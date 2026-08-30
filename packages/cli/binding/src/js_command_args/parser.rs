@@ -4,7 +4,7 @@ use clap::{Arg, ArgAction, Args, Command, FromArgMatches, error::ErrorKind};
 use napi_derive::napi;
 
 #[napi(object, object_from_js = false)]
-pub struct CliParseError {
+pub(crate) struct CliParseError {
     pub kind: String,
     pub message: String,
 }

@@ -20,28 +20,28 @@ const DEFAULT_MAX_ENTRIES: usize = 4096;
 
 /// A single cache entry for a resolved version.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ResolveCacheEntry {
+pub(crate) struct ResolveCacheEntry {
     /// The resolved version string (e.g., "20.18.0")
-    pub version: String,
+    pub(crate) version: String,
     /// The source of the version (e.g., ".node-version", "engines.node")
-    pub source: String,
+    pub(crate) source: String,
     /// Project root directory (if applicable)
-    pub project_root: Option<String>,
+    pub(crate) project_root: Option<String>,
     /// Unix timestamp when this entry was resolved
-    pub resolved_at: u64,
+    pub(crate) resolved_at: u64,
     /// Mtime of the version source file (for invalidation)
-    pub version_file_mtime: u64,
+    pub(crate) version_file_mtime: u64,
     /// Path to the version source file
-    pub source_path: Option<String>,
+    pub(crate) source_path: Option<String>,
     /// Whether the original version spec was a range (e.g., "20", "^20.0.0", "lts/*")
     /// Range versions use time-based expiry (1 hour) instead of mtime-only validation
     #[serde(default)]
-    pub is_range: bool,
+    pub(crate) is_range: bool,
 }
 
 /// Resolution cache stored in `<CACHE>/resolve_cache.json`.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ResolveCache {
+pub(crate) struct ResolveCache {
     /// Cache format version for upgrade compatibility
     version: u32,
     /// Cache entries keyed by current working directory
@@ -56,7 +56,7 @@ impl Default for ResolveCache {
 
 impl ResolveCache {
     /// Load cache from disk.
-    pub fn load(cache_path: &AbsolutePath) -> Self {
+    pub(crate) fn load(cache_path: &AbsolutePath) -> Self {
         match std::fs::read_to_string(cache_path) {
             Ok(content) => {
                 match serde_json::from_str::<Self>(&content) {
@@ -77,7 +77,7 @@ impl ResolveCache {
     }
 
     /// Save cache to disk.
-    pub fn save(&self, cache_path: &AbsolutePath) {
+    pub(crate) fn save(&self, cache_path: &AbsolutePath) {
         // Ensure parent directory exists
         if let Some(parent) = cache_path.parent() {
             std::fs::create_dir_all(parent).ok();
@@ -89,7 +89,7 @@ impl ResolveCache {
     }
 
     /// Get a cache entry if valid.
-    pub fn get(&self, cwd: &AbsolutePath) -> Option<&ResolveCacheEntry> {
+    pub(crate) fn get(&self, cwd: &AbsolutePath) -> Option<&ResolveCacheEntry> {
         let key = cwd.as_path().to_string_lossy().to_string();
         let entry = self.entries.get(&key)?;
 
@@ -102,7 +102,7 @@ impl ResolveCache {
     }
 
     /// Insert a cache entry.
-    pub fn insert(&mut self, cwd: &AbsolutePath, entry: ResolveCacheEntry) {
+    pub(crate) fn insert(&mut self, cwd: &AbsolutePath, entry: ResolveCacheEntry) {
         let key = cwd.as_path().to_string_lossy().to_string();
 
         // LRU eviction if needed
@@ -183,27 +183,27 @@ impl ResolveCache {
 }
 
 /// Get the cache file path (`<CACHE>/resolve_cache.json`).
-pub fn get_cache_path() -> Option<AbsolutePathBuf> {
+pub(crate) fn get_cache_path() -> Option<AbsolutePathBuf> {
     Some(vp_shared::EnvConfig::get().dirs.cache.join("resolve_cache.json"))
 }
 
 /// Invalidate the entire resolve cache by deleting the cache file.
 /// Called after version configuration changes (e.g., `vp env default`, `vp env pin`, `vp env unpin`).
-pub fn invalidate_cache() {
+pub(crate) fn invalidate_cache() {
     if let Some(cache_path) = get_cache_path() {
         std::fs::remove_file(cache_path.as_path()).ok();
     }
 }
 
 /// Get the mtime of a file as Unix timestamp.
-pub fn get_file_mtime(path: &AbsolutePath) -> Option<u64> {
+pub(crate) fn get_file_mtime(path: &AbsolutePath) -> Option<u64> {
     let metadata = std::fs::metadata(path).ok()?;
     let mtime = metadata.modified().ok()?;
     mtime.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).ok()
 }
 
 /// Get the current Unix timestamp.
-pub fn now_timestamp() -> u64 {
+pub(crate) fn now_timestamp() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 

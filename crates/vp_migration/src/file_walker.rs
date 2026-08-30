@@ -12,9 +12,9 @@ const TS_JS_EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs
 
 /// Result of walking TypeScript/JavaScript files
 #[derive(Debug)]
-pub struct WalkResult {
+pub(crate) struct WalkResult {
     /// List of file paths found
-    pub files: Vec<PathBuf>,
+    pub(crate) files: Vec<PathBuf>,
 }
 
 /// Find all TypeScript/JavaScript files in a directory, respecting gitignore
@@ -48,7 +48,7 @@ pub struct WalkResult {
 ///     println!("Found: {}", file.display());
 /// }
 /// ```
-pub fn find_ts_files(root: &Path) -> Result<WalkResult, Error> {
+pub(crate) fn find_ts_files(root: &Path) -> Result<WalkResult, Error> {
     let mut files = Vec::new();
 
     let walker = WalkBuilder::new(root)

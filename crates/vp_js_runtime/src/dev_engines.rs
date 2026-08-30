@@ -6,7 +6,7 @@
 //! For `PackageJson` types (devEngines, engines), see `vp_shared::package_json`.
 
 // Re-export shared types for internal use
-pub use vp_shared::PackageJson;
+pub(crate) use vp_shared::PackageJson;
 use vt_path::AbsolutePath;
 use vt_str::Str;
 
@@ -26,7 +26,7 @@ use vt_str::Str;
 /// LTS aliases are preserved as-is (e.g., `lts/iron` stays `lts/iron`).
 /// Returns `None` if the content is empty or contains only whitespace.
 #[must_use]
-pub fn parse_node_version_content(content: &str) -> Option<Str> {
+fn parse_node_version_content(content: &str) -> Option<Str> {
     let version = content.lines().next()?.trim();
     if version.is_empty() {
         return None;
@@ -49,7 +49,7 @@ pub fn parse_node_version_content(content: &str) -> Option<Str> {
 ///
 /// # Returns
 /// The version string if the file exists and contains a valid version.
-pub async fn read_node_version_file(project_path: &AbsolutePath) -> Option<Str> {
+pub(super) async fn read_node_version_file(project_path: &AbsolutePath) -> Option<Str> {
     let path = project_path.join(".node-version");
     let content = tokio::fs::read_to_string(&path).await.ok()?;
     parse_node_version_content(&content)

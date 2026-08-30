@@ -3,34 +3,34 @@ use vp_shared::output;
 
 #[derive(Debug, Clone)]
 pub(super) struct CheckSummary {
-    pub duration: String,
-    pub files: usize,
-    pub threads: usize,
+    pub(crate) duration: String,
+    pub(crate) files: usize,
+    pub(crate) threads: usize,
 }
 
 #[derive(Debug)]
 pub(super) struct FmtSuccess {
-    pub summary: CheckSummary,
+    pub(crate) summary: CheckSummary,
 }
 
 #[derive(Debug)]
 pub(super) struct FmtFailure {
-    pub summary: CheckSummary,
-    pub issue_files: Vec<String>,
-    pub issue_count: usize,
+    pub(crate) summary: CheckSummary,
+    pub(crate) issue_files: Vec<String>,
+    pub(crate) issue_count: usize,
 }
 
 #[derive(Debug)]
 pub(super) struct LintSuccess {
-    pub summary: CheckSummary,
+    pub(crate) summary: CheckSummary,
 }
 
 #[derive(Debug)]
 pub(super) struct LintFailure {
-    pub summary: CheckSummary,
-    pub warnings: usize,
-    pub errors: usize,
-    pub diagnostics: String,
+    pub(crate) summary: CheckSummary,
+    pub(crate) warnings: usize,
+    pub(crate) errors: usize,
+    pub(crate) diagnostics: String,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -153,7 +153,7 @@ fn create_command() -> Command {
 }
 
 #[napi(object, object_from_js = false)]
-pub struct CreateArgs {
+pub(crate) struct CreateArgs {
     pub template_name: Option<String>,
     pub directory: Option<String>,
     #[napi(ts_type = "false | string | Array<string>")]
@@ -192,6 +192,7 @@ impl From<CreateCliArgs> for CreateArgs {
     }
 }
 
+#[expect(unreachable_pub, reason = "NAPI requires public enums for JavaScript exports")]
 #[napi(discriminant = "status", discriminant_case = "camelCase", object_from_js = false)]
 pub enum ParseCreateArgsOutcome {
     Ok { value: CreateArgs },
@@ -200,7 +201,7 @@ pub enum ParseCreateArgsOutcome {
 }
 
 #[napi]
-pub fn parse_create_args(argv: Vec<String>) -> ParseCreateArgsOutcome {
+pub(crate) fn parse_create_args(argv: Vec<String>) -> ParseCreateArgsOutcome {
     match parse_args::<CreateCliArgs>(create_command(), argv) {
         ParseResult::Ok(value) => ParseCreateArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {

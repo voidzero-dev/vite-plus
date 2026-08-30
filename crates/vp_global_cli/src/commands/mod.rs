@@ -77,7 +77,7 @@ fn find_vite_plus_dependency(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
 ///
 /// Returns `true` if vite-plus is found, `false` if not found
 /// or if no package.json exists.
-pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
+pub(crate) fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
     find_nearest_package_json(cwd)
         .is_some_and(|package_json_path| package_json_has_vite_plus_dependency(&package_json_path))
 }
@@ -113,7 +113,9 @@ pub(crate) fn warn_missing_local_cli_if_project(cwd: &AbsolutePath) {
 ///
 /// If `project_path` contains a package.json, uses the project's runtime
 /// (based on devEngines.runtime). Otherwise, falls back to the CLI's runtime.
-pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Result<(), Error> {
+pub(crate) async fn prepend_js_runtime_to_path_env(
+    project_path: &AbsolutePath,
+) -> Result<(), Error> {
     let mut executor = JsExecutor::new(None);
 
     // Use project runtime if package.json exists, otherwise use CLI runtime
@@ -135,31 +137,31 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
 }
 
 // Global package management
-pub mod global;
+pub(crate) mod global;
 
 // Category B: JS Script Commands
-pub mod config;
-pub mod create;
-pub mod hooks;
-pub mod migrate;
-pub mod staged;
-pub mod toolchain;
-pub mod version;
+pub(crate) mod config;
+pub(crate) mod create;
+pub(crate) mod hooks;
+pub(crate) mod migrate;
+pub(crate) mod staged;
+pub(crate) mod toolchain;
+pub(crate) mod version;
 
 // Category D: Environment Management
-pub mod env;
-pub mod shell;
+pub(crate) mod env;
+pub(crate) mod shell;
 
 // Standalone binary commands
-pub mod vpr;
-pub mod vpx;
+pub(crate) mod vpr;
+pub(crate) mod vpx;
 
 // Self-Management
-pub mod implode;
-pub mod upgrade;
+pub(crate) mod implode;
+pub(crate) mod upgrade;
 
 // Category C: Local CLI Delegation
-pub mod delegate;
+pub(crate) mod delegate;
 
 #[cfg(test)]
 mod tests {

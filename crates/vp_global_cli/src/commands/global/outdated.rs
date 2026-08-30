@@ -17,15 +17,15 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct OutdatedPackage {
-    pub name: String,
-    pub current: String,
+pub(crate) struct OutdatedPackage {
+    pub(crate) name: String,
+    pub(crate) current: String,
     /// Newest version within the version spec recorded at install time (or
     /// given on the command line); what an update would install.
-    pub wanted: String,
+    pub(crate) wanted: String,
     /// Newest version on the registry's `latest` dist-tag.
-    pub latest: String,
-    pub spec: Option<String>,
+    pub(crate) latest: String,
+    pub(crate) spec: Option<String>,
     install_id: String,
     node: String,
     bins: Vec<String>,
@@ -36,13 +36,13 @@ pub struct OutdatedPackage {
 /// whose registry lookup failed (so callers can warn and continue instead of
 /// aborting, and can tell which packages were left unresolved).
 #[derive(Debug)]
-pub struct OutdatedReport {
-    pub outdated: Vec<OutdatedPackage>,
-    pub failures: Vec<(String, String)>,
+pub(crate) struct OutdatedReport {
+    pub(crate) outdated: Vec<OutdatedPackage>,
+    pub(crate) failures: Vec<(String, String)>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum LookupMode {
+pub(crate) enum LookupMode {
     /// Resolve only the version an update would install.
     WantedOnly,
     /// Also resolve the registry's `latest` dist-tag for outdated reporting.
@@ -113,7 +113,7 @@ struct OutdatedPackageJson {
     location: String,
 }
 
-pub async fn get_outdated_packages(
+pub(crate) async fn get_outdated_packages(
     packages: &[String],
     concurrency: usize,
     latest: bool,
@@ -211,7 +211,7 @@ pub async fn get_outdated_packages(
     Ok(OutdatedReport { outdated, failures })
 }
 
-pub async fn execute(
+pub(crate) async fn execute(
     packages: &[String],
     long: bool,
     format: Option<OutdatedFormat>,

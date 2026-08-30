@@ -14,7 +14,7 @@
 /// Used by e2e tests to assert on cache directory contents (e.g. exactly one
 /// `.tar.zst` archive after a re-run that should have cleaned up the prior
 /// archive).
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut dir: Option<&str> = None;
     let mut ext: Option<&str> = None;
     let mut recursive = false;

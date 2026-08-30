@@ -12,9 +12,9 @@ use vt_path::{AbsolutePathBuf, current_dir};
 
 use crate::{commands::env::config::resolve_version, error::Error};
 
-pub mod install;
-pub mod outdated;
-pub mod packages;
+pub(crate) mod install;
+pub(crate) mod outdated;
+pub(crate) mod packages;
 
 /// Core shims that should not be overwritten by package binaries.
 pub(crate) const CORE_SHIMS: &[&str] =

@@ -47,7 +47,7 @@ use vt_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, is_stdin_terminal, powe
 /// - the resolved path is not a `.cmd` (case-insensitive),
 /// - the `.cmd` has no sibling `.ps1`.
 #[must_use]
-pub fn rewrite_cmd_to_powershell(
+pub(super) fn rewrite_cmd_to_powershell(
     resolved: &AbsolutePath,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
     // `build_command` gives its standard input to child processes. Thus, a TTY

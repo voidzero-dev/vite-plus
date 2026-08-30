@@ -142,7 +142,7 @@ unsafe extern "system" {
 // ExitProcess does not run TLS destructors.
 // Thus, this process uses a successful no-op implementation.
 #[unsafe(no_mangle)]
-pub extern "C" fn atexit(_f: Option<unsafe extern "C" fn()>) -> i32 {
+pub(crate) extern "C" fn atexit(_f: Option<unsafe extern "C" fn()>) -> i32 {
     0
 }
 
@@ -441,7 +441,7 @@ unsafe extern "system" fn ignore_ctrl(_ctrl_type: u32) -> i32 {
     1
 }
 
-pub fn run() -> ! {
+pub(super) fn run() -> ! {
     // 1. Resolve the tool, bin directory, and per-tool sidecar from our path.
     let exe = module_path();
     let Some(last_separator) = exe.iter().rposition(|&unit| is_separator(unit)) else {

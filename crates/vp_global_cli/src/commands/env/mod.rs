@@ -3,9 +3,9 @@
 //! This module provides the `vp env` command for managing Node.js environments
 //! through shim-based version management.
 
-pub mod bin_config;
+pub(crate) mod bin_config;
 mod clean;
-pub mod config;
+pub(crate) mod config;
 mod current;
 mod default;
 mod doctor;
@@ -14,7 +14,7 @@ mod list;
 mod list_remote;
 mod off;
 mod on;
-pub mod package_metadata;
+pub(crate) mod package_metadata;
 mod pin;
 pub(crate) mod setup;
 mod unpin;
@@ -76,7 +76,7 @@ fn is_installable_version_source(source: &str) -> bool {
 }
 
 /// Execute the env command based on the provided arguments.
-pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, Error> {
     // Handle subcommands first
     if let Some(subcommand) = args.command {
         if should_print_env_header(&subcommand) {

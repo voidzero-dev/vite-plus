@@ -23,7 +23,7 @@ const NODE_VERSION_FILE: &str = ".node-version";
 const PACKAGE_JSON_FILE: &str = "package.json";
 
 /// Execute the pin command.
-pub async fn execute(
+pub(crate) async fn execute(
     cwd: AbsolutePathBuf,
     version: Option<String>,
     unpin: bool,
@@ -532,7 +532,7 @@ async fn resolve_version_for_pin(
 /// Removes the same source that `vp env pin` would write: `.node-version` when
 /// present, otherwise the node entry from `package.json#devEngines.runtime`.
 /// An explicit `target` overrides the selection.
-pub async fn do_unpin(
+pub(crate) async fn do_unpin(
     cwd: &AbsolutePathBuf,
     target: Option<PinTarget>,
 ) -> Result<ExitStatus, Error> {

@@ -4,7 +4,7 @@
 /// synchronization, keystroke delivery, and screen capture end-to-end without
 /// requiring milestone instrumentation in the product CLI. Prints a question,
 /// marks `probe:ask`, reads a line, greets, then marks `probe:done`.
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run() -> Result<(), Box<dyn std::error::Error>> {
     use std::io::{BufRead as _, Write as _};
 
     println!("What is your name?");

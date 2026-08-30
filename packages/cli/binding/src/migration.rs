@@ -21,7 +21,11 @@ use napi_derive::napi;
 /// console.log(`Updated: ${updated}`);
 /// ```
 #[napi]
-pub fn rewrite_scripts(scripts_json: String, rules_yaml: String) -> Result<Option<String>> {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn rewrite_scripts(scripts_json: String, rules_yaml: String) -> Result<Option<String>> {
     let updated =
         vp_migration::rewrite_scripts(&scripts_json, &rules_yaml).map_err(anyhow::Error::from)?;
     Ok(updated)
@@ -40,7 +44,11 @@ pub fn rewrite_scripts(scripts_json: String, rules_yaml: String) -> Result<Optio
 ///
 /// * `updated` - The updated scripts JSON string, or `null` if no changes were made
 #[napi]
-pub fn rewrite_eslint(scripts_json: String) -> Result<Option<String>> {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn rewrite_eslint(scripts_json: String) -> Result<Option<String>> {
     let updated = vp_migration::rewrite_eslint(&scripts_json).map_err(anyhow::Error::from)?;
     Ok(updated)
 }
@@ -58,14 +66,18 @@ pub fn rewrite_eslint(scripts_json: String) -> Result<Option<String>> {
 ///
 /// * `updated` - The updated scripts JSON string, or `null` if no changes were made
 #[napi]
-pub fn rewrite_prettier(scripts_json: String) -> Result<Option<String>> {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn rewrite_prettier(scripts_json: String) -> Result<Option<String>> {
     let updated = vp_migration::rewrite_prettier(&scripts_json).map_err(anyhow::Error::from)?;
     Ok(updated)
 }
 
 /// Result of merging JSON config into vite config
 #[napi(object)]
-pub struct MergeJsonConfigResult {
+pub(crate) struct MergeJsonConfigResult {
     /// The updated vite config content
     pub content: String,
     /// Whether any changes were made
@@ -101,7 +113,11 @@ pub struct MergeJsonConfigResult {
 /// }
 /// ```
 #[napi]
-pub fn merge_json_config(
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn merge_json_config(
     vite_config_path: String,
     json_config_path: String,
     config_key: String,
@@ -152,7 +168,11 @@ pub fn merge_json_config(
 /// }
 /// ```
 #[napi]
-pub fn upsert_json_config(
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn upsert_json_config(
     vite_config_path: String,
     json_config_path: String,
     config_key: String,
@@ -178,14 +198,18 @@ pub fn upsert_json_config(
 /// comments, string literal occurrences, and nested keys. Returns `false`
 /// for unrecognized shapes (e.g. `return $VAR` from a callback).
 #[napi]
-pub fn has_config_key(vite_config_path: String, config_key: String) -> Result<bool> {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn has_config_key(vite_config_path: String, config_key: String) -> Result<bool> {
     let content = std::fs::read_to_string(&vite_config_path).map_err(anyhow::Error::from)?;
     Ok(vp_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
 }
 
 /// Error from batch import rewriting
 #[napi(object)]
-pub struct BatchRewriteError {
+pub(crate) struct BatchRewriteError {
     /// The file path that had an error
     pub path: String,
     /// The error message
@@ -194,7 +218,7 @@ pub struct BatchRewriteError {
 
 /// Result of rewriting imports in multiple files
 #[napi(object)]
-pub struct BatchRewriteResult {
+pub(crate) struct BatchRewriteResult {
     /// Files that were modified
     pub modified_files: Vec<String>,
     /// Files in Nuxt test-utils packages where upstream `vitest` imports were preserved
@@ -229,7 +253,11 @@ pub struct BatchRewriteResult {
 /// }
 /// ```
 #[napi]
-pub fn merge_tsdown_config(
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn merge_tsdown_config(
     vite_config_path: String,
     tsdown_config_path: String,
 ) -> Result<MergeJsonConfigResult> {
@@ -248,7 +276,11 @@ pub fn merge_tsdown_config(
 /// with `lazyPlugins(() => [...])` and add a `lazyPlugins` import from
 /// `vite-plus` when needed.
 #[napi]
-pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResult> {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResult> {
     let result = vp_migration::wrap_lazy_plugins(Path::new(&vite_config_path))
         .map_err(anyhow::Error::from)?;
 
@@ -287,7 +319,11 @@ pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResu
 /// }
 /// ```
 #[napi]
-pub fn rewrite_imports_in_directory(
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn rewrite_imports_in_directory(
     root: String,
     preserve_vitest_in_nuxt_packages: Option<bool>,
 ) -> Result<BatchRewriteResult> {

@@ -6,11 +6,7 @@ use vt_str::Str;
 
 /// Error type for the global CLI.
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[allow(dead_code)] // Will be used for better error messages
-    #[error("No package manager detected. Please run in a project directory with a package.json.")]
-    NoPackageManager,
-
+pub(crate) enum Error {
     #[error("Failed to download Node.js runtime: {0}")]
     RuntimeDownload(#[from] vp_js_runtime::Error),
 
@@ -65,7 +61,7 @@ pub enum Error {
 impl Error {
     /// Whether this error should be printed without the "error: " prefix
     /// (a friendly user-facing message, not a stack trace).
-    pub fn is_user_message(&self) -> bool {
+    pub(crate) fn is_user_message(&self) -> bool {
         matches!(self, Self::UserMessage(_) | Self::PmCli(vp_pm_cli::Error::UserMessage(_)))
     }
 }

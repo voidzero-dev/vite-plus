@@ -695,7 +695,7 @@ async fn prepend_js_child_process_path_env(
 ///
 /// Called when the binary is invoked as a core shim or package binary.
 /// Returns an exit code to be used with std::process::exit.
-pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
+pub(crate) async fn dispatch(tool: &str, args: &[String]) -> i32 {
     tracing::debug!("dispatch: tool: {tool}, args: {:?}", args);
 
     // Handle vpx — standalone command, doesn't need recursion/bypass/shim-mode checks

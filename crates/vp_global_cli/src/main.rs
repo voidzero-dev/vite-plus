@@ -33,7 +33,7 @@ use clap_complete::env::CompleteEnv;
 use owo_colors::OwoColorize;
 use vp_shared::{exit_code_from_status, output};
 
-pub use crate::cli::try_parse_args_from;
+pub(crate) use crate::cli::try_parse_args_from;
 use crate::cli::{
     RenderOptions, command_with_help, raw_subcommand, run_command, run_command_with_options,
     try_parse_args_from_with_options,

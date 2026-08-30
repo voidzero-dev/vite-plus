@@ -28,8 +28,8 @@ const DEFAULT_GLOBAL_INSTALL_CONCURRENCY: usize = 5;
 const DEFAULT_GLOBAL_VIEW_CONCURRENCY: usize = 3 * DEFAULT_GLOBAL_INSTALL_CONCURRENCY;
 
 #[derive(Clone, Copy, Debug)]
-pub struct RenderOptions {
-    pub show_header: bool,
+pub(crate) struct RenderOptions {
+    pub(crate) show_header: bool,
 }
 
 impl Default for RenderOptions {
@@ -48,22 +48,22 @@ impl Default for RenderOptions {
     long_about = None
 )]
 #[command(disable_help_subcommand = true, disable_version_flag = true)]
-pub struct Args {
+pub(crate) struct Args {
     /// Print version
     #[arg(short = 'V', long = "version")]
-    pub version: bool,
+    pub(crate) version: bool,
 
     /// Run as if vp was started in <DIR> instead of the current working directory
     #[arg(short = 'C', value_name = "DIR")]
-    pub chdir: Option<String>,
+    pub(crate) chdir: Option<String>,
 
     #[clap(subcommand)]
-    pub command: Option<Commands>,
+    pub(crate) command: Option<Commands>,
 }
 
 /// Available commands
 #[derive(Subcommand, Debug)]
-pub enum Commands {
+pub(crate) enum Commands {
     // =========================================================================
     // Category A: Package Manager Commands
     // (clap-flattened from `vp_pm_cli::PackageManagerCommand` so the
@@ -269,7 +269,7 @@ pub enum Commands {
 impl Commands {
     /// Whether the command was invoked with flags that request quiet or
     /// machine-readable output (--silent, -s, --json, --parseable, --format json/list).
-    pub fn is_quiet_or_machine_readable(&self) -> bool {
+    pub(crate) fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::PackageManager(pm) => pm.is_quiet_or_machine_readable(),
             Self::Toolchain { json, .. } => *json,
@@ -284,15 +284,15 @@ impl Commands {
 
 /// Arguments for the `env` command
 #[derive(clap::Args, Debug)]
-pub struct EnvArgs {
+pub(crate) struct EnvArgs {
     /// Subcommand (e.g., 'default', 'setup', 'doctor', 'which')
     #[command(subcommand)]
-    pub command: Option<EnvSubcommands>,
+    pub(crate) command: Option<EnvSubcommands>,
 }
 
 /// Subcommands for the `env` command
 #[derive(clap::Subcommand, Debug)]
-pub enum EnvSubcommands {
+pub(crate) enum EnvSubcommands {
     /// Show current environment information
     Current {
         /// Output in JSON format
@@ -489,7 +489,7 @@ impl EnvSubcommands {
 
 /// Write target for `vp env pin` / `vp env unpin` (see rfcs/dev-engines.md)
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PinTarget {
+pub(crate) enum PinTarget {
     /// Pin via the .node-version file
     NodeVersion,
     /// Pin via package.json#devEngines.runtime
@@ -498,7 +498,7 @@ pub enum PinTarget {
 
 /// Version sorting order for list-remote command
 #[derive(clap::ValueEnum, Clone, Debug, Default)]
-pub enum SortingMethod {
+pub(crate) enum SortingMethod {
     /// Sort versions in ascending order (earliest to latest)
     #[default]
     Asc,
@@ -951,12 +951,12 @@ fn prompt_reinstall_node_mismatches(
 /// Parsing resolves a subcommand to one clap variant, which does not record the
 /// spelling used, so it is read straight from the command line instead.
 #[must_use]
-pub fn raw_subcommand(argv: &[String]) -> Option<&str> {
+pub(crate) fn raw_subcommand(argv: &[String]) -> Option<&str> {
     argv.iter().skip(1).map(String::as_str).find(|arg| !arg.starts_with('-'))
 }
 
 /// Run the CLI command.
-pub async fn run_command(
+pub(crate) async fn run_command(
     cwd: AbsolutePathBuf,
     args: Args,
     raw_subcommand: Option<&str>,
@@ -967,7 +967,7 @@ pub async fn run_command(
 }
 
 /// Run the CLI command with rendering options.
-pub async fn run_command_with_options(
+pub(crate) async fn run_command_with_options(
     mut cwd: AbsolutePathBuf,
     args: Args,
     render_options: RenderOptions,
@@ -1164,12 +1164,12 @@ fn maybe_print_runtime_header(command: &str, args: &[String], show_header: bool)
 }
 
 /// Build a clap Command with custom help formatting matching the JS CLI output.
-pub fn command_with_help() -> clap::Command {
+pub(crate) fn command_with_help() -> clap::Command {
     command_with_help_with_options(RenderOptions::default())
 }
 
 /// Build a clap Command with custom help formatting and rendering options.
-pub fn command_with_help_with_options(render_options: RenderOptions) -> clap::Command {
+pub(crate) fn command_with_help_with_options(render_options: RenderOptions) -> clap::Command {
     apply_custom_help(Args::command(), render_options)
 }
 
@@ -1189,7 +1189,7 @@ fn apply_custom_help(cmd: clap::Command, render_options: RenderOptions) -> clap:
 
 /// Parse CLI arguments from a custom args iterator with custom help formatting.
 /// Returns `Err` with the clap error if parsing fails (e.g., unknown command).
-pub fn try_parse_args_from(
+pub(crate) fn try_parse_args_from(
     args: impl IntoIterator<Item = String>,
 ) -> Result<Args, clap::error::Error> {
     try_parse_args_from_with_options(args, RenderOptions::default())
@@ -1197,7 +1197,7 @@ pub fn try_parse_args_from(
 
 /// Parse CLI arguments from a custom args iterator with rendering options.
 /// Returns `Err` with the clap error if parsing fails (e.g., unknown command).
-pub fn try_parse_args_from_with_options(
+pub(crate) fn try_parse_args_from_with_options(
     args: impl IntoIterator<Item = String>,
     render_options: RenderOptions,
 ) -> Result<Args, clap::error::Error> {

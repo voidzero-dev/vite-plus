@@ -17,15 +17,14 @@ use clap::Parser;
 use cow_utils::CowUtils;
 pub(crate) use execution::resolve_and_capture_output;
 // Re-exports for lib.rs and check/mod.rs
-pub use resolver::SubcommandResolver;
+pub(crate) use resolver::SubcommandResolver;
 use rustc_hash::FxHashMap;
-pub(crate) use types::CapturedCommandOutput;
-pub use types::{
-    BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand, ToolchainArgs,
-    ViteConfigResolverFn,
+pub(crate) use types::{
+    BoxedResolverFn, CapturedCommandOutput, CliOptions, ResolveCommandResult,
+    SynthesizableSubcommand, ToolchainArgs, ViteConfigResolverFn,
 };
 use vp_error::Error;
-pub use vp_shared::init_tracing;
+pub(crate) use vp_shared::init_tracing;
 use vp_shared::{PrependOptions, env_vars, prepend_to_path_env};
 use vt::{ExitStatus, Session, SessionConfig};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
@@ -364,7 +363,7 @@ fn print_toolchain_why_hint(options: Option<&CliOptions>, packages: &[String]) {
 /// * `args` - Optional CLI arguments. If None, uses env::args(). This allows NAPI bindings
 ///            to pass process.argv.slice(2) to avoid including node binary and script path.
 #[tracing::instrument(skip(options))]
-pub async fn main(
+pub(crate) async fn main(
     cwd: AbsolutePathBuf,
     options: Option<CliOptions>,
     args: Option<Vec<String>>,

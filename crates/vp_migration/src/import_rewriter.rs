@@ -2165,7 +2165,8 @@ enum FileResult {
 ///     println!("  {}", file.display());
 /// }
 /// ```
-pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, Error> {
+#[cfg(test)]
+fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, Error> {
     rewrite_imports_in_directory_with_options(root, RewriteImportsOptions::default())
 }
 

@@ -3,7 +3,7 @@
 /// Prints found/missing for the snapshot and keeps grep's exit semantics:
 /// nonzero when the pattern is absent or the file is unreadable, so
 /// content guards short-circuit under the runner's failure flow.
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let [path, pattern] = args else {
         return Err("Usage: vpt grep-file <path> <pattern>".into());
     };

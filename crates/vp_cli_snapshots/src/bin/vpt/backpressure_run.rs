@@ -30,7 +30,7 @@ struct Options {
 /// The reader consumes one small chunk whenever the channel fills. That lets a
 /// blocking writer advance while keeping enough pressure for a non-blocking
 /// writer to encounter `EAGAIN`.
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let options = parse_options(args)?;
     let (reader_fd, writer_fd) =
         socketpair(AddressFamily::Unix, SockType::Stream, None, SockFlag::empty())?;

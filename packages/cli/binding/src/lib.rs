@@ -14,7 +14,7 @@
 )]
 
 #[cfg(feature = "rolldown")]
-pub extern crate rolldown_binding;
+pub(crate) extern crate rolldown_binding;
 
 mod check;
 mod cli;
@@ -25,9 +25,7 @@ mod exec;
 mod js_command_args;
 #[allow(dead_code)]
 mod migration;
-#[allow(dead_code)]
 mod package_manager;
-#[allow(dead_code)]
 mod utils;
 
 use std::{collections::HashMap, error::Error as StdError, ffi::OsStr, fmt::Write as _, sync::Arc};
@@ -42,8 +40,12 @@ use crate::cli::{
 
 /// Module initialization - sets up tracing and panic hook
 #[napi_derive::module_init]
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
 #[allow(clippy::disallowed_macros)]
-pub fn init() {
+pub(crate) fn init() {
     vp_shared::ensure_blocking_stdio();
     crate::cli::init_tracing();
 
@@ -60,13 +62,17 @@ pub fn init() {
 
 /// Re-enable blocking stdio after Node.js has initialized its lazy standard streams.
 #[napi]
-pub fn ensure_blocking_stdio() {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn ensure_blocking_stdio() {
     vp_shared::ensure_blocking_stdio();
 }
 
 /// Configuration options passed from JavaScript to Rust.
 #[napi(object, object_to_js = false)]
-pub struct CliOptions {
+pub(crate) struct CliOptions {
     pub lint: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub fmt: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
     pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
@@ -88,7 +94,7 @@ pub struct CliOptions {
 
 /// Result returned by JavaScript resolver functions.
 #[napi(object, object_to_js = false)]
-pub struct JsCommandResolvedResult {
+pub(crate) struct JsCommandResolvedResult {
     pub bin_path: String,
     pub envs: HashMap<String, String>,
 }
@@ -165,7 +171,11 @@ fn format_error_message(error: &(dyn StdError + 'static)) -> String {
 /// from vt, while allowing the NAPI async context to continue running
 /// and process JavaScript callbacks (via ThreadsafeFunction).
 #[napi]
-pub async fn run(options: CliOptions) -> Result<i32> {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) async fn run(options: CliOptions) -> Result<i32> {
     // Use provided cwd or current directory
     let mut cwd = current_dir()?;
     if let Some(options_cwd) = options.cwd {
@@ -242,7 +252,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 
 /// Resolved on-disk category roots from [`vp_shared::EnvConfig`].
 #[napi(object)]
-pub struct VpDirsJs {
+pub(crate) struct VpDirsJs {
     pub bin: String,
     pub data: String,
     pub cache: String,
@@ -255,7 +265,11 @@ pub struct VpDirsJs {
 /// JavaScript must not read `VP_HOME` / `VP_*_DIR` / `XDG_*` itself;
 /// this is the JS surface of the same `EnvConfig::get().dirs` Rust uses.
 #[napi]
-pub fn get_vp_dirs() -> VpDirsJs {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn get_vp_dirs() -> VpDirsJs {
     let dirs = &vp_shared::EnvConfig::get().dirs;
     VpDirsJs {
         bin: dirs.bin.as_path().to_string_lossy().into_owned(),
@@ -268,7 +282,11 @@ pub fn get_vp_dirs() -> VpDirsJs {
 
 /// Render the Vite+ header using the Rust implementation.
 #[napi]
-pub fn vite_plus_header() -> String {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn vite_plus_header() -> String {
     vp_shared::header::vite_plus_header()
 }
 
@@ -277,6 +295,10 @@ pub fn vite_plus_header() -> String {
 /// Mirrors `vp_shared::header::should_print_header` so both CLIs apply
 /// the same TTY + git-hook gating without duplicating the rules in JS.
 #[napi]
-pub fn should_print_vite_plus_header() -> bool {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) fn should_print_vite_plus_header() -> bool {
     vp_shared::header::should_print_header()
 }

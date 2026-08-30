@@ -10,7 +10,7 @@ use crate::{error::Error, js_executor::JsExecutor};
 ///
 /// `raw_subcommand` is the subcommand as the user wrote it, which the local CLI
 /// cannot recover from `command` alone once parsing has resolved it.
-pub async fn execute(
+pub(crate) async fn execute(
     cwd: AbsolutePathBuf,
     command: &str,
     args: &[String],
@@ -20,7 +20,7 @@ pub async fn execute(
 }
 
 /// Execute an app command and preserve whether the user supplied `-C`.
-pub async fn execute_app(
+pub(crate) async fn execute_app(
     cwd: AbsolutePathBuf,
     command: &str,
     args: &[String],
@@ -36,7 +36,7 @@ pub async fn execute_app(
 }
 
 /// Execute a command by delegating to the local `vite-plus` CLI, capturing output.
-pub async fn execute_output(
+pub(crate) async fn execute_output(
     cwd: AbsolutePathBuf,
     command: &str,
     args: &[String],
@@ -50,7 +50,7 @@ pub async fn execute_output(
 /// Execute a command by delegating to the global `vite-plus` CLI.
 ///
 /// `raw_subcommand` is the subcommand as the user wrote it; see [`execute`].
-pub async fn execute_global(
+pub(crate) async fn execute_global(
     cwd: AbsolutePathBuf,
     command: &str,
     args: &[String],

@@ -7,7 +7,7 @@ use owo_colors::OwoColorize;
 use crate::{commands::env::package_metadata::PackageMetadata, error::Error};
 
 /// Execute the packages command.
-pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Error> {
     let all_packages = PackageMetadata::list_all().await?;
 
     let packages: Vec<_> = if let Some(pat) = pattern {

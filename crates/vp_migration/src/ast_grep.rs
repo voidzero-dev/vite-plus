@@ -18,7 +18,7 @@ use vp_error::Error;
 /// # Returns
 ///
 /// A tuple of (`transformed_content`, `was_updated`)
-pub fn apply_rules(content: &str, rule_yaml: &str) -> Result<(String, bool), Error> {
+pub(crate) fn apply_rules(content: &str, rule_yaml: &str) -> Result<(String, bool), Error> {
     let rules = load_rules(rule_yaml)?;
     let result = apply_loaded_rules(content, &rules);
     let updated = result != content;
@@ -26,7 +26,7 @@ pub fn apply_rules(content: &str, rule_yaml: &str) -> Result<(String, bool), Err
 }
 
 /// Load ast-grep rules from YAML string
-pub fn load_rules(yaml: &str) -> Result<Vec<RuleConfig<SupportLang>>, Error> {
+pub(crate) fn load_rules(yaml: &str) -> Result<Vec<RuleConfig<SupportLang>>, Error> {
     let globals = GlobalRules::default();
     let rules: Vec<RuleConfig<SupportLang>> = from_yaml_string::<SupportLang>(yaml, &globals)?;
     Ok(rules)
@@ -45,7 +45,7 @@ pub fn load_rules(yaml: &str) -> Result<Vec<RuleConfig<SupportLang>>, Error> {
 /// # Returns
 ///
 /// The transformed content (always returns a new string, even if unchanged)
-pub fn apply_loaded_rules(content: &str, rules: &[RuleConfig<SupportLang>]) -> String {
+pub(crate) fn apply_loaded_rules(content: &str, rules: &[RuleConfig<SupportLang>]) -> String {
     let mut current = content.to_string();
 
     for rule in rules {

@@ -71,7 +71,7 @@ fn print_rows(title: &str, rows: &[(&str, String)]) {
 }
 
 /// Execute the current command.
-pub async fn execute(cwd: AbsolutePathBuf, json: bool) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(cwd: AbsolutePathBuf, json: bool) -> Result<ExitStatus, Error> {
     let resolution = resolve_version(&cwd).await?;
     let package_manager = resolve_package_manager_info(&cwd);
 

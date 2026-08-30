@@ -74,7 +74,7 @@ fn abbreviate_home(path: &str) -> String {
 }
 
 /// Execute the doctor command.
-pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     let mut has_errors = false;
 
     // Section: Installation

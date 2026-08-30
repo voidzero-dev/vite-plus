@@ -142,7 +142,7 @@ jobs:
           cache-key: test
           tools: just
 
-      - run: cargo check --all-targets --all-features
+      - run: cargo check --workspace --all-targets --all-features
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
@@ -201,7 +201,7 @@ jobs:
               ;;
           esac
           export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS -D warnings"
-          cargo check --all-targets --all-features --target x86_64-pc-windows-msvc
+          cargo check --workspace --all-targets --all-features --target x86_64-pc-windows-msvc
 
       # Keep the package selection in sync with the `test` recipe in justfile.
       # vp_cli_snapshots is excluded there too: its snapshot suite needs a
@@ -336,7 +336,7 @@ jobs:
           components: clippy rust-docs rustfmt
 
       - run: |
-          cargo shear
+          cargo shear --exclude 'rolldown*' --exclude string_wizard
           cargo fmt --check
           cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml --check
           just lint

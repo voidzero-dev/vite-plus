@@ -1,4 +1,4 @@
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     if args.is_empty() {
         return Err("Usage: vpt touch-file <filename>...".into());
     }

@@ -31,7 +31,7 @@ const CORE_TOOLS: &[&str] = &["node", "npm", "npx"];
 const LABEL_WIDTH: usize = 10;
 
 /// Execute the which command.
-pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
     if let Some(status) = execute_package_manager_tool(&cwd, tool).await? {
         return Ok(status);
     }

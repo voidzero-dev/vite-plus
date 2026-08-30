@@ -3,7 +3,7 @@
 /// Sets a (possibly nested) key in a JSON file. `value` is parsed as JSON;
 /// if that fails it is treated as a plain string. Intermediate objects are
 /// created as needed.
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let [file, dot_path, raw_value] = args else {
         return Err("Usage: vpt json-edit <file> <dot-path> <value>".into());
     };

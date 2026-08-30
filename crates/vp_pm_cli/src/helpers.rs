@@ -6,7 +6,7 @@ use crate::{PackageManager, PackageManagerType, error::Error};
 
 /// Build a `PackageManager`, converting `PackageJsonNotFound` into a
 /// friendly error message.
-pub async fn build_package_manager(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
+pub(crate) async fn build_package_manager(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
     match PackageManager::builder(cwd).build_with_default().await {
         Ok(pm) => Ok(pm),
         Err(vp_error::Error::WorkspaceError(vt_workspace::Error::PackageJsonNotFound(_))) => {
@@ -23,7 +23,7 @@ pub async fn build_package_manager(cwd: &AbsolutePath) -> Result<PackageManager,
 /// Callers should ensure npm is on PATH before invoking commands that hit
 /// this fallback (the global CLI does this via its managed Node runtime;
 /// the local CLI relies on the system Node).
-pub async fn build_package_manager_or_npm_default(
+pub(crate) async fn build_package_manager_or_npm_default(
     cwd: &AbsolutePath,
 ) -> Result<PackageManager, Error> {
     match PackageManager::builder(cwd).build().await {
@@ -44,7 +44,7 @@ pub(crate) fn default_npm_package_manager(cwd: &AbsolutePath) -> PackageManager 
 
 /// Ensure a package.json exists in the given directory.
 /// If it doesn't exist, create a minimal one with `{ "type": "module" }`.
-pub async fn ensure_package_json(project_path: &AbsolutePath) -> Result<(), Error> {
+pub(crate) async fn ensure_package_json(project_path: &AbsolutePath) -> Result<(), Error> {
     use tokio::io::AsyncWriteExt;
 
     let package_json_path = project_path.join("package.json");

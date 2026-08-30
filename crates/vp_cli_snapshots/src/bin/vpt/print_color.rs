@@ -2,7 +2,7 @@
 //! escape sequence when `FORCE_COLOR` is set to a non-zero value, otherwise
 //! prints plain text. Used by e2e tests to verify color-env handling.
 
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     if args.len() < 2 {
         return Err("Usage: vpt print-color <color> <text>...".into());
     }

@@ -4,7 +4,7 @@ use std::process::ExitStatus;
 /// Depending on `vp_shared` here would pull its full dependency tree into
 /// this test-only crate and enable serde_json's `preserve_order` feature via
 /// unification, changing `vpt json-edit` output order.
-pub fn exit_code_from_status(status: ExitStatus) -> i32 {
+pub(super) fn exit_code_from_status(status: ExitStatus) -> i32 {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;

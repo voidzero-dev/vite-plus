@@ -18,18 +18,18 @@ const VERBATIM_PREFIX: &[u16] = &[BACKSLASH, BACKSLASH, QUESTION, BACKSLASH];
 const UNC_PREFIX: &[u16] = &[BACKSLASH, BACKSLASH, QUESTION, BACKSLASH, U, N, C, BACKSLASH];
 
 /// Must match `vp_shared::SHIM_POINTER_HEADER`.
-pub const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
+pub(crate) const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum ShimLayout<'a> {
+pub(crate) enum ShimLayout<'a> {
     SingleRoot,
     Split { cache: &'a str },
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ShimPointer<'a> {
-    pub data: &'a str,
-    pub layout: ShimLayout<'a>,
+pub(crate) struct ShimPointer<'a> {
+    pub(crate) data: &'a str,
+    pub(crate) layout: ShimLayout<'a>,
 }
 
 /// Parse the UTF-8 `<name>.shim` sidecar written by `vp_shared::VpDirs`.
@@ -37,7 +37,7 @@ pub struct ShimPointer<'a> {
 /// A sidecar records the directory layout, data root, and cache root.
 /// The parser requires the versioned header.
 /// The parser supports a UTF-8 BOM and CRLF line endings, as `vp_shared` does.
-pub fn parse_shim_pointer(bytes: &[u8]) -> Option<ShimPointer<'_>> {
+pub(crate) fn parse_shim_pointer(bytes: &[u8]) -> Option<ShimPointer<'_>> {
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     let text = core::str::from_utf8(bytes).ok()?.trim();
     let mut lines = text.lines();
@@ -75,7 +75,7 @@ pub fn parse_shim_pointer(bytes: &[u8]) -> Option<ShimPointer<'_>> {
 /// Leading whitespace ends an empty program argument.
 /// Forward `&cmdline[result..]` to the child without changes.
 /// This remaining text includes its leading whitespace.
-pub fn skip_program_argument(cmdline: &[u16]) -> usize {
+pub(crate) fn skip_program_argument(cmdline: &[u16]) -> usize {
     let mut i = 0;
     let mut quoted = false;
     while i < cmdline.len() {
@@ -99,7 +99,7 @@ fn is_path_separator(unit: u16) -> bool {
 /// Before the call, resolve `.` and `..` components.
 /// Before the call, replace `/` separators.
 /// The extended-length namespace uses the remaining path without changes.
-pub fn verbatim_path(path: &[u16]) -> Vec<u16> {
+pub(crate) fn verbatim_path(path: &[u16]) -> Vec<u16> {
     let (prefix, tail) = match path {
         // Keep an existing extended-length or NT namespace.
         [BACKSLASH, BACKSLASH, QUESTION, BACKSLASH, ..]
@@ -125,7 +125,7 @@ pub fn verbatim_path(path: &[u16]) -> Vec<u16> {
 /// Without the separator, `C:\vp.exe` produces the drive-relative path `C:`.
 /// Device roots such as `\\?\Volume{...}\vp.exe` have the same constraint.
 /// Other parent paths omit the final separator, as `Path::parent` does.
-pub fn parent_dir_len(path: &[u16], last_separator: usize) -> usize {
+pub(crate) fn parent_dir_len(path: &[u16], last_separator: usize) -> usize {
     let drive_root = last_separator >= 1 && path[last_separator - 1] == COLON;
     let device_root = last_separator >= 4
         && is_path_separator(path[0])
@@ -143,7 +143,7 @@ pub fn parent_dir_len(path: &[u16], last_separator: usize) -> usize {
 
 /// Return the file-stem length, as `Path::file_stem` does.
 /// The stem ends before the last `.`, but a leading `.` does not start an extension.
-pub fn file_stem_len(name: &[u16]) -> usize {
+pub(crate) fn file_stem_len(name: &[u16]) -> usize {
     match name.iter().skip(1).rposition(|&c| c == DOT) {
         Some(pos) => pos + 1,
         None => name.len(),
@@ -151,13 +151,13 @@ pub fn file_stem_len(name: &[u16]) -> usize {
 }
 
 /// Case-sensitive comparison of a UTF-16 slice against an ASCII string.
-pub fn eq_ascii(wide: &[u16], ascii: &[u8]) -> bool {
+pub(crate) fn eq_ascii(wide: &[u16], ascii: &[u8]) -> bool {
     wide.len() == ascii.len() && wide.iter().zip(ascii).all(|(&w, &a)| w == u16::from(a))
 }
 
 /// Format `value` as decimal ASCII in `buf`.
 /// Return the used suffix.
-pub fn format_u32(mut value: u32, buf: &mut [u8; 10]) -> &[u8] {
+pub(crate) fn format_u32(mut value: u32, buf: &mut [u8; 10]) -> &[u8] {
     let mut i = buf.len();
     loop {
         i -= 1;

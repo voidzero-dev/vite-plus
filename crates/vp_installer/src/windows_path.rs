@@ -44,7 +44,7 @@ fn broadcast_settings_change() {
 }
 
 /// Add a directory to the User PATH (`HKCU\Environment\Path`) if not already present.
-pub fn add_to_user_path(bin_dir: &str) -> io::Result<()> {
+pub(crate) fn add_to_user_path(bin_dir: &str) -> io::Result<()> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let env = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)?;
 

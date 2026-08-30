@@ -26,45 +26,45 @@ pub(crate) fn is_legacy_install_id(value: &str) -> bool {
 /// Metadata for a globally installed package.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PackageMetadata {
+pub(crate) struct PackageMetadata {
     /// Package name
-    pub name: String,
+    pub(crate) name: String,
     /// Package version
-    pub version: String,
+    pub(crate) version: String,
     /// Directory identifier for this installation. Empty or `#`-prefixed for legacy installs.
     #[serde(default)]
-    pub install_id: String,
+    pub(crate) install_id: String,
     /// Platform versions used during installation
-    pub platform: Platform,
+    pub(crate) platform: Platform,
     /// Binary names provided by this package
-    pub bins: Vec<String>,
+    pub(crate) bins: Vec<String>,
     /// Binary names that are JavaScript files (need Node.js to run).
     #[serde(default)]
-    pub js_bins: HashSet<String>,
+    pub(crate) js_bins: HashSet<String>,
     /// Version spec the package was installed with (a dist-tag like
     /// `nightly`, a range, or an exact version), so `vp update -g` keeps
     /// resolving within it. `None` means the implicit `latest` tag.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub version_spec: Option<String>,
+    pub(crate) version_spec: Option<String>,
     /// Package manager used for installation (npm, yarn, pnpm)
-    pub manager: String,
+    pub(crate) manager: String,
     /// Installation timestamp
-    pub installed_at: DateTime<Utc>,
+    pub(crate) installed_at: DateTime<Utc>,
 }
 
 /// Platform versions pinned to this package.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Platform {
+pub(crate) struct Platform {
     /// Node.js version
-    pub node: String,
+    pub(crate) node: String,
     /// npm version (if applicable)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub npm: Option<String>,
+    pub(crate) npm: Option<String>,
 }
 
 impl PackageMetadata {
     /// Create new package metadata.
-    pub fn new(
+    pub(crate) fn new(
         name: String,
         version: String,
         node_version: String,
@@ -89,7 +89,7 @@ impl PackageMetadata {
     /// Registry spec update flows should reinstall this package with:
     /// qualified with the recorded version spec when the install had one,
     /// the bare name (implicit `latest`) otherwise.
-    pub fn update_spec(&self) -> String {
+    pub(crate) fn update_spec(&self) -> String {
         match &self.version_spec {
             Some(spec) => format!("{}@{spec}", self.name),
             None => self.name.clone(),
@@ -97,17 +97,17 @@ impl PackageMetadata {
     }
 
     /// Check if a binary requires Node.js to run.
-    pub fn is_js_binary(&self, bin_name: &str) -> bool {
+    pub(crate) fn is_js_binary(&self, bin_name: &str) -> bool {
         self.js_bins.contains(bin_name)
     }
 
     /// Get the package installation prefix.
-    pub fn installation_dir(&self) -> Result<AbsolutePathBuf, Error> {
+    pub(crate) fn installation_dir(&self) -> Result<AbsolutePathBuf, Error> {
         Self::installation_dir_for(&self.name, &self.install_id)
     }
 
     /// Resolve an installation prefix, including both legacy layouts.
-    pub fn installation_dir_for(
+    pub(crate) fn installation_dir_for(
         package_name: &str,
         install_id: &str,
     ) -> Result<AbsolutePathBuf, Error> {
@@ -127,13 +127,13 @@ impl PackageMetadata {
     }
 
     /// Get the metadata file path for a package.
-    pub fn metadata_path(package_name: &str) -> Result<AbsolutePathBuf, Error> {
+    pub(crate) fn metadata_path(package_name: &str) -> Result<AbsolutePathBuf, Error> {
         let packages_dir = get_packages_dir()?;
         Ok(packages_dir.join(format!("{package_name}.json")))
     }
 
     /// Load metadata for a package.
-    pub async fn load(package_name: &str) -> Result<Option<Self>, Error> {
+    pub(crate) async fn load(package_name: &str) -> Result<Option<Self>, Error> {
         let path = Self::metadata_path(package_name)?;
         if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
             return Ok(None);
@@ -144,7 +144,7 @@ impl PackageMetadata {
     }
 
     /// Save metadata for a package.
-    pub async fn save(&self) -> Result<(), Error> {
+    pub(crate) async fn save(&self) -> Result<(), Error> {
         let path = Self::metadata_path(&self.name)?;
         // Create parent directory (handles scoped packages like @scope/pkg.json)
         if let Some(parent) = path.parent() {
@@ -157,7 +157,7 @@ impl PackageMetadata {
     }
 
     /// Delete metadata for a package.
-    pub async fn delete(package_name: &str) -> Result<(), Error> {
+    pub(crate) async fn delete(package_name: &str) -> Result<(), Error> {
         let path = Self::metadata_path(package_name)?;
         if tokio::fs::try_exists(&path).await.unwrap_or(false) {
             tokio::fs::remove_file(&path).await?;
@@ -166,7 +166,7 @@ impl PackageMetadata {
     }
 
     /// List all installed packages.
-    pub async fn list_all() -> Result<Vec<Self>, Error> {
+    pub(crate) async fn list_all() -> Result<Vec<Self>, Error> {
         let packages_dir = get_packages_dir()?;
         if !tokio::fs::try_exists(&packages_dir).await.unwrap_or(false) {
             return Ok(Vec::new());

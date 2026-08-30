@@ -14,15 +14,15 @@ use crate::{commands::env::config, shim::dispatch};
 
 /// Parsed vpx flags.
 #[derive(Debug, Default)]
-pub struct VpxFlags {
+pub(crate) struct VpxFlags {
     /// Packages to install (from --package/-p)
-    pub packages: Vec<String>,
+    pub(crate) packages: Vec<String>,
     /// Execute within a shell environment (-c/--shell-mode)
-    pub shell_mode: bool,
+    pub(crate) shell_mode: bool,
     /// Suppress output (-s/--silent)
-    pub silent: bool,
+    pub(crate) silent: bool,
     /// Show help (-h/--help)
-    pub help: bool,
+    pub(crate) help: bool,
 }
 
 /// Help text for vpx.
@@ -57,7 +57,7 @@ struct GlobalBinary {
 /// Main entry point for vpx execution.
 ///
 /// Called from shim dispatch when `argv[0]` is `vpx`.
-pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
+pub(crate) async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
     let (flags, positional) = parse_vpx_args(args);
 
     // Show help
@@ -233,7 +233,7 @@ fn prepend_node_modules_bin_to_path(cwd: &AbsolutePath) {
 ///
 /// On Windows, also checks for `.cmd` extension.
 /// Returns the absolute path to the binary if found.
-pub fn find_local_binary(cwd: &AbsolutePath, cmd: &str) -> Option<AbsolutePathBuf> {
+pub(crate) fn find_local_binary(cwd: &AbsolutePath, cmd: &str) -> Option<AbsolutePathBuf> {
     let mut current = cwd;
     loop {
         let bin_dir = current.join("node_modules").join(".bin");
@@ -266,7 +266,7 @@ pub fn find_local_binary(cwd: &AbsolutePath, cmd: &str) -> Option<AbsolutePathBu
 ///
 /// Scoped packages like `@vue/cli` are not version specs, but
 /// `@vue/cli@5.0.0` is.
-pub fn has_version_spec(spec: &str) -> bool {
+pub(crate) fn has_version_spec(spec: &str) -> bool {
     if spec.starts_with('@') {
         // Scoped package: @scope/pkg@version
         if let Some(slash_pos) = spec.find('/') {
@@ -307,7 +307,7 @@ fn extract_command_name(spec: &str) -> String {
 ///
 /// All flags must come before the first positional argument (npx-style).
 /// Returns the parsed flags and remaining positional arguments.
-pub fn parse_vpx_args(args: &[String]) -> (VpxFlags, Vec<String>) {
+pub(crate) fn parse_vpx_args(args: &[String]) -> (VpxFlags, Vec<String>) {
     let mut flags = VpxFlags::default();
     let mut positional = Vec::new();
     let mut i = 0;

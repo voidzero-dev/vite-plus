@@ -3,7 +3,7 @@
 /// Prints each file's bytes like cat, and like cat exits nonzero when any
 /// operand is missing, so migrated `cat` assertions keep their shell exit
 /// semantics under the runner's failure flow.
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write as _;
     let stdout = std::io::stdout();
     let mut out = stdout.lock();

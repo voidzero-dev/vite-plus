@@ -11,6 +11,9 @@ use vt_path::AbsolutePathBuf;
 use crate::{cli::PinTarget, error::Error};
 
 /// Execute the unpin command.
-pub async fn execute(cwd: AbsolutePathBuf, target: Option<PinTarget>) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(
+    cwd: AbsolutePathBuf,
+    target: Option<PinTarget>,
+) -> Result<ExitStatus, Error> {
     super::pin::do_unpin(&cwd, target).await
 }

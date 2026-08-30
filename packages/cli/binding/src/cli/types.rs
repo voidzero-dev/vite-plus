@@ -19,14 +19,14 @@ pub(crate) struct ResolvedUniversalViteConfig {
 
 /// Result type for resolved commands from JavaScript
 #[derive(Debug, Clone)]
-pub struct ResolveCommandResult {
-    pub bin_path: Arc<OsStr>,
-    pub envs: Vec<(String, String)>,
+pub(crate) struct ResolveCommandResult {
+    pub(crate) bin_path: Arc<OsStr>,
+    pub(crate) envs: Vec<(String, String)>,
 }
 
 /// Built-in subcommands that resolve to a concrete tool (oxlint, vitest, vite, etc.)
 #[derive(Debug, Clone, Subcommand)]
-pub enum SynthesizableSubcommand {
+pub(crate) enum SynthesizableSubcommand {
     /// Lint code
     #[command(disable_help_flag = true)]
     Lint {
@@ -96,18 +96,18 @@ pub enum SynthesizableSubcommand {
 }
 
 #[derive(Debug, clap::Args)]
-pub struct ToolchainArgs {
+pub(crate) struct ToolchainArgs {
     /// Tool or package names to show
     #[arg(value_name = "TOOLS")]
-    pub tools: Vec<String>,
+    pub(crate) tools: Vec<String>,
 
     /// Print the graph as JSON
     #[arg(long)]
-    pub json: bool,
+    pub(crate) json: bool,
 
     /// Use the global Vite+ toolchain
     #[arg(long)]
-    pub global: bool,
+    pub(crate) global: bool,
 }
 
 /// Top-level CLI argument parser for vite-plus.
@@ -135,28 +135,28 @@ pub(super) enum CLIArgs {
 
 /// Type alias for boxed async resolver function
 /// NOTE: Uses anyhow::Error to avoid NAPI type inference issues
-pub type BoxedResolverFn =
+pub(crate) type BoxedResolverFn =
     Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<ResolveCommandResult>> + 'static>>>;
 
 /// Type alias for vite config resolver function (takes package path, returns JSON string)
 /// Uses Arc for cloning and Send + Sync for use in UserConfigLoader
-pub type ViteConfigResolverFn = Arc<
+pub(crate) type ViteConfigResolverFn = Arc<
     dyn Fn(String) -> Pin<Box<dyn Future<Output = anyhow::Result<String>> + Send + 'static>>
         + Send
         + Sync,
 >;
 
 /// CLI options containing JavaScript resolver functions (using boxed futures for simplicity)
-pub struct CliOptions {
-    pub lint: BoxedResolverFn,
-    pub fmt: BoxedResolverFn,
-    pub vite: BoxedResolverFn,
-    pub test: BoxedResolverFn,
-    pub pack: BoxedResolverFn,
-    pub doc: BoxedResolverFn,
-    pub toolchain_manifest_path: String,
-    pub vite_plus_package_path: String,
-    pub resolve_universal_vite_config: ViteConfigResolverFn,
+pub(crate) struct CliOptions {
+    pub(crate) lint: BoxedResolverFn,
+    pub(crate) fmt: BoxedResolverFn,
+    pub(crate) vite: BoxedResolverFn,
+    pub(crate) test: BoxedResolverFn,
+    pub(crate) pack: BoxedResolverFn,
+    pub(crate) doc: BoxedResolverFn,
+    pub(crate) toolchain_manifest_path: String,
+    pub(crate) vite_plus_package_path: String,
+    pub(crate) resolve_universal_vite_config: ViteConfigResolverFn,
 }
 
 /// A resolved subcommand ready for execution.

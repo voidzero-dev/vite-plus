@@ -51,7 +51,7 @@ fn hooks_command() -> Command {
 }
 
 #[napi(object, object_from_js = false)]
-pub struct HooksArgs {
+pub(crate) struct HooksArgs {
     #[napi(ts_type = "'enable' | 'disable' | 'status'")]
     pub command: String,
     pub hooks_dir: Option<String>,
@@ -68,6 +68,7 @@ impl From<HooksCliArgs> for HooksArgs {
     }
 }
 
+#[expect(unreachable_pub, reason = "NAPI requires public enums for JavaScript exports")]
 #[napi(discriminant = "status", discriminant_case = "camelCase", object_from_js = false)]
 pub enum ParseHooksArgsOutcome {
     Ok { value: HooksArgs },
@@ -86,7 +87,7 @@ fn command_for_help(mut command: Command, argv: &[String]) -> Command {
 }
 
 #[napi]
-pub fn parse_hooks_args(argv: Vec<String>) -> ParseHooksArgsOutcome {
+pub(crate) fn parse_hooks_args(argv: Vec<String>) -> ParseHooksArgsOutcome {
     let help_argv = argv.clone();
     match parse_args::<HooksCliArgs>(hooks_command(), argv) {
         ParseResult::Ok(value) => ParseHooksArgsOutcome::Ok { value: value.into() },

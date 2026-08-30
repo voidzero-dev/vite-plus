@@ -15,7 +15,7 @@ use crate::error::Error;
 /// Source that installed a binary.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum BinSource {
+pub(crate) enum BinSource {
     /// Installed via `vp install -g` (managed shim)
     #[default]
     Vp,
@@ -26,43 +26,48 @@ pub enum BinSource {
 /// Config for a single binary, stored at `<DATA>/bins/{name}.json`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BinConfig {
+pub(crate) struct BinConfig {
     /// Binary name
-    pub name: String,
+    pub(crate) name: String,
     /// Package that installed this binary
-    pub package: String,
+    pub(crate) package: String,
     /// Package version
-    pub version: String,
+    pub(crate) version: String,
     /// Node.js version used
-    pub node_version: String,
+    pub(crate) node_version: String,
     /// How this binary was installed
     #[serde(default)]
-    pub source: BinSource,
+    pub(crate) source: BinSource,
 }
 
 impl BinConfig {
     /// Create a new BinConfig with `Vp` source (used by `vp install -g`).
-    pub fn new(name: String, package: String, version: String, node_version: String) -> Self {
+    pub(crate) fn new(
+        name: String,
+        package: String,
+        version: String,
+        node_version: String,
+    ) -> Self {
         Self { name, package, version, node_version, source: BinSource::Vp }
     }
 
     /// Create a new BinConfig with `Npm` source (used by npm install -g interception).
-    pub fn new_npm(name: String, package: String, node_version: String) -> Self {
+    pub(crate) fn new_npm(name: String, package: String, node_version: String) -> Self {
         Self { name, package, version: String::new(), node_version, source: BinSource::Npm }
     }
 
     /// Get the bins directory path (`<DATA>/bins`).
-    pub fn bins_dir() -> Result<AbsolutePathBuf, Error> {
+    pub(crate) fn bins_dir() -> Result<AbsolutePathBuf, Error> {
         Ok(vp_shared::EnvConfig::get().dirs.data.join("bins"))
     }
 
     /// Get the path to a binary's config file.
-    pub fn path(bin_name: &str) -> Result<AbsolutePathBuf, Error> {
+    pub(crate) fn path(bin_name: &str) -> Result<AbsolutePathBuf, Error> {
         Ok(Self::bins_dir()?.join(format!("{bin_name}.json")))
     }
 
     /// Load config for a binary (synchronous).
-    pub fn load_sync(bin_name: &str) -> Result<Option<Self>, Error> {
+    pub(crate) fn load_sync(bin_name: &str) -> Result<Option<Self>, Error> {
         let path = Self::path(bin_name)?;
         match std::fs::read_to_string(path.as_path()) {
             Ok(content) => {
@@ -77,7 +82,7 @@ impl BinConfig {
     }
 
     /// Save config for a binary (synchronous).
-    pub fn save_sync(&self) -> Result<(), Error> {
+    pub(crate) fn save_sync(&self) -> Result<(), Error> {
         let path = Self::path(&self.name)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -90,7 +95,7 @@ impl BinConfig {
     }
 
     /// Delete config for a binary (synchronous).
-    pub fn delete_sync(bin_name: &str) -> Result<(), Error> {
+    pub(crate) fn delete_sync(bin_name: &str) -> Result<(), Error> {
         let path = Self::path(bin_name)?;
         match std::fs::remove_file(path.as_path()) {
             Ok(()) => Ok(()),
@@ -100,7 +105,7 @@ impl BinConfig {
     }
 
     /// Load config for a binary.
-    pub async fn load(bin_name: &str) -> Result<Option<Self>, Error> {
+    pub(crate) async fn load(bin_name: &str) -> Result<Option<Self>, Error> {
         let path = Self::path(bin_name)?;
         if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
             return Ok(None);
@@ -112,7 +117,7 @@ impl BinConfig {
     }
 
     /// Save config for a binary.
-    pub async fn save(&self) -> Result<(), Error> {
+    pub(crate) async fn save(&self) -> Result<(), Error> {
         let path = Self::path(&self.name)?;
 
         // Ensure bins directory exists
@@ -128,7 +133,7 @@ impl BinConfig {
     }
 
     /// Delete config for a binary.
-    pub async fn delete(bin_name: &str) -> Result<(), Error> {
+    pub(crate) async fn delete(bin_name: &str) -> Result<(), Error> {
         let path = Self::path(bin_name)?;
         if tokio::fs::try_exists(&path).await.unwrap_or(false) {
             tokio::fs::remove_file(&path).await?;
@@ -141,7 +146,7 @@ impl BinConfig {
     /// Used during shim refresh to discover package shims that need their
     /// trampoline executables updated after a vite-plus upgrade.
     #[cfg_attr(not(windows), allow(dead_code))] // Only called from #[cfg(windows)] refresh_package_shims
-    pub async fn find_all_vp_source() -> Result<Vec<String>, Error> {
+    pub(crate) async fn find_all_vp_source() -> Result<Vec<String>, Error> {
         Self::find_bins_where(|config| config.source == BinSource::Vp).await
     }
 
@@ -149,7 +154,7 @@ impl BinConfig {
     ///
     /// This is used as a fallback during uninstall when PackageMetadata is missing
     /// (orphan recovery).
-    pub async fn find_by_package(package_name: &str) -> Result<Vec<String>, Error> {
+    pub(crate) async fn find_by_package(package_name: &str) -> Result<Vec<String>, Error> {
         Self::find_bins_where(|config| config.package == package_name).await
     }
 

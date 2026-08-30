@@ -59,7 +59,7 @@ fn config_command() -> Command {
 }
 
 #[napi(object, object_from_js = false)]
-pub struct ConfigArgs {
+pub(crate) struct ConfigArgs {
     pub hooks_dir: Option<String>,
     pub hooks: Option<bool>,
     pub agent: Option<bool>,
@@ -75,6 +75,7 @@ impl From<ConfigCliArgs> for ConfigArgs {
     }
 }
 
+#[expect(unreachable_pub, reason = "NAPI requires public enums for JavaScript exports")]
 #[napi(discriminant = "status", discriminant_case = "camelCase", object_from_js = false)]
 pub enum ParseConfigArgsOutcome {
     Ok { value: ConfigArgs },
@@ -83,7 +84,7 @@ pub enum ParseConfigArgsOutcome {
 }
 
 #[napi]
-pub fn parse_config_args(argv: Vec<String>) -> ParseConfigArgsOutcome {
+pub(crate) fn parse_config_args(argv: Vec<String>) -> ParseConfigArgsOutcome {
     match parse_args::<ConfigCliArgs>(config_command(), argv) {
         ParseResult::Ok(value) => ParseConfigArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {

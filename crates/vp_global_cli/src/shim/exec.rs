@@ -23,7 +23,7 @@ fn sync_child_pwd(cmd: &mut std::process::Command) {
 ///
 /// Unlike `exec_tool()`, this does NOT replace the current process on Unix,
 /// allowing the caller to run code after the tool exits.
-pub fn spawn_tool(path: &AbsolutePath, args: &[String]) -> i32 {
+pub(crate) fn spawn_tool(path: &AbsolutePath, args: &[String]) -> i32 {
     let mut cmd = std::process::Command::new(path.as_path());
     cmd.args(args);
     sync_child_pwd(&mut cmd);
@@ -39,7 +39,7 @@ pub fn spawn_tool(path: &AbsolutePath, args: &[String]) -> i32 {
 /// Execute a tool, replacing the current process on Unix.
 ///
 /// Returns an exit code on Windows or if exec fails on Unix.
-pub fn exec_tool(path: &AbsolutePath, args: &[String]) -> i32 {
+pub(crate) fn exec_tool(path: &AbsolutePath, args: &[String]) -> i32 {
     #[cfg(unix)]
     {
         exec_unix(path, args)

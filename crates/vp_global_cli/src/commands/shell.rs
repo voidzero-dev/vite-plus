@@ -8,7 +8,7 @@ use vt_str::Str;
 
 /// Detected shell type for output formatting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Shell {
+pub(crate) enum Shell {
     /// POSIX shell (bash, zsh, sh)
     Posix,
     /// Fish shell
@@ -40,7 +40,7 @@ impl FromStr for Shell {
 /// 1. `VP_SHELL` environment variable
 /// 2. Platform default
 #[must_use]
-pub fn detect_shell() -> Shell {
+pub(crate) fn detect_shell() -> Shell {
     let config = vp_shared::EnvConfig::get();
 
     // 1. Check VP_SHELL environment variable
@@ -57,7 +57,7 @@ pub fn detect_shell() -> Shell {
 /// All shell profile files that interactive terminal sessions may source.
 /// This matches the files that `install.sh` writes to and `vp implode` cleans.
 #[cfg(not(windows))]
-pub const ALL_SHELL_PROFILES: &[ShellProfile] = &[
+pub(crate) const ALL_SHELL_PROFILES: &[ShellProfile] = &[
     ShellProfile {
         root: ShellProfileRoot::Zsh,
         path: ".zshenv",
@@ -121,7 +121,7 @@ pub const ALL_SHELL_PROFILES: &[ShellProfile] = &[
 ];
 
 #[cfg(windows)]
-pub const ALL_SHELL_PROFILES: &[ShellProfile] = &[
+pub(crate) const ALL_SHELL_PROFILES: &[ShellProfile] = &[
     ShellProfile {
         root: ShellProfileRoot::NushellConfig,
         path: "nushell/config.nu",
@@ -148,7 +148,7 @@ pub const ALL_SHELL_PROFILES: &[ShellProfile] = &[
 /// - macOS: `.zshenv` is sourced for all zsh invocations (including IDE env resolution)
 /// - Linux: `.profile` is sourced by X11 display managers; `.zshenv` covers Wayland + zsh
 #[cfg(target_os = "macos")]
-pub const IDE_SHELL_PROFILES: &[ShellProfile] = &[
+pub(crate) const IDE_SHELL_PROFILES: &[ShellProfile] = &[
     ShellProfile {
         root: ShellProfileRoot::Zsh,
         path: ".zshenv",
@@ -164,7 +164,7 @@ pub const IDE_SHELL_PROFILES: &[ShellProfile] = &[
 ];
 
 #[cfg(target_os = "linux")]
-pub const IDE_SHELL_PROFILES: &[ShellProfile] = &[
+pub(crate) const IDE_SHELL_PROFILES: &[ShellProfile] = &[
     ShellProfile {
         root: ShellProfileRoot::Home,
         path: ".profile",
@@ -180,25 +180,25 @@ pub const IDE_SHELL_PROFILES: &[ShellProfile] = &[
 ];
 
 #[cfg(windows)]
-pub const IDE_SHELL_PROFILES: &[ShellProfile] = &[];
+pub(crate) const IDE_SHELL_PROFILES: &[ShellProfile] = &[];
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
-pub const IDE_SHELL_PROFILES: &[ShellProfile] = &[ShellProfile {
+pub(crate) const IDE_SHELL_PROFILES: &[ShellProfile] = &[ShellProfile {
     root: ShellProfileRoot::Home,
     path: ".profile",
     env_file: "env",
     kind: ShellProfileKind::Main,
 }];
 
-pub struct ShellProfile {
-    pub root: ShellProfileRoot,
-    pub path: &'static str,
-    pub env_file: &'static str,
-    pub kind: ShellProfileKind,
+pub(crate) struct ShellProfile {
+    pub(crate) root: ShellProfileRoot,
+    pub(crate) path: &'static str,
+    pub(crate) env_file: &'static str,
+    pub(crate) kind: ShellProfileKind,
 }
 
 #[derive(Clone, Copy)]
-pub enum ShellProfileRoot {
+pub(crate) enum ShellProfileRoot {
     #[cfg_attr(windows, allow(dead_code))]
     Home,
     #[cfg_attr(windows, allow(dead_code))]
@@ -210,7 +210,7 @@ pub enum ShellProfileRoot {
 }
 
 #[derive(Clone, Copy)]
-pub enum ShellProfileKind {
+pub(crate) enum ShellProfileKind {
     Main,
     Snippet,
 }

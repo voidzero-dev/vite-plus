@@ -185,7 +185,7 @@ macro_rules! resolutions {
         /// Resolve this category through the source chain. The first candidate
         /// wins. The caller resolves and provides `home`. Sources that do not
         /// need it ignore it.
-        pub fn $method(home: &AbsolutePath) -> Option<AbsolutePathBuf> {
+        pub(super) fn $method(home: &AbsolutePath) -> Option<AbsolutePathBuf> {
             $({
                 let source = <$resolution>::resolver(home);
                 if let Some(dir) = source.$method() {

@@ -12,7 +12,7 @@ use super::{config, list::list_installed_versions};
 use crate::error::Error;
 
 /// Execute the clean command.
-pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     let config = vp_shared::EnvConfig::get();
     let data_dir = &config.dirs.data;
     let node_dir = data_dir.join("js_runtime").join("node");

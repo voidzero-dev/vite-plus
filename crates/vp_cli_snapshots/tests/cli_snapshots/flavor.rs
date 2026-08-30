@@ -14,13 +14,13 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Flavor {
+pub(super) enum Flavor {
     Local,
     Global,
 }
 
 impl Flavor {
-    pub const fn as_str(self) -> &'static str {
+    pub(super) const fn as_str(self) -> &'static str {
         match self {
             Self::Local => "local",
             Self::Global => "global",
@@ -29,42 +29,42 @@ impl Flavor {
 }
 
 /// Everything the runner needs to spawn commands under one flavor.
-pub struct FlavorRuntime {
-    pub runner_bin_dir: PathBuf,
-    pub vpt: PathBuf,
+pub(super) struct FlavorRuntime {
+    pub(super) runner_bin_dir: PathBuf,
+    pub(super) vpt: PathBuf,
     /// Runner-owned POSIX shell binaries used by fixtures that execute the
     /// generated `env` file.
-    pub sh: Option<PathBuf>,
-    pub bash: Option<PathBuf>,
-    pub zsh: Option<PathBuf>,
+    pub(super) sh: Option<PathBuf>,
+    pub(super) bash: Option<PathBuf>,
+    pub(super) zsh: Option<PathBuf>,
     /// Runner-owned Fish binary used by fixtures that execute generated
     /// `env.fish` files. CI supplies it through `VP_SNAP_FISH_BIN`.
-    pub fish: Option<PathBuf>,
+    pub(super) fish: Option<PathBuf>,
     /// Runner-owned Nushell binary used by fixtures that execute generated
     /// `env.nu` files. CI supplies it through `VP_SNAP_NU_BIN`.
-    pub nu: Option<PathBuf>,
+    pub(super) nu: Option<PathBuf>,
     /// Canonical PowerShell binary used by fixtures that execute generated
     /// `env.ps1` files. CI supplies it through `VP_SNAP_PWSH_BIN`.
-    pub pwsh: Option<PathBuf>,
+    pub(super) pwsh: Option<PathBuf>,
     /// Canonical system cmd.exe used by fixtures that execute generated batch
     /// files. CI supplies it through `VP_SNAP_CMD_BIN`; it is not relocated.
-    pub cmd: Option<PathBuf>,
+    pub(super) cmd: Option<PathBuf>,
     /// Source global `vp` binary to install into each case's `VP_HOME/current`.
-    pub global_vp: PathBuf,
+    pub(super) global_vp: PathBuf,
     /// Source package installed into each case's `VP_HOME/current/node_modules`.
-    pub cli_package_dir: PathBuf,
+    pub(super) cli_package_dir: PathBuf,
 }
 
 /// The runner crate's manifest dir. The runtime env var wins: cargo sets it
 /// for test processes, and nextest rewrites it when running a relocated
 /// archive (`--workspace-remap`), where the compile-time path is a
 /// build-machine path that no longer exists.
-pub fn manifest_dir() -> PathBuf {
+pub(super) fn manifest_dir() -> PathBuf {
     std::env::var_os("CARGO_MANIFEST_DIR")
         .map_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")), PathBuf::from)
 }
 
-pub fn repo_root() -> PathBuf {
+pub(super) fn repo_root() -> PathBuf {
     manifest_dir().parent().unwrap().parent().unwrap().to_path_buf()
 }
 
@@ -227,38 +227,38 @@ fn optional_tool_path(env_var: &str, binary: &str) -> Result<Option<PathBuf>, St
 
 /// Resolves an optional Fish binary for fixtures that exercise generated
 /// `env.fish` files.
-pub fn fish_path() -> Result<Option<PathBuf>, String> {
+pub(super) fn fish_path() -> Result<Option<PathBuf>, String> {
     optional_tool_path("VP_SNAP_FISH_BIN", "fish")
 }
 
-pub fn sh_path() -> Result<Option<PathBuf>, String> {
+pub(super) fn sh_path() -> Result<Option<PathBuf>, String> {
     optional_tool_path("VP_SNAP_SH_BIN", "sh")
 }
 
-pub fn bash_path() -> Result<Option<PathBuf>, String> {
+pub(super) fn bash_path() -> Result<Option<PathBuf>, String> {
     optional_tool_path("VP_SNAP_BASH_BIN", "bash")
 }
 
-pub fn zsh_path() -> Result<Option<PathBuf>, String> {
+pub(super) fn zsh_path() -> Result<Option<PathBuf>, String> {
     optional_tool_path("VP_SNAP_ZSH_BIN", "zsh")
 }
 
 /// Resolves an optional Nushell binary for fixtures that exercise generated
 /// `env.nu` files.
-pub fn nushell_path() -> Result<Option<PathBuf>, String> {
+pub(super) fn nushell_path() -> Result<Option<PathBuf>, String> {
     optional_tool_path("VP_SNAP_NU_BIN", "nu")
 }
 
 /// Resolves an optional PowerShell binary for fixtures that exercise generated
 /// `env.ps1` files.
-pub fn powershell_path() -> Result<Option<PathBuf>, String> {
+pub(super) fn powershell_path() -> Result<Option<PathBuf>, String> {
     optional_tool_path("VP_SNAP_PWSH_BIN", "pwsh")
 }
 
 /// Resolves an optional cmd.exe for fixtures that exercise generated batch
 /// files. Keep the canonical system executable in place instead of copying it
 /// into the runner bin directory.
-pub fn cmd_path() -> Result<Option<PathBuf>, String> {
+pub(super) fn cmd_path() -> Result<Option<PathBuf>, String> {
     let path = optional_tool_path("VP_SNAP_CMD_BIN", "cmd.exe")?;
     path.map(|path| {
         std::fs::canonicalize(&path)
@@ -269,8 +269,8 @@ pub fn cmd_path() -> Result<Option<PathBuf>, String> {
 
 /// Home-layout names, shared with `CaseHome` in main.rs so the product's
 /// `~/.vite-plus/js_runtime` layout is spelled once.
-pub const VP_HOME_DIR: &str = ".vite-plus";
-pub const JS_RUNTIME_DIR: &str = "js_runtime";
+pub(super) const VP_HOME_DIR: &str = ".vite-plus";
+pub(super) const JS_RUNTIME_DIR: &str = "js_runtime";
 
 /// Directory holding an already-provisioned managed JS runtime that each
 /// case's `VP_HOME` is seeded with (symlinked, read-mostly). Without a seed,
@@ -279,7 +279,7 @@ pub const JS_RUNTIME_DIR: &str = "js_runtime";
 /// there); defaults to the developer's real `~/.vite-plus/js_runtime`.
 /// Cases that test runtime provisioning itself opt out via
 /// `seed-runtime = false`.
-pub fn js_runtime_seed_dir() -> Option<PathBuf> {
+pub(super) fn js_runtime_seed_dir() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("VP_SNAP_JS_RUNTIME_DIR") {
         let dir = PathBuf::from(dir);
         return dir.is_dir().then_some(dir);
@@ -293,7 +293,7 @@ pub fn js_runtime_seed_dir() -> Option<PathBuf> {
 /// node shim (which resolves a project-pinned version from its cwd). Used for
 /// runner infrastructure like the local-registry server, which needs a
 /// TypeScript-capable Node regardless of what the fixture under test pins.
-pub fn seed_runtime_node() -> Option<PathBuf> {
+pub(super) fn seed_runtime_node() -> Option<PathBuf> {
     let node_root = js_runtime_seed_dir()?.join("node");
     let mut versions: Vec<(Vec<u64>, PathBuf)> = std::fs::read_dir(&node_root)
         .ok()?
@@ -339,7 +339,7 @@ fn install_runner_tool(bin_dir: &Path, name: &str, target: &Path) -> Result<Path
 /// Installs a real executable file. Used for the standalone global layout under
 /// `VP_HOME/current/bin`, where symlinking to the build output would test the
 /// wrong installation shape.
-pub fn install_file(dest: &Path, source: &Path, label: &str) -> Result<(), String> {
+pub(super) fn install_file(dest: &Path, source: &Path, label: &str) -> Result<(), String> {
     let source = std::fs::canonicalize(source).unwrap_or_else(|_| source.to_path_buf());
     std::fs::hard_link(&source, dest)
         .or_else(|_| std::fs::copy(&source, dest).map(|_| ()))
@@ -348,7 +348,7 @@ pub fn install_file(dest: &Path, source: &Path, label: &str) -> Result<(), Strin
 
 /// Best-effort directory link. On Windows, directory symlinks may require
 /// privileges, so a junction (which never does) is the fallback.
-pub fn link_dir(target: &Path, link: &Path) {
+pub(super) fn link_dir(target: &Path, link: &Path) {
     #[cfg(unix)]
     let _ = std::os::unix::fs::symlink(target, link);
     #[cfg(windows)]
@@ -358,7 +358,7 @@ pub fn link_dir(target: &Path, link: &Path) {
 }
 
 /// Creates the per-run bin directory for `flavor` under `run_root`.
-pub fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, String> {
+pub(super) fn provision(flavor: Flavor, run_root: &Path) -> Result<FlavorRuntime, String> {
     let runner_bin_dir = run_root.join(format!("bin-{}", flavor.as_str()));
     std::fs::create_dir_all(&runner_bin_dir)
         .map_err(|e| format!("failed to create bin dir: {e}"))?;

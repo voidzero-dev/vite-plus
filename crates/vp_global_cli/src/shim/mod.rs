@@ -15,14 +15,13 @@ pub(crate) mod exec;
 use std::fs;
 
 pub(crate) use cache::invalidate_cache;
-pub use dispatch::dispatch;
-pub(crate) use dispatch::find_system_tool;
+pub(crate) use dispatch::{dispatch, find_system_tool};
 use vp_shared::env_vars;
 
 use crate::commands::env::config::get_bin_dir;
 
 /// Core shim tools managed directly by the main dispatch path.
-pub const CORE_SHIM_TOOLS: &[&str] =
+pub(crate) const CORE_SHIM_TOOLS: &[&str] =
     &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"];
 
 /// Extract the tool name from argv[0].
@@ -33,7 +32,7 @@ pub const CORE_SHIM_TOOLS: &[&str] =
 /// - `/usr/bin/node` (Unix full path)
 /// - `node.exe` (Windows)
 /// - `C:\path\node.exe` (Windows full path)
-pub fn extract_tool_name(argv0: &str) -> String {
+pub(crate) fn extract_tool_name(argv0: &str) -> String {
     let path = std::path::Path::new(argv0);
 
     // Handle Windows: strip .exe, .cmd extensions if present in stem
@@ -66,7 +65,7 @@ pub fn extract_tool_name(argv0: &str) -> String {
 
 /// Check if the given tool name is managed directly by the core shim path.
 #[must_use]
-pub fn is_core_shim_tool(tool: &str) -> bool {
+pub(crate) fn is_core_shim_tool(tool: &str) -> bool {
     CORE_SHIM_TOOLS.contains(&tool)
 }
 
@@ -76,7 +75,7 @@ pub fn is_core_shim_tool(tool: &str) -> bool {
 /// 1. The tool is a core shim, OR
 /// 2. The tool name is not "vp" (package binaries are detected later via metadata)
 #[must_use]
-pub fn is_shim_tool(tool: &str) -> bool {
+pub(crate) fn is_shim_tool(tool: &str) -> bool {
     // Core tools are always shims
     if is_core_shim_tool(tool) {
         return true;
@@ -144,7 +143,7 @@ const LEGACY_SHIM_TOOL_ENV_VAR: &str = "VITE_PLUS_SHIM_TOOL";
 ///
 /// IMPORTANT: This function clears both env vars after reading to
 /// prevent them from leaking to child processes.
-pub fn detect_shim_tool(argv0: &str) -> Option<String> {
+pub(crate) fn detect_shim_tool(argv0: &str) -> Option<String> {
     // Always clear both env vars to prevent them from leaking to child processes.
     // We read them first, then clear immediately.
     // SAFETY: We're at program startup before any threads are spawned.

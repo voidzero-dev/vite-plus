@@ -1,4 +1,4 @@
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run() -> Result<(), Box<dyn std::error::Error>> {
     use std::io::{Read as _, Write as _};
     let mut stdin = std::io::stdin().lock();
     let mut stdout = std::io::stdout().lock();

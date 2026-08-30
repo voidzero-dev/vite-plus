@@ -8,7 +8,7 @@ use super::config::{ShimMode, load_config, save_config};
 use crate::{error::Error, help};
 
 /// Execute the `vp env on` command.
-pub async fn execute() -> Result<ExitStatus, Error> {
+pub(crate) async fn execute() -> Result<ExitStatus, Error> {
     let mut config = load_config().await?;
 
     if config.shim_mode == ShimMode::Managed {

@@ -1,4 +1,4 @@
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     if args.len() < 3 {
         return Err("Usage: vpt replace-file-content <filename> <searchValue> <newValue>".into());
     }

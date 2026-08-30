@@ -1,4 +1,4 @@
-pub fn run() {
+pub(super) fn run() {
     use std::io::IsTerminal as _;
     let stdin_tty = if std::io::stdin().is_terminal() { "tty" } else { "not-tty" };
     let stdout_tty = if std::io::stdout().is_terminal() { "tty" } else { "not-tty" };

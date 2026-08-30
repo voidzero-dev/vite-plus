@@ -14,28 +14,28 @@ use vt_path::AbsolutePathBuf;
 use crate::error::Error;
 
 /// Options for the upgrade command.
-pub struct UpgradeOptions {
+pub(crate) struct UpgradeOptions {
     /// Target version (e.g., "0.2.0"). None means use the tag.
-    pub version: Option<String>,
+    pub(crate) version: Option<String>,
     /// npm dist-tag (default: "latest")
-    pub tag: String,
+    pub(crate) tag: String,
     /// Check for updates without installing
-    pub check: bool,
+    pub(crate) check: bool,
     /// Revert to previous version
-    pub rollback: bool,
+    pub(crate) rollback: bool,
     /// Force reinstall even if already on the target version
-    pub force: bool,
+    pub(crate) force: bool,
     /// Suppress output
-    pub silent: bool,
+    pub(crate) silent: bool,
     /// Custom npm registry URL
-    pub registry: Option<String>,
+    pub(crate) registry: Option<String>,
     /// Refresh cached update status in a background helper
-    pub background_check: bool,
+    pub(crate) background_check: bool,
 }
 
 /// Execute the upgrade command.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
-pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     if options.background_check {
         crate::upgrade_check::run_background_check().await;
         return Ok(ExitStatus::default());

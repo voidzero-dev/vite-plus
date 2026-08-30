@@ -7,7 +7,7 @@
 /// assert flags (states: `file`, `dir`, `symlink`, `missing`) additionally
 /// fail the step on mismatch, preserving shell `test` guard semantics under
 /// the runner's line-boundary failure flow.
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut paths: Vec<&str> = Vec::new();
     let mut expect: Option<(&str, bool)> = None;
     let mut i = 0;

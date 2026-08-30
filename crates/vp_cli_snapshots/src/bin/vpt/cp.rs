@@ -1,4 +1,4 @@
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let (recursive, paths) = match args {
         [flag, src, dst] if flag == "-r" => (true, [src.as_str(), dst.as_str()]),
         [src, dst] => (false, [src.as_str(), dst.as_str()]),

@@ -4,7 +4,7 @@ use std::sync::Arc;
 ///
 /// Sets up a Ctrl+C handler, emits a "ready" milestone, then waits.
 /// When Ctrl+C is received, prints "ctrl-c received" and exits.
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run() -> Result<(), Box<dyn std::error::Error>> {
     // On Windows, an ancestor process (e.g. cargo, the test runner) may have
     // been created with CREATE_NEW_PROCESS_GROUP, which implicitly calls
     // SetConsoleCtrlHandler(NULL, TRUE) and sets CONSOLE_IGNORE_CTRL_C in the

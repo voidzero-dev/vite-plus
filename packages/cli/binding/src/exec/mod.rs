@@ -12,7 +12,10 @@ use self::workspace::execute_exec_workspace;
 ///
 /// Resolves the workspace, selects packages (defaulting to the current package
 /// when no flags are given), and executes the command in each selected package.
-pub async fn execute(exec_args: ExecArgs, cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(
+    exec_args: ExecArgs,
+    cwd: &AbsolutePathBuf,
+) -> Result<ExitStatus, Error> {
     // No command specified
     if exec_args.command.is_empty() {
         vp_shared::output::error(

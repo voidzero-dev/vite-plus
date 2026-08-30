@@ -4,7 +4,7 @@ use vt_path::AbsolutePathBuf;
 
 use crate::{commands::delegate, error::Error, js_executor::JsExecutor};
 
-pub async fn execute(
+pub(crate) async fn execute(
     cwd: AbsolutePathBuf,
     tools: Vec<String>,
     json: bool,

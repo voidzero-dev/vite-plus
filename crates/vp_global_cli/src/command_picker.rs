@@ -22,13 +22,13 @@ const SELECTED_MARKER: &str = "›";
 const UNSELECTED_MARKER: &str = " ";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PickedCommand {
-    pub command: &'static str,
-    pub append_help: bool,
+pub(crate) struct PickedCommand {
+    pub(crate) command: &'static str,
+    pub(crate) append_help: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TopLevelCommandPick {
+pub(crate) enum TopLevelCommandPick {
     Skipped,
     Selected(PickedCommand),
     Cancelled,
@@ -126,7 +126,7 @@ const COMMANDS: &[CommandEntry] = &[
     },
 ];
 
-pub fn pick_top_level_command_if_interactive(
+pub(crate) fn pick_top_level_command_if_interactive(
     cwd: &AbsolutePath,
 ) -> io::Result<TopLevelCommandPick> {
     if !vp_shared::is_interactive_terminal() {

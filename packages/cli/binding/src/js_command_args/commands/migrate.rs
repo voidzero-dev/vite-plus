@@ -100,7 +100,7 @@ fn migrate_command() -> Command {
 }
 
 #[napi(object, object_from_js = false)]
-pub struct MigrateArgs {
+pub(crate) struct MigrateArgs {
     pub path: Option<String>,
     #[napi(ts_type = "false | string | Array<string>")]
     pub agent: Option<Either3<bool, String, Vec<String>>>,
@@ -124,6 +124,7 @@ impl From<MigrateCliArgs> for MigrateArgs {
     }
 }
 
+#[expect(unreachable_pub, reason = "NAPI requires public enums for JavaScript exports")]
 #[napi(discriminant = "status", discriminant_case = "camelCase", object_from_js = false)]
 pub enum ParseMigrateArgsOutcome {
     Ok { value: MigrateArgs },
@@ -132,7 +133,7 @@ pub enum ParseMigrateArgsOutcome {
 }
 
 #[napi]
-pub fn parse_migrate_args(argv: Vec<String>) -> ParseMigrateArgsOutcome {
+pub(crate) fn parse_migrate_args(argv: Vec<String>) -> ParseMigrateArgsOutcome {
     match parse_args::<MigrateCliArgs>(migrate_command(), argv) {
         ParseResult::Ok(value) => ParseMigrateArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {

@@ -10,7 +10,10 @@ use super::config::{get_config_path, load_config, save_config};
 use crate::error::Error;
 
 /// Execute the default command.
-pub async fn execute(_cwd: AbsolutePathBuf, version: Option<String>) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(
+    _cwd: AbsolutePathBuf,
+    version: Option<String>,
+) -> Result<ExitStatus, Error> {
     match version {
         Some(v) => set_default(&v).await,
         None => show_default().await,

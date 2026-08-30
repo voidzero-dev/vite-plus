@@ -7,7 +7,7 @@
 /// Options:
 /// - `--exit=<code>`: Exit with the given code after the barrier is met.
 /// - `--hang`: Keep process alive after the barrier (for kill tests).
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut positional: Vec<&str> = Vec::new();
     let mut exit_code: i32 = 0;
     let mut hang = false;

@@ -14,7 +14,7 @@ use super::{
 
 /// Resolves synthesizable subcommands to concrete programs and arguments.
 /// Used by both direct CLI execution and CommandHandler.
-pub struct SubcommandResolver {
+pub(crate) struct SubcommandResolver {
     cli_options: Option<CliOptions>,
     workspace_path: Arc<AbsolutePath>,
 }
@@ -29,11 +29,11 @@ impl std::fmt::Debug for SubcommandResolver {
 }
 
 impl SubcommandResolver {
-    pub fn new(workspace_path: Arc<AbsolutePath>) -> Self {
+    pub(crate) fn new(workspace_path: Arc<AbsolutePath>) -> Self {
         Self { cli_options: None, workspace_path }
     }
 
-    pub fn with_cli_options(mut self, cli_options: CliOptions) -> Self {
+    pub(crate) fn with_cli_options(mut self, cli_options: CliOptions) -> Self {
         self.cli_options = Some(cli_options);
         self
     }

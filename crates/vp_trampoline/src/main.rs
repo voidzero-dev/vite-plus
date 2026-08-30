@@ -100,7 +100,7 @@ mod portable {
         Some(ShimPointer { data: PathBuf::from(parsed.data), layout })
     }
 
-    pub fn run() {
+    pub(super) fn run() {
         // 1. Determine the tool name from our own executable filename.
         let exe_path = env::current_exe().unwrap_or_else(|_| process::exit(1));
         let tool_name =

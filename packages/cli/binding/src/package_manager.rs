@@ -7,7 +7,7 @@ use vt_workspace::{Error::PackageJsonNotFound, WorkspaceFile, find_workspace_roo
 
 #[napi(object)]
 #[derive(Debug)]
-pub struct DownloadPackageManagerOptions {
+pub(crate) struct DownloadPackageManagerOptions {
     pub name: String,
     pub version: String,
     pub expected_hash: Option<String>,
@@ -15,7 +15,7 @@ pub struct DownloadPackageManagerOptions {
 
 #[napi(object)]
 #[derive(Debug)]
-pub struct DownloadPackageManagerResult {
+pub(crate) struct DownloadPackageManagerResult {
     pub name: String,
     pub install_dir: String,
     pub bin_prefix: String,
@@ -55,7 +55,11 @@ pub struct DownloadPackageManagerResult {
 /// console.log(`Package manager version: ${result.version}`);
 /// ```
 #[napi]
-pub async fn download_package_manager(
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) async fn download_package_manager(
     options: DownloadPackageManagerOptions,
 ) -> Result<DownloadPackageManagerResult> {
     let package_manager_type = match options.name.as_str() {
@@ -90,7 +94,7 @@ pub async fn download_package_manager(
 
 #[napi(object)]
 #[derive(Debug)]
-pub struct DetectWorkspaceResult {
+pub(crate) struct DetectWorkspaceResult {
     pub package_manager_name: Option<String>,
     pub package_manager_version: Option<String>,
     pub is_monorepo: bool,
@@ -121,7 +125,11 @@ pub struct DetectWorkspaceResult {
 /// console.log(`Workspace root: ${result.root}`);
 /// ```
 #[napi]
-pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
     let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
     let (workspace_root, _relative_path) = match find_workspace_root(&cwd) {
         Ok(result) => result,

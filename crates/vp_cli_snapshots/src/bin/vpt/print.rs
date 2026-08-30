@@ -1,3 +1,3 @@
-pub fn run(args: &[String]) {
+pub(super) fn run(args: &[String]) {
     println!("{}", args.join(" "));
 }

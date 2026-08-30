@@ -57,7 +57,7 @@ pub(crate) const SHIM_TOOLS: &[&str] =
     &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx", "vpx", "vpr"];
 
 /// Execute the setup command.
-pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
+pub(crate) async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
     let config = vp_shared::EnvConfig::get();
     let dirs = &config.dirs;
 

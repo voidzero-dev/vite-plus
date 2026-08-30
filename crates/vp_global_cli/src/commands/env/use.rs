@@ -70,7 +70,7 @@ fn print_windows_eval_wrapper_required() {
 }
 
 /// Execute the `vp env use` command.
-pub async fn execute(
+pub(crate) async fn execute(
     cwd: AbsolutePathBuf,
     version: Option<String>,
     unset: bool,

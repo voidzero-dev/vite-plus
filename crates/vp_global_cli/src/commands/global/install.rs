@@ -114,20 +114,20 @@ pub(crate) fn is_protected_shim(bin_name: &str, ignore_case: bool) -> bool {
 }
 
 /// Options for [`install`].
-pub struct InstallOptions<'a> {
+pub(crate) struct InstallOptions<'a> {
     /// Node.js version to install with; resolved from the current directory
     /// when `None`.
-    pub node_version: Option<&'a str>,
+    pub(crate) node_version: Option<&'a str>,
     /// Auto-uninstall packages whose binaries conflict.
-    pub force: bool,
+    pub(crate) force: bool,
     /// Number of packages to install in parallel.
-    pub concurrency: usize,
+    pub(crate) concurrency: usize,
     /// Whether this is a `vp update -g` operation.
-    pub update: bool,
+    pub(crate) update: bool,
 }
 
 /// Install global packages in parallel.
-pub async fn install(
+pub(crate) async fn install(
     package_specs: &[String],
     options: InstallOptions<'_>,
 ) -> Result<(), InstallError> {
@@ -952,7 +952,7 @@ async fn stale_bin_names_for_package(
 /// Uses two-phase uninstall:
 /// 1. Try to use PackageMetadata for binary list
 /// 2. Fallback to scanning BinConfig files for orphaned binaries
-pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
+pub(crate) async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     if is_local_package_spec(package_name) {
         // We can't resolve local packages for uninstall, follow npm's behavior
         return Err(Error::Other(

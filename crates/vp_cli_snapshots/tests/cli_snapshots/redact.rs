@@ -386,7 +386,7 @@ fn path_variants(path: &str, label: &'static str) -> Vec<(String, &'static str)>
     clippy::disallowed_types,
     reason = "String required by regex replace_all and cow_replace APIs"
 )]
-pub fn redact_output(
+pub(super) fn redact_output(
     mut output: String,
     paths: &[(&str, &'static str)],
     normalize_separators: bool,
@@ -601,7 +601,7 @@ pub fn redact_output(
 /// only for steps it identifies as version probes, so fixture-controlled bare
 /// versions elsewhere (a printed `.node-version` file) stay assertable.
 #[expect(clippy::disallowed_types, reason = "String required by regex replace_all API")]
-pub fn redact_version_probe_output(output: String) -> String {
+pub(super) fn redact_version_probe_output(output: String) -> String {
     BARE_VERSION_BLOCK_RE.replace_all(&output, "${1}<version>${2}").into_owned()
 }
 

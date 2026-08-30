@@ -5,39 +5,39 @@ use clap::Parser;
 /// Vite+ Installer — standalone installer for the vp CLI.
 #[derive(Parser, Debug)]
 #[command(name = "vp-setup", about = "Install the Vite+ CLI")]
-pub struct Options {
+pub(crate) struct Options {
     /// Accept defaults without prompting (for CI/unattended installs)
     #[arg(short = 'y', long = "yes")]
-    pub yes: bool,
+    pub(crate) yes: bool,
 
     /// Suppress all output except errors
     #[arg(short = 'q', long = "quiet")]
-    pub quiet: bool,
+    pub(crate) quiet: bool,
 
     /// Install a specific version (default: latest)
     #[arg(long = "version")]
-    pub version: Option<String>,
+    pub(crate) version: Option<String>,
 
     /// npm dist-tag to install (default: latest)
     #[arg(long = "tag", default_value = "latest")]
-    pub tag: String,
+    pub(crate) tag: String,
 
     /// Custom npm registry URL
     #[arg(long = "registry")]
-    pub registry: Option<String>,
+    pub(crate) registry: Option<String>,
 
     /// Skip Node.js version manager setup
     #[arg(long = "no-node-manager")]
-    pub no_node_manager: bool,
+    pub(crate) no_node_manager: bool,
 
     /// Do not modify the User PATH
     #[arg(long = "no-modify-path")]
-    pub no_modify_path: bool,
+    pub(crate) no_modify_path: bool,
 }
 
 /// Parse CLI arguments, merging with environment variables.
 /// CLI flags take precedence over environment variables.
-pub fn parse() -> Options {
+pub(crate) fn parse() -> Options {
     let mut opts = Options::parse();
 
     // Merge env var overrides (CLI flags already set take precedence)

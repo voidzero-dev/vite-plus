@@ -20,7 +20,7 @@ const CONFIG_FILE: &str = "config.json";
 /// Shim mode determines how shims resolve tools.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum ShimMode {
+pub(crate) enum ShimMode {
     /// Shims always use vite-plus managed Node.js
     #[default]
     Managed,
@@ -31,13 +31,13 @@ pub enum ShimMode {
 /// User configuration stored in `<CONFIG>/config.json`
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct Config {
+pub(crate) struct Config {
     /// Default Node.js version when no project version file is found
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_node_version: Option<String>,
+    pub(crate) default_node_version: Option<String>,
     /// Shim mode for tool resolution
     #[serde(default, skip_serializing_if = "is_default_shim_mode")]
-    pub shim_mode: ShimMode,
+    pub(crate) shim_mode: ShimMode,
 }
 
 /// Check if shim mode is the default (for skip_serializing_if)
@@ -47,27 +47,27 @@ fn is_default_shim_mode(mode: &ShimMode) -> bool {
 
 /// Version resolution result
 #[derive(Debug)]
-pub struct VersionResolution {
+pub(crate) struct VersionResolution {
     /// The resolved version string (e.g., "20.18.0")
-    pub version: String,
+    pub(crate) version: String,
     /// The source of the version (e.g., ".node-version", "engines.node", "default")
-    pub source: String,
+    pub(crate) source: String,
     /// Path to the source file (if applicable)
-    pub source_path: Option<AbsolutePathBuf>,
+    pub(crate) source_path: Option<AbsolutePathBuf>,
     /// Project root directory (if version came from a project file)
-    pub project_root: Option<AbsolutePathBuf>,
+    pub(crate) project_root: Option<AbsolutePathBuf>,
     /// Whether the original version spec was a range (e.g., "20", "^20.0.0", "lts/*")
     /// Range versions should use time-based cache expiry instead of mtime-only validation
-    pub is_range: bool,
+    pub(crate) is_range: bool,
 }
 
 /// Get the bin directory path (`<BIN>`).
-pub fn get_bin_dir() -> Result<AbsolutePathBuf, Error> {
+pub(crate) fn get_bin_dir() -> Result<AbsolutePathBuf, Error> {
     Ok(vp_shared::EnvConfig::get().dirs.bin.clone())
 }
 
 /// Get the packages directory path (`<DATA>/packages`).
-pub fn get_packages_dir() -> Result<AbsolutePathBuf, Error> {
+pub(crate) fn get_packages_dir() -> Result<AbsolutePathBuf, Error> {
     Ok(vp_shared::EnvConfig::get().dirs.data.join("packages"))
 }
 
@@ -79,7 +79,7 @@ pub fn get_packages_dir() -> Result<AbsolutePathBuf, Error> {
 ///
 /// This function probes both paths and returns the one that exists,
 /// falling back to the platform default if neither exists.
-pub fn get_node_modules_dir(prefix: &AbsolutePath, package_name: &str) -> AbsolutePathBuf {
+pub(crate) fn get_node_modules_dir(prefix: &AbsolutePath, package_name: &str) -> AbsolutePathBuf {
     // Try Unix layout first (lib/node_modules)
     let unix_path = prefix.join("lib").join("node_modules").join(package_name);
     if unix_path.as_path().exists() {
@@ -104,12 +104,12 @@ pub fn get_node_modules_dir(prefix: &AbsolutePath, package_name: &str) -> Absolu
 }
 
 /// Get the config file path (`<CONFIG>/config.json`).
-pub fn get_config_path() -> Result<AbsolutePathBuf, Error> {
+pub(crate) fn get_config_path() -> Result<AbsolutePathBuf, Error> {
     Ok(vp_shared::EnvConfig::get().dirs.config.join(CONFIG_FILE))
 }
 
 /// Load configuration from disk.
-pub async fn load_config() -> Result<Config, Error> {
+pub(crate) async fn load_config() -> Result<Config, Error> {
     let config_path = get_config_path()?;
 
     if !tokio::fs::try_exists(&config_path).await.unwrap_or(false) {
@@ -122,7 +122,7 @@ pub async fn load_config() -> Result<Config, Error> {
 }
 
 /// Save configuration to disk.
-pub async fn save_config(config: &Config) -> Result<(), Error> {
+pub(crate) async fn save_config(config: &Config) -> Result<(), Error> {
     let config_path = get_config_path()?;
 
     // Ensure directory exists
@@ -137,18 +137,18 @@ pub async fn save_config(config: &Config) -> Result<(), Error> {
 
 /// Environment variable for per-shell session Node.js version override.
 /// Set by `vp env use` command.
-pub const VERSION_ENV_VAR: &str = vp_shared::env_vars::VP_NODE_VERSION;
+pub(crate) const VERSION_ENV_VAR: &str = vp_shared::env_vars::VP_NODE_VERSION;
 
 /// Session version file name, written by `vp env use` so shims work without the shell eval wrapper.
-pub const SESSION_VERSION_FILE: &str = ".session-node-version";
+pub(crate) const SESSION_VERSION_FILE: &str = ".session-node-version";
 
 /// Get the path to the session version file (`<STATE>/.session-node-version`).
-pub fn get_session_version_path() -> Result<AbsolutePathBuf, Error> {
+pub(crate) fn get_session_version_path() -> Result<AbsolutePathBuf, Error> {
     Ok(vp_shared::EnvConfig::get().dirs.state.join(SESSION_VERSION_FILE))
 }
 
 /// Read the session version file. Returns `None` if the file is missing or empty.
-pub async fn read_session_version() -> Option<String> {
+pub(crate) async fn read_session_version() -> Option<String> {
     let path = get_session_version_path().ok()?;
     let content = tokio::fs::read_to_string(&path).await.ok()?;
     let trimmed = content.trim().to_string();
@@ -156,7 +156,7 @@ pub async fn read_session_version() -> Option<String> {
 }
 
 /// Read the session version file synchronously. Returns `None` if the file is missing or empty.
-pub fn read_session_version_sync() -> Option<String> {
+pub(crate) fn read_session_version_sync() -> Option<String> {
     let path = get_session_version_path().ok()?;
     let content = std::fs::read_to_string(path.as_path()).ok()?;
     let trimmed = content.trim().to_string();
@@ -164,7 +164,7 @@ pub fn read_session_version_sync() -> Option<String> {
 }
 
 /// Write the resolved version to the session version file.
-pub async fn write_session_version(version: &str) -> Result<(), Error> {
+pub(crate) async fn write_session_version(version: &str) -> Result<(), Error> {
     let path = get_session_version_path()?;
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
@@ -175,7 +175,7 @@ pub async fn write_session_version(version: &str) -> Result<(), Error> {
 }
 
 /// Delete the session version file. Ignores "not found" errors.
-pub async fn delete_session_version() -> Result<(), Error> {
+pub(crate) async fn delete_session_version() -> Result<(), Error> {
     let path = get_session_version_path()?;
     match tokio::fs::remove_file(&path).await {
         Ok(()) => Ok(()),
@@ -195,7 +195,7 @@ pub async fn delete_session_version() -> Result<(), Error> {
 /// 5. `.nvmrc` file in current or parent directories
 /// 6. User default from config.json
 /// 7. Latest LTS version
-pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
+pub(crate) async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
     // Session override via environment variable (set by `vp env use`)
     if let Some(env_version) = vp_shared::EnvConfig::get().node_version.as_deref() {
         let env_version = env_version.trim();
@@ -225,10 +225,10 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
 }
 
 pub(crate) struct ProjectVersionSource {
-    pub version: String,
-    pub source: String,
-    pub source_path: AbsolutePathBuf,
-    pub project_root: AbsolutePathBuf,
+    pub(crate) version: String,
+    pub(crate) source: String,
+    pub(crate) source_path: AbsolutePathBuf,
+    pub(crate) project_root: AbsolutePathBuf,
 }
 
 /// Resolve the effective project-file Node.js version source.
@@ -338,7 +338,9 @@ fn validate_version_spec(
 /// Resolve Node.js version from project files only (skipping session overrides).
 ///
 /// This is used by `vp env use` without arguments to revert to file-based resolution.
-pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
+pub(crate) async fn resolve_version_from_files(
+    cwd: &AbsolutePath,
+) -> Result<VersionResolution, Error> {
     let provider = NodeProvider::new();
 
     if let Some(project_source) = resolve_project_version_source(cwd, true).await? {
@@ -413,7 +415,7 @@ async fn resolve_version_string(version: &str, provider: &NodeProvider) -> Resul
 /// Resolve version alias (lts, latest) to an exact version.
 ///
 /// Wraps resolution errors with a user-friendly message showing valid examples.
-pub async fn resolve_version_alias(
+pub(crate) async fn resolve_version_alias(
     version: &str,
     provider: &NodeProvider,
 ) -> Result<String, Error> {

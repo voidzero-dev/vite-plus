@@ -4,7 +4,7 @@
 /// mode (for example, `chmod +x hook.mjs`). Windows
 /// treats it as a validated no-op: the mode and target are still checked,
 /// so a typo or a failed earlier setup step fails on every platform.
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     if args.len() != 2 {
         return Err("Usage: vpt chmod <octal-mode>|+x <path>".into());
     }

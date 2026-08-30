@@ -49,7 +49,7 @@ fn lexical_path(path: &Path) -> PathBuf {
     normalized
 }
 
-pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
+pub(crate) fn execute(yes: bool) -> Result<ExitStatus, Error> {
     let env_config = vp_shared::EnvConfig::get();
     let dirs = &env_config.dirs;
 
@@ -1363,25 +1363,35 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let home_dir = home.join(".vite-plus");
+        let xdg_config = home.join(".config");
+        let xdg_data = home.join(".local/share");
         let matcher = VitePlusSourceMatcher::new(&home_dir, &home);
 
-        // Clear env overrides so the test environment doesn't affect results
-        temp_env::with_vars_unset(["ZDOTDIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME"], || {
-            // Main profile with vite-plus line
-            std::fs::write(home.join(".zshrc"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
-            // Unrelated profile (should be ignored)
-            std::fs::write(home.join(".bashrc"), "export PATH=/usr/bin\n").unwrap();
-            // Snippet file with a matching Vite+ source line
-            let fish_dir = home.join(".config/fish/conf.d");
-            std::fs::create_dir_all(&fish_dir).unwrap();
-            std::fs::write(fish_dir.join("vite-plus.fish"), "source ~/.vite-plus/env.fish\n")
-                .unwrap();
+        // Keep every profile root inside the fixture so the user's real Nushell
+        // directories cannot affect the result.
+        temp_env::with_vars(
+            [
+                ("ZDOTDIR", None),
+                ("XDG_CONFIG_HOME", Some(xdg_config.as_path().as_os_str())),
+                ("XDG_DATA_HOME", Some(xdg_data.as_path().as_os_str())),
+            ],
+            || {
+                // Main profile with vite-plus line
+                std::fs::write(home.join(".zshrc"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+                // Unrelated profile (should be ignored)
+                std::fs::write(home.join(".bashrc"), "export PATH=/usr/bin\n").unwrap();
+                // Snippet file with a matching Vite+ source line
+                let fish_dir = home.join(".config/fish/conf.d");
+                std::fs::create_dir_all(&fish_dir).unwrap();
+                std::fs::write(fish_dir.join("vite-plus.fish"), "source ~/.vite-plus/env.fish\n")
+                    .unwrap();
 
-            let profiles = collect_affected_profiles(&home, &matcher);
-            assert_eq!(profiles.len(), 2);
-            assert!(matches!(&profiles[0].kind, AffectedProfileKind::Main { .. }));
-            assert!(matches!(&profiles[1].kind, AffectedProfileKind::Snippet));
-        });
+                let profiles = collect_affected_profiles(&home, &matcher);
+                assert_eq!(profiles.len(), 2);
+                assert!(matches!(&profiles[0].kind, AffectedProfileKind::Main { .. }));
+                assert!(matches!(&profiles[1].kind, AffectedProfileKind::Snippet));
+            },
+        );
     }
 
     #[test]

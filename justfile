@@ -57,7 +57,7 @@ watch *args='':
   watchexec --no-vcs-ignore {{args}}
 
 fmt:
-  cargo shear --fix
+  cargo shear --fix --exclude 'rolldown*' --exclude string_wizard
   cargo fmt --all
   cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml
   pnpm fmt
@@ -123,7 +123,7 @@ snapshot-test-global *args='':
   $Env:VP_SNAP_SKIP_FLAVORS='local'; just snapshot-test {{args}}
 
 # Single source of truth for clippy, used by CI too. The `-A` flags allow
-# new toolchain lints that fire in upstream rolldown crates without a `[lints]` table.
+# new toolchain lints that fire in upstream dependencies.
 lint:
   cargo clippy --workspace --all-targets --all-features -- --deny warnings \
     -A clippy::byte_char_slices \

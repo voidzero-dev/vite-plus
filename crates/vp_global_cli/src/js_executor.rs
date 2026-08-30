@@ -24,7 +24,7 @@ use crate::{
 /// Handles two runtime resolution strategies:
 /// - CLI runtime: For package manager commands and bundled JS scripts (Categories A & B)
 /// - Project runtime: For delegating to local vite-plus CLI (Category C)
-pub struct JsExecutor {
+pub(crate) struct JsExecutor {
     /// Cached runtime for CLI commands (Categories A & B)
     cli_runtime: Option<JsRuntime>,
     /// Cached runtime for project delegation (Category C)
@@ -46,7 +46,7 @@ impl JsExecutor {
     /// * `scripts_dir` - Optional path to the JS scripts directory.
     ///   If not provided, will be auto-detected from the binary location.
     #[must_use]
-    pub const fn new(scripts_dir: Option<AbsolutePathBuf>) -> Self {
+    pub(crate) const fn new(scripts_dir: Option<AbsolutePathBuf>) -> Self {
         Self {
             cli_runtime: None,
             project_runtime: None,
@@ -61,13 +61,13 @@ impl JsExecutor {
     ///
     /// A command runs under its canonical name, so the spelling the user used is
     /// otherwise lost on the way down.
-    pub fn with_raw_subcommand(mut self, raw_subcommand: Option<&str>) -> Self {
+    pub(crate) fn with_raw_subcommand(mut self, raw_subcommand: Option<&str>) -> Self {
         self.raw_subcommand = raw_subcommand.map(ToOwned::to_owned);
         self
     }
 
     /// Preserve an explicit `-C` after the global CLI changes the child cwd.
-    pub const fn with_explicit_chdir(mut self, explicit_chdir: bool) -> Self {
+    pub(crate) const fn with_explicit_chdir(mut self, explicit_chdir: bool) -> Self {
         self.explicit_chdir = explicit_chdir;
         self
     }
@@ -83,7 +83,7 @@ impl JsExecutor {
     /// 1. Explicitly provided `scripts_dir`
     /// 2. `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable
     /// 3. Auto-detect from binary location (../dist relative to binary)
-    pub fn get_scripts_dir(&self) -> Result<AbsolutePathBuf, Error> {
+    pub(crate) fn get_scripts_dir(&self) -> Result<AbsolutePathBuf, Error> {
         // 1. Use explicitly provided scripts_dir
         if let Some(dir) = &self.scripts_dir {
             return Ok(dir.clone());
@@ -165,7 +165,7 @@ impl JsExecutor {
     ///
     /// When system-first mode is active (`vp env off`), prefers the
     /// system-installed Node.js found in PATH.
-    pub async fn ensure_cli_runtime(&mut self) -> Result<&JsRuntime, Error> {
+    pub(crate) async fn ensure_cli_runtime(&mut self) -> Result<&JsRuntime, Error> {
         if self.cli_runtime.is_none() {
             if let Some(system_runtime) = find_system_node_runtime().await {
                 return Ok(self.cli_runtime.insert(system_runtime));
@@ -188,7 +188,7 @@ impl JsExecutor {
     ///    delegates to `download_runtime_for_project()` for cache-aware resolution
     /// 4. User default from config.json
     /// 5. Latest LTS
-    pub async fn ensure_project_runtime(
+    pub(crate) async fn ensure_project_runtime(
         &mut self,
         project_path: &AbsolutePath,
     ) -> Result<&JsRuntime, Error> {
@@ -237,15 +237,6 @@ impl JsExecutor {
         Ok(self.project_runtime.as_ref().unwrap())
     }
 
-    /// Download a specific Node.js version.
-    ///
-    /// This is used when we need a specific version regardless of
-    /// package.json configuration.
-    #[allow(dead_code)] // Will be used in future phases
-    pub async fn download_node(&self, version: &str) -> Result<JsRuntime, Error> {
-        Ok(download_runtime(JsRuntimeType::Node, version).await?)
-    }
-
     /// Delegate to local or global vite-plus CLI.
     ///
     /// Uses `oxc_resolver` to find the project's local vite-plus installation.
@@ -253,12 +244,10 @@ impl JsExecutor {
     /// to the global installation's `dist/bin.js`.
     ///
     /// Uses the project's runtime resolved via `config::resolve_version()`.
-    /// For side-effect-free commands like `--version`, use [`delegate_with_cli_runtime`] instead.
-    ///
     /// # Arguments
     /// * `project_path` - Path to the project directory
     /// * `args` - Arguments to pass to the local CLI
-    pub async fn delegate_to_local_cli(
+    pub(crate) async fn delegate_to_local_cli(
         &mut self,
         project_path: &AbsolutePath,
         args: &[String],
@@ -270,7 +259,7 @@ impl JsExecutor {
         self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
-    pub async fn delegate_to_local_cli_output(
+    pub(crate) async fn delegate_to_local_cli_output(
         &mut self,
         project_path: &AbsolutePath,
         args: &[String],
@@ -289,7 +278,7 @@ impl JsExecutor {
     /// (or local is newer, or none is installed) keep local-first semantics
     /// (`delegate_to_local_cli` already falls back to the global bin when no local
     /// vite-plus is resolvable).
-    pub async fn delegate_migrate(
+    pub(crate) async fn delegate_migrate(
         &mut self,
         project_path: &AbsolutePath,
         args: &[String],
@@ -315,7 +304,7 @@ impl JsExecutor {
     ///
     /// Unlike [`delegate_to_local_cli`], this bypasses project-local resolution and always runs
     /// the global installation's `dist/bin.js`.
-    pub async fn delegate_to_global_cli(
+    pub(crate) async fn delegate_to_global_cli(
         &mut self,
         project_path: &AbsolutePath,
         args: &[String],
@@ -331,26 +320,6 @@ impl JsExecutor {
         vp_command::sync_child_pwd(&mut cmd, project_path);
 
         Ok(vp_command::execute_with_terminal_guard(cmd).await?)
-    }
-
-    /// Delegate to local or global vite-plus CLI using the CLI's own runtime.
-    ///
-    /// Like [`delegate_to_local_cli`], but uses the CLI's bundled runtime
-    /// (from its own `devEngines.runtime` in `package.json`) instead of the
-    /// project's runtime. This avoids side effects like writing `.node-version`
-    /// when no version source exists in the project directory.
-    ///
-    /// Use this for read-only / side-effect-free commands like `--version`.
-    #[allow(dead_code)] // kept for future read-only delegations
-    pub async fn delegate_with_cli_runtime(
-        &mut self,
-        project_path: &AbsolutePath,
-        args: &[String],
-    ) -> Result<ExitStatus, Error> {
-        let runtime = self.ensure_cli_runtime().await?;
-        let node_binary = runtime.get_binary_path();
-        let bin_prefix = runtime.get_bin_prefix();
-        self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
     /// Prepare a JS command with the entry point resolved.

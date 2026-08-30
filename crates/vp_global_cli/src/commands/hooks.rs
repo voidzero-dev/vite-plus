@@ -7,7 +7,7 @@ use vt_path::AbsolutePathBuf;
 use crate::error::Error;
 
 /// Execute the `hooks` command by delegating to local or global vite-plus.
-pub async fn execute(
+pub(crate) async fn execute(
     cwd: AbsolutePathBuf,
     args: &[String],
     raw_subcommand: Option<&str>,

@@ -1,11 +1,12 @@
 [workspace]
 resolver = "3"
 members = ["bench", "crates/*", "packages/cli/binding"]
-# vp_trampoline is a standalone package.
+# vp_trampoline is a standalone package. Rolldown is a pinned source dependency
+# with its own workspace and lint policy.
 # It needs a separate release profile and a crate-local build-std config.
 # Cargo ignores `panic` in per-package profile overrides.
 # See crates/vp_trampoline/Cargo.toml.
-exclude = ["crates/vp_trampoline"]
+exclude = ["crates/vp_trampoline", "rolldown"]
 
 [workspace.metadata.cargo-shear]
 ignored = [
@@ -26,8 +27,10 @@ rust-version = "1.92.0"
 
 [workspace.lints.rust]
 absolute_paths_not_starting_with_crate = "warn"
+dead_code = "deny"
 non_ascii_idents = "warn"
 unit_bindings = "warn"
+unreachable_pub = "deny"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(coverage_nightly)'] }
 unsafe_op_in_unsafe_fn = "warn"
 unused_unsafe = "warn"

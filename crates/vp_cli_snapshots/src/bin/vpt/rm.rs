@@ -1,4 +1,4 @@
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut recursive = false;
     let mut force = false;
     let mut paths = Vec::new();

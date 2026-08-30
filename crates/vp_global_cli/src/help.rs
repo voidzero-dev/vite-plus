@@ -1,7 +1,7 @@
 //! Global help documents and routing.
 
 use clap::{CommandFactory, error::ErrorKind};
-pub use vp_cli_help::{
+pub(crate) use vp_cli_help::{
     HelpDoc, HelpRow, HelpSection, accent, accent_command, print_help_doc, render_heading,
     render_help_doc,
 };
@@ -249,7 +249,7 @@ fn parse_clap_help_to_doc(raw_help: &str) -> Option<HelpDoc> {
     })
 }
 
-pub fn top_level_help_doc() -> HelpDoc {
+pub(crate) fn top_level_help_doc() -> HelpDoc {
     HelpDoc {
         usage: "vp [COMMAND]".into(),
         summary: Vec::new(),
@@ -455,7 +455,7 @@ fn should_skip_parent_help_for_unknown_direct_nested_child(
         && has_help_flag_before_terminator(&argv[index..])
 }
 
-pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
+pub(crate) fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
     if argv.len() < 3 {
         return false;
     }
@@ -524,7 +524,7 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
     print_unified_clap_help_for_path(&command_path_refs)
 }
 
-pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
+pub(crate) fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
     if command_path == ["env"] {
         print_help_doc(&env_help_doc());
         return true;

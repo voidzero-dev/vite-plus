@@ -33,9 +33,11 @@ import { generateLicenseFile } from '../../scripts/generate-license.js';
 import corePkg from '../core/package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
+const repoDir = join(projectDir, '..', '..');
 const TEST_PACKAGE_NAME = 'vitest';
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 const NATIVE_BUILD_TIME_PATH = join(projectDir, 'binding', 'vite-plus.build-time');
+const CARGO_MANIFEST_PATHS = [join(repoDir, 'Cargo.toml'), join(repoDir, 'rolldown', 'Cargo.toml')];
 const UTC_BUILD_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
 // Browser providers projected under ./test/* and ./test/browser/providers/* so the
@@ -636,12 +638,14 @@ interface ToolchainConfig {
   }>;
 }
 
+interface CargoPackage {
+  name: string;
+  version: string;
+  source: string | null;
+}
+
 interface CargoMetadata {
-  packages: Array<{
-    name: string;
-    version: string;
-    source: string | null;
-  }>;
+  packages: CargoPackage[];
 }
 
 interface ResolvedToolchainNode {
@@ -663,14 +667,27 @@ async function readPackageVersion(packageJsonPath: string, label: string): Promi
   return pkg.version;
 }
 
-function readCargoMetadata(): CargoMetadata {
-  const repoDir = join(projectDir, '..', '..');
-  const stdout = execFileSync('cargo', ['metadata', '--locked', '--format-version', '1'], {
-    cwd: repoDir,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
+function readCargoMetadata(manifestPath: string): CargoMetadata {
+  const stdout = execFileSync(
+    'cargo',
+    ['metadata', '--locked', '--format-version', '1', '--manifest-path', manifestPath],
+    {
+      cwd: repoDir,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  );
   return JSON.parse(stdout) as CargoMetadata;
+}
+
+function readCargoPackageMetadata(): CargoMetadata {
+  const packages = new Map<string, CargoPackage>();
+  for (const manifestPath of CARGO_MANIFEST_PATHS) {
+    for (const pkg of readCargoMetadata(manifestPath).packages) {
+      packages.set(`${pkg.name}\0${pkg.version}\0${pkg.source ?? ''}`, pkg);
+    }
+  }
+  return { packages: [...packages.values()] };
 }
 
 function resolveCargoPackage(metadata: CargoMetadata, packageName: string) {
@@ -833,7 +850,7 @@ async function syncToolchainExports() {
   validateToolchainConfig(config);
 
   const cliVersion = await readPackageVersion(join(projectDir, 'package.json'), 'vite-plus');
-  const cargoMetadata = readCargoMetadata();
+  const cargoMetadata = readCargoPackageMetadata();
   const buildTime = await resolveNativeBuildTime();
   const nodes = await Promise.all(
     config.nodes.map((node) => resolveToolchainNode(node, cargoMetadata, cliVersion, buildTime)),

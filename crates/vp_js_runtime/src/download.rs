@@ -20,22 +20,22 @@ use vt_str::Str;
 use crate::{Error, provider::ArchiveFormat};
 
 /// Response from a cached fetch operation
-pub struct CachedFetchResponse<T> {
+pub(crate) struct CachedFetchResponse<T> {
     /// Deserialized response body (None if 304 Not Modified)
-    pub body: Option<T>,
+    pub(crate) body: Option<T>,
     /// `ETag` header value
-    pub etag: Option<Str>,
+    pub(crate) etag: Option<Str>,
     /// Cache max-age in seconds (from Cache-Control header)
-    pub max_age: Option<u64>,
+    pub(crate) max_age: Option<u64>,
     /// Whether this was a 304 Not Modified response
-    pub not_modified: bool,
+    pub(crate) not_modified: bool,
 }
 
 /// Download a file with retry logic and progress bar
 ///
 /// The `message` parameter is displayed to the user to indicate what is being downloaded
 /// (e.g., "Downloading Node.js v22.13.1").
-pub async fn download_file(
+pub(crate) async fn download_file(
     url: &str,
     target_path: &AbsolutePath,
     message: &str,
@@ -277,7 +277,7 @@ fn full_response(response: reqwest::Response) -> Result<reqwest::Response, Error
 
 /// Download text content from a URL with retry logic
 #[expect(clippy::disallowed_types, reason = "HTTP response body is a String")]
-pub async fn download_text(url: &str) -> Result<String, Error> {
+pub(crate) async fn download_text(url: &str) -> Result<String, Error> {
     let client = vp_shared::shared_http_client()?;
 
     tracing::debug!("Downloading text from {url}");
@@ -303,7 +303,7 @@ pub async fn download_text(url: &str) -> Result<String, Error> {
 /// If `if_none_match` is provided, sends `If-None-Match` header for conditional request.
 /// The request, response body, and JSON decoding are retried as one operation so a
 /// truncated body cannot escape the retry boundary as a deserialization error.
-pub async fn fetch_json_with_cache_headers<T: DeserializeOwned>(
+pub(crate) async fn fetch_json_with_cache_headers<T: DeserializeOwned>(
     url: &str,
     if_none_match: Option<&str>,
 ) -> Result<CachedFetchResponse<T>, Error> {
@@ -379,7 +379,7 @@ fn parse_max_age(cache_control: &str) -> Option<u64> {
 }
 
 /// Verify file hash against expected SHA256 hash
-pub async fn verify_file_hash(
+pub(crate) async fn verify_file_hash(
     file_path: &AbsolutePath,
     expected_hash: &str,
     filename: &str,
@@ -405,7 +405,7 @@ pub async fn verify_file_hash(
 }
 
 /// Extract archive based on format
-pub async fn extract_archive(
+pub(crate) async fn extract_archive(
     archive_path: &AbsolutePath,
     target_dir: &AbsolutePath,
     format: ArchiveFormat,
@@ -458,7 +458,7 @@ fn extract_zip(archive_path: &AbsolutePath, target_dir: &AbsolutePath) -> Result
 ///
 /// Uses a file-based lock to ensure atomicity when multiple processes/threads
 /// try to install the same runtime version concurrently.
-pub async fn move_to_cache(
+pub(crate) async fn move_to_cache(
     source: &AbsolutePath,
     target: &AbsolutePathBuf,
     binary_path: &AbsolutePath,

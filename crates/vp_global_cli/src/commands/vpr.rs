@@ -9,7 +9,7 @@ use vt_path::AbsolutePath;
 /// Main entry point for vpr execution.
 ///
 /// Called from shim dispatch when `argv[0]` is `vpr`.
-pub async fn execute_vpr(args: &[String], cwd: &AbsolutePath) -> i32 {
+pub(crate) async fn execute_vpr(args: &[String], cwd: &AbsolutePath) -> i32 {
     // `vpr -C <dir> <task>` mirrors `vp -C <dir> run <task>`: consume the
     // global flag before treating the rest as run arguments. There is no
     // clap parse on this path, so a missing value is reported here.

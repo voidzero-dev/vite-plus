@@ -150,7 +150,7 @@ fn staged_command() -> Command {
 }
 
 #[napi(object, object_from_js = false)]
-pub struct StagedArgs {
+pub(crate) struct StagedArgs {
     pub allow_empty: Option<bool>,
     pub concurrent: Option<Either<bool, u32>>,
     pub continue_on_error: Option<bool>,
@@ -200,6 +200,7 @@ impl From<StagedCliArgs> for StagedArgs {
     }
 }
 
+#[expect(unreachable_pub, reason = "NAPI requires public enums for JavaScript exports")]
 #[napi(discriminant = "status", discriminant_case = "camelCase", object_from_js = false)]
 pub enum ParseStagedArgsOutcome {
     Ok { value: StagedArgs },
@@ -208,7 +209,7 @@ pub enum ParseStagedArgsOutcome {
 }
 
 #[napi]
-pub fn parse_staged_args(argv: Vec<String>) -> ParseStagedArgsOutcome {
+pub(crate) fn parse_staged_args(argv: Vec<String>) -> ParseStagedArgsOutcome {
     match parse_args::<StagedCliArgs>(staged_command(), argv) {
         ParseResult::Ok(value) => ParseStagedArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {

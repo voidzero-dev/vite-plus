@@ -15,7 +15,7 @@ use vt_path::AbsolutePathBuf;
 /// - `cwd`: The current working directory for the command
 #[napi(object, object_to_js = false)]
 #[derive(Debug)]
-pub struct RunCommandOptions {
+pub(crate) struct RunCommandOptions {
     /// The name of the binary to execute
     pub bin_name: String,
     /// Command line arguments to pass to the binary
@@ -29,7 +29,7 @@ pub struct RunCommandOptions {
 /// Access modes for a path.
 #[napi(object)]
 #[derive(Debug)]
-pub struct PathAccess {
+pub(crate) struct PathAccess {
     /// Whether the path was read
     pub read: bool,
     /// Whether the path was written
@@ -45,7 +45,7 @@ pub struct PathAccess {
 /// - `path_accesses`: A map of relative paths to their access modes
 #[napi(object)]
 #[derive(Debug)]
-pub struct RunCommandResult {
+pub(crate) struct RunCommandResult {
     /// The exit code of the command
     pub exit_code: i32,
     /// Map of relative paths to their access modes
@@ -85,7 +85,11 @@ pub struct RunCommandResult {
 /// console.log(`Path accesses:`, result.pathAccesses);
 /// ```
 #[napi]
-pub async fn run_command(options: RunCommandOptions) -> Result<RunCommandResult> {
+#[cfg_attr(
+    test,
+    expect(dead_code, reason = "NAPI exports are called by JavaScript, not Rust tests")
+)]
+pub(crate) async fn run_command(options: RunCommandOptions) -> Result<RunCommandResult> {
     tracing::debug!("Run command options: {:?}", options);
     // Parse and validate the working directory
     let cwd = AbsolutePathBuf::new(PathBuf::from(&options.cwd)).ok_or_else(|| {

@@ -38,6 +38,10 @@ path = "src/main.rs"
 # This crate does not inherit workspace lints.
 # It uses std types and macros directly to keep the binary small.
 # Thus, allow the .clippy.toml rules that require shared project abstractions.
+[lints.rust]
+dead_code = "deny"
+unreachable_pub = "deny"
+
 [lints.clippy]
 disallowed_macros = "allow"
 disallowed_types = "allow"

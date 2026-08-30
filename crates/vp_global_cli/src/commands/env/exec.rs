@@ -23,7 +23,7 @@ use crate::{
 /// When `--node` is provided, runs a command with the specified Node.js version.
 /// When `--node` is not provided and the command is a shim tool (node/npm/npx or global package),
 /// uses the same shim dispatch logic as Unix symlinks.
-pub async fn execute(
+pub(crate) async fn execute(
     node_version: Option<&str>,
     npm_version: Option<&str>,
     command: &[String],

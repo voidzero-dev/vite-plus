@@ -165,6 +165,8 @@ Reference these files instead of duplicating rules here:
 
 Prefer shared output helpers for user-facing messages and match nearby command style. New Rust code should satisfy the custom clippy restrictions.
 
+Use the narrowest Rust visibility that fits the consumer. Reserve `pub` for APIs that another crate or external runtime intentionally consumes. Prefer private items, then `pub(super)` or `pub(crate)`, for implementation details. Add a crate-root `pub use` only when it is part of the intended crate API.
+
 ### TypeScript
 
 Reference these files instead of duplicating rules here:

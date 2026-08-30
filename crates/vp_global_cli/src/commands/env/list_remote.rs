@@ -44,7 +44,7 @@ struct LocalMarkers {
 }
 
 /// Execute the list-remote command.
-pub async fn execute(
+pub(crate) async fn execute(
     cwd: AbsolutePathBuf,
     pattern: Option<String>,
     lts_only: bool,

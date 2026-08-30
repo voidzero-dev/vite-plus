@@ -2,7 +2,7 @@
 ///
 /// Spawns `<command>` with `<data>` piped to its stdin, then exits with
 /// the child's exit code. If `<data>` is empty, an empty stdin is provided.
-pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let sep = args
         .iter()
         .position(|a| a == "--")

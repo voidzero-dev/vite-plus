@@ -227,7 +227,7 @@ fn configure_background_process(command: &mut Command) {
 
 /// Refresh the cached update status. This function intentionally runs in the
 /// helper process so the foreground command never waits for registry I/O.
-pub async fn run_background_check() {
+pub(crate) async fn run_background_check() {
     let config = vp_shared::EnvConfig::get();
     let cache_dir = &config.dirs.cache;
     let data_dir = &config.dirs.data;
@@ -285,7 +285,7 @@ pub async fn run_background_check() {
 
 /// Print a one-line upgrade notice from cache and record the prompt time.
 #[expect(clippy::print_stderr, clippy::disallowed_macros)]
-pub fn display_cached_upgrade_notice() {
+pub(crate) fn display_cached_upgrade_notice() {
     if checks_disabled() {
         return;
     }
@@ -323,7 +323,7 @@ pub fn display_cached_upgrade_notice() {
 /// Whether a foreground command may run the upgrade check and display its cached notice.
 /// Returns `false` for commands excluded by design, quiet modes, and
 /// machine-readable output flags (--silent, -s, --json, --parseable, --format json).
-pub fn should_run_for_command(args: &crate::cli::Args) -> bool {
+pub(crate) fn should_run_for_command(args: &crate::cli::Args) -> bool {
     if !cfg!(test) && !vp_shared::is_stderr_terminal() {
         return false;
     }
