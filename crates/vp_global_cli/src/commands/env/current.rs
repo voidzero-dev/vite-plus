@@ -170,7 +170,7 @@ async fn resolve_package_manager_info(
     let Some(selected_type) = selected_type else {
         return Ok(None);
     };
-    let mode = config.package_manager_shim_mode_for(selected_type);
+    let mode = config.effective_package_manager_shim_mode_for(selected_type);
     if mode == ShimMode::SystemFirst {
         let bin_paths = selected_type
             .bin_names()

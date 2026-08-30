@@ -35,6 +35,7 @@ steps = [
   { argv = ["vp", "env", "off", "node"], snapshot = false },
   { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "a system-first package manager resolves offline and receives the Node.js selected by system-first Node mode" },
+  { argv = ["vp", "env", "exec", "--node", "20.18.0", "pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "explicit Node execution inspects the system manager before resolving its declared range" },
 ]
 
 [[case]]
@@ -63,5 +64,6 @@ steps = [
   { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
   { argv = ["pnpm", "--version"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "a non-interactive upgrade keeps using system pnpm without prompting" },
+  { argv = ["vp", "env", "current", "pnpm", "--json"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "non-interactive environment inspection follows the undecided shim's system-preserving policy" },
   { argv = ["vpt", "stat-file", "$VP_HOME/config.json", "--assert", "missing"], comment = "non-interactive use does not record a choice" },
 ]

@@ -28,3 +28,11 @@ VITE+ - The Unified Toolchain for the Web
 
 system-node
 ```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH} NPM_CONFIG_REGISTRY=http://127.0.0.1:9 vp env exec --node 20.18.0 pnpm --version`
+
+explicit Node execution inspects the system manager before resolving its declared range
+
+```
+10.18.0
+```

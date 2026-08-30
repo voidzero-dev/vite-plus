@@ -14,6 +14,25 @@ a non-interactive upgrade keeps using system pnpm without prompting
 system-pnpm
 ```
 
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} NPM_CONFIG_REGISTRY=http://127.0.0.1:9 vp env current pnpm --json`
+
+non-interactive environment inspection follows the undecided shim's system-preserving policy
+
+```
+{
+  "package_manager": {
+    "name": "pnpm",
+    "version": "system-pnpm",
+    "source": "system PATH",
+    "bin_paths": {
+      "pnpm": "<workspace>/system-bin/pnpm"
+    },
+    "installed": true,
+    "mode": "system_first"
+  }
+}
+```
+
 ## `vpt stat-file $VP_HOME/config.json --assert missing`
 
 non-interactive use does not record a choice

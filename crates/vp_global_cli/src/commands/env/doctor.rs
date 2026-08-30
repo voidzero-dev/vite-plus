@@ -302,11 +302,11 @@ async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePat
         if let Some(package_manager) = scope.package_manager() {
             print_package_manager_mode(
                 "Package manager",
-                config.package_manager_shim_mode_for(package_manager),
+                config.effective_package_manager_shim_mode_for(package_manager),
             );
         } else {
             let modes = package_manager::ALL_PACKAGE_MANAGERS.map(|package_manager| {
-                (package_manager, config.package_manager_shim_mode_for(package_manager))
+                (package_manager, config.effective_package_manager_shim_mode_for(package_manager))
             });
             let shared_mode = modes[0].1;
             if modes.iter().all(|(_, mode)| *mode == shared_mode) {
@@ -351,7 +351,8 @@ async fn check_package_manager_resolution(
         return true;
     };
 
-    if config.package_manager_shim_mode_for(selected.package_manager_type) == ShimMode::SystemFirst
+    if config.effective_package_manager_shim_mode_for(selected.package_manager_type)
+        == ShimMode::SystemFirst
         && let Some(system_binary) =
             shim::find_system_tool(&selected.package_manager_type.to_string())
     {

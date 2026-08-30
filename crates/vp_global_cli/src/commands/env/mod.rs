@@ -167,7 +167,8 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
             .map(|resolution| resolution.package_manager_type)
             .or_else(|| scope.package_manager());
         let system_bin_dir = selected_type.and_then(|package_manager| {
-            if modes.package_manager_shim_mode_for(package_manager) == config::ShimMode::SystemFirst
+            if modes.effective_package_manager_shim_mode_for(package_manager)
+                == config::ShimMode::SystemFirst
             {
                 crate::shim::dispatch::find_system_tool(&package_manager.to_string())
                     .and_then(|path| path.parent().map(vt_path::AbsolutePath::to_absolute_path_buf))
@@ -268,7 +269,10 @@ fn format_path_snippet(shell: Shell, bin_dirs: &[String]) -> String {
                 .collect::<Vec<_>>()
                 .join(";")
         ),
-        Shell::Cmd => format!("set \"PATH={};%PATH%\"", bin_dirs.join(";")),
+        Shell::Cmd => format!(
+            "set \"PATH={};%PATH%\"",
+            bin_dirs.iter().map(|path| path.replace('%', "%%")).collect::<Vec<_>>().join(";")
+        ),
         Shell::NuShell => format!(
             "$env.PATH = ($env.PATH | prepend [{}])",
             bin_dirs
@@ -305,8 +309,8 @@ mod tests {
             r#"$env:PATH = 'C:\A&B''s;' + $env:PATH"#
         );
         assert_eq!(
-            format_path_snippet(Shell::Cmd, &[r#"C:\A&B"#.into()]),
-            r#"set "PATH=C:\A&B;%PATH%""#
+            format_path_snippet(Shell::Cmd, &[r#"C:\%literal%\A&B"#.into()]),
+            r#"set "PATH=C:\%%literal%%\A&B;%PATH%""#
         );
         assert_eq!(
             format_path_snippet(Shell::NuShell, &[r#"C:\A "B""#.into()]),

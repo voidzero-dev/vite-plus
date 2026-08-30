@@ -67,6 +67,12 @@ async fn protected_package_manager(
     let mut protected = Vec::new();
     if let Some(current) = current {
         protected.push((current.package_manager_type, vec![current.version.to_string()]));
+    } else if let EnvScope::PackageManager(kind) = scope
+        && kind != PackageManagerType::Npm
+        && config.effective_package_manager_shim_mode_for(kind) == config::ShimMode::Managed
+    {
+        protected
+            .push((kind, vec![resolve_package_manager_version(kind, "latest").await?.to_string()]));
     }
     if let Some((kind, version)) = default {
         let version = resolve_package_manager_version(kind, &version).await?.to_string();

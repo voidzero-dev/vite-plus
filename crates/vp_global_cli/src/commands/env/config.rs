@@ -60,8 +60,19 @@ impl Config {
     }
 
     #[must_use]
-    pub fn package_manager_shim_mode_for(&self, package_manager: PackageManagerType) -> ShimMode {
-        self.configured_package_manager_shim_mode_for(package_manager).unwrap_or_default()
+    pub fn effective_package_manager_shim_mode_for(
+        &self,
+        package_manager: PackageManagerType,
+    ) -> ShimMode {
+        self.configured_package_manager_shim_mode_for(package_manager).unwrap_or_else(|| {
+            if !vp_shared::is_interactive_terminal()
+                && crate::shim::dispatch::find_system_tool(&package_manager.to_string()).is_some()
+            {
+                ShimMode::SystemFirst
+            } else {
+                self.shim_mode
+            }
+        })
     }
 
     pub fn set_shim_modes(&mut self, node: bool, package_manager: bool, mode: ShimMode) {
@@ -1495,23 +1506,19 @@ mod tests {
         config.set_package_manager_shim_mode(PackageManagerType::Pnpm, ShimMode::SystemFirst);
 
         assert_eq!(
-            config.package_manager_shim_mode_for(PackageManagerType::Pnpm),
-            ShimMode::SystemFirst
-        );
-        assert_eq!(
-            config.package_manager_shim_mode_for(PackageManagerType::Bun),
-            ShimMode::Managed
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            Some(ShimMode::SystemFirst)
         );
         assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Bun), None);
 
         config.set_shim_modes(false, true, ShimMode::Managed);
         assert_eq!(
-            config.package_manager_shim_mode_for(PackageManagerType::Pnpm),
-            ShimMode::Managed
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            Some(ShimMode::Managed)
         );
         assert_eq!(
-            config.package_manager_shim_mode_for(PackageManagerType::Bun),
-            ShimMode::Managed
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Bun),
+            Some(ShimMode::Managed)
         );
         assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
     }

@@ -678,7 +678,7 @@ async fn run_package_manager_command(
     let result = if let Some(selected) = selected.as_ref()
         && commands::env::config::load_config()
             .await?
-            .package_manager_shim_mode_for(selected.package_manager_type)
+            .effective_package_manager_shim_mode_for(selected.package_manager_type)
             == commands::env::config::ShimMode::SystemFirst
         && let Some(system_path) =
             crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())

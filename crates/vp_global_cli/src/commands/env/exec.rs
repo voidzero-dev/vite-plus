@@ -153,18 +153,37 @@ async fn execute_with_version(
         path_prefixes.push(runtime.get_bin_prefix().as_path().to_path_buf());
     }
     let explicit_package_manager = package_manager.is_some();
+    let mut system_package_manager = None;
     let selected_package_manager = if let Some(package_manager) = package_manager {
         let (kind, selector) = parse_package_manager_spec(package_manager)?;
         let version = resolve_package_manager_version(kind, &selector).await?.to_string();
         Some((kind, version, None))
     } else {
-        package_manager_resolution::resolve_current(cwd).await?.map(|resolution| {
-            (resolution.package_manager_type, resolution.version.to_string(), resolution.hash)
-        })
+        let selected = package_manager_resolution::resolve_current_spec(cwd).await?;
+        if let Some(selected) = selected
+            && modes.effective_package_manager_shim_mode_for(selected.package_manager_type)
+                == config::ShimMode::SystemFirst
+            && let Some(path) =
+                crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())
+            && let Some(bin_dir) = path.parent()
+        {
+            let system_version =
+                read_tool_version(&path).await.unwrap_or_else(|| selected.version.to_string());
+            path_prefixes.insert(0, bin_dir.as_path().to_path_buf());
+            system_package_manager =
+                Some(format!("{}@{system_version}", selected.package_manager_type));
+            None
+        } else {
+            package_manager_resolution::resolve_current(cwd).await?.map(|resolution| {
+                (resolution.package_manager_type, resolution.version.to_string(), resolution.hash)
+            })
+        }
     };
-    let resolved_package_manager = if let Some((kind, version, hash)) = selected_package_manager {
+    let resolved_package_manager = if system_package_manager.is_some() {
+        system_package_manager
+    } else if let Some((kind, version, hash)) = selected_package_manager {
         if !explicit_package_manager
-            && modes.package_manager_shim_mode_for(kind) == config::ShimMode::SystemFirst
+            && modes.effective_package_manager_shim_mode_for(kind) == config::ShimMode::SystemFirst
             && let Some(path) = crate::shim::dispatch::find_system_tool(&kind.to_string())
             && let Some(bin_dir) = path.parent()
         {
