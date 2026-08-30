@@ -154,20 +154,7 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
     let modes = config::load_config().await?;
     let mut bin_dirs = Vec::new();
     if scope.includes_node() {
-        if modes.shim_mode == config::ShimMode::SystemFirst
-            && let Some(path) = crate::shim::dispatch::find_system_tool("node")
-            && let Some(bin_dir) = path.parent()
-        {
-            bin_dirs.push(bin_dir.as_path().display().to_string());
-        } else {
-            let resolution = config::resolve_version(&cwd).await?;
-            let runtime = vp_js_runtime::download_runtime(
-                vp_js_runtime::JsRuntimeType::Node,
-                &resolution.version,
-            )
-            .await?;
-            bin_dirs.push(runtime.get_bin_prefix().as_path().display().to_string());
-        }
+        bin_dirs.push(resolve_node_bin_dir(&cwd, &modes).await?.as_path().display().to_string());
     }
     if scope.includes_package_managers() {
         let selected = package_manager::resolve_current_spec(&cwd).await?.filter(|resolution| {
@@ -195,6 +182,17 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
                 match package_manager::resolve_current_for(&cwd, scope.package_manager()).await? {
                     Some(resolution) => {
                         Some((resolution.package_manager_type, resolution.version, resolution.hash))
+                    }
+                    None if scope.package_manager() == Some(vp_pm_cli::PackageManagerType::Npm) => {
+                        bin_dirs.insert(
+                            0,
+                            resolve_node_bin_dir(&cwd, &modes)
+                                .await?
+                                .as_path()
+                                .display()
+                                .to_string(),
+                        );
+                        None
                     }
                     None => match scope.package_manager() {
                         Some(package_manager) => Some((
@@ -224,6 +222,24 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
     println!("{snippet}");
 
     Ok(ExitStatus::default())
+}
+
+async fn resolve_node_bin_dir(
+    cwd: &vt_path::AbsolutePath,
+    config: &config::Config,
+) -> Result<AbsolutePathBuf, Error> {
+    if config.shim_mode == config::ShimMode::SystemFirst
+        && let Some(path) = crate::shim::dispatch::find_system_tool("node")
+        && let Some(bin_dir) = path.parent()
+    {
+        return Ok(bin_dir.to_absolute_path_buf());
+    }
+
+    let resolution = config::resolve_version(cwd).await?;
+    let runtime =
+        vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, &resolution.version)
+            .await?;
+    Ok(runtime.get_bin_prefix())
 }
 
 fn format_path_snippet(shell: Shell, bin_dirs: &[String]) -> String {

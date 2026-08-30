@@ -1,7 +1,10 @@
 use std::{collections::BTreeMap, process::ExitStatus};
 
 use serde::Serialize;
-use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
+use vp_pm_cli::{
+    PackageManagerType, package_manager_bin_path, package_manager_install_dir,
+    resolve_package_manager_version,
+};
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -160,13 +163,16 @@ async fn resolve_package_manager_info(
     let selected = package_manager::resolve_current_spec(cwd).await?.filter(|resolution| {
         scope.package_manager().is_none_or(|expected| expected == resolution.package_manager_type)
     });
-    let Some(selected) = selected else {
+    let selected_type = selected
+        .as_ref()
+        .map(|resolution| resolution.package_manager_type)
+        .or_else(|| scope.package_manager());
+    let Some(selected_type) = selected_type else {
         return Ok(None);
     };
-    let mode = config.package_manager_shim_mode_for(selected.package_manager_type);
+    let mode = config.package_manager_shim_mode_for(selected_type);
     if mode == ShimMode::SystemFirst {
-        let bin_paths = selected
-            .package_manager_type
+        let bin_paths = selected_type
             .bin_names()
             .iter()
             .filter_map(|name| {
@@ -174,17 +180,20 @@ async fn resolve_package_manager_info(
                     .map(|path| ((*name).to_string(), path.as_path().display().to_string()))
             })
             .collect::<BTreeMap<_, _>>();
-        if let Some(primary) = bin_paths.get(selected.package_manager_type.to_string().as_str())
+        if let Some(primary) = bin_paths.get(selected_type.to_string().as_str())
             && let Some(primary) = AbsolutePathBuf::new(primary.into())
         {
             return Ok(Some(PackageManagerInfo {
-                name: selected.package_manager_type.to_string(),
+                name: selected_type.to_string(),
                 version: read_tool_version(&primary).await.unwrap_or_else(|| "unknown".into()),
                 source: "system PATH".into(),
                 source_path: None,
-                project_root: selected
-                    .project_root
-                    .map(|path| path.as_path().display().to_string()),
+                project_root: selected.as_ref().and_then(|resolution| {
+                    resolution
+                        .project_root
+                        .as_ref()
+                        .map(|path| path.as_path().display().to_string())
+                }),
                 installed: true,
                 bin_paths,
                 mode,
@@ -192,18 +201,28 @@ async fn resolve_package_manager_info(
         }
     }
 
-    let Some(resolution) =
-        package_manager::resolve_current_for(cwd, scope.package_manager()).await?
-    else {
+    let resolution = package_manager::resolve_current_for(cwd, scope.package_manager()).await?;
+    let (package_manager_type, version, source, source_path, project_root) = match resolution {
+        Some(resolution) => (
+            resolution.package_manager_type,
+            resolution.version.to_string(),
+            resolution.source.to_string(),
+            resolution.source_path.map(|path| path.as_path().display().to_string()),
+            resolution.project_root.map(|path| path.as_path().display().to_string()),
+        ),
+        None if scope.package_manager().is_some() && selected_type != PackageManagerType::Npm => (
+            selected_type,
+            resolve_package_manager_version(selected_type, "latest").await?.to_string(),
+            "registry fallback".into(),
+            None,
+            None,
+        ),
+        None => return Ok(None),
+    };
+    let Some(install_dir) = package_manager_install_dir(package_manager_type, &version) else {
         return Ok(None);
     };
-    let Some(install_dir) =
-        package_manager_install_dir(resolution.package_manager_type, &resolution.version)
-    else {
-        return Ok(None);
-    };
-    let bin_paths = resolution
-        .package_manager_type
+    let bin_paths = package_manager_type
         .bin_names()
         .iter()
         .map(|name| {
@@ -215,11 +234,11 @@ async fn resolve_package_manager_info(
         .collect::<BTreeMap<_, _>>();
     let installed = bin_paths.values().all(|path| std::path::Path::new(path).exists());
     Ok(Some(PackageManagerInfo {
-        name: resolution.package_manager_type.to_string(),
-        version: resolution.version.to_string(),
-        source: resolution.source.to_string(),
-        source_path: resolution.source_path.map(|path| path.as_path().display().to_string()),
-        project_root: resolution.project_root.map(|path| path.as_path().display().to_string()),
+        name: package_manager_type.to_string(),
+        version,
+        source,
+        source_path,
+        project_root,
         bin_paths,
         installed,
         mode,

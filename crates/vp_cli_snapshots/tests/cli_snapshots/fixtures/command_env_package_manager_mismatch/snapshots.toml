@@ -78,6 +78,16 @@ steps = [
 ]
 
 [[case]]
+name = "env_node_list_stays_offline_for_floating_default"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/config.json", "{\"defaultNodeVersion\":\"latest\"}\n"], snapshot = false },
+  { argv = ["vp", "env", "list", "node", "--json"], comment = "local Node.js listing remains available when a floating default cannot reach its mirror", envs = [["VP_NODE_DIST_MIRROR", "http://127.0.0.1:9"]] },
+]
+
+[[case]]
 name = "env_pin_package_manager_requires_confirmation"
 vp = "global"
 seed-runtime = false

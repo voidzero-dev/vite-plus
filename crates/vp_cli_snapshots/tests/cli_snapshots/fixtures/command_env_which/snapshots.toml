@@ -22,3 +22,18 @@ skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "env", "print", "pnpm"], comment = "a concrete family falls back to its latest release and Fish keeps a spaced install path intact", envs = [["VP_HOME", "${workspace}/custom home"], ["VP_SHELL", "fish"]] },
 ]
+
+[[case]]
+name = "command_env_print_npm_uses_node_runtime"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "print", "npm"], comment = "unselected npm comes from the resolved Node.js runtime" },
+]
+
+[[case]]
+name = "command_env_current_concrete_package_manager_fallback"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vp", "env", "current", "pnpm", "--json"], comment = "a concrete family reports the same registry fallback as its shim" },
+]

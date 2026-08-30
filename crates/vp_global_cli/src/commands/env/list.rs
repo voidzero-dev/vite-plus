@@ -65,10 +65,11 @@ pub async fn execute(
     };
     let default_node = if scope.includes_node() {
         match config.default_node_version.as_deref() {
-            Some(selector) => Some(
+            Some(selector) => {
                 config::resolve_version_alias(selector, &vp_js_runtime::NodeProvider::new())
-                    .await?,
-            ),
+                    .await
+                    .ok()
+            }
             None => None,
         }
     } else {

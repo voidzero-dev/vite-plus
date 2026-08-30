@@ -307,7 +307,7 @@ pub async fn execute(
 }
 
 fn current_override(session: Option<String>, environment: Option<String>) -> Option<String> {
-    environment.map(|value| value.trim().to_string()).or(session)
+    environment.map(|value| value.trim().to_string()).filter(|value| !value.is_empty()).or(session)
 }
 
 #[cfg(test)]
@@ -327,6 +327,14 @@ mod tests {
                 let shell = detect_shell();
                 assert_eq!(shell, Shell::PowerShell);
             },
+        );
+    }
+
+    #[test]
+    fn empty_environment_override_falls_back_to_session() {
+        assert_eq!(
+            current_override(Some("pnpm@10.18.0".into()), Some("   ".into())).as_deref(),
+            Some("pnpm@10.18.0")
         );
     }
 
