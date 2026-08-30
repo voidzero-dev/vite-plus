@@ -6,7 +6,7 @@
 
 Managed mode is on by default, so Node.js and configured package-manager shims resolve through Vite+ and pick the right versions for the current project. Fresh installers record managed mode for npm, pnpm, Yarn, and Bun after the user enables environment management.
 
-When an upgrade adds a package-manager shim that has no recorded mode, its first interactive invocation asks what to do only when the corresponding system binary is already on PATH. If no system binary is found, the package manager inherits `shimMode`. Non-interactive invocations preserve an existing system command without recording a choice.
+When an upgrade adds a package-manager shim that has no recorded mode, its first interactive invocation asks what to do only when the corresponding system binary is already on PATH. The current family defaults to managed mode; choosing a system tool or applying a choice to every family remains explicit. Non-interactive invocations use managed mode without recording a choice.
 
 Most commands operate on both components when no selector is given. Add `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the command. `pm` means all four families for listing and cleanup, but the single selected package manager for project operations.
 
@@ -41,7 +41,7 @@ Package-manager selection uses this priority:
 6. The named package manager's global default version
 7. The named shim's latest release
 
-A selected manager controls only its named shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Alias pairs are `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The resolved version is cached for one hour and an expired cache remains available when the registry cannot be reached. npm instead falls back to the version bundled with the resolved Node.js runtime.
+A selected manager controls only its named shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Alias pairs are `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The resolved version is cached for one hour and an expired cache remains available when the registry cannot be reached. The directly invoked npm shim keeps its Node-bundled fallback, while an explicit `vp env ... npm` family scope uses standalone npm's latest release.
 
 A fresh install uses the split platform layout by default. On Unix, Vite+
 stores managed runtimes and related files in `~/.local/share/vite-plus`. It

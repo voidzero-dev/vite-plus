@@ -16,7 +16,8 @@ local-registry = true
 seed-runtime = false
 steps = [
   { argv = ["vp", "env", "print", "pnpm"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/0.0.1/pnpm/bin/pnpm", "#!/bin/sh\n"], snapshot = false },
-  { argv = ["vp", "env", "clean", "pnpm"], comment = "cleanup removes stale installs but preserves the concrete family's current fallback" },
+  { argv = ["vp", "env", "clean", "pnpm"], comment = "cleanup removes stale installs but preserves the concrete family's managed fallback even in system-first mode" },
   { argv = ["node", "assert-one-pnpm-version.cjs"], comment = "the cached registry fallback remains available" },
 ]

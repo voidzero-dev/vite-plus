@@ -1,10 +1,7 @@
 use std::{collections::BTreeMap, process::ExitStatus};
 
 use serde::Serialize;
-use vp_pm_cli::{
-    PackageManagerType, package_manager_bin_path, package_manager_install_dir,
-    resolve_package_manager_version,
-};
+use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -67,7 +64,7 @@ pub async fn execute(
     let config = config::load_config().await?;
 
     let node = if scope.includes_node()
-        && config.shim_mode == ShimMode::SystemFirst
+        && config.node_shim_mode == ShimMode::SystemFirst
         && let Some(bin_path) = crate::shim::dispatch::find_system_tool("node")
     {
         Some(NodeInfo {
@@ -77,7 +74,7 @@ pub async fn execute(
             project_root: None,
             bin_path: bin_path.as_path().display().to_string(),
             installed: true,
-            mode: config.shim_mode,
+            mode: config.node_shim_mode,
         })
     } else if scope.includes_node() {
         let resolution = resolve_version(&cwd).await?;
@@ -98,7 +95,7 @@ pub async fn execute(
             project_root: resolution.project_root.map(|path| path.as_path().display().to_string()),
             installed: bin_path.as_path().exists(),
             bin_path: bin_path.as_path().display().to_string(),
-            mode: config.shim_mode,
+            mode: config.node_shim_mode,
         })
     } else {
         None
@@ -170,7 +167,7 @@ async fn resolve_package_manager_info(
     let Some(selected_type) = selected_type else {
         return Ok(None);
     };
-    let mode = config.effective_package_manager_shim_mode_for(selected_type);
+    let mode = config.package_manager_shim_mode_for(selected_type);
     if mode == ShimMode::SystemFirst {
         let bin_paths = selected_type
             .bin_names()
@@ -201,27 +198,20 @@ async fn resolve_package_manager_info(
         }
     }
 
-    let resolution = package_manager::resolve_current_for(cwd, scope.package_manager()).await?;
-    let (package_manager_type, version, source, source_path, project_root) = match resolution {
-        Some(resolution) => (
-            resolution.package_manager_type,
-            resolution.version.to_string(),
-            resolution.source.to_string(),
-            resolution.source_path.map(|path| path.as_path().display().to_string()),
-            resolution.project_root.map(|path| path.as_path().display().to_string()),
-        ),
-        None if scope.package_manager().is_some() && selected_type != PackageManagerType::Npm => (
-            selected_type,
-            resolve_package_manager_version(selected_type, "latest").await?.to_string(),
-            "registry fallback".into(),
-            None,
-            None,
-        ),
-        None if selected_type == PackageManagerType::Npm => {
-            return resolve_bundled_npm_info(cwd, config, mode).await;
+    let resolution = match scope.package_manager() {
+        Some(package_manager) => {
+            Some(package_manager::resolve_current_or_fallback_for(cwd, package_manager).await?)
         }
-        None => return Ok(None),
+        None => package_manager::resolve_current_for(cwd, None).await?,
     };
+    let Some(resolution) = resolution else {
+        return Ok(None);
+    };
+    let package_manager_type = resolution.package_manager_type;
+    let version = resolution.version.to_string();
+    let source = resolution.source.to_string();
+    let source_path = resolution.source_path.map(|path| path.as_path().display().to_string());
+    let project_root = resolution.project_root.map(|path| path.as_path().display().to_string());
     let Some(install_dir) = package_manager_install_dir(package_manager_type, &version) else {
         return Ok(None);
     };
@@ -244,71 +234,6 @@ async fn resolve_package_manager_info(
         project_root,
         bin_paths,
         installed,
-        mode,
-    }))
-}
-
-async fn resolve_bundled_npm_info(
-    cwd: &vt_path::AbsolutePath,
-    config: &config::Config,
-    mode: ShimMode,
-) -> Result<Option<PackageManagerInfo>, Error> {
-    if config.shim_mode == ShimMode::SystemFirst
-        && crate::shim::dispatch::find_system_tool("node").is_some()
-    {
-        let bin_paths = PackageManagerType::Npm
-            .bin_names()
-            .iter()
-            .filter_map(|name| {
-                crate::shim::dispatch::find_system_tool(name)
-                    .map(|path| ((*name).to_string(), path.as_path().display().to_string()))
-            })
-            .collect::<BTreeMap<_, _>>();
-        let Some(primary) = bin_paths.get("npm").and_then(|path| AbsolutePathBuf::new(path.into()))
-        else {
-            return Ok(None);
-        };
-        return Ok(Some(PackageManagerInfo {
-            name: "npm".into(),
-            version: read_tool_version(&primary).await.unwrap_or_else(|| "unknown".into()),
-            source: "system PATH".into(),
-            source_path: None,
-            project_root: None,
-            installed: true,
-            bin_paths,
-            mode,
-        }));
-    }
-
-    let resolution = resolve_version(cwd).await?;
-    let home = vp_shared::EnvConfig::get()
-        .dirs
-        .data
-        .join("js_runtime")
-        .join("node")
-        .join(&resolution.version);
-    let bin_paths = PackageManagerType::Npm
-        .bin_names()
-        .iter()
-        .map(|name| {
-            #[cfg(windows)]
-            let path = home.join(format!("{name}.cmd"));
-            #[cfg(not(windows))]
-            let path = home.join("bin").join(name);
-            ((*name).to_string(), path.as_path().display().to_string())
-        })
-        .collect::<BTreeMap<_, _>>();
-    let primary = AbsolutePathBuf::new(bin_paths["npm"].clone().into())
-        .expect("managed npm path is absolute");
-    let installed = bin_paths.values().all(|path| std::path::Path::new(path).exists());
-    Ok(Some(PackageManagerInfo {
-        name: "npm".into(),
-        version: read_tool_version(&primary).await.unwrap_or_else(|| "unknown".into()),
-        source: format!("Node.js {}", resolution.version),
-        source_path: resolution.source_path.map(|path| path.as_path().display().to_string()),
-        project_root: resolution.project_root.map(|path| path.as_path().display().to_string()),
-        installed,
-        bin_paths,
         mode,
     }))
 }

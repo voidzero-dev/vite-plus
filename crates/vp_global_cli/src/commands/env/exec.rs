@@ -135,7 +135,7 @@ async fn execute_with_version(
     let modes = config::load_config().await?;
     let (resolved_node, system_node_bin) = if let Some(node_version) = node_version {
         (resolve_version(node_version, &NodeProvider::new()).await?, None)
-    } else if modes.shim_mode == config::ShimMode::SystemFirst
+    } else if modes.node_shim_mode == config::ShimMode::SystemFirst
         && let Some(path) = crate::shim::dispatch::find_system_tool("node")
     {
         (
@@ -162,7 +162,7 @@ async fn execute_with_version(
     } else {
         let selected = package_manager_resolution::resolve_current_spec(cwd).await?;
         if let Some(selected) = selected
-            && modes.effective_package_manager_shim_mode_for(selected.package_manager_type)
+            && modes.package_manager_shim_mode_for(selected.package_manager_type)
                 == config::ShimMode::SystemFirst
             && let Some(path) =
                 crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())
@@ -188,7 +188,7 @@ async fn execute_with_version(
         system_package_manager
     } else if let Some((kind, version, hash)) = selected_package_manager {
         if !explicit_package_manager
-            && modes.effective_package_manager_shim_mode_for(kind) == config::ShimMode::SystemFirst
+            && modes.package_manager_shim_mode_for(kind) == config::ShimMode::SystemFirst
             && let Some(path) = crate::shim::dispatch::find_system_tool(&kind.to_string())
             && let Some(bin_dir) = path.parent()
         {

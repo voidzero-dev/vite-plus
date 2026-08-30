@@ -1,6 +1,6 @@
 use vp_pm_cli::{
     EnvironmentPackageManagerResolution, PackageManagerType, resolve_environment_package_manager,
-    resolve_environment_package_manager_spec,
+    resolve_environment_package_manager_spec, resolve_package_manager_version,
 };
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -27,6 +27,17 @@ pub(crate) async fn resolve_current_for(
     .await?;
     specs.apply_session_source(&mut resolution);
     Ok(resolution)
+}
+
+pub(crate) async fn resolve_current_or_fallback_for(
+    cwd: &AbsolutePath,
+    package_manager: PackageManagerType,
+) -> Result<EnvironmentPackageManagerResolution, Error> {
+    if let Some(resolution) = resolve_current_for(cwd, Some(package_manager)).await? {
+        return Ok(resolution);
+    }
+
+    registry_fallback_for(package_manager).await
 }
 
 pub(crate) async fn resolve_current_spec(
@@ -127,6 +138,30 @@ pub(crate) async fn resolve_from_files_for(
     )
     .await
     .map_err(Error::from)
+}
+
+pub(crate) async fn resolve_from_files_or_fallback_for(
+    cwd: &AbsolutePath,
+    package_manager: PackageManagerType,
+) -> Result<EnvironmentPackageManagerResolution, Error> {
+    if let Some(resolution) = resolve_from_files_for(cwd, Some(package_manager)).await? {
+        return Ok(resolution);
+    }
+
+    registry_fallback_for(package_manager).await
+}
+
+async fn registry_fallback_for(
+    package_manager: PackageManagerType,
+) -> Result<EnvironmentPackageManagerResolution, Error> {
+    Ok(EnvironmentPackageManagerResolution {
+        package_manager_type: package_manager,
+        version: resolve_package_manager_version(package_manager, "latest").await?,
+        hash: None,
+        source: "registry fallback".into(),
+        source_path: None,
+        project_root: None,
+    })
 }
 
 pub(crate) async fn warn_if_target_differs(cwd: &AbsolutePath, target: PackageManagerType) {

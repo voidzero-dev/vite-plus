@@ -24,11 +24,12 @@ steps = [
 ]
 
 [[case]]
-name = "command_env_print_npm_uses_node_runtime"
+name = "command_env_print_npm_uses_standalone_fallback"
 vp = "global"
+local-registry = true
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "env", "print", "npm"], comment = "unselected npm comes from the resolved Node.js runtime" },
+  { argv = ["vp", "env", "print", "npm"], comment = "an explicit npm scope uses the standalone registry fallback" },
 ]
 
 [[case]]
@@ -40,9 +41,9 @@ steps = [
 ]
 
 [[case]]
-name = "command_env_current_npm_uses_node_runtime"
+name = "command_env_current_npm_uses_standalone_fallback"
 vp = "global"
-skip-platforms = ["windows"]
+local-registry = true
 steps = [
-  { argv = ["vp", "env", "current", "npm", "--json"], comment = "unselected npm reports the executable bundled with the resolved Node.js runtime" },
+  { argv = ["vp", "env", "current", "npm", "--json"], comment = "an explicit npm scope reports the standalone registry fallback" },
 ]

@@ -16,7 +16,7 @@ vp env pin 22.0.0 pnpm@10.18.0  # Both
 
 Selectors are `node`, `pm`, `npm`, `pnpm`, `yarn`, and `bun`. `pm` selects every family for listing and cleanup, but the single project-selected manager for `current`, `pin`, `unpin`, `use`, and execution.
 
-Node and package-manager modes persist independently. Existing `shimMode` remains the Node mode; optional `packageManagerShimMode` inherits it when absent. A Node-only mode change materializes the inherited PM value before changing `shimMode`, so it cannot accidentally change PM behavior.
+Node and package-manager modes persist independently. `nodeShimMode` stores the Node mode and accepts the legacy `shimMode` field while reading older configurations. Missing package-manager modes default to managed without inheriting Node state, and only package-manager mode commands or first-use choices persist them.
 
 Package-manager resolution priority is explicit override, `VP_PACKAGE_MANAGER` or `.session-package-manager`, top-level `packageManager`, `devEngines.packageManager`, lockfile/config detection, `defaultPackageManager`, then the existing fallback. The resolver is non-mutating and shared by env inspection, shims, `vp install`, `use`, and `exec`.
 
@@ -456,7 +456,12 @@ VP_HOME/                              # Default: ~/.vite-plus
   // Set via: vp env on (managed) or vp env off (system_first)
   // - "managed" (default): All vp commands and shims use vite-plus managed Node.js
   // - "system_first": All vp commands and shims prefer system Node.js, fallback to managed if not found
-  "shimMode": "managed"
+  "nodeShimMode": "managed",
+
+  // `shimMode` is accepted as the legacy Node.js field name but is no longer written.
+  "packageManagerShimModes": {
+    "pnpm": "managed"
+  }
 }
 ```
 

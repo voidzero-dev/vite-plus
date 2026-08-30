@@ -3,13 +3,16 @@
 ## `vp env print pnpm`
 
 
+## `vp env off pnpm`
+
+
 ## `vpt write-file $VP_HOME/package_manager/pnpm/0.0.1/pnpm/bin/pnpm '#'\!'/bin/sh
 '`
 
 
 ## `vp env clean pnpm`
 
-cleanup removes stale installs but preserves the concrete family's current fallback
+cleanup removes stale installs but preserves the concrete family's managed fallback even in system-first mode
 
 ```
 VITE+ - The Unified Toolchain for the Web

@@ -47,9 +47,9 @@ pub struct Config {
         skip_serializing_if = "BTreeMap::is_empty"
     )]
     pub default_package_manager_versions: BTreeMap<String, String>,
-    /// Shim mode for tool resolution
-    #[serde(default, skip_serializing_if = "is_default_shim_mode")]
-    pub shim_mode: ShimMode,
+    /// Node.js shim mode. `shimMode` is accepted as the legacy field name.
+    #[serde(default, alias = "shimMode", skip_serializing_if = "is_default_shim_mode")]
+    pub node_shim_mode: ShimMode,
     /// Explicit per-package-manager shim modes. An absent family has not been configured yet.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub package_manager_shim_modes: BTreeMap<String, ShimMode>,
@@ -85,31 +85,13 @@ impl Config {
     }
 
     #[must_use]
-    pub fn effective_package_manager_shim_mode_for(
-        &self,
-        package_manager: PackageManagerType,
-    ) -> ShimMode {
-        self.configured_package_manager_shim_mode_for(package_manager).unwrap_or_else(|| {
-            if !vp_shared::is_interactive_terminal()
-                && crate::shim::dispatch::find_system_tool(&package_manager.to_string()).is_some()
-            {
-                ShimMode::SystemFirst
-            } else {
-                self.shim_mode
-            }
-        })
+    pub fn package_manager_shim_mode_for(&self, package_manager: PackageManagerType) -> ShimMode {
+        self.configured_package_manager_shim_mode_for(package_manager).unwrap_or_default()
     }
 
     pub fn set_shim_modes(&mut self, node: bool, package_manager: bool, mode: ShimMode) {
-        if node && !package_manager {
-            for package_manager in ALL_PACKAGE_MANAGERS {
-                self.package_manager_shim_modes
-                    .entry(package_manager.to_string())
-                    .or_insert(self.shim_mode);
-            }
-        }
         if node {
-            self.shim_mode = mode;
+            self.node_shim_mode = mode;
         }
         if package_manager {
             self.set_all_package_manager_shim_modes(mode);
@@ -1552,15 +1534,15 @@ mod tests {
     }
 
     #[test]
-    fn node_only_mode_change_materializes_inherited_package_manager_modes() {
+    fn node_only_mode_change_leaves_package_managers_undecided() {
         let mut config = Config::default();
         config.set_shim_modes(true, false, ShimMode::SystemFirst);
-        assert_eq!(config.shim_mode, ShimMode::SystemFirst);
+        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
+        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm), None);
         assert_eq!(
-            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
-            Some(ShimMode::Managed)
+            config.package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            ShimMode::Managed
         );
-        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
     }
 
     #[test]
@@ -1588,10 +1570,21 @@ mod tests {
 
     #[test]
     fn package_manager_only_mode_change_preserves_node_mode() {
-        let mut config = Config { shim_mode: ShimMode::SystemFirst, ..Config::default() };
+        let mut config = Config { node_shim_mode: ShimMode::SystemFirst, ..Config::default() };
         config.set_shim_modes(false, true, ShimMode::Managed);
-        assert_eq!(config.shim_mode, ShimMode::SystemFirst);
+        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
         assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
+    }
+
+    #[test]
+    fn legacy_shim_mode_loads_as_node_shim_mode() {
+        let config: Config = serde_json::from_str(r#"{"shimMode":"system_first"}"#).unwrap();
+
+        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
+        assert_eq!(
+            serde_json::to_value(config).unwrap(),
+            serde_json::json!({ "nodeShimMode": "system_first" })
+        );
     }
 
     #[test]

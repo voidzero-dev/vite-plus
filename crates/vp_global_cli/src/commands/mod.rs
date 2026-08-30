@@ -117,7 +117,7 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
     let config = env::config::load_config().await?;
     let mut executor = JsExecutor::new(None);
 
-    let node_bin_prefix = if config.shim_mode == env::config::ShimMode::SystemFirst
+    let node_bin_prefix = if config.node_shim_mode == env::config::ShimMode::SystemFirst
         && let Some(system_node) = crate::shim::dispatch::find_system_tool("node")
         && let Some(bin_dir) = system_node.parent()
     {
@@ -139,7 +139,7 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         tracing::debug!("Set PATH to include {:?}", node_bin_prefix);
     }
     if let Some(package_manager) = env::package_manager::resolve_current_spec(project_path).await? {
-        if config.effective_package_manager_shim_mode_for(package_manager.package_manager_type)
+        if config.package_manager_shim_mode_for(package_manager.package_manager_type)
             == env::config::ShimMode::SystemFirst
             && let Some(system_path) = crate::shim::dispatch::find_system_tool(
                 &package_manager.package_manager_type.to_string(),

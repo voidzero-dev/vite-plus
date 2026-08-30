@@ -167,8 +167,7 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
             .map(|resolution| resolution.package_manager_type)
             .or_else(|| scope.package_manager());
         let system_bin_dir = selected_type.and_then(|package_manager| {
-            if modes.effective_package_manager_shim_mode_for(package_manager)
-                == config::ShimMode::SystemFirst
+            if modes.package_manager_shim_mode_for(package_manager) == config::ShimMode::SystemFirst
             {
                 crate::shim::dispatch::find_system_tool(&package_manager.to_string())
                     .and_then(|path| path.parent().map(vt_path::AbsolutePath::to_absolute_path_buf))
@@ -179,36 +178,19 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
         if let Some(bin_dir) = system_bin_dir {
             bin_dirs.insert(0, bin_dir.as_path().display().to_string());
         } else {
-            let package_manager =
-                match package_manager::resolve_current_for(&cwd, scope.package_manager()).await? {
-                    Some(resolution) => {
-                        Some((resolution.package_manager_type, resolution.version, resolution.hash))
-                    }
-                    None if scope.package_manager() == Some(vp_pm_cli::PackageManagerType::Npm) => {
-                        bin_dirs.insert(
-                            0,
-                            resolve_node_bin_dir(&cwd, &modes)
-                                .await?
-                                .as_path()
-                                .display()
-                                .to_string(),
-                        );
-                        None
-                    }
-                    None => match scope.package_manager() {
-                        Some(package_manager) => Some((
-                            package_manager,
-                            vp_pm_cli::resolve_package_manager_version(package_manager, "latest")
-                                .await?,
-                            None,
-                        )),
-                        None => None,
-                    },
-                };
-            if let Some((package_manager, version, hash)) = package_manager {
-                let (install_dir, _, _) =
-                    vp_pm_cli::download_package_manager(package_manager, &version, hash.as_deref())
-                        .await?;
+            let resolution = match scope.package_manager() {
+                Some(package_manager) => Some(
+                    package_manager::resolve_current_or_fallback_for(&cwd, package_manager).await?,
+                ),
+                None => package_manager::resolve_current_for(&cwd, None).await?,
+            };
+            if let Some(resolution) = resolution {
+                let (install_dir, _, _) = vp_pm_cli::download_package_manager(
+                    resolution.package_manager_type,
+                    &resolution.version,
+                    resolution.hash.as_deref(),
+                )
+                .await?;
                 bin_dirs.insert(0, install_dir.join("bin").as_path().display().to_string());
             }
         }
@@ -229,7 +211,7 @@ async fn resolve_node_bin_dir(
     cwd: &vt_path::AbsolutePath,
     config: &config::Config,
 ) -> Result<AbsolutePathBuf, Error> {
-    if config.shim_mode == config::ShimMode::SystemFirst
+    if config.node_shim_mode == config::ShimMode::SystemFirst
         && let Some(path) = crate::shim::dispatch::find_system_tool("node")
         && let Some(bin_dir) = path.parent()
     {

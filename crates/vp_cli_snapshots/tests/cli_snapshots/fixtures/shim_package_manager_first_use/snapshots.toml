@@ -9,14 +9,12 @@ steps = [
   { argv = ["pnpm", "--version"], snapshot = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], interactions = [
     { "expect-milestone" = "pm-shim-choice:pnpm" },
     { "write-key" = "down" },
-    { "write-key" = "down" },
     { "write-key" = "enter" },
   ] },
   { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "the explicit system choice records only pnpm" },
   { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "later pnpm invocations use the recorded choice without prompting" },
   { argv = ["yarn", "--version"], snapshot = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], interactions = [
     { "expect-milestone" = "pm-shim-choice:yarn" },
-    { "write-key" = "down" },
     { "write-key" = "down" },
     { "write-key" = "enter" },
   ] },
@@ -57,13 +55,23 @@ steps = [
 ]
 
 [[case]]
-name = "non_interactive_use_preserves_system_without_deciding"
+name = "non_interactive_use_defaults_to_managed_without_deciding"
 vp = "global"
+local-registry = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
-  { argv = ["pnpm", "--version"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "a non-interactive upgrade keeps using system pnpm without prompting" },
-  { argv = ["vp", "env", "current", "pnpm", "--json"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "non-interactive environment inspection follows the undecided shim's system-preserving policy" },
+  { argv = ["pnpm", "--version"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "an undecided non-interactive shim uses managed pnpm without prompting" },
+  { argv = ["vp", "env", "current", "pnpm", "--json"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "environment inspection uses the same stable managed default" },
   { argv = ["vpt", "stat-file", "$VP_HOME/config.json", "--assert", "missing"], comment = "non-interactive use does not record a choice" },
+]
+
+[[case]]
+name = "node_mode_does_not_decide_package_manager_modes"
+vp = "global"
+steps = [
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "a Node-only mode change writes only the Node mode" },
 ]

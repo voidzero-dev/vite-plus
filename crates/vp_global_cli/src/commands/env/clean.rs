@@ -9,12 +9,7 @@ use vp_pm_cli::{PackageManagerType, resolve_package_manager_version};
 use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use super::{
-    config,
-    list::list_installed_versions,
-    package_manager::{self, ALL_PACKAGE_MANAGERS},
-    spec::EnvScope,
-};
+use super::{config, list::list_installed_versions, package_manager, spec::EnvScope};
 use crate::error::Error;
 
 /// Execute the clean command.
@@ -31,21 +26,24 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     }
 
     if scope.includes_package_managers() {
-        let protected = match protected_package_manager(&cwd, scope).await {
-            Ok(protected) => protected,
-            Err(error) => {
-                output::warn(&format!(
-                    "Could not resolve the protected package manager; package-manager cleanup was skipped: {error}"
-                ));
-                return Ok(ExitStatus::default());
-            }
-        };
-        let selected = match scope {
-            EnvScope::PackageManager(kind) => vec![kind],
-            _ => ALL_PACKAGE_MANAGERS.to_vec(),
-        };
-        let removed =
-            clean_package_managers(package_manager_dir.as_path(), &selected, &protected).await?;
+        let mut removed = 0;
+        for kind in package_manager::selected(scope) {
+            let protected = match protected_package_manager(&cwd, kind).await {
+                Ok(protected) => protected,
+                Err(error) => {
+                    output::warn(&format!(
+                        "Could not resolve protected {kind} versions; {kind} cleanup was skipped: {error}"
+                    ));
+                    continue;
+                }
+            };
+            removed += clean_package_managers(
+                package_manager_dir.as_path(),
+                &[kind],
+                &[(kind, protected)],
+            )
+            .await?;
+        }
         output::success(&format!("Removed {removed} package manager install{}", plural(removed)));
     }
 
@@ -54,30 +52,14 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
 async fn protected_package_manager(
     cwd: &AbsolutePath,
-    scope: EnvScope,
-) -> Result<Vec<(PackageManagerType, Vec<String>)>, Error> {
-    let current = package_manager::resolve_current_for(cwd, scope.package_manager()).await?;
+    kind: PackageManagerType,
+) -> Result<Vec<String>, Error> {
+    let current = package_manager::resolve_current_or_fallback_for(cwd, kind).await?;
+    let mut protected = vec![current.version.to_string()];
     let config = config::load_config().await?;
-    let mut protected = Vec::new();
-    if let Some(current) = current {
-        protected.push((current.package_manager_type, vec![current.version.to_string()]));
-    } else if let EnvScope::PackageManager(kind) = scope
-        && kind != PackageManagerType::Npm
-        && config.effective_package_manager_shim_mode_for(kind) == config::ShimMode::Managed
-    {
-        protected
-            .push((kind, vec![resolve_package_manager_version(kind, "latest").await?.to_string()]));
-    }
-    for kind in package_manager::selected(scope) {
-        let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)? else {
-            continue;
-        };
+    if let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)? {
         let version = resolve_package_manager_version(kind, &selector).await?.to_string();
-        if let Some((_, versions)) = protected.iter_mut().find(|(current, _)| *current == kind) {
-            push_unique_version(versions, version);
-        } else {
-            protected.push((kind, vec![version]));
-        }
+        push_unique_version(&mut protected, version);
     }
     Ok(protected)
 }

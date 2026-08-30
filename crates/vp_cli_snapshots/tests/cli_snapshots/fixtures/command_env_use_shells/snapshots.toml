@@ -23,3 +23,13 @@ env = { VP_ENV_USE_EVAL_ENABLE = "1", VP_PACKAGE_MANAGER = "pnpm@10.18.0" }
 steps = [
   { argv = ["vp", "env", "use", "--no-install"], comment = "activating a project with no package-manager selection clears the previous override", envs = [["VP_SHELL", "bash"]] },
 ]
+
+[[case]]
+name = "env_use_npm_uses_standalone_fallback"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+env = { VP_ENV_USE_EVAL_ENABLE = "1", VP_SHELL = "bash" }
+steps = [
+  { argv = ["vp", "env", "use", "npm", "--no-install"], comment = "an explicit npm scope exports only the standalone npm fallback" },
+]

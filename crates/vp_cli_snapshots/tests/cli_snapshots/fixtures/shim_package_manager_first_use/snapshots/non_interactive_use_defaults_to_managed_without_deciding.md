@@ -1,4 +1,4 @@
-# non_interactive_use_preserves_system_without_deciding
+# non_interactive_use_defaults_to_managed_without_deciding
 
 ## `vpt rm -f $VP_HOME/config.json`
 
@@ -8,27 +8,28 @@
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} pnpm --version`
 
-a non-interactive upgrade keeps using system pnpm without prompting
+an undecided non-interactive shim uses managed pnpm without prompting
 
 ```
-system-pnpm
+11.24.0
 ```
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} NPM_CONFIG_REGISTRY=http://127.0.0.1:9 vp env current pnpm --json`
 
-non-interactive environment inspection follows the undecided shim's system-preserving policy
+environment inspection uses the same stable managed default
 
 ```
 {
   "package_manager": {
     "name": "pnpm",
-    "version": "system-pnpm",
-    "source": "system PATH",
+    "version": "<version>",
+    "source": "registry fallback",
     "bin_paths": {
-      "pnpm": "<workspace>/system-bin/pnpm"
+      "pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm",
+      "pnpx": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpx"
     },
     "installed": true,
-    "mode": "system_first"
+    "mode": "managed"
   }
 }
 ```

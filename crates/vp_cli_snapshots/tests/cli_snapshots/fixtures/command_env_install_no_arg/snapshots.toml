@@ -11,12 +11,13 @@ steps = [
 ]
 
 [[case]]
-name = "command_env_install_bundled_npm"
+name = "command_env_install_standalone_npm_fallback"
 vp = "global"
+local-registry = true
 skip-platforms = ["windows"]
 seed-runtime = false
 steps = [
-  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], snapshot = false },
-  { argv = ["vp", "env", "install", "npm"], comment = "unselected npm installs the resolved Node.js runtime that bundles it" },
-  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.18.0/bin/npm", "--assert", "symlink"], comment = "the installed npm is the Node.js-bundled executable" },
+  { argv = ["vp", "env", "install", "npm"], comment = "an explicit npm scope installs the standalone registry fallback" },
+  { argv = ["vp", "env", "current", "npm", "--json"], comment = "the standalone npm fallback is installed" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node", "--assert", "missing"], comment = "installing standalone npm does not install Node.js" },
 ]

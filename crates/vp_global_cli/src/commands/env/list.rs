@@ -2,10 +2,7 @@ use std::{collections::BTreeMap, process::ExitStatus};
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use vp_pm_cli::{
-    PackageManagerType, package_manager_bin_path, package_manager_install_dir,
-    resolve_package_manager_version,
-};
+use vp_pm_cli::{PackageManagerType, package_manager_bin_path, package_manager_install_dir};
 use vt_path::AbsolutePathBuf;
 
 use super::{config, package_manager, spec::EnvScope};
@@ -56,22 +53,16 @@ pub async fn execute(
         None
     };
     let current_pm = if scope.includes_package_managers() {
-        package_manager::resolve_current_for(&cwd, scope.package_manager()).await.ok().flatten()
-    } else {
-        None
-    };
-    let default_node = if scope.includes_node() {
-        match config.default_node_version.as_deref() {
-            Some(selector) => {
-                config::resolve_version_alias(selector, &vp_js_runtime::NodeProvider::new())
-                    .await
-                    .ok()
+        match scope.package_manager() {
+            Some(package_manager) => {
+                package_manager::resolve_current_or_fallback_for(&cwd, package_manager).await.ok()
             }
-            None => None,
+            None => package_manager::resolve_current_for(&cwd, None).await.ok().flatten(),
         }
     } else {
         None
     };
+    let default_node = scope.includes_node().then(|| config.default_node_version.clone()).flatten();
     let mut default_package_manager_versions = BTreeMap::new();
     if scope.includes_package_managers() {
         for kind in package_manager::selected(scope) {
@@ -79,9 +70,7 @@ pub async fn execute(
             else {
                 continue;
             };
-            if let Ok(version) = resolve_package_manager_version(kind, &selector).await {
-                default_package_manager_versions.insert(kind.to_string(), version.to_string());
-            }
+            default_package_manager_versions.insert(kind.to_string(), selector);
         }
     }
 

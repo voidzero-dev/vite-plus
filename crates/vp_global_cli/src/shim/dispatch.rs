@@ -789,7 +789,9 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // package managers still need the Node.js runtime selected by its mode.
     let system_node = if PackageManagerType::from_tool(tool).is_some() {
         match config::load_config().await {
-            Ok(config) if config.shim_mode == ShimMode::SystemFirst => find_system_tool("node"),
+            Ok(config) if config.node_shim_mode == ShimMode::SystemFirst => {
+                find_system_tool("node")
+            }
             Ok(_) => None,
             Err(error) => {
                 eprintln!("vp: Failed to load Node.js shim mode: {error}");
@@ -949,7 +951,7 @@ fn read_node_version(node_path: &AbsolutePath) -> Option<String> {
 
 async fn prepare_node_path_for_system_package_manager() -> Result<(), Error> {
     let config = config::load_config().await?;
-    if config.shim_mode == ShimMode::SystemFirst
+    if config.node_shim_mode == ShimMode::SystemFirst
         && let Some(node) = find_system_tool("node")
         && let Some(bin_dir) = node.parent()
     {
@@ -1302,7 +1304,7 @@ pub(crate) fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, 
 /// Returns the default (Managed) if config cannot be read.
 async fn load_shim_mode(tool: &str) -> ShimMode {
     let Some(package_manager) = PackageManagerType::from_tool(tool) else {
-        return config::load_config().await.map(|config| config.shim_mode).unwrap_or_default();
+        return config::load_config().await.map(|config| config.node_shim_mode).unwrap_or_default();
     };
     resolve_package_manager_shim_mode(tool, package_manager).await
 }
@@ -1315,11 +1317,7 @@ async fn resolve_package_manager_shim_mode(
         Ok(config) => config,
         Err(error) => {
             output::warn(&format!("Could not read package-manager shim preferences: {error}"));
-            return if find_system_tool(tool).is_some() {
-                ShimMode::SystemFirst
-            } else {
-                ShimMode::Managed
-            };
+            return ShimMode::Managed;
         }
     };
     if let Some(mode) = config.configured_package_manager_shim_mode_for(package_manager) {
@@ -1327,11 +1325,11 @@ async fn resolve_package_manager_shim_mode(
     }
 
     let Some(system_path) = find_system_tool(tool) else {
-        return config.shim_mode;
+        return ShimMode::Managed;
     };
 
     if !vp_shared::is_interactive_terminal() {
-        return ShimMode::SystemFirst;
+        return ShimMode::Managed;
     }
 
     let Some((mode, apply_to_all)) =
@@ -1369,7 +1367,7 @@ fn prompt_package_manager_shim_mode(
     let choice = Select::with_theme(&ColorfulTheme::default())
         .with_prompt(format!("How should {package_manager} run?"))
         .items(&options)
-        .default(0)
+        .default(1)
         .interact()
         .ok()?;
 

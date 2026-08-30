@@ -35,9 +35,9 @@ const LABEL_WIDTH: usize = 10;
 pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
     let config = super::config::load_config().await?;
     let mode = if let Some(package_manager) = PackageManagerType::from_tool(tool) {
-        config.effective_package_manager_shim_mode_for(package_manager)
+        config.package_manager_shim_mode_for(package_manager)
     } else {
-        config.shim_mode
+        config.node_shim_mode
     };
     if mode == ShimMode::SystemFirst
         && let Some(path) = shim::dispatch::find_system_tool(tool)
@@ -194,7 +194,7 @@ async fn execute_package_manager_tool(
 /// Execute which for a core tool (node, npm, npx).
 async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
     if matches!(tool, "npm" | "npx")
-        && super::config::load_config().await?.shim_mode == ShimMode::SystemFirst
+        && super::config::load_config().await?.node_shim_mode == ShimMode::SystemFirst
         && let Some(path) = shim::dispatch::find_system_tool(tool)
     {
         println!("{}", path.as_path().display());

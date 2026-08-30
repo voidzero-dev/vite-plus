@@ -1,6 +1,6 @@
 use std::process::ExitStatus;
 
-use vp_pm_cli::{PackageManagerType, download_package_manager, resolve_package_manager_version};
+use vp_pm_cli::{download_package_manager, resolve_package_manager_version};
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -67,23 +67,12 @@ pub(crate) async fn install(
             let version = resolve_package_manager_version(kind, &selector).await?;
             Some((kind, version, hash))
         } else if let EnvScope::PackageManager(kind) = scope {
-            match package_manager::resolve_current_for(&cwd, Some(kind)).await? {
-                Some(current) => {
-                    Some((kind, current.version, current.hash.map(|hash| hash.to_string())))
-                }
-                None if kind == PackageManagerType::Npm => {
-                    let resolution = config::resolve_version(&cwd).await?;
-                    println!("Installing npm bundled with Node.js v{}...", resolution.version);
-                    vp_js_runtime::download_runtime(
-                        vp_js_runtime::JsRuntimeType::Node,
-                        &resolution.version,
-                    )
-                    .await?;
-                    println!("Installed npm bundled with Node.js v{}", resolution.version);
-                    None
-                }
-                None => Some((kind, resolve_package_manager_version(kind, "latest").await?, None)),
-            }
+            let resolution = package_manager::resolve_current_or_fallback_for(&cwd, kind).await?;
+            Some((
+                resolution.package_manager_type,
+                resolution.version,
+                resolution.hash.map(|hash| hash.to_string()),
+            ))
         } else {
             package_manager::resolve_current(&cwd).await?.map(|current| {
                 (
