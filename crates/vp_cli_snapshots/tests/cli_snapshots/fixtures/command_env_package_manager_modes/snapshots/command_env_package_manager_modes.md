@@ -14,7 +14,7 @@ Selected commands and shims will now prefer system tools, falling back to manage
 Run `vp env on` to always use Vite+ managed tools.
 ```
 
-## `VP_PACKAGE_MANAGER=pnpm@10.18.0 vp env current pnpm --json`
+## `VP_PACKAGE_MANAGER=pnpm@10.18.0 VP_BYPASS=${PATH} vp env current pnpm --json`
 
 pnpm uses its individual mode
 

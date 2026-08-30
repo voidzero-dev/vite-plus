@@ -4,7 +4,7 @@ vp = "global"
 seed-runtime = false
 steps = [
   { argv = ["vp", "env", "off", "pnpm"], comment = "switch only pnpm to system-first mode" },
-  { argv = ["vp", "env", "current", "pnpm", "--json"], envs = [["VP_PACKAGE_MANAGER", "pnpm@10.18.0"]], comment = "pnpm uses its individual mode" },
+  { argv = ["vp", "env", "current", "pnpm", "--json"], envs = [["VP_PACKAGE_MANAGER", "pnpm@10.18.0"], ["VP_BYPASS", "${PATH}"]], comment = "pnpm uses its individual mode" },
   { argv = ["vp", "env", "current", "bun", "--json"], envs = [["VP_PACKAGE_MANAGER", "bun@1.2.3"]], comment = "bun keeps the shared managed mode" },
   { argv = ["vp", "env", "on", "pnpm"], comment = "restore only pnpm to managed mode" },
   { argv = ["vp", "env", "current", "pnpm", "--json"], envs = [["VP_PACKAGE_MANAGER", "pnpm@10.18.0"]], comment = "pnpm returns to the shared managed mode" },

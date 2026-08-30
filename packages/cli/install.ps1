@@ -1170,8 +1170,16 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
     if ($nodeManagerResult -eq "true") {
-        & "$BinDir\vp.exe" env on pm *> $null
-        if ($LASTEXITCODE -ne 0) {
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            # Older Vite+ payloads do not support the pm scope.
+            $ErrorActionPreference = "Continue"
+            & $vpBin env on pm *> $null
+            $preferenceExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if ($preferenceExitCode -ne 0) {
             Write-Warn "Failed to record package-manager management preference."
         }
     }
