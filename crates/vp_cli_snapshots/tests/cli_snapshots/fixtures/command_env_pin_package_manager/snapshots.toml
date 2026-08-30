@@ -3,7 +3,7 @@ name = "env_pin_makes_requested_dev_engines_manager_effective"
 vp = "global"
 seed-runtime = false
 steps = [
-  { argv = ["vp", "env", "pin", "pnpm@10.18.0", "--no-install"], comment = "pinning an existing later option makes it the effective first supported entry" },
+  { argv = ["vp", "env", "pin", "pnpm@10.18.0", "--no-install", "--force"], comment = "pinning an existing later option makes it the effective first supported entry" },
   { argv = ["vp", "env", "current", "pm", "--json"], comment = "current resolves the newly pinned manager" },
   { argv = ["vpt", "print-file", "package.json"], comment = "the pin preserves sibling options and their policy" },
 ]
@@ -14,7 +14,17 @@ vp = "global"
 seed-runtime = false
 cwd = "packages/app"
 steps = [
-  { argv = ["vp", "env", "pin", "yarn@4.12.0", "--no-install"], comment = "a nested workspace pin updates the resolver-owned root manifest" },
+  { argv = ["vp", "env", "pin", "yarn@4.12.0", "--no-install", "--force"], comment = "a nested workspace pin updates the resolver-owned root manifest" },
   { argv = ["vp", "env", "current", "pm", "--json"], comment = "the nested project resolves the new root pin" },
   { argv = ["vpt", "print-file", "../../package.json", "package.json"], comment = "only the workspace manifest owns the package-manager pin" },
+]
+
+[[case]]
+name = "env_unpin_targets_shadowed_dev_engines_manager"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-pin-package-manager\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\",\"devEngines\":{\"packageManager\":{\"name\":\"yarn\",\"version\":\"4.12.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vp", "env", "unpin", "pm", "--target", "dev-engines"], comment = "an explicit target removes the devEngines manager even when packageManager shadows it" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the effective top-level packageManager remains intact" },
 ]

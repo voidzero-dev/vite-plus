@@ -1818,7 +1818,7 @@ async fn create_bun_shim_files(bin_prefix: &AbsolutePath) -> Result<(), Error> {
 /// the exact resolved version is recorded with `onFail: "download"` so future
 /// runs are deterministic. Preserves the file's key order and formatting style,
 /// placing `devEngines` next to `engines` when present.
-async fn set_dev_engines_package_manager_field(
+pub(crate) async fn set_dev_engines_package_manager_field(
     package_json_path: impl AsRef<AbsolutePath>,
     package_manager_type: PackageManagerType,
     version: &str,

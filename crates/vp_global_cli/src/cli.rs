@@ -685,16 +685,11 @@ async fn run_package_manager_command(
         && let Some(manager) =
             system_package_manager(selected.package_manager_type, &system_path).await
     {
-        vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager).await?
+        vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager, selected).await?
     } else {
         match selected {
             Some(selected) => {
-                vp_pm_cli::dispatch_with_package_manager(
-                    &cwd,
-                    command,
-                    (selected.package_manager_type, &selected.version, selected.hash.as_deref()),
-                )
-                .await?
+                vp_pm_cli::dispatch_with_package_manager(&cwd, command, &selected).await?
             }
             None => vp_pm_cli::dispatch_with_metadata(&cwd, command).await?,
         }

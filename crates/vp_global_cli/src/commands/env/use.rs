@@ -75,13 +75,23 @@ fn package_manager_spec(
     package_manager: PackageManagerType,
     version: &str,
     hash: Option<&str>,
-) -> String {
+) -> Result<String, Error> {
     let mut spec = format!("{package_manager}@{version}");
     if let Some(hash) = hash {
+        if hash.is_empty()
+            || !hash.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric()
+                    || matches!(byte, b'.' | b'-' | b'_' | b'/' | b'+' | b'=')
+            })
+        {
+            return Err(Error::Other(
+                format!("invalid package-manager integrity suffix {hash:?}").into(),
+            ));
+        }
         spec.push('+');
         spec.push_str(hash);
     }
-    spec
+    Ok(spec)
 }
 
 /// Execute the `vp env use` command.
@@ -189,12 +199,20 @@ pub async fn execute(
         };
         let package_manager_unchanged = match &package_manager {
             Some((kind, version, _, hash)) => {
+                let spec = package_manager_spec(*kind, version, hash.as_deref())?;
                 current_override(
                     config::read_session_package_manager().await,
                     vp_shared::EnvConfig::get().package_manager.clone(),
                 )
                 .as_deref()
-                    == Some(package_manager_spec(*kind, version, hash.as_deref()).as_str())
+                    == Some(spec.as_str())
+            }
+            None if uses_project_environment && scope.includes_package_managers() => {
+                current_override(
+                    config::read_session_package_manager().await,
+                    vp_shared::EnvConfig::get().package_manager.clone(),
+                )
+                .is_none()
             }
             None => true,
         };
@@ -251,9 +269,12 @@ pub async fn execute(
                 format_export(
                     &shell,
                     PACKAGE_MANAGER_ENV_VAR,
-                    &package_manager_spec(*kind, version, hash.as_deref())
+                    &package_manager_spec(*kind, version, hash.as_deref())?
                 )
             );
+        } else if uses_project_environment && scope.includes_package_managers() {
+            config::delete_session_package_manager().await?;
+            println!("{}", format_unset(&shell, PACKAGE_MANAGER_ENV_VAR));
         }
     } else if !can_use_session_file() {
         print_windows_eval_wrapper_required();
@@ -268,8 +289,10 @@ pub async fn execute(
                 *kind,
                 version,
                 hash.as_deref(),
-            ))
+            )?)
             .await?;
+        } else if uses_project_environment && scope.includes_package_managers() {
+            config::delete_session_package_manager().await?;
         }
     }
 
@@ -403,6 +426,18 @@ mod tests {
     fn test_format_unset_nushell() {
         let result = format_unset(&Shell::NuShell, VERSION_ENV_VAR);
         assert_eq!(result, "hide-env VP_NODE_VERSION");
+    }
+
+    #[test]
+    fn package_manager_spec_rejects_shell_metacharacters() {
+        let error = package_manager_spec(
+            PackageManagerType::Pnpm,
+            "10.18.0",
+            Some("sha512.valid; touch injected"),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("invalid package-manager integrity suffix"));
     }
 
     #[cfg(windows)]

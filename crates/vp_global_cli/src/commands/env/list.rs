@@ -59,7 +59,7 @@ pub async fn execute(
         None
     };
     let current_pm = if scope.includes_package_managers() {
-        package_manager::resolve_current_for(&cwd, scope.package_manager()).await?
+        package_manager::resolve_current_for(&cwd, scope.package_manager()).await.ok().flatten()
     } else {
         None
     };

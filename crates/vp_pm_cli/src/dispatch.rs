@@ -8,7 +8,7 @@ use std::process::ExitStatus;
 use vt_path::AbsolutePath;
 
 use crate::{
-    PackageManager, PackageManagerType,
+    EnvironmentPackageManagerResolution, PackageManager,
     cli::{PackageManagerCommand, PmCommand},
     download_package_manager,
     error::Error,
@@ -34,8 +34,8 @@ enum ManagerPolicy {
 
 enum ManagerSource<'a> {
     Detect,
-    Selected((PackageManagerType, &'a str, Option<&'a str>)),
-    Resolved(PackageManager),
+    Environment(&'a EnvironmentPackageManagerResolution),
+    ResolvedEnvironment(PackageManager, &'a EnvironmentPackageManagerResolution),
 }
 
 pub async fn dispatch(
@@ -55,17 +55,23 @@ pub async fn dispatch_with_metadata(
 pub async fn dispatch_with_package_manager(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
-    package_manager: (PackageManagerType, &str, Option<&str>),
+    package_manager: &EnvironmentPackageManagerResolution,
 ) -> Result<DispatchResult, Error> {
-    dispatch_with_manager(cwd, command, ManagerSource::Selected(package_manager)).await
+    dispatch_with_manager(cwd, command, ManagerSource::Environment(package_manager)).await
 }
 
 pub async fn dispatch_with_resolved_package_manager(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
     manager: PackageManager,
+    package_manager: &EnvironmentPackageManagerResolution,
 ) -> Result<DispatchResult, Error> {
-    dispatch_with_manager(cwd, command, ManagerSource::Resolved(manager)).await
+    dispatch_with_manager(
+        cwd,
+        command,
+        ManagerSource::ResolvedEnvironment(manager, package_manager),
+    )
+    .await
 }
 
 async fn dispatch_with_manager(
@@ -78,7 +84,7 @@ async fn dispatch_with_manager(
         PackageManagerCommand::Dlx(args) => {
             let manager = match source {
                 ManagerSource::Detect => return dispatch_dlx(cwd, args, render_diagnostics).await,
-                source => resolve_manager(source).await?,
+                source => resolve_manager(cwd, source).await?,
             };
             let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
             let status = run_resolution(cwd, resolution, render_diagnostics).await?;
@@ -101,7 +107,7 @@ async fn dispatch_with_manager(
             }
             ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
         },
-        source => resolve_manager(source).await?,
+        source => resolve_manager(cwd, source).await?,
     };
     let package_manager = manager.client;
     let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
@@ -110,22 +116,59 @@ async fn dispatch_with_manager(
     Ok(DispatchResult { status, why_hint_packages })
 }
 
-async fn resolve_manager(source: ManagerSource<'_>) -> Result<PackageManager, Error> {
+async fn resolve_manager(
+    cwd: &AbsolutePath,
+    source: ManagerSource<'_>,
+) -> Result<PackageManager, Error> {
     match source {
-        ManagerSource::Selected(package_manager) => {
-            build_selected_package_manager(package_manager).await
+        ManagerSource::Environment(package_manager) => {
+            let manager = build_selected_package_manager(package_manager).await?;
+            auto_pin_environment_package_manager(cwd, package_manager, &manager).await?;
+            Ok(manager)
         }
-        ManagerSource::Resolved(manager) => Ok(manager),
+        ManagerSource::ResolvedEnvironment(manager, package_manager) => {
+            auto_pin_environment_package_manager(cwd, package_manager, &manager).await?;
+            Ok(manager)
+        }
         ManagerSource::Detect => unreachable!("detected managers are resolved from the cwd"),
     }
 }
 
 async fn build_selected_package_manager(
-    (kind, version, hash): (PackageManagerType, &str, Option<&str>),
+    package_manager: &EnvironmentPackageManagerResolution,
 ) -> Result<PackageManager, Error> {
-    let (install_dir, _, version) =
-        download_package_manager(kind, version, hash).await.map_err(Error::Install)?;
-    Ok(PackageManager { client: kind, version, install_dir })
+    let (install_dir, _, version) = download_package_manager(
+        package_manager.package_manager_type,
+        &package_manager.version,
+        package_manager.hash.as_deref(),
+    )
+    .await
+    .map_err(Error::Install)?;
+    Ok(PackageManager { client: package_manager.package_manager_type, version, install_dir })
+}
+
+async fn auto_pin_environment_package_manager(
+    cwd: &AbsolutePath,
+    resolution: &EnvironmentPackageManagerResolution,
+    manager: &PackageManager,
+) -> Result<(), Error> {
+    if matches!(resolution.source.as_str(), "lockfile or config" | "default") {
+        let project_root = resolution.project_root.clone().or_else(|| {
+            vt_workspace::find_workspace_root(cwd)
+                .ok()
+                .map(|(workspace, _)| workspace.path.to_absolute_path_buf())
+        });
+        let Some(project_root) = project_root else {
+            return Ok(());
+        };
+        super::package_manager::set_dev_engines_package_manager_field(
+            &project_root.join("package.json"),
+            resolution.package_manager_type,
+            &manager.version,
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 async fn dispatch_dlx(

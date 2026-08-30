@@ -24,6 +24,19 @@ steps = [
 ]
 
 [[case]]
+name = "system_package_manager_uses_system_first_node"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"system-package-manager\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\"}\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-dispatch-bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-dispatch-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"]], comment = "a system-first package manager receives the Node.js selected by system-first Node mode" },
+]
+
+[[case]]
 name = "non_interactive_use_preserves_system_without_deciding"
 vp = "global"
 skip-platforms = ["windows"]

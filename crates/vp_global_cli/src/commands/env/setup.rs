@@ -948,7 +948,7 @@ fn escape_posix_double_quoted_string(value: &str) -> String {
 }
 
 /// Escape a value for a Fish double-quoted string.
-fn escape_fish_double_quoted_string(value: &str) -> String {
+pub(super) fn escape_fish_double_quoted_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('$', "\\$").replace('"', "\\\"")
 }
 

@@ -1,6 +1,6 @@
 # env_pin_package_manager_from_nested_workspace
 
-## `vp env pin yarn@4.12.0 --no-install`
+## `vp env pin yarn@4.12.0 --no-install --force`
 
 a nested workspace pin updates the resolver-owned root manifest
 

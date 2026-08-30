@@ -1,6 +1,6 @@
 # env_pin_makes_requested_dev_engines_manager_effective
 
-## `vp env pin pnpm@10.18.0 --no-install`
+## `vp env pin pnpm@10.18.0 --no-install --force`
 
 pinning an existing later option makes it the effective first supported entry
 

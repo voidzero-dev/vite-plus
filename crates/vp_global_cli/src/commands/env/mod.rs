@@ -176,45 +176,80 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
             bin_dirs.push(runtime.get_bin_prefix().as_path().display().to_string());
         }
     }
-    if scope.includes_package_managers()
-        && let Some(resolution) =
-            package_manager::resolve_current_for(&cwd, scope.package_manager()).await?
-    {
-        if modes.package_manager_shim_mode_for(resolution.package_manager_type)
-            == config::ShimMode::SystemFirst
-            && let Some(path) = crate::shim::dispatch::find_system_tool(
-                &resolution.package_manager_type.to_string(),
-            )
+    let package_manager = if scope.includes_package_managers() {
+        match package_manager::resolve_current_for(&cwd, scope.package_manager()).await? {
+            Some(resolution) => {
+                Some((resolution.package_manager_type, resolution.version, resolution.hash))
+            }
+            None => match scope.package_manager() {
+                Some(package_manager) => Some((
+                    package_manager,
+                    vp_pm_cli::resolve_package_manager_version(package_manager, "latest").await?,
+                    None,
+                )),
+                None => None,
+            },
+        }
+    } else {
+        None
+    };
+    if let Some((package_manager, version, hash)) = package_manager {
+        if modes.package_manager_shim_mode_for(package_manager) == config::ShimMode::SystemFirst
+            && let Some(path) =
+                crate::shim::dispatch::find_system_tool(&package_manager.to_string())
             && let Some(bin_dir) = path.parent()
         {
             bin_dirs.insert(0, bin_dir.as_path().display().to_string());
         } else {
-            let (install_dir, _, _) = vp_pm_cli::download_package_manager(
-                resolution.package_manager_type,
-                &resolution.version,
-                resolution.hash.as_deref(),
-            )
-            .await?;
+            let (install_dir, _, _) =
+                vp_pm_cli::download_package_manager(package_manager, &version, hash.as_deref())
+                    .await?;
             bin_dirs.insert(0, install_dir.join("bin").as_path().display().to_string());
         }
     }
     if bin_dirs.is_empty() {
         return Err(Error::Other("no selected environment component could be resolved".into()));
     }
-    let snippet = match detect_shell() {
-        Shell::Posix => format!("export PATH=\"{}:$PATH\"", bin_dirs.join(":")),
-        Shell::Fish => format!("set -gx PATH {} $PATH", bin_dirs.join(" ")),
-        Shell::PowerShell => format!("$env:PATH = \"{};$env:PATH\"", bin_dirs.join(";")),
-        Shell::Cmd => format!("set PATH={};%PATH%", bin_dirs.join(";")),
-        Shell::NuShell => format!(
-            "$env.PATH = ($env.PATH | prepend [{}])",
-            bin_dirs.iter().map(|path| format!("\"{path}\"")).collect::<Vec<_>>().join(", ")
-        ),
-    };
+    let snippet = format_path_snippet(detect_shell(), &bin_dirs);
 
     // Print shell snippet
     println!("# Add to your shell to use this environment for this session:");
     println!("{snippet}");
 
     Ok(ExitStatus::default())
+}
+
+fn format_path_snippet(shell: Shell, bin_dirs: &[String]) -> String {
+    match shell {
+        Shell::Posix => format!("export PATH=\"{}:$PATH\"", bin_dirs.join(":")),
+        Shell::Fish => format!(
+            "set -gx PATH {} $PATH",
+            bin_dirs
+                .iter()
+                .map(|path| format!("\"{}\"", setup::escape_fish_double_quoted_string(path)))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+        Shell::PowerShell => format!("$env:PATH = \"{};$env:PATH\"", bin_dirs.join(";")),
+        Shell::Cmd => format!("set PATH={};%PATH%", bin_dirs.join(";")),
+        Shell::NuShell => format!(
+            "$env.PATH = ($env.PATH | prepend [{}])",
+            bin_dirs.iter().map(|path| format!("\"{path}\"")).collect::<Vec<_>>().join(", ")
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fish_path_snippet_quotes_each_directory() {
+        let snippet = format_path_snippet(
+            Shell::Fish,
+            &["/Users/Example User/node/bin".into(), "/tmp/pm/bin".into()],
+        );
+
+        assert_eq!(snippet, "set -gx PATH \"/Users/Example User/node/bin\" \"/tmp/pm/bin\" $PATH");
+    }
 }
