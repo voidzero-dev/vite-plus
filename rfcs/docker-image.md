@@ -189,7 +189,7 @@ deployed images small.
 - **Preinstalled:** `vp` (on `PATH`), `ca-certificates`, `curl`, `git`, and a
   build toolchain (`build-essential`, `python3`, `pkg-config`) for native addon
   compilation (for example `better-sqlite3`). Package managers are handled by
-  vp's managed corepack/runtime, so they are provisioned per-project rather than
+  vp's package-manager support, so they are provisioned per-project rather than
   baked to a fixed version.
 - **No baked default Node.js:** the installer pre-provisions a default Node.js
   (~190 MB); the image drops it (`rm -rf $VP_HOME/js_runtime`) because each

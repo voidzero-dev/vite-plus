@@ -1,9 +1,14 @@
 [[case]]
 name = "shim_pnpm_uses_project_node_version"
 vp = "global"
+local-registry = true
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "install", "-g", "pnpm@11.20.0"], comment = "Install a fixed JS-based pnpm version", snapshot = false, continue-on-failure = true },
-  { argv = ["vp", "env", "exec", "node", "-v"], comment = "Node version resolved from .node-version", continue-on-failure = true },
-  { argv = ["vp", "env", "exec", "pnpm", "--silent", "exec", "node", "-v"], comment = "pnpm should use same project Node version", continue-on-failure = true },
+  { argv = ["pnpm", "--version"], comment = "The unpinned pnpm shim resolves the latest version", snapshot = false },
+  { argv = ["pnpm", "--version"], envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "The unpinned shim reuses its fresh latest-version cache without registry access", snapshot = false },
+  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');const {delimiter}=require('node:path');const env={...process.env,PATH:[process.env.VP_HOME+'/bin','/usr/bin','/bin'].join(delimiter)};const version=execFileSync('pnpm',['--version'],{encoding:'utf8',env}).trim();if(!version)process.exit(1);console.log('node child reached pnpm shim')"], comment = "A Node process launched through its shim can invoke the pnpm shim" },
+  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');execFileSync('pnpm',['--silent','exec','node','-e','if(process.version!==process.env.EXPECTED_NODE_VERSION)process.exit(1)'],{stdio:'inherit',env:{...process.env,EXPECTED_NODE_VERSION:process.version}});console.log('pnpm child uses project Node version')"], comment = "pnpm uses the project Node version" },
+  { argv = ["vp", "env", "exec", "--node", "22.13", "pnpm", "exec", "node", "-e", "if(!process.version.startsWith('v22.13.'))process.exit(1);console.log('explicit Node reaches pnpm child')"], comment = "Explicit env exec version overrides the project version through the pnpm shim" },
+  { argv = ["vpt", "write-file", ".node-version", ">=999.0.0\n"], snapshot = false },
+  { argv = ["pnpm", "--version"], envs = [["VP_NODE_DIST_MIRROR", "http://127.0.0.1:9"]], comment = "JS package-manager shims report project Node resolution failures", continue-on-failure = true },
 ]

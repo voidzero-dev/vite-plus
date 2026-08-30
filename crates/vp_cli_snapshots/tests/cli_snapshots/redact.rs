@@ -268,7 +268,7 @@ static NODE_TRACE_WARNING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // A version-probe step (`npm --version` / `npx --version`) prints a lone bare
 // semver in its fenced code block (no `v` prefix, so the generic VERSION_RE
 // misses it). The value tracks the managed Node's bundled npm or a
-// corepack-resolved packageManager pin, both of which vary by environment, so
+// packageManager pin, both of which vary by environment, so
 // mask it. Applied via `redact_version_probe_output` ONLY to steps the runner
 // identifies as version probes: other steps' bare versions in a block (a
 // printed `.node-version` file) are fixture-controlled assertions that must

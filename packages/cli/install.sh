@@ -1066,7 +1066,7 @@ shim_pointer_data() {
   return 1
 }
 
-# Setup Node.js version manager (node/npm/npx/corepack shims)
+# Setup Vite+ environment shims
 # Sets NODE_MANAGER_ENABLED global
 # Arguments: bin_dir - path to the version's bin directory containing vp
 setup_node_manager() {
@@ -1131,7 +1131,7 @@ setup_node_manager() {
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you like Vite+ to manage your Node.js versions?"
-    echo "Vite+ adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$SHIM_DIR")."
+    echo "Vite+ adds \`node\`, \`npm\`, \`npx\`, \`pnpm\`, \`pnpx\`, \`yarn\`, \`yarnpkg\`, \`bun\`, and \`bunx\` shims to $(abbreviate_path "$SHIM_DIR")."
     echo "It selects the required version automatically."
     echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "

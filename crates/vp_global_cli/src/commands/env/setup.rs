@@ -1,16 +1,16 @@
 //! Setup command implementation for creating bin directory and shims.
 //!
 //! Creates the following structure:
-//! - `<BIN>/`     - Contains vp symlink and node/npm/npx/corepack shims
+//! - `<BIN>/`     - Contains vp symlink and default tool shims
 //! - `<DATA>/current/` - Contains the actual vp CLI binary
 //!
 //! On Unix:
 //! - bin/vp is a symlink to the active vp binary
-//! - bin/node, bin/npm, bin/npx, bin/corepack are symlinks to the active vp binary
+//! - Default tool shims are symlinks to the active vp binary
 //! - Symlinks preserve argv[0], allowing tool detection via the symlink name
 //!
 //! On Windows:
-//! - bin/vp.exe, bin/node.exe, bin/npm.exe, bin/npx.exe, bin/corepack.exe are trampoline executables
+//! - bin/vp.exe and default tool shims are trampoline executables
 //! - Each trampoline detects its tool name from its own filename and spawns
 //!   current\bin\vp.exe with VP_SHIM_TOOL env var set
 //! - This avoids the "Terminate batch job (Y/N)?" prompt from .cmd wrappers
@@ -20,7 +20,14 @@ use std::process::ExitStatus;
 #[cfg(windows)]
 use indoc::formatdoc;
 
-use crate::{error::Error, help};
+use crate::{
+    commands::{
+        env::{bin_config::BinConfig, package_metadata::PackageMetadata},
+        global::{LEGACY_PACKAGE_MANAGER_PACKAGES, install::uninstall},
+    },
+    error::Error,
+    help,
+};
 
 /// Shells that get a generated `<CONFIG>/env.*` setup script.
 #[derive(Clone, Copy, Debug)]
@@ -45,8 +52,9 @@ impl EnvShell {
     }
 }
 
-/// Tools to create shims for (node, npm, npx, corepack, vpx, vpr)
-pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "corepack", "vpx", "vpr"];
+/// Tools to create shims for during setup.
+pub(crate) const SHIM_TOOLS: &[&str] =
+    &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx", "vpx", "vpr"];
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
@@ -75,6 +83,10 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Ensure bin directory exists
     tokio::fs::create_dir_all(bin_dir).await?;
 
+    if refresh {
+        cleanup_legacy_package_manager_installs(&bin_dir).await;
+    }
+
     #[cfg(windows)]
     tokio::fs::write(bin_dir.join("vp-use.cmd"), vp_use_cmd_content(&config)).await?;
 
@@ -84,7 +96,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Create wrapper script in bin/
     setup_vp_wrapper(&current_exe, bin_dir, refresh).await?;
 
-    // Create shims for node, npm, npx, corepack
+    // Create default tool shims
     let mut created = Vec::new();
     let mut skipped = Vec::new();
 
@@ -96,16 +108,15 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
             skipped.push(*tool);
         }
 
-        // Remove corepack-written .cmd/.ps1/extensionless launchers that
-        // would shadow an existing trampoline .exe in PowerShell/Git Bash
-        // (create_shim skips existing shims without cleaning siblings).
+        // Remove legacy .cmd/.ps1/extensionless launchers that would shadow
+        // an existing trampoline .exe in PowerShell/Git Bash (create_shim
+        // skips existing shims without cleaning siblings).
         #[cfg(windows)]
         cleanup_legacy_windows_shim(bin_dir, tool).await;
 
-        // Drop stale `npm install -g` link configs for default shim names
-        // (e.g. a pre-default-shim `npm i -g corepack`): the link itself is
-        // replaced by the shim above, and a leftover Npm-sourced BinConfig
-        // would let a later `npm uninstall -g` delete the default shim.
+        // Drop stale `npm install -g` link configs for default shim names. The
+        // link itself is replaced by the shim above, and a leftover Npm-sourced
+        // BinConfig would let a later `npm uninstall -g` delete the default shim.
         if let Ok(Some(config)) = super::bin_config::BinConfig::load(tool).await
             && config.source == super::bin_config::BinSource::Npm
         {
@@ -152,6 +163,58 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     print_path_instructions(&dirs.config);
 
     Ok(ExitStatus::default())
+}
+
+/// Remove legacy managed installs left by versions that did not expose package-manager shims.
+async fn cleanup_legacy_package_manager_installs(bin_dir: &vt_path::AbsolutePath) {
+    for package_name in LEGACY_PACKAGE_MANAGER_PACKAGES {
+        let has_metadata = match PackageMetadata::load(package_name).await {
+            Ok(metadata) => metadata.is_some(),
+            Err(error) => {
+                vp_shared::output::warn(&format!(
+                    "Failed to inspect legacy global package '{package_name}': {error}"
+                ));
+                continue;
+            }
+        };
+        let has_bin_config = match BinConfig::find_by_package(package_name).await {
+            Ok(bins) => !bins.is_empty(),
+            Err(error) => {
+                vp_shared::output::warn(&format!(
+                    "Failed to inspect legacy shims for '{package_name}': {error}"
+                ));
+                continue;
+            }
+        };
+
+        if (has_metadata || has_bin_config)
+            && let Err(error) = uninstall(package_name, false).await
+        {
+            vp_shared::output::warn(&format!(
+                "Failed to remove legacy global package '{package_name}': {error}"
+            ));
+        }
+    }
+
+    // Corepack is no longer exposed, so remove its old default shim even when no package metadata remains.
+    #[cfg(unix)]
+    {
+        let shim_path = bin_dir.join("corepack");
+        match tokio::fs::remove_file(&shim_path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => vp_shared::output::warn(&format!(
+                "Failed to remove legacy Corepack shim at {}: {error}",
+                shim_path.as_path().display()
+            )),
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        remove_or_rename_to_old(&bin_dir.join("corepack.exe")).await;
+        cleanup_legacy_windows_shim(bin_dir, "corepack").await;
+    }
 }
 
 /// Create symlink in bin/ that points to the active vp binary.
@@ -236,7 +299,7 @@ pub(crate) async fn resolve_unix_vp_shim_target(
     Ok(current_exe.to_path_buf())
 }
 
-/// Create a single shim for a default shim tool (node/npm/npx/corepack/vpx/vpr).
+/// Create a single default tool shim.
 ///
 /// Returns `true` if the shim was created, `false` if it already exists.
 pub(crate) async fn create_shim(
@@ -1092,15 +1155,6 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_shim_tools_contains_default_shims() {
-        // corepack is a default shim (#858, #1309). It must NOT be a core
-        // shim: `vp install -g corepack` stays allowed (CORE_SHIMS guard) and
-        // dispatch uses a dedicated resolution path instead of the core one.
-        assert!(SHIM_TOOLS.contains(&"corepack"));
-        assert!(!crate::commands::global::CORE_SHIMS.contains(&"corepack"));
-    }
-
     /// Helper: vars pinning a single-root install at `root`; `user_home`
     /// is set separately (both `HOME` and `USERPROFILE`, for the platforms'
     /// differing precedence) to exercise $HOME-relative vs absolute rendering.
@@ -1783,6 +1837,104 @@ mod tests {
                 assert!(fresh_home.join("env").exists(), "env file should be created");
                 assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
                 assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[cfg_attr(windows, serial_test::serial)]
+    async fn test_execute_refresh_removes_legacy_package_manager_installs() {
+        use crate::commands::{
+            env::{bin_config::BinConfig, package_metadata::PackageMetadata},
+            global::LEGACY_PACKAGE_MANAGER_PACKAGES,
+        };
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let bin_dir = home.join("bin");
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                #[cfg(windows)]
+                let trampoline = write_fake_trampoline(temp_dir.path());
+
+                tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+                let mut package_dirs = Vec::new();
+                for package_name in LEGACY_PACKAGE_MANAGER_PACKAGES {
+                    let mut metadata = PackageMetadata::new(
+                        package_name.to_string(),
+                        "1.0.0".to_string(),
+                        "22.0.0".to_string(),
+                        None,
+                        vec![package_name.to_string()],
+                        Default::default(),
+                        "npm".to_string(),
+                    );
+                    metadata.install_id = "123e4567-e89b-42d3-a456-426614174000".to_string();
+                    metadata.save().await.unwrap();
+                    let package_dir = metadata.installation_dir().unwrap();
+                    tokio::fs::create_dir_all(&package_dir).await.unwrap();
+                    package_dirs.push(package_dir);
+
+                    BinConfig::new(
+                        package_name.to_string(),
+                        package_name.to_string(),
+                        "1.0.0".to_string(),
+                        "22.0.0".to_string(),
+                    )
+                    .save()
+                    .await
+                    .unwrap();
+                }
+
+                #[cfg(unix)]
+                tokio::fs::write(bin_dir.join("corepack"), "legacy corepack shim").await.unwrap();
+                #[cfg(windows)]
+                for suffix in [".exe", ".cmd", ".ps1", ""] {
+                    tokio::fs::write(
+                        bin_dir.join(format!("corepack{suffix}")),
+                        "legacy corepack shim",
+                    )
+                    .await
+                    .unwrap();
+                }
+
+                #[cfg(not(windows))]
+                let status = execute(true, false).await.unwrap();
+                #[cfg(windows)]
+                let status = vp_shared::EnvConfig::with_vars_async(
+                    [(vp_shared::env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str())],
+                    |_| async { execute(true, false).await.unwrap() },
+                )
+                .await;
+
+                assert!(status.success());
+                for (package_name, package_dir) in
+                    LEGACY_PACKAGE_MANAGER_PACKAGES.iter().zip(package_dirs)
+                {
+                    assert!(PackageMetadata::load(package_name).await.unwrap().is_none());
+                    assert!(BinConfig::load(package_name).await.unwrap().is_none());
+                    assert!(!package_dir.as_path().exists());
+                }
+                for tool in ["pnpm", "yarn", "bun"] {
+                    assert!(
+                        std::fs::symlink_metadata(bin_dir.join(shim_filename(tool)).as_path())
+                            .is_ok(),
+                        "{tool} should be recreated as a default shim"
+                    );
+                }
+                let corepack_suffixes: &[&str] =
+                    if cfg!(windows) { &[".exe", ".cmd", ".ps1", ""] } else { &[""] };
+                for suffix in corepack_suffixes {
+                    assert!(
+                        std::fs::symlink_metadata(
+                            bin_dir.join(format!("corepack{suffix}")).as_path(),
+                        )
+                        .is_err(),
+                        "legacy corepack shim should be removed"
+                    );
+                }
             },
         )
         .await;
