@@ -15,7 +15,8 @@ Unqualified versions remain Node.js versions for compatibility:
 ```bash
 vp env pin 22.0.0               # Node.js only
 vp env pin pnpm@10.18.0         # pnpm only
-vp env pin 22.0.0 pnpm@10.18.0  # Both components
+vp env pin node@24 pnpm@12      # Both components
+vp env pin 22.0.0 pnpm@10.18.0  # Also both components
 ```
 
 Vite+ checks the current directory first, then walks up through its parents. The nearest directory
@@ -159,11 +160,11 @@ vp env print                  # Print PATH setup for both components
 # Manage
 vp env pin lts pnpm@10        # Pin both project components to exact versions
 vp env install                # Install the complete resolved environment
-vp env default lts            # Set the global Node.js default
+vp env default node@24        # Set the global Node.js default
 vp env default pnpm@10        # Set pnpm's global default version
 vp env use 20 pnpm@10         # Override both components for this shell
 vp env use --unset pm         # Remove only the PM session override
-vp env clean yarn             # Remove unused managed Yarn versions
+vp env clean                  # Remove unused managed Node.js and package manager versions
 
 # Inspect
 vp env current                # Show current resolved environment
