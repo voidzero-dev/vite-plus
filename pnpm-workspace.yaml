@@ -20,8 +20,8 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.146.0
-  '@oxc-project/types': =0.146.0
+  '@oxc-project/runtime': =0.147.0
+  '@oxc-project/types': =0.147.0
   '@oxlint/plugins': =1.79.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
@@ -96,11 +96,11 @@ catalog:
   mocha: ^11.7.5
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.146.0
-  oxc-parser: =0.146.0
-  oxc-transform: =0.146.0
-  oxfmt: =0.64.0
-  oxlint: =1.79.0
+  oxc-minify: =0.147.0
+  oxc-parser: =0.147.0
+  oxc-transform: =0.147.0
+  oxfmt: =0.65.0
+  oxlint: =1.80.0
   oxlint-tsgolint: =7.0.2001
   pathe: ^2.0.3
   picocolors: ^1.1.1
@@ -109,7 +109,7 @@ catalog:
   react: ^19.1.0
   react-dom: ^19.1.0
   remark-parse: ^11.0.0
-  remeda: ^2.34.1
+  remeda: ^2.42.0
   rolldown-plugin-dts: ^0.28.0
   rollup: ^4.60.4
   semver: ^7.8.0
