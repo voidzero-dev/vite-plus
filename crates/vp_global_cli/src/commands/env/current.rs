@@ -102,72 +102,7 @@ pub async fn execute(
     };
 
     let package_manager = if scope.includes_package_managers() {
-        let resolution =
-            package_manager::resolve_current_for(&cwd, scope.package_manager()).await?;
-        resolution.and_then(|resolution| {
-            let package_manager_mode =
-                config.package_manager_shim_mode_for(resolution.package_manager_type);
-            let system_paths = (package_manager_mode == ShimMode::SystemFirst)
-                .then(|| {
-                    resolution
-                        .package_manager_type
-                        .bin_names()
-                        .iter()
-                        .filter_map(|name| {
-                            crate::shim::dispatch::find_system_tool(name).map(|path| {
-                                ((*name).to_string(), path.as_path().display().to_string())
-                            })
-                        })
-                        .collect::<BTreeMap<_, _>>()
-                })
-                .filter(|paths| !paths.is_empty());
-            let install_dir =
-                package_manager_install_dir(resolution.package_manager_type, &resolution.version)?;
-            let bin_paths = resolution
-                .package_manager_type
-                .bin_names()
-                .iter()
-                .map(|name| {
-                    (
-                        (*name).to_string(),
-                        package_manager_bin_path(&install_dir, name)
-                            .as_path()
-                            .display()
-                            .to_string(),
-                    )
-                })
-                .collect::<BTreeMap<_, _>>();
-            let bin_paths = system_paths.unwrap_or(bin_paths);
-            let installed = bin_paths.values().all(|path| std::path::Path::new(path).exists());
-            let system_version = bin_paths
-                .get(resolution.package_manager_type.to_string().as_str())
-                .filter(|_| package_manager_mode == ShimMode::SystemFirst)
-                .and_then(|path| vt_path::AbsolutePathBuf::new(path.into()));
-            let is_system = system_version.is_some();
-            Some(PackageManagerInfo {
-                name: resolution.package_manager_type.to_string(),
-                version: system_version
-                    .as_ref()
-                    .and_then(|path| read_tool_version_sync(path))
-                    .unwrap_or_else(|| resolution.version.to_string()),
-                source: if is_system {
-                    "system PATH".into()
-                } else {
-                    resolution.source.to_string()
-                },
-                source_path: if is_system {
-                    None
-                } else {
-                    resolution.source_path.map(|path| path.as_path().display().to_string())
-                },
-                project_root: resolution
-                    .project_root
-                    .map(|path| path.as_path().display().to_string()),
-                bin_paths,
-                installed,
-                mode: package_manager_mode,
-            })
-        })
+        resolve_package_manager_info(&cwd, scope, &config).await?
     } else {
         None
     };
@@ -217,12 +152,78 @@ async fn read_tool_version(path: &vt_path::AbsolutePath) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().trim_start_matches('v').to_string())
 }
 
-fn read_tool_version_sync(path: &vt_path::AbsolutePath) -> Option<String> {
-    let output = std::process::Command::new(path.as_path()).arg("--version").output().ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().trim_start_matches('v').to_string())
+async fn resolve_package_manager_info(
+    cwd: &vt_path::AbsolutePath,
+    scope: EnvScope,
+    config: &config::Config,
+) -> Result<Option<PackageManagerInfo>, Error> {
+    let selected = package_manager::resolve_current_spec(cwd).await?.filter(|resolution| {
+        scope.package_manager().is_none_or(|expected| expected == resolution.package_manager_type)
+    });
+    let Some(selected) = selected else {
+        return Ok(None);
+    };
+    let mode = config.package_manager_shim_mode_for(selected.package_manager_type);
+    if mode == ShimMode::SystemFirst {
+        let bin_paths = selected
+            .package_manager_type
+            .bin_names()
+            .iter()
+            .filter_map(|name| {
+                crate::shim::dispatch::find_system_tool(name)
+                    .map(|path| ((*name).to_string(), path.as_path().display().to_string()))
+            })
+            .collect::<BTreeMap<_, _>>();
+        if let Some(primary) = bin_paths.get(selected.package_manager_type.to_string().as_str())
+            && let Some(primary) = AbsolutePathBuf::new(primary.into())
+        {
+            return Ok(Some(PackageManagerInfo {
+                name: selected.package_manager_type.to_string(),
+                version: read_tool_version(&primary).await.unwrap_or_else(|| "unknown".into()),
+                source: "system PATH".into(),
+                source_path: None,
+                project_root: selected
+                    .project_root
+                    .map(|path| path.as_path().display().to_string()),
+                installed: true,
+                bin_paths,
+                mode,
+            }));
+        }
+    }
+
+    let Some(resolution) =
+        package_manager::resolve_current_for(cwd, scope.package_manager()).await?
+    else {
+        return Ok(None);
+    };
+    let Some(install_dir) =
+        package_manager_install_dir(resolution.package_manager_type, &resolution.version)
+    else {
+        return Ok(None);
+    };
+    let bin_paths = resolution
+        .package_manager_type
+        .bin_names()
+        .iter()
+        .map(|name| {
+            (
+                (*name).to_string(),
+                package_manager_bin_path(&install_dir, name).as_path().display().to_string(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let installed = bin_paths.values().all(|path| std::path::Path::new(path).exists());
+    Ok(Some(PackageManagerInfo {
+        name: resolution.package_manager_type.to_string(),
+        version: resolution.version.to_string(),
+        source: resolution.source.to_string(),
+        source_path: resolution.source_path.map(|path| path.as_path().display().to_string()),
+        project_root: resolution.project_root.map(|path| path.as_path().display().to_string()),
+        bin_paths,
+        installed,
+        mode,
+    }))
 }
 
 fn mode_name(mode: ShimMode) -> &'static str {

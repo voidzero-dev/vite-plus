@@ -10,6 +10,9 @@
 ## `vpt chmod +x system-dispatch-bin/pnpm`
 
 
+## `vpt chmod +x bin/pnpm`
+
+
 ## `vp env off node`
 
 

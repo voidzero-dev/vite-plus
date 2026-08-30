@@ -73,22 +73,23 @@ impl CurrentSpecs {
 
 async fn current_specs() -> Result<CurrentSpecs, Error> {
     let config = vp_shared::EnvConfig::get();
-    let (session, session_source, session_source_path) =
-        if let Some(spec) = config.package_manager.as_deref() {
-            (
-                Some(parse_package_manager_spec_with_hash(spec.trim())?),
-                Some(config::PACKAGE_MANAGER_ENV_VAR),
-                None,
-            )
-        } else if let Some(spec) = config::read_session_package_manager().await {
-            (
-                Some(parse_package_manager_spec_with_hash(spec.trim())?),
-                Some(config::SESSION_PACKAGE_MANAGER_FILE),
-                config::get_session_package_manager_path().ok(),
-            )
-        } else {
-            (None, None, None)
-        };
+    let (session, session_source, session_source_path) = if let Some(spec) =
+        config.package_manager.as_deref().map(str::trim).filter(|spec| !spec.is_empty())
+    {
+        (
+            Some(parse_package_manager_spec_with_hash(spec)?),
+            Some(config::PACKAGE_MANAGER_ENV_VAR),
+            None,
+        )
+    } else if let Some(spec) = config::read_session_package_manager().await {
+        (
+            Some(parse_package_manager_spec_with_hash(spec.trim())?),
+            Some(config::SESSION_PACKAGE_MANAGER_FILE),
+            config::get_session_package_manager_path().ok(),
+        )
+    } else {
+        (None, None, None)
+    };
     let config = config::load_config().await?;
     let default = config
         .default_package_manager

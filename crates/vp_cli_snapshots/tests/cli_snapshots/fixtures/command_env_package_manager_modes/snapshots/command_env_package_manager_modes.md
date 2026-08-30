@@ -23,7 +23,7 @@ pnpm uses its individual mode
   "package_manager": {
     "name": "pnpm",
     "version": "<version>",
-    "source": "system PATH",
+    "source": "VP_PACKAGE_MANAGER",
     "bin_paths": {
       "pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm",
       "pnpx": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpx"

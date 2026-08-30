@@ -735,8 +735,8 @@ async fn system_package_manager(
     }
     let version = std::str::from_utf8(&output.stdout).ok()?.trim();
     node_semver::Version::parse(version).ok()?;
-    let install_dir = executable.parent()?.parent()?.to_absolute_path_buf();
-    Some(vp_pm_cli::PackageManager::from_install_dir(kind, version, install_dir))
+    let bin_prefix = executable.parent()?.to_absolute_path_buf();
+    Some(vp_pm_cli::PackageManager::from_bin_prefix(kind, version, bin_prefix))
 }
 
 async fn managed_install(

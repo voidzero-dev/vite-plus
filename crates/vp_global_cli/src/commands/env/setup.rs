@@ -943,7 +943,7 @@ fn render_nu_path_ref(path_ref: &str) -> String {
 }
 
 /// Escape a value for a POSIX-shell double-quoted string.
-fn escape_posix_double_quoted_string(value: &str) -> String {
+pub(super) fn escape_posix_double_quoted_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('$', "\\$").replace('`', "\\`").replace('"', "\\\"")
 }
 
@@ -964,13 +964,13 @@ fn escape_home_relative_double_quoted_path(path_ref: &str, escape: fn(&str) -> S
 ///
 /// Example: `vp "home\with spaces"` → `vp \"home\\with spaces\"`
 /// https://www.nushell.sh/book/working_with_strings.html#double-quoted-strings
-fn escape_nu_double_quoted_string(value: &str) -> String {
+pub(super) fn escape_nu_double_quoted_string(value: &str) -> String {
     // `vp "home\with spaces"` → `vp \"home\\with spaces\"`
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Escape a value for a PowerShell single-quoted string.
-fn escape_powershell_single_quoted_string(value: &str) -> String {
+pub(super) fn escape_powershell_single_quoted_string(value: &str) -> String {
     value.replace('\'', "''")
 }
 

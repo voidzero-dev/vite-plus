@@ -416,7 +416,7 @@ mod tests {
         PackageManager {
             client,
             version: version.into(),
-            install_dir: workspace_root.join(".test-package-manager"),
+            bin_prefix: workspace_root.join(".test-package-manager").join("bin"),
         }
     }
 

@@ -206,7 +206,7 @@ impl PackageManagerSource {
 pub struct PackageManager {
     pub(crate) client: PackageManagerType,
     pub(crate) version: Str,
-    pub(crate) install_dir: AbsolutePathBuf,
+    pub(crate) bin_prefix: AbsolutePathBuf,
 }
 
 #[derive(Debug)]
@@ -254,7 +254,11 @@ impl PackageManagerBuilder {
             .await?;
         }
 
-        Ok(PackageManager { client: package_manager_type, version, install_dir })
+        Ok(PackageManager {
+            client: package_manager_type,
+            version,
+            bin_prefix: install_dir.join("bin"),
+        })
     }
 
     /// Build the package manager with default package manager.
@@ -284,12 +288,21 @@ impl PackageManager {
         version: impl Into<Str>,
         install_dir: AbsolutePathBuf,
     ) -> Self {
-        Self { client, version: version.into(), install_dir }
+        Self { client, version: version.into(), bin_prefix: install_dir.join("bin") }
+    }
+
+    #[must_use]
+    pub fn from_bin_prefix(
+        client: PackageManagerType,
+        version: impl Into<Str>,
+        bin_prefix: AbsolutePathBuf,
+    ) -> Self {
+        Self { client, version: version.into(), bin_prefix }
     }
 
     #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
-        self.install_dir.join("bin")
+        self.bin_prefix.clone()
     }
 }
 

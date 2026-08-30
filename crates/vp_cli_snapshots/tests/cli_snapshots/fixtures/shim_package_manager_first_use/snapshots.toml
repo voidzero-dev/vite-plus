@@ -31,9 +31,26 @@ steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"system-package-manager\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-dispatch-bin/node"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-dispatch-bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "bin/pnpm"], snapshot = false },
   { argv = ["vp", "env", "off", "node"], snapshot = false },
   { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "a system-first package manager resolves offline and receives the Node.js selected by system-first Node mode" },
+]
+
+[[case]]
+name = "managed_package_manager_uses_system_first_node"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"managed-package-manager\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\"}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\nnode --version\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx", "#!/bin/sh\nnode --version\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-dispatch-bin/node"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"]], comment = "a managed package manager receives the Node.js selected by system-first Node mode" },
 ]
 
 [[case]]

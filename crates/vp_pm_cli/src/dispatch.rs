@@ -144,7 +144,11 @@ async fn build_selected_package_manager(
     )
     .await
     .map_err(Error::Install)?;
-    Ok(PackageManager { client: package_manager.package_manager_type, version, install_dir })
+    Ok(PackageManager {
+        client: package_manager.package_manager_type,
+        version,
+        bin_prefix: install_dir.join("bin"),
+    })
 }
 
 async fn auto_pin_environment_package_manager(

@@ -25,3 +25,10 @@ vp = "global"
 steps = [
   { argv = ["node", "assert-doctor-fails.cjs"], comment = "package-manager resolution errors make doctor fail" },
 ]
+
+[[case]]
+name = "command_env_empty_package_manager_override"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "current", "pm", "--json"], envs = [["VP_PACKAGE_MANAGER", "   "]], comment = "an empty package-manager environment override falls through to project resolution" },
+]

@@ -28,3 +28,13 @@ steps = [
   { argv = ["vp", "env", "unpin", "pm", "--target", "dev-engines"], comment = "an explicit target removes the devEngines manager even when packageManager shadows it" },
   { argv = ["vpt", "print-file", "package.json"], comment = "the effective top-level packageManager remains intact" },
 ]
+
+[[case]]
+name = "env_unpin_package_manager_target_preserves_dev_engines"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-pin-package-manager\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"10.18.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vp", "env", "unpin", "pm", "--target", "package-manager"], comment = "an explicit top-level target does not remove a devEngines-only package-manager pin" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the devEngines package-manager pin remains unchanged" },
+]

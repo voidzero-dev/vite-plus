@@ -82,9 +82,10 @@ pub async fn execute(
             .transpose()?
             .filter(|(kind, _)| scope.includes_package_manager(*kind));
         match default {
-            Some((kind, selector)) => {
-                Some((kind, resolve_package_manager_version(kind, &selector).await?.to_string()))
-            }
+            Some((kind, selector)) => resolve_package_manager_version(kind, &selector)
+                .await
+                .ok()
+                .map(|version| (kind, version.to_string())),
             None => None,
         }
     } else {

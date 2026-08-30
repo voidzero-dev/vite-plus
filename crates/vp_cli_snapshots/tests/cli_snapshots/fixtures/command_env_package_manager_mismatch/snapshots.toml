@@ -67,6 +67,17 @@ steps = [
 ]
 
 [[case]]
+name = "env_package_manager_list_stays_offline_for_floating_default"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vp", "env", "default", "pnpm@latest"], snapshot = false },
+  { argv = ["vp", "env", "list", "pnpm", "--json"], comment = "local listing remains available when a floating default cannot reach the registry", envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]] },
+]
+
+[[case]]
 name = "env_pin_package_manager_requires_confirmation"
 vp = "global"
 seed-runtime = false

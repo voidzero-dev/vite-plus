@@ -221,7 +221,14 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
 
 fn format_path_snippet(shell: Shell, bin_dirs: &[String]) -> String {
     match shell {
-        Shell::Posix => format!("export PATH=\"{}:$PATH\"", bin_dirs.join(":")),
+        Shell::Posix => format!(
+            "export PATH=\"{}:$PATH\"",
+            bin_dirs
+                .iter()
+                .map(|path| setup::escape_posix_double_quoted_string(path))
+                .collect::<Vec<_>>()
+                .join(":")
+        ),
         Shell::Fish => format!(
             "set -gx PATH {} $PATH",
             bin_dirs
@@ -230,11 +237,22 @@ fn format_path_snippet(shell: Shell, bin_dirs: &[String]) -> String {
                 .collect::<Vec<_>>()
                 .join(" ")
         ),
-        Shell::PowerShell => format!("$env:PATH = \"{};$env:PATH\"", bin_dirs.join(";")),
-        Shell::Cmd => format!("set PATH={};%PATH%", bin_dirs.join(";")),
+        Shell::PowerShell => format!(
+            "$env:PATH = '{};' + $env:PATH",
+            bin_dirs
+                .iter()
+                .map(|path| setup::escape_powershell_single_quoted_string(path))
+                .collect::<Vec<_>>()
+                .join(";")
+        ),
+        Shell::Cmd => format!("set \"PATH={};%PATH%\"", bin_dirs.join(";")),
         Shell::NuShell => format!(
             "$env.PATH = ($env.PATH | prepend [{}])",
-            bin_dirs.iter().map(|path| format!("\"{path}\"")).collect::<Vec<_>>().join(", ")
+            bin_dirs
+                .iter()
+                .map(|path| format!("\"{}\"", setup::escape_nu_double_quoted_string(path)))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
     }
 }
@@ -251,5 +269,25 @@ mod tests {
         );
 
         assert_eq!(snippet, "set -gx PATH \"/Users/Example User/node/bin\" \"/tmp/pm/bin\" $PATH");
+    }
+
+    #[test]
+    fn path_snippets_escape_shell_metacharacters() {
+        assert_eq!(
+            format_path_snippet(Shell::Posix, &[r#"/tmp/$USER `tick` \ dir"#.into()]),
+            r#"export PATH="/tmp/\$USER \`tick\` \\ dir:$PATH""#
+        );
+        assert_eq!(
+            format_path_snippet(Shell::PowerShell, &[r#"C:\A&B's"#.into()]),
+            r#"$env:PATH = 'C:\A&B''s;' + $env:PATH"#
+        );
+        assert_eq!(
+            format_path_snippet(Shell::Cmd, &[r#"C:\A&B"#.into()]),
+            r#"set "PATH=C:\A&B;%PATH%""#
+        );
+        assert_eq!(
+            format_path_snippet(Shell::NuShell, &[r#"C:\A "B""#.into()]),
+            r#"$env.PATH = ($env.PATH | prepend ["C:\\A \"B\""])"#
+        );
     }
 }

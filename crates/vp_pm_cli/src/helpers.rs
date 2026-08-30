@@ -49,7 +49,7 @@ pub(crate) fn default_npm_package_manager(cwd: &AbsolutePath) -> PackageManager 
     PackageManager {
         client: PackageManagerType::Npm,
         version: "latest".into(),
-        install_dir: cwd.to_absolute_path_buf(),
+        bin_prefix: cwd.join("bin"),
     }
 }
 

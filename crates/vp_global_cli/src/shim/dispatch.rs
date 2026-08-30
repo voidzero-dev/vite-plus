@@ -797,11 +797,27 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // Ensure Node.js is installed and locate its binary for PATH preparation.
     // Package-manager shims can use their own declared version, but JS-based
     // package managers still need the project-resolved Node.js runtime.
-    let node_path = match ensure_installed(&resolution.version).await {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("vp: Failed to install Node {}: {e}", resolution.version);
-            return 1;
+    let system_node = if PackageManagerType::from_tool(tool).is_some() {
+        match config::load_config().await {
+            Ok(config) if config.shim_mode == ShimMode::SystemFirst => find_system_tool("node"),
+            Ok(_) => None,
+            Err(error) => {
+                eprintln!("vp: Failed to load Node.js shim mode: {error}");
+                return 1;
+            }
+        }
+    } else {
+        None
+    };
+    let node_path = if let Some(system_node) = system_node {
+        system_node
+    } else {
+        match ensure_installed(&resolution.version).await {
+            Ok(path) => path,
+            Err(error) => {
+                eprintln!("vp: Failed to install Node {}: {error}", resolution.version);
+                return 1;
+            }
         }
     };
 

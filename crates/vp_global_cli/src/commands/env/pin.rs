@@ -856,7 +856,9 @@ async fn unpin_package_manager(
         });
         if remove_top_level && top_level_matches {
             changed = obj.remove("packageManager").is_some();
-        } else if let Some(expected) = expected {
+        } else if !matches!(target, Some(PinTarget::PackageManager))
+            && let Some(expected) = expected
+        {
             changed = remove_dev_engines_package_manager(obj, expected);
         }
     })
