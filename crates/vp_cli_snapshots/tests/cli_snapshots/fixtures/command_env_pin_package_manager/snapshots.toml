@@ -38,3 +38,13 @@ steps = [
   { argv = ["vp", "env", "unpin", "pm", "--target", "package-manager"], comment = "an explicit top-level target does not remove a devEngines-only package-manager pin" },
   { argv = ["vpt", "print-file", "package.json"], comment = "the devEngines package-manager pin remains unchanged" },
 ]
+
+[[case]]
+name = "env_pin_dev_engines_warns_when_top_level_version_shadows_it"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-pin-package-manager\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\"}\n"], snapshot = false },
+  { argv = ["vp", "env", "pin", "pnpm@11.0.0", "--target", "dev-engines", "--no-install", "--force"], comment = "pinning a shadowed same-family devEngines version explains which declaration remains effective" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "both explicitly targeted declarations remain unchanged except for the new devEngines pin" },
+]

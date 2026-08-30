@@ -152,22 +152,15 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
 async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitStatus, Error> {
     let scope = spec::EnvScope::parse(scope.as_deref())?;
     let modes = config::load_config().await?;
-    // Resolve the Node.js version for the current directory
-    let resolution = scope.includes_node().then(|| config::resolve_version(&cwd));
-    let resolution = match resolution {
-        Some(resolution) => Some(resolution.await?),
-        None => None,
-    };
-
-    // Get the node bin directory
     let mut bin_dirs = Vec::new();
-    if let Some(resolution) = resolution {
+    if scope.includes_node() {
         if modes.shim_mode == config::ShimMode::SystemFirst
             && let Some(path) = crate::shim::dispatch::find_system_tool("node")
             && let Some(bin_dir) = path.parent()
         {
             bin_dirs.push(bin_dir.as_path().display().to_string());
         } else {
+            let resolution = config::resolve_version(&cwd).await?;
             let runtime = vp_js_runtime::download_runtime(
                 vp_js_runtime::JsRuntimeType::Node,
                 &resolution.version,
@@ -176,35 +169,49 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
             bin_dirs.push(runtime.get_bin_prefix().as_path().display().to_string());
         }
     }
-    let package_manager = if scope.includes_package_managers() {
-        match package_manager::resolve_current_for(&cwd, scope.package_manager()).await? {
-            Some(resolution) => {
-                Some((resolution.package_manager_type, resolution.version, resolution.hash))
-            }
-            None => match scope.package_manager() {
-                Some(package_manager) => Some((
-                    package_manager,
-                    vp_pm_cli::resolve_package_manager_version(package_manager, "latest").await?,
-                    None,
-                )),
-                None => None,
-            },
-        }
-    } else {
-        None
-    };
-    if let Some((package_manager, version, hash)) = package_manager {
-        if modes.package_manager_shim_mode_for(package_manager) == config::ShimMode::SystemFirst
-            && let Some(path) =
+    if scope.includes_package_managers() {
+        let selected = package_manager::resolve_current_spec(&cwd).await?.filter(|resolution| {
+            scope
+                .package_manager()
+                .is_none_or(|expected| expected == resolution.package_manager_type)
+        });
+        let selected_type = selected
+            .as_ref()
+            .map(|resolution| resolution.package_manager_type)
+            .or_else(|| scope.package_manager());
+        let system_bin_dir = selected_type.and_then(|package_manager| {
+            if modes.package_manager_shim_mode_for(package_manager) == config::ShimMode::SystemFirst
+            {
                 crate::shim::dispatch::find_system_tool(&package_manager.to_string())
-            && let Some(bin_dir) = path.parent()
-        {
+                    .and_then(|path| path.parent().map(vt_path::AbsolutePath::to_absolute_path_buf))
+            } else {
+                None
+            }
+        });
+        if let Some(bin_dir) = system_bin_dir {
             bin_dirs.insert(0, bin_dir.as_path().display().to_string());
         } else {
-            let (install_dir, _, _) =
-                vp_pm_cli::download_package_manager(package_manager, &version, hash.as_deref())
-                    .await?;
-            bin_dirs.insert(0, install_dir.join("bin").as_path().display().to_string());
+            let package_manager =
+                match package_manager::resolve_current_for(&cwd, scope.package_manager()).await? {
+                    Some(resolution) => {
+                        Some((resolution.package_manager_type, resolution.version, resolution.hash))
+                    }
+                    None => match scope.package_manager() {
+                        Some(package_manager) => Some((
+                            package_manager,
+                            vp_pm_cli::resolve_package_manager_version(package_manager, "latest")
+                                .await?,
+                            None,
+                        )),
+                        None => None,
+                    },
+                };
+            if let Some((package_manager, version, hash)) = package_manager {
+                let (install_dir, _, _) =
+                    vp_pm_cli::download_package_manager(package_manager, &version, hash.as_deref())
+                        .await?;
+                bin_dirs.insert(0, install_dir.join("bin").as_path().display().to_string());
+            }
         }
     }
     if bin_dirs.is_empty() {

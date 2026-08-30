@@ -702,6 +702,12 @@ async fn pin_package_manager(
     let package_json: serde_json::Value = serde_json::from_str(&content)?;
     let use_top_level = matches!(target, Some(PinTarget::PackageManager))
         || (target.is_none() && package_json.get("packageManager").is_some());
+    let shadowing_top_level =
+        if use_top_level { None } else { existing_package_manager_pin(&content, true) };
+    let shadowing_top_level = shadowing_top_level.filter(|(name, version)| {
+        PackageManagerType::from_name(name) == Some(package_manager)
+            && version.as_str() != resolved.as_str()
+    });
     if let Some((name, version)) = existing_package_manager_pin(&content, use_top_level) {
         let existing = format!("{name}@{version}");
         let next = format!("{package_manager}@{resolved}");
@@ -740,6 +746,11 @@ async fn pin_package_manager(
     tokio::fs::write(&package_json_path, updated).await?;
     crate::shim::invalidate_cache();
     output::success(&format!("Pinned package manager to {package_manager}@{resolved}"));
+    if let Some((name, version)) = shadowing_top_level {
+        output::warn(&format!(
+            "Top-level packageManager {name}@{version} remains effective; remove or update it to use devEngines.packageManager {package_manager}@{resolved}."
+        ));
+    }
     if no_install {
         output::note("Package manager will be downloaded on first use.");
     } else if let Err(error) = download_package_manager(package_manager, &resolved, None).await {

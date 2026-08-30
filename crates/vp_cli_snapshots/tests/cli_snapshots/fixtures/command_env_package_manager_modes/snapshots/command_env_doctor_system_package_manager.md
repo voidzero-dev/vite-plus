@@ -17,4 +17,5 @@ doctor checks a system-first package manager without registry access
 ```
 doctor reports the system pnpm binary without resolving the declared range
 current reports the system pnpm binary without resolving the declared range
+print uses the system pnpm binary without resolving the declared range
 ```

@@ -21,3 +21,11 @@ if (info.package_manager?.source !== 'system PATH' || !info.package_manager?.bin
 }
 
 console.log('current reports the system pnpm binary without resolving the declared range')
+
+const printed = spawnSync('vp', ['env', 'print', 'pnpm'], { encoding: 'utf8' })
+if (printed.status !== 0 || !printed.stdout.includes('system-bin')) {
+  process.stderr.write(`${printed.stdout}${printed.stderr}`)
+  process.exit(1)
+}
+
+console.log('print uses the system pnpm binary without resolving the declared range')

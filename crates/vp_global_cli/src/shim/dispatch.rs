@@ -784,19 +784,9 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         }
     };
 
-    // Resolve version (with caching)
-    let resolution = match resolve_with_cache(&cwd).await {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("vp: Failed to resolve Node version: {e}");
-            eprintln!("vp: Run 'vp env doctor' for diagnostics");
-            return 1;
-        }
-    };
-
     // Ensure Node.js is installed and locate its binary for PATH preparation.
     // Package-manager shims can use their own declared version, but JS-based
-    // package managers still need the project-resolved Node.js runtime.
+    // package managers still need the Node.js runtime selected by its mode.
     let system_node = if PackageManagerType::from_tool(tool).is_some() {
         match config::load_config().await {
             Ok(config) if config.shim_mode == ShimMode::SystemFirst => find_system_tool("node"),
@@ -809,9 +799,22 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     } else {
         None
     };
+    let resolution = if system_node.is_none() {
+        match resolve_with_cache(&cwd).await {
+            Ok(resolution) => Some(resolution),
+            Err(error) => {
+                eprintln!("vp: Failed to resolve Node version: {error}");
+                eprintln!("vp: Run 'vp env doctor' for diagnostics");
+                return 1;
+            }
+        }
+    } else {
+        None
+    };
     let node_path = if let Some(system_node) = system_node {
         system_node
     } else {
+        let resolution = resolution.as_ref().expect("managed Node.js has no resolution");
         match ensure_installed(&resolution.version).await {
             Ok(path) => path,
             Err(error) => {
@@ -825,13 +828,19 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // fallback. Node and bundled npm tools come from the selected Node.js runtime.
     let tool_path = match resolve_package_manager_tool(&cwd, tool).await {
         Ok(Some(path)) => path,
-        Ok(None) => match locate_tool(&resolution.version, tool) {
-            Ok(path) => path,
-            Err(e) => {
-                eprintln!("vp: Tool '{tool}' not found: {e}");
-                return 1;
+        Ok(None) => {
+            let path = match resolution.as_ref() {
+                Some(resolution) => locate_tool(&resolution.version, tool),
+                None => find_system_tool(tool).ok_or_else(|| format!("system '{tool}' not found")),
+            };
+            match path {
+                Ok(path) => path,
+                Err(error) => {
+                    eprintln!("vp: Tool '{tool}' not found: {error}");
+                    return 1;
+                }
             }
-        },
+        }
         Err(e) => {
             eprintln!("vp: Failed to resolve package manager for '{tool}': {e}");
             return 1;
@@ -858,10 +867,18 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
     // Optional debug env vars
     if std::env::var(env_vars::VP_DEBUG_SHIM).is_ok() {
-        // SAFETY: Setting env vars at this point before exec is safe
-        unsafe {
-            std::env::set_var(env_vars::VP_ACTIVE_NODE, &resolution.version);
-            std::env::set_var(env_vars::VP_RESOLVE_SOURCE, &resolution.source);
+        if let Some(resolution) = resolution.as_ref() {
+            // SAFETY: Setting env vars at this point before exec is safe
+            unsafe {
+                std::env::set_var(env_vars::VP_ACTIVE_NODE, &resolution.version);
+                std::env::set_var(env_vars::VP_RESOLVE_SOURCE, &resolution.source);
+            }
+        } else if let Some(version) = read_node_version(&node_path) {
+            // SAFETY: Setting env vars at this point before exec is safe
+            unsafe {
+                std::env::set_var(env_vars::VP_ACTIVE_NODE, version);
+                std::env::set_var(env_vars::VP_RESOLVE_SOURCE, "system PATH");
+            }
         }
     }
 
@@ -880,19 +897,18 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         if let Some(parsed) = parse_npm_global_install(args) {
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                let node_dir = vp_shared::EnvConfig::get()
-                    .dirs
-                    .data
-                    .join("js_runtime")
-                    .join("node")
-                    .join(&*resolution.version);
+                let node_dir = node_prefix_from_binary(&node_path);
+                let node_version = resolution.as_ref().map_or_else(
+                    || read_node_version(&node_path).unwrap_or_else(|| "unknown".into()),
+                    |resolution| resolution.version.clone(),
+                );
                 let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
                 check_npm_global_install_result(
                     &parsed.packages,
                     original_path.as_deref(),
                     &npm_prefix,
                     &node_dir,
-                    &resolution.version,
+                    &node_version,
                 );
             }
             return exit_code;
@@ -900,12 +916,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
         if let Some(parsed) = parse_npm_global_uninstall(args) {
             // Collect bin names before uninstall (package.json will be gone after)
-            let node_dir = vp_shared::EnvConfig::get()
-                .dirs
-                .data
-                .join("js_runtime")
-                .join("node")
-                .join(&*resolution.version);
+            let node_dir = node_prefix_from_binary(&node_path);
             let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
             let bin_names = collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir);
             let exit_code = exec::spawn_tool(&tool_path, args);
@@ -918,6 +929,22 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
     // Execute the tool (normal path — exec replaces process on Unix)
     exec::exec_tool(&tool_path, args)
+}
+
+fn node_prefix_from_binary(node_path: &AbsolutePath) -> AbsolutePathBuf {
+    #[cfg(windows)]
+    let prefix = node_path.parent();
+    #[cfg(not(windows))]
+    let prefix = node_path.parent().and_then(AbsolutePath::parent);
+    prefix.expect("Node.js has no installation prefix").to_absolute_path_buf()
+}
+
+fn read_node_version(node_path: &AbsolutePath) -> Option<String> {
+    let output = std::process::Command::new(node_path.as_path()).arg("--version").output().ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().trim_start_matches('v').to_string())
 }
 
 async fn prepare_node_path_for_system_package_manager() -> Result<(), Error> {
