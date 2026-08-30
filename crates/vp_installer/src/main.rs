@@ -227,11 +227,11 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
             Ok(()) if current_version.is_none() => {
                 let vp_binary = dirs.data.join("current").join("bin").join(VP_BINARY_NAME);
                 let preference_result = tokio::process::Command::new(vp_binary.as_path())
-                    .args(["env", "on", "pm"])
+                    .args(["env", "on"])
                     .output()
                     .await;
                 if !preference_result.is_ok_and(|output| output.status.success()) {
-                    print_warn("Failed to record package-manager management preference.");
+                    print_warn("Failed to record environment management preference.");
                 }
             }
             Ok(()) => {}

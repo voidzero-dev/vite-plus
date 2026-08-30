@@ -1418,8 +1418,8 @@ WRAPPER_EOF
   # Setup Node.js version manager (shims) - separate component
   setup_node_manager "$BIN_DIR"
   if [ "$NODE_MANAGER_ENABLED" = "true" ]; then
-    if ! "$vp_bin" env on pm > /dev/null 2>&1; then
-      warn "Failed to record package-manager management preference."
+    if ! "$vp_bin" env on > /dev/null 2>&1; then
+      warn "Failed to record environment management preference."
     fi
   fi
 
