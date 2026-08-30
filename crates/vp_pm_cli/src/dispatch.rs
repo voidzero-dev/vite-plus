@@ -31,7 +31,7 @@ enum ManagerPolicy {
 enum ManagerSource<'a> {
     Detect,
     Environment(&'a EnvironmentPackageManagerResolution),
-    ResolvedEnvironment(PackageManager, &'a EnvironmentPackageManagerResolution),
+    ResolvedEnvironment(PackageManager),
 }
 
 pub async fn dispatch(
@@ -60,14 +60,9 @@ pub async fn dispatch_with_resolved_package_manager(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
     manager: PackageManager,
-    package_manager: &EnvironmentPackageManagerResolution,
+    _package_manager: &EnvironmentPackageManagerResolution,
 ) -> Result<DispatchResult, Error> {
-    dispatch_with_manager(
-        cwd,
-        command,
-        ManagerSource::ResolvedEnvironment(manager, package_manager),
-    )
-    .await
+    dispatch_with_manager(cwd, command, ManagerSource::ResolvedEnvironment(manager)).await
 }
 
 async fn dispatch_with_manager(
@@ -114,7 +109,7 @@ async fn resolve_manager(source: ManagerSource<'_>) -> Result<PackageManager, Er
         ManagerSource::Environment(package_manager) => {
             build_selected_package_manager(package_manager).await
         }
-        ManagerSource::ResolvedEnvironment(manager, _) => Ok(manager),
+        ManagerSource::ResolvedEnvironment(manager) => Ok(manager),
         ManagerSource::Detect => unreachable!("detected managers are resolved from the cwd"),
     }
 }
