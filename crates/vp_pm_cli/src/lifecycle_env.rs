@@ -88,16 +88,17 @@ impl PackageManager {
 
     /// Environment variables the package manager would stamp when running a
     /// `package.json` script, limited to the package-manager detection
-    /// channels (`npm_execpath`, `npm_config_user_agent`). Empty for bun: what
-    /// `bun run` stamps is unverified, so its environment is left untouched
-    /// rather than guessed at.
+    /// channels (`npm_execpath`, `npm_config_user_agent`). Empty for bun: this
+    /// narrow #2317 compatibility fix deliberately leaves Bun's lifecycle
+    /// environment untouched instead of expanding the emulation contract.
     ///
     /// Names follow npm's lifecycle script environment
     /// (https://docs.npmjs.com/cli/v10/using-npm/scripts#environment), which
     /// pnpm reproduces by routing `pnpm run` scripts through
     /// `@pnpm/npm-lifecycle`
     /// (https://github.com/pnpm/pnpm/blob/main/pnpm11/exec/lifecycle/src/runLifecycleHook.ts).
-    /// Verified against pnpm 11.21.0 and npm 10.9.8.
+    /// Verified against pnpm 11.20.0, native pnpm 12.0.0, npm 10.9.8,
+    /// and Yarn 4.17.1.
     #[must_use]
     pub fn lifecycle_env_vars(
         &self,
@@ -107,22 +108,32 @@ impl PackageManager {
             return Vec::new();
         }
 
+        let exec_path = self.lifecycle_exec_path();
+        let node_version = if matches!(self.client, PackageManagerType::Pnpm)
+            && matches!(
+                exec_path.as_path().file_name().and_then(|name| name.to_str()),
+                Some("pnpm.native" | "pnpm.native.exe")
+            ) {
+            // Native pnpm 12 is not running inside Node.js. It stamps `node/?`
+            // rather than leaking the Node.js version that happens to host vp.
+            Some("?")
+        } else {
+            context.node_version.as_deref()
+        };
+
         vec![
-            ("npm_execpath", self.lifecycle_exec_path().as_path().as_os_str().to_os_string()),
+            ("npm_execpath", exec_path.as_path().as_os_str().to_os_string()),
             (
                 "npm_config_user_agent",
-                OsString::from(user_agent(
-                    self.client,
-                    &self.version,
-                    context.node_version.as_deref(),
-                )),
+                OsString::from(user_agent(self.client, &self.version, node_version)),
             ),
         ]
     }
 }
 
 /// `npm_config_user_agent`, formatted the way the package manager itself does:
-/// `pnpm/11.20.0 npm/? node/v22.23.1 linux x64` (pnpm, yarn) or
+/// `pnpm/11.20.0 npm/? node/v22.23.1 linux x64` (pnpm 11, yarn),
+/// `pnpm/12.0.0 npm/? node/? linux x64` (native pnpm 12), or
 /// `npm/10.9.8 node/v22.23.1 linux x64 workspaces/false` (npm).
 ///
 /// Formats follow pnpm's resolved `userAgent` config
@@ -287,6 +298,32 @@ mod tests {
         assert!(!map.contains_key("npm_node_execpath"));
         assert!(!map.contains_key("NODE"));
         assert!(!map.contains_key("PNPM_SCRIPT_SRC_DIR"));
+    }
+
+    #[test]
+    fn native_pnpm_vars_do_not_leak_host_node_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let install_dir = dir.path().join("pm");
+        let native_name = if cfg!(windows) { "pnpm.native.exe" } else { "pnpm.native" };
+        write_file(&install_dir.join("bin").join(native_name));
+        let pm = package_manager(PackageManagerType::Pnpm, "12.0.0", &install_dir);
+
+        let vars = pm.lifecycle_env_vars(&context(Some("v22.23.1")));
+        let map = vars_map(&vars);
+
+        assert_eq!(
+            map["npm_execpath"],
+            install_dir.join("bin").join(native_name).as_path().as_os_str()
+        );
+        assert_eq!(
+            map["npm_config_user_agent"],
+            OsStr::new(&vt_str::format!(
+                "pnpm/12.0.0 npm/? node/? {} {}",
+                node_platform(env::consts::OS),
+                node_arch(env::consts::ARCH)
+            ))
+        );
+        assert!(!map["npm_config_user_agent"].to_string_lossy().contains("v22.23.1"));
     }
 
     #[test]

@@ -1,15 +1,66 @@
 [[case]]
-name = "vite_task_lifecycle_env"
+name = "vite_task_lifecycle_env_npm"
 vp = "local"
 comment = """
-Regression test for #2317: `vp run` stamps the package-manager lifecycle env
-(npm_execpath, npm_config_user_agent) for package.json scripts, so
-child tooling like npm-run-all detects pnpm instead of falling back to npm.
-Pre-fix every variable printed `(undefined)`. The fake managed pnpm install
-under VP_HOME keeps the case offline; the script normalizes the user-agent
-platform/arch tail that suite redaction does not mask.
+Regression test for #2317 using Vite+'s real managed npm distribution. `vp run`
+stamps npm's CLI entry and user agent for package-manager detection.
 """
 steps = [
-  { argv = ["node", "scripts/setup-fake-pnpm.cjs"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.9.8"], snapshot = false },
+  { argv = ["npm", "--version"], comment = "Execute the pinned npm binary", timeout = 120000 },
+  { argv = ["vp", "run", "check-env"] },
+]
+
+[[case]]
+name = "vite_task_lifecycle_env_yarn"
+vp = "local"
+env = { YARN_ENABLE_TELEMETRY = "0" }
+comment = """
+Regression test for #2317 using Vite+'s real managed Yarn distribution. `vp run`
+stamps Yarn's CLI entry and user agent for package-manager detection.
+"""
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.17.1"], snapshot = false },
+  { argv = ["yarn", "--version"], comment = "Execute the pinned Yarn binary", timeout = 120000 },
+  { argv = ["vp", "run", "check-env"] },
+]
+
+[[case]]
+name = "vite_task_lifecycle_env_pnpm11"
+vp = "local"
+comment = """
+Regression test for #2317 using Vite+'s real managed pnpm 11 distribution.
+`vp run` stamps pnpm's JavaScript CLI entry and Node-backed user agent.
+"""
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.20.0"], snapshot = false },
+  { argv = ["pnpm", "--version"], comment = "Execute the pinned pnpm 11 binary", timeout = 120000 },
+  { argv = ["vp", "run", "check-env"] },
+]
+
+[[case]]
+name = "vite_task_lifecycle_env_pnpm12"
+vp = "local"
+comment = """
+Regression test for #2317 using Vite+'s real managed native pnpm 12
+distribution. `npm_execpath` uses the native entry and the user agent reports
+`node/?` instead of leaking the Node.js version that hosts Vite+.
+"""
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@12.0.0"], snapshot = false },
+  { argv = ["pnpm", "--version"], comment = "Execute the pinned native pnpm 12 binary", timeout = 120000 },
+  { argv = ["vp", "run", "check-env"] },
+]
+
+[[case]]
+name = "vite_task_lifecycle_env_bun"
+vp = "local"
+comment = """
+Boundary coverage with Vite+'s real managed Bun distribution. The narrow #2317
+fix does not emulate Bun's lifecycle environment, so both values stay undefined.
+"""
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.3.14"], snapshot = false },
+  { argv = ["bun", "--version"], comment = "Execute the pinned Bun binary", timeout = 120000 },
   { argv = ["vp", "run", "check-env"] },
 ]

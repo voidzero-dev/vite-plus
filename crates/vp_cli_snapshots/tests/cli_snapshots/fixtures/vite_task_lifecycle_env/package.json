@@ -3,6 +3,5 @@
   "private": true,
   "scripts": {
     "check-env": "node check-env.js"
-  },
-  "packageManager": "pnpm@11.0.0"
+  }
 }
