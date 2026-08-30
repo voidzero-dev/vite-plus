@@ -12,21 +12,11 @@ System-first inspection commands must use an available system manager without re
 ## `vp env off pnpm`
 
 
-## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} NPM_CONFIG_REGISTRY=http://127.0.0.1:9 vp env doctor pnpm`
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} NPM_CONFIG_REGISTRY=http://127.0.0.1:9 node print-doctor-configuration.cjs pnpm`
 
 doctor reports the system pnpm binary without resolving the declared range
 
 ```
-VITE+ - The Unified Toolchain for the Web
-
-Installation
-  ✓ Bin dir           ~/.vite-plus/bin
-  ✓ Data dir          ~/.vite-plus
-  ✓ Cache dir         ~/.vite-plus/cache (not created yet)
-  ✓ Config dir        ~/.vite-plus
-  ✓ State dir         ~/.vite-plus
-  ✓ Shims             pnpm, pnpx
-
 Configuration
   ✓ Package manager   system-first mode
 
@@ -39,16 +29,6 @@ Package Manager Resolution
   Source            system PATH
   Version           pnpm@10.18.0
   ✓ PM binary         <workspace>/system-bin/pnpm
-
-IDE Setup
-  ⚠ GUI applications may not see shell PATH changes.
-
-  macOS:
-  Add to ~/.zshenv or ~/.profile:
-  . "$HOME/.vite-plus/env"
-  Then restart your IDE to apply changes.
-
-✓ All checks passed
 ```
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} NPM_CONFIG_REGISTRY=http://127.0.0.1:9 vp env current pnpm --json`
