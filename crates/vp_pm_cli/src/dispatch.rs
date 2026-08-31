@@ -28,10 +28,9 @@ enum ManagerPolicy {
     AllowNpmFallback,
 }
 
-enum ManagerSource<'a> {
+enum ManagerSource {
     Detect,
-    Environment(&'a EnvironmentPackageManagerResolution),
-    ResolvedEnvironment(PackageManager),
+    Resolved(PackageManager),
 }
 
 pub async fn dispatch(
@@ -53,29 +52,29 @@ pub async fn dispatch_with_package_manager(
     command: PackageManagerCommand,
     package_manager: &EnvironmentPackageManagerResolution,
 ) -> Result<DispatchResult, Error> {
-    dispatch_with_manager(cwd, command, ManagerSource::Environment(package_manager)).await
+    let manager = build_selected_package_manager(package_manager).await?;
+    dispatch_with_manager(cwd, command, ManagerSource::Resolved(manager)).await
 }
 
 pub async fn dispatch_with_resolved_package_manager(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
     manager: PackageManager,
-    _package_manager: &EnvironmentPackageManagerResolution,
 ) -> Result<DispatchResult, Error> {
-    dispatch_with_manager(cwd, command, ManagerSource::ResolvedEnvironment(manager)).await
+    dispatch_with_manager(cwd, command, ManagerSource::Resolved(manager)).await
 }
 
 async fn dispatch_with_manager(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
-    source: ManagerSource<'_>,
+    source: ManagerSource,
 ) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
     let command = match command {
         PackageManagerCommand::Dlx(args) => {
             let manager = match source {
                 ManagerSource::Detect => return dispatch_dlx(cwd, args, render_diagnostics).await,
-                source => resolve_manager(source).await?,
+                ManagerSource::Resolved(manager) => manager,
             };
             let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
             let status = run_resolution(cwd, resolution, render_diagnostics).await?;
@@ -90,11 +89,11 @@ async fn dispatch_with_manager(
             ManagerPolicy::RequireProject => build_package_manager(cwd).await?,
             ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
         },
-        source => {
+        ManagerSource::Resolved(manager) => {
             if policy == ManagerPolicy::RequireProject {
                 require_package_json(cwd)?;
             }
-            resolve_manager(source).await?
+            manager
         }
     };
     let package_manager = manager.client;
@@ -102,16 +101,6 @@ async fn dispatch_with_manager(
     let resolution = command.resolve_for_manager(&manager)?;
     let status = run_resolution(cwd, resolution, render_diagnostics).await?;
     Ok(DispatchResult { status, why_hint_packages })
-}
-
-async fn resolve_manager(source: ManagerSource<'_>) -> Result<PackageManager, Error> {
-    match source {
-        ManagerSource::Environment(package_manager) => {
-            build_selected_package_manager(package_manager).await
-        }
-        ManagerSource::ResolvedEnvironment(manager) => Ok(manager),
-        ManagerSource::Detect => unreachable!("detected managers are resolved from the cwd"),
-    }
 }
 
 async fn build_selected_package_manager(
@@ -124,11 +113,7 @@ async fn build_selected_package_manager(
     )
     .await
     .map_err(Error::Install)?;
-    Ok(PackageManager {
-        client: package_manager.package_manager_type,
-        version,
-        bin_prefix: install_dir.join("bin"),
-    })
+    Ok(PackageManager::from_install_dir(package_manager.package_manager_type, version, install_dir))
 }
 
 async fn dispatch_dlx(
