@@ -9,4 +9,16 @@ steps = [
   { argv = ["vp", "env", "use", "--unset"], comment = "should output unset command to stdout", continue-on-failure = true },
   { argv = ["vp", "env", "use", "d"], comment = "should show friendly error for invalid version", continue-on-failure = true },
   { argv = ["vp", "env", "use", "abc"], comment = "should show friendly error for invalid version", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "--silent-if-unchanged", "--no-install"], comment = "an unchanged project environment emits no shell mutations", envs = [["VP_NODE_VERSION", "20.18.0"], ["VP_PACKAGE_MANAGER", "npm@10.9.4"]] },
+]
+
+[[case]]
+name = "command_env_use_silent_unchanged_stays_noop"
+vp = "global"
+comment = "The unchanged guard must return before installation so --silent-if-unchanged remains free of downloads and filesystem side effects."
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-use\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\"}\n"], snapshot = false },
+  { argv = ["vp", "env", "use", "pm", "--silent-if-unchanged"], envs = [["VP_PACKAGE_MANAGER", "pnpm@10.18.0"]], snapshot = false },
+  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "--assert", "missing"], comment = "silent unchanged mode preserves the legacy no-op behavior" },
 ]

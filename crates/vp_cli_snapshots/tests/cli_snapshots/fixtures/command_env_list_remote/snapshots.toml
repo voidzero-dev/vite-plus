@@ -4,7 +4,27 @@ vp = "global"
 skip-platforms = ["windows"]
 seed-runtime = false
 steps = [
+  { argv = ["vp", "env", "default", "node"], comment = "An unconfigured Node.js default explains the effective fallback without claiming it was set in config", continue-on-failure = true },
   { argv = ["vp", "env", "install", "lts"], comment = "Install an LTS Node.js version locally", continue-on-failure = true },
   { argv = ["vp", "env", "default", "lts"], comment = "Set it as the global default (stored as the `lts` alias)", continue-on-failure = true },
-  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process'); const {versions}=JSON.parse(execFileSync('vp',['env','list-remote','--lts','--json'],{encoding:'utf8'})); console.log('installed marked:', versions.some(v=>v.installed)); console.log('current marked:', versions.some(v=>v.current)); console.log('default marked:', versions.some(v=>v.default));"], comment = "installed/current/default flags should all resolve, including the `lts` default alias", continue-on-failure = true },
+  { argv = ["vp", "env", "default", "node"], comment = "A configured Node.js alias shows its current resolution and config source", continue-on-failure = true },
+  { argv = ["vp", "env", "default", "pnpm@10.18.0"], comment = "Package-manager default updates identify the selected family and version", continue-on-failure = true },
+  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process'); const {node}=JSON.parse(execFileSync('vp',['env','list-remote','--lts','--json'],{encoding:'utf8'})); console.log('installed marked:', node.some(v=>v.installed)); console.log('current marked:', node.some(v=>v.current)); console.log('default marked:', node.some(v=>v.default));"], comment = "the unified JSON node entries resolve installed/current/default flags, including the `lts` default alias", continue-on-failure = true },
+  { argv = ["vp", "env", "list-remote", "node", "22.11.0"], comment = "Human-readable Node.js results keep the v prefix, LTS codename, and interactive formatting", formatted-snapshot = true, continue-on-failure = true },
+  { argv = ["vp", "env", "list-remote", "pnpm", "10.18.0"], comment = "Human-readable package-manager results retain current-version formatting", formatted-snapshot = true, continue-on-failure = true },
+  { argv = ["vp", "env", "list-remote", "node", "999"], comment = "An empty Node.js result includes actionable feedback", continue-on-failure = true },
+]
+
+[[case]]
+name = "command_env_list_format"
+vp = "global"
+skip-platforms = ["windows"]
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "$VP_HOME/js_runtime/node/22.11.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vp", "env", "default", "22.11.0", "pnpm@10.18.0"], snapshot = false },
+  { argv = ["vp", "env", "list", "node"], comment = "Installed Node.js versions retain their interactive formatting", formatted-snapshot = true },
+  { argv = ["vp", "env", "list", "pnpm"], comment = "Installed package-manager versions use the same interactive formatting", formatted-snapshot = true },
 ]

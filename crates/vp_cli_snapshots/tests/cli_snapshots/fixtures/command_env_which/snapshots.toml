@@ -4,14 +4,21 @@ vp = "global"
 local-registry = true
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "remove", "-g", "corepack"], snapshot = false, continue-on-failure = true },
   { argv = ["vp", "env", "exec", "node", "--version"], comment = "Ensure Node.js is installed first", continue-on-failure = true },
   { argv = ["vp", "env", "which", "node"], comment = "Core tool - shows resolved Node.js binary path", continue-on-failure = true },
   { argv = ["vp", "env", "which", "npm"], comment = "Core tool - shows resolved npm binary path", continue-on-failure = true },
   { argv = ["vp", "env", "which", "npx"], comment = "Core tool - shows resolved npx binary path", continue-on-failure = true },
-  { argv = ["vp", "env", "which", "corepack"], comment = "Core tool - corepack bundled with the resolved Node.js", continue-on-failure = true },
   { argv = ["vp", "install", "-g", "cowsay@1.6.0"], comment = "Install a global package via vp", continue-on-failure = true },
   { argv = ["vp", "env", "which", "cowsay"], comment = "Global package - shows binary path with metadata", continue-on-failure = true },
   { argv = ["vp", "remove", "-g", "cowsay"], comment = "Cleanup", continue-on-failure = true },
   { argv = ["vp", "env", "which", "unknown-tool"], comment = "Unknown tool - error message", continue-on-failure = true },
+]
+
+[[case]]
+name = "command_env_current_concrete_package_manager_fallback"
+vp = "global"
+comment = "A named family has an effective registry fallback even when no project, session, or default selection exists."
+local-registry = true
+steps = [
+  { argv = ["vp", "env", "current", "pnpm", "--json"], comment = "a concrete family reports the same registry fallback as its shim" },
 ]

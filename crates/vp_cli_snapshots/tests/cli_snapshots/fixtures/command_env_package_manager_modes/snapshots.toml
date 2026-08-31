@@ -1,0 +1,35 @@
+[[case]]
+name = "command_env_package_manager_modes"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vp", "env", "off", "pnpm"], comment = "switch only pnpm to system-first mode" },
+  { argv = ["vp", "env", "current", "pnpm", "--json"], envs = [["VP_PACKAGE_MANAGER", "pnpm@10.18.0"], ["VP_BYPASS", "${PATH}"]], comment = "pnpm uses its individual mode" },
+  { argv = ["vp", "env", "current", "bun", "--json"], envs = [["VP_PACKAGE_MANAGER", "bun@1.2.3"]], comment = "bun keeps the shared managed mode" },
+  { argv = ["vp", "env", "on", "pnpm"], comment = "restore only pnpm to managed mode" },
+  { argv = ["vp", "env", "current", "pnpm", "--json"], envs = [["VP_PACKAGE_MANAGER", "pnpm@10.18.0"]], comment = "pnpm returns to the shared managed mode" },
+]
+
+[[case]]
+name = "command_env_doctor_package_manager_modes"
+vp = "global"
+comment = "Doctor may collapse identical family modes, but must expose per-family rows as soon as one package manager differs."
+steps = [
+  { argv = ["node", "print-doctor-configuration.cjs"], comment = "doctor keeps one package-manager row when every mode matches" },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["node", "print-doctor-configuration.cjs"], comment = "doctor prints each package manager when their modes differ" },
+]
+
+[[case]]
+name = "command_env_doctor_system_package_manager"
+vp = "global"
+comment = "System-first inspection commands must use an available system manager without resolving its project range through the registry."
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"doctor-system-package-manager\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["node", "print-doctor-configuration.cjs", "pnpm"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "doctor reports the system pnpm binary without resolving the declared range" },
+  { argv = ["vp", "env", "current", "pnpm", "--json"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "current reports the same system pnpm selection" },
+  { argv = ["vp", "env", "print", "pnpm"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "print exports the system pnpm directory" },
+]

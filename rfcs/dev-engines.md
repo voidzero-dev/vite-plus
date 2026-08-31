@@ -373,7 +373,7 @@ A small shared Rust helper (in `vp_shared`) will own "edit one field in package.
 - Managing non-Node runtimes (`deno`, `bun` as a runtime) via `devEngines.runtime`.
 - Validating `devEngines.os` / `cpu` / `libc`.
 - Acting as a general enforcement layer for arbitrary package manager names beyond pnpm / yarn / npm / bun.
-- Changing session-override behavior (`vp env use`, `VP_NODE_VERSION`).
+- Node session override behavior remains compatible; unified environments additionally support `VP_PACKAGE_MANAGER` and `.session-package-manager`.
 
 ## Deferred / Future Work
 

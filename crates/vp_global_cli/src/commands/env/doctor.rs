@@ -3,10 +3,15 @@
 use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
+use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
 use vp_shared::{env_vars, output};
 use vt_path::{AbsolutePathBuf, current_dir};
 
-use super::config::{self, ShimMode, get_bin_dir, load_config, resolve_version};
+use super::{
+    config::{self, ShimMode, get_bin_dir, load_config, resolve_version},
+    package_manager,
+    spec::EnvScope,
+};
 use crate::{
     commands::shell::{ALL_SHELL_PROFILES, IDE_SHELL_PROFILES, ShellProfile, resolve_profile_path},
     error::Error,
@@ -33,8 +38,6 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
     ("n", "N_PREFIX"),
 ];
 
-use super::setup::SHIM_TOOLS;
-
 /// Column width for left-side keys in aligned output
 const KEY_WIDTH: usize = 18;
 
@@ -58,6 +61,14 @@ fn print_check(status: &str, key: &str, value: &str) {
     }
 }
 
+fn print_package_manager_mode(key: &str, mode: ShimMode) {
+    let mode = match mode {
+        ShimMode::Managed => "managed mode",
+        ShimMode::SystemFirst => "system-first mode",
+    };
+    print_check(&output::CHECK.green().to_string(), key, mode);
+}
+
 /// Print a continuation/hint line (dimmed).
 fn print_hint(text: &str) {
     println!("  {}", format!("note: {text}").dimmed());
@@ -74,33 +85,47 @@ fn abbreviate_home(path: &str) -> String {
 }
 
 /// Execute the doctor command.
-pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
+pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitStatus, Error> {
+    let scope = EnvScope::parse(scope.as_deref())?;
     let mut has_errors = false;
 
     // Section: Installation
     println!("{}", "Installation".bold());
     has_errors |= !check_dirs().await;
-    has_errors |= !check_shims().await;
+    has_errors |= !check_shims(scope).await;
 
     // Section: Configuration
     print_section("Configuration");
-    let (shim_mode, system_node_path) = check_shim_mode().await;
+    let (environment_config, system_node_path) = check_shim_mode(scope).await;
 
     // Check env sourcing: IDE-relevant profiles first, then all shell profiles
     let env_status = cfg!(not(windows)).then(check_env_sourcing);
 
-    check_session_override();
+    if scope.includes_node() {
+        check_session_override();
+    }
+    if scope.includes_package_managers() {
+        check_package_manager_session_override().await;
+    }
 
     // Section: PATH
     print_section("PATH");
-    has_errors |= !check_path().await;
+    has_errors |= !check_path(scope).await;
 
     // Section: Version Resolution
-    print_section("Version Resolution");
-    let resolution = check_current_resolution(&cwd, shim_mode, system_node_path).await;
+    let resolution = if scope.includes_node() {
+        print_section("Node.js Resolution");
+        check_current_resolution(&cwd, environment_config.node_shim_mode, system_node_path).await
+    } else {
+        None
+    };
+    if scope.includes_package_managers() {
+        print_section("Package Manager Resolution");
+        has_errors |= !check_package_manager_resolution(&cwd, scope, &environment_config).await;
+    }
 
     // Section: devEngines (conditional, see rfcs/dev-engines.md)
-    check_dev_engines(&cwd, resolution.as_ref()).await;
+    check_dev_engines(&cwd, resolution.as_ref(), scope).await;
 
     // Section: Conflicts (conditional)
     check_conflicts();
@@ -169,7 +194,19 @@ async fn check_dirs() -> bool {
 
 /// Check shim files in the bin directory. A missing bin directory is
 /// already reported by [`check_dirs`].
-async fn check_shims() -> bool {
+fn selected_shim_tools(scope: EnvScope) -> Vec<&'static str> {
+    match scope {
+        EnvScope::All => crate::shim::DEFAULT_SHIM_TOOLS.to_vec(),
+        EnvScope::Node => vec!["node"],
+        EnvScope::PackageManagers => package_manager::ALL_PACKAGE_MANAGERS
+            .into_iter()
+            .flat_map(|package_manager| package_manager.bin_names().iter().copied())
+            .collect(),
+        EnvScope::PackageManager(package_manager) => package_manager.bin_names().to_vec(),
+    }
+}
+
+async fn check_shims(scope: EnvScope) -> bool {
     let config = vp_shared::EnvConfig::get();
     let bin_dir = &config.dirs.bin;
 
@@ -179,7 +216,8 @@ async fn check_shims() -> bool {
 
     let mut missing = Vec::new();
 
-    for tool in SHIM_TOOLS {
+    let tools = selected_shim_tools(scope);
+    for tool in &tools {
         let shim_path = bin_dir.join(shim_filename(tool));
         if !tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             missing.push(*tool);
@@ -187,7 +225,7 @@ async fn check_shims() -> bool {
     }
 
     if missing.is_empty() {
-        print_check(&output::CHECK.green().to_string(), "Shims", &SHIM_TOOLS.join(", "));
+        print_check(&output::CHECK.green().to_string(), "Shims", &tools.join(", "));
         true
     } else {
         print_check(
@@ -215,47 +253,168 @@ fn shim_filename(tool: &str) -> String {
 }
 
 /// Check and display shim mode. Returns the mode and any found system node path.
-async fn check_shim_mode() -> (ShimMode, Option<AbsolutePathBuf>) {
+async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePathBuf>) {
     let config = match load_config().await {
         Ok(c) => c,
         Err(e) => {
             print_check(
                 &output::WARN_SIGN.yellow().to_string(),
-                "Node.js mode",
+                "Node.js",
                 &format!("config error: {e}").yellow().to_string(),
             );
-            return (ShimMode::default(), None);
+            return (config::Config::default(), None);
         }
     };
 
     let mut system_node_path = None;
 
-    match config.shim_mode {
-        ShimMode::Managed => {
-            print_check(&output::CHECK.green().to_string(), "Node.js mode", "managed");
-        }
-        ShimMode::SystemFirst => {
-            print_check(
-                &output::CHECK.green().to_string(),
-                "Node.js mode",
-                &"system-first".bright_blue().to_string(),
-            );
-
-            // Check if system Node.js is available
-            if let Some(system_node) = shim::find_system_tool("node") {
-                print_check(" ", "System Node.js", &system_node.as_path().display().to_string());
-                system_node_path = Some(system_node);
-            } else {
+    if scope.includes_node() {
+        match config.node_shim_mode {
+            ShimMode::Managed => {
+                print_check(&output::CHECK.green().to_string(), "Node.js", "managed mode");
+            }
+            ShimMode::SystemFirst => {
                 print_check(
-                    &output::WARN_SIGN.yellow().to_string(),
-                    "System Node.js",
-                    &"not found (will fall back to managed)".yellow().to_string(),
+                    &output::CHECK.green().to_string(),
+                    "Node.js",
+                    &"system-first mode".bright_blue().to_string(),
                 );
+
+                // Check if system Node.js is available
+                if let Some(system_node) = shim::find_system_tool("node") {
+                    print_check(
+                        " ",
+                        "System Node.js",
+                        &system_node.as_path().display().to_string(),
+                    );
+                    system_node_path = Some(system_node);
+                } else {
+                    print_check(
+                        &output::WARN_SIGN.yellow().to_string(),
+                        "System Node.js",
+                        &"not found (will fall back to managed)".yellow().to_string(),
+                    );
+                }
+            }
+        }
+    }
+    if scope.includes_package_managers() {
+        if let Some(package_manager) = scope.package_manager() {
+            print_package_manager_mode(
+                "Package manager",
+                config.package_manager_shim_mode_for(package_manager),
+            );
+        } else {
+            let modes = package_manager::ALL_PACKAGE_MANAGERS.map(|package_manager| {
+                (package_manager, config.package_manager_shim_mode_for(package_manager))
+            });
+            let shared_mode = modes[0].1;
+            if modes.iter().all(|(_, mode)| *mode == shared_mode) {
+                print_package_manager_mode("Package manager", shared_mode);
+            } else {
+                for (package_manager, mode) in modes {
+                    print_package_manager_mode(package_manager::title(package_manager), mode);
+                }
             }
         }
     }
 
-    (config.shim_mode, system_node_path)
+    (config, system_node_path)
+}
+
+async fn check_package_manager_session_override() {
+    let environment = vp_shared::EnvConfig::get().package_manager.clone();
+    let session = config::read_session_package_manager().await;
+    if let Some(value) = environment.or(session) {
+        print_check(" ", "PM session", &value);
+    }
+}
+
+async fn check_package_manager_resolution(
+    cwd: &AbsolutePathBuf,
+    scope: EnvScope,
+    config: &config::Config,
+) -> bool {
+    let selected = match package_manager::resolve_current_spec(cwd).await {
+        Ok(selected) => selected.filter(|resolution| {
+            scope
+                .package_manager()
+                .is_none_or(|expected| expected == resolution.package_manager_type)
+        }),
+        Err(error) => {
+            print_check(&output::CROSS.red().to_string(), "Package manager", &error.to_string());
+            return false;
+        }
+    };
+    let Some(selected) = selected else {
+        print_check(" ", "Package manager", "not selected");
+        return true;
+    };
+
+    if config.package_manager_shim_mode_for(selected.package_manager_type) == ShimMode::SystemFirst
+        && let Some(system_binary) =
+            shim::find_system_tool(&selected.package_manager_type.to_string())
+    {
+        let Some(version) = try_get_tool_version(&system_binary).await else {
+            print_check(" ", "Source", "system PATH");
+            print_check(
+                &output::CROSS.red().to_string(),
+                "PM binary",
+                &format!("{} (could not execute)", system_binary.as_path().display())
+                    .red()
+                    .to_string(),
+            );
+            return false;
+        };
+        print_check(" ", "Source", "system PATH");
+        print_check(
+            " ",
+            "Version",
+            &format!("{}@{version}", selected.package_manager_type).bright_green().to_string(),
+        );
+        print_check(
+            &output::CHECK.green().to_string(),
+            "PM binary",
+            &system_binary.as_path().display().to_string(),
+        );
+        return true;
+    }
+
+    match package_manager::resolve_current_for(cwd, scope.package_manager()).await {
+        Ok(Some(resolution)) => {
+            print_check(" ", "Source", &resolution.source);
+            print_check(
+                " ",
+                "Version",
+                &format!("{}@{}", resolution.package_manager_type, resolution.version)
+                    .bright_green()
+                    .to_string(),
+            );
+            let installed =
+                package_manager_install_dir(resolution.package_manager_type, &resolution.version)
+                    .is_some_and(|directory| {
+                        resolution.package_manager_type.bin_names().iter().all(|name| {
+                            package_manager_bin_path(&directory, name).as_path().exists()
+                        })
+                    });
+            let status = if installed { "installed" } else { "not installed" };
+            let indicator = if installed {
+                output::CHECK.green().to_string()
+            } else {
+                output::WARN_SIGN.yellow().to_string()
+            };
+            print_check(&indicator, "PM binaries", status);
+            true
+        }
+        Ok(_) => {
+            print_check(" ", "Package manager", "not selected");
+            true
+        }
+        Err(error) => {
+            print_check(&output::CROSS.red().to_string(), "Package manager", &error.to_string());
+            false
+        }
+    }
 }
 
 /// Check profile files for env sourcing and classify where it was found.
@@ -329,7 +488,7 @@ fn check_session_override() {
 }
 
 /// Check PATH configuration.
-async fn check_path() -> bool {
+async fn check_path(scope: EnvScope) -> bool {
     let bin_dir = match get_bin_dir() {
         Ok(d) => d,
         Err(_) => return false,
@@ -355,7 +514,7 @@ async fn check_path() -> bool {
     }
 
     // Show which tool would be executed for each shim
-    for tool in SHIM_TOOLS {
+    for tool in selected_shim_tools(scope) {
         if let Some(tool_path) = find_in_path(tool) {
             let expected = bin_dir.join(shim_filename(tool));
             let display = abbreviate_home(&tool_path.display().to_string());
@@ -594,12 +753,17 @@ async fn check_current_resolution(
 
 /// Get the version string from a Node.js binary.
 async fn get_node_version(node_path: &vt_path::AbsolutePath) -> String {
-    match tokio::process::Command::new(node_path.as_path()).arg("--version").output().await {
-        Ok(output) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
-        }
-        _ => "unknown".to_string(),
-    }
+    get_tool_version(node_path).await
+}
+
+async fn get_tool_version(tool_path: &vt_path::AbsolutePath) -> String {
+    try_get_tool_version(tool_path).await.unwrap_or_else(|| "unknown".to_string())
+}
+
+async fn try_get_tool_version(tool_path: &vt_path::AbsolutePath) -> Option<String> {
+    let output =
+        tokio::process::Command::new(tool_path.as_path()).arg("--version").output().await.ok()?;
+    output.status.success().then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 /// One devEngines doctor finding.
@@ -657,8 +821,12 @@ async fn find_nearest_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<
 /// All checks are semver-aware: an exact version satisfying a declared range is
 /// not a conflict. Findings are warnings or notes; they never fail the doctor run
 /// and are never auto-fixed.
-async fn check_dev_engines(cwd: &AbsolutePathBuf, resolution: Option<&config::VersionResolution>) {
-    let findings = collect_dev_engines_findings(cwd, resolution).await;
+async fn check_dev_engines(
+    cwd: &AbsolutePathBuf,
+    resolution: Option<&config::VersionResolution>,
+    scope: EnvScope,
+) {
+    let findings = collect_dev_engines_findings(cwd, resolution, scope).await;
     if findings.is_empty() {
         return;
     }
@@ -728,9 +896,12 @@ async fn nvmrc_conflict_finding(
 async fn collect_dev_engines_findings(
     cwd: &AbsolutePathBuf,
     resolution: Option<&config::VersionResolution>,
+    scope: EnvScope,
 ) -> Vec<DevEnginesFinding> {
+    let check_node = scope.includes_node();
+    let check_package_managers = scope.includes_package_managers();
     let mut findings = Vec::new();
-    if let Some(finding) = nvmrc_conflict_finding(resolution).await {
+    if check_node && let Some(finding) = nvmrc_conflict_finding(resolution).await {
         findings.push(finding);
     }
 
@@ -749,22 +920,29 @@ async fn collect_dev_engines_findings(
     // monorepo it can be a different (higher) file than the nearest package.json
     // used by the Node.js runtime checks above.
     let nearest_pkg_path = pkg_dir.join("package.json");
-    let root_doc = read_workspace_root_doc(cwd, &nearest_pkg_path).await;
+    let root_doc = if check_package_managers {
+        read_workspace_root_doc(cwd, &nearest_pkg_path).await
+    } else {
+        None
+    };
     let (pm_raw, pm_pkg): (&serde_json::Value, &vp_shared::PackageJson) = match &root_doc {
         Some((root_raw, root_pkg)) => (root_raw, root_pkg),
         None => (&raw, &pkg),
     };
 
-    let runtime_field = pkg.dev_engines.as_ref().and_then(|de| de.runtime.as_ref());
-    let package_manager_field =
-        pm_pkg.dev_engines.as_ref().and_then(|de| de.package_manager.as_ref());
+    let runtime_field =
+        check_node.then(|| pkg.dev_engines.as_ref().and_then(|de| de.runtime.as_ref())).flatten();
+    let package_manager_field = check_package_managers
+        .then(|| pm_pkg.dev_engines.as_ref().and_then(|de| de.package_manager.as_ref()))
+        .flatten();
 
     // .node-version vs devEngines.runtime (semver-aware: only exact .node-version
     // values can conflict with a declared range). Both sides follow the resolution
     // walk: the check fires only when a .node-version actually wins resolution, and
     // the devEngines.runtime declaration may live in an ancestor manifest rather
     // than the nearest package.json.
-    if let Ok(Some(resolution)) = vp_js_runtime::resolve_node_version(cwd, true).await
+    if check_node
+        && let Ok(Some(resolution)) = vp_js_runtime::resolve_node_version(cwd, true).await
         && resolution.source == vp_js_runtime::VersionSource::NodeVersionFile
         && let Ok(version) = node_semver::Version::parse(&resolution.version)
         && let Some(declared) = find_nearest_dev_engines_node_version(cwd).await
@@ -781,7 +959,8 @@ async fn collect_dev_engines_findings(
     }
 
     // Resolved Node.js version vs engines.node
-    if let Some(resolution) = resolution
+    if check_node
+        && let Some(resolution) = resolution
         && let Some(engines_node) = pkg.engines.as_ref().and_then(|e| e.node.as_ref())
         && let Ok(version) = node_semver::Version::parse(&resolution.version)
         && let Ok(range) = node_semver::Range::parse(engines_node.as_str())
@@ -897,12 +1076,15 @@ async fn collect_dev_engines_findings(
     // Malformed entries that lenient parsing skipped (raw JSON inspection):
     // runtime entries come from the nearest package.json, packageManager entries
     // from the workspace root package.json
-    if let Some(raw_dev_engines) = raw.get("devEngines").and_then(serde_json::Value::as_object)
+    if check_node
+        && let Some(raw_dev_engines) = raw.get("devEngines").and_then(serde_json::Value::as_object)
         && let Some(value) = raw_dev_engines.get("runtime")
     {
         collect_malformed_entry_findings("runtime", value, &mut findings);
     }
-    if let Some(raw_dev_engines) = pm_raw.get("devEngines").and_then(serde_json::Value::as_object)
+    if check_package_managers
+        && let Some(raw_dev_engines) =
+            pm_raw.get("devEngines").and_then(serde_json::Value::as_object)
         && let Some(value) = raw_dev_engines.get("packageManager")
     {
         collect_malformed_entry_findings("packageManager", value, &mut findings);
@@ -1006,16 +1188,39 @@ fn check_conflicts() {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::*;
     #[cfg(not(windows))]
     use crate::commands::shell::{ShellProfileKind, ShellProfileRoot};
 
+    #[test]
+    fn test_selected_shim_tools_respect_scope() {
+        assert_eq!(selected_shim_tools(EnvScope::Node), vec!["node"]);
+        assert_eq!(
+            selected_shim_tools(EnvScope::PackageManager(vp_pm_cli::PackageManagerType::Pnpm)),
+            vec!["pnpm", "pnpx"]
+        );
+        assert_eq!(
+            selected_shim_tools(EnvScope::PackageManagers),
+            vec!["npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"]
+        );
+        assert_eq!(selected_shim_tools(EnvScope::All), crate::shim::DEFAULT_SHIM_TOOLS);
+    }
+
     /// Test helper: write `files` into a temp project and collect devEngines findings.
     async fn dev_engines_findings_for(
         files: &[(&str, &str)],
         resolved: Option<(&str, &str)>,
+    ) -> Vec<DevEnginesFinding> {
+        dev_engines_findings_for_scope(files, resolved, EnvScope::All).await
+    }
+
+    async fn dev_engines_findings_for_scope(
+        files: &[(&str, &str)],
+        resolved: Option<(&str, &str)>,
+        scope: EnvScope,
     ) -> Vec<DevEnginesFinding> {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1029,7 +1234,28 @@ mod tests {
             project_root: Some(temp_path.clone()),
             is_range: false,
         });
-        collect_dev_engines_findings(&temp_path, resolution.as_ref()).await
+        collect_dev_engines_findings(&temp_path, resolution.as_ref(), scope).await
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_respect_scope() {
+        let package_json = r#"{
+            "packageManager": "npm@10.5.0",
+            "devEngines": {
+                "runtime": {"name": "node", "version": "^24.0.0"},
+                "packageManager": {"name": "pnpm", "version": "^11.0.0"}
+            }
+        }"#;
+        let files = [(".node-version", "20.18.0\n"), ("package.json", package_json)];
+
+        let node = dev_engines_findings_for_scope(&files, None, EnvScope::Node).await;
+        assert_eq!(node.len(), 1, "findings: {:?}", messages(&node));
+        assert_eq!(node[0].key, "Runtime");
+
+        let package_managers =
+            dev_engines_findings_for_scope(&files, None, EnvScope::PackageManagers).await;
+        assert_eq!(package_managers.len(), 1, "findings: {:?}", messages(&package_managers));
+        assert_eq!(package_managers[0].key, "PackageManager");
     }
 
     // npm-install-checks: "semver version is not in range" (via .node-version)
@@ -1336,7 +1562,7 @@ mod tests {
         tokio::fs::write(app_dir.join("package.json"), r#"{"name": "app"}"#).await.unwrap();
         tokio::fs::write(app_dir.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        let findings = collect_dev_engines_findings(&app_dir, None, EnvScope::All).await;
         assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
         assert!(findings[0].warn);
         assert!(
@@ -1363,7 +1589,7 @@ mod tests {
         .await
         .unwrap();
 
-        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        let findings = collect_dev_engines_findings(&app_dir, None, EnvScope::All).await;
         assert!(findings.is_empty(), "findings: {:?}", messages(&findings));
     }
 
@@ -1395,7 +1621,7 @@ mod tests {
 
         // running from the nested package still diagnoses the workspace root's
         // packageManager vs devEngines.packageManager conflict
-        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        let findings = collect_dev_engines_findings(&app_dir, None, EnvScope::All).await;
         assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
         assert!(findings[0].warn);
         assert_eq!(findings[0].key, "PackageManager");
@@ -1547,6 +1773,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_abbreviate_home() {
         if let Ok(home) = std::env::var("HOME") {
             let path = format!("{home}/.vite-plus");

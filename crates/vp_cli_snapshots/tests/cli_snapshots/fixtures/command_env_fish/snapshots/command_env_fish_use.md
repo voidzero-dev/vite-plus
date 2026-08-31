@@ -15,7 +15,7 @@ verifies the Fish wrapper help, explicit use, unset, file-based use, and failure
 
 ```
 Using Node.js <version> (resolved from 20.18.0)
-Reverted to file-based Node.js version resolution
+Reverted selected components to project environment resolution
 Using Node.js <version> (resolved from .node-version)
 error: Unexpected argument '--invalid-option'
 

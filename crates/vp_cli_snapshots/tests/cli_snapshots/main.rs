@@ -693,12 +693,28 @@ impl CaseHome {
             .envs(&env)
             .output()
             .map_err(|e| format!("failed to run `vp env setup`: {e}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "`vp env setup` failed with status {}\nstdout:\n{}\nstderr:\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        // Cases start from fresh-install consent. A dedicated first-use fixture
+        // removes this config before exercising upgrade compatibility.
+        let output = std::process::Command::new(vp)
+            .args(["env", "on", "pm"])
+            .env_clear()
+            .envs(&env)
+            .output()
+            .map_err(|e| format!("failed to run `vp env on pm`: {e}"))?;
         if output.status.success() {
             return Ok(());
         }
-
         Err(format!(
-            "`vp env setup` failed with status {}\nstdout:\n{}\nstderr:\n{}",
+            "`vp env on pm` failed with status {}\nstdout:\n{}\nstderr:\n{}",
             output.status,
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
@@ -1437,8 +1453,8 @@ fn run_case(
         if step.snapshot || !succeeded {
             let mut redacted = redact_output(raw_output, &redactions, !step.formatted_snapshot);
             // A version-probe step's output is a bare semver that varies by
-            // environment (the managed Node's bundled npm or a
-            // corepack-resolved pin); mask it. Scoped by argv so
+            // environment (the managed Node's bundled npm or a package
+            // manager pin); mask it. Scoped by argv so
             // fixture-controlled bare versions elsewhere (a printed
             // `.node-version` file) stay assertable.
             let version_probe = matches!(argv.first().map(String::as_str), Some("npm" | "npx"))

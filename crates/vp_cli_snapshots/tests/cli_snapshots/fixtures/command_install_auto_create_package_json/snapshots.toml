@@ -10,3 +10,16 @@ steps = [
   { tty = false, argv = ["vp", "add", "testnpm2", "-D"], comment = "should add package to auto-created package.json" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_install_auto_pins_lockfile_manager"
+vp = ["local", "global"]
+comment = "A lockfile-inferred manager must become an exact project pin so later installs cannot drift to a newer release."
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"lockfile-project\",\"private\":true}\n"], snapshot = false },
+  { argv = ["vpt", "touch-file", "pnpm-lock.yaml"], snapshot = false },
+  { tty = false, argv = ["vp", "install", "--silent"], comment = "installing with a lockfile-inferred manager records the exact resolved version" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the inferred manager is pinned in devEngines" },
+]

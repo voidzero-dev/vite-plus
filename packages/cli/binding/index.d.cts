@@ -1694,6 +1694,12 @@ export declare class BindingDevEngine {
    * actual module and its dependencies.
    */
   compileEntry(moduleId: string, clientId: string): Promise<BindingLazyChunkOutput>;
+  /**
+   * Same data the plugin-context `getModuleInfo` returns, readable from the engine
+   * handle at any time (no hook context needed).
+   */
+  getModuleInfo(moduleId: string): BindingModuleInfo | null;
+  getModuleIds(): Array<string>;
 }
 
 export declare class BindingLoadPluginContext {
@@ -2002,8 +2008,8 @@ export declare class TraceSubscriberGuard {
 }
 
 export declare class TsconfigCache {
-  /** Create a new transform cache with auto tsconfig discovery enabled. */
-  constructor(yarnPnp: boolean);
+  /** Create a new transform cache with auto or manual tsconfig discovery enabled. */
+  constructor(yarnPnp: boolean, pathToTsconfig?: string | undefined | null);
   /**
    * Clear the cache.
    *
@@ -2288,9 +2294,10 @@ export interface BindingEnhancedTransformOptions {
   /**
    * Configure tsconfig handling.
    * - true: Auto-discover and load the nearest tsconfig.json
+   * - string: Use the tsconfig at the provided path
    * - TsconfigRawOptions: Use the provided inline tsconfig options
    */
-  tsconfig?: boolean | BindingTsconfigRawOptions;
+  tsconfig?: boolean | string | BindingTsconfigRawOptions;
   /** An input source map to collapse with the output source map. */
   inputMap?: SourceMap;
 }
@@ -2701,8 +2708,8 @@ export interface BindingManualCodeSplittingOptions {
 }
 
 export interface BindingMatchGroup {
-  name: string | ((id: string, ctx: BindingChunkingContext) => VoidNullable<string>);
-  test?: string | RegExp | ((id: string) => VoidNullable<boolean>);
+  name: string | ((ids: Array<string>, ctx: BindingChunkingContext) => Array<VoidNullable<string>>);
+  test?: string | RegExp | ((ids: Array<string>) => Uint8Array);
   priority?: number;
   minSize?: number;
   minShareCount?: number;
@@ -2802,6 +2809,7 @@ export interface BindingOutputOptions {
 export interface BindingOutputs {
   chunks: Array<BindingOutputChunk>;
   assets: Array<BindingOutputAsset>;
+  mangleCache?: Record<string, string | false>;
 }
 
 export interface BindingOverwriteOptions {
@@ -2913,14 +2921,14 @@ export interface BindingPluginOptions {
   renderErrorMeta?: BindingPluginHookMeta;
   generateBundle?: (
     ctx: BindingPluginContext,
-    bundle: BindingErrorsOr<BindingOutputs>,
+    bundle: BindingResult<BindingOutputs>,
     isWrite: boolean,
     opts: BindingNormalizedOptions,
   ) => MaybePromise<VoidNullable<JsChangedOutputs>>;
   generateBundleMeta?: BindingPluginHookMeta;
   writeBundle?: (
     ctx: BindingPluginContext,
-    bundle: BindingErrorsOr<BindingOutputs>,
+    bundle: BindingResult<BindingOutputs>,
     opts: BindingNormalizedOptions,
   ) => MaybePromise<VoidNullable<JsChangedOutputs>>;
   writeBundleMeta?: BindingPluginHookMeta;
@@ -3214,6 +3222,7 @@ export interface BindingViteReporterPluginConfig {
 
 export interface BindingViteResolvePluginConfig {
   resolveOptions: BindingViteResolvePluginResolveOptions;
+  tsconfig?: string;
   environmentConsumer: string;
   environmentName: string;
   builtins: Array<BindingStringOrRegex>;
@@ -3259,6 +3268,7 @@ export interface BindingViteResolvePluginResolveOptions {
 
 export interface BindingViteTransformPluginConfig {
   root: string;
+  tsconfig?: string;
   include?: Array<BindingStringOrRegex>;
   exclude?: Array<BindingStringOrRegex>;
   jsxRefreshInclude?: Array<BindingStringOrRegex>;
@@ -3468,6 +3478,32 @@ export interface CliOptions {
   resolveUniversalViteConfig: (err: Error | null, arg: string) => Promise<string>;
 }
 
+export interface CliParseError {
+  kind: string;
+  message: string;
+}
+
+export interface ConfigArgs {
+  hooksDir?: string;
+  hooks?: boolean;
+  agent?: boolean;
+}
+
+export interface CreateArgs {
+  templateName?: string;
+  directory?: string;
+  agent?: false | string | Array<string>;
+  editor?: false | string;
+  git?: boolean;
+  hooks?: boolean;
+  packageManager?: 'pnpm' | 'npm' | 'yarn' | 'bun';
+  approveBuilds?: boolean;
+  verbose?: boolean;
+  interactive?: boolean;
+  list?: boolean;
+  templateArgs: Array<string>;
+}
+
 /**
  * Detect the workspace root and package manager type and version
  *
@@ -3574,6 +3610,11 @@ export declare function getVpDirs(): VpDirsJs;
  */
 export declare function hasConfigKey(viteConfigPath: string, configKey: string): boolean;
 
+export interface HooksArgs {
+  command: 'enable' | 'disable' | 'status';
+  hooksDir?: string;
+}
+
 /** Result returned by JavaScript resolver functions. */
 export interface JsCommandResolvedResult {
   binPath: string;
@@ -3655,6 +3696,50 @@ export declare function mergeTsdownConfig(
   viteConfigPath: string,
   tsdownConfigPath: string,
 ): MergeJsonConfigResult;
+
+export interface MigrateArgs {
+  path?: string;
+  agent?: false | string | Array<string>;
+  editor?: false | string;
+  hooks?: boolean;
+  interactive?: boolean;
+  full?: boolean;
+}
+
+export declare function parseConfigArgs(argv: Array<string>): ParseConfigArgsOutcome;
+
+export type ParseConfigArgsOutcome =
+  | { status: 'ok'; value: ConfigArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
+
+export declare function parseCreateArgs(argv: Array<string>): ParseCreateArgsOutcome;
+
+export type ParseCreateArgsOutcome =
+  | { status: 'ok'; value: CreateArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
+
+export declare function parseHooksArgs(argv: Array<string>): ParseHooksArgsOutcome;
+
+export type ParseHooksArgsOutcome =
+  | { status: 'ok'; value: HooksArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
+
+export declare function parseMigrateArgs(argv: Array<string>): ParseMigrateArgsOutcome;
+
+export type ParseMigrateArgsOutcome =
+  | { status: 'ok'; value: MigrateArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
+
+export declare function parseStagedArgs(argv: Array<string>): ParseStagedArgsOutcome;
+
+export type ParseStagedArgsOutcome =
+  | { status: 'ok'; value: StagedArgs }
+  | { status: 'exit'; code: number }
+  | { status: 'error'; error: CliParseError };
 
 /** Access modes for a path. */
 export interface PathAccess {
@@ -3839,6 +3924,24 @@ export interface RunCommandResult {
  * the same TTY + git-hook gating without duplicating the rules in JS.
  */
 export declare function shouldPrintVitePlusHeader(): boolean;
+
+export interface StagedArgs {
+  allowEmpty?: boolean;
+  concurrent?: boolean | number;
+  continueOnError?: boolean;
+  cwd?: string;
+  debug?: boolean;
+  diff?: string;
+  diffFilter?: string;
+  failOnChanges?: boolean;
+  hidePartiallyStaged?: boolean;
+  hideUnstaged?: boolean;
+  quiet?: boolean;
+  relative?: boolean;
+  revert?: boolean;
+  stash?: boolean;
+  verbose?: boolean;
+}
 
 /**
  * Set the value of a top-level config key in a vite config file (upsert)

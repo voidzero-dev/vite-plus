@@ -16,6 +16,17 @@ pub async fn build_package_manager(cwd: &AbsolutePath) -> Result<PackageManager,
     }
 }
 
+/// Require the current directory to belong to a package workspace.
+pub fn require_package_json(cwd: &AbsolutePath) -> Result<(), Error> {
+    match vt_workspace::find_workspace_root(cwd) {
+        Ok(_) => Ok(()),
+        Err(vt_workspace::Error::PackageJsonNotFound(_)) => {
+            Err(Error::UserMessage("No package.json found.".into()))
+        }
+        Err(error) => Err(Error::Install(error.into())),
+    }
+}
+
 /// Build a `PackageManager`, falling back to a default npm instance when no
 /// package.json is found. Uses `build()` instead of `build_with_default()`
 /// to skip the interactive package manager selection prompt on the fallback path.
@@ -38,7 +49,7 @@ pub(crate) fn default_npm_package_manager(cwd: &AbsolutePath) -> PackageManager 
     PackageManager {
         client: PackageManagerType::Npm,
         version: "latest".into(),
-        install_dir: cwd.to_absolute_path_buf(),
+        bin_prefix: cwd.join("bin"),
     }
 }
 

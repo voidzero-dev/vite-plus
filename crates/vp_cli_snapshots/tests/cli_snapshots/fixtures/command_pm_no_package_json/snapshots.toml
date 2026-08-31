@@ -2,6 +2,7 @@
 name = "command_pm_no_package_json"
 vp = ["local", "global"]
 skip-platforms = ["windows"]
+env = { VP_PACKAGE_MANAGER = "npm@10.9.4" }
 steps = [
   { argv = ["vp", "pm", "ls"], comment = "should show friendly error", continue-on-failure = true },
   { argv = ["vp", "pm", "prune"], comment = "should show friendly error", continue-on-failure = true },

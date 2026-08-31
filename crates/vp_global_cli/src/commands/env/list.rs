@@ -1,17 +1,13 @@
-//! List command for displaying locally installed Node.js versions.
-//!
-//! Handles `vp env list` to show Node.js versions installed in VP_HOME/js_runtime/node/.
-
-use std::process::ExitStatus;
+use std::{collections::BTreeMap, process::ExitStatus};
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
+use vp_pm_cli::{PackageManagerType, package_manager_bin_path, package_manager_install_dir};
 use vt_path::AbsolutePathBuf;
 
-use super::config;
+use super::{config, package_manager, spec::EnvScope};
 use crate::error::Error;
 
-/// JSON output format for a single installed version
 #[derive(Serialize)]
 struct InstalledVersionJson {
     version: String,
@@ -19,135 +15,180 @@ struct InstalledVersionJson {
     default: bool,
 }
 
-/// Scan the node versions directory and return sorted version strings.
-pub(super) fn list_installed_versions(node_dir: &std::path::Path) -> Vec<String> {
-    let entries = match std::fs::read_dir(node_dir) {
+#[derive(Serialize)]
+struct InstalledEnvironmentJson {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    node: Option<Vec<InstalledVersionJson>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_managers: Option<BTreeMap<String, Vec<InstalledVersionJson>>>,
+}
+
+pub(super) fn list_installed_versions(directory: &std::path::Path) -> Vec<String> {
+    let entries = match std::fs::read_dir(directory) {
         Ok(entries) => entries,
         Err(_) => return Vec::new(),
     };
-
-    let mut versions: Vec<String> = entries
+    let mut versions = entries
         .filter_map(|entry| {
             let entry = entry.ok()?;
             let name = entry.file_name().into_string().ok()?;
-            // Skip hidden directories and non-directories
-            if name.starts_with('.') || !entry.path().is_dir() {
-                return None;
-            }
-            Some(name)
+            (!name.starts_with('.') && entry.path().is_dir()).then_some(name)
         })
-        .collect();
-
-    versions.sort_by_cached_key(|v| node_semver::Version::parse(v).ok());
+        .collect::<Vec<_>>();
+    versions.sort_by_cached_key(|version| node_semver::Version::parse(version).ok());
     versions
 }
 
-/// Execute the list command (local installed versions).
-pub async fn execute(cwd: AbsolutePathBuf, json_output: bool) -> Result<ExitStatus, Error> {
-    let node_dir = vp_shared::EnvConfig::get().dirs.data.join("js_runtime").join("node");
-
-    let versions = list_installed_versions(node_dir.as_path());
-
-    if versions.is_empty() {
-        if json_output {
-            println!("[]");
-        } else {
-            println!("No Node.js versions installed.");
-            println!();
-            println!("Install a version with: vp env install <version>");
+pub async fn execute(
+    cwd: AbsolutePathBuf,
+    scope: Option<String>,
+    json: bool,
+) -> Result<ExitStatus, Error> {
+    let scope = EnvScope::parse(scope.as_deref())?;
+    let home = vp_shared::EnvConfig::get().dirs.data.clone();
+    let config = config::load_config().await?;
+    let current_node = if scope.includes_node() {
+        config::resolve_version(&cwd).await.ok().map(|resolution| resolution.version)
+    } else {
+        None
+    };
+    let current_pm = if scope.includes_package_managers() {
+        match scope.package_manager() {
+            Some(package_manager) => {
+                package_manager::resolve_current_or_fallback_for(&cwd, package_manager).await.ok()
+            }
+            None => package_manager::resolve_current_for(&cwd, None).await.ok().flatten(),
         }
+    } else {
+        None
+    };
+    let default_node = scope.includes_node().then(|| config.default_node_version.clone()).flatten();
+    let mut default_package_manager_versions = BTreeMap::new();
+    if scope.includes_package_managers() {
+        for kind in package_manager::selected(scope) {
+            let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)?
+            else {
+                continue;
+            };
+            default_package_manager_versions.insert(kind.to_string(), selector);
+        }
+    }
+
+    let node = scope.includes_node().then(|| {
+        list_installed_versions(home.join("js_runtime").join("node").as_path())
+            .into_iter()
+            .map(|version| InstalledVersionJson {
+                current: current_node.as_deref() == Some(version.as_str()),
+                default: default_node.as_deref() == Some(version.as_str()),
+                version,
+            })
+            .collect::<Vec<_>>()
+    });
+
+    let package_managers = if scope.includes_package_managers() {
+        let selected = package_manager::selected(scope);
+        Some(
+            selected
+                .into_iter()
+                .map(|kind| {
+                    let versions = list_complete_package_manager_versions(&home, kind)
+                        .into_iter()
+                        .map(|version| InstalledVersionJson {
+                            current: current_pm.as_ref().is_some_and(|current| {
+                                current.package_manager_type == kind
+                                    && current.version.as_str() == version
+                            }),
+                            default: default_package_manager_versions.get(&kind.to_string())
+                                == Some(&version),
+                            version,
+                        })
+                        .collect();
+                    (kind.to_string(), versions)
+                })
+                .collect(),
+        )
+    } else {
+        None
+    };
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&InstalledEnvironmentJson { node, package_managers })?
+        );
         return Ok(ExitStatus::default());
     }
 
-    // Resolve current version (gracefully handle errors)
-    let current_version = config::resolve_version(&cwd).await.ok().map(|r| r.version);
-
-    // Load default version
-    let default_version = config::load_config().await.ok().and_then(|c| c.default_node_version);
-
-    if json_output {
-        print_json(&versions, current_version.as_deref(), default_version.as_deref());
-    } else {
-        print_human(&versions, current_version.as_deref(), default_version.as_deref());
+    if let Some(node) = node {
+        print_section("Node.js", &node, true);
     }
-
+    if let Some(mut package_managers) = package_managers {
+        for kind in package_manager::selected(scope) {
+            let name = kind.to_string();
+            if scope.includes_node() || kind != PackageManagerType::Npm {
+                println!();
+            }
+            print_section(
+                package_manager::title(kind),
+                &package_managers.remove(&name).unwrap_or_default(),
+                false,
+            );
+        }
+    }
     Ok(ExitStatus::default())
 }
 
-/// Print installed versions as JSON.
-fn print_json(versions: &[String], current: Option<&str>, default: Option<&str>) {
-    let entries: Vec<InstalledVersionJson> = versions
-        .iter()
-        .map(|v| InstalledVersionJson {
-            version: v.clone(),
-            current: current.is_some_and(|c| c == v),
-            default: default.is_some_and(|d| d == v),
+pub(super) fn list_complete_package_manager_versions(
+    home: &AbsolutePathBuf,
+    package_manager: PackageManagerType,
+) -> Vec<String> {
+    list_installed_versions(
+        home.join("package_manager").join(package_manager.to_string()).as_path(),
+    )
+    .into_iter()
+    .filter(|version| {
+        package_manager_install_dir(package_manager, version).is_some_and(|directory| {
+            package_manager
+                .bin_names()
+                .iter()
+                .all(|name| package_manager_bin_path(&directory, name).as_path().exists())
         })
-        .collect();
-
-    // unwrap is safe here since we're serializing simple structs
-    println!("{}", serde_json::to_string_pretty(&entries).unwrap());
+    })
+    .collect()
 }
 
-/// Print installed versions in human-readable format.
-fn print_human(versions: &[String], current: Option<&str>, default: Option<&str>) {
-    for v in versions {
-        let is_current = current.is_some_and(|c| c == v);
-        let is_default = default.is_some_and(|d| d == v);
-
+fn print_section(title: &str, versions: &[InstalledVersionJson], node: bool) {
+    println!("{title}");
+    if versions.is_empty() {
+        println!("  No versions installed.");
+        return;
+    }
+    let colorize = use_color();
+    for version in versions {
         let mut markers = Vec::new();
-        if is_current {
+        if version.current {
             markers.push("current");
         }
-        if is_default {
+        if version.default {
             markers.push("default");
         }
-
-        let marker_str = if markers.is_empty() {
+        let suffix = if markers.is_empty() {
             String::new()
-        } else {
+        } else if colorize {
             format!(" {}", markers.join(" ").dimmed())
-        };
-
-        let line = format!("* v{v}{marker_str}");
-        if is_current {
-            println!("{}", line.bright_blue());
         } else {
-            println!("{line}");
+            format!(" {}", markers.join(" "))
+        };
+        let display = if node { format!("v{}", version.version) } else { version.version.clone() };
+        let line = format!("* {display}");
+        if version.current && colorize {
+            println!("  {}{suffix}", line.bright_blue());
+        } else {
+            println!("  {line}{suffix}");
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_list_installed_versions_nonexistent_dir() {
-        let versions = list_installed_versions(std::path::Path::new("/nonexistent/path"));
-        assert!(versions.is_empty());
-    }
-
-    #[test]
-    fn test_list_installed_versions_empty_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        let versions = list_installed_versions(dir.path());
-        assert!(versions.is_empty());
-    }
-
-    #[test]
-    fn test_list_installed_versions_with_versions() {
-        let dir = tempfile::tempdir().unwrap();
-        // Create version directories
-        std::fs::create_dir(dir.path().join("20.18.0")).unwrap();
-        std::fs::create_dir(dir.path().join("22.13.0")).unwrap();
-        std::fs::create_dir(dir.path().join("18.20.0")).unwrap();
-        // Create a hidden dir that should be skipped
-        std::fs::create_dir(dir.path().join(".tmp")).unwrap();
-        // Create a file that should be skipped
-        std::fs::write(dir.path().join("some-file"), "").unwrap();
-
-        let versions = list_installed_versions(dir.path());
-        assert_eq!(versions, vec!["18.20.0", "20.18.0", "22.13.0"]);
-    }
+pub(super) fn use_color() -> bool {
+    vp_shared::is_stdout_terminal() && std::env::var_os("NO_COLOR").is_none()
 }

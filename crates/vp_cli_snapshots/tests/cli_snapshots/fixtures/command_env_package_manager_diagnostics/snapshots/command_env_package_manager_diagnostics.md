@@ -1,25 +1,68 @@
 # command_env_package_manager_diagnostics
 
-## `node -e 'const {execFileSync}=require('\''node:child_process'\'');const info=JSON.parse(execFileSync('\''vp'\'',['\''env'\'','\''current'\'','\''--json'\''],{encoding:'\''utf8'\''}));if(info.package_manager?.name'\!'=='\''npm'\''||info.package_manager?.version'\!'=='\''10.9.4'\''||info.package_manager?.source'\!'=='\''packageManager'\'')process.exit(1);console.log('\''current reports npm packageManager'\'')'`
+## `node prepare-npm.cjs`
+
+
+## `vp env current pm --json`
 
 current reports the npm packageManager pin
 
 ```
-current reports npm packageManager
+{
+  "package_manager": {
+    "name": "npm",
+    "version": "<version>",
+    "source": "packageManager",
+    "source_path": "<workspace>/package.json",
+    "project_root": "<workspace>",
+    "bin_paths": {
+      "npm": "<home>/.vite-plus/package_manager/npm/<version>/npm/bin/npm",
+      "npx": "<home>/.vite-plus/package_manager/npm/<version>/npm/bin/npx"
+    },
+    "installed": true,
+    "mode": "managed"
+  }
+}
 ```
 
-## `node -e 'const {execFileSync}=require('\''node:child_process'\'');const text=execFileSync('\''vp'\'',['\''env'\'','\''which'\'','\''npm'\''],{encoding:'\''utf8'\''});if('\!'text.includes('\''Package:'\'')||'\!'text.includes('\''npm@10.9.4'\'')||'\!'text.includes('\''package.json'\''))process.exit(1);console.log('\''which reports npm packageManager'\'')'`
+## `vp env current pm`
+
+current lists every binary exposed by the selected package-manager family
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Package Manager:
+  Name       npm
+  Version    10.9.4
+  Source     packageManager
+  Bin Paths
+    npm      <home>/.vite-plus/package_manager/npm/<version>/npm/bin/npm
+    npx      <home>/.vite-plus/package_manager/npm/<version>/npm/bin/npx
+  Installed  true
+  Mode       managed
+```
+
+## `vp env which npm`
 
 which reports the npm packageManager pin
 
 ```
-which reports npm packageManager
+VITE+ - The Unified Toolchain for the Web
+
+<home>/.vite-plus/package_manager/npm/<version>/npm/bin/npm
+  Package:    npm@10.9.4
+  Source:     <workspace>/package.json
 ```
 
-## `node -e 'const {execFileSync}=require('\''node:child_process'\'');const text=execFileSync('\''vp'\'',['\''env'\'','\''which'\'','\''npx'\''],{encoding:'\''utf8'\''});if('\!'text.includes('\''Package:'\'')||'\!'text.includes('\''npm@10.9.4'\'')||'\!'text.includes('\''package.json'\''))process.exit(1);console.log('\''which reports npx packageManager'\'')'`
+## `vp env which npx`
 
-which reports the npx packageManager pin
+the npx alias reports the same npm packageManager pin
 
 ```
-which reports npx packageManager
+VITE+ - The Unified Toolchain for the Web
+
+<home>/.vite-plus/package_manager/npm/<version>/npm/bin/npx
+  Package:    npm@10.9.4
+  Source:     <workspace>/package.json
 ```

@@ -2,7 +2,46 @@
 name = "command_env_package_manager_diagnostics"
 vp = "global"
 steps = [
-  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');const info=JSON.parse(execFileSync('vp',['env','current','--json'],{encoding:'utf8'}));if(info.package_manager?.name!=='npm'||info.package_manager?.version!=='10.9.4'||info.package_manager?.source!=='packageManager')process.exit(1);console.log('current reports npm packageManager')"], comment = "current reports the npm packageManager pin" },
-  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');const text=execFileSync('vp',['env','which','npm'],{encoding:'utf8'});if(!text.includes('Package:')||!text.includes('npm@10.9.4')||!text.includes('package.json'))process.exit(1);console.log('which reports npm packageManager')"], comment = "which reports the npm packageManager pin" },
-  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');const text=execFileSync('vp',['env','which','npx'],{encoding:'utf8'});if(!text.includes('Package:')||!text.includes('npm@10.9.4')||!text.includes('package.json'))process.exit(1);console.log('which reports npx packageManager')"], comment = "which reports the npx packageManager pin" },
+  { argv = ["node", "prepare-npm.cjs"], snapshot = false },
+  { argv = ["vp", "env", "current", "pm", "--json"], comment = "current reports the npm packageManager pin" },
+  { argv = ["vp", "env", "current", "pm"], comment = "current lists every binary exposed by the selected package-manager family" },
+  { argv = ["vp", "env", "which", "npm"], comment = "which reports the npm packageManager pin" },
+  { argv = ["vp", "env", "which", "npx"], comment = "the npx alias reports the same npm packageManager pin" },
+]
+
+[[case]]
+name = "command_env_package_manager_session_provenance"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "use", "npm@10.9.4", "--no-install"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/npm/10.9.4/npm/bin/npm", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/npm/10.9.4/npm/bin/npm"], snapshot = false },
+  { argv = ["vp", "env", "current", "pm", "--json"], comment = "current reports the package-manager session file path" },
+  { argv = ["vp", "env", "which", "npm"], comment = "which reports the package-manager session file as its source" },
+]
+
+[[case]]
+name = "command_env_doctor_package_manager_resolution_failure"
+vp = "global"
+steps = [
+  { argv = ["node", "assert-doctor-fails.cjs"], comment = "package-manager resolution errors make doctor fail" },
+]
+
+[[case]]
+name = "command_env_empty_package_manager_override"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "current", "pm", "--json"], envs = [["VP_PACKAGE_MANAGER", "   "]], comment = "an empty package-manager environment override falls through to project resolution" },
+]
+
+[[case]]
+name = "command_env_unset_session_independently_of_override"
+vp = "global"
+comment = "Scoped unset must inspect and clear the session file independently of any different environment override."
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "use", "pnpm@10.18.0", "--no-install"], snapshot = false },
+  { argv = ["vp", "env", "use", "--unset", "pnpm"], envs = [["VP_PACKAGE_MANAGER", "yarn@4.12.0"]], snapshot = false },
+  { argv = ["vpt", "stat-file", "$VP_HOME/.session-package-manager", "--assert", "missing"], comment = "a different environment override does not hide the matching session file from scoped cleanup" },
 ]

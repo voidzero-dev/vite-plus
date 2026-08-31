@@ -4,7 +4,17 @@ pnpm 12 ships a native binary via @pnpm/exe.* platform packages; the pnpm shim r
 
 ## `vp install -g pnpm`
 
-Expose the pnpm/pnpx shims
+Reject the redundant managed global install
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+warn: Vite+ already includes 'pnpm'; skipping.
+```
+
+## `vpt stat-file $VP_HOME/packages/pnpm.json --assert missing`
+
+The redundant package should not be installed
 
 
 ## `vp env exec node --version`

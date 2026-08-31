@@ -1066,7 +1066,7 @@ shim_pointer_data() {
   return 1
 }
 
-# Setup Node.js version manager (node/npm/npx/corepack shims)
+# Setup Vite+ environment shims
 # Sets NODE_MANAGER_ENABLED global
 # Arguments: bin_dir - path to the version's bin directory containing vp
 setup_node_manager() {
@@ -1130,8 +1130,8 @@ setup_node_manager() {
   # Prompt user in interactive mode
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
-    echo "Would you like Vite+ to manage your Node.js versions?"
-    echo "Vite+ adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to $(abbreviate_path "$SHIM_DIR")."
+    echo "Would you like Vite+ to manage your Node.js and package-manager versions?"
+    echo "Vite+ adds \`node\`, \`npm\`, \`npx\`, \`pnpm\`, \`pnpx\`, \`yarn\`, \`yarnpkg\`, \`bun\`, and \`bunx\` shims to $(abbreviate_path "$SHIM_DIR")."
     echo "It selects the required version automatically."
     echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
@@ -1417,6 +1417,11 @@ WRAPPER_EOF
 
   # Setup Node.js version manager (shims) - separate component
   setup_node_manager "$BIN_DIR"
+  if [ "$NODE_MANAGER_ENABLED" = "true" ]; then
+    if ! "$vp_bin" env on > /dev/null 2>&1; then
+      warn "Failed to record environment management preference."
+    fi
+  fi
 
   prompt_remove_previous_install_dir "$previous_install_dir"
 
@@ -1436,13 +1441,13 @@ WRAPPER_EOF
   echo ""
   echo -e "  ${BOLD}Get started:${NC}"
   echo -e "    ${BRIGHT_BLUE}vp create${NC}       Create a new project"
-  echo -e "    ${BRIGHT_BLUE}vp env${NC}          Manage Node.js versions"
+  echo -e "    ${BRIGHT_BLUE}vp env${NC}          Manage Node.js and package managers"
   echo -e "    ${BRIGHT_BLUE}vp install${NC}      Install dependencies"
   echo -e "    ${BRIGHT_BLUE}vp migrate${NC}      Migrate to Vite+"
 
   if [ "$NODE_MANAGER_ENABLED" = "true" ] || [ "$NODE_MANAGER_ENABLED" = "already" ]; then
     echo ""
-    echo -e "  Vite+ is now managing Node.js via ${BRIGHT_BLUE}vp env${NC}."
+    echo -e "  Vite+ is now managing Node.js and package managers via ${BRIGHT_BLUE}vp env${NC}."
     echo -e "  Run ${BRIGHT_BLUE}vp env doctor${NC} to verify your setup, or ${BRIGHT_BLUE}vp env off${NC} to opt out."
   fi
 

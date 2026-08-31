@@ -16,7 +16,7 @@ loads the generated env.nu and verifies setup, explicit use, unset, and file-bas
 
 ```
 Using Node.js <version> (resolved from 20.18.0)
-Reverted to file-based Node.js version resolution
+Reverted selected components to project environment resolution
 Using Node.js <version> (resolved from .node-version)
 Nushell environment checks passed
 ```

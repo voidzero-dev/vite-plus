@@ -5,13 +5,17 @@
 //! - Version resolution with priority order
 //! - Config file management
 
-use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Deserializer, Serialize, de};
 use vp_js_runtime::{
     NodeProvider, VersionSource, is_valid_version, normalize_version, read_nvmrc_file,
     read_package_json, resolve_node_version,
 };
+use vp_pm_cli::PackageManagerType;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
+use super::package_manager::ALL_PACKAGE_MANAGERS;
 use crate::error::Error;
 
 /// Config file name
@@ -35,9 +39,106 @@ pub struct Config {
     /// Default Node.js version when no project version file is found
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_node_version: Option<String>,
-    /// Shim mode for tool resolution
-    #[serde(default, skip_serializing_if = "is_default_shim_mode")]
-    pub shim_mode: ShimMode,
+    /// Default versions used by package-manager shims when the project does not select that family.
+    #[serde(
+        default,
+        alias = "defaultPackageManager",
+        deserialize_with = "deserialize_package_manager_default_versions",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub default_package_manager_versions: BTreeMap<String, String>,
+    /// Node.js shim mode. `shimMode` is accepted as the legacy field name.
+    #[serde(default, alias = "shimMode", skip_serializing_if = "is_default_shim_mode")]
+    pub node_shim_mode: ShimMode,
+    /// Explicit per-package-manager shim modes. An absent family has not been configured yet.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub package_manager_shim_modes: BTreeMap<String, ShimMode>,
+}
+
+impl Config {
+    #[must_use]
+    pub fn default_package_manager_version_for(
+        &self,
+        package_manager: PackageManagerType,
+    ) -> Option<&str> {
+        self.default_package_manager_versions.get(&package_manager.to_string()).map(String::as_str)
+    }
+
+    pub fn set_default_package_manager_version(
+        &mut self,
+        package_manager: PackageManagerType,
+        version: String,
+    ) {
+        self.default_package_manager_versions.insert(package_manager.to_string(), version);
+    }
+
+    pub fn clear_default_package_manager_version(&mut self, package_manager: PackageManagerType) {
+        self.default_package_manager_versions.remove(&package_manager.to_string());
+    }
+
+    #[must_use]
+    pub fn configured_package_manager_shim_mode_for(
+        &self,
+        package_manager: PackageManagerType,
+    ) -> Option<ShimMode> {
+        self.package_manager_shim_modes.get(&package_manager.to_string()).copied()
+    }
+
+    #[must_use]
+    pub fn package_manager_shim_mode_for(&self, package_manager: PackageManagerType) -> ShimMode {
+        self.configured_package_manager_shim_mode_for(package_manager).unwrap_or_default()
+    }
+
+    pub fn set_shim_modes(&mut self, node: bool, package_manager: bool, mode: ShimMode) {
+        if node {
+            self.node_shim_mode = mode;
+        }
+        if package_manager {
+            self.set_all_package_manager_shim_modes(mode);
+        }
+    }
+
+    pub fn set_all_package_manager_shim_modes(&mut self, mode: ShimMode) {
+        self.package_manager_shim_modes.clear();
+        for package_manager in ALL_PACKAGE_MANAGERS {
+            self.set_package_manager_shim_mode(package_manager, mode);
+        }
+    }
+
+    pub fn set_package_manager_shim_mode(
+        &mut self,
+        package_manager: PackageManagerType,
+        mode: ShimMode,
+    ) {
+        self.package_manager_shim_modes.insert(package_manager.to_string(), mode);
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum PackageManagerDefaultVersions {
+    Versions(BTreeMap<String, String>),
+    Legacy(String),
+}
+
+fn deserialize_package_manager_default_versions<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<String, String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match PackageManagerDefaultVersions::deserialize(deserializer)? {
+        PackageManagerDefaultVersions::Versions(versions) => Ok(versions),
+        PackageManagerDefaultVersions::Legacy(spec) => {
+            let (name, version) = spec
+                .split_once('@')
+                .filter(|(name, version)| {
+                    PackageManagerType::from_name(name).is_some() && !version.is_empty()
+                })
+                .ok_or_else(|| de::Error::custom("invalid legacy package-manager default"))?;
+            Ok(BTreeMap::from([(name.to_string(), version.to_string())]))
+        }
+    }
 }
 
 /// Check if shim mode is the default (for skip_serializing_if)
@@ -139,18 +240,35 @@ pub async fn save_config(config: &Config) -> Result<(), Error> {
 /// Set by `vp env use` command.
 pub const VERSION_ENV_VAR: &str = vp_shared::env_vars::VP_NODE_VERSION;
 
+/// Environment variable for the per-shell package-manager override.
+pub const PACKAGE_MANAGER_ENV_VAR: &str = vp_shared::env_vars::VP_PACKAGE_MANAGER;
+
 /// Session version file name, written by `vp env use` so shims work without the shell eval wrapper.
 pub const SESSION_VERSION_FILE: &str = ".session-node-version";
+
+/// Package-manager session override file name.
+pub const SESSION_PACKAGE_MANAGER_FILE: &str = ".session-package-manager";
 
 /// Get the path to the session version file (`<STATE>/.session-node-version`).
 pub fn get_session_version_path() -> Result<AbsolutePathBuf, Error> {
     Ok(vp_shared::EnvConfig::get().dirs.state.join(SESSION_VERSION_FILE))
 }
 
+pub fn get_session_package_manager_path() -> Result<AbsolutePathBuf, Error> {
+    Ok(vp_shared::EnvConfig::get().dirs.state.join(SESSION_PACKAGE_MANAGER_FILE))
+}
+
 /// Read the session version file. Returns `None` if the file is missing or empty.
 pub async fn read_session_version() -> Option<String> {
     let path = get_session_version_path().ok()?;
     let content = tokio::fs::read_to_string(&path).await.ok()?;
+    let trimmed = content.trim().to_string();
+    if trimmed.is_empty() { None } else { Some(trimmed) }
+}
+
+pub async fn read_session_package_manager() -> Option<String> {
+    let path = get_session_package_manager_path().ok()?;
+    let content = tokio::fs::read_to_string(path).await.ok()?;
     let trimmed = content.trim().to_string();
     if trimmed.is_empty() { None } else { Some(trimmed) }
 }
@@ -174,10 +292,28 @@ pub async fn write_session_version(version: &str) -> Result<(), Error> {
     Ok(())
 }
 
+pub async fn write_session_package_manager(spec: &str) -> Result<(), Error> {
+    let path = get_session_package_manager_path()?;
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    tokio::fs::write(path, spec).await?;
+    Ok(())
+}
+
 /// Delete the session version file. Ignores "not found" errors.
 pub async fn delete_session_version() -> Result<(), Error> {
     let path = get_session_version_path()?;
     match tokio::fs::remove_file(&path).await {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn delete_session_package_manager() -> Result<(), Error> {
+    let path = get_session_package_manager_path()?;
+    match tokio::fs::remove_file(path).await {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e.into()),
@@ -1392,6 +1528,90 @@ mod tests {
                 let resolution_from_files = resolve_version_from_files(&temp_path).await.unwrap();
                 assert_eq!(resolution_from_files.version, "20.18.0");
                 assert_eq!(resolution_from_files.source, ".node-version");
+            },
+        )
+        .await;
+    }
+
+    #[test]
+    fn node_only_mode_change_leaves_package_managers_undecided() {
+        let mut config = Config::default();
+        config.set_shim_modes(true, false, ShimMode::SystemFirst);
+        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
+        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm), None);
+        assert_eq!(
+            config.package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            ShimMode::Managed
+        );
+    }
+
+    #[test]
+    fn package_manager_mode_change_preserves_other_package_manager_modes() {
+        let mut config = Config::default();
+        config.set_package_manager_shim_mode(PackageManagerType::Pnpm, ShimMode::SystemFirst);
+
+        assert_eq!(
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            Some(ShimMode::SystemFirst)
+        );
+        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Bun), None);
+
+        config.set_shim_modes(false, true, ShimMode::Managed);
+        assert_eq!(
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            Some(ShimMode::Managed)
+        );
+        assert_eq!(
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Bun),
+            Some(ShimMode::Managed)
+        );
+        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
+    }
+
+    #[test]
+    fn package_manager_only_mode_change_preserves_node_mode() {
+        let mut config = Config { node_shim_mode: ShimMode::SystemFirst, ..Config::default() };
+        config.set_shim_modes(false, true, ShimMode::Managed);
+        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
+        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
+    }
+
+    #[test]
+    fn legacy_shim_mode_loads_as_node_shim_mode() {
+        let config: Config = serde_json::from_str(r#"{"shimMode":"system_first"}"#).unwrap();
+
+        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
+        assert_eq!(
+            serde_json::to_value(config).unwrap(),
+            serde_json::json!({ "nodeShimMode": "system_first" })
+        );
+    }
+
+    #[test]
+    fn legacy_package_manager_default_migrates_to_version_map() {
+        let config: Config =
+            serde_json::from_str(r#"{"defaultPackageManager":"pnpm@10.18.0"}"#).unwrap();
+
+        assert_eq!(
+            config.default_package_manager_version_for(PackageManagerType::Pnpm),
+            Some("10.18.0")
+        );
+        assert_eq!(
+            serde_json::to_value(config).unwrap()["defaultPackageManagerVersions"]["pnpm"],
+            "10.18.0"
+        );
+    }
+
+    #[tokio::test]
+    async fn package_manager_session_file_round_trip() {
+        let temp_dir = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            [(vp_shared::env_vars::VP_HOME, temp_dir.path())],
+            |_| async {
+                write_session_package_manager("pnpm@10.18.0").await.unwrap();
+                assert_eq!(read_session_package_manager().await.as_deref(), Some("pnpm@10.18.0"));
+                delete_session_package_manager().await.unwrap();
+                assert!(read_session_package_manager().await.is_none());
             },
         )
         .await;

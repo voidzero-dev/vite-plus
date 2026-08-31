@@ -221,10 +221,23 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
 
     if !opts.no_node_manager {
         if !opts.quiet {
-            print_info("setting up Node.js version manager...");
+            print_info("setting up Node.js and package-manager version management...");
         }
-        if let Err(e) = install::refresh_shims(&dirs.data).await {
-            print_warn(&format!("Node.js manager setup failed (non-fatal): {e}"));
+        match install::refresh_shims(&dirs.data).await {
+            Ok(()) if current_version.is_none() => {
+                let vp_binary = dirs.data.join("current").join("bin").join(VP_BINARY_NAME);
+                let preference_result = tokio::process::Command::new(vp_binary.as_path())
+                    .args(["env", "on"])
+                    .output()
+                    .await;
+                if !preference_result.is_ok_and(|output| output.status.success()) {
+                    print_warn("Failed to record environment management preference.");
+                }
+            }
+            Ok(()) => {}
+            Err(e) => {
+                print_warn(&format!("Node.js and package-manager setup failed (non-fatal): {e}"))
+            }
         }
     } else if let Err(e) = install::create_env_files(&dirs.data).await {
         print_warn(&format!("Env file creation failed (non-fatal): {e}"));
@@ -515,7 +528,7 @@ fn show_interactive_menu(opts: &mut cli::Options, data_dir: &str, bin_dir: &str)
         );
         println!("    Version:           {}", style(version).cyan());
         println!(
-            "    Node.js manager:   {}",
+            "    Node.js / package managers: {}",
             style(if opts.no_node_manager { "disabled" } else { "enabled" }).cyan()
         );
         println!();
@@ -548,7 +561,7 @@ fn show_customize_menu(opts: &mut cli::Options) {
         println!("    1) Version:        [{}]", style(version_display).cyan());
         println!("    2) npm registry:   [{}]", style(registry_display).cyan());
         println!(
-            "    3) Node.js manager: [{}]",
+            "    3) Node.js / package managers: [{}]",
             style(if opts.no_node_manager { "disabled" } else { "enabled" }).cyan()
         );
         println!(

@@ -5,4 +5,22 @@ skip-platforms = ["windows"]
 seed-runtime = false
 steps = [
   { argv = ["vp", "env", "install"], comment = "Install version from .node-version (22.x)", continue-on-failure = true },
+  { argv = ["vp", "env", "use", "22", "--no-install"], snapshot = false },
+  { argv = ["vp", "env", "install"], comment = "An implicit install identifies an active session override", continue-on-failure = true },
+  { argv = ["vp", "env", "uninstall", "22"], comment = "Node.js uninstall accepts the same major-version selectors as install", continue-on-failure = true },
+]
+
+[[case]]
+name = "command_env_install_standalone_npm_fallback"
+vp = "global"
+comment = "Explicit npm family scopes use standalone registry npm; only the directly invoked npm shim keeps Node.js' bundled npm fallback."
+local-registry = true
+skip-platforms = ["windows"]
+seed-runtime = false
+env = { VP_ENV_USE_EVAL_ENABLE = "1", VP_SHELL = "bash" }
+steps = [
+  { argv = ["vp", "env", "use", "npm", "--no-install"], comment = "an explicit npm scope exports the standalone npm fallback" },
+  { argv = ["vp", "env", "install", "npm"], comment = "an explicit npm scope installs the standalone registry fallback" },
+  { argv = ["vp", "env", "current", "npm", "--json"], comment = "the standalone npm fallback is installed" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node", "--assert", "missing"], comment = "installing standalone npm does not install Node.js" },
 ]

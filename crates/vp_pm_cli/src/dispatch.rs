@@ -8,10 +8,14 @@ use std::process::ExitStatus;
 use vt_path::AbsolutePath;
 
 use crate::{
-    PackageManager,
+    EnvironmentPackageManagerResolution, PackageManager,
     cli::{PackageManagerCommand, PmCommand},
+    download_package_manager,
     error::Error,
-    helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
+    helpers::{
+        build_package_manager, build_package_manager_or_npm_default, ensure_package_json,
+        require_package_json,
+    },
     resolution::{DlxArgs, StageCommand, run_resolution},
 };
 
@@ -28,6 +32,12 @@ enum ManagerPolicy {
     AllowNpmFallback,
 }
 
+enum ManagerSource<'a> {
+    Detect,
+    Environment(&'a EnvironmentPackageManagerResolution),
+    ResolvedEnvironment(PackageManager, &'a EnvironmentPackageManagerResolution),
+}
+
 pub async fn dispatch(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
@@ -39,28 +49,130 @@ pub async fn dispatch_with_metadata(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
 ) -> Result<DispatchResult, Error> {
+    dispatch_with_manager(cwd, command, ManagerSource::Detect).await
+}
+
+pub async fn dispatch_with_package_manager(
+    cwd: &AbsolutePath,
+    command: PackageManagerCommand,
+    package_manager: &EnvironmentPackageManagerResolution,
+) -> Result<DispatchResult, Error> {
+    dispatch_with_manager(cwd, command, ManagerSource::Environment(package_manager)).await
+}
+
+pub async fn dispatch_with_resolved_package_manager(
+    cwd: &AbsolutePath,
+    command: PackageManagerCommand,
+    manager: PackageManager,
+    package_manager: &EnvironmentPackageManagerResolution,
+) -> Result<DispatchResult, Error> {
+    dispatch_with_manager(
+        cwd,
+        command,
+        ManagerSource::ResolvedEnvironment(manager, package_manager),
+    )
+    .await
+}
+
+async fn dispatch_with_manager(
+    cwd: &AbsolutePath,
+    command: PackageManagerCommand,
+    source: ManagerSource<'_>,
+) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
     let command = match command {
         PackageManagerCommand::Dlx(args) => {
-            return dispatch_dlx(cwd, args, render_diagnostics).await;
+            let manager = match source {
+                ManagerSource::Detect => return dispatch_dlx(cwd, args, render_diagnostics).await,
+                source => resolve_manager(cwd, source).await?,
+            };
+            let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
+            let status = run_resolution(cwd, resolution, render_diagnostics).await?;
+            return Ok(DispatchResult { status, why_hint_packages: None });
         }
         command => command,
     };
 
-    let manager = match manager_policy(&command) {
-        ManagerPolicy::CreateIfMissing => {
-            ensure_package_json(cwd).await?;
-            build_package_manager(cwd).await?
-        }
-        ManagerPolicy::RequireProject => build_package_manager(cwd).await?,
-        ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
-    };
+    let policy = manager_policy(&command);
+    match policy {
+        ManagerPolicy::CreateIfMissing => ensure_package_json(cwd).await?,
+        ManagerPolicy::RequireProject => require_package_json(cwd)?,
+        ManagerPolicy::AllowNpmFallback => {}
+    }
 
+    let manager = match source {
+        ManagerSource::Detect => match policy {
+            ManagerPolicy::CreateIfMissing | ManagerPolicy::RequireProject => {
+                build_package_manager(cwd).await?
+            }
+            ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
+        },
+        source => resolve_manager(cwd, source).await?,
+    };
     let package_manager = manager.client;
     let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
     let resolution = command.resolve_for_manager(&manager)?;
     let status = run_resolution(cwd, resolution, render_diagnostics).await?;
     Ok(DispatchResult { status, why_hint_packages })
+}
+
+async fn resolve_manager(
+    cwd: &AbsolutePath,
+    source: ManagerSource<'_>,
+) -> Result<PackageManager, Error> {
+    match source {
+        ManagerSource::Environment(package_manager) => {
+            let manager = build_selected_package_manager(package_manager).await?;
+            auto_pin_environment_package_manager(cwd, package_manager, &manager).await?;
+            Ok(manager)
+        }
+        ManagerSource::ResolvedEnvironment(manager, package_manager) => {
+            auto_pin_environment_package_manager(cwd, package_manager, &manager).await?;
+            Ok(manager)
+        }
+        ManagerSource::Detect => unreachable!("detected managers are resolved from the cwd"),
+    }
+}
+
+async fn build_selected_package_manager(
+    package_manager: &EnvironmentPackageManagerResolution,
+) -> Result<PackageManager, Error> {
+    let (install_dir, _, version) = download_package_manager(
+        package_manager.package_manager_type,
+        &package_manager.version,
+        package_manager.hash.as_deref(),
+    )
+    .await
+    .map_err(Error::Install)?;
+    Ok(PackageManager {
+        client: package_manager.package_manager_type,
+        version,
+        bin_prefix: install_dir.join("bin"),
+    })
+}
+
+async fn auto_pin_environment_package_manager(
+    cwd: &AbsolutePath,
+    resolution: &EnvironmentPackageManagerResolution,
+    manager: &PackageManager,
+) -> Result<(), Error> {
+    if matches!(resolution.source.as_str(), "lockfile or config" | "default") {
+        let project_root = resolution.project_root.clone().or_else(|| {
+            vt_workspace::find_workspace_root(cwd)
+                .ok()
+                .map(|(workspace, _)| workspace.path.to_absolute_path_buf())
+        });
+        let Some(project_root) = project_root else {
+            return Ok(());
+        };
+        super::package_manager::set_dev_engines_package_manager_field(
+            &project_root.join("package.json"),
+            resolution.package_manager_type,
+            &manager.version,
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 async fn dispatch_dlx(
