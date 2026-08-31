@@ -4,16 +4,6 @@ use vt_path::AbsolutePath;
 
 use crate::{PackageManager, PackageManagerType, error::Error};
 
-/// Build a `PackageManager` for the current package workspace.
-pub async fn build_package_manager(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
-    PackageManager::builder(cwd).build_with_default().await.map_err(Error::Install)
-}
-
-/// Require the current directory to belong to a package.
-pub fn require_package_json(cwd: &AbsolutePath) -> Result<(), Error> {
-    vt_workspace::find_package_root(cwd).map(|_| ()).map_err(|error| Error::Install(error.into()))
-}
-
 /// Build a `PackageManager`, falling back to a default npm instance when no
 /// package.json is found. Uses `build()` instead of `build_with_default()`
 /// to skip the interactive package manager selection prompt on the fallback path.

@@ -9,23 +9,17 @@ use vt_path::AbsolutePath;
 
 use crate::{
     EnvironmentPackageManagerResolution, PackageManager,
-    cli::{PackageManagerCommand, PmCommand},
+    cli::PackageManagerCommand,
     download_package_manager,
     error::Error,
-    helpers::{build_package_manager, build_package_manager_or_npm_default, require_package_json},
-    resolution::{DlxArgs, StageCommand, run_resolution},
+    helpers::build_package_manager_or_npm_default,
+    resolution::{DlxArgs, run_resolution},
 };
 
 #[derive(Debug)]
 pub struct DispatchResult {
     pub status: ExitStatus,
     pub why_hint_packages: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ManagerPolicy {
-    RequireProject,
-    AllowNpmFallback,
 }
 
 enum ManagerSource<'a> {
@@ -86,15 +80,8 @@ async fn dispatch_with_manager(
         command => command,
     };
 
-    let policy = manager_policy(&command);
-    if policy == ManagerPolicy::RequireProject {
-        require_package_json(cwd)?;
-    }
     let manager = match source {
-        ManagerSource::Detect => match policy {
-            ManagerPolicy::RequireProject => build_package_manager(cwd).await?,
-            ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
-        },
+        ManagerSource::Detect => build_package_manager_or_npm_default(cwd).await?,
         ManagerSource::Environment(package_manager) => {
             build_selected_package_manager(package_manager).await?
         }
@@ -137,134 +124,5 @@ async fn dispatch_dlx(
             Ok(DispatchResult { status, why_hint_packages: None })
         }
         Err(error) => Err(Error::Install(error)),
-    }
-}
-
-fn manager_policy(command: &PackageManagerCommand) -> ManagerPolicy {
-    match command {
-        PackageManagerCommand::Install(_)
-        | PackageManagerCommand::Add(_)
-        | PackageManagerCommand::Remove(_)
-        | PackageManagerCommand::Update(_)
-        | PackageManagerCommand::Dedupe(_)
-        | PackageManagerCommand::Outdated(_)
-        | PackageManagerCommand::Why(_)
-        | PackageManagerCommand::Link(_)
-        | PackageManagerCommand::Unlink(_) => ManagerPolicy::RequireProject,
-        PackageManagerCommand::Info(_) => ManagerPolicy::AllowNpmFallback,
-        PackageManagerCommand::Dlx(_) => {
-            unreachable!("dlx commands are dispatched before manager policy selection")
-        }
-        PackageManagerCommand::Pm(command) => pm_manager_policy(command),
-    }
-}
-
-fn pm_manager_policy(command: &PmCommand) -> ManagerPolicy {
-    match command {
-        PmCommand::Ci(_)
-        | PmCommand::ApproveBuilds(_)
-        | PmCommand::Prune(_)
-        | PmCommand::Patch(_)
-        | PmCommand::PatchCommit(_)
-        | PmCommand::Pack(_)
-        | PmCommand::List(_)
-        | PmCommand::Version(_)
-        | PmCommand::Publish(_)
-        | PmCommand::Rebuild(_)
-        | PmCommand::Fund(_)
-        | PmCommand::Audit(_)
-        | PmCommand::Stage(StageCommand::Publish { .. }) => ManagerPolicy::RequireProject,
-        PmCommand::View(_)
-        | PmCommand::Stage(_)
-        | PmCommand::Owner(_)
-        | PmCommand::Cache(_)
-        | PmCommand::Config(_)
-        | PmCommand::Login(_)
-        | PmCommand::Logout(_)
-        | PmCommand::Whoami(_)
-        | PmCommand::Token(_)
-        | PmCommand::DistTag(_)
-        | PmCommand::Deprecate(_)
-        | PmCommand::Search(_)
-        | PmCommand::Ping(_) => ManagerPolicy::AllowNpmFallback,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use clap::{FromArgMatches, Subcommand};
-    use vt_path::AbsolutePathBuf;
-
-    use super::*;
-
-    fn parse_command(args: &[&str]) -> PackageManagerCommand {
-        let mut command = PackageManagerCommand::augment_subcommands(clap::Command::new("vp"));
-        let matches = command.try_get_matches_from_mut(args).unwrap();
-        PackageManagerCommand::from_arg_matches(&matches).unwrap()
-    }
-
-    #[test]
-    fn manager_policy_requires_a_project_for_install_and_mutation() {
-        assert_eq!(
-            manager_policy(&parse_command(&["vp", "install"])),
-            ManagerPolicy::RequireProject
-        );
-        assert_eq!(
-            manager_policy(&parse_command(&["vp", "add", "react"])),
-            ManagerPolicy::RequireProject
-        );
-        assert_eq!(
-            manager_policy(&parse_command(&["vp", "remove", "react"])),
-            ManagerPolicy::RequireProject
-        );
-    }
-
-    #[tokio::test]
-    async fn selected_manager_requires_a_project_before_resolution() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_manager = EnvironmentPackageManagerResolution {
-            package_manager_type: crate::PackageManagerType::Pnpm,
-            version: "not-a-version".into(),
-            hash: None,
-            source: "session".into(),
-            source_path: None,
-            project_root: None,
-        };
-
-        let error = dispatch_with_package_manager(
-            &cwd,
-            parse_command(&["vp", "install"]),
-            &package_manager,
-        )
-        .await
-        .unwrap_err();
-
-        assert!(matches!(
-            error,
-            Error::Install(vp_error::Error::WorkspaceError(
-                vt_workspace::Error::PackageJsonNotFound(_)
-            ))
-        ));
-    }
-
-    #[test]
-    fn manager_policy_covers_npm_fallbacks() {
-        assert_eq!(
-            manager_policy(&parse_command(&["vp", "info", "react"])),
-            ManagerPolicy::AllowNpmFallback
-        );
-    }
-
-    #[test]
-    fn only_stage_publish_requires_a_project() {
-        assert_eq!(
-            manager_policy(&parse_command(&["vp", "pm", "stage", "publish"])),
-            ManagerPolicy::RequireProject
-        );
-        assert_eq!(
-            manager_policy(&parse_command(&["vp", "pm", "stage", "list"])),
-            ManagerPolicy::AllowNpmFallback
-        );
     }
 }
