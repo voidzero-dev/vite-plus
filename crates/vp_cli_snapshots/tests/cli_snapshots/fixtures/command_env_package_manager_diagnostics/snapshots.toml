@@ -4,6 +4,7 @@ vp = "global"
 steps = [
   { argv = ["node", "prepare-npm.cjs"], snapshot = false },
   { argv = ["vp", "env", "current", "pm", "--json"], comment = "current reports the npm packageManager pin" },
+  { argv = ["vp", "env", "current", "pm"], comment = "current lists every binary exposed by the selected package-manager family" },
   { argv = ["vp", "env", "which", "npm"], comment = "which reports the npm packageManager pin" },
   { argv = ["vp", "env", "which", "npx"], comment = "the npx alias reports the same npm packageManager pin" },
 ]

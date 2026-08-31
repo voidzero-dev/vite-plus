@@ -25,6 +25,24 @@ current reports the npm packageManager pin
 }
 ```
 
+## `vp env current pm`
+
+current lists every binary exposed by the selected package-manager family
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Package Manager:
+  Name       npm
+  Version    10.9.4
+  Source     packageManager
+  Bin Paths
+    npm      <home>/.vite-plus/package_manager/npm/<version>/npm/bin/npm
+    npx      <home>/.vite-plus/package_manager/npm/<version>/npm/bin/npx
+  Installed  true
+  Mode       managed
+```
+
 ## `vp env which npm`
 
 which reports the npm packageManager pin

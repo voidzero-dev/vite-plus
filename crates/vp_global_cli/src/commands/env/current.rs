@@ -46,7 +46,7 @@ struct PackageManagerInfo {
     mode: ShimMode,
 }
 
-fn print_rows(title: &str, rows: &[(&str, String)]) {
+fn print_rows(title: &str, rows: &[(String, String)]) {
     println!("{}", help::render_heading(title));
     let label_width = rows.iter().map(|(label, _)| label.chars().count()).max().unwrap_or(0);
     for (label, value) in rows {
@@ -116,11 +116,11 @@ pub async fn execute(
         print_rows(
             "Node.js",
             &[
-                ("Version", node.version),
-                ("Source", node.source),
-                ("Bin Path", node.bin_path),
-                ("Installed", node.installed.to_string()),
-                ("Mode", mode_name(node.mode).into()),
+                ("Version".into(), node.version),
+                ("Source".into(), node.source),
+                ("Bin Path".into(), node.bin_path),
+                ("Installed".into(), node.installed.to_string()),
+                ("Mode".into(), mode_name(node.mode).into()),
             ],
         );
     }
@@ -128,16 +128,20 @@ pub async fn execute(
         if scope.includes_node() {
             println!();
         }
-        print_rows(
-            "Package Manager",
-            &[
-                ("Name", package_manager.name),
-                ("Version", package_manager.version),
-                ("Source", package_manager.source),
-                ("Installed", package_manager.installed.to_string()),
-                ("Mode", mode_name(package_manager.mode).into()),
-            ],
+        let mut rows = vec![
+            ("Name".into(), package_manager.name),
+            ("Version".into(), package_manager.version),
+            ("Source".into(), package_manager.source),
+            ("Bin Paths".into(), String::new()),
+        ];
+        rows.extend(
+            package_manager.bin_paths.into_iter().map(|(name, path)| (format!("  {name}"), path)),
         );
+        rows.extend([
+            ("Installed".into(), package_manager.installed.to_string()),
+            ("Mode".into(), mode_name(package_manager.mode).into()),
+        ]);
+        print_rows("Package Manager", &rows);
     }
 
     Ok(ExitStatus::default())
