@@ -9,3 +9,13 @@ steps = [
   { tty = false, argv = ["vp", "add", "testnpm2", "-D"], comment = "add should require package.json", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "package.json", "--assert-not", "file"], comment = "add should not create package.json", continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_install_requires_manifest_in_pnpm_workspace"
+comment = "A workspace marker alone does not satisfy the package.json requirement."
+vp = ["local", "global"]
+cwd = "pnpm-workspace"
+steps = [
+  { tty = false, argv = ["vp", "install", "--silent"], comment = "install should reject a workspace without package.json", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "package.json", "--assert-not", "file"], comment = "install should not create package.json", continue-on-failure = true },
+]

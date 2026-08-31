@@ -28,8 +28,9 @@ enum ManagerPolicy {
     AllowNpmFallback,
 }
 
-enum ManagerSource {
+enum ManagerSource<'a> {
     Detect,
+    Environment(&'a EnvironmentPackageManagerResolution),
     Resolved(PackageManager),
 }
 
@@ -52,8 +53,7 @@ pub async fn dispatch_with_package_manager(
     command: PackageManagerCommand,
     package_manager: &EnvironmentPackageManagerResolution,
 ) -> Result<DispatchResult, Error> {
-    let manager = build_selected_package_manager(package_manager).await?;
-    dispatch_with_manager(cwd, command, ManagerSource::Resolved(manager)).await
+    dispatch_with_manager(cwd, command, ManagerSource::Environment(package_manager)).await
 }
 
 pub async fn dispatch_with_resolved_package_manager(
@@ -67,13 +67,16 @@ pub async fn dispatch_with_resolved_package_manager(
 async fn dispatch_with_manager(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
-    source: ManagerSource,
+    source: ManagerSource<'_>,
 ) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
     let command = match command {
         PackageManagerCommand::Dlx(args) => {
             let manager = match source {
                 ManagerSource::Detect => return dispatch_dlx(cwd, args, render_diagnostics).await,
+                ManagerSource::Environment(package_manager) => {
+                    build_selected_package_manager(package_manager).await?
+                }
                 ManagerSource::Resolved(manager) => manager,
             };
             let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
@@ -84,17 +87,18 @@ async fn dispatch_with_manager(
     };
 
     let policy = manager_policy(&command);
+    if policy == ManagerPolicy::RequireProject {
+        require_package_json(cwd)?;
+    }
     let manager = match source {
         ManagerSource::Detect => match policy {
             ManagerPolicy::RequireProject => build_package_manager(cwd).await?,
             ManagerPolicy::AllowNpmFallback => build_package_manager_or_npm_default(cwd).await?,
         },
-        ManagerSource::Resolved(manager) => {
-            if policy == ManagerPolicy::RequireProject {
-                require_package_json(cwd)?;
-            }
-            manager
+        ManagerSource::Environment(package_manager) => {
+            build_selected_package_manager(package_manager).await?
         }
+        ManagerSource::Resolved(manager) => manager,
     };
     let package_manager = manager.client;
     let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
@@ -189,6 +193,7 @@ fn pm_manager_policy(command: &PmCommand) -> ManagerPolicy {
 #[cfg(test)]
 mod tests {
     use clap::{FromArgMatches, Subcommand};
+    use vt_path::AbsolutePathBuf;
 
     use super::*;
 
@@ -212,6 +217,35 @@ mod tests {
             manager_policy(&parse_command(&["vp", "remove", "react"])),
             ManagerPolicy::RequireProject
         );
+    }
+
+    #[tokio::test]
+    async fn selected_manager_requires_a_project_before_resolution() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_manager = EnvironmentPackageManagerResolution {
+            package_manager_type: crate::PackageManagerType::Pnpm,
+            version: "not-a-version".into(),
+            hash: None,
+            source: "session".into(),
+            source_path: None,
+            project_root: None,
+        };
+
+        let error = dispatch_with_package_manager(
+            &cwd,
+            parse_command(&["vp", "install"]),
+            &package_manager,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::Install(vp_error::Error::WorkspaceError(
+                vt_workspace::Error::PackageJsonNotFound(_)
+            ))
+        ));
     }
 
     #[test]
