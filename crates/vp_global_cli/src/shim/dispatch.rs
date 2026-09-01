@@ -738,7 +738,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
     // Check shim mode from config
     let shim_mode = load_shim_mode(tool).await;
-    let disable_pnpm_runtime =
+    let (disable_pnpm_runtime, pnpm_cwd) =
         if PackageManagerType::from_tool(tool) == Some(PackageManagerType::Pnpm) {
             let cwd = match current_dir() {
                 Ok(path) => path,
@@ -754,16 +754,22 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                     return 1;
                 }
             };
-            match pnpm_runtime::should_disable_for_command(&cwd, args, node_shim_mode).await {
-                Ok(disable) => disable,
+            let command_cwd = pnpm_runtime::command_cwd(tool, &cwd, args);
+            let disable = match command_cwd.as_deref() {
+                Some(cwd) => pnpm_runtime::should_disable(cwd, node_shim_mode).await,
+                None => Ok(false),
+            };
+            match disable {
+                Ok(disable) => (disable, command_cwd),
                 Err(error) => {
                     eprintln!("vp: Failed to resolve pnpm runtime management: {error}");
                     return 1;
                 }
             }
         } else {
-            false
+            (false, None)
         };
+    let pnpm_node_cwd = pnpm_cwd.as_deref().filter(|_| disable_pnpm_runtime);
     let pnpm_runtime_env = if disable_pnpm_runtime {
         &[(pnpm_runtime::PNPM_CONFIG_RUNTIME, pnpm_runtime::PNPM_CONFIG_RUNTIME_DISABLED)][..]
     } else {
@@ -774,7 +780,8 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         // In system-first mode, try to find system tool first
         if let Some(system_path) = find_system_tool(tool) {
             if PackageManagerType::from_tool(tool).is_some()
-                && let Err(error) = prepare_node_path_for_system_package_manager().await
+                && let Err(error) =
+                    prepare_node_path_for_system_package_manager(pnpm_node_cwd).await
             {
                 eprintln!("vp: Failed to prepare Node.js for system package manager: {error}");
                 return 1;
@@ -815,6 +822,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
             return 1;
         }
     };
+    let node_cwd = pnpm_node_cwd.map_or_else(|| cwd.clone(), AbsolutePath::to_absolute_path_buf);
 
     // Ensure Node.js is installed and locate its binary for PATH preparation.
     // Package-manager shims can use their own declared version, but JS-based
@@ -834,7 +842,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         None
     };
     let resolution = if system_node.is_none() {
-        match resolve_with_cache(&cwd).await {
+        match resolve_with_cache(&node_cwd).await {
             Ok(resolution) => Some(resolution),
             Err(error) => {
                 eprintln!("vp: Failed to resolve Node version: {error}");
@@ -981,7 +989,9 @@ fn read_node_version(node_path: &AbsolutePath) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().trim_start_matches('v').to_string())
 }
 
-async fn prepare_node_path_for_system_package_manager() -> Result<(), Error> {
+async fn prepare_node_path_for_system_package_manager(
+    pnpm_cwd: Option<&AbsolutePath>,
+) -> Result<(), Error> {
     let config = config::load_config().await?;
     if config.node_shim_mode == ShimMode::SystemFirst
         && let Some(node) = find_system_tool("node")
@@ -991,7 +1001,10 @@ async fn prepare_node_path_for_system_package_manager() -> Result<(), Error> {
         return Ok(());
     }
 
-    let cwd = current_dir()?;
+    let cwd = match pnpm_cwd {
+        Some(cwd) => cwd.to_absolute_path_buf(),
+        None => current_dir()?,
+    };
     let resolution = resolve_with_cache(&cwd).await.map_err(|error| Error::Other(error.into()))?;
     let node =
         ensure_installed(&resolution.version).await.map_err(|error| Error::Other(error.into()))?;

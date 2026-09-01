@@ -56,6 +56,13 @@ printf '\''PNPM_CONFIG_RUNTIME=%s\n'\'' "${PNPM_CONFIG_RUNTIME-unset}"
 ## `vpt chmod +x $VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpx`
 
 
+## `vpt mkdir other`
+
+
+## `vpt write-file other/package.json '{"name":"other","private":true,"devEngines":{"runtime":{"name":"deno","version":"2.0.0","onFail":"download"}}}
+'`
+
+
 ## `vp env on pnpm`
 
 
@@ -70,6 +77,14 @@ PNPM_CONFIG_RUNTIME=false
 ## `PNPM_CONFIG_RUNTIME=from-user pnpx package`
 
 the pnpx alias receives the same child-only override
+
+```
+PNPM_CONFIG_RUNTIME=false
+```
+
+## `PNPM_CONFIG_RUNTIME=from-user pnpx package --dir other`
+
+pnpx forwards --dir to the downloaded command without changing runtime ownership
 
 ```
 PNPM_CONFIG_RUNTIME=false

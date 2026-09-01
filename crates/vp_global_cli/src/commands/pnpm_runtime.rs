@@ -8,7 +8,16 @@ use crate::error::Error;
 pub(crate) const PNPM_CONFIG_RUNTIME: &str = "PNPM_CONFIG_RUNTIME";
 pub(crate) const PNPM_CONFIG_RUNTIME_DISABLED: &str = "false";
 
-fn command_cwd(cwd: &AbsolutePath, args: &[String]) -> Option<AbsolutePathBuf> {
+pub(crate) fn command_cwd(
+    tool: &str,
+    cwd: &AbsolutePath,
+    args: &[String],
+) -> Option<AbsolutePathBuf> {
+    // pnpx forwards every argument to the downloaded command.
+    if tool != "pnpm" {
+        return Some(cwd.to_absolute_path_buf());
+    }
+
     let mut dir = None;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
@@ -28,15 +37,6 @@ fn command_cwd(cwd: &AbsolutePath, args: &[String]) -> Option<AbsolutePathBuf> {
     }
     let path = Path::new(dir);
     if path.is_absolute() { AbsolutePathBuf::new(path.to_path_buf()) } else { Some(cwd.join(path)) }
-}
-
-pub(crate) async fn should_disable_for_command(
-    cwd: &AbsolutePath,
-    args: &[String],
-    node_shim_mode: ShimMode,
-) -> Result<bool, Error> {
-    let Some(cwd) = command_cwd(cwd, args) else { return Ok(false) };
-    should_disable(&cwd, node_shim_mode).await
 }
 
 pub(crate) async fn should_disable(
@@ -82,8 +82,8 @@ pub(crate) async fn should_disable(
         }
     }
 
-    // The opt-out covers every runtime, so the selected Node.js must satisfy
-    // every declaration that pnpm would otherwise install.
+    // The opt-out filters runtime entries for every workspace importer, so the
+    // selected Node.js must satisfy each workspace declaration that it replaces.
     if !has_managed_node {
         return Ok(false);
     }

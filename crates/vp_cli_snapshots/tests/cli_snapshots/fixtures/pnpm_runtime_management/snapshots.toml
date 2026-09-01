@@ -17,9 +17,12 @@ steps = [
   { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpx", "#!/bin/sh\nprintf 'PNPM_CONFIG_RUNTIME=%s\\n' \"${PNPM_CONFIG_RUNTIME-unset}\"\n"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpm"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpx"], snapshot = false },
+  { argv = ["vpt", "mkdir", "other"], snapshot = false },
+  { argv = ["vpt", "write-file", "other/package.json", "{\"name\":\"other\",\"private\":true,\"devEngines\":{\"runtime\":{\"name\":\"deno\",\"version\":\"2.0.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
   { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
   { argv = ["pnpm", "install"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct managed pnpm disables its duplicate Node.js runtime" },
   { argv = ["pnpx", "package"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "the pnpx alias receives the same child-only override" },
+  { argv = ["pnpx", "package", "--dir", "other"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "pnpx forwards --dir to the downloaded command without changing runtime ownership" },
   { argv = ["vp", "install"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "pnpm-backed vp install applies the same managed-pnpm policy" },
 ]
 
@@ -127,4 +130,26 @@ steps = [
   { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["pnpm", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct pnpm preserves the conflicting Node.js runtime" },
   { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "vp install preserves the same conflicting runtime" },
+]
+
+[[case]]
+name = "pnpm_runtime_uses_target_node_version"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+comment = "The managed Node.js selected for direct pnpm matches the project inspected for runtime ownership."
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@11.1.0\"}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".node-version", "20.18.0\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "other"], snapshot = false },
+  { argv = ["vpt", "write-file", "other/package.json", "{\"name\":\"other\",\"private\":true,\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"22.11.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/22.11.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/20.18.0/bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/22.11.0/bin/node"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpm", "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '11.1.0\\n'; else printf 'VP_ACTIVE_NODE=%s\\nPNPM_CONFIG_RUNTIME=%s\\n' \"${VP_ACTIVE_NODE-unset}\" \"${PNPM_CONFIG_RUNTIME-unset}\"; fi\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "on", "node"], snapshot = false },
+  { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "-C", "other", "install"], envs = [["VP_DEBUG_SHIM", "1"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "the target Node.js version and runtime opt-out are applied together" },
 ]
