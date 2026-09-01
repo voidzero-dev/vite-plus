@@ -13,7 +13,7 @@ Upgraded installations may have no recorded family mode; non-interactive use mus
 an undecided non-interactive shim uses managed pnpm without prompting
 
 ```
-11.24.0
+11.25.0
 ```
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} NPM_CONFIG_REGISTRY=http://127.0.0.1:9 vp env current pnpm --json`
