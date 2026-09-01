@@ -2,7 +2,7 @@
 
 pnpm keeps runtime ownership when Vite+ does not manage Node.js.
 
-## `vpt write-file package.json '{"name":"pnpm-runtime-management","private":true,"packageManager":"pnpm@10.18.0","devEngines":{"runtime":{"name":"node","version":"20.18.0","onFail":"download"}}}
+## `vpt write-file package.json '{"name":"pnpm-runtime-management","private":true,"packageManager":"pnpm@11.1.0","devEngines":{"runtime":{"name":"node","version":"20.18.0","onFail":"download"}}}
 '`
 
 

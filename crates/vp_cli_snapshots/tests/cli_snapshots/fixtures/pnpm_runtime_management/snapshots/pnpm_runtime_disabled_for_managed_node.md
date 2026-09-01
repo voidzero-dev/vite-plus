@@ -2,7 +2,7 @@
 
 Vite+ owns Node.js runtime management independently from the selected pnpm binary.
 
-## `vpt write-file package.json '{"name":"pnpm-runtime-management","private":true,"packageManager":"pnpm@10.18.0","devEngines":{"runtime":{"name":"node","version":"20.18.0","onFail":"download"}}}
+## `vpt write-file package.json '{"name":"pnpm-runtime-management","private":true,"packageManager":"pnpm@11.1.0","devEngines":{"runtime":{"name":"node","version":"20.18.0","onFail":"download"}}}
 '`
 
 
@@ -40,19 +40,20 @@ VITE+ - The Unified Toolchain for the Web
 PNPM_CONFIG_RUNTIME=false
 ```
 
-## `vpt write-file $VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm '#'\!'/bin/sh
-if [ "$1" = "--version" ]; then printf '\''10.18.0\n'\''; else printf '\''PNPM_CONFIG_RUNTIME=%s\n'\'' "${PNPM_CONFIG_RUNTIME-unset}"; fi
+## `vpt write-file $VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpm '#'\!'/bin/sh
+if [ "$1" = "--version" ]; then printf '\''11.1.0\n'\''; else printf '\''PNPM_CONFIG_RUNTIME=%s\n'\'' "${PNPM_CONFIG_RUNTIME-unset}"; fi
 '`
 
 
-## `vpt write-file $VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx '#'\!'/bin/sh
+## `vpt write-file $VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpx '#'\!'/bin/sh
+printf '\''PNPM_CONFIG_RUNTIME=%s\n'\'' "${PNPM_CONFIG_RUNTIME-unset}"
 '`
 
 
-## `vpt chmod +x $VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm`
+## `vpt chmod +x $VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpm`
 
 
-## `vpt chmod +x $VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx`
+## `vpt chmod +x $VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpx`
 
 
 ## `vp env on pnpm`
@@ -61,6 +62,14 @@ if [ "$1" = "--version" ]; then printf '\''10.18.0\n'\''; else printf '\''PNPM_C
 ## `PNPM_CONFIG_RUNTIME=from-user pnpm install`
 
 direct managed pnpm disables its duplicate Node.js runtime
+
+```
+PNPM_CONFIG_RUNTIME=false
+```
+
+## `PNPM_CONFIG_RUNTIME=from-user pnpx package`
+
+the pnpx alias receives the same child-only override
 
 ```
 PNPM_CONFIG_RUNTIME=false

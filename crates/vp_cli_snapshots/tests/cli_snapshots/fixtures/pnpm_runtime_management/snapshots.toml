@@ -5,7 +5,7 @@ seed-runtime = false
 skip-platforms = ["windows"]
 comment = "Vite+ owns Node.js runtime management independently from the selected pnpm binary."
 steps = [
-  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@11.1.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
   { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/20.18.0/bin/node"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
@@ -13,12 +13,13 @@ steps = [
   { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["pnpm", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct system-first pnpm disables its duplicate Node.js runtime" },
   { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "pnpm-backed vp install applies the same system-first policy" },
-  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '10.18.0\\n'; else printf 'PNPM_CONFIG_RUNTIME=%s\\n' \"${PNPM_CONFIG_RUNTIME-unset}\"; fi\n"], snapshot = false },
-  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx", "#!/bin/sh\n"], snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm"], snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpm", "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '11.1.0\\n'; else printf 'PNPM_CONFIG_RUNTIME=%s\\n' \"${PNPM_CONFIG_RUNTIME-unset}\"; fi\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpx", "#!/bin/sh\nprintf 'PNPM_CONFIG_RUNTIME=%s\\n' \"${PNPM_CONFIG_RUNTIME-unset}\"\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpx"], snapshot = false },
   { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
   { argv = ["pnpm", "install"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct managed pnpm disables its duplicate Node.js runtime" },
+  { argv = ["pnpx", "package"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "the pnpx alias receives the same child-only override" },
   { argv = ["vp", "install"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "pnpm-backed vp install applies the same managed-pnpm policy" },
 ]
 
@@ -29,7 +30,7 @@ seed-runtime = false
 skip-platforms = ["windows"]
 comment = "Vite+ must not disable pnpm runtimes that it cannot manage."
 steps = [
-  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\",\"devEngines\":{\"runtime\":[{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"},{\"name\":\"deno\",\"version\":\"2.0.0\",\"onFail\":\"download\"}]}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@11.1.0\",\"devEngines\":{\"runtime\":[{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"},{\"name\":\"deno\",\"version\":\"2.0.0\",\"onFail\":\"download\"}]}}\n"], snapshot = false },
   { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/20.18.0/bin/node"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
@@ -46,11 +47,66 @@ seed-runtime = false
 skip-platforms = ["windows"]
 comment = "pnpm keeps runtime ownership when Vite+ does not manage Node.js."
 steps = [
-  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@11.1.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-bin/node"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
   { argv = ["vp", "env", "off", "node"], snapshot = false },
   { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["pnpm", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct pnpm preserves runtime management with system-first Node.js" },
   { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "vp install preserves the same system-first Node.js policy" },
+]
+
+[[case]]
+name = "pnpm_runtime_preserved_for_engines_runtime"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+comment = "pnpm runtime declarations in engines are part of the same process-wide policy."
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@11.1.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"}},\"engines\":{\"runtime\":{\"name\":\"deno\",\"version\":\"2.0.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/20.18.0/bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "on", "node"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct pnpm preserves the Deno runtime declared in engines.runtime" },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "vp install preserves the same engines.runtime setting" },
+]
+
+[[case]]
+name = "pnpm_runtime_preserved_for_workspace_member"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+comment = "A runtime required by any workspace member keeps pnpm runtime management enabled."
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@11.1.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - packages/*\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "packages/member"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/member/package.json", "{\"name\":\"member\",\"version\":\"1.0.0\",\"devEngines\":{\"runtime\":{\"name\":\"bun\",\"version\":\"1.2.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/20.18.0/bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "on", "node"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct pnpm preserves the member's Bun runtime" },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "vp install preserves the same workspace-wide setting" },
+]
+
+[[case]]
+name = "pnpm_runtime_uses_explicit_working_directory"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+comment = "Direct pnpm evaluates runtime ownership in the project selected by -C."
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@11.1.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "other"], snapshot = false },
+  { argv = ["vpt", "write-file", "other/package.json", "{\"name\":\"other\",\"private\":true,\"devEngines\":{\"runtime\":{\"name\":\"deno\",\"version\":\"2.0.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/20.18.0/bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "on", "node"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "-C", "other", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "the target project's Deno runtime remains managed by pnpm" },
 ]

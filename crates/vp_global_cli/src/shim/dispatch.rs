@@ -754,7 +754,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                     return 1;
                 }
             };
-            match pnpm_runtime::should_disable(&cwd, node_shim_mode).await {
+            match pnpm_runtime::should_disable_for_command(&cwd, args, node_shim_mode).await {
                 Ok(disable) => disable,
                 Err(error) => {
                     eprintln!("vp: Failed to resolve pnpm runtime management: {error}");

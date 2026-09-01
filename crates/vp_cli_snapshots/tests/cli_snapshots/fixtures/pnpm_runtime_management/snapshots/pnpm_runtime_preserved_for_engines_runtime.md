@@ -1,8 +1,8 @@
-# pnpm_runtime_preserved_for_mixed_runtimes
+# pnpm_runtime_preserved_for_engines_runtime
 
-Vite+ must not disable pnpm runtimes that it cannot manage.
+pnpm runtime declarations in engines are part of the same process-wide policy.
 
-## `vpt write-file package.json '{"name":"pnpm-runtime-management","private":true,"packageManager":"pnpm@11.1.0","devEngines":{"runtime":[{"name":"node","version":"20.18.0","onFail":"download"},{"name":"deno","version":"2.0.0","onFail":"download"}]}}
+## `vpt write-file package.json '{"name":"pnpm-runtime-management","private":true,"packageManager":"pnpm@11.1.0","devEngines":{"runtime":{"name":"node","version":"20.18.0","onFail":"download"}},"engines":{"runtime":{"name":"deno","version":"2.0.0","onFail":"download"}}}
 '`
 
 
@@ -24,7 +24,7 @@ Vite+ must not disable pnpm runtimes that it cannot manage.
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} PNPM_CONFIG_RUNTIME=from-user pnpm install`
 
-direct pnpm preserves runtime management for a mixed declaration
+direct pnpm preserves the Deno runtime declared in engines.runtime
 
 ```
 PNPM_CONFIG_RUNTIME=from-user
@@ -32,7 +32,7 @@ PNPM_CONFIG_RUNTIME=from-user
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} PNPM_CONFIG_RUNTIME=from-user vp install`
 
-vp install preserves the same mixed-runtime setting
+vp install preserves the same engines.runtime setting
 
 ```
 VITE+ - The Unified Toolchain for the Web
