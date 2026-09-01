@@ -111,8 +111,8 @@ pub(crate) fn warn_missing_local_cli_if_project(cwd: &AbsolutePath) {
 /// Select the configured JS runtime and prepend its bin directory to PATH.
 /// This should be called before executing any package manager command.
 ///
-/// If `project_path` contains a package.json, uses the project's runtime
-/// (based on devEngines.runtime). Otherwise, falls back to the CLI's runtime.
+/// If `project_path` is inside a package, uses the nearest package's runtime.
+/// Otherwise, falls back to the CLI's runtime.
 pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Result<(), Error> {
     let config = env::config::load_config().await?;
     let mut executor = JsExecutor::new(None);
@@ -123,12 +123,12 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
     {
         bin_dir.to_absolute_path_buf()
     } else {
-        // Use project runtime if package.json exists, otherwise use CLI runtime
-        let package_json_path = project_path.join("package.json");
-        let runtime = if package_json_path.as_path().exists() {
-            executor.ensure_project_runtime(project_path).await?
-        } else {
-            executor.ensure_cli_runtime().await?
+        let runtime = match vt_workspace::find_package_root(project_path) {
+            Ok(package) => executor.ensure_project_runtime(package.path).await?,
+            Err(vt_workspace::Error::PackageJsonNotFound(_)) => {
+                executor.ensure_cli_runtime().await?
+            }
+            Err(error) => return Err(error.into()),
         };
         runtime.get_bin_prefix()
     };

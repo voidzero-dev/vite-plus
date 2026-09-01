@@ -36,3 +36,11 @@ the target project's Deno runtime remains managed by pnpm
 ```
 PNPM_CONFIG_RUNTIME=from-user
 ```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} PNPM_CONFIG_RUNTIME=from-user pnpm -C=other install`
+
+the short equals form resolves the same target project
+
+```
+PNPM_CONFIG_RUNTIME=from-user
+```

@@ -63,6 +63,9 @@ printf '\''PNPM_CONFIG_RUNTIME=%s\n'\'' "${PNPM_CONFIG_RUNTIME-unset}"
 '`
 
 
+## `vpt mkdir child`
+
+
 ## `vp env on pnpm`
 
 
@@ -90,9 +93,43 @@ pnpx forwards --dir to the downloaded command without changing runtime ownership
 PNPM_CONFIG_RUNTIME=false
 ```
 
+## `PNPM_CONFIG_RUNTIME=from-user pnpm exec package --dir other`
+
+pnpm exec forwards --dir after the command without changing runtime ownership
+
+```
+PNPM_CONFIG_RUNTIME=false
+```
+
+## `PNPM_CONFIG_RUNTIME=from-user pnpm runtime set deno 2`
+
+an explicit runtime command keeps pnpm runtime management enabled
+
+```
+PNPM_CONFIG_RUNTIME=from-user
+```
+
+## `PNPM_CONFIG_RUNTIME=from-user pnpm add bun@runtime:1.2.0`
+
+an explicit runtime dependency keeps pnpm runtime management enabled
+
+```
+PNPM_CONFIG_RUNTIME=from-user
+```
+
 ## `PNPM_CONFIG_RUNTIME=from-user vp install`
 
 pnpm-backed vp install applies the same managed-pnpm policy
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+PNPM_CONFIG_RUNTIME=false
+```
+
+## `cd child && PNPM_CONFIG_RUNTIME=from-user vp install`
+
+vp install from a child directory uses the parent package's managed Node.js
 
 ```
 VITE+ - The Unified Toolchain for the Web

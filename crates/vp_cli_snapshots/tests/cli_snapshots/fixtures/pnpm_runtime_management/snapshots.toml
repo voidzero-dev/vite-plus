@@ -19,11 +19,16 @@ steps = [
   { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/11.1.0/pnpm/bin/pnpx"], snapshot = false },
   { argv = ["vpt", "mkdir", "other"], snapshot = false },
   { argv = ["vpt", "write-file", "other/package.json", "{\"name\":\"other\",\"private\":true,\"devEngines\":{\"runtime\":{\"name\":\"deno\",\"version\":\"2.0.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "child"], snapshot = false },
   { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
   { argv = ["pnpm", "install"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct managed pnpm disables its duplicate Node.js runtime" },
   { argv = ["pnpx", "package"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "the pnpx alias receives the same child-only override" },
   { argv = ["pnpx", "package", "--dir", "other"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "pnpx forwards --dir to the downloaded command without changing runtime ownership" },
+  { argv = ["pnpm", "exec", "package", "--dir", "other"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "pnpm exec forwards --dir after the command without changing runtime ownership" },
+  { argv = ["pnpm", "runtime", "set", "deno", "2"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "an explicit runtime command keeps pnpm runtime management enabled" },
+  { argv = ["pnpm", "add", "bun@runtime:1.2.0"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "an explicit runtime dependency keeps pnpm runtime management enabled" },
   { argv = ["vp", "install"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "pnpm-backed vp install applies the same managed-pnpm policy" },
+  { argv = ["vp", "install"], cwd = "child", envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "vp install from a child directory uses the parent package's managed Node.js" },
 ]
 
 [[case]]
@@ -112,6 +117,7 @@ steps = [
   { argv = ["vp", "env", "on", "node"], snapshot = false },
   { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["pnpm", "-C", "other", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "the target project's Deno runtime remains managed by pnpm" },
+  { argv = ["pnpm", "-C=other", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "the short equals form resolves the same target project" },
 ]
 
 [[case]]

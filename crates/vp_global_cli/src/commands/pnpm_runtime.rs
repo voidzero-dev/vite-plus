@@ -8,6 +8,9 @@ use crate::error::Error;
 pub(crate) const PNPM_CONFIG_RUNTIME: &str = "PNPM_CONFIG_RUNTIME";
 pub(crate) const PNPM_CONFIG_RUNTIME_DISABLED: &str = "false";
 
+const FORWARDED_ARGUMENT_COMMANDS: &[&str] =
+    &["create", "dlx", "exec", "restart", "run", "start", "stop", "test"];
+
 pub(crate) fn command_cwd(
     tool: &str,
     cwd: &AbsolutePath,
@@ -24,8 +27,13 @@ pub(crate) fn command_cwd(
         if arg == "--" {
             break;
         }
+        if FORWARDED_ARGUMENT_COMMANDS.contains(&arg.as_str()) {
+            break;
+        }
         if arg == "-C" || arg == "--dir" {
             dir = Some(args.next()?.as_str());
+        } else if let Some(value) = arg.strip_prefix("-C=") {
+            dir = Some(value);
         } else if let Some(value) = arg.strip_prefix("--dir=") {
             dir = Some(value);
         }
@@ -37,6 +45,11 @@ pub(crate) fn command_cwd(
     }
     let path = Path::new(dir);
     if path.is_absolute() { AbsolutePathBuf::new(path.to_path_buf()) } else { Some(cwd.join(path)) }
+}
+
+pub(crate) fn explicitly_manages_runtime(args: &[String]) -> bool {
+    args.windows(2).any(|args| args[0] == "runtime" && args[1] == "set")
+        || args.iter().any(|arg| arg.contains("@runtime:"))
 }
 
 pub(crate) async fn should_disable(

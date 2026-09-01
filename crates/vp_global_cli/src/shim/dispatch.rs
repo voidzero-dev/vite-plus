@@ -755,9 +755,12 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                 }
             };
             let command_cwd = pnpm_runtime::command_cwd(tool, &cwd, args);
-            let disable = match command_cwd.as_deref() {
-                Some(cwd) => pnpm_runtime::should_disable(cwd, node_shim_mode).await,
-                None => Ok(false),
+            let disable = if pnpm_runtime::explicitly_manages_runtime(args) {
+                Ok(false)
+            } else if let Some(cwd) = command_cwd.as_deref() {
+                pnpm_runtime::should_disable(cwd, node_shim_mode).await
+            } else {
+                Ok(false)
             };
             match disable {
                 Ok(disable) => (disable, command_cwd),
