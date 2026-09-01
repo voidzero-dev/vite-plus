@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
@@ -53,7 +52,7 @@ import {
   runViteInstall,
   selectPackageManager,
 } from '../utils/prompts.ts';
-import { accent, formatDuration, muted, log, printHeader, success } from '../utils/terminal.ts';
+import { accent, muted, log, printHeader, success } from '../utils/terminal.ts';
 import {
   detectWorkspace,
   updatePackageJsonWithDeps,
@@ -77,6 +76,7 @@ import {
 } from './prompts.ts';
 import { getRandomProjectName } from './random-name.ts';
 import { registerLocalTemplate } from './register-template.ts';
+import { showCreateSummary } from './summary.ts';
 import {
   executeBuiltinTemplate,
   executeBundledTemplate,
@@ -238,53 +238,11 @@ function formatTemplateName(templateName: string) {
   return `${frameworkName} + ${isTypeScript ? 'TypeScript' : 'JavaScript'}`;
 }
 
-function getNextCommand(projectDir: string, command: string) {
-  if (!projectDir || projectDir === '.') {
-    return command;
-  }
-  return `cd ${projectDir} && ${command}`;
-}
-
 function getCopilotSetupRoot(projectRoot: string, isExistingMonorepo: boolean) {
   if (!isExistingMonorepo) {
     return projectRoot;
   }
   return findGitRoot(projectRoot) ?? projectRoot;
-}
-
-function showCreateSummary(options: {
-  description?: string;
-  installSummary?: CommandRunSummary;
-  nextCommand: string;
-  packageManager: string;
-  packageManagerVersion: string;
-  projectDir: string;
-}) {
-  const {
-    description,
-    installSummary,
-    nextCommand,
-    packageManager,
-    packageManagerVersion,
-    projectDir,
-  } = options;
-
-  log(
-    `${styleText('magenta', '◇')} Scaffolded ${accent(projectDir)}${
-      description ? ` with ${description}` : ''
-    }`,
-  );
-  log(
-    `${styleText('gray', '•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
-  );
-  if (installSummary?.status === 'installed') {
-    log(
-      `${styleText('green', '✓')} Dependencies installed in ${formatDuration(
-        installSummary.durationMs,
-      )}`,
-    );
-  }
-  log(`${styleText('blue', '→')} Next: ${accent(nextCommand)}`);
 }
 
 async function main() {
@@ -949,12 +907,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     });
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
-    await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
+    const monorepoFmtSummary = await runViteFmt(fullPath, options.interactive, undefined, {
+      silent: compactOutput,
+    });
     clearCreateProgress();
     showCreateSummary({
       description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
       installSummary,
-      nextCommand: getNextCommand(projectDir, 'vp run'),
+      fmtSummary: monorepoFmtSummary,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
       projectDir,
@@ -1102,6 +1062,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     detectTsupProject(fullPath).hasDependency;
 
   let installSummary: CommandRunSummary | undefined;
+  let fmtSummary: CommandRunSummary | undefined;
 
   // For templates that ship ESLint/Prettier, install template deps first so
   // `@oxlint/migrate` can resolve eslint.config.js's plugin imports, then
@@ -1245,7 +1206,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     const fmtPaths = registeredConfigPath
       ? [projectDir, path.relative(workspaceInfo.rootDir, registeredConfigPath)]
       : [projectDir];
-    await runViteFmt(workspaceInfo.rootDir, options.interactive, fmtPaths, {
+    fmtSummary = await runViteFmt(workspaceInfo.rootDir, options.interactive, fmtPaths, {
       silent: compactOutput,
     });
     // No git setup here: `resolveGitInit` always returns false inside an
@@ -1287,14 +1248,16 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     });
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
-    await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
+    fmtSummary = await runViteFmt(fullPath, options.interactive, undefined, {
+      silent: compactOutput,
+    });
   }
 
   clearCreateProgress();
   showCreateSummary({
     description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
     installSummary,
-    nextCommand: getNextCommand(projectDir, 'vp run'),
+    fmtSummary,
     packageManager: workspaceInfo.packageManager,
     packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     projectDir,

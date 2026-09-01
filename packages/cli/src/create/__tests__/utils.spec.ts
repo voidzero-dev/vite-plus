@@ -11,6 +11,7 @@ import {
   formatTargetDir,
   getProjectDirFromPackageName,
   renameFiles,
+  resolveCreateCompletion,
   shouldConfigureEditorsForCreate,
 } from '../utils.js';
 
@@ -374,5 +375,64 @@ describe('renameFiles', () => {
     write('_foo', 'bar\n');
     renameFiles(projectDir);
     expect(read('_foo')).toBe('bar\n');
+  });
+});
+
+describe('resolveCreateCompletion', () => {
+  const installed = { durationMs: 1, exitCode: 0, status: 'installed' } as const;
+  const formatted = { durationMs: 1, exitCode: 0, status: 'formatted' } as const;
+  const failed = { durationMs: 1, exitCode: 1, status: 'failed' } as const;
+  const skipped = { durationMs: 0, status: 'skipped' } as const;
+
+  it('reports success and suggests running the project when both steps pass', () => {
+    expect(resolveCreateCompletion({ installSummary: installed, fmtSummary: formatted })).toEqual({
+      failures: [],
+      nextCommand: 'vp run',
+      exitCode: 0,
+    });
+  });
+
+  it('reports a failed install and suggests the recovery command', () => {
+    expect(resolveCreateCompletion({ installSummary: failed, fmtSummary: formatted })).toEqual({
+      failures: ['Dependencies were not installed'],
+      nextCommand: 'vp install',
+      exitCode: 1,
+    });
+  });
+
+  // A format failure leaves a complete, runnable project, so it is named in
+  // the summary but must not fail the command: scaffolding a `react-ts` or
+  // `vue-ts` template produces a `vite.config.ts` whose plugin import is not
+  // resolvable until dependencies land, and `vp fmt` fails there routinely.
+  it('reports a failed format without failing the command', () => {
+    expect(resolveCreateCompletion({ installSummary: installed, fmtSummary: failed })).toEqual({
+      failures: ['Code was not formatted'],
+      nextCommand: 'vp run',
+      exitCode: 0,
+    });
+  });
+
+  it('reports both failures in the order the steps ran', () => {
+    expect(resolveCreateCompletion({ installSummary: failed, fmtSummary: failed })).toEqual({
+      failures: ['Dependencies were not installed', 'Code was not formatted'],
+      nextCommand: 'vp install',
+      exitCode: 1,
+    });
+  });
+
+  it('does not treat a skipped install as a failure', () => {
+    expect(resolveCreateCompletion({ installSummary: skipped, fmtSummary: formatted })).toEqual({
+      failures: [],
+      nextCommand: 'vp run',
+      exitCode: 0,
+    });
+  });
+
+  it('does not treat a step that never ran as a failure', () => {
+    expect(resolveCreateCompletion({})).toEqual({
+      failures: [],
+      nextCommand: 'vp run',
+      exitCode: 0,
+    });
   });
 });
