@@ -229,30 +229,14 @@ impl PackageManagerBuilder {
     /// Build the package manager.
     /// Detect the package manager from the current working directory.
     pub async fn build(&self) -> Result<PackageManager, Error> {
-        let (workspace_root, _cwd) = find_workspace_root(&self.cwd)?;
-        let (package_manager_type, version_or_req, hash, source) =
+        let (workspace_root, _) = find_workspace_root(&self.cwd)?;
+        let (package_manager_type, version_or_req, hash, _) =
             get_package_manager_type_and_version(&workspace_root, self.client_override)?;
 
         // only download the package manager if it's not already downloaded
         let (install_dir, _package_name, version) =
             download_package_manager(package_manager_type, &version_or_req, hash.as_deref())
                 .await?;
-
-        // Auto-pin the resolved version when detection had no explicit field
-        // (lockfiles, config files, or caller default). A devEngines range is
-        // the user's source of truth and is never frozen into an exact pin.
-        // See rfcs/dev-engines.md.
-        if matches!(source, PackageManagerSource::LockfileOrConfig | PackageManagerSource::Default)
-            && version_or_req != version
-        {
-            let package_json_path = workspace_root.path.join("package.json");
-            set_dev_engines_package_manager_field(
-                &package_json_path,
-                package_manager_type,
-                &version,
-            )
-            .await?;
-        }
 
         Ok(PackageManager {
             client: package_manager_type,
@@ -1828,66 +1812,6 @@ async fn create_bun_shim_files(bin_prefix: &AbsolutePath) -> Result<(), Error> {
     Ok(())
 }
 
-/// Write the resolved package manager into `devEngines.packageManager`.
-///
-/// Used by auto-pin when detection had no explicit field (rfcs/dev-engines.md):
-/// the exact resolved version is recorded with `onFail: "download"` so future
-/// runs are deterministic. Preserves the file's key order and formatting style,
-/// placing `devEngines` next to `engines` when present.
-pub(crate) async fn set_dev_engines_package_manager_field(
-    package_json_path: impl AsRef<AbsolutePath>,
-    package_manager_type: PackageManagerType,
-    version: &str,
-) -> Result<(), Error> {
-    let package_json_path = package_json_path.as_ref();
-    let content = if is_exists_file(package_json_path)? {
-        tokio::fs::read_to_string(&package_json_path).await?
-    } else {
-        "{}\n".to_string()
-    };
-    let entry = vp_shared::dev_engine_entry(&package_manager_type.to_string(), version);
-    let updated = vp_shared::edit_json_object(&content, |obj| {
-        let Some(dev_engines) = obj.get_mut("devEngines").and_then(|v| v.as_object_mut()) else {
-            vp_shared::insert_after(
-                obj,
-                "engines",
-                "devEngines",
-                serde_json::json!({ "packageManager": entry }),
-            );
-            return;
-        };
-        // Auto-pin only fires when detection found no usable entry, but the field
-        // may still declare entries Vite+ does not act on (e.g. other package
-        // managers with onFail: ignore). Those are preserved, never replaced.
-        match dev_engines.get_mut("packageManager") {
-            // existing single entry: convert to array form, keeping it first
-            Some(existing @ serde_json::Value::Object(_)) => {
-                let existing = std::mem::take(existing);
-                dev_engines.insert(
-                    "packageManager".into(),
-                    serde_json::Value::Array(vec![existing, entry]),
-                );
-            }
-            // existing array: append the resolved entry
-            Some(serde_json::Value::Array(entries)) => {
-                entries.push(entry);
-            }
-            // absent or malformed (spec-invalid) value: write a single entry
-            _ => {
-                dev_engines.insert("packageManager".into(), entry);
-            }
-        }
-    })?;
-    tokio::fs::write(&package_json_path, updated).await?;
-    tracing::debug!(
-        "set_dev_engines_package_manager_field: {:?} to {}@{}",
-        package_json_path,
-        package_manager_type,
-        version
-    );
-    Ok(())
-}
-
 use vp_shared::is_ci_environment;
 
 /// Interactive menu for selecting a package manager with keyboard navigation
@@ -2866,20 +2790,8 @@ mod tests {
                     .expect("Should detect pnpm");
                 assert_eq!(result.client.to_string(), "pnpm");
 
-                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
                 let package_json_path = temp_dir.path().join("package.json");
-                let package_json: serde_json::Value =
-                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-                println!("package_json: {package_json:?}");
-                let entry = &package_json["devEngines"]["packageManager"];
-                assert_eq!(entry["name"].as_str().unwrap(), "pnpm");
-                assert!(Version::parse(entry["version"].as_str().unwrap()).is_ok());
-                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-                // the legacy field is not written
-                assert!(package_json.get("packageManager").is_none());
-                // keep other fields
-                assert_eq!(package_json["version"].as_str().unwrap(), "1.0.0");
-                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                assert_eq!(fs::read_to_string(package_json_path).unwrap(), package_content);
             },
         )
         .await;
@@ -2910,16 +2822,8 @@ mod tests {
                     "bin_prefix should end with yarn/bin, but got {:?}",
                     result.get_bin_prefix()
                 );
-                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
                 let package_json_path = temp_dir_path.join("package.json");
-                let package_json: serde_json::Value =
-                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-                println!("package_json: {package_json:?}");
-                let entry = &package_json["devEngines"]["packageManager"];
-                assert_eq!(entry["name"].as_str().unwrap(), "yarn");
-                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-                // keep other fields
-                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                assert_eq!(fs::read_to_string(package_json_path).unwrap(), package_content);
             },
         )
         .await;
@@ -3467,143 +3371,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_dev_engines_package_manager_field_preserves_format_and_engines() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_json_path = temp_dir_path.join("package.json");
-        // 4-space indentation and an existing engines.node that must stay unchanged
-        let package_content = "{\n    \"name\": \"test-package\",\n    \"engines\": {\n        \"node\": \">=20.0.0\"\n    },\n    \"scripts\": {}\n}\n";
-        fs::write(&package_json_path, package_content).unwrap();
-
-        set_dev_engines_package_manager_field(
-            &package_json_path,
-            PackageManagerType::Pnpm,
-            "9.15.0",
-        )
-        .await
-        .unwrap();
-
-        let updated = fs::read_to_string(&package_json_path).unwrap();
-        // engines.node is kept unchanged and devEngines is placed right after it
-        assert_eq!(
-            updated,
-            "{\n    \"name\": \"test-package\",\n    \"engines\": {\n        \"node\": \">=20.0.0\"\n    },\n    \"devEngines\": {\n        \"packageManager\": {\n            \"name\": \"pnpm\",\n            \"version\": \"9.15.0\",\n            \"onFail\": \"download\"\n        }\n    },\n    \"scripts\": {}\n}\n"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_set_dev_engines_package_manager_field_appends_to_existing_array() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_json_path = temp_dir_path.join("package.json");
-        // entries Vite+ does not act on (detection fell through to a lockfile)
-        // must be preserved, never replaced
-        let package_content = r#"{
-  "name": "test-package",
-  "devEngines": {
-    "packageManager": [
-      {
-        "name": "vlt",
-        "version": "^1.0.0",
-        "onFail": "ignore"
-      }
-    ]
-  }
-}
-"#;
-        fs::write(&package_json_path, package_content).unwrap();
-
-        set_dev_engines_package_manager_field(
-            &package_json_path,
-            PackageManagerType::Pnpm,
-            "9.15.0",
-        )
-        .await
-        .unwrap();
-
-        let updated = fs::read_to_string(&package_json_path).unwrap();
-        let package_json: serde_json::Value = serde_json::from_str(&updated).unwrap();
-        let entries = package_json["devEngines"]["packageManager"].as_array().unwrap();
-        assert_eq!(entries.len(), 2);
-        // the existing entry stays first with its onFail intact
-        assert_eq!(entries[0]["name"].as_str().unwrap(), "vlt");
-        assert_eq!(entries[0]["onFail"].as_str().unwrap(), "ignore");
-        assert_eq!(entries[1]["name"].as_str().unwrap(), "pnpm");
-        assert_eq!(entries[1]["version"].as_str().unwrap(), "9.15.0");
-        assert_eq!(entries[1]["onFail"].as_str().unwrap(), "download");
-    }
-
-    #[tokio::test]
-    async fn test_set_dev_engines_package_manager_field_converts_single_entry_to_array() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_json_path = temp_dir_path.join("package.json");
-        let package_content = r#"{
-  "devEngines": {
-    "packageManager": {
-      "name": "vlt",
-      "version": "^1.0.0",
-      "onFail": "warn"
-    }
-  }
-}
-"#;
-        fs::write(&package_json_path, package_content).unwrap();
-
-        set_dev_engines_package_manager_field(
-            &package_json_path,
-            PackageManagerType::Npm,
-            "11.4.0",
-        )
-        .await
-        .unwrap();
-
-        let updated = fs::read_to_string(&package_json_path).unwrap();
-        let package_json: serde_json::Value = serde_json::from_str(&updated).unwrap();
-        let entries = package_json["devEngines"]["packageManager"].as_array().unwrap();
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0]["name"].as_str().unwrap(), "vlt");
-        assert_eq!(entries[0]["onFail"].as_str().unwrap(), "warn");
-        assert_eq!(entries[1]["name"].as_str().unwrap(), "npm");
-        assert_eq!(entries[1]["version"].as_str().unwrap(), "11.4.0");
-    }
-
-    #[tokio::test]
-    async fn test_set_dev_engines_package_manager_field_keeps_existing_runtime() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_json_path = temp_dir_path.join("package.json");
-        let package_content = r#"{
-  "name": "test-package",
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": "^24.0.0"
-    }
-  }
-}
-"#;
-        fs::write(&package_json_path, package_content).unwrap();
-
-        set_dev_engines_package_manager_field(
-            &package_json_path,
-            PackageManagerType::Npm,
-            "11.4.0",
-        )
-        .await
-        .unwrap();
-
-        let updated = fs::read_to_string(&package_json_path).unwrap();
-        let package_json: serde_json::Value = serde_json::from_str(&updated).unwrap();
-        // the existing runtime entry is preserved
-        assert_eq!(package_json["devEngines"]["runtime"]["version"].as_str().unwrap(), "^24.0.0");
-        let entry = &package_json["devEngines"]["packageManager"];
-        assert_eq!(entry["name"].as_str().unwrap(), "npm");
-        assert_eq!(entry["version"].as_str().unwrap(), "11.4.0");
-        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-    }
-
-    #[tokio::test]
     async fn test_parse_package_manager_with_sha1_hash() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -3946,15 +3713,8 @@ mod tests {
                     .await
                     .expect("Should use default");
                 assert_eq!(result.client.to_string(), "yarn");
-                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
                 let package_json_path = temp_dir_path.join("package.json");
-                let package_json: serde_json::Value =
-                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-                let entry = &package_json["devEngines"]["packageManager"];
-                assert_eq!(entry["name"].as_str().unwrap(), "yarn");
-                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-                // keep other fields
-                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                assert_eq!(fs::read_to_string(package_json_path).unwrap(), package_content);
             },
         )
         .await;
@@ -4406,15 +4166,8 @@ mod tests {
                     "bin_prefix should end with yarn/bin, but got {:?}",
                     result.get_bin_prefix()
                 );
-                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
                 let package_json_path = temp_dir.path().join("package.json");
-                let package_json: serde_json::Value =
-                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-                let entry = &package_json["devEngines"]["packageManager"];
-                assert_eq!(entry["name"].as_str().unwrap(), "yarn");
-                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-                // keep other fields
-                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                assert_eq!(fs::read_to_string(package_json_path).unwrap(), package_content);
             },
         )
         .await;
@@ -4445,15 +4198,8 @@ mod tests {
                     "bin_prefix should end with pnpm/bin, but got {:?}",
                     result.get_bin_prefix()
                 );
-                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
                 let package_json_path = temp_dir_path.join("package.json");
-                let package_json: serde_json::Value =
-                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-                let entry = &package_json["devEngines"]["packageManager"];
-                assert_eq!(entry["name"].as_str().unwrap(), "pnpm");
-                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-                // keep other fields
-                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                assert_eq!(fs::read_to_string(package_json_path).unwrap(), package_content);
             },
         )
         .await;
@@ -4487,15 +4233,8 @@ mod tests {
                     "bin_prefix should end with yarn/bin, but got {:?}",
                     result.get_bin_prefix()
                 );
-                // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
                 let package_json_path = temp_dir_path.join("package.json");
-                let package_json: serde_json::Value =
-                    serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-                let entry = &package_json["devEngines"]["packageManager"];
-                assert_eq!(entry["name"].as_str().unwrap(), "yarn");
-                assert_eq!(entry["onFail"].as_str().unwrap(), "download");
-                // keep other fields
-                assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
+                assert_eq!(fs::read_to_string(package_json_path).unwrap(), package_content);
             },
         )
         .await;

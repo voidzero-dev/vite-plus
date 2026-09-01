@@ -685,7 +685,7 @@ async fn run_package_manager_command(
         && let Some(manager) =
             system_package_manager(selected.package_manager_type, &system_path).await
     {
-        vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager, selected).await?
+        vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager).await?
     } else {
         let selected = commands::env::package_manager::resolve_current(&cwd).await?;
         match selected {

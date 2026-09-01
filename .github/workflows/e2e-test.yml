@@ -399,6 +399,8 @@ jobs:
               vp run test:coverage
           - name: nuxt-devtools
             node-version: 24
+            # The Windows build can exceed Node's default old-space limit.
+            node-options: --max-old-space-size=4096
             command: |
               vp run build
               vp run typecheck
@@ -507,6 +509,8 @@ jobs:
 
       - name: Run vite-plus commands in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
+        env:
+          NODE_OPTIONS: ${{ matrix.project.node-options || '' }}
         run: ${{ matrix.project.command }}
 
   notify-failure:
