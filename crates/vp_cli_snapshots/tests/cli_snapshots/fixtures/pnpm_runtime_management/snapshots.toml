@@ -1,0 +1,56 @@
+[[case]]
+name = "pnpm_runtime_disabled_for_managed_node"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+comment = "Vite+ owns Node.js runtime management independently from the selected pnpm binary."
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/20.18.0/bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "on", "node"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct system-first pnpm disables its duplicate Node.js runtime" },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "pnpm-backed vp install applies the same system-first policy" },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '10.18.0\\n'; else printf 'PNPM_CONFIG_RUNTIME=%s\\n' \"${PNPM_CONFIG_RUNTIME-unset}\"; fi\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx"], snapshot = false },
+  { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "install"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct managed pnpm disables its duplicate Node.js runtime" },
+  { argv = ["vp", "install"], envs = [["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "pnpm-backed vp install applies the same managed-pnpm policy" },
+]
+
+[[case]]
+name = "pnpm_runtime_preserved_for_mixed_runtimes"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+comment = "Vite+ must not disable pnpm runtimes that it cannot manage."
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\",\"devEngines\":{\"runtime\":[{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"},{\"name\":\"deno\",\"version\":\"2.0.0\",\"onFail\":\"download\"}]}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/20.18.0/bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "on", "node"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct pnpm preserves runtime management for a mixed declaration" },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "vp install preserves the same mixed-runtime setting" },
+]
+
+[[case]]
+name = "pnpm_runtime_preserved_for_system_first_node"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+comment = "pnpm keeps runtime ownership when Vite+ does not manage Node.js."
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct pnpm preserves runtime management with system-first Node.js" },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "vp install preserves the same system-first Node.js policy" },
+]

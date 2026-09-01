@@ -1,0 +1,2 @@
+#!/bin/sh
+printf 'v20.18.0\n'

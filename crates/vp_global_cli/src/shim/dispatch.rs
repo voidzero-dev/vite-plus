@@ -23,6 +23,7 @@ use crate::{
             package_metadata::PackageMetadata,
         },
         global::install::is_protected_shim,
+        pnpm_runtime,
     },
     error::Error,
 };
@@ -737,6 +738,37 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
     // Check shim mode from config
     let shim_mode = load_shim_mode(tool).await;
+    let disable_pnpm_runtime =
+        if PackageManagerType::from_tool(tool) == Some(PackageManagerType::Pnpm) {
+            let cwd = match current_dir() {
+                Ok(path) => path,
+                Err(error) => {
+                    eprintln!("vp: Failed to get current directory: {error}");
+                    return 1;
+                }
+            };
+            let node_shim_mode = match config::load_config().await {
+                Ok(config) => config.node_shim_mode,
+                Err(error) => {
+                    eprintln!("vp: Failed to load Node.js shim mode: {error}");
+                    return 1;
+                }
+            };
+            match pnpm_runtime::should_disable(&cwd, node_shim_mode).await {
+                Ok(disable) => disable,
+                Err(error) => {
+                    eprintln!("vp: Failed to resolve pnpm runtime management: {error}");
+                    return 1;
+                }
+            }
+        } else {
+            false
+        };
+    let pnpm_runtime_env = if disable_pnpm_runtime {
+        &[(pnpm_runtime::PNPM_CONFIG_RUNTIME, pnpm_runtime::PNPM_CONFIG_RUNTIME_DISABLED)][..]
+    } else {
+        &[]
+    };
     if shim_mode == ShimMode::SystemFirst {
         tracing::debug!("system-first mode enabled");
         // In system-first mode, try to find system tool first
@@ -764,7 +796,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                     std::env::set_var(env_vars::VP_BYPASS, bypass_val);
                 }
             }
-            return exec::exec_tool(&system_path, args);
+            return exec::exec_tool_with_env(&system_path, args, pnpm_runtime_env);
         }
         // Fall through to managed if system not found
     }
@@ -930,7 +962,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     }
 
     // Execute the tool (normal path — exec replaces process on Unix)
-    exec::exec_tool(&tool_path, args)
+    exec::exec_tool_with_env(&tool_path, args, pnpm_runtime_env)
 }
 
 fn node_prefix_from_binary(node_path: &AbsolutePath) -> AbsolutePathBuf {

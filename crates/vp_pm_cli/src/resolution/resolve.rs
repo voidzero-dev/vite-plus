@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use semver::Version;
 
 use crate::{
@@ -11,6 +13,14 @@ use crate::{
 pub(crate) struct Resolution {
     pub(crate) outcome: CommandResolution,
     pub(crate) diagnostics: Diagnostics,
+}
+
+impl Resolution {
+    pub(crate) fn extend_env(&mut self, env: &BTreeMap<String, String>) {
+        if let CommandResolution::Run(command) = &mut self.outcome {
+            command.env.extend(env.clone());
+        }
+    }
 }
 
 pub(crate) trait Resolve<A>: PackageManagerDialect {

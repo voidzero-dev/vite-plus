@@ -21,7 +21,8 @@ pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::npm_registry;
 pub use dispatch::{
     DispatchResult, dispatch, dispatch_with_metadata, dispatch_with_package_manager,
-    dispatch_with_resolved_package_manager,
+    dispatch_with_package_manager_and_env, dispatch_with_resolved_package_manager,
+    dispatch_with_resolved_package_manager_and_env,
 };
 pub use error::Error;
 pub use package_manager::{

@@ -176,6 +176,7 @@ pub mod config;
 pub mod create;
 pub mod hooks;
 pub mod migrate;
+pub(crate) mod pnpm_runtime;
 pub mod staged;
 pub mod toolchain;
 pub mod version;

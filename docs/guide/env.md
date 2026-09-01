@@ -74,6 +74,8 @@ vp env off
 
 This switches both components to system-first mode. Vite+ prefers system tools and falls back to managed installations. Mixed configurations compose: a system package-manager launcher receives the Node.js selected by the Node mode.
 
+When Node.js is managed and a pnpm project declares only Node.js in `devEngines.runtime`, Vite+ passes `PNPM_CONFIG_RUNTIME=false` to pnpm so it does not install a duplicate runtime. This also applies when pnpm is system-first because the Node.js and package-manager modes are independent. Vite+ leaves pnpm runtime management unchanged for Bun, Deno, and mixed runtime declarations.
+
 Using `pm` records the selected mode for all currently supported package managers and replaces their individual choices. An unscoped `on` or `off` does the same while also changing Node.js. A family without a recorded mode remains undecided until its shim is first used or an `on` / `off` command configures it.
 
 ## Commands

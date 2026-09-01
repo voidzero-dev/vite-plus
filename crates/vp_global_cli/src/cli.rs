@@ -3,7 +3,11 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::{collections::HashSet, ffi::OsStr, process::ExitStatus};
+use std::{
+    collections::{BTreeMap, HashSet},
+    ffi::OsStr,
+    process::ExitStatus,
+};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
@@ -675,22 +679,45 @@ async fn run_package_manager_command(
 
     commands::prepend_js_runtime_to_path_env(&cwd).await?;
     let selected = commands::env::package_manager::resolve_current_spec(&cwd).await?;
+    let config = commands::env::config::load_config().await?;
+    let mut package_manager_env = BTreeMap::new();
+    if matches!(&command, PackageManagerCommand::Install(_))
+        && selected.as_ref().is_some_and(|selected| {
+            selected.package_manager_type == vp_pm_cli::PackageManagerType::Pnpm
+        })
+        && commands::pnpm_runtime::should_disable(&cwd, config.node_shim_mode).await?
+    {
+        package_manager_env.insert(
+            commands::pnpm_runtime::PNPM_CONFIG_RUNTIME.to_string(),
+            commands::pnpm_runtime::PNPM_CONFIG_RUNTIME_DISABLED.to_string(),
+        );
+    }
     let result = if let Some(selected) = selected.as_ref()
-        && commands::env::config::load_config()
-            .await?
-            .package_manager_shim_mode_for(selected.package_manager_type)
+        && config.package_manager_shim_mode_for(selected.package_manager_type)
             == commands::env::config::ShimMode::SystemFirst
         && let Some(system_path) =
             crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())
         && let Some(manager) =
             system_package_manager(selected.package_manager_type, &system_path).await
     {
-        vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager).await?
+        vp_pm_cli::dispatch_with_resolved_package_manager_and_env(
+            &cwd,
+            command,
+            manager,
+            &package_manager_env,
+        )
+        .await?
     } else {
         let selected = commands::env::package_manager::resolve_current(&cwd).await?;
         match selected {
             Some(selected) => {
-                vp_pm_cli::dispatch_with_package_manager(&cwd, command, &selected).await?
+                vp_pm_cli::dispatch_with_package_manager_and_env(
+                    &cwd,
+                    command,
+                    &selected,
+                    &package_manager_env,
+                )
+                .await?
             }
             None => vp_pm_cli::dispatch_with_metadata(&cwd, command).await?,
         }
