@@ -253,7 +253,7 @@ jobs:
         with:
           name: windows-test-archive
 
-      - uses: taiki-e/install-action@a2a5f6e99e1a31540baa0468acfa302cff0f359f # v2.86.4
+      - uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
         with:
           tool: cargo-nextest
 
@@ -960,8 +960,17 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
-      - name: Install Fish
-        uses: fish-actions/install-fish@4bb37a71daebb76c6fb7d83771cff31b8a78c28e # v1.2.0
+      - name: Ensure Fish is installed
+        run: |
+          if ! command -v fish >/dev/null 2>&1; then
+            if [ "$RUNNER_OS" = 'Linux' ]; then
+              sudo apt-get update
+              sudo apt-get install --yes fish
+            else
+              brew install fish
+            fi
+          fi
+          fish --version
 
       - name: Ensure Zsh is installed
         run: |
@@ -1093,7 +1102,7 @@ jobs:
         with:
           name: windows-snapshot-test-archive
 
-      - uses: taiki-e/install-action@a2a5f6e99e1a31540baa0468acfa302cff0f359f # v2.86.4
+      - uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
         with:
           tool: cargo-nextest
 

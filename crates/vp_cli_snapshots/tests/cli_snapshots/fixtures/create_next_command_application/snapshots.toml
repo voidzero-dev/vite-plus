@@ -4,3 +4,25 @@ vp = "global"
 steps = [
   { argv = ["vp", "create", "vite:application", "--no-interactive"], comment = "verify next command suggests vp run", continue-on-failure = true },
 ]
+
+[[case]]
+name = "create_git_command_application"
+vp = "global"
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--git"], comment = "standalone create: Git command must not change the current directory", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "vite-plus-application/.git", "--assert", "dir"], comment = "Git repository initialized", continue-on-failure = true },
+]
+
+[[case]]
+name = "create_git_command_application_with_special_directories"
+vp = "global"
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--git", "--directory", "examples with spaces/my-app"], comment = "quote a nested target directory that contains spaces", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "examples with spaces/my-app/.git", "--assert", "dir"], comment = "Git repository initialized in the target directory with spaces", continue-on-failure = true },
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--git", "--directory", "examples;tools/my-app"], comment = "quote a nested target directory that contains a shell metacharacter", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "examples;tools/my-app/.git", "--assert", "dir"], comment = "Git repository initialized in the target directory with a shell metacharacter", continue-on-failure = true },
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--git", "--directory", "示例/my-app"], comment = "quote a nested target directory that contains Chinese characters", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "示例/my-app/.git", "--assert", "dir"], comment = "Git repository initialized in the target directory with Chinese characters", continue-on-failure = true },
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--git", "--directory", "サンプル/my-app"], comment = "quote a nested target directory that contains Japanese characters", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "サンプル/my-app/.git", "--assert", "dir"], comment = "Git repository initialized in the target directory with Japanese characters", continue-on-failure = true },
+]
