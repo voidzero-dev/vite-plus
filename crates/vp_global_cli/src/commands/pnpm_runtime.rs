@@ -2,7 +2,7 @@ use std::path::Path;
 
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use super::env::config::ShimMode;
+use super::env::config::{self, ShimMode};
 use crate::error::Error;
 
 pub(crate) const PNPM_CONFIG_RUNTIME: &str = "PNPM_CONFIG_RUNTIME";
@@ -54,6 +54,7 @@ pub(crate) async fn should_disable(
     };
     let packages = vt_workspace::load_package_graph(&workspace)?;
     let mut has_managed_node = false;
+    let mut node_requirements = Vec::new();
 
     // pnpm converts both fields from every workspace manifest into runtime dependencies.
     for package in packages.node_weights() {
@@ -74,11 +75,23 @@ pub(crate) async fn should_disable(
                     return Ok(false);
                 }
                 has_managed_node = has_managed_node || engines == "devEngines";
+                if let Some(version) = entry.get("version").and_then(serde_json::Value::as_str) {
+                    node_requirements.push(version.to_string());
+                }
             }
         }
     }
 
-    // pnpm's runtime opt-out covers Node.js, Bun, and Deno together, so Vite+
-    // can use it only when every declared runtime is one Vite+ manages.
-    Ok(has_managed_node)
+    // The opt-out covers every runtime, so the selected Node.js must satisfy
+    // every declaration that pnpm would otherwise install.
+    if !has_managed_node {
+        return Ok(false);
+    }
+    let selected = config::resolve_version(cwd).await?;
+    let Ok(selected) = node_semver::Version::parse(&selected.version) else {
+        return Ok(false);
+    };
+    Ok(node_requirements.iter().all(|requirement| {
+        node_semver::Range::parse(requirement).is_ok_and(|range| range.satisfies(&selected))
+    }))
 }

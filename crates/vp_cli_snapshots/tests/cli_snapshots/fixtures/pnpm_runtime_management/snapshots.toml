@@ -110,3 +110,21 @@ steps = [
   { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["pnpm", "-C", "other", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "the target project's Deno runtime remains managed by pnpm" },
 ]
+
+[[case]]
+name = "pnpm_runtime_preserved_for_conflicting_node_versions"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+comment = "pnpm keeps runtime ownership when Vite+ selects a different Node.js version."
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"pnpm-runtime-management\",\"private\":true,\"packageManager\":\"pnpm@11.1.0\",\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"22.11.0\",\"onFail\":\"download\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".node-version", "20.18.0\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/js_runtime/node/20.18.0/bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "on", "node"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "direct pnpm preserves the conflicting Node.js runtime" },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["PNPM_CONFIG_RUNTIME", "from-user"]], comment = "vp install preserves the same conflicting runtime" },
+]
