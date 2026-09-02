@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "viteplus-dev",
+  "compatibility_date": "2026-09-02",
+  "account_id": "f8b59a295069bd81a0f256b7012f2c53",
+  "assets": {
+    "directory": "./.vitepress/dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}
