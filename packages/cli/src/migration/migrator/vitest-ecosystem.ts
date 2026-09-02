@@ -10,7 +10,9 @@ import {
   VITE_PLUS_OVERRIDE_PACKAGES,
 } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
+import { extractOverrideTargetName } from '../../utils/package-overrides.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
+import { isAlignableVitestEcosystemPackage } from '../../utils/vitest-ecosystem.ts';
 import {
   bootstrapProjectPaths,
   getCatalogDependencySpec,
@@ -31,23 +33,6 @@ import {
   type PackageJsonDependencyField,
 } from './shared.ts';
 
-// Official `@vitest/*` packages are versioned in lockstep with vitest and carry
-// an EXACT `vitest` peer (verified against the registry: `@vitest/coverage-v8`,
-// `@vitest/coverage-istanbul`, `@vitest/ui`, `@vitest/web-worker`, the browser
-// family, and the runtime internals all pin `vitest: <version>`), so any the
-// project lists must match the bundled vitest or Vitest runs mixed copies (the
-// `define-config.ts` coverage guard fail-fasts on exactly this skew).
-// `@vitest/eslint-plugin` versions on its own line, and deprecated
-// `@vitest/coverage-c8` never published on the Vitest 4 line, so neither may be
-// pinned to the bundled Vitest version.
-const VITEST_ALIGN_EXCLUDED = new Set([
-  '@vitest/eslint-plugin',
-  // Deprecated at 0.33.0 and replaced by @vitest/coverage-v8. It does not
-  // publish versions on Vitest's current release line, so pinning it to the
-  // bundled Vitest version creates a dependency spec that does not exist.
-  '@vitest/coverage-c8',
-]);
-
 // Official packages that do not declare a required `vitest` peer. Keep them
 // aligned when a project lists them directly, but do not add a direct vitest
 // merely because they are present.
@@ -63,58 +48,7 @@ export const VITEST_DIRECT_USAGE_EXCLUDED = new Set([
   '@vitest/ws-client',
 ]);
 
-export function isAlignableVitestEcosystemPackage(name: string): boolean {
-  return name.startsWith('@vitest/') && !VITEST_ALIGN_EXCLUDED.has(name);
-}
-
-// Extract the package name an override/resolution key *targets* — i.e. the
-// package whose version would be forced. This mirrors the grammar of the real
-// package-manager parsers (verified against `@yarnpkg/parsers` parseResolution):
-//   - bare (`pkg`, `@scope/pkg`)
-//   - versioned (`pkg@1`, `@scope/pkg@1`)
-//   - pnpm parent selectors (`parent>pkg`, chained `a@1>b>@scope/pkg`)
-//   - yarn `from/target` selectors (`parent/pkg`, `parent/@scope/pkg`,
-//     `parent@1/pkg`, glob `**/pkg`)
-// For a yarn `from/target` selector the forced package is the TRAILING
-// descriptor, not the parent: `@scope/pkg@4/child` targets `child`, and an
-// npm-alias key like `@scope/pkg@npm:@other/fork@1` is parsed by yarn as
-// `from=@scope/pkg@npm:@other`, `descriptor=fork@1` — so the target is `fork`,
-// NOT `@scope/pkg`. Taking the trailing descriptor is exactly that. (Yarn
-// *rejects* keys whose range embeds a slash, e.g. `pkg@patch:…/…` or git/URL
-// ranges, so those never reach us as valid keys and need no special handling.)
-// Scoped names keep their leading `@` and internal `/`.
-function extractOverrideTargetName(key: string): string {
-  // pnpm parent selector `parent>child` (incl. chains `a>b>child`): the forced
-  // package is the deepest child. pnpm splits at a `>` whose preceding char is
-  // NOT space, `|`, or `@` — this is pnpm's own delimiter rule (DELIMITER_REGEX
-  // = /[^ |@]>/ in @pnpm/parse-overrides) — so a semver comparator range such as
-  // `pkg@>=4`, `pkg@>4`, or `>1 || >2` is NOT mistaken for a parent selector.
-  // Peel parent levels until none remain, keeping the trailing child.
-  let target = key.trim();
-  for (let delim = target.search(/[^ |@]>/); delim !== -1; delim = target.search(/[^ |@]>/)) {
-    target = target.slice(delim + 2).trim();
-  }
-  if (!target) {
-    return target;
-  }
-  // yarn `from/target` selector: drop leading parent/glob segments, keeping the
-  // trailing package descriptor (and a scoped name's own `/`).
-  if (target.includes('/')) {
-    const segments = target.split('/');
-    const last = segments[segments.length - 1];
-    const scope = segments[segments.length - 2];
-    target = scope?.startsWith('@') ? `${scope}/${last}` : last;
-  }
-  // Strip a trailing version/range suffix. The version `@` follows the name
-  // (after the `/` for a scoped name); the leading scope `@` is never a version
-  // separator.
-  const nameStart = target.startsWith('@') ? target.indexOf('/') + 1 : 0;
-  const versionAt = target.indexOf('@', nameStart);
-  if (versionAt > 0) {
-    target = target.slice(0, versionAt);
-  }
-  return target;
-}
+export { isAlignableVitestEcosystemPackage } from '../../utils/vitest-ecosystem.ts';
 
 // True iff a pnpm.overrides key's target (after stripping selector and
 // version suffixes) is a provider whose stale pin must be dropped (see

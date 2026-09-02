@@ -90,6 +90,13 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Produce a dependency-alignment plan for external automation
+    #[command(name = "sync-versions", hide = true, disable_help_flag = true)]
+    SyncVersions {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// In-repo configuration (hooks, agent integration)
     #[command(disable_help_flag = true)]
     Config {
@@ -273,6 +280,7 @@ impl Commands {
         match self {
             Self::PackageManager(pm) => pm.is_quiet_or_machine_readable(),
             Self::Toolchain { json, .. } => *json,
+            Self::SyncVersions { .. } => true,
             Self::Upgrade { silent, .. } => *silent,
             Self::Env(args) => {
                 args.command.as_ref().is_some_and(|sub| sub.is_quiet_or_machine_readable())
@@ -1092,6 +1100,10 @@ pub async fn run_command_with_options(
 
         Commands::Migrate { args } => commands::migrate::execute(cwd, &args).await,
 
+        Commands::SyncVersions { args } => {
+            commands::sync_versions::execute(cwd, &args, raw_subcommand).await
+        }
+
         Commands::Config { args } => commands::config::execute(cwd, &args, raw_subcommand).await,
 
         Commands::Hooks { args } => commands::hooks::execute(cwd, &args, raw_subcommand).await,
@@ -1280,8 +1292,9 @@ pub fn try_parse_args_from_with_options(
 #[cfg(test)]
 mod tests {
     use super::{
-        display_node_version, has_flag_before_terminator, is_same_node_version, raw_subcommand,
-        should_force_global_delegate, should_suppress_header_for_subcommand,
+        Commands, display_node_version, has_flag_before_terminator, is_same_node_version,
+        raw_subcommand, should_force_global_delegate, should_suppress_header_for_subcommand,
+        try_parse_args_from,
     };
 
     fn argv(args: &[&str]) -> Vec<String> {
@@ -1303,6 +1316,17 @@ mod tests {
     fn raw_subcommand_is_none_without_a_subcommand() {
         assert_eq!(raw_subcommand(&argv(&["vp"])), None);
         assert_eq!(raw_subcommand(&argv(&["vp", "--version"])), None);
+    }
+
+    #[test]
+    fn parses_sync_versions_as_machine_readable_global_command() {
+        let parsed = try_parse_args_from(argv(&["vp", "sync-versions", "--plan-json"]))
+            .expect("sync-versions should parse");
+        let Some(Commands::SyncVersions { args }) = parsed.command else {
+            panic!("expected sync-versions command");
+        };
+        assert_eq!(args, vec!["--plan-json"]);
+        assert!(Commands::SyncVersions { args }.is_quiet_or_machine_readable());
     }
 
     #[test]

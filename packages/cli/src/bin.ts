@@ -1,7 +1,7 @@
 /**
  * Unified entry point for both the local CLI (via bin/vp) and the global CLI (via Rust vp binary).
  *
- * Global commands (create, migrate, config, hooks, staged, --version) are handled by tsdown-bundled modules.
+ * Global commands (create, migrate, sync-versions, config, hooks, staged, --version) are handled by tsdown-bundled modules.
  * All other commands are delegated to the Rust core through NAPI bindings, which
  * uses JavaScript tool resolver functions to locate tool binaries.
  *
@@ -117,6 +117,8 @@ if (maybePrintCommandHelp(args)) {
   await import('./create/bin.js');
 } else if (command === 'migrate') {
   await import('./migration/bin.js');
+} else if (command === 'sync-versions') {
+  await import('./sync-versions/bin.js');
 } else if (command === 'config') {
   await import('./config/bin.js');
 } else if (command === 'hooks') {

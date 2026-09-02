@@ -132,10 +132,13 @@ jobs:
         shell: bash
         working-directory: ./target/${{ matrix.settings.target }}/release
         run: |
+          mkdir -p sync-versions
+          cp ../../../packages/cli/dist/sync-versions/bin.mjs sync-versions/bin.mjs
+          cp ../../../packages/cli/dist/toolchain.json toolchain.json
           if [ -f vp.exe ]; then
-            7z a "vp-${{ matrix.settings.target }}.zip" vp.exe vp-shim.exe
+            7z a "vp-${{ matrix.settings.target }}.zip" vp.exe vp-shim.exe sync-versions/bin.mjs toolchain.json
           else
-            tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp
+            tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp sync-versions/bin.mjs toolchain.json
           fi
 
       - name: Upload release archive

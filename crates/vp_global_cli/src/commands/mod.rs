@@ -177,6 +177,7 @@ pub mod create;
 pub mod hooks;
 pub mod migrate;
 pub mod staged;
+pub mod sync_versions;
 pub mod toolchain;
 pub mod version;
 

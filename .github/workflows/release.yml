@@ -152,6 +152,10 @@ jobs:
           pattern: vp-release-archive-*
           merge-multiple: true
 
+      - name: Create release archive checksums
+        working-directory: binary-release
+        run: sha256sum vp-* > vp-checksums.txt
+
       - name: Prepare and publish native addons
         run: node ./packages/cli/publish-native-addons.ts --mode npm
 
@@ -207,6 +211,7 @@ jobs:
             installer-release/vp-setup-*.exe
             binary-release/vp-*.tar.gz
             binary-release/vp-*.zip
+            binary-release/vp-checksums.txt
 
       - name: Publish GitHub Release
         env:
