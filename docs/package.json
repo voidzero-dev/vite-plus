@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vitepress dev",
     "build": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vp run build:site",
+    "build:cloudflare": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vitepress build",
     "build:netlify": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vitepress build",
     "deploy:cloudflare": "pnpm run build && wrangler deploy",
     "preview": "vitepress preview",
