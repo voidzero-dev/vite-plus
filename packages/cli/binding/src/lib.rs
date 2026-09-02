@@ -148,11 +148,16 @@ fn create_vite_config_resolver(
 }
 
 fn format_error_message(error: &(dyn StdError + 'static)) -> String {
-    let mut message = error.to_string();
+    let mut previous = error.to_string();
+    let mut message = previous.clone();
     let mut source = error.source();
 
     while let Some(current) = source {
-        let _ = write!(message, "\n* {current}");
+        let current_message = current.to_string();
+        if current_message != previous {
+            let _ = write!(message, "\n* {current_message}");
+        }
+        previous = current_message;
         source = current.source();
     }
 

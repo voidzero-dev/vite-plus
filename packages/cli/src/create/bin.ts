@@ -242,7 +242,12 @@ function getNextCommand(projectDir: string, command: string) {
   if (!projectDir || projectDir === '.') {
     return command;
   }
-  return `cd ${projectDir} && ${command}`;
+  return `cd ${formatProjectDirArgument(projectDir)} && ${command}`;
+}
+
+function formatProjectDirArgument(projectDir: string) {
+  const argument = projectDir.startsWith('-') ? `./${projectDir}` : projectDir;
+  return /^[A-Za-z0-9_@./\\-]+$/.test(argument) ? argument : JSON.stringify(argument);
 }
 
 function getCopilotSetupRoot(projectRoot: string, isExistingMonorepo: boolean) {
@@ -254,6 +259,7 @@ function getCopilotSetupRoot(projectRoot: string, isExistingMonorepo: boolean) {
 
 function showCreateSummary(options: {
   description?: string;
+  gitInitialized: boolean;
   installSummary?: CommandRunSummary;
   nextCommand: string;
   packageManager: string;
@@ -262,6 +268,7 @@ function showCreateSummary(options: {
 }) {
   const {
     description,
+    gitInitialized,
     installSummary,
     nextCommand,
     packageManager,
@@ -283,6 +290,12 @@ function showCreateSummary(options: {
         installSummary.durationMs,
       )}`,
     );
+  }
+  if (gitInitialized) {
+    const git =
+      !projectDir || projectDir === '.' ? 'git' : `git -C ${formatProjectDirArgument(projectDir)}`;
+    const gitCommand = `${git} add -A && ${git} commit -m "chore: initial commit"`;
+    log(`${styleText('blue', '→')} Git (optional): ${accent(gitCommand)}`);
   }
   log(`${styleText('blue', '→')} Next: ${accent(nextCommand)}`);
 }
@@ -346,6 +359,7 @@ async function main() {
   let selectedEditors: Awaited<ReturnType<typeof selectEditors>>;
   let selectedParentDir: string | undefined;
   let remoteTargetDir: string | undefined;
+  let gitInitialized = false;
   let shouldSetupHooks = false;
   let bundled: Extract<OrgResolution, { kind: 'bundled' }> | undefined;
   let skipShorthandExpansion = false;
@@ -883,7 +897,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     // matching the standalone path below.
     if (shouldSetupGit) {
       updateCreateProgress('Initializing git repository');
-      if (await initGitRepository(fullPath)) {
+      gitInitialized = await initGitRepository(fullPath);
+      if (gitInitialized) {
         ensureDefaultGitignoreEntries(fullPath);
       }
     }
@@ -953,6 +968,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     clearCreateProgress();
     showCreateSummary({
       description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
+      gitInitialized,
       installSummary,
       nextCommand: getNextCommand(projectDir, 'vp run'),
       packageManager: workspaceInfo.packageManager,
@@ -1256,7 +1272,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     // for a subdirectory project and its staged workflow is left half-set-up.
     if (shouldSetupGit) {
       updateCreateProgress('Initializing git repository');
-      if (await initGitRepository(fullPath)) {
+      gitInitialized = await initGitRepository(fullPath);
+      if (gitInitialized) {
         ensureDefaultGitignoreEntries(fullPath);
       }
     }
@@ -1293,6 +1310,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   clearCreateProgress();
   showCreateSummary({
     description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
+    gitInitialized,
     installSummary,
     nextCommand: getNextCommand(projectDir, 'vp run'),
     packageManager: workspaceInfo.packageManager,

@@ -313,7 +313,7 @@ vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dc
 vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }
 walkdir = "2.5.0"
 webpki-root-certs = "1.0.9"
-which = "8.0.0"
+which = "8.0.6"
 winreg = "0.56.0"
 xxhash-rust = "0.8.15"
 zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
