@@ -1192,6 +1192,66 @@ describe('collectInstalledPackageNames', () => {
     sanitizeMigratedOxlintConfig(config, available);
     expect(config.jsPlugins).toEqual([]);
   });
+
+  // #2231: a local jsPlugin's real namespace comes from its `meta.name`,
+  // which can't be derived from the path, so its rules get filtered out.
+  // Dropping them is currently required (Oxlint refuses to start on a rule
+  // whose plugin it can't resolve), but it must not happen silently.
+  it('warns which rules it dropped when a local jsPlugin namespace is unresolvable', () => {
+    writeRootPkg({ devDependencies: { vite: '^7.0.0' } });
+    const available = collectInstalledPackageNames(tmpDir);
+    const report = createMigrationReport();
+    const config: import('oxlint').OxlintConfig = {
+      jsPlugins: ['./lint/kumo.js'],
+      rules: { 'kumo/no-foo': 'error', 'no-debugger': 'error' },
+    };
+
+    sanitizeMigratedOxlintConfig(config, available, report);
+
+    // The unbacked rule still has to go, and the native one stays.
+    expect(config.rules).toEqual({ 'no-debugger': 'error' });
+    // The local plugin itself is preserved — Oxlint resolves it by path.
+    expect(config.jsPlugins).toEqual(['./lint/kumo.js']);
+    // The drop is reported, names the rule, and points at the fix.
+    const warning = report.warnings.find((w) => w.includes('Stripped lint rule(s)'));
+    expect(warning).toBeDefined();
+    expect(warning).toContain('kumo/no-foo');
+    expect(warning).not.toContain('no-debugger');
+    expect(warning).toContain('specifier');
+  });
+
+  it('reports rules dropped from overrides, not just base rules', () => {
+    writeRootPkg({ devDependencies: { vite: '^7.0.0' } });
+    const available = collectInstalledPackageNames(tmpDir);
+    const report = createMigrationReport();
+    const config: import('oxlint').OxlintConfig = {
+      overrides: [{ files: ['**/*.ts'], rules: { 'kumo/no-bar': 'warn' } }],
+    };
+
+    sanitizeMigratedOxlintConfig(config, available, report);
+
+    expect(config.overrides?.[0]?.rules).toEqual({});
+    const warning = report.warnings.find((w) => w.includes('Stripped lint rule(s)'));
+    expect(warning).toBeDefined();
+    expect(warning).toContain('kumo/no-bar');
+  });
+
+  it('does not warn about rules when nothing was dropped', () => {
+    writeRootPkg({ devDependencies: { vite: '^7.0.0' } });
+    const available = collectInstalledPackageNames(tmpDir);
+    const report = createMigrationReport();
+    const config: import('oxlint').OxlintConfig = {
+      rules: { 'no-debugger': 'error', 'typescript/no-explicit-any': 'error' },
+    };
+
+    sanitizeMigratedOxlintConfig(config, available, report);
+
+    expect(config.rules).toEqual({
+      'no-debugger': 'error',
+      'typescript/no-explicit-any': 'error',
+    });
+    expect(report.warnings.some((w) => w.includes('Stripped lint rule(s)'))).toBe(false);
+  });
 });
 
 describe('ensureSvelteRuneGlobals', () => {

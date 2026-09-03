@@ -541,15 +541,23 @@ function ruleKeyMatchesNamespace(key: string, namespaces: Set<string>): boolean 
   return false;
 }
 
-/** Filter a rules object to only entries whose namespace is recognized. */
+/**
+ * Filter a rules object to only entries whose namespace is recognized.
+ * Every removed key is recorded in `dropped` so the caller can tell the
+ * user which rules it lost — silently discarding a user's custom rules
+ * is the failure mode reported in #2231.
+ */
 function filterRulesAgainstNamespaces(
   rules: Record<string, unknown>,
   namespaces: Set<string>,
+  dropped?: Set<string>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(rules)) {
     if (ruleKeyMatchesNamespace(key, namespaces)) {
       out[key] = value;
+    } else {
+      dropped?.add(key);
     }
   }
   return out;
@@ -634,6 +642,7 @@ export function sanitizeMigratedOxlintConfig(
   // Track everything we strip so we can warn the user.
   const allDroppedJsPlugins = new Set<string>();
   const allDroppedPlugins = new Set<string>();
+  const allDroppedRules = new Set<string>();
 
   // 1. Sanitize base-level jsPlugins.
   const baseSplit = partitionJsPlugins(config.jsPlugins ?? [], availablePackages);
@@ -670,7 +679,7 @@ export function sanitizeMigratedOxlintConfig(
   // `rules: undefined` property that would shift downstream key
   // emission in the merged vite.config.ts.
   if (config.rules) {
-    const filtered = filterRulesAgainstNamespaces(config.rules, baseNamespaces);
+    const filtered = filterRulesAgainstNamespaces(config.rules, baseNamespaces, allDroppedRules);
     if (Object.keys(filtered).length !== Object.keys(config.rules).length) {
       config.rules = filtered as typeof config.rules;
     }
@@ -720,7 +729,11 @@ export function sanitizeMigratedOxlintConfig(
 
       // Override rules.
       if (override.rules) {
-        const filtered = filterRulesAgainstNamespaces(override.rules, overrideNamespaces);
+        const filtered = filterRulesAgainstNamespaces(
+          override.rules,
+          overrideNamespaces,
+          allDroppedRules,
+        );
         if (Object.keys(filtered).length !== Object.keys(override.rules).length) {
           override.rules = filtered as typeof override.rules;
         }
@@ -750,6 +763,19 @@ export function sanitizeMigratedOxlintConfig(
     warnMigration(
       `Stripped unknown plugin reference(s) from the generated lint config: ${[...allDroppedPlugins].join(', ')}. ` +
         "These aren't native Oxlint plugins and no surviving JS plugin contributes them.",
+      report,
+    );
+  }
+  // Rules have to go when nothing backs their namespace: Oxlint refuses to
+  // start at all on a rule whose plugin it can't find ("Plugin 'x' not
+  // found"), so keeping them would break `vp lint` outright rather than
+  // degrade it. But losing a rule the user wrote should never be silent —
+  // dropped plugins already warn, and rules used to disappear quietly.
+  if (allDroppedRules.size > 0) {
+    warnMigration(
+      `Stripped lint rule(s) from the generated lint config: ${[...allDroppedRules].join(', ')}. ` +
+        'No plugin in the migrated config contributes their namespace, and Oxlint fails to start when a rule names a plugin it cannot find. ' +
+        "If a namespace comes from a local JS plugin, name it explicitly in `lint.jsPlugins` as `{ name: '<namespace>', specifier: './path/to/plugin.js' }` and add those rules back.",
       report,
     );
   }
