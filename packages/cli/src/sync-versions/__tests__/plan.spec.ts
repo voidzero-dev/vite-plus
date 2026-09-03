@@ -57,6 +57,32 @@ describe('planSyncVersions', () => {
     });
   });
 
+  it('aligns managed npm aliases and preserves custom aliases', () => {
+    const before = `${JSON.stringify(
+      {
+        devDependencies: {
+          '@vitest/ui': 'npm:@vitest/ui@4.1.11',
+          'vite-plus': 'npm:@scope/vite-plus-fork@0.3.0',
+          vite: 'npm:@voidzero-dev/vite-plus-core@^0.3.0',
+          vitest: 'npm:vitest@~4.1.11',
+        },
+      },
+      null,
+      2,
+    )}\n`;
+
+    const plan = planSyncVersions(packageJsonRequest(before), toolchain);
+
+    expect(JSON.parse(plan.replacements[0].after)).toEqual({
+      devDependencies: {
+        '@vitest/ui': 'npm:@vitest/ui@5.0.0',
+        'vite-plus': 'npm:@scope/vite-plus-fork@0.3.0',
+        vite: 'npm:@voidzero-dev/vite-plus-core@0.4.0',
+        vitest: 'npm:vitest@5.0.0',
+      },
+    });
+  });
+
   it('updates referenced pnpm catalogs without replacing catalog protocols', () => {
     const packageJson = `${JSON.stringify(
       {
@@ -68,7 +94,7 @@ describe('planSyncVersions', () => {
       null,
       2,
     )}\n`;
-    const pnpmWorkspace = `packages:\n  - packages/*\ncatalog:\n  '@vitest/coverage-v8': 4.1.11\ncatalogs:\n  toolchain:\n    vite-plus: 0.3.0\n`;
+    const pnpmWorkspace = `packages:\n  - packages/*\ncatalog:\n  '@vitest/coverage-v8': 4.1.11\ncatalogs:\n  toolchain:\n    vite: npm:@voidzero-dev/vite-plus-core@0.3.0\n    vite-plus: 0.3.0\n`;
     const request = parseSyncVersionsRequest({
       schemaVersion: 1,
       workspace: '.',
@@ -85,8 +111,48 @@ describe('planSyncVersions', () => {
     expect(parseYaml(plan.replacements[0].after)).toEqual({
       packages: ['packages/*'],
       catalog: { '@vitest/coverage-v8': '5.0.0' },
-      catalogs: { toolchain: { 'vite-plus': '0.4.0' } },
+      catalogs: {
+        toolchain: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@0.4.0',
+          'vite-plus': '0.4.0',
+        },
+      },
     });
+  });
+
+  it('updates Yarn catalogs without touching pnpm-only overrides or surrounding bytes', () => {
+    const before =
+      'nodeLinker: node-modules\r\ncatalog:\r\n    vitest: \'^4.1.11\' # keep this comment\r\ncatalogs:\r\n  toolchain:\r\n    vite: "npm:@voidzero-dev/vite-plus-core@0.3.0"\r\n    vite-plus: 0.3.0\r\noverrides:\r\n  vitest: 4.1.11\r\n';
+    const request = parseSyncVersionsRequest({
+      schemaVersion: 1,
+      workspace: '.',
+      manifests: [{ path: '.yarnrc.yml', kind: 'yarnRc', contents: before }],
+    });
+
+    const plan = planSyncVersions(request, toolchain);
+
+    expect(plan.replacements).toHaveLength(1);
+    expect(plan.replacements[0].kind).toBe('yarnRc');
+    expect(plan.replacements[0].after).toBe(
+      before
+        .replace("vitest: '^4.1.11'", "vitest: '5.0.0'")
+        .replace(
+          'vite: "npm:@voidzero-dev/vite-plus-core@0.3.0"',
+          'vite: "npm:@voidzero-dev/vite-plus-core@0.4.0"',
+        )
+        .replace('vite-plus: 0.3.0', 'vite-plus: 0.4.0'),
+    );
+  });
+
+  it('returns a byte-identical Yarn no-op and ignores its overrides', () => {
+    const before = 'catalog: { vitest: "5.0.0" }  # keep spacing\noverrides:\n  vitest: 4.1.11\n';
+    const request = parseSyncVersionsRequest({
+      schemaVersion: 1,
+      workspace: '.',
+      manifests: [{ path: 'config/.yarnrc.yml', kind: 'yarnRc', contents: before }],
+    });
+
+    expect(planSyncVersions(request, toolchain).replacements).toEqual([]);
   });
 
   it('changes only YAML scalar tokens and preserves surrounding formatting', () => {
@@ -146,12 +212,14 @@ describe('planSyncVersions', () => {
     expect(planSyncVersions(request, toolchain).replacements).toEqual([]);
   });
 
-  it('preserves non-registry protocols and returns a byte-identical no-op', () => {
+  it('preserves custom npm aliases and non-registry protocols in a byte-identical no-op', () => {
     const before = `${JSON.stringify(
       {
         dependencies: {
           '@vitest/browser-playwright': 'file:../provider.tgz',
+          vite: 'npm:@scope/vite-fork@6.0.0',
           'vite-plus': 'workspace:*',
+          vitest: 'npm:@scope/vitest-fork@4.1.11',
         },
       },
       null,
@@ -326,6 +394,11 @@ describe('parseSyncVersionsRequest', () => {
       schemaVersion: 1,
       workspace: '.',
       manifests: [{ path: 'pnpm-workspace.yaml', kind: 'packageJson', contents: '{}' }],
+    },
+    {
+      schemaVersion: 1,
+      workspace: '.',
+      manifests: [{ path: 'yarnrc.yml', kind: 'yarnRc', contents: '{}' }],
     },
   ])('rejects an invalid or ambiguous request', (request) => {
     expect(() => parseSyncVersionsRequest(request)).toThrow();

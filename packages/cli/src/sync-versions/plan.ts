@@ -27,6 +27,13 @@ const manifestSnapshotSchema = z.discriminatedUnion('kind', [
       contents: z.string().max(MAX_MANIFEST_BYTES),
     })
     .strict(),
+  z
+    .object({
+      path: z.string().min(1),
+      kind: z.literal('yarnRc'),
+      contents: z.string().max(MAX_MANIFEST_BYTES),
+    })
+    .strict(),
 ]);
 
 const syncVersionsRequestSchema = z
@@ -55,7 +62,8 @@ const syncVersionsRequestSchema = z
       const basename = path.posix.basename(manifest.path);
       const kindMatchesPath =
         (manifest.kind === 'packageJson' && basename === 'package.json') ||
-        (manifest.kind === 'pnpmWorkspace' && basename === 'pnpm-workspace.yaml');
+        (manifest.kind === 'pnpmWorkspace' && basename === 'pnpm-workspace.yaml') ||
+        (manifest.kind === 'yarnRc' && basename === '.yarnrc.yml');
       if (!kindMatchesPath) {
         context.addIssue({
           code: 'custom',
@@ -142,7 +150,30 @@ function targetVersion(name: string, toolchain: SyncVersionsToolchain): string |
   return undefined;
 }
 
+function alignedNpmAlias(current: string, toolchain: SyncVersionsToolchain): string {
+  const prefix = 'npm:';
+  const versionAt = current.lastIndexOf('@');
+  if (!current.startsWith(prefix) || versionAt <= prefix.length) {
+    return current;
+  }
+
+  const packageName = current.slice(prefix.length, versionAt);
+  const currentVersion = current.slice(versionAt + 1);
+  const target = targetVersion(packageName, toolchain);
+  if (
+    target === undefined ||
+    currentVersion === target ||
+    semver.validRange(currentVersion) === null
+  ) {
+    return current;
+  }
+  return `${current.slice(0, versionAt + 1)}${target}`;
+}
+
 function alignedSpec(name: string, current: string, toolchain: SyncVersionsToolchain): string {
+  if (current.startsWith('npm:')) {
+    return alignedNpmAlias(current, toolchain);
+  }
   const target = targetVersion(name, toolchain);
   if (
     target === undefined ||
@@ -336,7 +367,7 @@ function applyTextEdits(contents: string, edits: TextEdit[]): string {
   let previousStart = contents.length;
   for (const edit of edits.toSorted((left, right) => right.start - left.start)) {
     if (edit.start < 0 || edit.end < edit.start || edit.end > previousStart) {
-      throw new Error('Overlapping or invalid pnpm-workspace.yaml edits');
+      throw new Error('Overlapping or invalid YAML manifest edits');
     }
     output = `${output.slice(0, edit.start)}${edit.value}${output.slice(edit.end)}`;
     previousStart = edit.start;
@@ -344,26 +375,45 @@ function applyTextEdits(contents: string, edits: TextEdit[]): string {
   return output;
 }
 
-function planPnpmWorkspace(contents: string, toolchain: SyncVersionsToolchain): string {
+function parseYamlManifest(
+  contents: string,
+  fileName: 'pnpm-workspace.yaml' | '.yarnrc.yml',
+): {
+  document: ReturnType<typeof parseDocument>;
+  manifest: Record<string, unknown>;
+} {
   const document = parseDocument(contents);
   if (document.errors.length > 0) {
-    throw new Error('Invalid pnpm-workspace.yaml manifest');
+    throw new Error(`Invalid ${fileName} manifest`);
   }
-  const workspace: unknown = document.toJS();
-  if (!isRecord(workspace)) {
-    throw new Error('Invalid pnpm-workspace.yaml manifest');
+  const manifest: unknown = document.toJS();
+  if (!isRecord(manifest)) {
+    throw new Error(`Invalid ${fileName} manifest`);
   }
+  return { document, manifest };
+}
 
-  const edits: TextEdit[] = [];
-  alignYamlStringMap(document, workspace.catalog, ['catalog'], toolchain, edits);
-  if (isRecord(workspace.catalogs)) {
-    for (const [catalogName, entries] of Object.entries(workspace.catalogs)) {
+function alignYamlCatalogs(
+  document: ReturnType<typeof parseDocument>,
+  manifest: Record<string, unknown>,
+  toolchain: SyncVersionsToolchain,
+  edits: TextEdit[],
+): void {
+  alignYamlStringMap(document, manifest.catalog, ['catalog'], toolchain, edits);
+  if (isRecord(manifest.catalogs)) {
+    for (const [catalogName, entries] of Object.entries(manifest.catalogs)) {
       alignYamlStringMap(document, entries, ['catalogs', catalogName], toolchain, edits);
     }
   }
+}
+
+function planPnpmWorkspace(contents: string, toolchain: SyncVersionsToolchain): string {
+  const { document, manifest } = parseYamlManifest(contents, 'pnpm-workspace.yaml');
+  const edits: TextEdit[] = [];
+  alignYamlCatalogs(document, manifest, toolchain, edits);
   alignYamlStringMap(
     document,
-    workspace.overrides,
+    manifest.overrides,
     ['overrides'],
     toolchain,
     edits,
@@ -373,16 +423,38 @@ function planPnpmWorkspace(contents: string, toolchain: SyncVersionsToolchain): 
   return applyTextEdits(contents, edits);
 }
 
+function planYarnRc(contents: string, toolchain: SyncVersionsToolchain): string {
+  const { document, manifest } = parseYamlManifest(contents, '.yarnrc.yml');
+  const edits: TextEdit[] = [];
+  alignYamlCatalogs(document, manifest, toolchain, edits);
+  return applyTextEdits(contents, edits);
+}
+
+function planManifest(
+  manifest: SyncVersionsManifestSnapshot,
+  toolchain: SyncVersionsToolchain,
+): string {
+  switch (manifest.kind) {
+    case 'packageJson':
+      return planPackageJson(manifest.contents, toolchain);
+    case 'pnpmWorkspace':
+      return planPnpmWorkspace(manifest.contents, toolchain);
+    case 'yarnRc':
+      return planYarnRc(manifest.contents, toolchain);
+    default: {
+      const exhaustive: never = manifest;
+      return exhaustive;
+    }
+  }
+}
+
 export function planSyncVersions(
   request: SyncVersionsRequestV1,
   toolchain: SyncVersionsToolchain,
 ): SyncVersionsPlanV1 {
   const replacements: SyncVersionsReplacementV1[] = [];
   for (const manifest of request.manifests) {
-    const after =
-      manifest.kind === 'packageJson'
-        ? planPackageJson(manifest.contents, toolchain)
-        : planPnpmWorkspace(manifest.contents, toolchain);
+    const after = planManifest(manifest, toolchain);
     if (after !== manifest.contents) {
       replacements.push({
         path: manifest.path,
