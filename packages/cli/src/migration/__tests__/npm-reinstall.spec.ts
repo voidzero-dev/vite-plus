@@ -4,7 +4,10 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { prepareNpmViteAliasReinstall } from '../npm-reinstall.ts';
+import {
+  getNpmInitialMigrationInstallArgs,
+  prepareNpmViteAliasReinstall,
+} from '../npm-reinstall.ts';
 
 const tempDirs: string[] = [];
 
@@ -23,6 +26,16 @@ afterEach(() => {
   for (const tempDir of tempDirs.splice(0)) {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+describe('getNpmInitialMigrationInstallArgs', () => {
+  it('uses legacy peer resolution for npm 10', () => {
+    expect(getNpmInitialMigrationInstallArgs('10.9.2')).toEqual(['--', '--legacy-peer-deps']);
+  });
+
+  it.each(['11.0.0', '12.0.0'])('uses normal peer resolution for npm %s', (version) => {
+    expect(getNpmInitialMigrationInstallArgs(version)).toBeUndefined();
+  });
 });
 
 describe('prepareNpmViteAliasReinstall', () => {

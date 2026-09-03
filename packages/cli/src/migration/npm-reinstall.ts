@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import semver from 'semver';
+
 import { readJsonFile, writeJsonFile } from '../utils/json.ts';
 
 const VITE_PLUS_CORE_PACKAGE = '@voidzero-dev/vite-plus-core';
@@ -33,6 +35,10 @@ interface MovedViteInstall {
 // Dot-prefixed so npm treats the backup as an internal directory instead of an
 // installed package while it sits inside node_modules during the reinstall.
 const STALE_VITE_BACKUP_NAME = '.vite-plus-migrate-stale-vite';
+
+export function getNpmInitialMigrationInstallArgs(version: string): string[] | undefined {
+  return semver.satisfies(version, '<11.0.0') ? ['--', '--legacy-peer-deps'] : undefined;
+}
 
 function removeStaleInstalledVite(packagePath: string, moved: MovedViteInstall[]): boolean {
   const packageJsonPath = path.join(packagePath, 'package.json');

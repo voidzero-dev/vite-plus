@@ -71,7 +71,10 @@ import {
   type Framework,
   type NodeVersionManagerDetection,
 } from './migrator.ts';
-import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
+import {
+  getNpmInitialMigrationInstallArgs,
+  prepareNpmViteAliasReinstall,
+} from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
 import {
@@ -759,10 +762,20 @@ async function executeMigrationPlan(
 
   // 4. Run vp install to ensure the project is ready
   updateMigrationProgress('Installing dependencies');
+  // npm 10's Arborist can crash while resolving nested optional peer sets
+  // when different major versions are available (for example, Vitest 4 in
+  // the project and Vitest 5 through Vite's optional devtools peer). This
+  // preparatory install only needs the project's declared dependencies for
+  // migration analysis. The final install below still uses npm's normal peer
+  // resolver after the package manifest has been rewritten.
+  const initialInstallArgs =
+    workspaceInfo.packageManager === PackageManager.npm
+      ? getNpmInitialMigrationInstallArgs(workspaceInfo.downloadPackageManager.version)
+      : undefined;
   const initialInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
     interactive,
-    undefined,
+    initialInstallArgs,
     {
       silent: true,
       packageManager: workspaceInfo.packageManager,
