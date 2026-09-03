@@ -54,6 +54,7 @@ const {
   ensureSvelteRuneGlobals,
   mergeViteConfigFiles,
   rewriteEslintPackageJson,
+  rewritePrettierPackageJson,
   collectInstalledPackageNames,
   sanitizeMigratedOxlintConfig,
   detectIncompatibleEslintIntegration,
@@ -1138,6 +1139,123 @@ describe('rewriteEslintPackageJson', () => {
     rewriteEslintPackageJson(pkgPath, new Set());
     const pkg = readJson(pkgPath);
     expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+  });
+});
+
+describe('rewritePrettierPackageJson', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-prettier-cleanup-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writePkg(pkg: object): string {
+    const pkgPath = path.join(tmpDir, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg));
+    return pkgPath;
+  }
+
+  it('removes prettier and flat prettier-plugin-* / prettier-config-* packages', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        prettier: '^3.0.0',
+        'prettier-plugin-tailwindcss': '^0.6.0',
+        'prettier-plugin-astro': '^0.14.0',
+        'prettier-config-standard': '^7.0.0',
+        vite: '^7.0.0',
+      },
+      dependencies: {
+        'prettier-plugin-svelte': '^3.0.0',
+        vue: '^3.5.0',
+      },
+    });
+    rewritePrettierPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+    expect(pkg.dependencies).toEqual({ vue: '^3.5.0' });
+  });
+
+  it('removes scoped Prettier plugin/config packages (e.g. @trivago/prettier-plugin-sort-imports)', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        '@trivago/prettier-plugin-sort-imports': '^5.0.0',
+        '@ianvs/prettier-plugin-sort-imports': '^4.0.0',
+        '@shopify/prettier-plugin-liquid': '^1.0.0',
+        '@company/prettier-config': '^1.0.0',
+        keepme: '^1.0.0',
+      },
+    });
+    rewritePrettierPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
+  });
+
+  it('removes @prettier/* scope packages', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        '@prettier/plugin-php': '^0.22.0',
+        '@prettier/plugin-xml': '^3.0.0',
+        '@prettier/plugin-ruby': '^4.0.0',
+        '@prettier/sync': '^0.5.0',
+        keepme: '^1.0.0',
+      },
+    });
+    rewritePrettierPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
+  });
+
+  it('removes @types/<X> packages symmetrically with their runtime counterparts', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        prettier: '^3.0.0',
+        '@types/prettier': '^3.0.0',
+        // Unrelated @types should stay.
+        '@types/node': '^22.0.0',
+      },
+    });
+    rewritePrettierPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ '@types/node': '^22.0.0' });
+  });
+
+  it('preserves unrelated packages that merely contain "prettier" in their name', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        // Not Prettier-only: these are ESLint packages, handled by the
+        // ESLint migration when it runs.
+        'eslint-config-prettier': '^9.0.0',
+        'eslint-plugin-prettier': '^5.0.0',
+        // Not a Prettier plugin: a scope that merely starts with the same
+        // characters, and a flat name that isn't a plugin/config.
+        '@prettierx/core': '^1.0.0',
+        prettierx: '^0.19.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewritePrettierPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({
+      'eslint-config-prettier': '^9.0.0',
+      'eslint-plugin-prettier': '^5.0.0',
+      '@prettierx/core': '^1.0.0',
+      prettierx: '^0.19.0',
+      vite: '^7.0.0',
+    });
+  });
+
+  it('no-ops when package.json has no prettier-ecosystem deps', () => {
+    const pkgPath = writePkg({
+      devDependencies: { vite: '^7.0.0' },
+    });
+    const before = fs.readFileSync(pkgPath, 'utf8');
+    rewritePrettierPackageJson(pkgPath);
+    const after = fs.readFileSync(pkgPath, 'utf8');
+    expect(after).toBe(before);
   });
 });
 
