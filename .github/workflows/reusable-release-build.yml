@@ -141,6 +141,45 @@ jobs:
             tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp sync-versions/bin.mjs toolchain.json
           fi
 
+      - name: Verify packaged sync-versions planner
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        shell: bash
+        working-directory: ./target/${{ matrix.settings.target }}/release
+        run: |
+          set -euo pipefail
+          archive_dir="$(mktemp -d)"
+          cleanup() {
+            rm -rf "${archive_dir}"
+          }
+          trap cleanup EXIT
+          tar -xzf "vp-${{ matrix.settings.target }}.tar.gz" -C "${archive_dir}"
+
+          node --input-type=module -e '
+            const before = JSON.stringify({ devDependencies: { "vite-plus": "0.0.0" } }) + "\n";
+            process.stdout.write(JSON.stringify({
+              schemaVersion: 1,
+              workspace: ".",
+              manifests: [{ path: "package.json", kind: "packageJson", contents: before }],
+            }));
+          ' | "${archive_dir}/vp" sync-versions --json > "${archive_dir}/plan.json"
+
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const [planPath, expectedVersion] = process.argv.slice(1);
+            const plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
+            const before = JSON.stringify({ devDependencies: { "vite-plus": "0.0.0" } }) + "\n";
+            const after = JSON.stringify({ devDependencies: { "vite-plus": expectedVersion } }) + "\n";
+            if (
+              plan.tool?.name !== "vite-plus" ||
+              plan.tool.version !== expectedVersion ||
+              plan.replacements?.length !== 1 ||
+              plan.replacements[0].before !== before ||
+              plan.replacements[0].after !== after
+            ) {
+              throw new Error("Unexpected packaged sync plan: " + JSON.stringify(plan));
+            }
+          ' "${archive_dir}/plan.json" "${VERSION}"
+
       - name: Upload release archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
