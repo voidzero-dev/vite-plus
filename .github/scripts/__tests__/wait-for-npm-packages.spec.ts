@@ -9,7 +9,7 @@ import {
   waitForNpmPackages,
 } from '../wait-for-npm-packages.ts';
 
-function response(status: number, body: unknown = undefined) {
+function response(status: number, body?: unknown) {
   return {
     ok: status >= 200 && status < 300,
     status,
