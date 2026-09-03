@@ -1,0 +1,7 @@
+[[case]]
+name = "command_sync_versions_rejects_tty"
+vp = ["local", "global"]
+comment = "The machine protocol rejects an interactive terminal instead of waiting forever for EOF."
+steps = [
+  { argv = ["vp", "sync-versions", "--json"], continue-on-failure = true },
+]

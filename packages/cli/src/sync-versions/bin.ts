@@ -18,6 +18,12 @@ async function main(): Promise<void> {
     throw new Error('Usage: vp sync-versions --json');
   }
 
+  if (process.stdin.isTTY) {
+    throw new Error(
+      'Expected a JSON request on stdin. Pipe the request to this command; it is intended for external automation.',
+    );
+  }
+
   const [requestJson, manifestJson] = await Promise.all([
     readBoundedUtf8(process.stdin),
     fs.readFile(new URL('../toolchain.json', import.meta.url), 'utf8'),
