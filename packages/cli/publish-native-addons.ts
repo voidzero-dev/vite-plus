@@ -1,4 +1,3 @@
-import { execSync } from 'node:child_process';
 import { copyFileSync, existsSync, chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -6,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 import { NapiCli, parseTriple } from '@napi-rs/cli';
 
+import { publishNpmPackageFromEnv } from '../../.github/scripts/publish-npm-package.ts';
+import { waitForNpmPackagesFromEnv } from '../../.github/scripts/wait-for-npm-packages.ts';
 import pkg from './package.json' with { type: 'json' };
 import { editJsonFile, readJsonFile } from './src/utils/json.ts';
 
@@ -93,6 +94,8 @@ const cliPackageJson = readJsonFile(join(currentDir, 'package.json')) as {
   repository?: unknown;
   optionalDependencies?: Record<string, string>;
 };
+// Lockstep versioning: every generated platform package uses the CLI version.
+const cliVersion = cliPackageJson.version;
 
 // napi-rs prePublish injects the platform packages into this package's
 // `optionalDependencies`. Release builds of core rewrite bundled Rolldown's
@@ -120,36 +123,28 @@ editJsonFile(join(repoRoot, 'packages', 'core', 'package.json'), (corePkgJson) =
     ...nativePlatformPins,
   },
 }));
+const publishedPlatformPackages = Object.keys(nativePlatformPins).map((name) => ({
+  name,
+  version: cliVersion,
+}));
 
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';
 if (!skipNpmPublish) {
   for (const file of platformDirs) {
-    try {
-      const output = execSync(`npm publish --tag ${npmTag} --access public`, {
-        cwd: join(currentDir, 'npm', file),
-        env: process.env,
-        stdio: 'pipe',
-      });
-      process.stdout.write(output);
-    } catch (e) {
-      if (
-        e instanceof Error &&
-        e.message.includes('You cannot publish over the previously published versions')
-      ) {
-        // eslint-disable-next-line no-console
-        console.info(e.message);
-        // eslint-disable-next-line no-console
-        console.warn(`${file} has been published, skipping`);
-      } else {
-        throw e;
-      }
-    }
+    const platformDir = join(currentDir, 'npm', file);
+    const platformPackageJson = readJsonFile(join(platformDir, 'package.json')) as {
+      name: string;
+      version: string;
+    };
+    await publishNpmPackageFromEnv(
+      { name: platformPackageJson.name, version: platformPackageJson.version },
+      'npm',
+      ['publish', '--tag', npmTag, '--access', 'public'],
+      platformDir,
+    );
   }
 }
-
-// Lockstep versioning: the CLI platform packages publish at the same version.
-const cliVersion = cliPackageJson.version;
 
 // Create and publish separate @voidzero-dev/vite-plus-cli-{platform} packages
 const cliNpmDir = join(currentDir, 'cli-npm');
@@ -206,6 +201,10 @@ for (const napiTarget of pkg.napi.targets) {
     repository: cliPackageJson.repository,
   };
   writeFileSync(join(platformCliDir, 'package.json'), JSON.stringify(cliPackage, null, 2) + '\n');
+  publishedPlatformPackages.push({
+    name: cliPackage.name,
+    version: cliVersion,
+  });
 
   if (skipNpmPublish) {
     // eslint-disable-next-line no-console
@@ -216,14 +215,26 @@ for (const napiTarget of pkg.napi.targets) {
   }
 
   // Publish CLI package
-  execSync(`npm publish --tag ${npmTag} --access public`, {
-    cwd: platformCliDir,
-    env: process.env,
-    stdio: 'inherit',
-  });
+  const result = await publishNpmPackageFromEnv(
+    { name: cliPackage.name, version: cliVersion },
+    'npm',
+    ['publish', '--tag', npmTag, '--access', 'public'],
+    platformCliDir,
+  );
 
-  // eslint-disable-next-line no-console
-  console.log(`Published CLI package: @voidzero-dev/vite-plus-cli-${platform}@${cliVersion}`);
+  if (result === 'published') {
+    // eslint-disable-next-line no-console
+    console.log(`Published CLI package: @voidzero-dev/vite-plus-cli-${platform}@${cliVersion}`);
+  }
+}
+
+// `npm publish` returns when npm accepts an upload, before publish-time scanning
+// necessarily makes that version installable. Core and the main CLI pin the
+// native packages at this exact version, while the installers fetch the CLI
+// platform packages directly. Do not continue the release until every
+// platform packument and tarball can be fetched.
+if (!skipNpmPublish) {
+  await waitForNpmPackagesFromEnv(publishedPlatformPackages);
 }
 
 // Clean up cli-npm directory (skipped when caller still needs the prepared dirs).
