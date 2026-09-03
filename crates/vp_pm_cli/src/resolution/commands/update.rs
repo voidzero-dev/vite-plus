@@ -3,6 +3,7 @@ use vp_pm_cli_macros::pm_args;
 use super::parse_positive_usize;
 use crate::resolution::{
     Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, Pnpm, Resolve, Yarn,
+    command::PnpmInteractiveUpdate,
 };
 
 #[pm_args]
@@ -74,6 +75,10 @@ pub struct UpdateArgs {
 
 impl Resolve<UpdateArgs> for Pnpm {
     fn resolve(&self, args: &UpdateArgs, _diag: &mut Diagnostics) -> CommandResolution {
+        if args.interactive {
+            return resolve_interactive_pnpm_update(args);
+        }
+
         let mut cmd = CommandBuilder::new("pnpm");
         cmd.repeated("--filter", args.filter.iter())
             .arg("update")
@@ -90,6 +95,50 @@ impl Resolve<UpdateArgs> for Pnpm {
             .extend(args.packages.iter());
         cmd.into()
     }
+}
+
+fn resolve_interactive_pnpm_update(args: &UpdateArgs) -> CommandResolution {
+    let lockfile_only = args
+        .pass_through_args
+        .iter()
+        .any(|arg| arg == "--lockfile-only" || arg.starts_with("--lockfile-only="));
+    // Match pnpm's own interactive picker: GitHub Actions are offered only when
+    // dev dependencies are in scope and the update can modify source files.
+    let include_github_actions = !args.no_save && !lockfile_only && (args.dev || !args.prod);
+
+    let mut outdated = CommandBuilder::new("pnpm");
+    outdated
+        .repeated("--filter", args.filter.iter())
+        .arg("outdated")
+        .arg("--format")
+        .arg("json")
+        .arg_if("--workspace-root", args.workspace_root)
+        .arg_if("--recursive", args.recursive)
+        .arg_if("--dev", args.dev)
+        .arg_if("--prod", args.prod)
+        .arg_if("--no-optional", args.no_optional)
+        .extend(args.packages.iter());
+
+    let mut update = CommandBuilder::new("pnpm");
+    update
+        .repeated("--filter", args.filter.iter())
+        .arg("update")
+        .arg_if("--latest", args.latest)
+        .arg_if("--workspace-root", args.workspace_root)
+        .arg_if("--recursive", args.recursive)
+        .arg_if("--dev", args.dev)
+        .arg_if("--prod", args.prod)
+        .arg_if("--no-optional", args.no_optional)
+        .arg_if("--no-save", args.no_save)
+        .arg_if("--workspace", args.workspace)
+        .extend(args.pass_through_args.iter());
+
+    CommandResolution::PnpmInteractiveUpdate(PnpmInteractiveUpdate {
+        outdated: outdated.build(),
+        update: update.build(),
+        latest: args.latest,
+        include_github_actions,
+    })
 }
 
 impl Resolve<UpdateArgs> for Npm {
@@ -265,12 +314,32 @@ mod tests {
 
     #[test]
     fn test_pnpm_update_interactive() {
-        let options = UpdateArgs { interactive: true, ..Default::default() };
+        let options = UpdateArgs {
+            packages: vec!["react".to_string()],
+            filter: vec!["app".to_string()],
+            latest: true,
+            interactive: true,
+            no_save: true,
+            pass_through_args: vec!["--save-exact".to_string()],
+            ..Default::default()
+        };
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let command = expect_run(resolution.outcome);
+        let CommandResolution::PnpmInteractiveUpdate(plan) = resolution.outcome else {
+            panic!("expected interactive pnpm update resolution");
+        };
 
-        assert_eq!(command.program, "pnpm");
-        assert_eq!(command.args, vec!["update", "--interactive"]);
+        assert_eq!(plan.outdated.program, "pnpm");
+        assert_eq!(
+            plan.outdated.args,
+            vec!["--filter", "app", "outdated", "--format", "json", "react"]
+        );
+        assert_eq!(plan.update.program, "pnpm");
+        assert_eq!(
+            plan.update.args,
+            vec!["--filter", "app", "update", "--latest", "--no-save", "--save-exact"]
+        );
+        assert!(plan.latest);
+        assert!(!plan.include_github_actions);
     }
 
     #[test]
@@ -498,11 +567,27 @@ mod tests {
         options.dev = true;
         options.interactive = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let command = expect_run(resolution.outcome);
+        let CommandResolution::PnpmInteractiveUpdate(plan) = resolution.outcome else {
+            panic!("expected interactive pnpm update resolution");
+        };
 
-        assert_eq!(command.program, "pnpm");
         assert_eq!(
-            command.args,
+            plan.outdated.args,
+            vec![
+                "--filter",
+                "app",
+                "--filter",
+                "web",
+                "outdated",
+                "--format",
+                "json",
+                "--recursive",
+                "--dev",
+                "react"
+            ]
+        );
+        assert_eq!(
+            plan.update.args,
             vec![
                 "--filter",
                 "app",
@@ -511,11 +596,27 @@ mod tests {
                 "update",
                 "--latest",
                 "--recursive",
-                "--dev",
-                "--interactive",
-                "react"
+                "--dev"
             ]
         );
+        assert!(plan.latest);
+        assert!(plan.include_github_actions);
+    }
+
+    #[test]
+    fn test_pnpm_interactive_update_excludes_github_actions_for_lockfile_only() {
+        let options = UpdateArgs {
+            interactive: true,
+            pass_through_args: vec!["--lockfile-only".to_string()],
+            ..Default::default()
+        };
+
+        let resolution = resolve(&pnpm("11.0.0"), options);
+        let CommandResolution::PnpmInteractiveUpdate(plan) = resolution.outcome else {
+            panic!("expected interactive pnpm update resolution");
+        };
+
+        assert!(!plan.include_github_actions);
     }
 
     #[test]

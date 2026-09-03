@@ -56,10 +56,16 @@ where
         }
     };
 
-    if let CommandResolution::Run(command) = &mut resolution.outcome {
-        command
-            .env
-            .insert("PATH".to_string(), vp_shared::format_path_prepended(manager.get_bin_prefix()));
+    let path = vp_shared::format_path_prepended(manager.get_bin_prefix());
+    match &mut resolution.outcome {
+        CommandResolution::Run(command) => {
+            command.env.insert("PATH".to_string(), path);
+        }
+        CommandResolution::PnpmInteractiveUpdate(plan) => {
+            plan.outdated.env.insert("PATH".to_string(), path.clone());
+            plan.update.env.insert("PATH".to_string(), path);
+        }
+        CommandResolution::Noop | CommandResolution::InvalidArgument(_) => {}
     }
 
     Ok(resolution)
@@ -76,7 +82,7 @@ fn parse_version(manager: &PackageManager) -> Result<Version, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resolution::ApproveBuildsArgs;
+    use crate::resolution::{ApproveBuildsArgs, UpdateArgs};
 
     fn package_manager(client: PackageManagerType, version: &str) -> PackageManager {
         let workspace_root = vt_path::current_dir().unwrap();
@@ -121,5 +127,24 @@ mod tests {
                 ..
             } if version == "latest"
         ));
+    }
+
+    #[test]
+    fn interactive_update_binds_the_managed_package_manager_path_to_both_commands() {
+        let manager = package_manager(PackageManagerType::Pnpm, "11.0.0");
+        let resolution =
+            resolve_for_manager(&manager, UpdateArgs { interactive: true, ..Default::default() })
+                .unwrap();
+        let CommandResolution::PnpmInteractiveUpdate(plan) = resolution.outcome else {
+            panic!("expected interactive pnpm update resolution");
+        };
+
+        for command in [&plan.outdated, &plan.update] {
+            let path = command.env.get("PATH").expect("resolved command should bind PATH");
+            assert_eq!(
+                std::env::split_paths(path).next().as_deref(),
+                Some(manager.get_bin_prefix().as_path())
+            );
+        }
     }
 }

@@ -31,6 +31,7 @@ mod command;
 mod commands;
 mod diagnostics;
 mod dialect;
+mod interactive_update;
 mod resolve;
 mod runner;
 mod support;
