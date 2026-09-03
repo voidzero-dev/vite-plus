@@ -2202,6 +2202,40 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
   });
 
+  it('tolerates nested npm override objects under managed keys', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        // Nested npm override objects: user overrides scoped UNDER the managed
+        // keys. Neither aliases the package itself.
+        overrides: {
+          vite: { rollup: '^4.0.0' },
+          vitest: { '@vitest/expect': '4.0.0' },
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    expect(result.changed).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, unknown>;
+    };
+    // The nested object under `vite` does not satisfy the managed alias, so it
+    // is replaced with the managed override.
+    expect(pkg.overrides.vite).toContain('@voidzero-dev/vite-plus-core');
+    // The project does NOT use vitest directly, so `vitest` is not managed; the
+    // user override scoped under it is left intact rather than removed.
+    expect(pkg.overrides.vitest).toEqual({ '@vitest/expect': '4.0.0' });
+  });
+
   it('replaces protocol-pinned migration targets in force-override mode', () => {
     const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
     process.env.VP_FORCE_MIGRATE = '1';
