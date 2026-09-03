@@ -97,9 +97,7 @@ git show origin/release/v<curr>:pnpm-workspace.yaml                 # vitest/oxl
 ### Structure
 
 ```markdown
-Release vite-plus vX.Y.Z: <theme>.
-
-<One or two sentences on the release theme. When a blog post accompanies the release, read it first (via its preview URL if not yet deployed), align the theme with it, and link the final URL here even if that URL is not live yet.>
+<One or two sentences on the release theme. Do not repeat the PR title as an opener line; GitHub renders the title directly above the body, and step 8 would only strip it again. When a blog post accompanies the release, read it first (via its preview URL if not yet deployed), align the theme with it, and link the final URL here even if that URL is not live yet.>
 
 ### Breaking Changes
 
@@ -135,6 +133,9 @@ Merging this PR will trigger the release workflow.
 - **Describe the net change between the two released versions, not intra-cycle churn.** When several PRs touch the same area within one release (one narrows a behavior, a later one broadens it back), the reader only sees the delta from `v<prev>` to `v<curr>`; describe that once, listing every PR number, and do not narrate a regression that was introduced and then fixed inside the cycle. Apply this to the intro/theme sentence too.
 - `feat` -> Features, `fix` -> Fixes & Enhancements, `refactor` and `revert` -> Refactor (never Chore), `docs` -> Docs, `test` / `ci` / `chore` -> Chore.
 - `feat(docs)` goes in Docs when the user-facing surface is the docs site.
+- **Docs means the published docs site, not contributor files.** A `docs` commit that changes an RFC, `AGENTS.md`, the repo map, or a skill under `.claude/` belongs in Chore: a vite-plus user never reads those. Docs should hold only entries a reader could go and look at on the site or in the README.
+- **Describe behaviour, not resolution logic.** An entry states what a user now observes. Rules the implementation follows internally (target-selection signals, config precedence, detection order) belong in the RFC or the PR, not the changelog. If an entry needs a nested list to explain how a decision is reached, cut it down to the outcome.
+- **A breaking change needs its migration path.** State what existing installs or projects do by default, then how to move to the new behaviour deliberately, then what that costs. Link the guide rather than restating it, and say plainly when doing nothing is a valid choice.
 - Highlights: 3-5 changes a vite-plus user will notice (new capabilities, security, major fixes). Skip developer-tooling-only conveniences. Each highlight ends with `, by @<author>`, same as every other entry.
 - Entry format: `Description ([#N](https://github.com/voidzero-dev/vite-plus/pull/N)), by @author`. Describe the user-visible behavior, not the implementation. Group supporting implementation PRs under the user-visible change they enable instead of giving them separate entries. Never include defensive edge cases or internal mechanics unless users need them to use or understand the feature; use concrete behavior instead of internal UI taxonomy that needs extra context.
 - **Upstream dependency upgrade PRs** (`feat(deps): upgrade upstream dependencies`): consolidate all of them into one Features entry with net oldest-to-latest version changes (e.g. `vite 8.0.16 -> 8.1.2`), listing every PR number. Check the upgraded range for security fixes (search the upstream changelog for CVE/GHSA); if present, add a dedicated security entry quoting severity and linking the advisory. When oxfmt or oxlint changed version, add one clause telling users the new versions can flag code that passed before, so they should run `vp fmt` after upgrading if their CI runs `vp check`; in ecosystem testing this is reliably the largest single class of post-upgrade CI failures.
@@ -346,10 +347,27 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 5. `publish-docker`: multi-arch toolchain image to `ghcr.io/voidzero-dev/vite-plus`, after npm publish (the image installs vp from npm).
 6. `discord-notify`: announces to Discord with a link to the release.
 
+**A green `Release` job does not mean the packages are installable.** `pnpm publish` prints `✅ Published package <name>@X.Y.Z` as soon as the registry accepts the request, and the registry can then take tens of minutes to actually serve that version. This has shipped a broken release: `vite-plus@X.Y.Z` went live on `latest` with an exact dependency on `@voidzero-dev/vite-plus-core@X.Y.Z` that was invisible for about 35 minutes, so every `npm install vite-plus` failed with `ETARGET` and both `publish-docker` and `Deploy docs` failed on `ERR_PNPM_NO_MATCHING_VERSION`. The downstream job failures are the symptom, not the cause; do not re-run them until the registry has the package.
+
+Check visibility directly, not through `npm view`, which caches:
+
+```bash
+for pkg in '@voidzero-dev%2Fvite-plus-core' 'vite-plus'; do
+  curl -s -H 'Cache-Control: no-cache' "https://registry.npmjs.org/$pkg?t=$(date +%s)" |
+    python3 -c "import json,sys;d=json.load(sys.stdin);print('$pkg', d['dist-tags'].get('latest'), 'X.Y.Z' in d['versions'])"
+done
+```
+
+Both must report `True` before you trust the release. A stale `modified` timestamp on the packument is the giveaway that nothing landed. If `vite-plus` is visible and `core` is not, the release is broken **right now** for every new install: tell the release manager immediately and offer to move the tag back (`npm dist-tag add vite-plus@<prev> latest`) while the publish is sorted out. Confirm the fix with a real install in a temp directory, not just a registry read:
+
+```bash
+d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z --no-audit --no-fund
+```
+
 ## 8. Post-release
 
 1. **Polish the GitHub release notes** (ask first): the auto-created release body has only Published Packages and Installation. Build the polished notes from the final release PR body:
-   - Drop the `Release vite-plus vX.Y.Z: ...` opener line (the release title carries it) and the closing `---` / `Merging this PR ...` boilerplate.
+   - Drop the closing `---` / `Merging this PR ...` boilerplate.
    - Keep every changelog section through **Full Changelog** unchanged.
    - Append the generated Published Packages and Installation sections, and end Installation with a Docker usage block (keep the explanation to one short sentence):
 
@@ -432,7 +450,7 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 
    The release-notes URL stays in `<angle brackets>` to suppress the embed; a blog post link (if any) goes bare so it unfurls. Lead the header with the server custom emoji `:viteplus:` (before the bold title, since it is a custom emoji). Link contributors as `[@user](https://github.com/user)` because Discord does not auto-link a bare GitHub handle. Keep the whole message user-facing: exclude vite-plus's own tooling/CI work.
 
-   Never post to Discord yourself. Save the draft to a file, update that file after every requested revision, and post the approved contents as a comment on the release PR wrapped in a fenced ` ```markdown ` block, so the `@mentions` do not ping anyone on GitHub, the emoji shortcodes stay literal, and any team member can copy-paste it into Discord. After the release manager approves the Discord draft, proceed directly to step 9; do not wait for another prompt or treat the skill update as optional.
+   Never post to Discord yourself. Save the draft to a file, update that file after every requested revision, and hand the approved contents over in chat. Do **not** post it as a comment on the release PR: that PR is a code-review artifact, and an announcement draft there is noise for reviewers and a second copy that can drift from the approved wording. After the release manager approves the Discord draft, proceed directly to step 9; do not wait for another prompt or treat the skill update as optional.
 
 ## 9. Update this skill (post-release)
 
@@ -453,5 +471,5 @@ After the release ships and the Discord announcement draft is approved, review t
 - [ ] Release PR merged; `release` environment approved by someone other than the merger; npm + GitHub release + Docker image all published
 - [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
 - [ ] Installs verified (npm versions + latest tag, `vp upgrade`, `vp --version` output inside the ghcr Docker image)
-- [ ] Discord announcement drafted (concise only) and shared as a fenced code block comment on the release PR
+- [ ] Discord announcement drafted (concise only) and handed over in chat, not posted to the release PR
 - [ ] Skill reviewed for durable learnings; any that generalize folded in and a `docs(skill)` PR proposed
