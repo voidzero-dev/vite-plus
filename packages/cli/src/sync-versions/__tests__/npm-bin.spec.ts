@@ -14,7 +14,7 @@ describe('npm CLI sync-versions command', () => {
       manifests: [{ path: 'package.json', kind: 'packageJson', contents: before }],
     });
 
-    const stdout = execFileSync(process.execPath, [cliBinPath, 'sync-versions', '--plan-json'], {
+    const stdout = execFileSync(process.execPath, [cliBinPath, 'sync-versions', '--json'], {
       input: request,
       encoding: 'utf8',
     });

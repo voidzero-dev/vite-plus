@@ -1320,12 +1320,12 @@ mod tests {
 
     #[test]
     fn parses_sync_versions_as_machine_readable_global_command() {
-        let parsed = try_parse_args_from(argv(&["vp", "sync-versions", "--plan-json"]))
+        let parsed = try_parse_args_from(argv(&["vp", "sync-versions", "--json"]))
             .expect("sync-versions should parse");
         let Some(Commands::SyncVersions { args }) = parsed.command else {
             panic!("expected sync-versions command");
         };
-        assert_eq!(args, vec!["--plan-json"]);
+        assert_eq!(args, vec!["--json"]);
         assert!(Commands::SyncVersions { args }.is_quiet_or_machine_readable());
     }
 

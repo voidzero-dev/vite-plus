@@ -14,8 +14,8 @@ function syncVersionsArgs(argv: readonly string[]): string[] {
 
 async function main(): Promise<void> {
   const args = syncVersionsArgs(process.argv);
-  if (args.length !== 1 || args[0] !== '--plan-json') {
-    throw new Error('Usage: vp sync-versions --plan-json');
+  if (args.length !== 1 || args[0] !== '--json') {
+    throw new Error('Usage: vp sync-versions --json');
   }
 
   const [requestJson, manifestJson] = await Promise.all([
