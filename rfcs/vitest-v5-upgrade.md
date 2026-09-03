@@ -2,19 +2,19 @@
 
 - Status: Proposed
 - Tracking issue: [#2405](https://github.com/voidzero-dev/vite-plus/issues/2405)
-- Upstream baseline: [`v5.0.0-rc.3`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.3)
-- Release target: the final `v5.0.0` release
+- Upstream baseline: [`v5.0.0`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0)
+- Release target: Vite+ before `1.0`
 
 ## Decision
 
-Upgrade `vp test` and the `vite-plus/test*` API to the final Vitest v5 release before Vite+ 1.0. Do not put a Vitest release candidate in a stable Vite+ release.
+Upgrade `vp test` and the `vite-plus/test*` API to Vitest `5.0.0` before Vite+ 1.0. Pin the official Vitest packages to the final release.
 
 The upgrade has four parts:
 
 1. Update the bundled runner, browser packages, public shims, resolver, and Vite config integration as one versioned unit.
 2. Add a Vitest v5 pass to `vp migrate`. It preserves v4 behavior where a config option can do so, applies safe source rewrites, and reports changes that need review.
 3. Raise the `vite-plus` Node.js range to the intersection of the current Vite+ range and the Vitest v5 range: `^22.18.0 || ^24.11.0 || >=26.0.0`.
-4. Release the change through a Vite+ prerelease, run the compatibility matrix in this RFC, and recheck the final Vitest changelog before a stable release.
+4. Release the change through a Vite+ prerelease and run the compatibility matrix in this RFC before a stable release.
 
 New projects use the Vitest v5 defaults. Migrated projects get explicit compatibility options. A user can remove those options later to adopt the new defaults one at a time.
 
@@ -51,7 +51,7 @@ Vitest v5 changes the package graph and project configuration model. A version-o
 
 ## Upstream audit
 
-The audit covers every v5 prerelease through `v5.0.0-rc.3` and the complete [Vitest v5 migration guide](https://main.vitest.dev/guide/migration#vitest-5). The release train introduced breaking changes in these groups:
+The audit covers every v5 prerelease, the final [`v5.0.0` release](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0), and the complete [Vitest v5 migration guide](https://vitest.dev/guide/migration#vitest-5). Vitest v5 introduced breaking changes in these groups:
 
 | Release                                                                     | Breaking-change themes                                                                                                                                 |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -65,14 +65,16 @@ The audit covers every v5 prerelease through `v5.0.0-rc.3` and the complete [Vit
 | [`rc.1`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.1)     | project inheritance, nested projects, shared servers, test-name separators, async assertions, failure screenshots, class mocks, and assertion generics |
 | [`rc.2`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.2)     | no new breaking change                                                                                                                                 |
 | [`rc.3`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.3)     | no new breaking change; Istanbul coverage moved to `@vitest/istanbuljs` packages                                                                       |
+| [`rc.4`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.4)     | `vitest list` and the programmatic `collect()` API use static parsing by default                                                                       |
+| [`v5.0.0`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0)        | no new breaking change after `rc.4`                                                                                                                    |
 
-The final release is still pending at the time of this RFC. Release work must compare the final release with `rc.3` and update this audit.
+Vitest published `v5.0.0` on September 3, 2026. The comparison from `rc.4` to the final tag contains fixes, documentation, dependency updates, and performance work. It contains no additional breaking commit. The final package manifests retain the audited Node, Vite, export, browser-provider, and Istanbul dependency contracts.
 
 ## Compatibility design
 
 ### 1. Runtime and dependency graph
 
-Pin the official Vitest packages to one exact v5 version. Keep the existing coverage-provider version guard. Coverage packages remain project-installed peers and must match the bundled runner exactly.
+Pin the official Vitest packages to the exact version `5.0.0`. Keep the existing coverage-provider version guard. Coverage packages remain project-installed peers and must match the bundled runner exactly.
 
 | Package group                                                                                 | Policy                                                                                                                                                                                                                                |
 | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -89,7 +91,7 @@ Replace the resolver's broad `@vitest/*` rule with an explicit supported-package
 
 The repository vendors Vite and Rolldown workspaces. Their catalogs still request Vitest v4, and `sync-remote` rejects the v4/v5 major conflict. Prefer upstream v5 updates. If release timing requires a local bridge, add `vitest` to the sync tool's reviewed major-conflict set, align direct `@vitest/*` dependencies in the vendored workspaces, and run their test suites with the resolved v5 graph. Do not leave a hidden mix of v4 and v5 packages in the development lockfile.
 
-Vitest `v5.0.0-rc.3` moves Istanbul internals to `@vitest/istanbuljs` packages. Keep those packages on the project-installed `@vitest/coverage-istanbul` dependency edge. The resolver allowlist must not redirect them to a missing Vite+ copy.
+Vitest `5.0.0` uses `@vitest/istanbuljs` packages for Istanbul internals. Keep those packages on the project-installed `@vitest/coverage-istanbul` dependency edge. The resolver allowlist must not redirect them to a missing Vite+ copy.
 
 ### 2. Node.js and Vite prerequisites
 
@@ -123,6 +125,8 @@ Keep these aliases through the Vite+ 1.x line because each has an exact public t
 Do not create partial shims for `vite-plus/test/runners`, `vite-plus/test/suite`, `vite-plus/test/plugins/runner`, `vite-plus/test/plugins/expect`, or `vite-plus/test/internal/module-runner`. Their old symbols do not have a complete one-to-one v5 implementation with the required shared state. The migration reports them and directs users to `expect`, `TestRunner`, and its static methods from `vite-plus/test` where possible.
 
 Keep the Playwright and Preview provider aliases. Keep the WebDriverIO aliases only when the community peer is installed and compatible. Update `packages/cli/BUNDLING.md` to state which paths mirror upstream and which paths are Vite+ compatibility contracts.
+
+At the time of the final Vitest release, the latest community WebDriverIO provider is `5.0.0-rc.1`. The final Vitest manifest accepts `@vitest/browser-webdriverio` versions `^5.0.0-beta.5 || >=5.0.0`. Test the selected community version against Vitest `5.0.0`; do not hold the official package graph at an earlier release candidate.
 
 ### 4. Config integration and project inheritance
 
@@ -195,7 +199,7 @@ The `toNotFake` option only preserves behavior while fake timers run. It does no
 
 ### Safe source and config rewrites
 
-Apply AST rewrites for these forms:
+Apply AST or structured command rewrites for these forms:
 
 - `test.sequential`, `describe.sequential`, and `{ sequential: true }` to `{ concurrent: false }` forms;
 - all v4 browser `toHaveTextContent` calls with a string or regular expression to `toMatchTextContent`;
@@ -204,6 +208,8 @@ Apply AST rewrites for these forms:
 - deprecated Vitest entry points to the canonical Vite+ v5 paths;
 - root-safe `@vitest/expect` imports to `vite-plus/test`;
 - supported `@vitest/runner` uses to `TestRunner` from `vite-plus/test`;
+- direct `vitest list` commands without a static-parse flag to include `--no-static-parse`;
+- direct calls to the programmatic `Vitest.collect()` API to pass `{ staticParse: false }` when the options are absent or are a static object without `staticParse`;
 - HTML reporter `outputFile` directory settings to `outputDir`.
 
 Run specific mappings before the current generic `vitest/<subpath>` rewrite. The generic rule must only emit a path present in the final `vite-plus` export map.
@@ -243,6 +249,7 @@ This list is the authoritative scanner checklist. Report each item with a file l
 - referenced config files that merge a root config containing `test.projects`;
 - dynamic, function, or promise inline projects whose effective config cannot be determined from source;
 - plugins that depend on one Vite server or config execution per project;
+- `vitest list` commands or programmatic `collect()` calls whose static-parse setting cannot be determined or rewritten safely;
 - configured `coverage.include` or `coverage.exclude` when a v4/v5 resolved file-set comparison is unavailable;
 - imports from removed runner, suite, or internal module-runner APIs that have no direct replacement;
 - direct `@vitest/ws-client` use and `@vitest/expect` or `@vitest/runner` symbols that are not available from the root v5 API.
@@ -280,7 +287,7 @@ The entry-point migration uses these exact mappings:
 
 ## Complete incompatible-change and risk matrix
 
-This matrix tracks every v5 migration-guide item and the extra breaking entries in the prerelease notes. “Scan” refers to the versioned `vp migrate` pass.
+This matrix tracks every v5 migration-guide item and the extra breaking entries in the release notes. “Scan” refers to the versioned `vp migrate` pass.
 
 | Change                                                       | Upgrade risk                                                                                                                                    | Vite+ handling                                                                                                              |
 | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -288,6 +295,7 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 | `clearMocks: true` default                                   | Setup-file, top-level, `beforeAll`, and cross-test mock history disappears.                                                                     | Add `clearMocks: false` for existing configs; use `true` for new projects.                                                  |
 | Configless v4 projects                                       | New defaults apply without a config file that the migration can edit.                                                                           | Report applicable changes. Do not create a config without a separate action and user confirmation.                          |
 | Full test names use `>`                                      | `-t 'suite test'` no longer matches across the boundary.                                                                                        | Scan scripts and CI strings; recommend one segment or `suite.*test`.                                                        |
+| Test listing uses static parsing                             | Runtime-generated tests and collection side effects can be absent from `vitest list` and `Vitest.collect()` results.                            | Add `--no-static-parse` or `{ staticParse: false }` to direct migrated uses; report dynamic wrappers.                       |
 | Browser iframe scaling changed                               | Headed browser UI and screenshot dimensions can differ from v4.                                                                                 | Run headed and headless screenshot fixtures at fixed viewports; refresh baselines only after review.                        |
 | Inline projects inherit root config                          | Plugins, aliases, setup files, and arrays can apply twice or begin applying.                                                                    | Add `extends: false` to static entries, report dynamic entries, and make plugin injection inheritance-aware.                |
 | Referenced configs can define nested projects                | A merged root `projects` field can recurse, duplicate projects, or resolve paths from a new base.                                               | Scan referenced configs and root-config merges; require manual extraction of a shared config.                               |
@@ -329,7 +337,7 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 
 ### Phase 1: compatibility branch
 
-- Pin the current v5 release candidate only in a development branch.
+- Pin the official Vitest packages to `5.0.0` in a development branch.
 - Update the package graph, export generator, resolver, project plugin injection, and migration package set.
 - Add export snapshots and unit fixtures before accepting generated package changes.
 - Resolve the vendored Vite and Rolldown catalog conflict without a mixed Vitest family.
@@ -342,8 +350,8 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 
 ### Phase 3: Vite+ prerelease
 
-- Move to the final Vitest `v5.0.0` packages when available.
-- Recheck all releases after `rc.3` and update the RFC and migration guide.
+- Confirm that the lockfile resolves the final official `5.0.0` package graph.
+- Verify one compatible community WebDriverIO provider against Vitest `5.0.0`.
 - Publish a Vite+ prerelease and run ecosystem CI against real projects.
 - Keep the v4-based Vite+ release available for Node 20 and for any WebDriverIO user blocked by community-provider timing.
 
@@ -353,7 +361,7 @@ Release only after the gates below pass. State the Node requirement and the `vp 
 
 ## Validation and release gates
 
-The investigation spike updated the available official packages to `5.0.0-rc.2`, removed the unavailable runner package, built the CLI and 60 generated test exports, and passed the focused config/resolver tests. The complete TypeScript unit run passed 63 files and 1,029 tests. The spike also reproduced the vendored Rolldown catalog conflict, which confirms that dependency synchronization needs an explicit solution.
+The earlier investigation spike used `5.0.0-rc.2`. It removed the unavailable runner package, built the CLI and 60 generated test exports, and passed the focused config/resolver tests. The complete TypeScript unit run passed 63 files and 1,029 tests. The spike also reproduced the vendored Rolldown catalog conflict, which confirms that dependency synchronization needs an explicit solution. Repeat these checks against final `5.0.0`; the `rc.4` static-collection change was not present in the spike.
 
 The implementation must pass these gates:
 
@@ -364,9 +372,9 @@ The implementation must pass these gates:
 5. npm, pnpm, Yarn PnP, and Bun install and test fixtures.
 6. Configless, single-project, inherited inline-project, `extends: false`, referenced-config, nested-project, and shared-server fixtures. Add a fixture that combines `extends: false` with `sharedViteServer: false`. Assert independent server and plugin-hook behavior without extra inheritance.
 7. Playwright and Preview browser suites. Run the WebDriverIO suite against a verified community release without requiring an exact Vitest patch version.
-8. V8 and Istanbul coverage with matching providers, mismatched-provider rejection, glob threshold checks, and v4/v5 file-list comparison. Verify the `@vitest/istanbuljs` dependency graph from `rc.3` or later.
+8. V8 and Istanbul coverage with matching providers, mismatched-provider rejection, glob threshold checks, and v4/v5 file-list comparison. Verify the final `@vitest/istanbuljs` dependency graph.
 9. JSON, JUnit, HTML, blob merge, attachments, failure screenshots, and reference-screenshot path fixtures.
-10. UI token, browser session, custom command locator, jsdom, happy-dom, Temporal, custom environment, worker ID, `resolveConfig`, custom matcher, and benchmark migration fixtures.
+10. UI token, browser session, custom command locator, jsdom, happy-dom, Temporal, custom environment, worker ID, `resolveConfig`, `vitest list`, `Vitest.collect()`, custom matcher, and benchmark migration fixtures.
 11. `ecosystem-ci` cases for `vite-plus-vitest-global-type-minimal-repro`, `vitest-playwright-repro`, and `vite-plus-vitest-type-aug`, followed by the broader ecosystem set.
 12. Vendored Vite and Rolldown tests under the final synchronized dependency graph.
 
