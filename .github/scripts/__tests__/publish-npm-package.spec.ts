@@ -12,7 +12,7 @@ import type { FetchLike } from '../wait-for-npm-packages.ts';
 
 const pkg = { name: '@scope/pkg', version: '1.2.3' };
 
-function response(status: number, body: unknown = undefined) {
+function response(status: number, body?: unknown) {
   return {
     ok: status >= 200 && status < 300,
     status,
