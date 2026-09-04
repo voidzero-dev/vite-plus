@@ -1,6 +1,7 @@
 [[case]]
 name = "command_list_npm10_with_workspace"
 vp = "global"
+serial = true
 steps = [
   { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
   { argv = ["vp", "pm", "list", "--json"], comment = "should list current workspace root dependencies", continue-on-failure = true },

@@ -803,6 +803,10 @@ const commandHelpDocs = {
         title: 'Options',
         rows: [
           { label: '--fix', description: 'Auto-fix format and lint issues' },
+          {
+            label: '--quiet',
+            description: 'Disable reporting on warnings, only errors are reported',
+          },
           { label: '--no-fmt', description: 'Skip format check' },
           {
             label: '--no-lint',

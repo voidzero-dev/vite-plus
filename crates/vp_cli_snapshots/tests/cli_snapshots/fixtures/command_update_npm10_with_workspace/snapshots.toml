@@ -1,6 +1,7 @@
 [[case]]
 name = "command_update_npm10_with_workspace"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "update", "testnpm2", "-w", "--", "--no-audit"], comment = "should update in workspace root" },

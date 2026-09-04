@@ -94,6 +94,7 @@ async fn execute_direct_subcommand(
     let status = match subcommand {
         SynthesizableSubcommand::Check {
             fix,
+            quiet,
             no_fmt,
             no_lint,
             no_error_on_unmatched_pattern,
@@ -102,6 +103,7 @@ async fn execute_direct_subcommand(
             return crate::check::execute_check(
                 &resolver,
                 fix,
+                quiet,
                 no_fmt,
                 no_lint,
                 no_error_on_unmatched_pattern,

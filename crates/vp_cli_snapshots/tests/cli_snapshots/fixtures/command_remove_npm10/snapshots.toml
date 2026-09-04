@@ -1,6 +1,7 @@
 [[case]]
 name = "command_remove_npm10"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "remove", "testnpm2", "-D", "--", "--no-audit"], comment = "should pass when remove not exists package" },

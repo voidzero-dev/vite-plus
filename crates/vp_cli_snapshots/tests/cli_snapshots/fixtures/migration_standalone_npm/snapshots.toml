@@ -1,6 +1,7 @@
 [[case]]
 name = "migration_standalone_npm"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 unset-env = ["CI", "VP_SKIP_INSTALL"]
 local-registry = true

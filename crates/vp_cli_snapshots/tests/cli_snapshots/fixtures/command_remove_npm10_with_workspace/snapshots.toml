@@ -1,6 +1,7 @@
 [[case]]
 name = "command_remove_npm10_with_workspace"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "add", "testnpm2", "-D", "-w", "--filter=*", "--", "--no-audit"], comment = "prepare packages" },

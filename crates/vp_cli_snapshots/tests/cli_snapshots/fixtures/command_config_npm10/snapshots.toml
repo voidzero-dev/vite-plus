@@ -1,6 +1,7 @@
 [[case]]
 name = "command_config_npm10"
 vp = "global"
+serial = true
 steps = [
   { argv = ["vp", "pm", "config", "--help"], comment = "should show help", continue-on-failure = true },
   { argv = ["vp", "pm", "config", "get", "vite-plus-pm-config-test-key", "--location", "project"], comment = "should get config value from project scope", continue-on-failure = true },

@@ -1,6 +1,7 @@
 [[case]]
 name = "command_cache_npm10"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "pm", "cache", "dir"], comment = "should show cache directory (uses npm config get cache)", continue-on-failure = true },
