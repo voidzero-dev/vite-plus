@@ -146,6 +146,50 @@ async function getLatestNpmVersion(packageName: string): Promise<string> {
   return data.version;
 }
 
+// Every published version of a package, in publish order (which is chronological,
+// so the last entry of a major is that major's newest release — including
+// prereleases, unlike the `latest` dist-tag).
+async function fetchNpmVersions(packageName: string): Promise<string[]> {
+  const res = await fetch(`https://registry.npmjs.org/${packageName}`, {
+    headers: { accept: 'application/vnd.npm.install-v1+json' },
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch npm versions for ${packageName}: ${res.status} ${res.statusText}`,
+    );
+  }
+  const data = (await res.json()) as { versions?: Record<string, unknown> };
+  return Object.keys(data.versions ?? {});
+}
+
+// Resolve the catalog pin for a `@vitest/*` package that tracks `vitest`. Siblings
+// normally publish the exact same version, but one can lag during a vitest major
+// release: when vitest 5.0.0 shipped, `@vitest/browser-webdriverio` was still only
+// at 5.0.0-rc.1, and pinning it to an unpublished 5.0.0 fails the install outright.
+// Fall back to the newest published release sharing vitest's major, which still
+// satisfies vitest's peer range. A sibling with no release at all on that major was
+// dropped upstream (as `@vitest/runner` was in vitest 5) and must leave the list.
+async function resolveVitestSiblingVersion(pkg: string, vitestVersion: string): Promise<string> {
+  const versions = await fetchNpmVersions(pkg);
+  if (versions.includes(vitestVersion)) {
+    return vitestVersion;
+  }
+
+  const major = vitestVersion.split('.')[0];
+  const sameMajor = versions.filter((version) => version.split('.')[0] === major);
+  // Publish order is chronological, so the last same-major entry is its newest.
+  const fallback = sameMajor[sameMajor.length - 1];
+  if (!fallback) {
+    throw new Error(
+      `${pkg} has no published ${major}.x release to match vitest ${vitestVersion}. ` +
+        `If it was dropped upstream, remove it from vitestExactVersionPackages in ` +
+        `.github/scripts/upgrade-deps.ts (and from the catalog and packages/cli).`,
+    );
+  }
+  console.log(`${pkg} lags vitest ${vitestVersion} -> pinning ${fallback}`);
+  return fallback;
+}
+
 // Read a dependency range from the latest published version of `packageName`,
 // e.g. the `lightningcss` range that the bundled `@tsdown/css` depends on.
 async function getNpmDependencyRange(packageName: string, dependencyName: string): Promise<string> {
@@ -185,9 +229,10 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   let content = fs.readFileSync(filePath, 'utf8');
 
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
-  // All @vitest/* catalog entries (browser + core direct deps) must stay pinned
-  // to the same exact version as `vitest` itself, otherwise the catalog drifts
-  // from VITEST_VERSION.
+  // All @vitest/* catalog entries (browser + core direct deps) track `vitest`
+  // itself, otherwise the catalog drifts from VITEST_VERSION. `@vitest/runner` is
+  // absent because vitest 5 folded it into the core package and stopped publishing
+  // it. See [[resolveVitestSiblingVersion]] for how a lagging sibling is pinned.
   const vitestExactVersionPackages = [
     '@vitest/browser',
     '@vitest/browser-playwright',
@@ -196,17 +241,21 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     '@vitest/expect',
     '@vitest/mocker',
     '@vitest/pretty-format',
-    '@vitest/runner',
     '@vitest/snapshot',
     '@vitest/spy',
     '@vitest/utils',
   ];
-  const vitestExactVersionEntries: PnpmWorkspaceEntry[] = vitestExactVersionPackages.map((pkg) => ({
-    name: pkg,
-    pattern: new RegExp(`'${pkg.replaceAll('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
-    replacement: `'${pkg}': ${versions.vitest}`,
-    newVersion: versions.vitest,
-  }));
+  const vitestExactVersionEntries: PnpmWorkspaceEntry[] = await Promise.all(
+    vitestExactVersionPackages.map(async (pkg) => {
+      const version = await resolveVitestSiblingVersion(pkg, versions.vitest);
+      return {
+        name: pkg,
+        pattern: new RegExp(`'${pkg.replaceAll('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
+        replacement: `'${pkg}': ${version}`,
+        newVersion: version,
+      };
+    }),
+  );
   const entries: PnpmWorkspaceEntry[] = [
     {
       name: 'vitest',

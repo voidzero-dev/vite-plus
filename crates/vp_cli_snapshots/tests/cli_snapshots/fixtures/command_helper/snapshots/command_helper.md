@@ -81,7 +81,6 @@ Options:
   --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: TSDOWN_)
   --on-success <command>        Command to run on success
   --copy <dir>                  Copy files to output dir
-  --public-dir <dir>            Alias for --copy, deprecated
   --tsconfig <tsconfig>         Set tsconfig path
   --unbundle                    Unbundle mode
   --root <dir>                  Root directory of input files
@@ -299,6 +298,7 @@ Commands:
   dev      Run tests in development mode
   related  Run tests related to changed files
   bench    Run benchmarks
+  doctor   Compare configurations to find a faster setup
   list     List matching tests
 
 Arguments:
@@ -312,15 +312,16 @@ Options:
   --dir <path>                        Base directory to scan for the test files
   --ui                                Enable UI
   --open                              Open UI automatically (default: !process.env.CI)
-  --api [port]                        Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204. Use '--help --api' for more info.
+  --api [port]                        Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204 or 63315 in browser mode. Use '--help --api' for more info.
   --silent [value]                    Silent console output from tests. Use 'passed-only' to see logs from failing tests only.
   --hideSkippedTests                  Hide logs for skipped tests
   --reporter <name>                   Specify reporters (default, agent, minimal, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions)
   --outputFile <filename/-s>          Write test results to a file when supporter reporter is also specified, use cac's dot notation for individual outputs of multiple reporters (example: --outputFile.tap=./tap.txt)
   --coverage                          Enable coverage report. Use '--help --coverage' for more info.
-  --mode <name>                       Override Vite mode (default: test or benchmark)
+  --mode <name>                       Override Vite mode (default: test)
   --isolate                           Run every test file in isolation. To disable isolation, use --no-isolate (default: true)
   --globals                           Inject apis globally
+  --injectCjsGlobals                  Inject CommonJS variables (module, exports, require, __filename, __dirname) into every test module. To disable, use --no-inject-cjs-globals (default: true)
   --dom                               Mock browser API with happy-dom
   --browser <name>                    Run tests in the browser. Equivalent to --browser.enabled (default: false). Use '--help --browser' for more info.
   --pool <pool>                       Specify pool, if not running in the browser (default: forks)
@@ -343,29 +344,33 @@ Options:
   --hookTimeout <timeout>             Default hook timeout in milliseconds (default: 10000). Use 0 to disable timeout completely.
   --bail <number>                     Stop test execution when given number of tests have failed (default: 0)
   --retry <times>                     Retry the test specific number of times if it fails (default: 0). Use '--help --retry' for more info.
+  --repeats <number>                  Repeat every test a specific number of times regardless of the result (default: 0)
   --diff <path>                       DiffOptions object or a path to a module which exports DiffOptions object. Use '--help --diff' for more info.
   --exclude <glob>                    Additional file globs to be excluded from test
   --expandSnapshotDiff                Show full diff when snapshot fails
   --disableConsoleIntercept           Disable automatic interception of console logging (default: false)
   --typecheck                         Enable typechecking alongside tests (default: false). Use '--help --typecheck' for more info.
-  --project <name>                    The name of the project to run if you are using Vitest workspace feature. This can be repeated for multiple projects: --project=1 --project=2. You can also filter projects using wildcards like --project=packages*, and exclude projects with --project=!pattern.
+  -p, --project <name>                The name of the project to run if you are using Vitest workspace feature. This can be repeated for multiple projects: --project=1 --project=2. You can also filter projects using wildcards like --project=packages*, and exclude projects with --project=!pattern. A project runs if it matches no negated pattern and, when regular patterns are also given, matches at least one of them.
   --slowTestThreshold <threshold>     Threshold in milliseconds for a test or suite to be considered slow (default: 300)
   --teardownTimeout <timeout>         Default timeout of a teardown function in milliseconds (default: 10000)
   --cache                             Enable cache. Use '--help --cache' for more info.
   --maxConcurrency <number>           Maximum number of concurrent tests and suites during test file execution (default: 5)
+  --fsModuleCache                     Cache transformed modules on the file system and reuse them between reruns (default: false)
+  --fsModuleCachePath <path>          Directory where the fsModuleCache is stored (default: node_modules/.vitest-cache)
   --expect                            Configuration options for expect() matches. Use '--help --expect' for more info.
   --printConsoleTrace                 Always print console stack traces
   --includeTaskLocation               Collect test and suite locations in the location property
-  --attachmentsDir <dir>              The directory where attachments from context.annotate are stored in (default: .vitest-attachments)
+  --attachmentsDir <dir>              The directory where attachments from context.annotate are stored in (default: .vitest/attachments)
   --run                               Disable watch mode
   --no-color                          Removes colors from the console output (default: true)
   --clearScreen                       Clear terminal screen when re-running tests during watch mode (default: true)
   --standalone                        Start Vitest without running tests. Tests will be running only on change. If browser mode is enabled, the UI will be opened automatically. This option is ignored when CLI file filters are passed. (default: false)
   --mergeReports [path]               Path to a blob reports directory. If this options is used, Vitest won't run any tests, it will only report previously recorded tests
   --listTags [type]                   List all available tags instead of running tests. --list-tags=json will output tags in JSON format, unless there are no tags.
-  --clearCache                        Delete all Vitest caches, including experimental.fsModuleCache, without running any tests. This will reduce the performance in the subsequent test run.
+  --clearCache                        Delete all Vitest caches, including the fsModuleCache, without running any tests. This will reduce the performance in the subsequent test run.
   --tagsFilter <expression>           Run only tests with the specified tags. You can use logical operators && (and), || (or) and ! (not) to create complex expressions, see https://vitest.dev/guide/test-tags#syntax for more information.
   --strictTags                        Should Vitest throw an error if test has a tag that is not defined in the config. (default: true)
+  --sharedViteServer                  Let inline projects that don't modify the Vite config reuse the Vite server of the config that declares them. (default: true)
   --experimental <features>           Experimental features.. Use '--help --experimental' for more info.
   -h, --help                          Display this message
 

@@ -370,14 +370,21 @@ const OXC_PACKAGES = new Set([
   'oxlint',
   'oxlint-tsgolint',
 ]);
-const VITEST_DEPS = new Set(['tinybench']);
+// Vitest and its packages also use the higher version on conflict. Vite+ bundles
+// vitest for `vp test` and tracks the newest release, while rolldown only uses it
+// for its own test suite and lags behind — across a vitest major bump that lag is
+// a cross-major conflict the merger would otherwise refuse to resolve.
+const VITEST_PACKAGE_PREFIXES = ['@vitest/'];
+const VITEST_DEPS = new Set(['vitest', 'tinybench']);
 
 // These packages should always use the highest version
 function syncedPackages(packageName: string): boolean {
   if (OXC_PACKAGES.has(packageName) || VITEST_DEPS.has(packageName)) {
     return true;
   }
-  return OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix));
+  return [...OXC_PACKAGE_PREFIXES, ...VITEST_PACKAGE_PREFIXES].some((prefix) =>
+    packageName.startsWith(prefix),
+  );
 }
 
 function mergeSemverVersions(

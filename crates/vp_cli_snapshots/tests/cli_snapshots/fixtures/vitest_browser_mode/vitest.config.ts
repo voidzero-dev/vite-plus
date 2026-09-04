@@ -1,7 +1,13 @@
 // import { defineProject } from 'vitest/config';
+import { defineConfig } from 'vite-plus';
 import { playwright } from 'vite-plus/test/browser-playwright';
 
-export default {
+// `defineConfig` (not a bare object literal) is what injects the Vite+ plugins,
+// including the one that keeps `vite-plus/test` out of dependency pre-bundling.
+// Vitest 5 pre-bundles it otherwise, which hands the test file a second copy of
+// the runtime whose runner state is unset — the first `describe()` then fails
+// with "Cannot read properties of undefined (reading 'config')".
+export default defineConfig({
   plugins: [
     {
       name: 'vitest-browser-mode-suppress-known-vite-logs',
@@ -35,4 +41,4 @@ export default {
       ],
     },
   },
-};
+});

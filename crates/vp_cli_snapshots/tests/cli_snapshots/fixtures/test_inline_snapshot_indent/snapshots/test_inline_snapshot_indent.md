@@ -16,7 +16,7 @@ write inline snapshot via --update (regression test for #1553)
  Test Files  1 passed (1)
       Tests  1 passed (1)
    Start at  <time>
-   Duration  <duration> (transform <duration>, setup <duration>, import <duration>, tests <duration>, environment <duration>)
+   Duration  <duration> (import <share>, tests <share>, transform <share>, worker <share>)
 ```
 
 ## `vpt print-file src/inline-snapshot.test.ts`

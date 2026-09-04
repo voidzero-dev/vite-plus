@@ -181,6 +181,11 @@ static ASSET_HASH_RE: LazyLock<regex::Regex> =
 // verbatim.
 static LOCAL_REGISTRY_URL_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"http://127\.0\.0\.1:\d+").unwrap());
+// Vitest 5 announces the browser-mode API server ("API started at
+// http://localhost:63315/"). 63315 is only the default: the server falls back to
+// the next free port when it is taken, so mask it like the local-registry port.
+static VITEST_BROWSER_API_URL_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(API started at http://localhost:)\d+").unwrap());
 // npm names its debug log after the wall-clock start of the failing run.
 static NPM_LOG_NAME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}_\d{3}Z(-debug-\d+\.log)").unwrap()
@@ -306,6 +311,14 @@ static NPM_NOTICE_RE: LazyLock<regex::Regex> =
 // <duration>).
 static START_AT_TIME_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(Start at\s+)\d{1,2}:\d{2}:\d{2}").unwrap());
+// Vitest 5 replaced the per-phase duration breakdown ("transform 1.2s, setup
+// 0ms, ...") with shares of the total ("transform 56%, import 30%, worker 8%,
+// tests 6%"). Both the percentages and the order vary run to run, because the
+// phases are sorted by share. Mask each share and sort the phases by name so
+// which phases ran stays visible while the timing noise does not.
+static VITEST_DURATION_SHARES_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(Duration\s+<duration> )\(([a-z]+ \d+%(?:, [a-z]+ \d+%)*)\)").unwrap()
+});
 // `vp env which` prints an `Installed:` field for a global package holding the
 // wall-clock date the install ran, so it drifts with the calendar rather than
 // with any fixture input. Mask by the label context (like the sibling `Node:`
@@ -445,6 +458,26 @@ pub fn redact_output(
     // Runs before version redaction so "1.23s" never half-matches as a version.
     output = DURATION_RE.replace_all(&output, "<duration>").into_owned();
 
+    // Normalize Vitest's phase-share breakdown once the total is masked above.
+    output = VITEST_DURATION_SHARES_RE
+        .replace_all(&output, |caps: &regex::Captures| {
+            let mut phases = caps[2]
+                .split(", ")
+                .filter_map(|phase| phase.split_whitespace().next())
+                .collect::<Vec<_>>();
+            phases.sort_unstable();
+            format!(
+                "{}({})",
+                &caps[1],
+                phases
+                    .iter()
+                    .map(|phase| format!("{phase} <share>"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })
+        .into_owned();
+
     // Redact semver-shaped versions (bundled tool versions, Node versions).
     output = VERSION_RE.replace_all(&output, "<version>").into_owned();
 
@@ -575,6 +608,7 @@ pub fn redact_output(
     // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
     // log name, live spinner frames, and pnpm's nondeterministic progress lines
     output = LOCAL_REGISTRY_URL_RE.replace_all(&output, "http://127.0.0.1:<port>").into_owned();
+    output = VITEST_BROWSER_API_URL_RE.replace_all(&output, "${1}<port>").into_owned();
     output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();

@@ -132,34 +132,13 @@
       "types": "./dist/test/internal/browser.d.ts",
       "default": "./dist/test/internal/browser.js"
     },
-    "./test/runners": {
-      "types": "./dist/test/runners.d.ts",
-      "default": "./dist/test/runners.js"
-    },
-    "./test/suite": {
-      "types": "./dist/test/suite.d.ts",
-      "default": "./dist/test/suite.js"
-    },
-    "./test/environments": {
-      "types": "./dist/test/environments.d.ts",
-      "default": "./dist/test/environments.js"
+    "./test/internal/traces": {
+      "default": "./dist/test/internal/traces.js"
     },
     "./test/config": {
       "types": "./dist/test/config.d.ts",
       "require": "./dist/test/config.cjs",
       "default": "./dist/test/config.js"
-    },
-    "./test/coverage": {
-      "types": "./dist/test/coverage.d.ts",
-      "default": "./dist/test/coverage.js"
-    },
-    "./test/reporters": {
-      "types": "./dist/test/reporters.d.ts",
-      "default": "./dist/test/reporters.js"
-    },
-    "./test/snapshot": {
-      "types": "./dist/test/snapshot.d.ts",
-      "default": "./dist/test/snapshot.js"
     },
     "./test/runtime": {
       "types": "./dist/test/runtime.d.ts",
@@ -242,15 +221,6 @@
     "./test/browser-compat": {
       "types": "./dist/test/browser-compat.d.ts",
       "default": "./dist/test/browser-compat.js"
-    },
-    "./test/plugins/runner": {
-      "default": "./dist/test/plugins/runner.js"
-    },
-    "./test/plugins/runner-utils": {
-      "default": "./dist/test/plugins/runner-utils.js"
-    },
-    "./test/plugins/runner-types": {
-      "default": "./dist/test/plugins/runner-types.js"
     },
     "./test/plugins/utils": {
       "default": "./dist/test/plugins/utils.js"
@@ -364,7 +334,6 @@
     "@vitest/expect": "catalog:",
     "@vitest/mocker": "catalog:",
     "@vitest/pretty-format": "catalog:",
-    "@vitest/runner": "catalog:",
     "@vitest/snapshot": "catalog:",
     "@vitest/spy": "catalog:",
     "@vitest/utils": "catalog:",

@@ -352,13 +352,13 @@ Instead of copying vitest's dist files, we create thin shim files that re-export
 
 Every entry under vitest's own `exports` is shimmed under `./test/*` (wildcard exports and `./package.json` are skipped). The shim is purely a re-export — `vite-plus/test` and friends are aliases for the matching subpath of upstream `vitest`. Examples:
 
-| Vitest Export      | CLI Package Export         |
-| ------------------ | -------------------------- |
-| `vitest`           | `vite-plus/test`           |
-| `vitest/browser`   | `vite-plus/test/browser`   |
-| `vitest/node`      | `vite-plus/test/node`      |
-| `vitest/config`    | `vite-plus/test/config`    |
-| `vitest/reporters` | `vite-plus/test/reporters` |
+| Vitest Export    | CLI Package Export       |
+| ---------------- | ------------------------ |
+| `vitest`         | `vite-plus/test`         |
+| `vitest/browser` | `vite-plus/test/browser` |
+| `vitest/node`    | `vite-plus/test/node`    |
+| `vitest/config`  | `vite-plus/test/config`  |
+| `vitest/runtime` | `vite-plus/test/runtime` |
 
 The full set is regenerated on every build from the upstream vitest `package.json`, so the exact list tracks vitest itself.
 

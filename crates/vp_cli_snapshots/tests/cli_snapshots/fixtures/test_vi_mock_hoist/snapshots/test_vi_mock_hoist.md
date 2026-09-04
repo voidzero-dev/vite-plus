@@ -14,5 +14,5 @@ vi.mock() from 'vite-plus/test' must hoist via upstream mocker (no vite-plus pat
  Test Files  1 passed (1)
       Tests  1 passed (1)
    Start at  <time>
-   Duration  <duration> (transform <duration>, setup <duration>, import <duration>, tests <duration>, environment <duration>)
+   Duration  <duration> (import <share>, tests <share>, transform <share>, worker <share>)
 ```

@@ -7,11 +7,13 @@ import {
   checkCoverageProviderVersion,
   computeAutoInlineList,
   defineConfig,
+  OPTIMIZE_DEPS_EXCLUDE,
   resolveCoverageProviderToCheck,
 } from '../define-config.ts';
 import { VITEST_VERSION } from '../utils/constants.ts';
 
 const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
+const OPTIMIZE_DEPS_EXCLUDE_PLUGIN_NAME = 'vite-plus:exclude-test-runtime-from-prebundling';
 const COVERAGE_GUARD_PLUGIN_NAME = 'vite-plus:coverage-version-guard';
 
 function pluginName(p: unknown): string | undefined {
@@ -28,8 +30,9 @@ describe('defineConfig project plugin injection', () => {
 
     expect(pluginName(result.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(result.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
-    expect(pluginName(result.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-    expect(pluginName(result.plugins[3])).toBe('user-existing-root-plugin');
+    expect(pluginName(result.plugins[2])).toBe(OPTIMIZE_DEPS_EXCLUDE_PLUGIN_NAME);
+    expect(pluginName(result.plugins[3])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
+    expect(pluginName(result.plugins[4])).toBe('user-existing-root-plugin');
   });
 
   it('injects resolver + auto-inline plugins into an inline-object project entry, preserving existing plugins', () => {
@@ -49,10 +52,11 @@ describe('defineConfig project plugin injection', () => {
     expect(project.test.name).toBe('unit');
     expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
-    expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-    expect(pluginName(project.plugins[3])).toBe('user-unit-project-plugin');
+    expect(pluginName(project.plugins[2])).toBe(OPTIMIZE_DEPS_EXCLUDE_PLUGIN_NAME);
+    expect(pluginName(project.plugins[3])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
+    expect(pluginName(project.plugins[4])).toBe('user-unit-project-plugin');
     // Sanity: the existing plugin reference is preserved (clone shallow-copies the array).
-    expect(project.plugins[3]).toBe(existing);
+    expect(project.plugins[4]).toBe(existing);
   });
 
   it('injects plugins into the return value of a function-shaped project entry', () => {
@@ -74,8 +78,9 @@ describe('defineConfig project plugin injection', () => {
     const resolved = (wrapped as (env: typeof fakeEnv) => { plugins: unknown[] })(fakeEnv);
     expect(pluginName(resolved.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(resolved.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
-    expect(pluginName(resolved.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-    expect(pluginName(resolved.plugins[3])).toBe('user-fn-project-plugin');
+    expect(pluginName(resolved.plugins[2])).toBe(OPTIMIZE_DEPS_EXCLUDE_PLUGIN_NAME);
+    expect(pluginName(resolved.plugins[3])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
+    expect(pluginName(resolved.plugins[4])).toBe('user-fn-project-plugin');
   });
 
   it('passes string-glob project entries through unchanged', () => {
@@ -101,10 +106,11 @@ describe('defineConfig project plugin injection', () => {
 
     const project = result.test.projects[0] as { plugins: unknown[]; test: { name: string } };
     expect(project.test.name).toBe('no-plugins');
-    expect(project.plugins).toHaveLength(3);
+    expect(project.plugins).toHaveLength(4);
     expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
-    expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
+    expect(pluginName(project.plugins[2])).toBe(OPTIMIZE_DEPS_EXCLUDE_PLUGIN_NAME);
+    expect(pluginName(project.plugins[3])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
   });
 });
 
@@ -206,6 +212,38 @@ describe('defineConfig auto-inline deps plugin registration', () => {
     expect(plugin).toBeDefined();
     expect(plugin?.enforce).toBe('pre');
     expect(typeof plugin?.configResolved).toBe('function');
+  });
+});
+
+describe('defineConfig optimizeDeps exclude plugin', () => {
+  /** Pull the injected plugin's `config` hook out of a `defineConfig` result. */
+  function configHook(): (config: {
+    optimizeDeps?: { exclude?: string[] };
+  }) => { optimizeDeps?: { exclude?: string[] } } | undefined {
+    const result = defineConfig({}) as { plugins: unknown[] };
+    const plugin = result.plugins.find(
+      (p): p is Record<string, unknown> =>
+        !!p &&
+        typeof p === 'object' &&
+        (p as { name?: unknown }).name === OPTIMIZE_DEPS_EXCLUDE_PLUGIN_NAME,
+    );
+    expect(plugin).toBeDefined();
+    expect(plugin?.enforce).toBe('pre');
+    return plugin?.config as ReturnType<typeof configHook>;
+  }
+
+  it('adds every entry to an empty optimizeDeps.exclude', () => {
+    expect(configHook()({})).toEqual({ optimizeDeps: { exclude: [...OPTIMIZE_DEPS_EXCLUDE] } });
+  });
+
+  it('appends to a user-supplied exclude list without dropping their entries', () => {
+    expect(configHook()({ optimizeDeps: { exclude: ['some-esm-only-dep'] } })).toEqual({
+      optimizeDeps: { exclude: ['some-esm-only-dep', ...OPTIMIZE_DEPS_EXCLUDE] },
+    });
+  });
+
+  it('returns undefined when the user already excluded every entry', () => {
+    expect(configHook()({ optimizeDeps: { exclude: [...OPTIMIZE_DEPS_EXCLUDE] } })).toBeUndefined();
   });
 });
 

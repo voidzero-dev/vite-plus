@@ -52,9 +52,6 @@ const BROWSER_PROVIDER_PACKAGES: ReadonlyArray<{ pkg: string; short: string }> =
 // `./test/plugins/<name>` to restore the surface that the removed
 // `@voidzero-dev/vite-plus-test` wrapper previously exposed.
 const PLUGIN_SHIM_ENTRIES: ReadonlyArray<readonly [importSpecifier: string, pluginName: string]> = [
-  ['@vitest/runner', 'runner'],
-  ['@vitest/runner/utils', 'runner-utils'],
-  ['@vitest/runner/types', 'runner-types'],
   ['@vitest/utils', 'utils'],
   ['@vitest/utils/source-map', 'utils-source-map'],
   ['@vitest/utils/source-map/node', 'utils-source-map-node'],

@@ -153,7 +153,7 @@ const vitePlusModuleFile = fileURLToPath(import.meta.url);
 /**
  * Absolute path to the bundled `vitest` package's `package.json`, used as a
  * second `this.resolve` importer. The nested `@vitest/*` family (`@vitest/expect`,
- * `@vitest/runner`, `@vitest/snapshot`, …) are dependencies of `vitest` itself —
+ * `@vitest/mocker`, `@vitest/snapshot`, …) are dependencies of `vitest` itself —
  * not direct deps of `vite-plus` — so under pnpm's isolated layout they are
  * reachable from `vitest`'s location but not from [[vitePlusModuleFile]].
  * Resolving `package.json` is condition-agnostic, so this is safe with
@@ -377,6 +377,39 @@ function vitePlusAutoInlineMatcherPlugin(): PluginOption {
         }
         testConfig.server.deps.inline = merged;
       }
+    },
+  };
+}
+
+/**
+ * Import specifiers that must never be dependency pre-bundled by Vite.
+ *
+ * Vitest keeps its own `vitest` entry out of browser-mode pre-bundling so the
+ * test file and the browser runner share one module instance. Vite+ users reach
+ * that same runtime through `vite-plus/test`, which Vite does not know about and
+ * happily pre-bundles into a SECOND copy. That copy's module-level runner state
+ * is never initialised, so the first `describe()` in a browser-mode test throws
+ * `TypeError: Cannot read properties of undefined (reading 'config')`.
+ *
+ * `vite-plus/test` is the only generated shim that re-exports `vitest` itself —
+ * the rest re-export individual `@vitest/*` packages — so excluding it is enough
+ * to keep the runtime a singleton.
+ *
+ * Exported for unit testing.
+ */
+export const OPTIMIZE_DEPS_EXCLUDE: ReadonlyArray<string> = ['vite-plus/test'];
+
+function vitePlusOptimizeDepsExcludePlugin(): PluginOption {
+  return {
+    name: 'vite-plus:exclude-test-runtime-from-prebundling',
+    enforce: 'pre',
+    config(userConfig) {
+      const existing = userConfig.optimizeDeps?.exclude ?? [];
+      const missing = OPTIMIZE_DEPS_EXCLUDE.filter((id) => !existing.includes(id));
+      if (missing.length === 0) {
+        return undefined;
+      }
+      return { optimizeDeps: { exclude: [...existing, ...missing] } };
     },
   };
 }
@@ -623,6 +656,7 @@ function injectPluginIntoInlineConfig<
     plugins: [
       vitePlusVitestResolverPlugin(),
       vitePlusAutoInlineMatcherPlugin(),
+      vitePlusOptimizeDepsExcludePlugin(),
       vitePlusCoverageVersionGuardPlugin(),
       ...(config.plugins ?? []),
     ],

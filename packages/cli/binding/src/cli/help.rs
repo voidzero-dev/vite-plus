@@ -48,7 +48,7 @@ fn is_vitest_watch_flag(arg: &str) -> bool {
 }
 
 fn is_vitest_test_subcommand(arg: &str) -> bool {
-    matches!(arg, "run" | "watch" | "dev" | "related" | "bench" | "init" | "list")
+    matches!(arg, "run" | "watch" | "dev" | "related" | "bench" | "init" | "doctor" | "list")
 }
 
 fn has_flag_before_terminator(args: &[String], flag: &str) -> bool {

@@ -8,6 +8,7 @@ import {
   enableDebug,
   type InlineConfig,
   type ResolvedConfig,
+  type TsdownHandle,
 } from '@voidzero-dev/vite-plus-core/pack';
 import { cac } from 'cac';
 
@@ -128,6 +129,11 @@ cli
   })
   .option('--on-success <command>', 'Command to run on success')
   .option('--copy <dir>', 'Copy files to output dir')
+  // NOTE: removed from tsdown CLI in v0.23.0 — tsdown no longer reads `publicDir`
+  // anywhere, so this is now a no-op. Kept registered so existing
+  // `vp pack --public-dir <dir>` invocations fail soft instead of erroring on an
+  // unknown flag, and dropped from the static help, which mirrors upstream. Remove
+  // once users have had a release to move to `--copy`.
   .option('--public-dir <dir>', 'Alias for --copy, deprecated')
   .option('--tsconfig <tsconfig>', 'Set tsconfig path')
   .option('--unbundle', 'Unbundle mode')
@@ -145,7 +151,10 @@ cli
       flags.envPrefix = DEFAULT_ENV_PREFIXES;
     }
 
-    async function runBuild() {
+    // tsdown 0.23 threads a `TsdownHandle` through `buildWithConfigs` so watch mode
+    // can restart itself, which makes the rebuild callback (this function) recursive
+    // in its own return type — hence the explicit annotation.
+    async function runBuild(): Promise<TsdownHandle> {
       const viteConfig =
         flags.config === false
           ? undefined
@@ -172,7 +181,7 @@ cli
         configs.push(...resolvedConfig);
       }
 
-      await buildWithConfigs(configs, configDeps, runBuild);
+      return buildWithConfigs(configs, configDeps, runBuild);
     }
 
     await runBuild();
