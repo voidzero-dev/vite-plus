@@ -8,5 +8,5 @@
   "devDependencies": {
     "oxlint": "latest"
   },
-  "packageManager": "npm@11.13.0"
+  "packageManager": "npm@10.9.0"
 }
