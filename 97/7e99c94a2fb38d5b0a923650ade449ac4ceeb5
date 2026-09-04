@@ -1,0 +1,19 @@
+docs/wrangler.jsonc
+  s_1a6ccb0669ad48::t_cfa537fc70acf3 8-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "977e99c94a2fb38d5b0a923650ade449ac4ceeb5",
+  "prompts": {},
+  "sessions": {
+    "s_1a6ccb0669ad48": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06a9d-9d70-7dc1-88ee-5151b0b5cb05",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "mdong <mdong@cloudflare.com>"
+    }
+  }
+}
