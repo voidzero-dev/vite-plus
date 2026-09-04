@@ -72,7 +72,7 @@ import {
   type NodeVersionManagerDetection,
 } from './migrator.ts';
 import {
-  getNpmInitialMigrationInstallArgs,
+  // getNpmInitialMigrationInstallArgs,
   prepareNpmViteAliasReinstall,
 } from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
@@ -768,10 +768,12 @@ async function executeMigrationPlan(
   // preparatory install only needs the project's declared dependencies for
   // migration analysis. The final install below still uses npm's normal peer
   // resolver after the package manifest has been rewritten.
-  const initialInstallArgs =
-    workspaceInfo.packageManager === PackageManager.npm
-      ? getNpmInitialMigrationInstallArgs(workspaceInfo.downloadPackageManager.version)
-      : undefined;
+  // Temporarily disabled to compare the snapshot suite without this workaround.
+  // const initialInstallArgs =
+  //   workspaceInfo.packageManager === PackageManager.npm
+  //     ? getNpmInitialMigrationInstallArgs(workspaceInfo.downloadPackageManager.version)
+  //     : undefined;
+  const initialInstallArgs = undefined;
   const initialInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
     interactive,
