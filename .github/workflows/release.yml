@@ -65,6 +65,11 @@ jobs:
       id-token: write # Required for OIDC
     env:
       VERSION: ${{ needs.check.outputs.version }}
+      # npm publish-time scanning makes a successful upload temporarily
+      # unavailable to installs. After each dependency tier becomes visible on
+      # this runner's registry edge, allow time for other CDN edges to settle.
+      PUBLISH_PROPAGATION_MIN_SECONDS: '60'
+      PUBLISH_PROPAGATION_TIMEOUT_SECONDS: '600'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -155,10 +160,30 @@ jobs:
       - name: Prepare and publish native addons
         run: node ./packages/cli/publish-native-addons.ts --mode npm
 
-      - name: Publish
-        run: |
+      - name: Publish core dependency tier
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "@voidzero-dev/vite-plus-core@${VERSION}"
+          --
           pnpm publish --filter=./packages/core --tag latest --access public --no-git-checks
+
+      # The CLI pins core via workspace:* (rewritten to this exact version).
+      # Wait for both its install metadata and tarball before publishing the CLI.
+      - name: Wait for core to propagate
+        run: >-
+          node ./.github/scripts/wait-for-npm-packages.ts
+          "@voidzero-dev/vite-plus-core@${VERSION}"
+
+      - name: Publish Vite+
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "vite-plus@${VERSION}"
+          --
           pnpm publish --filter=./packages/cli --tag latest --access public --no-git-checks
+
+      # Downstream jobs build Docker images by installing this release from npm.
+      - name: Wait for Vite+ to propagate
+        run: node ./.github/scripts/wait-for-npm-packages.ts "vite-plus@${VERSION}"
 
       - name: Create release body
         env:
