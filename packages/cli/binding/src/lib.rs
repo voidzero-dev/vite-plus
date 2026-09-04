@@ -78,6 +78,9 @@ pub struct CliOptions {
     pub explicit_chdir: Option<bool>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
     pub args: Option<Vec<String>>,
+    /// Host Node.js version (`process.version`), used for the package-manager
+    /// lifecycle env user agent.
+    pub node_version: Option<String>,
     /// Generated toolchain manifest shipped with this vite-plus package.
     pub toolchain_manifest_path: String,
     /// Root directory of this vite-plus package.
@@ -186,6 +189,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let doc_tsf = options.doc;
     let resolve_universal_vite_config_tsf = options.resolve_universal_vite_config;
     let args = options.args;
+    let node_version = options.node_version;
     let explicit_chdir = options.explicit_chdir.unwrap_or(false);
     let toolchain_manifest_path = options.toolchain_manifest_path;
     let vite_plus_package_path = options.vite_plus_package_path;
@@ -210,6 +214,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
             resolve_universal_vite_config: create_vite_config_resolver(
                 resolve_universal_vite_config_tsf,
             ),
+            node_version,
         };
 
         // Create a new single-threaded runtime for non-Send futures

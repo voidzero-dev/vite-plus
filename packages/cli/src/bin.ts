@@ -151,6 +151,7 @@ if (maybePrintCommandHelp(args)) {
       toolchainManifestPath: path.join(cliDistDir, 'toolchain.json'),
       vitePlusPackagePath,
       resolveUniversalViteConfig,
+      nodeVersion: process.version,
       explicitChdir,
       args: rustCliArgs,
     });
