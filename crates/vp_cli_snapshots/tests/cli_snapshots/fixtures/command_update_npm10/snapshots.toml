@@ -1,6 +1,7 @@
 [[case]]
 name = "command_update_npm10"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "update", "testnpm2", "--", "--no-audit"], comment = "should update package within semver range" },

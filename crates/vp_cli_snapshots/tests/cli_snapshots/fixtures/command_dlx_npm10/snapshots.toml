@@ -1,6 +1,7 @@
 [[case]]
 name = "command_dlx_npm10"
 vp = "global"
+serial = true
 local-registry = true
 skip-platforms = ["windows", { os = "linux", libc = "musl" }]
 steps = [

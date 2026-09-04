@@ -1,6 +1,7 @@
 [[case]]
 name = "command_add_npm10_with_workspace"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "add", "testnpm2", "-D", "-w", "--", "--no-audit"], comment = "should add package to workspace root" },

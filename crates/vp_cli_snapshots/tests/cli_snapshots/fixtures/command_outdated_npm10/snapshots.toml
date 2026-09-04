@@ -1,6 +1,7 @@
 [[case]]
 name = "command_outdated_npm10"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },

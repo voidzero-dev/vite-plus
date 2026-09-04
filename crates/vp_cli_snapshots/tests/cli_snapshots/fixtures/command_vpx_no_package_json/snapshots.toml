@@ -1,6 +1,7 @@
 [[case]]
 name = "command_vpx_no_package_json"
 vp = "global"
+serial = true
 local-registry = true
 skip-platforms = ["windows"]
 steps = [

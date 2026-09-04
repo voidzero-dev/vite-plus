@@ -1,6 +1,7 @@
 [[case]]
 name = "command_add_npm10"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "add", "--help"], comment = "should show help", continue-on-failure = true },

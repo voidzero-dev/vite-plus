@@ -1,6 +1,7 @@
 [[case]]
 name = "command_unlink_npm10"
 vp = "global"
+serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vpt", "mkdir", "-p", "../unlink-test-lib-npm"], comment = "create test library" },

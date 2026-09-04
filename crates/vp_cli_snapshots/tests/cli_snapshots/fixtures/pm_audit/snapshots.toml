@@ -1,6 +1,7 @@
 [[case]]
 name = "pm_audit_bun"
 vp = "global"
+serial = true
 cwd = "bun"
 steps = [
   { argv = ["vp", "install", "--", "--silent"], comment = "should install packages first", continue-on-failure = true },

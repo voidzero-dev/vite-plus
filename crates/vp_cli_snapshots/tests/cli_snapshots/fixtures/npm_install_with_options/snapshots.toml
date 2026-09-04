@@ -1,6 +1,7 @@
 [[case]]
 name = "npm_install_with_options"
 vp = "local"
+serial = true
 steps = [
   { argv = ["vp", "install", "--help"], comment = "print help message", continue-on-failure = true },
   { argv = ["vp", "run", "install"], comment = "https://docs.npmjs.com/cli/v10/commands/npm-install", continue-on-failure = true },

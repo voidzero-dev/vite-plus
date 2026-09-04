@@ -83,6 +83,7 @@ cwd = "packages/app"          # optional, relative to the fixture root
 skip-platforms = ["windows"]  # or { os = "linux", libc = "musl" }
 requires = ["bash"]           # "sh" | "bash" | "zsh" | "cmd" | "fish" | "nu" | "pwsh"
 ignore = false                # true: only runs with `-- --ignored`
+serial = false                # true: run alone across cargo test/nextest workers
 seed-runtime = true           # false: start from an empty VP_HOME
 link-node-modules = false     # true: expose the run-root node_modules as
                               #   the workspace's parent-dir node_modules,
