@@ -30,7 +30,7 @@ check package.json has overrides field (not pnpm.overrides)
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@<version>"
   },
-  "packageManager": "npm@10.9.2"
+  "packageManager": "npm@11.13.0"
 }
 ```
 

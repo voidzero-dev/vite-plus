@@ -1,0 +1,8 @@
+{
+  "name": "command-list-npm11-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "npm@11.13.0"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "command-outdated-npm11-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "packageManager": "npm@11.13.0"
+}
