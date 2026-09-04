@@ -1,3 +1,4 @@
 .vitepress/cache
+.wrangler
 public/install.sh
 public/install.ps1
