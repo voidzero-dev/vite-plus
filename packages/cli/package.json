@@ -63,11 +63,13 @@
     },
     "./fmt": {
       "types": "./dist/fmt.d.ts",
-      "import": "./dist/fmt.js"
+      "import": "./dist/fmt.js",
+      "default": "./dist/fmt.js"
     },
     "./lint": {
       "types": "./dist/lint.d.ts",
-      "import": "./dist/lint.js"
+      "import": "./dist/lint.js",
+      "default": "./dist/lint.js"
     },
     "./oxlint-plugin": {
       "module-sync": "./dist/oxlint-plugin.js",

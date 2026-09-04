@@ -1,0 +1,10 @@
+{
+  "name": "migration-oxc-config-conflict",
+  "scripts": {
+    "lint": "oxlint"
+  },
+  "devDependencies": {
+    "oxlint": "^1.0.0",
+    "vite": "^7.0.0"
+  }
+}

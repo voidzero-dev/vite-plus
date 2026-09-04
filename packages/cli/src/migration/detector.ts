@@ -59,6 +59,103 @@ export const PRETTIER_CONFIG_FILES = [
   'prettier.config.mts',
 ] as const;
 
+// Oxlint and Oxfmt each accept a static JSON config or a dynamic TypeScript one.
+// The JSON forms are inlined into `vite.config.*` during migration and deleted;
+// the dynamic forms are preserved and imported instead. Detection takes the
+// first match in each list, so the two forms are ordered JSON-first only to keep
+// the historical precedence — `detectOxcConfigConflicts` rejects any directory
+// holding more than one of these before that precedence can matter.
+// https://oxc.rs/docs/guide/usage/linter/config.html#configuration-file-format
+export const OXLINT_JSON_CONFIG_FILES = ['.oxlintrc.json', '.oxlintrc.jsonc'] as const;
+export const OXLINT_DYNAMIC_CONFIG_FILES = ['oxlint.config.ts', 'oxlint.config.mts'] as const;
+export const OXLINT_CONFIG_FILES = [
+  ...OXLINT_JSON_CONFIG_FILES,
+  ...OXLINT_DYNAMIC_CONFIG_FILES,
+] as const;
+
+// https://oxc.rs/docs/guide/usage/formatter.html#configuration-file
+export const OXFMT_JSON_CONFIG_FILES = ['.oxfmtrc.json', '.oxfmtrc.jsonc'] as const;
+export const OXFMT_DYNAMIC_CONFIG_FILES = ['oxfmt.config.ts', 'oxfmt.config.mts'] as const;
+export const OXFMT_CONFIG_FILES = [
+  ...OXFMT_JSON_CONFIG_FILES,
+  ...OXFMT_DYNAMIC_CONFIG_FILES,
+] as const;
+
+export interface OxcConfigConflict {
+  /** `oxlint` or `oxfmt` — the tool whose config is ambiguous. */
+  tool: 'oxlint' | 'oxfmt';
+  /** Directory holding the competing configs, relative to the workspace root ('.' for the root). */
+  dir: string;
+  /** Every config for `tool` present in `dir`, in the tool's own candidate order. */
+  configs: string[];
+}
+
+/**
+ * Detect directories that hold more than one config for the same Oxc tool.
+ *
+ * Both tools refuse to run in that state — `oxlint` and `oxfmt` each fail with
+ * "Both '<a>' and '<b>' found in <dir>" — so such a project is already broken
+ * before migration sees it. The rule is one config per directory, not one config
+ * *form*: two JSON forms (`.oxlintrc.json` + `.oxlintrc.jsonc`) and two dynamic
+ * forms (`oxlint.config.ts` + `oxlint.config.mts`) are rejected exactly like the
+ * mixed pair. Migration cannot repair any of them either: first-match detection
+ * would consume one config and leave the rest on disk unreferenced, where they
+ * then silently shadow the freshly inlined `lint` block for direct `oxlint`
+ * invocations. Erroring out and letting the user pick a single config first is
+ * the only outcome that does not quietly lose settings.
+ *
+ * `dir` is `'.'` for the workspace root; other values are workspace-relative
+ * package paths with forward slashes.
+ */
+export function detectOxcConfigConflicts(
+  projectPath: string,
+  relativeDir = '.',
+): OxcConfigConflict[] {
+  const conflicts: OxcConfigConflict[] = [];
+
+  const tools = [
+    { tool: 'oxlint', configFiles: OXLINT_CONFIG_FILES },
+    { tool: 'oxfmt', configFiles: OXFMT_CONFIG_FILES },
+  ] as const;
+
+  for (const { tool, configFiles } of tools) {
+    const configs = configFiles.filter((config) => fs.existsSync(path.join(projectPath, config)));
+
+    if (configs.length > 1) {
+      conflicts.push({ tool, dir: relativeDir, configs });
+    }
+  }
+
+  return conflicts;
+}
+
+/**
+ * Collect Oxc config conflicts across a workspace: the root directory plus every
+ * workspace package. `packageDirs` holds workspace-relative paths with forward
+ * slashes, matching `WorkspacePackage['path']`; pass an empty array for a
+ * single-package project.
+ */
+export function collectOxcConfigConflicts(
+  rootDir: string,
+  packageDirs: readonly string[] = [],
+): OxcConfigConflict[] {
+  return [
+    ...detectOxcConfigConflicts(rootDir),
+    ...packageDirs.flatMap((packageDir) =>
+      detectOxcConfigConflicts(path.join(rootDir, packageDir), packageDir),
+    ),
+  ];
+}
+
+/** Render one conflict as a user-facing line for the migration abort message. */
+export function formatOxcConfigConflict(conflict: OxcConfigConflict): string {
+  const location = conflict.dir === '.' ? 'the project root' : conflict.dir;
+  const quoted = conflict.configs.map((file) => `\`${file}\``);
+  // `a and b` for the common pair, `a, b and c` once a directory holds more.
+  const files = [quoted.slice(0, -1).join(', '), quoted.at(-1)].filter(Boolean).join(' and ');
+  return `${location} has ${files} — ${conflict.tool} allows only one config per directory.`;
+}
+
 export function detectConfigs(projectPath: string): ConfigFiles {
   const configs: ConfigFiles = {};
 
@@ -119,8 +216,7 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
   // Check for oxlint configs
   // https://oxc.rs/docs/guide/usage/linter/config.html#configuration-file-format
-  const oxlintConfigs = ['.oxlintrc.json', '.oxlintrc.jsonc'];
-  for (const config of oxlintConfigs) {
+  for (const config of OXLINT_CONFIG_FILES) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.oxlintConfig = config;
       break;
@@ -129,8 +225,7 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
   // Check for oxfmt configs
   // https://oxc.rs/docs/guide/usage/formatter.html#configuration-file
-  const oxfmtConfigs = ['.oxfmtrc.json', '.oxfmtrc.jsonc'];
-  for (const config of oxfmtConfigs) {
+  for (const config of OXFMT_CONFIG_FILES) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.oxfmtConfig = config;
       break;

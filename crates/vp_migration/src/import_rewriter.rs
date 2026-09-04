@@ -1567,6 +1567,166 @@ transform:
 fix: $NEW_IMPORT
 "#;
 
+/// ast-grep rules for rewriting the bare Oxc package imports that Vite+ owns.
+///
+/// The migration removes `oxlint` and `oxfmt` from the project's direct
+/// dependencies. Dynamic Oxc config files therefore need to import their
+/// runtime helpers through Vite+'s public subpaths so they keep resolving in
+/// strict package-manager layouts.
+const REWRITE_OXLINT_RULES: &str = r#"---
+id: rewrite-oxlint-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint
+      by: "vite-plus/lint"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint
+      by: "vite-plus/lint"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint
+      by: "vite-plus/lint"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint
+      by: "vite-plus/lint"
+fix: $NEW_IMPORT
+"#;
+
+/// Same rewrite for `oxfmt`'s runtime helpers → `vite-plus/fmt`. Kept separate
+/// from the `oxlint` rules so each package honors its own dependency skip.
+const REWRITE_OXFMT_RULES: &str = r#"---
+id: rewrite-oxfmt-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxfmt['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxfmt
+      by: "vite-plus/fmt"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxfmt-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxfmt['"]$
+  inside:
+    kind: export_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxfmt
+      by: "vite-plus/fmt"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxfmt-require
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxfmt['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        regex: ^require$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxfmt
+      by: "vite-plus/fmt"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxfmt-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxfmt['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxfmt
+      by: "vite-plus/fmt"
+fix: $NEW_IMPORT
+"#;
+
 static PARSED_VITE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_VITE_RULES).expect("failed to parse vite rewrite rules")
 });
@@ -1611,6 +1771,14 @@ static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang
 
 static PARSED_TSDOWN_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_TSDOWN_RULES).expect("failed to parse tsdown rewrite rules")
+});
+
+static PARSED_OXLINT_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    ast_grep::load_rules(REWRITE_OXLINT_RULES).expect("failed to parse oxlint rewrite rules")
+});
+
+static PARSED_OXFMT_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    ast_grep::load_rules(REWRITE_OXFMT_RULES).expect("failed to parse oxfmt rewrite rules")
 });
 
 // Regex patterns for rewriting `/// <reference types="..." />` directives.
@@ -1954,6 +2122,10 @@ struct SkipPackages {
     skip_vitest: bool,
     /// Skip rewriting tsdown imports (tsdown is in peerDependencies or dependencies)
     skip_tsdown: bool,
+    /// Skip rewriting oxlint imports (oxlint is in peerDependencies or dependencies)
+    skip_oxlint: bool,
+    /// Skip rewriting oxfmt imports (oxfmt is in peerDependencies or dependencies)
+    skip_oxfmt: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -1968,13 +2140,6 @@ pub struct RewriteImportsOptions {
     /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
     /// whose nearest package.json declares `@nuxt/test-utils`.
     pub preserve_vitest_in_nuxt_packages: bool,
-}
-
-impl SkipPackages {
-    /// Check if all packages should be skipped (file can be skipped entirely)
-    const fn all_skipped(&self) -> bool {
-        self.skip_vite && self.skip_vitest && self.skip_tsdown
-    }
 }
 
 /// Find the nearest package.json by walking up from the file's directory.
@@ -2094,6 +2259,10 @@ fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContex
                 || has_package("dependencies", "vitest"),
             skip_tsdown: has_package("peerDependencies", "tsdown")
                 || has_package("dependencies", "tsdown"),
+            skip_oxlint: has_package("peerDependencies", "oxlint")
+                || has_package("dependencies", "oxlint"),
+            skip_oxfmt: has_package("peerDependencies", "oxfmt")
+                || has_package("dependencies", "oxfmt"),
         },
         uses_nuxt_test_utils: ["dependencies", "devDependencies", "optionalDependencies"]
             .into_iter()
@@ -2199,10 +2368,6 @@ pub fn rewrite_imports_in_directory_with_options(
         .into_par_iter()
         .map(|(file_path, package_context)| {
             let skip_packages = package_context.skip_packages;
-            if skip_packages.all_skipped() {
-                return (file_path, FileResult::Unchanged, false);
-            }
-
             match rewrite_import(
                 &file_path,
                 &skip_packages,
@@ -2246,7 +2411,8 @@ pub fn rewrite_imports_in_directory_with_options(
     Ok(batch_result)
 }
 
-/// Rewrite imports in a TypeScript/JavaScript file from vite/vitest to vite-plus
+/// Rewrite imports in a TypeScript/JavaScript file from the bundled tool
+/// packages to vite-plus.
 ///
 /// This function reads a file and rewrites the import statements
 /// to use 'vite-plus' instead of 'vite', 'vitest', or '@vitest/*'.
@@ -2297,6 +2463,12 @@ fn content_may_need_rewriting(content: &str, skip_packages: &SkipPackages) -> bo
         return true;
     }
     if !skip_packages.skip_tsdown && content.contains("tsdown") {
+        return true;
+    }
+    if !skip_packages.skip_oxlint && content.contains("oxlint") {
+        return true;
+    }
+    if !skip_packages.skip_oxfmt && content.contains("oxfmt") {
         return true;
     }
     false
@@ -2376,6 +2548,26 @@ fn rewrite_import_content_full(
         let tsdown_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_TSDOWN_RULES);
         if tsdown_content != new_content {
             new_content = tsdown_content;
+            updated = true;
+        }
+    }
+
+    // Oxc's runtime helpers must resolve through Vite+ after migration removes
+    // the direct oxlint/oxfmt dependencies. A package that declares oxlint or
+    // oxfmt itself keeps that dependency, so — like vite/vitest/tsdown above —
+    // its sources keep their original specifiers.
+    if !skip_packages.skip_oxlint {
+        let oxlint_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_OXLINT_RULES);
+        if oxlint_content != new_content {
+            new_content = oxlint_content;
+            updated = true;
+        }
+    }
+
+    if !skip_packages.skip_oxfmt {
+        let oxfmt_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_OXFMT_RULES);
+        if oxfmt_content != new_content {
+            new_content = oxfmt_content;
             updated = true;
         }
     }
@@ -3791,6 +3983,25 @@ export default defineConfig({
         );
     }
 
+    #[test]
+    fn test_rewrite_oxc_runtime_imports() {
+        let content = r#"import { defineConfig as defineLintConfig } from 'oxlint';
+export { defineConfig as defineFmtConfig } from "oxfmt";
+const lint = require('oxlint');
+const fmt = import("oxfmt");"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig as defineLintConfig } from 'vite-plus/lint';
+export { defineConfig as defineFmtConfig } from "vite-plus/fmt";
+const lint = require('vite-plus/lint');
+const fmt = import("vite-plus/fmt");"#
+        );
+    }
+
     // ========================
     // PeerDependencies Tests
     // ========================
@@ -3803,8 +4014,12 @@ import { describe } from 'vitest';
 
 export default defineConfig({});"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: false,
+            skip_tsdown: false,
+            ..Default::default()
+        };
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
@@ -3826,8 +4041,12 @@ import { describe } from 'vitest';
 
 export default defineConfig({});"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: true,
+            skip_tsdown: false,
+            ..Default::default()
+        };
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
@@ -3850,7 +4069,12 @@ import { build } from 'tsdown';
 
 export default defineConfig({});"#;
 
-        let skip_packages = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: true,
+            skip_tsdown: true,
+            ..Default::default()
+        };
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(!result.updated);
@@ -3858,15 +4082,93 @@ export default defineConfig({});"#;
     }
 
     #[test]
-    fn test_skip_packages_all_skipped() {
-        let skip_all = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
-        assert!(skip_all.all_skipped());
+    fn test_skip_oxlint_when_declared_leaves_oxfmt_rewritten() {
+        // A package that declares oxlint itself keeps that dependency after
+        // migration, so its sources must keep the bare `oxlint` specifier.
+        // oxfmt is not declared, so it still routes through Vite+.
+        let content = r#"import { defineConfig } from 'oxlint';
+import { defineConfig as fmt } from 'oxfmt';"#;
 
-        let skip_some = SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: true };
-        assert!(!skip_some.all_skipped());
+        let skip_packages = SkipPackages { skip_oxlint: true, ..Default::default() };
 
-        let skip_none = SkipPackages::default();
-        assert!(!skip_none.all_skipped());
+        let result = rewrite_import_content(content, &skip_packages).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from 'oxlint';
+import { defineConfig as fmt } from 'vite-plus/fmt';"#
+        );
+    }
+
+    #[test]
+    fn test_skip_oxfmt_when_declared_leaves_oxlint_rewritten() {
+        let content = r#"import { defineConfig } from 'oxlint';
+import { defineConfig as fmt } from 'oxfmt';"#;
+
+        let skip_packages = SkipPackages { skip_oxfmt: true, ..Default::default() };
+
+        let result = rewrite_import_content(content, &skip_packages).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from 'vite-plus/lint';
+import { defineConfig as fmt } from 'oxfmt';"#
+        );
+    }
+
+    #[test]
+    fn test_skip_both_oxc_packages_when_declared() {
+        let content = r#"import { defineConfig } from 'oxlint';
+import { defineConfig as fmt } from 'oxfmt';"#;
+
+        let skip_packages =
+            SkipPackages { skip_oxlint: true, skip_oxfmt: true, ..Default::default() };
+
+        let result = rewrite_import_content(content, &skip_packages).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_package_json_with_oxc_deps() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // oxlint as a peerDependency, oxfmt as a runtime dependency: both are
+        // whole-package skips, exactly like vite/vitest/tsdown.
+        let pkg_json = r#"{
+  "name": "my-oxc-preset",
+  "peerDependencies": {
+    "oxlint": "^1.0.0"
+  },
+  "dependencies": {
+    "oxfmt": "^0.1.0"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_oxlint);
+        assert!(skip.skip_oxfmt);
+        assert!(!skip.skip_vite);
+    }
+
+    #[test]
+    fn test_oxc_imports_still_rewritten_when_not_declared() {
+        // The default case must be unchanged: a project that does not declare
+        // oxlint/oxfmt still has its helper imports routed through Vite+.
+        let content = r#"import { defineConfig } from 'oxlint';
+import { defineConfig as fmt } from 'oxfmt';"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from 'vite-plus/lint';
+import { defineConfig as fmt } from 'vite-plus/fmt';"#
+        );
     }
 
     #[test]
@@ -3912,7 +4214,6 @@ export default defineConfig({});"#;
         assert!(skip.skip_vite);
         assert!(skip.skip_vitest);
         assert!(skip.skip_tsdown);
-        assert!(skip.all_skipped());
     }
 
     #[test]
@@ -4695,8 +4996,12 @@ module.exports = defineConfig({});"#
         // also be skipped (parity with the import-shape rule).
         let content = r#"const vi = require('vitest');
 const { defineConfig } = require('vite');"#;
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: true,
+            skip_tsdown: false,
+            ..Default::default()
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         // vitest require is NOT rewritten; vite require IS rewritten.
@@ -5162,8 +5467,12 @@ export default defineConfig({});"#
         let content = r#"/// <reference types="vite/client" />
 /// <reference types="vitest" />"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: false,
+            skip_tsdown: false,
+            ..Default::default()
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -5179,8 +5488,12 @@ export default defineConfig({});"#
 /// <reference types="vitest" />
 /// <reference types="@vitest/browser/matchers" />"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: true,
+            skip_tsdown: false,
+            ..Default::default()
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -5196,8 +5509,12 @@ export default defineConfig({});"#
         let content = r#"/// <reference types="tsdown/client" />
 /// <reference types="vite/client" />"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: false, skip_tsdown: true };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: false,
+            skip_tsdown: true,
+            ..Default::default()
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -5213,7 +5530,12 @@ export default defineConfig({});"#
 /// <reference types="vitest" />
 /// <reference types="tsdown/client" />"#;
 
-        let skip_packages = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: true,
+            skip_tsdown: true,
+            ..Default::default()
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(!result.updated);
         assert_eq!(result.content, content);
