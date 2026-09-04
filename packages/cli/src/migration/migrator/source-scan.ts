@@ -2,10 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { type WorkspacePackage } from '../../types/index.ts';
+import { editJsonFile } from '../../utils/json.ts';
 import { hasVitestTypesInTsconfig } from '../../utils/tsconfig.ts';
 import { projectUsesVitestDirectly } from '../migrator.ts';
 import {
   OPT_IN_BROWSER_PROVIDERS,
+  OXLINT_PLUGINS_PACKAGE,
+  OXLINT_PLUGIN_API_PACKAGES,
   PLAYWRIGHT_PROVIDER,
   WEBDRIVERIO_PROVIDER,
   readPackageJsonIfExists,
@@ -215,6 +218,12 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
 function sourceTreeMatches(
   projectPath: string,
   matchesContent: (content: string) => boolean,
+  // Cross nested package.json boundaries. Off by default, because most signals
+  // are per-package and a sub-package is scanned on its own pass. On for the
+  // dependency-retention check, where a nested example or fixture directory
+  // that is not a workspace member would otherwise go unscanned while still
+  // resolving the root's dependency.
+  crossPackageBoundaries = false,
 ): boolean {
   const scanDir = (dir: string, isRoot: boolean): boolean => {
     let entries: fs.Dirent[];
@@ -225,7 +234,11 @@ function sourceTreeMatches(
     }
     // A nested package.json marks a separate workspace package — it is migrated
     // (and scanned) on its own pass, so don't let its files leak into this one.
-    if (!isRoot && entries.some((e) => e.isFile() && e.name === 'package.json')) {
+    if (
+      !crossPackageBoundaries &&
+      !isRoot &&
+      entries.some((e) => e.isFile() && e.name === 'package.json')
+    ) {
       return false;
     }
     for (const entry of entries) {
@@ -335,4 +348,82 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
     );
   }
   return modes;
+}
+
+// CommonJS forms that reach the Oxlint plugin API. The rewrite deliberately
+// leaves these alone, because `vite-plus/lint/plugins*` is ESM-only and a
+// rewritten `require()` would fail with ERR_PACKAGE_PATH_NOT_EXPORTED. A
+// project that still has one therefore needs its direct `@oxlint/plugins`
+// dependency: under pnpm's strict layout the transitive copy inside
+// `vite-plus` is not resolvable from the plugin file.
+/**
+ * True when the source tree still names `@oxlint/plugins` anywhere.
+ *
+ * Deliberately a plain substring scan over the FINAL source, run after the
+ * import rewrite. By then every form the rewrite handles has already become a
+ * `vite-plus/lint/*` specifier, so anything left is a form it preserves: a
+ * `require()`, an `import x = require()`, a JSDoc `@typedef {import(...)}`, a
+ * template-literal call, or a plain string.
+ *
+ * Enumerating those syntaxes ahead of the rewrite was the wrong shape. It meant
+ * predicting the rewriter with regexes, and each missed spelling silently
+ * deleted a dependency that was still load-bearing. Scanning afterwards asks
+ * the only question that matters: does anything still need this package?
+ */
+export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): boolean {
+  return sourceTreeMatches(
+    projectPath,
+    (content) => content.includes('@oxlint/plugins'),
+    // Nested non-workspace packages (examples, fixtures) resolve the root's
+    // dependency by walking up, so they must be scanned before it is deleted.
+    true,
+  );
+}
+
+/**
+ * Drop `@oxlint/plugins` from devDependencies once nothing names it any more.
+ *
+ * Runs AFTER the import rewrite, so the scan sees final source. Skips a package
+ * that owns the API as a published contract (`dependencies` or
+ * `peerDependencies`), and skips any package whose source still names it
+ * through a form the rewrite preserves.
+ */
+export function dropDeadOxlintPluginsDependency(
+  rootDir: string,
+  packages?: readonly { path: string }[],
+): void {
+  const dirs = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+  for (const dir of dirs) {
+    const packageJsonPath = path.join(dir, 'package.json');
+    const pkg = readPackageJsonIfExists(packageJsonPath);
+    if (!pkg) {
+      continue;
+    }
+    const declaredIn = (['devDependencies', 'optionalDependencies'] as const).filter(
+      (field) => pkg?.[field]?.[OXLINT_PLUGINS_PACKAGE] !== undefined,
+    );
+    if (declaredIn.length === 0) {
+      continue;
+    }
+    const ownsApi = OXLINT_PLUGIN_API_PACKAGES.some(
+      (name) =>
+        pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
+    );
+    if (ownsApi || sourceTreeReferencesOxlintPluginsPackage(dir)) {
+      continue;
+    }
+    editJsonFile<{
+      devDependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
+    }>(packageJsonPath, (json) => {
+      let changed = false;
+      for (const field of declaredIn) {
+        if (json[field]?.[OXLINT_PLUGINS_PACKAGE]) {
+          delete json[field][OXLINT_PLUGINS_PACKAGE];
+          changed = true;
+        }
+      }
+      return changed ? json : undefined;
+    });
+  }
 }

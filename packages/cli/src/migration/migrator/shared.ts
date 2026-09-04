@@ -321,3 +321,41 @@ export function pnpmMajor(version: string | undefined): number | undefined {
   const coerced = version ? semver.coerce(version)?.version : undefined;
   return coerced ? semver.major(coerced) : undefined;
 }
+
+// Packages that own the Oxlint JS-plugin authoring API as a published contract.
+// A package that declares either in `dependencies` or `peerDependencies` is a
+// published Oxlint plugin, so its source must keep resolving the API from that
+// package rather than from `vite-plus`.
+export const OXLINT_PLUGINS_PACKAGE = '@oxlint/plugins';
+
+export const OXLINT_PLUGIN_API_PACKAGES = ['oxlint', OXLINT_PLUGINS_PACKAGE] as const;
+
+/**
+ * Collect the directories of packages that own the Oxlint plugin API, so the
+ * import rewriter can exempt them.
+ *
+ * Must run BEFORE `rewritePackageJson`. That function strips `oxlint` (it is in
+ * {@link REMOVE_PACKAGES}), and the import rewriter reads the manifests only
+ * afterwards, by which point the signal is gone from disk.
+ */
+export function collectOxlintOwnerDirs(
+  rootDir: string,
+  packages?: readonly { path: string }[],
+): string[] {
+  const owners: string[] = [];
+  const candidates = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+  for (const dir of candidates) {
+    const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
+    if (!pkg) {
+      continue;
+    }
+    const owns = OXLINT_PLUGIN_API_PACKAGES.some(
+      (name) =>
+        pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
+    );
+    if (owns) {
+      owners.push(dir);
+    }
+  }
+  return owners;
+}

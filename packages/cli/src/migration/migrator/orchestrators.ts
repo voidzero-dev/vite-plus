@@ -9,6 +9,8 @@ import {
   applyYarnWorkspaceHoistingFix,
   cleanupDeprecatedTsconfigOptions,
   collectInjectedProviderNames,
+  collectOxlintOwnerDirs,
+  dropDeadOxlintPluginsDependency,
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
@@ -76,6 +78,9 @@ export function rewriteStandaloneProject(
   const packageManager = workspaceInfo.packageManager;
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
+  // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
+  // reads the manifests afterwards and would no longer see the signal.
+  const oxlintOwnerDirs = collectOxlintOwnerDirs(projectPath, workspaceInfo.packages);
   // Source-tree scan signals are computed once here and reused below (and inside
   // projectUsesVitestDirectly / collectInjectedProviderNames) so the source tree
   // is traversed once each instead of repeatedly. They do not depend on
@@ -333,7 +338,8 @@ export function rewriteStandaloneProject(
   injectFmtDefaults(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(projectPath, silent, report, true);
+  rewriteAllImports(projectPath, silent, report, true, oxlintOwnerDirs);
+  dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
@@ -353,6 +359,9 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
   );
+  // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
+  // reads the manifests afterwards and would no longer see the signal.
+  const oxlintOwnerDirs = collectOxlintOwnerDirs(workspaceInfo.rootDir, workspaceInfo.packages);
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   const usePnpmWorkspaceSettings = pnpmSupportsWorkspaceSettings(
     workspaceInfo.downloadPackageManager.version,
@@ -463,7 +472,8 @@ export function rewriteMonorepo(
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(workspaceInfo.rootDir, silent, report, true);
+  rewriteAllImports(workspaceInfo.rootDir, silent, report, true, oxlintOwnerDirs);
+  dropDeadOxlintPluginsDependency(workspaceInfo.rootDir, workspaceInfo.packages);
   wrapLazyPluginsInViteConfig(workspaceInfo.rootDir, silent, report);
   for (const pkg of workspaceInfo.packages) {
     wrapLazyPluginsInViteConfig(path.join(workspaceInfo.rootDir, pkg.path), silent, report);

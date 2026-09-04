@@ -290,11 +290,17 @@ pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResu
 pub fn rewrite_imports_in_directory(
     root: String,
     preserve_vitest_in_nuxt_packages: Option<bool>,
+    oxlint_owner_dirs: Option<Vec<String>>,
 ) -> Result<BatchRewriteResult> {
     let result = vp_migration::rewrite_imports_in_directory_with_options(
         Path::new(&root),
         vp_migration::RewriteImportsOptions {
             preserve_vitest_in_nuxt_packages: preserve_vitest_in_nuxt_packages.unwrap_or(false),
+            oxlint_owner_dirs: oxlint_owner_dirs
+                .unwrap_or_default()
+                .into_iter()
+                .map(std::path::PathBuf::from)
+                .collect(),
         },
     )
     .map_err(anyhow::Error::from)?;

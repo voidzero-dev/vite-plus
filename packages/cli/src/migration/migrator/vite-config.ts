@@ -522,8 +522,12 @@ export function rewriteAllImports(
   silent = false,
   report?: MigrationReport,
   preserveNuxtVitestImports = true,
+  // Directories of packages that own the Oxlint plugin API, captured before
+  // `rewritePackageJson` stripped `oxlint` from their manifests. See
+  // `collectOxlintOwnerDirs`.
+  oxlintOwnerDirs: string[] = [],
 ): boolean {
-  const result = rewriteImportsInDirectory(projectPath, preserveNuxtVitestImports);
+  const result = rewriteImportsInDirectory(projectPath, preserveNuxtVitestImports, oxlintOwnerDirs);
   const modified = result.modifiedFiles.length;
   const preserved = result.preservedVitestFiles.length;
   const errors = result.errors.length;

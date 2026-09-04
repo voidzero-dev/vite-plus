@@ -204,6 +204,39 @@ surface are written against `vite-plus` by hand.
   needed.
 - Existing `vite-plus/test*` imports are left unchanged.
 
+### Oxlint JS Plugin Imports
+
+Vite+ bundles Oxlint, so the migration removes a standalone `oxlint`
+dependency. Your own Oxlint JS plugins import the authoring API by name. That
+import stops resolving when the dependency goes away. `vp lint` then fails to
+load the plugin.
+
+The migration repoints those imports at Vite+:
+
+- It rewrites `@oxlint/plugins` to `vite-plus/lint/plugins`.
+- It rewrites `oxlint/plugins-dev` to `vite-plus/lint/plugins-dev`.
+- It rewrites `oxlint` to `vite-plus/lint/plugins` when the import names a
+  binding from the authoring API, such as `defineRule`, `definePlugin`, or
+  `Context`. Older Oxlint releases exposed that API from the main entry. It now
+  lives in `@oxlint/plugins`.
+
+An import through Vite+ always matches the version of Oxlint that Vite+
+bundles. You pin no second package. The import also resolves from any package
+that already depends on `vite-plus`.
+
+The migration leaves three forms alone:
+
+- `oxlint` imports that name only the config surface, such as `defineConfig`,
+  `OxlintConfig`, or `OxlintOverride`. These still resolve against the
+  standalone package.
+- Default and namespace `oxlint` imports. They name no binding, so the
+  migration cannot tell the two surfaces apart.
+- Bare side-effect `oxlint` imports, for the same reason.
+
+The migration also skips a package that declares `oxlint` or `@oxlint/plugins`
+in `dependencies` or `peerDependencies`. That shape marks a published Oxlint
+plugin. Its consumers may not run Vite+.
+
 ### What Is Never Rewritten
 
 - `declare module 'vitest'` and `declare module '@vitest/browser*'`: module

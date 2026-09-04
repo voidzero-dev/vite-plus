@@ -27,6 +27,8 @@ import {
   findDeclaredSpec,
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
+  OXLINT_PLUGINS_PACKAGE,
+  OXLINT_PLUGIN_API_PACKAGES,
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
@@ -183,10 +185,58 @@ export function rewritePackageJson(
   const hasBrowserDepSignal = VITEST_BROWSER_DEP_NAMES.some((name) =>
     dependencyGroups.some(({ dependencies }) => dependencies?.[name] !== undefined),
   );
+  // A `dependencies` / `peerDependencies` edge on the Oxlint plugin API marks a
+  // published Oxlint plugin: the API is part of what it ships against, not a
+  // tool it runs. The import rewrite leaves such a package's source on `oxlint`
+  // (`skip_oxlint`), so its manifest edge is preserved too. Stripping it would
+  // leave the source importing a package the manifest no longer declares.
+  //
+  // Both groups are checked, matching `collectOxlintOwnerDirs`. A peer-only
+  // check would preserve the source of a plugin that declares `oxlint` under
+  // `dependencies` while deleting the edge that provides it.
+  const ownsOxlintApi = OXLINT_PLUGIN_API_PACKAGES.some(
+    (name) => pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
+  );
+  // `@oxlint/plugins` often becomes dead weight once the import rewrite points
+  // the authoring API at `vite-plus/lint/plugins`, but not always: the rewrite
+  // preserves several forms. The deletion therefore happens AFTER the rewrite,
+  // in `dropDeadOxlintPluginsDependency`, where the question is simply whether
+  // anything still names the package.
+  //
+  // The `vite-plus` edge is still decided here, though. A leaf whose only
+  // migration signal is this dependency will have its imports repointed at
+  // `vite-plus/lint/plugins`, so it needs a direct `vite-plus` edge to resolve
+  // them under an isolated layout such as Yarn PnP.
+  // An optional install edge provisions the API the same way a dev one does,
+  // so it is the same signal.
+  if (
+    (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined ||
+      pkg.optionalDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined) &&
+    !ownsOxlintApi
+  ) {
+    needVitePlus = true;
+  }
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     let wasRemoved = false;
-    for (const { dependencies } of dependencyGroups) {
+    for (const { dependencyField, dependencies } of dependencyGroups) {
+      if (
+        ownsOxlintApi &&
+        (dependencyField === 'peerDependencies' || dependencyField === 'dependencies') &&
+        (OXLINT_PLUGIN_API_PACKAGES as readonly string[]).includes(name)
+      ) {
+        // A `catalog:` reference would dangle once the catalog entry for a
+        // REMOVE_PACKAGES name is dropped, and the next install fails. Resolve
+        // it to the concrete range the catalog currently points at.
+        const current = dependencies?.[name];
+        if (current?.startsWith('catalog:') && dependencies) {
+          const resolved = catalogDependencyResolver?.(current, name);
+          if (resolved) {
+            dependencies[name] = resolved;
+          }
+        }
+        continue;
+      }
       if (dependencies?.[name]) {
         delete dependencies[name];
         wasRemoved = true;
