@@ -1,0 +1,11 @@
+packages:
+  - .
+
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@0.3.0
+  vite-plus: 0.3.0
+  vitest: npm:@voidzero-dev/vite-plus-test@0.1.24
+
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'

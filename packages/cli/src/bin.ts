@@ -21,7 +21,6 @@ import { fmt } from './resolve-fmt.ts';
 import { lint } from './resolve-lint.ts';
 import { pack } from './resolve-pack.ts';
 import { test } from './resolve-test.ts';
-import { resolveUniversalViteConfig } from './resolve-vite-config.ts';
 import { vite } from './resolve-vite.ts';
 import { accent, errorMsg, log } from './utils/terminal.ts';
 
@@ -130,6 +129,12 @@ if (maybePrintCommandHelp(args)) {
 } else {
   // All other commands — delegate to Rust core via NAPI binding
   try {
+    // Loading resolve-vite-config also loads define-config, whose runtime
+    // Vitest helpers import `vitest/config`. Keep that import behind the
+    // delegated-command branch so global commands such as `migrate` and
+    // `config` can repair a stale `vitest` package-manager alias before the
+    // removed wrapper is evaluated.
+    const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
     const initInspection = inspectInitCommand(command, args.slice(1));
     if (
       initInspection.handled &&
