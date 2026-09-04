@@ -21,6 +21,7 @@ use crate::cli::{
 pub(crate) async fn execute_check(
     resolver: &SubcommandResolver,
     fix: bool,
+    quiet: bool,
     no_fmt_flag: bool,
     no_lint_flag: bool,
     no_error_on_unmatched_pattern: bool,
@@ -153,6 +154,9 @@ pub(crate) async fn execute_check(
         if fix && lint_enabled {
             args.push("--fix".to_string());
         }
+        if quiet {
+            args.push("--quiet".to_string());
+        }
         // `vp check` parses oxlint's human-readable summary output to print
         // unified pass/fail lines. When `GITHUB_ACTIONS=true`, oxlint auto-switches
         // to the GitHub reporter, which omits that summary on success and makes the
@@ -184,7 +188,7 @@ pub(crate) async fn execute_check(
             Some(Ok(success)) => {
                 let message = format!(
                     "{} in {}",
-                    lint_message_kind.success_label(),
+                    lint_message_kind.success_label(quiet),
                     format_count(success.summary.files, "file", "files"),
                 );
                 let detail =
@@ -197,10 +201,17 @@ pub(crate) async fn execute_check(
                 }
             }
             Some(Err(failure)) => {
-                if failure.errors == 0 && failure.warnings > 0 {
-                    output::warn(lint_message_kind.warning_heading());
-                } else {
-                    output::error(lint_message_kind.issue_heading());
+                // `--quiet` suppresses warning diagnostics, but oxlint still
+                // reports warning counts in its summary. Preserve those counts
+                // so `vp check --quiet` matches `vp lint --quiet` semantics.
+                let quiet_warning_only =
+                    quiet && failure.errors == 0 && status == ExitStatus::SUCCESS;
+                if !quiet_warning_only {
+                    if failure.errors == 0 && failure.warnings > 0 {
+                        output::warn(lint_message_kind.warning_heading());
+                    } else {
+                        output::error(lint_message_kind.issue_heading());
+                    }
                 }
                 print_stdout_block(&failure.diagnostics);
                 print_summary_line(&format!(

@@ -4,4 +4,5 @@ vp = "local"
 steps = [
   { argv = ["vp", "check", "--fix"], continue-on-failure = true },
   { argv = ["vp", "check"], continue-on-failure = true },
+  { argv = ["vp", "check", "--fix", "--quiet"], comment = "quiet composes with the fix pipeline", continue-on-failure = true },
 ]

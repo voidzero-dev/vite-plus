@@ -80,6 +80,9 @@ pub enum SynthesizableSubcommand {
         /// Auto-fix format and lint issues
         #[arg(long)]
         fix: bool,
+        /// Disable reporting on warnings, only errors are reported
+        #[arg(long)]
+        quiet: bool,
         /// Skip format check
         #[arg(long = "no-fmt")]
         no_fmt: bool,

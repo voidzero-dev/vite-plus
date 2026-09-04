@@ -14,6 +14,7 @@ Arguments:
 
 Options:
   --fix                            Auto-fix format and lint issues
+  --quiet                          Disable reporting on warnings, only errors are reported
   --no-fmt                         Skip format check
   --no-lint                        Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
@@ -41,6 +42,7 @@ Arguments:
 
 Options:
   --fix                            Auto-fix format and lint issues
+  --quiet                          Disable reporting on warnings, only errors are reported
   --no-fmt                         Skip format check
   --no-lint                        Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
@@ -68,6 +70,7 @@ Arguments:
 
 Options:
   --fix                            Auto-fix format and lint issues
+  --quiet                          Disable reporting on warnings, only errors are reported
   --no-fmt                         Skip format check
   --no-lint                        Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched

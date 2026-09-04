@@ -16,3 +16,23 @@ warn: Lint warnings found
 
 Found 0 errors and 1 warning in 2 files (<duration>, <n> threads)
 ```
+
+## `vp check --quiet`
+
+warning diagnostics are suppressed
+
+```
+pass: All 3 files are correctly formatted (<duration>, <n> threads)
+
+Found 0 errors and 1 warning in 2 files (<duration>, <n> threads)
+```
+
+## `vp lint --quiet`
+
+standalone lint has the same warning suppression semantics
+
+```
+
+Found 1 warning and 0 errors.
+Finished in <duration> on 2 files with <n> rules using <n> threads.
+```

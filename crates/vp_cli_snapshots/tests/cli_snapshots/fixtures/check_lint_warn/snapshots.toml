@@ -3,4 +3,6 @@ name = "check_lint_warn"
 vp = "local"
 steps = [
   { argv = ["vp", "check"], continue-on-failure = true },
+  { argv = ["vp", "check", "--quiet"], comment = "warning diagnostics are suppressed", continue-on-failure = true },
+  { argv = ["vp", "lint", "--quiet"], comment = "standalone lint has the same warning suppression semantics", continue-on-failure = true },
 ]

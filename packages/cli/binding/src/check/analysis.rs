@@ -52,9 +52,11 @@ impl LintMessageKind {
         }
     }
 
-    pub(super) fn success_label(self) -> &'static str {
+    pub(super) fn success_label(self, quiet: bool) -> &'static str {
         match self {
+            Self::LintOnly if quiet => "Found no lint errors",
             Self::LintOnly => "Found no warnings or lint errors",
+            Self::LintAndTypeCheck if quiet => "Found no lint or type errors",
             Self::LintAndTypeCheck => "Found no warnings, lint errors, or type errors",
             Self::TypeCheckOnly => "Found no type errors",
         }
@@ -262,7 +264,10 @@ mod tests {
     fn lint_message_kind_defaults_to_lint_only_without_typecheck() {
         assert!(!lint_config_type_check_enabled(None));
         assert!(!lint_config_type_check_enabled(Some(&json!({ "options": {} }))));
-        assert_eq!(LintMessageKind::from_flags(true, false), LintMessageKind::LintOnly);
+        let kind = LintMessageKind::from_flags(true, false);
+        assert_eq!(kind, LintMessageKind::LintOnly);
+        assert_eq!(kind.success_label(false), "Found no warnings or lint errors");
+        assert_eq!(kind.success_label(true), "Found no lint errors");
     }
 
     #[test]
@@ -278,7 +283,8 @@ mod tests {
 
         let kind = LintMessageKind::from_flags(true, true);
         assert_eq!(kind, LintMessageKind::LintAndTypeCheck);
-        assert_eq!(kind.success_label(), "Found no warnings, lint errors, or type errors");
+        assert_eq!(kind.success_label(false), "Found no warnings, lint errors, or type errors");
+        assert_eq!(kind.success_label(true), "Found no lint or type errors");
         assert_eq!(kind.warning_heading(), "Lint or type warnings found");
         assert_eq!(kind.issue_heading(), "Lint or type issues found");
     }
@@ -287,7 +293,8 @@ mod tests {
     fn lint_message_kind_type_check_only_labels() {
         let kind = LintMessageKind::from_flags(false, true);
         assert_eq!(kind, LintMessageKind::TypeCheckOnly);
-        assert_eq!(kind.success_label(), "Found no type errors");
+        assert_eq!(kind.success_label(false), "Found no type errors");
+        assert_eq!(kind.success_label(true), "Found no type errors");
         assert_eq!(kind.warning_heading(), "Type warnings found");
         assert_eq!(kind.issue_heading(), "Type errors found");
     }
