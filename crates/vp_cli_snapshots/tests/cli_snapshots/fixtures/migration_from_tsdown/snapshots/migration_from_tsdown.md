@@ -25,7 +25,7 @@ export default defineConfig({
   entry: 'src/index.ts',
   outDir: 'dist',
   format: ['esm', 'cjs'],
-  dts: { generator: 'tsgo' },
+  dts: true,
 });
 ```
 
@@ -113,7 +113,7 @@ export default defineConfig({
   entry: 'src/index.ts',
   outDir: 'dist',
   format: ['esm', 'cjs'],
-  dts: { generator: 'tsgo' },
+  dts: true,
 });
 ```
 
