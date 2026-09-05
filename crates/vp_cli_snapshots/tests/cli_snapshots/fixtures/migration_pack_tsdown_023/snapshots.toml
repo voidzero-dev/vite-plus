@@ -1,0 +1,24 @@
+[[case]]
+name = "migration_pack_tsdown_023"
+vp = "global"
+comment = "Upgrade an existing Vite+ pack config without --full and preserve it on a second migration."
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vpt", "print-file", "package.json"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_build"
+vp = "global"
+comment = "Build a migrated library and check that static assets and declarations are emitted."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { pack: { entry: 'src/index.ts', bundle: false, publicDir: 'public', removeNodeProtocol: true, dts: { oxc: true, cjsReexport: false } } };"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vp", "run", "build"] },
+  { argv = ["vpt", "stat-file", "dist/index.mjs", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "dist/index.d.mts", "--assert", "file"] },
+  { argv = ["vpt", "print-file", "dist/public/asset.txt"] },
+]

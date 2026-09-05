@@ -37,6 +37,67 @@ pub fn rewrite_script(script: &str, config: &ScriptRewriteConfig) -> String {
     rewrite_direct_script(&rewritten_bunx, config)
 }
 
+/// Rename the removed tsdown copy flag only in `vp pack` invocations. The
+/// command rewrite runs first, so this also covers scripts that used tsdown.
+pub(crate) fn rewrite_pack_flags(script: &str) -> String {
+    let script = rewrite_bunx_commands(script, rewrite_direct_pack_flags);
+    rewrite_direct_pack_flags(&script)
+}
+
+fn rewrite_direct_pack_flags(script: &str) -> String {
+    let mut parser = brush_parser::Parser::new(
+        script.as_bytes(),
+        &brush_parser::ParserOptions::default(),
+        &brush_parser::SourceInfo::default(),
+    );
+    let Ok(mut program) = parser.parse_program() else { return script.to_owned() };
+    let changed = visit_simple_commands(&mut program, &mut |cmd| {
+        let words = collect_command_words(cmd);
+        let start = match words.first().map(|word| word.value.as_str()) {
+            Some("vp") => 0,
+            Some("cross-env" | "cross-env-shell") => {
+                let Some(index) = words.iter().skip(1).position(|word| !word.value.contains('='))
+                else {
+                    return false;
+                };
+                index + 1
+            }
+            _ => return false,
+        };
+        if words.get(start).is_none_or(|word| word.value != "vp")
+            || words.get(start + 1).is_none_or(|word| word.value != "pack")
+        {
+            return false;
+        }
+        let mut changed = false;
+        for word in words.iter().skip(start + 2) {
+            if word.value == "--" {
+                break;
+            }
+            let replacement = if word.value == "--public-dir" {
+                "--copy".to_owned()
+            } else if let Some(value) = word.value.strip_prefix("--public-dir=") {
+                format!("--copy={value}")
+            } else {
+                continue;
+            };
+            if let CommandWordPosition::Suffix(index) = word.position
+                && let Some(suffix) = &mut cmd.suffix
+                && let ast::CommandPrefixOrSuffixItem::Word(value) = &mut suffix.0[index]
+            {
+                value.value = replacement;
+                changed = true;
+            }
+        }
+        changed
+    });
+    if changed {
+        collapse_newlines(&normalize_pipe_spacing(&program.to_string()))
+    } else {
+        script.to_owned()
+    }
+}
+
 fn rewrite_direct_script(script: &str, config: &ScriptRewriteConfig) -> String {
     let mut parser = brush_parser::Parser::new(
         script.as_bytes(),

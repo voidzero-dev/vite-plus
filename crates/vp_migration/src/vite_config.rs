@@ -405,7 +405,7 @@ fn wrap_lazy_plugins_content(
     Ok(MergeResult { content, updated: true, uses_function_callback })
 }
 
-fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
+pub(crate) fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
     let text = key_node.text();
     match key_node.kind().as_ref() {
         "property_identifier" => text == config_key,
@@ -414,7 +414,7 @@ fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
     }
 }
 
-/// Convert the boolean declaration-generator options removed in tsdown 0.23.
+/// Make declaration-generator selection explicit for tsdown 0.23.
 /// Only inspect config objects, leaving plugin options and computed values alone.
 pub(crate) fn rewrite_pack_dts_generators(content: &str, standalone: bool) -> String {
     let grep = SupportLang::TypeScript.ast_grep(content);
@@ -427,33 +427,30 @@ pub(crate) fn rewrite_pack_dts_generators(content: &str, standalone: bool) -> St
             continue;
         }
         let Some(config) = node.parent() else { continue };
-        let config = match config.parent() {
-            Some(parent) if parent.kind() == "array" => parent,
-            _ => config,
-        };
-        let is_pack = config.parent().is_some_and(|pair| {
-            pair.kind() == "pair"
-                && pair.field("key").is_some_and(|key| pair_key_matches(&key, "pack"))
-                && pair.parent().is_some_and(|object| is_direct_recognized_config_object(&object))
-        });
-        if !(is_pack || standalone && is_direct_recognized_config_object(&config)) {
+        if !crate::pack_config::is_pack_object(&config, standalone)
+            || !crate::pack_config::can_edit_object(&config)
+        {
             continue;
         }
         let Some(options) = node.field("value").filter(|value| value.kind() == "object") else {
             continue;
         };
+        if !crate::pack_config::can_edit_object(&options) {
+            continue;
+        }
         let children: Vec<_> = options.children().collect();
-        // A spread, computed key, or non-boolean selector can affect precedence.
+        // A spread, computed key, or dynamic selector can affect precedence.
         if children.iter().any(|child| {
             child.kind() == "spread_element"
+                || child.kind() == "method_definition"
                 || child.kind() == "shorthand_property_identifier"
                     && matches!(child.text().as_ref(), "tsgo" | "oxc")
                 || child.field("key").is_some_and(|key| key.kind() == "computed_property_name")
                 || (child.field("key").is_some_and(|key| {
                     pair_key_matches(&key, "tsgo") || pair_key_matches(&key, "oxc")
-                }) && child
-                    .field("value")
-                    .is_some_and(|value| !matches!(value.kind().as_ref(), "true" | "false")))
+                }) && child.field("value").is_some_and(|value| {
+                    !matches!(value.kind().as_ref(), "true" | "false" | "object")
+                }))
         }) {
             continue;
         }
@@ -473,13 +470,22 @@ pub(crate) fn rewrite_pack_dts_generators(content: &str, standalone: bool) -> St
                 continue;
             };
             let Some(value) = child.field("value") else { continue };
-            if !matches!(value.kind().as_ref(), "true" | "false") {
+            if !matches!(value.kind().as_ref(), "true" | "false" | "object") {
                 continue;
             }
-            if value.kind() == "true" && (generator.is_none() || name == "tsgo") {
+            if value.kind() != "false" && (generator.is_none() || name == "tsgo") {
                 generator = Some((index, name));
             }
-            boolean_options.push(index);
+            if value.kind() != "object" {
+                boolean_options.push(index);
+            }
+        }
+        if !has_generator
+            && let Some((index, name)) = generator
+            && children[index].field("value").is_some_and(|value| value.kind() == "object")
+        {
+            let start = options.range().start + 1;
+            edits.push((start..start, format!(" generator: '{name}',")));
         }
         for index in boolean_options {
             let child = &children[index];
@@ -487,10 +493,13 @@ pub(crate) fn rewrite_pack_dts_generators(content: &str, standalone: bool) -> St
                 && let Some((selected, name)) = generator
                 && selected == index
             {
-                edits.push((child.range(), format!("generator: '{name}'")));
+                if let (Some(key), Some(value)) = (child.field("key"), child.field("value")) {
+                    edits.push((key.range(), "generator".to_owned()));
+                    edits.push((value.range(), format!("'{name}'")));
+                }
                 continue;
             }
-            edits.push((child.range(), String::new()));
+            edits.push((child.range(), crate::pack_config::property_comments(child)));
             if let Some(comma) = children[index + 1..].iter().find(|n| n.kind() != "comment")
                 && comma.kind() == ","
             {
@@ -587,7 +596,7 @@ static RE_NAMESPACE_LAZY_PLUGINS_IMPORT: LazyLock<Regex> =
 /// returns inside nested functions (e.g. an inline plugin's `config()` hook)
 /// do NOT match, so destructive edits never touch them. Used by transforms
 /// that rewrite in place (`wrap_lazy_plugins`, `upsert_json_config`).
-fn is_direct_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
+pub(crate) fn is_direct_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
     let Some(parent) = object_node.parent() else { return false };
     match parent.kind().as_ref() {
         "export_statement" => true,
@@ -1028,12 +1037,10 @@ mod tests {
         for input in [
             "export default { plugins: [plugin({ dts: { tsgo: true } })] };",
             "export default { test: { pack: { dts: { tsgo: true } } } };",
-            "export default { pack: { dts: { tsgo: { path: './tsgo' } } } };",
             "export default { pack: { dts: { tsgo: enabled } } };",
             "export default { pack: { dts: { tsgo: enabled, oxc: true } } };",
             "export default { pack: { dts: { tsgo, oxc: true } } };",
             "export default { pack: { dts: { tsgo: true, oxc } } };",
-            "export default { pack: { dts: { tsgo: { path: './tsgo' }, oxc: true } } };",
             "export default { pack: { dts: { ...options, tsgo: true } } };",
             "export default { pack: { dts: { [key]: value, tsgo: true } } };",
         ] {

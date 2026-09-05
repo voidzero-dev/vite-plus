@@ -26,6 +26,9 @@ export default defineConfig({
   outDir: 'dist',
   format: ['esm', 'cjs'],
   dts: true,
+  unbundle: true,
+  copy: 'public',
+  deps: { resolveDepSubpath: true, onlyBundle: false },
 });
 ```
 
@@ -56,7 +59,7 @@ check package.json
 {
   "name": "migration-from-tsdown",
   "scripts": {
-    "build": "vp pack",
+    "build": "vp pack --copy public",
     "build:watch": "vp pack --watch",
     "build:dts": "vp pack --dts",
     "prepare": "vp config"
@@ -114,6 +117,9 @@ export default defineConfig({
   outDir: 'dist',
   format: ['esm', 'cjs'],
   dts: true,
+  unbundle: true,
+  copy: 'public',
+  deps: { resolveDepSubpath: true, onlyBundle: false },
 });
 ```
 
@@ -144,7 +150,7 @@ check package.json
 {
   "name": "migration-from-tsdown",
   "scripts": {
-    "build": "vp pack",
+    "build": "vp pack --copy public",
     "build:watch": "vp pack --watch",
     "build:dts": "vp pack --dts",
     "prepare": "vp config"

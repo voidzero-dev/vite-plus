@@ -10,6 +10,7 @@ mod ast_grep;
 mod eslint;
 mod file_walker;
 mod import_rewriter;
+mod pack_config;
 mod package;
 mod prettier;
 mod script_rewrite;
