@@ -1,0 +1,9 @@
+[[case]]
+name = "config_stale_vitest_alias_boundaries"
+vp = ["local", "global"]
+env = { npm_lifecycle_event = "prepare" }
+steps = [
+  { argv = ["vp", "config", "--no-hooks", "--no-agent"], cwd = "standalone", comment = "Ignore metadata and unrelated parent package settings", continue-on-failure = true },
+  { argv = ["vp", "config", "--no-hooks", "--no-agent"], cwd = "npm-workspace", comment = "Stop at the npm workspace root", continue-on-failure = true },
+  { argv = ["vp", "config", "--no-hooks", "--no-agent"], cwd = "pnpm-workspace", comment = "Stop at the pnpm workspace root and ignore cyclic metadata", continue-on-failure = true },
+]

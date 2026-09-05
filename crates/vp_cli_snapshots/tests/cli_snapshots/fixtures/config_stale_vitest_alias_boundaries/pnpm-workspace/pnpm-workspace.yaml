@@ -1,0 +1,5 @@
+packages:
+  - .
+metadata: &metadata
+  self: *metadata
+  example: npm:@voidzero-dev/vite-plus-test@0.1.24
