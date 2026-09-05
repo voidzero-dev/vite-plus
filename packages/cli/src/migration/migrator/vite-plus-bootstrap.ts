@@ -10,6 +10,7 @@ import {
   isForceOverrideMode,
 } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
+import { getVitestEcosystemVersion } from '../../utils/vitest-ecosystem.ts';
 import { type NpmWorkspaces } from '../../utils/workspace.ts';
 import { editYamlFile, readYamlFile, type YamlDocument } from '../../utils/yaml.ts';
 import {
@@ -399,7 +400,7 @@ function reconcileVitePlusBootstrapPackage(
       pkg.devDependencies ??= {};
       pkg.devDependencies[provider] = getCatalogDependencySpec(
         undefined,
-        VITEST_VERSION,
+        getVitestEcosystemVersion(provider),
         supportCatalog && packageManager !== PackageManager.bun,
         { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
       );
@@ -1334,11 +1335,11 @@ function readInstalledRawViteVersion(projectPath: string): string | undefined {
  * reconcile mutates the manifest so the `from` values still reflect the
  * pre-migration root package.json.
  *
- * `to` targets: `vite-plus` -> VITE_PLUS_VERSION, `vitest` and every declared
- * `@vitest/*` -> VITEST_VERSION, `vite` -> the RAW bundled upstream Vite version
- * (NOT the `@voidzero-dev/vite-plus-core` alias). An entry is included only when
- * `to` is defined and the version actually changes (or the package is freshly
- * added, i.e. `from` is undefined).
+ * `to` targets: `vite-plus` -> VITE_PLUS_VERSION, `vitest` and official
+ * lockstep packages -> VITEST_VERSION, WebDriverIO -> its independent provider
+ * version, and `vite` -> the raw bundled upstream Vite version. An entry is
+ * included only when `to` is defined and the version changes (or the package
+ * is freshly added).
  */
 export async function collectToolchainVersionChanges(
   projectPath: string,
@@ -1400,9 +1401,8 @@ export async function collectToolchainVersionChanges(
   ) {
     pushChange('vitest', VITEST_VERSION, fromFor('vitest'));
   }
-  // Only the `@vitest/*` packages the migrator actually aligns to the bundled
-  // vitest version belong here. `@vitest/eslint-plugin` and `@vitest/coverage-c8`
-  // version independently and are left untouched, so they are not "changes".
+  // Only the `@vitest/*` packages the migrator aligns belong here. Independently
+  // versioned packages that the migrator leaves untouched are not changes.
   const scopedVitestNames = new Set<string>();
   for (const group of [pkg.dependencies, pkg.devDependencies]) {
     for (const name of Object.keys(group ?? {})) {
@@ -1412,7 +1412,7 @@ export async function collectToolchainVersionChanges(
     }
   }
   for (const name of [...scopedVitestNames].toSorted()) {
-    pushChange(name, VITEST_VERSION, fromFor(name));
+    pushChange(name, getVitestEcosystemVersion(name), fromFor(name));
   }
 
   return changes;

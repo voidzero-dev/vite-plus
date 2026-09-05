@@ -52,9 +52,6 @@ const BROWSER_PROVIDER_PACKAGES: ReadonlyArray<{ pkg: string; short: string }> =
 // `./test/plugins/<name>` to restore the surface that the removed
 // `@voidzero-dev/vite-plus-test` wrapper previously exposed.
 const PLUGIN_SHIM_ENTRIES: ReadonlyArray<readonly [importSpecifier: string, pluginName: string]> = [
-  ['@vitest/runner', 'runner'],
-  ['@vitest/runner/utils', 'runner-utils'],
-  ['@vitest/runner/types', 'runner-types'],
   ['@vitest/utils', 'utils'],
   ['@vitest/utils/source-map', 'utils-source-map'],
   ['@vitest/utils/source-map/node', 'utils-source-map-node'],
@@ -68,7 +65,6 @@ const PLUGIN_SHIM_ENTRIES: ReadonlyArray<readonly [importSpecifier: string, plug
   ['@vitest/utils/constants', 'utils-constants'],
   ['@vitest/utils/diff', 'utils-diff'],
   ['@vitest/spy', 'spy'],
-  ['@vitest/expect', 'expect'],
   ['@vitest/snapshot', 'snapshot'],
   ['@vitest/snapshot/environment', 'snapshot-environment'],
   ['@vitest/snapshot/manager', 'snapshot-manager'],
@@ -401,6 +397,27 @@ async function syncTestPackageExports() {
       generatedExports[cliExportPath] = shimExport;
       console.log(`  Created ${cliExportPath}`);
     }
+  }
+
+  // Keep the Vite+ 1.x compatibility paths that have exact public v5 targets.
+  // Vitest removed these root subpaths in v5, so they cannot be generated from
+  // its export map. Assertion and runner internals are intentionally excluded.
+  const mockerPkgPath = require.resolve('@vitest/mocker/package.json', { paths: [projectDir] });
+  const mockerPkg = JSON.parse(await readFile(mockerPkgPath, 'utf-8'));
+  const compatibilityShims = [
+    { name: 'coverage', target: 'vitest/node', value: testExports['./node'] },
+    { name: 'reporters', target: 'vitest/node', value: testExports['./node'] },
+    { name: 'environments', target: 'vitest/runtime', value: testExports['./runtime'] },
+    { name: 'snapshot', target: 'vitest/runtime', value: testExports['./runtime'] },
+    { name: 'mocker', target: '@vitest/mocker', value: mockerPkg.exports?.['.'] },
+  ] as const;
+  for (const { name, target, value } of compatibilityShims) {
+    const shimExport = await createShimForExport(name, value, target, testDistDir);
+    if (!shimExport) {
+      throw new Error(`Could not create ./test/${name} compatibility shim for ${target}`);
+    }
+    generatedExports[`./test/${name}`] = shimExport;
+    console.log(`  Created ./test/${name} compatibility shim`);
   }
 
   // Private shims for `@vitest/browser` and `@vitest/browser/context`. These

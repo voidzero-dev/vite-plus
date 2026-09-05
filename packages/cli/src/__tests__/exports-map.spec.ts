@@ -35,6 +35,62 @@ function namedValueExports(mod: Record<string, unknown>): string[] {
 }
 
 describe('package.json exports map', () => {
+  it('publishes the tested WebDriverIO provider as a compatible optional peer', () => {
+    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
+
+    expect(pkg.devDependencies['@vitest/browser-webdriverio']).toBe('catalog:');
+    expect(pkg.peerDependencies['@vitest/browser-webdriverio']).toBe('^5.0.0-beta.5 || >=5.0.0');
+    expect(pkg.peerDependenciesMeta['@vitest/browser-webdriverio']).toEqual({ optional: true });
+  });
+
+  it('matches the reviewed Vitest v5 root export keys', () => {
+    const vitestPkgPath = requireFromHere.resolve('vitest/package.json');
+    const vitestPkg = JSON.parse(fs.readFileSync(vitestPkgPath, 'utf-8'));
+
+    expect(Object.keys(vitestPkg.exports)).toEqual([
+      '.',
+      './browser',
+      './package.json',
+      './optional-types.js',
+      './optional-runtime-types.js',
+      './globals',
+      './jsdom',
+      './importMeta',
+      './import-meta',
+      './node',
+      './internal/browser',
+      './internal/traces',
+      './config',
+      './runtime',
+      './worker',
+    ]);
+  });
+
+  it('keeps only the reviewed Vite+ compatibility paths for removed v4 exports', () => {
+    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
+    const exports = pkg.exports as Record<string, unknown>;
+
+    for (const path of [
+      './test/coverage',
+      './test/reporters',
+      './test/environments',
+      './test/snapshot',
+      './test/mocker',
+    ]) {
+      expect(exports[path], `${path} should remain available`).toBeDefined();
+    }
+    for (const path of [
+      './test/runners',
+      './test/suite',
+      './test/plugins/runner',
+      './test/plugins/runner-utils',
+      './test/plugins/runner-types',
+      './test/plugins/expect',
+    ]) {
+      expect(exports[path], `${path} should be removed`).toBeUndefined();
+    }
+  });
+
   it('every dual-condition entry emits `require` before `default`', () => {
     const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
     const exports = pkg.exports as Record<string, unknown>;

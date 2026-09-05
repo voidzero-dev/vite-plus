@@ -51,13 +51,13 @@ export const REMOVE_PACKAGES = [
 // REMOVE_PACKAGES); each drags a heavy non-optional framework peer
 // (`playwright` / `webdriverio`) that non-browser consumers must not be forced
 // to install. The migration keeps a provider the user actually targets in their
-// own deps, pinned to the bundled vitest version.
+// own deps at its compatible version. WebDriverIO has a separate release line.
 export const WEBDRIVERIO_PROVIDER = '@vitest/browser-webdriverio';
 
 export const PLAYWRIGHT_PROVIDER = '@vitest/browser-playwright';
 
 // All opt-in browser providers handled identically by the migration: kept in
-// the user's deps (pinned to the bundled vitest), framework peer ensured, stale
+// the user's deps at a compatible version, framework peer ensured, stale
 // forcing pins dropped, while their catalog entries are PRESERVED.
 export const OPT_IN_BROWSER_PROVIDERS = [WEBDRIVERIO_PROVIDER, PLAYWRIGHT_PROVIDER] as const;
 
@@ -65,7 +65,7 @@ export const OPT_IN_BROWSER_PROVIDERS = [WEBDRIVERIO_PROVIDER, PLAYWRIGHT_PROVID
 // migration: everything vite-plus owns (REMOVE_PACKAGES) plus the user-owned
 // opt-in providers. The provider DEP is preserved, but a leftover
 // override/resolution pin to another version would WIN over the direct dep and
-// misalign the provider against the bundled vitest — so the stale forcing pin is
+// misalign the provider with the managed test graph — so the stale forcing pin is
 // dropped while the dependency itself stays installed. NOTE: catalog deletion
 // uses REMOVE_PACKAGES (not this set) on purpose — a catalog entry is only a
 // version *definition*, and deleting it could dangle a surviving `catalog:`

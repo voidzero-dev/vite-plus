@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 
+import { VITEST_WEBDRIVERIO_VERSION } from '../../utils/constants.ts';
 import {
   parseSyncVersionsRequest,
   planSyncVersions,
@@ -27,9 +28,11 @@ describe('planSyncVersions', () => {
       {
         devDependencies: {
           '@vitest/browser-playwright': '4.1.11',
+          '@vitest/browser-webdriverio': '4.1.11',
           '@vitest/coverage-v8': '^4.1.11',
           '@vitest/eslint-plugin': '1.6.0',
           '@vitest/coverage-c8': '0.33.0',
+          '@vitest/runner': '4.1.11',
           '@voidzero-dev/vite-plus-core': '0.3.0',
           'vite-plus': '0.3.0',
           vitest: '~4.1.11',
@@ -47,9 +50,11 @@ describe('planSyncVersions', () => {
     expect(JSON.parse(plan.replacements[0].after)).toEqual({
       devDependencies: {
         '@vitest/browser-playwright': '5.0.0',
+        '@vitest/browser-webdriverio': VITEST_WEBDRIVERIO_VERSION,
         '@vitest/coverage-v8': '5.0.0',
         '@vitest/eslint-plugin': '1.6.0',
         '@vitest/coverage-c8': '0.33.0',
+        '@vitest/runner': '4.1.11',
         '@voidzero-dev/vite-plus-core': '0.4.0',
         'vite-plus': '0.4.0',
         vitest: '5.0.0',

@@ -132,22 +132,21 @@
       "types": "./dist/test/internal/browser.d.ts",
       "default": "./dist/test/internal/browser.js"
     },
-    "./test/runners": {
-      "types": "./dist/test/runners.d.ts",
-      "default": "./dist/test/runners.js"
-    },
-    "./test/suite": {
-      "types": "./dist/test/suite.d.ts",
-      "default": "./dist/test/suite.js"
-    },
-    "./test/environments": {
-      "types": "./dist/test/environments.d.ts",
-      "default": "./dist/test/environments.js"
+    "./test/internal/traces": {
+      "default": "./dist/test/internal/traces.js"
     },
     "./test/config": {
       "types": "./dist/test/config.d.ts",
       "require": "./dist/test/config.cjs",
       "default": "./dist/test/config.js"
+    },
+    "./test/runtime": {
+      "types": "./dist/test/runtime.d.ts",
+      "default": "./dist/test/runtime.js"
+    },
+    "./test/worker": {
+      "types": "./dist/test/worker.d.ts",
+      "default": "./dist/test/worker.js"
     },
     "./test/coverage": {
       "types": "./dist/test/coverage.d.ts",
@@ -157,17 +156,17 @@
       "types": "./dist/test/reporters.d.ts",
       "default": "./dist/test/reporters.js"
     },
+    "./test/environments": {
+      "types": "./dist/test/environments.d.ts",
+      "default": "./dist/test/environments.js"
+    },
     "./test/snapshot": {
       "types": "./dist/test/snapshot.d.ts",
       "default": "./dist/test/snapshot.js"
     },
-    "./test/runtime": {
-      "types": "./dist/test/runtime.d.ts",
-      "default": "./dist/test/runtime.js"
-    },
-    "./test/worker": {
-      "types": "./dist/test/worker.d.ts",
-      "default": "./dist/test/worker.js"
+    "./test/mocker": {
+      "types": "./dist/test/mocker.d.ts",
+      "default": "./dist/test/mocker.js"
     },
     "./test/browser-playwright": {
       "types": "./dist/test/browser-playwright.d.ts",
@@ -243,15 +242,6 @@
       "types": "./dist/test/browser-compat.d.ts",
       "default": "./dist/test/browser-compat.js"
     },
-    "./test/plugins/runner": {
-      "default": "./dist/test/plugins/runner.js"
-    },
-    "./test/plugins/runner-utils": {
-      "default": "./dist/test/plugins/runner-utils.js"
-    },
-    "./test/plugins/runner-types": {
-      "default": "./dist/test/plugins/runner-types.js"
-    },
     "./test/plugins/utils": {
       "default": "./dist/test/plugins/utils.js"
     },
@@ -290,9 +280,6 @@
     },
     "./test/plugins/spy": {
       "default": "./dist/test/plugins/spy.js"
-    },
-    "./test/plugins/expect": {
-      "default": "./dist/test/plugins/expect.js"
     },
     "./test/plugins/snapshot": {
       "default": "./dist/test/plugins/snapshot.js"
@@ -361,10 +348,8 @@
     "@oxlint/plugins": "catalog:",
     "@vitest/browser": "catalog:",
     "@vitest/browser-preview": "catalog:",
-    "@vitest/expect": "catalog:",
     "@vitest/mocker": "catalog:",
     "@vitest/pretty-format": "catalog:",
-    "@vitest/runner": "catalog:",
     "@vitest/snapshot": "catalog:",
     "@vitest/spy": "catalog:",
     "@vitest/utils": "catalog:",
@@ -405,7 +390,7 @@
   },
   "peerDependencies": {
     "@vitest/browser-playwright": "catalog:",
-    "@vitest/browser-webdriverio": "catalog:"
+    "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0"
   },
   "peerDependenciesMeta": {
     "@vitest/browser-playwright": {
@@ -430,6 +415,6 @@
     ]
   },
   "engines": {
-    "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   }
 }

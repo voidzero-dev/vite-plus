@@ -39,7 +39,7 @@ Migration Prompt:
   development, builds, tests, linting, formatting, and packaging.
   Run `vp help` and `vp help migrate` before you make changes.
   Run `vp migrate --no-interactive` in the workspace root.
-  Make sure that the project uses Vite 8+ and Vitest 4.1+.
+  Make sure that the project uses Vite 8+ and Vitest 5+.
 
   After the migration, check imports, configuration, and package aliases.
   Then run `vp install`, `vp check`, `vp test`, and `vp build`.

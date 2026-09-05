@@ -90,7 +90,7 @@ export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
 
 ### Step 4: Test Package Export Sync (`syncTestPackageExports`)
 
-Reads vitest's exports plus the three `@vitest/browser-*` provider packages and creates shim files that re-export everything under `./test/*`:
+Reads Vitest's exports plus the three `@vitest/browser-*` provider packages and creates shim files that re-export them under `./test/*`. It also creates the retained Vite+ 1.x compatibility paths that have public Vitest v5 targets:
 
 ```typescript
 // For each vitest export like "./node"
@@ -101,6 +101,10 @@ export * from 'vitest/node';
 //   dist/test/browser-playwright.js          (matches old wrapper path)
 //   dist/test/browser/providers/playwright.js (alias path)
 export * from '@vitest/browser-playwright';
+
+// Compatibility paths removed from Vitest's v5 export map use explicit targets.
+// dist/test/coverage.js and dist/test/reporters.js
+export * from 'vitest/node';
 ```
 
 Provider `.d.ts` shims are NOT bare re-exports — see the [Provider Type Identity](#why-provider-dts-shims-are-inlined) note below.
@@ -350,17 +354,26 @@ Instead of copying vitest's dist files, we create thin shim files that re-export
 
 ### Export Mapping (Test)
 
-Every entry under vitest's own `exports` is shimmed under `./test/*` (wildcard exports and `./package.json` are skipped). The shim is purely a re-export — `vite-plus/test` and friends are aliases for the matching subpath of upstream `vitest`. Examples:
+Every entry under Vitest's own `exports` is shimmed under `./test/*` (wildcard exports and `./package.json` are skipped). The shim is purely a re-export — `vite-plus/test` and friends are aliases for the matching subpath of upstream Vitest. Examples:
 
-| Vitest Export      | CLI Package Export         |
-| ------------------ | -------------------------- |
-| `vitest`           | `vite-plus/test`           |
-| `vitest/browser`   | `vite-plus/test/browser`   |
-| `vitest/node`      | `vite-plus/test/node`      |
-| `vitest/config`    | `vite-plus/test/config`    |
-| `vitest/reporters` | `vite-plus/test/reporters` |
+| Vitest Export    | CLI Package Export       |
+| ---------------- | ------------------------ |
+| `vitest`         | `vite-plus/test`         |
+| `vitest/browser` | `vite-plus/test/browser` |
+| `vitest/node`    | `vite-plus/test/node`    |
+| `vitest/config`  | `vite-plus/test/config`  |
 
-The full set is regenerated on every build from the upstream vitest `package.json`, so the exact list tracks vitest itself.
+The full set is regenerated on every build from the upstream Vitest `package.json`, so the exact list tracks Vitest itself. Vite+ also retains these 1.x compatibility paths with explicit public v5 targets:
+
+| Compatibility Export          | Upstream Target  |
+| ----------------------------- | ---------------- |
+| `vite-plus/test/coverage`     | `vitest/node`    |
+| `vite-plus/test/reporters`    | `vitest/node`    |
+| `vite-plus/test/environments` | `vitest/runtime` |
+| `vite-plus/test/snapshot`     | `vitest/runtime` |
+| `vite-plus/test/mocker`       | `@vitest/mocker` |
+
+Removed runner, suite, and standalone expect internals are not shimmed.
 
 In addition to vitest's own exports, the three `@vitest/browser-*` provider packages are projected under two parallel surfaces so existing user code keeps resolving after the deleted `@voidzero-dev/vite-plus-test` wrapper:
 
@@ -372,7 +385,7 @@ In addition to vitest's own exports, the three `@vitest/browser-*` provider pack
 
 Each provider's own subpaths (e.g. `./context`) are mirrored under both alias prefixes.
 
-> **Note — webdriverio and playwright are opt-in.** `@vitest/browser` (base) and `@vitest/browser-preview` stay bundled **runtime dependencies** of `vite-plus` (and are stripped from users' manifests during migration) because neither carries a heavy non-optional peer. `@vitest/browser-webdriverio` and `@vitest/browser-playwright` are now vite-plus **devDependencies + optional peerDependencies** — each is kept as a devDependency so build-time shim generation can still emit the `./test/browser-webdriverio*` / `./test/browser-playwright*` exports (the export/shim surfaces above are unchanged), but neither is a bundled runtime dep. They are optional peers because each drags a non-optional framework peer (`webdriverio` / `playwright`) that non-browser consumers must not be forced to install. Users targeting a provider instead **keep** it in their **own** dependencies via `vp migrate` (pinned to the bundled vitest version, with its framework peer ensured), so their rewritten `vite-plus/test/browser-webdriverio` / `vite-plus/test/browser-playwright` imports resolve.
+> **Note — webdriverio and playwright are opt-in.** `@vitest/browser` (base) and `@vitest/browser-preview` stay bundled **runtime dependencies** of `vite-plus` (and are stripped from users' manifests during migration) because neither carries a heavy non-optional peer. `@vitest/browser-webdriverio` and `@vitest/browser-playwright` are Vite+ **devDependencies + optional peerDependencies**. Each stays available for build-time shim generation, but neither is a bundled runtime dependency. They are optional peers because each requires a non-optional framework peer (`webdriverio` or `playwright`). Users targeting a provider keep it in their own dependencies through `vp migrate`, with its compatible provider version and framework peer. WebDriverIO has an independent release line: the build tests `5.0.0-rc.1`, while the published peer accepts `^5.0.0-beta.5 || >=5.0.0` instead of forcing the core Vitest version.
 
 #### Why provider d.ts shims are inlined
 

@@ -1,5 +1,5 @@
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -24,7 +24,9 @@ interface PnpmWorkspace {
 interface PackageJson {
   name?: string;
   version?: string;
+  dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   exports?: Record<string, unknown>;
   [key: string]: unknown;
@@ -351,6 +353,60 @@ export function syncViteDevtoolsDependencies(corePkg: PackageJson, vitePkg: Pack
   corePkg.peerDependencies[VITE_DEVTOOLS_PACKAGE] = peerRange;
 }
 
+const VITEST_DEPENDENCY_SECTIONS = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+] as const;
+
+export function alignVitestDependencies(
+  pkg: PackageJson,
+  catalog: Record<string, string>,
+): string[] {
+  const changes: string[] = [];
+
+  for (const section of VITEST_DEPENDENCY_SECTIONS) {
+    const dependencies = pkg[section];
+    if (!dependencies) continue;
+
+    for (const name of Object.keys(dependencies)) {
+      if ((name === 'vitest' || name.startsWith('@vitest/')) && name in catalog) {
+        if (dependencies[name] !== 'catalog:') {
+          dependencies[name] = 'catalog:';
+          changes.push(name);
+        }
+      }
+    }
+  }
+
+  return changes;
+}
+
+function alignVendoredVitestDependencies(rootDir: string, catalog: Record<string, string>): void {
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'target') {
+        continue;
+      }
+
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(path);
+      } else if (entry.name === 'package.json') {
+        const pkg = JSON.parse(readFileSync(path, 'utf-8').replace(/^\uFEFF/, '')) as PackageJson;
+        const changes = alignVitestDependencies(pkg, catalog);
+        if (changes.length > 0) {
+          writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+          log(`  ${path}: ${changes.join(', ')} -> catalog:`);
+        }
+      }
+    }
+  };
+
+  visit(join(rootDir, ROLLDOWN_DIR));
+  visit(join(rootDir, VITE_DIR));
+}
+
 // Oxc-related packages that should use the higher version on conflict
 const OXC_PACKAGE_PREFIXES = [
   '@oxc-project/',
@@ -370,7 +426,7 @@ const OXC_PACKAGES = new Set([
   'oxlint',
   'oxlint-tsgolint',
 ]);
-const VITEST_DEPS = new Set(['tinybench']);
+const VITEST_DEPS = new Set(['tinybench', 'vitest']);
 
 // These packages should always use the highest version
 function syncedPackages(packageName: string): boolean {
@@ -871,6 +927,12 @@ export async function syncRemote() {
     upstreamVersions['vite'].hash,
   );
 
+  // Apply source branding before dependency alignment. The branding helper
+  // restores the Vite checkout first, so running it later would discard the
+  // catalog references written by alignVendoredVitestDependencies.
+  const { brandVite } = await import('./brand-vite.ts');
+  brandVite(rootDir);
+
   // Dynamically import dependencies after git clone. Capture the whole `yaml`
   // module (we need `yaml.parseDocument` to preserve comments).
   let yaml: typeof import('yaml');
@@ -905,6 +967,10 @@ export async function syncRemote() {
   writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');
 
   log('✓ pnpm-workspace.yaml updated successfully!');
+
+  const mergedWorkspace = yaml.parse(yamlContent) as PnpmWorkspace;
+  alignVendoredVitestDependencies(rootDir, mergedWorkspace.catalog ?? {});
+  log('✓ vendored Vitest dependencies aligned with the root catalog!');
 
   const corePackagePath = join(rootDir, CORE_PACKAGE_PATH, 'package.json');
   const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
@@ -962,10 +1028,6 @@ export async function syncRemote() {
   writeFileSync(corePackagePath, JSON.stringify(corePackage, null, 2) + '\n', 'utf-8');
 
   log('✓ package.json exports updated successfully!');
-
-  // Apply Vite+ branding patches to vite source
-  const { brandVite } = await import('./brand-vite.ts');
-  brandVite(rootDir);
 
   log('✓ Done!');
 }

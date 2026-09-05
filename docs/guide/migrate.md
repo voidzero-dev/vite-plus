@@ -62,7 +62,7 @@ Most projects will require further manual adjustments after running `vp migrate`
 
 Before running the migration:
 
-- Upgrade to Vite 8+ and Vitest 4.1+ first
+- Upgrade to Vite 8+ and Vitest 5+ first
 - Make sure you understand any existing lint, format, or test setup that should be preserved
 
 After running the migration:
@@ -85,7 +85,7 @@ You need to add overrides to your package manager so that other packages resolve
 ```json
 "overrides": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.11"
+  "vitest": "5.0.0"
 }
 ```
 
@@ -94,7 +94,7 @@ If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 ```yaml
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: 4.1.11
+  vitest: 5.0.0
 ```
 
 Or, if you are using Yarn:
@@ -102,7 +102,7 @@ Or, if you are using Yarn:
 ```json
 "resolutions": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.11"
+  "vitest": "5.0.0"
 }
 ```
 
@@ -111,7 +111,7 @@ Or, if you are using Yarn:
 If you want to hand this work to a coding agent (or the reader is a coding agent!), use this migration prompt:
 
 ```md
-Migrate this project to Vite+. Vite+ replaces the current split tooling around runtime management, package management, dev/build/test commands, linting, formatting, and packaging. Run `vp help` to understand Vite+ capabilities and `vp help migrate` before making changes. Use `vp migrate --no-interactive` in the workspace root. Make sure the project is using Vite 8+ and Vitest 4.1+ before migrating.
+Migrate this project to Vite+. Vite+ replaces the current split tooling around runtime management, package management, dev/build/test commands, linting, formatting, and packaging. Run `vp help` to understand Vite+ capabilities and `vp help migrate` before making changes. Use `vp migrate --no-interactive` in the workspace root. Make sure the project is using Vite 8+ and Vitest 5+ before migrating.
 
 After the migration:
 

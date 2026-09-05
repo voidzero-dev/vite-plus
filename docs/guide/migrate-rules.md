@@ -13,7 +13,7 @@ take yourself, everything below describes automatic behavior.
 1. Run `vp upgrade` so the global CLI has the latest migration rules. A stale
    local `vite-plus` is not a blocker: when the project's local copy is older,
    migration delegates to the global CLI.
-2. Upgrade the project to Vite 8+ and Vitest 4.1+ when necessary.
+2. Upgrade the project to Vite 8+ and Vitest 5+ when necessary.
 3. Run `vp migrate` from the workspace root. Use `--no-interactive` in
    automated environments.
 4. Review every changed manifest, package-manager config, source rewrite, and

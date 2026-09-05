@@ -32,7 +32,7 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(result.plugins[3])).toBe('user-existing-root-plugin');
   });
 
-  it('injects resolver + auto-inline plugins into an inline-object project entry, preserving existing plugins', () => {
+  it('relies on root plugin inheritance for a default inline-object project', () => {
     const existing: Plugin = { name: 'user-unit-project-plugin' };
     const result = defineConfig({
       test: {
@@ -47,17 +47,56 @@ describe('defineConfig project plugin injection', () => {
 
     const project = result.test.projects[0] as { plugins: unknown[]; test: { name: string } };
     expect(project.test.name).toBe('unit');
-    expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
-    expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
-    expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-    expect(pluginName(project.plugins[3])).toBe('user-unit-project-plugin');
-    // Sanity: the existing plugin reference is preserved (clone shallow-copies the array).
+    expect(project.plugins).toEqual([existing]);
+  });
+
+  it('injects plugins into an inline project with `extends: false`', () => {
+    const existing: Plugin = { name: 'user-unit-project-plugin' };
+    const result = defineConfig({
+      test: {
+        projects: [
+          {
+            extends: false,
+            plugins: [existing],
+            test: { name: 'unit', environment: 'node' },
+          },
+        ],
+      },
+    }) as { test: { projects: unknown[] } };
+
+    const project = result.test.projects[0] as { plugins: unknown[] };
+    expect(project.plugins.map(pluginName)).toEqual([
+      RESOLVER_PLUGIN_NAME,
+      AUTO_INLINE_PLUGIN_NAME,
+      COVERAGE_GUARD_PLUGIN_NAME,
+      'user-unit-project-plugin',
+    ]);
     expect(project.plugins[3]).toBe(existing);
   });
 
-  it('injects plugins into the return value of a function-shaped project entry', () => {
+  it('injects plugins into an inline project with an external base config', () => {
+    const result = defineConfig({
+      test: {
+        projects: [
+          {
+            extends: './vitest.shared.ts',
+            test: { name: 'unit', environment: 'node' },
+          },
+        ],
+      },
+    }) as { test: { projects: Array<{ plugins: unknown[] }> } };
+
+    expect(result.test.projects[0].plugins.map(pluginName)).toEqual([
+      RESOLVER_PLUGIN_NAME,
+      AUTO_INLINE_PLUGIN_NAME,
+      COVERAGE_GUARD_PLUGIN_NAME,
+    ]);
+  });
+
+  it('resolves a function-shaped project before applying the inheritance rule', () => {
     const existing: Plugin = { name: 'user-fn-project-plugin' };
     const projectFn = () => ({
+      extends: false as const,
       plugins: [existing],
       test: { name: 'nuxt', environment: 'happy-dom' as const },
     });
@@ -78,6 +117,23 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(resolved.plugins[3])).toBe('user-fn-project-plugin');
   });
 
+  it('resolves a promise project before applying the inheritance rule', async () => {
+    const project = Promise.resolve({
+      extends: false as const,
+      test: { name: 'async-project', environment: 'node' as const },
+    });
+    const result = defineConfig({ test: { projects: [project] } }) as {
+      test: { projects: Array<Promise<{ plugins: unknown[] }>> };
+    };
+
+    const resolved = await result.test.projects[0];
+    expect(resolved.plugins.map(pluginName)).toEqual([
+      RESOLVER_PLUGIN_NAME,
+      AUTO_INLINE_PLUGIN_NAME,
+      COVERAGE_GUARD_PLUGIN_NAME,
+    ]);
+  });
+
   it('passes string-glob project entries through unchanged', () => {
     const result = defineConfig({
       test: {
@@ -88,11 +144,12 @@ describe('defineConfig project plugin injection', () => {
     expect(result.test.projects).toEqual(['./packages/*', './apps/*']);
   });
 
-  it('handles projects with no existing plugins array', () => {
+  it('handles detached projects with no existing plugins array', () => {
     const result = defineConfig({
       test: {
         projects: [
           {
+            extends: false,
             test: { name: 'no-plugins', environment: 'node' },
           },
         ],
@@ -105,6 +162,18 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
+  });
+
+  it('does not duplicate Vite+ plugins when a config is wrapped more than once', () => {
+    const result = defineConfig(defineConfig({})) as { plugins: unknown[] };
+
+    for (const name of [
+      RESOLVER_PLUGIN_NAME,
+      AUTO_INLINE_PLUGIN_NAME,
+      COVERAGE_GUARD_PLUGIN_NAME,
+    ]) {
+      expect(result.plugins.filter((plugin) => pluginName(plugin) === name)).toHaveLength(1);
+    }
   });
 });
 

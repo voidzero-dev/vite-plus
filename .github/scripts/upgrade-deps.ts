@@ -42,6 +42,7 @@ type UpstreamVersions = {
 
 type PnpmWorkspaceVersions = {
   vitest: string;
+  vitestWebdriverio: string;
   tsdown: string;
   lightningcss: string;
   oxcNodeCli: string;
@@ -185,18 +186,14 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   let content = fs.readFileSync(filePath, 'utf8');
 
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
-  // All @vitest/* catalog entries (browser + core direct deps) must stay pinned
-  // to the same exact version as `vitest` itself, otherwise the catalog drifts
-  // from VITEST_VERSION.
+  // Official @vitest/* packages stay on the exact Vitest version. The
+  // community WebDriverIO provider has an independent release line.
   const vitestExactVersionPackages = [
     '@vitest/browser',
     '@vitest/browser-playwright',
     '@vitest/browser-preview',
-    '@vitest/browser-webdriverio',
-    '@vitest/expect',
     '@vitest/mocker',
     '@vitest/pretty-format',
-    '@vitest/runner',
     '@vitest/snapshot',
     '@vitest/spy',
     '@vitest/utils',
@@ -220,6 +217,12 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.vitest,
     },
     ...vitestExactVersionEntries,
+    {
+      name: '@vitest/browser-webdriverio',
+      pattern: /'@vitest\/browser-webdriverio': ([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@vitest/browser-webdriverio': ${versions.vitestWebdriverio}`,
+      newVersion: versions.vitestWebdriverio,
+    },
     {
       name: 'tsdown',
       pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
@@ -338,23 +341,31 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
 // in sync with the `vitest:` catalog entry in pnpm-workspace.yaml. The
 // constant is consumed by both `packages/cli` and `ecosystem-ci/patch-project.ts`
 // (which re-imports it), so daily upstream bumps must update it here too.
-async function updateVitestVersionConstant(vitestVersion: string): Promise<void> {
+async function updateVitestVersionConstants(
+  vitestVersion: string,
+  webdriverioVersion: string,
+): Promise<void> {
   const filePath = path.join(ROOT, 'packages/cli/src/utils/constants.ts');
-  const content = fs.readFileSync(filePath, 'utf8');
-  const pattern = /export const VITEST_VERSION = '([\d.]+(?:-[\w.]+)?)';/;
-  let oldVersion: string | undefined;
-  const updated = content.replace(pattern, (_match: string, captured: string) => {
-    oldVersion = captured;
-    return `export const VITEST_VERSION = '${vitestVersion}';`;
-  });
-  if (oldVersion === undefined) {
-    throw new Error(
-      `Failed to match VITEST_VERSION in ${filePath} — the pattern ${pattern} is stale, ` +
-        `please update it in .github/scripts/upgrade-deps.ts`,
-    );
+  let content = fs.readFileSync(filePath, 'utf8');
+  for (const [name, version] of [
+    ['VITEST_VERSION', vitestVersion],
+    ['VITEST_WEBDRIVERIO_VERSION', webdriverioVersion],
+  ] as const) {
+    const pattern = new RegExp(`export const ${name} = '([\\d.]+(?:-[\\w.]+)?)';`);
+    let oldVersion: string | undefined;
+    content = content.replace(pattern, (_match: string, captured: string) => {
+      oldVersion = captured;
+      return `export const ${name} = '${version}';`;
+    });
+    if (oldVersion === undefined) {
+      throw new Error(
+        `Failed to match ${name} in ${filePath} — the pattern ${pattern} is stale, ` +
+          `please update it in .github/scripts/upgrade-deps.ts`,
+      );
+    }
+    recordChange(`${name} constant`, oldVersion, version);
   }
-  fs.writeFileSync(filePath, updated);
-  recordChange('VITEST_VERSION constant', oldVersion, vitestVersion);
+  fs.writeFileSync(filePath, content);
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
@@ -412,7 +423,11 @@ async function updateTsdownMigrateVersion(
 // README's suffix at build time) is kept in sync here too so the daily PR stays
 // self-consistent without depending on a build step running first.
 async function updateReadmeVitestPins(vitestVersion: string): Promise<void> {
-  const readmePaths = [path.join(ROOT, 'README.md'), path.join(ROOT, 'packages/cli/README.md')];
+  const readmePaths = [
+    path.join(ROOT, 'README.md'),
+    path.join(ROOT, 'packages/cli/README.md'),
+    path.join(ROOT, 'docs/guide/migrate.md'),
+  ];
   // JSON form: `"vitest": "4.1.9"` — npm/Bun `overrides` + Yarn `resolutions` (2 blocks)
   const jsonPattern = /("vitest": ")[\d.]+(?:-[\w.]+)?(")/g;
   // YAML form: `  vitest: 4.1.9` — pnpm-workspace `overrides` (1 block)
@@ -540,6 +555,7 @@ console.log('Fetching latest versions…');
 
 const [
   vitestVersion,
+  vitestWebdriverioVersion,
   tsdownVersion,
   stableTsdownMigrateVersion,
   lightningcssVersion,
@@ -555,6 +571,7 @@ const [
   oxcTransformVersion,
 ] = await Promise.all([
   getLatestNpmVersion('vitest'),
+  getLatestNpmVersion('@vitest/browser-webdriverio'),
   getLatestNpmVersion('tsdown'),
   getLatestNpmVersion('tsdown-migrate'),
   // Mirror exactly what the bundled @tsdown/css depends on.
@@ -572,6 +589,7 @@ const [
 ]);
 
 console.log(`vitest: ${vitestVersion}`);
+console.log(`@vitest/browser-webdriverio: ${vitestWebdriverioVersion}`);
 console.log(`tsdown: ${tsdownVersion}`);
 console.log(`tsdown-migrate (stable): ${stableTsdownMigrateVersion}`);
 console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
@@ -589,6 +607,7 @@ console.log(`oxc-transform: ${oxcTransformVersion}`);
 await updateUpstreamVersions();
 await updatePnpmWorkspace({
   vitest: vitestVersion,
+  vitestWebdriverio: vitestWebdriverioVersion,
   tsdown: tsdownVersion,
   lightningcss: lightningcssVersion,
   oxcNodeCli: oxcNodeCliVersion,
@@ -603,7 +622,7 @@ await updatePnpmWorkspace({
   oxcTransform: oxcTransformVersion,
 });
 await updateTsdownMigrateVersion(tsdownVersion, stableTsdownMigrateVersion);
-await updateVitestVersionConstant(vitestVersion);
+await updateVitestVersionConstants(vitestVersion, vitestWebdriverioVersion);
 await updateReadmeVitestPins(vitestVersion);
 writeMetaFiles();
 

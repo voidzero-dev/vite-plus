@@ -12,7 +12,10 @@ import {
 import { readJsonFile } from '../../utils/json.ts';
 import { extractOverrideTargetName } from '../../utils/package-overrides.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
-import { isAlignableVitestEcosystemPackage } from '../../utils/vitest-ecosystem.ts';
+import {
+  getVitestEcosystemVersion,
+  isAlignableVitestEcosystemPackage,
+} from '../../utils/vitest-ecosystem.ts';
 import {
   bootstrapProjectPaths,
   getCatalogDependencySpec,
@@ -48,7 +51,10 @@ export const VITEST_DIRECT_USAGE_EXCLUDED = new Set([
   '@vitest/ws-client',
 ]);
 
-export { isAlignableVitestEcosystemPackage } from '../../utils/vitest-ecosystem.ts';
+export {
+  getVitestEcosystemVersion,
+  isAlignableVitestEcosystemPackage,
+} from '../../utils/vitest-ecosystem.ts';
 
 // True iff a pnpm.overrides key's target (after stripping selector and
 // version suffixes) is a provider whose stale pin must be dropped (see
@@ -623,13 +629,18 @@ export function getAlignedVitestEcosystemDependencySpec(
   // catalog-ized — so the toolchain and its ecosystem share one catalog source
   // of truth. rewriteCatalog adds the matching catalog entry (keyed on the
   // catalog owning `vitest`), keeping the two writers consistent and idempotent.
-  return getCatalogDependencySpec(current, VITEST_VERSION, supportCatalog, {
-    dependencyField,
-    dependencyName,
-    packageManager,
-    catalogDependencyResolver,
-    preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec,
-  });
+  return getCatalogDependencySpec(
+    current,
+    getVitestEcosystemVersion(dependencyName),
+    supportCatalog,
+    {
+      dependencyField,
+      dependencyName,
+      packageManager,
+      catalogDependencyResolver,
+      preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec,
+    },
+  );
 }
 
 // Align every declared official `@vitest/*` package with the bundled Vitest.
@@ -695,7 +706,7 @@ export function vitestEcosystemCatalogReferencesPending(
       if (
         isAlignableVitestEcosystemPackage(name) &&
         spec.startsWith('catalog:') &&
-        catalogDependencyResolver(spec, name) !== VITEST_VERSION
+        catalogDependencyResolver(spec, name) !== getVitestEcosystemVersion(name)
       ) {
         return true;
       }

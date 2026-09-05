@@ -11,7 +11,7 @@ Vite+ is in beta: stable, but not yet complete. We are adding features on the ro
 Vite+ expects modern upstream tool versions.
 
 - Vite 8 or newer
-- Vitest 4.1 or newer
+- Vitest 5 or newer
 
 If you are migrating an existing project and it still depends on older Vite or Vitest versions, upgrade those first before adopting Vite+.
 

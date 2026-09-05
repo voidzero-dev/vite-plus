@@ -5,7 +5,11 @@ import url from 'node:url';
 
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { VITE_PLUS_VERSION, VITEST_VERSION } from '../../utils/constants.js';
+import {
+  VITE_PLUS_VERSION,
+  VITEST_VERSION,
+  VITEST_WEBDRIVERIO_VERSION,
+} from '../../utils/constants.js';
 
 // `collectToolchainVersionChanges` reads the bundled raw Vite version via
 // `await import('../versions.js')`. In the built CLI that resolves to
@@ -52,6 +56,7 @@ describe('collectToolchainVersionChanges', () => {
             'vite-plus': 'catalog:',
             vite: 'catalog:',
             vitest: 'catalog:',
+            '@vitest/browser-webdriverio': 'catalog:',
             '@vitest/coverage-v8': 'catalog:',
             // Already on the target version: must be dropped (from === to).
             '@vitest/spy': 'catalog:',
@@ -71,6 +76,7 @@ describe('collectToolchainVersionChanges', () => {
         '  vite-plus: 0.1.21',
         '  vite: "npm:@voidzero-dev/vite-plus-core@0.1.21"',
         '  vitest: 3.2.4',
+        "  '@vitest/browser-webdriverio': 4.1.11",
         "  '@vitest/coverage-v8': 3.2.4",
         `  '@vitest/spy': ${VITEST_VERSION}`,
         '',
@@ -99,6 +105,11 @@ describe('collectToolchainVersionChanges', () => {
       { name: 'vite-plus', from: '0.1.21', to: VITE_PLUS_VERSION },
       { name: 'vite', from: '8.0.0', to: STUB_BUNDLED_VITE },
       { name: 'vitest', from: '3.2.4', to: VITEST_VERSION },
+      {
+        name: '@vitest/browser-webdriverio',
+        from: '4.1.11',
+        to: VITEST_WEBDRIVERIO_VERSION,
+      },
       { name: '@vitest/coverage-v8', from: '3.2.4', to: VITEST_VERSION },
     ]);
     // A package whose old value already equals the target is omitted.
@@ -128,6 +139,7 @@ describe('collectToolchainVersionChanges', () => {
           vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.21',
           // Versions independently — never aligned, so never a "change".
           '@vitest/eslint-plugin': '^1.6.0',
+          '@vitest/runner': '4.1.11',
           '@vitest/ui': '3.2.4',
         },
       }),
@@ -139,6 +151,7 @@ describe('collectToolchainVersionChanges', () => {
     expect(changes).toContainEqual({ name: 'vitest', from: '0.1.21', to: VITEST_VERSION });
     expect(changes).toContainEqual({ name: '@vitest/ui', from: '3.2.4', to: VITEST_VERSION });
     expect(changes.some((change) => change.name === '@vitest/eslint-plugin')).toBe(false);
+    expect(changes.some((change) => change.name === '@vitest/runner')).toBe(false);
   });
 
   it('skips a preserved protocol-pinned vite-plus and an unused bare vitest', async () => {

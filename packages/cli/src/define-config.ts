@@ -152,10 +152,9 @@ const vitePlusModuleFile = fileURLToPath(import.meta.url);
 
 /**
  * Absolute path to the bundled `vitest` package's `package.json`, used as a
- * second `this.resolve` importer. The nested `@vitest/*` family (`@vitest/expect`,
- * `@vitest/runner`, `@vitest/snapshot`, …) are dependencies of `vitest` itself —
- * not direct deps of `vite-plus` — so under pnpm's isolated layout they are
- * reachable from `vitest`'s location but not from [[vitePlusModuleFile]].
+ * second `this.resolve` importer. Some managed `@vitest/*` packages are
+ * dependencies of `vitest` instead of direct dependencies of `vite-plus`, so
+ * pnpm exposes them from this location but not from [[vitePlusModuleFile]].
  * Resolving `package.json` is condition-agnostic, so this is safe with
  * `require.resolve`. Cached; `null` once an attempt has failed so we never retry.
  */
@@ -173,9 +172,26 @@ function getVitestAnchor(): string | null {
 }
 
 /**
- * Match the `vitest` / `@vitest/*` family of bare specifiers — the imports a
- * browser-mode Vite dev server must resolve. Any query string is stripped
- * first; relative (`./`), absolute (`/`), and virtual (`\0`) ids never match.
+ * Packages that must resolve from the same managed graph as the bundled Vitest
+ * runner. Optional project-owned peers such as coverage, UI, and WebDriverIO
+ * are intentionally absent. Standalone `@vitest/expect` and removed
+ * `@vitest/runner` APIs must also stay on normal project resolution.
+ */
+const MANAGED_VITEST_PACKAGES = [
+  'vitest',
+  '@vitest/browser',
+  '@vitest/browser-playwright',
+  '@vitest/browser-preview',
+  '@vitest/mocker',
+  '@vitest/pretty-format',
+  '@vitest/snapshot',
+  '@vitest/spy',
+  '@vitest/utils',
+] as const;
+
+/**
+ * Match a bare specifier in the Vite+-managed Vitest package set. Any query
+ * string is stripped first; relative, absolute, and virtual ids never match.
  *
  * Exported for unit testing.
  */
@@ -184,54 +200,44 @@ export function isVitestFamilySpecifier(id: string): boolean {
   if (bare.startsWith('.') || bare.startsWith('/') || bare.startsWith('\0')) {
     return false;
   }
-  return (
-    bare === 'vitest' ||
-    bare.startsWith('vitest/') ||
-    bare === '@vitest/browser' ||
-    bare.startsWith('@vitest/')
+  return MANAGED_VITEST_PACKAGES.some(
+    (packageName) => bare === packageName || bare.startsWith(`${packageName}/`),
   );
 }
 
 /**
- * Rescue `vitest` / `@vitest/*` resolution for browser-mode tests.
+ * Rescue managed Vitest package resolution for browser-mode tests.
  *
  * In an established project that depends only on `vite-plus`, both `vitest`
  * and `@vitest/browser` are transitive deps. pnpm's isolated layout only
- * exposes a package's *direct* deps, so the browser-mode Vite dev server
- * (rooted at the consumer project) cannot resolve `vitest/internal/browser`,
- * `@vitest/expect`, etc. Non-browser tests are unaffected — vitest's own
- * module runner handles resolution there.
+ * exposes a package's direct deps, so the browser-mode Vite dev server rooted
+ * at the consumer project cannot resolve transitive managed packages.
  *
- * This plugin re-resolves the `vitest` / `@vitest/*` family through Vite's OWN
- * resolver, but ROOTED at `vite-plus`'s location ([[vitePlusModuleFile]]) and
- * then the bundled `vitest`'s location ([[getVitestAnchor]]) BEFORE the
- * project. So every such import binds to the same physical (pinned) Vitest that
+ * This plugin re-resolves the managed set through Vite's resolver, rooted at
+ * `vite-plus` and then the bundled `vitest` package before the project. Every
+ * managed import binds to the same physical pinned Vitest graph that
  * `vp test` spawns as the runner (see `resolveBundled` in `resolve-test.ts`)
  * and that the `vite-plus/test*` shims re-export. Were a project-local Vitest
  * preferred instead, a project that keeps its own `vitest` dependency would
  * split the run across two physical Vitest module instances — the runner
  * (bundled) vs. the test files' `vi`/`expect`/runner internals (project) — a
  * classic source of internal-state and mock-hoisting mismatches. For the common
- * migrated layout (a project depending only on `vite-plus`) nothing in this
- * family is resolvable from the project root under pnpm's isolated layout
- * anyway, so default resolution would return `null` there regardless;
- * bundle-first only changes the project-keeps-its-own-`vitest` case, which is
- * exactly the case we want pinned.
+ * migrated layout, the managed packages are not resolvable from the project
+ * root under pnpm's isolated layout. Bundle-first also keeps a project-local
+ * Vitest copy from splitting runner state.
  *
  * Resolution goes through `this.resolve` (NOT [[vitePlusRequire]].resolve) so
  * Vite's ESM export conditions are honoured: a raw `require.resolve` would pick
  * Vitest's CJS `require`-condition entry — a throw-stub for the bare `vitest`
  * root (`index.cjs`), and the CJS build for subpaths (e.g. `vitest/config` →
  * `config.cjs`) instead of the ESM entry. Two bundled anchors are tried because `@vitest/browser*` are
- * direct deps of `vite-plus` (reachable from [[vitePlusModuleFile]]) while the
- * nested `@vitest/*` family are deps of `vitest` (reachable only from the
- * `vitest` anchor). The project root remains the last resort for any family id
- * the bundled tree cannot resolve, so this is never worse than deferring first.
+ * direct deps of `vite-plus` while other managed packages are deps of `vitest`.
+ * The project root remains the last resort when both bundled anchors miss.
  *
  * Two intentional limits of routing through `this.resolve`:
  *   - An EXPLICIT project `resolve.alias` / `resolve.dedupe` on the vitest
  *     family takes precedence (Vite's pipeline applies it even from a bundled
- *     anchor). Neither is set by default in Vitest 4.x, so this only affects
+ *     anchor). Neither is set by default in Vitest, so this only affects
  *     projects that deliberately re-point the family — treated as an opt-out of
  *     pinning, not defeated silently.
  *   - Coverage providers (`@vitest/coverage-v8` / `-istanbul`) are NOT shipped
@@ -268,9 +274,8 @@ function vitePlusVitestResolverPlugin(): PluginOption {
           return resolved;
         }
       }
-      // Last resort: default project-rooted resolution for any family id the
-      // bundled tree cannot resolve (e.g. coverage providers not shipped with
-      // vite-plus).
+      // Last resort: use normal project-rooted resolution when both managed
+      // anchors miss.
       return this.resolve(id, importer, { ...options, skipSelf: true });
     },
   };
@@ -604,9 +609,25 @@ function vitePlusCoverageVersionGuardPlugin(): PluginOption {
 }
 
 /**
- * Inject the vitest resolver plugin, the auto-inline matcher plugin, and the
- * coverage version guard into a single inline project config. Used both for
- * root configs and for object-shaped entries inside `test.projects`.
+ * Return whether a plugin option already contains a Vite+ plugin with the
+ * given name. Vite accepts nested plugin arrays, so inspect them recursively.
+ */
+function hasNamedPlugin(plugin: PluginOption, name: string): boolean {
+  if (Array.isArray(plugin)) {
+    return plugin.some((entry) => hasNamedPlugin(entry, name));
+  }
+  return Boolean(plugin && typeof plugin === 'object' && 'name' in plugin && plugin.name === name);
+}
+
+const VITE_PLUS_PLUGIN_FACTORIES = [
+  ['vite-plus:vitest-resolver', vitePlusVitestResolverPlugin],
+  ['vite-plus:auto-inline-matcher-deps', vitePlusAutoInlineMatcherPlugin],
+  ['vite-plus:coverage-version-guard', vitePlusCoverageVersionGuardPlugin],
+] as const;
+
+/**
+ * Inject the Vitest resolver, auto-inline matcher support, and coverage guard
+ * into one config. A name check makes repeated Vite+ wrapping idempotent.
  *
  * The shapes overlap (both have an optional top-level `plugins` array and
  * an optional `test.server.deps.inline`), so a shared helper keeps the
@@ -618,38 +639,40 @@ function injectPluginIntoInlineConfig<
     test?: { server?: { deps?: { inline?: unknown } } };
   },
 >(config: T): T {
+  const existingPlugins = config.plugins ?? [];
+  const missingPlugins = VITE_PLUS_PLUGIN_FACTORIES.filter(
+    ([name]) => !existingPlugins.some((plugin) => hasNamedPlugin(plugin, name)),
+  ).map(([, createPlugin]) => createPlugin());
+  if (missingPlugins.length === 0) {
+    return config;
+  }
   return {
     ...config,
-    plugins: [
-      vitePlusVitestResolverPlugin(),
-      vitePlusAutoInlineMatcherPlugin(),
-      vitePlusCoverageVersionGuardPlugin(),
-      ...(config.plugins ?? []),
-    ],
+    plugins: [...missingPlugins, ...existingPlugins],
   };
 }
 
 /**
- * Walk `config.test?.projects` and inject the vite-plus plugins into each
- * project entry. Vitest spins up an independent Vite pipeline per project, so
- * root-level plugins do NOT propagate — without this, files matched by a
- * project's `include` glob never get the vitest resolver / auto-inline plugins.
+ * Inject plugins into an inline project only when Vitest does not inherit the
+ * declaring root config. Vitest v5 defaults `extends` to `true`; injecting the
+ * plugins again would duplicate them when Vitest merges plugin arrays.
  *
  * Entry shapes (from `TestProjectConfiguration`):
  *   - string  (glob path like `'./packages/*'`)  → passed through unchanged.
- *   - object  (inline config with `test: {...}`) → clone and prepend plugin.
- *   - function (sync or async)                   → wrap so its result is injected.
- *   - Promise (resolves to inline config)        → chain `.then(injectPlugin)`.
+ *   - object  (inline config with `test: {...}`) → inspect effective `extends`.
+ *   - function (sync or async)                   → wrap and inspect its result.
+ *   - Promise (resolves to inline config)        → inspect its resolved value.
  *
- * String/glob entries cannot be cloned, so they carry no injected plugin. This
- * only weakens the COVERAGE guard, and only narrowly: coverage is global, and
- * the migration rewrites every nested config file to vite-plus
- * `defineConfig`/`defineProject` (which re-inject the guard), so a migrated
- * workspace still fires it from its resolved projects. The residual gap is a
- * hand-authored workspace whose string globs resolve to raw `vitest/config`
- * sub-configs or bare directory projects — there a provider/runner skew falls
- * back to Vitest's own (softer) warning instead of the guard's hard error.
+ * String and glob entries resolve their own config. A `defineProject` call in
+ * that config injects the plugins there.
  */
+function injectPluginIntoResolvedProject<T extends UserWorkspaceConfig>(config: T): T {
+  const extendsValue = (config as T & { extends?: boolean | string }).extends;
+  return extendsValue === false || typeof extendsValue === 'string'
+    ? injectPluginIntoInlineConfig(config)
+    : config;
+}
+
 function injectPluginIntoProject(project: TestProjectConfiguration): TestProjectConfiguration {
   if (typeof project === 'string') {
     return project;
@@ -658,17 +681,17 @@ function injectPluginIntoProject(project: TestProjectConfiguration): TestProject
     const wrapped: UserProjectConfigFn = (env: ConfigEnv) => {
       const result = project(env);
       if (result instanceof Promise) {
-        return result.then(injectPluginIntoInlineConfig);
+        return result.then(injectPluginIntoResolvedProject);
       }
-      return injectPluginIntoInlineConfig(result);
+      return injectPluginIntoResolvedProject(result);
     };
     return wrapped;
   }
   if (project instanceof Promise) {
-    return project.then(injectPluginIntoInlineConfig);
+    return project.then(injectPluginIntoResolvedProject);
   }
   if (typeof project === 'object' && project !== null) {
-    return injectPluginIntoInlineConfig(project);
+    return injectPluginIntoResolvedProject(project);
   }
   return project;
 }

@@ -42,8 +42,17 @@ describe('isVitestFamilySpecifier', () => {
     expect(isVitestFamilySpecifier('@vitest/browser/context')).toBe(true);
   });
 
-  it('matches `@vitest/expect`', () => {
-    expect(isVitestFamilySpecifier('@vitest/expect')).toBe(true);
+  it('matches managed standalone packages', () => {
+    expect(isVitestFamilySpecifier('@vitest/mocker')).toBe(true);
+    expect(isVitestFamilySpecifier('@vitest/utils/diff')).toBe(true);
+  });
+
+  it('does not match project-owned or removed packages', () => {
+    expect(isVitestFamilySpecifier('@vitest/expect')).toBe(false);
+    expect(isVitestFamilySpecifier('@vitest/runner')).toBe(false);
+    expect(isVitestFamilySpecifier('@vitest/coverage-v8')).toBe(false);
+    expect(isVitestFamilySpecifier('@vitest/ui')).toBe(false);
+    expect(isVitestFamilySpecifier('@vitest/browser-webdriverio')).toBe(false);
   });
 
   it('matches a queried subpath (query stripped before matching)', () => {
@@ -86,24 +95,27 @@ describe('vitePlusVitestResolverPlugin', () => {
     expect(typeof plugin?.resolveId).toBe('function');
   });
 
-  it('is injected into each `test.projects` entry (before user plugins)', () => {
+  it('is injected only into projects that do not inherit the root config', () => {
     const existing: Plugin = { name: 'user-project-plugin' };
     const result = defineConfig({
       test: {
         projects: [
           { test: { name: 'unit', environment: 'node' } },
-          { plugins: [existing], test: { name: 'browser', environment: 'jsdom' } },
+          {
+            extends: false,
+            plugins: [existing],
+            test: { name: 'browser', environment: 'jsdom' },
+          },
         ],
       },
     }) as { test: { projects: unknown[] } };
 
-    for (const project of result.test.projects) {
-      const plugins = (project as { plugins?: unknown }).plugins;
-      const plugin = findPlugin(plugins, RESOLVER_PLUGIN_NAME);
-      expect(plugin).toBeDefined();
-      expect(plugin?.enforce).toBe('pre');
-      expect(typeof plugin?.resolveId).toBe('function');
-    }
+    expect((result.test.projects[0] as { plugins?: unknown }).plugins).toBeUndefined();
+    const plugins = (result.test.projects[1] as { plugins?: unknown }).plugins;
+    const plugin = findPlugin(plugins, RESOLVER_PLUGIN_NAME);
+    expect(plugin).toBeDefined();
+    expect(plugin?.enforce).toBe('pre');
+    expect(typeof plugin?.resolveId).toBe('function');
   });
 
   it('is injected by defineProject too (browser project configs)', () => {
@@ -170,7 +182,7 @@ function makeCtx(resolveFor: (call: ResolveCall) => ResolveResult): {
 describe('vitePlusVitestResolverPlugin resolveId (bundle-first)', () => {
   // The runner `vp test` spawns is the Vitest bundled with vite-plus (see
   // resolve-test.ts). For the run to use a SINGLE physical Vitest, every
-  // `vitest` / `@vitest/*` import must resolve to that same bundled copy — even
+  // managed Vitest imports must resolve to that same bundled copy — even
   // when the project keeps its own `vitest` dependency that the default
   // resolver would otherwise prefer.
   it('resolves the vitest family from a bundled anchor, never the project importer', async () => {
@@ -187,21 +199,20 @@ describe('vitePlusVitestResolverPlugin resolveId (bundle-first)', () => {
     expect(calls[0].fromProject).toBe(false);
   });
 
-  it('tries the vite-plus anchor then the vitest anchor for the nested @vitest/* family', async () => {
+  it('tries the vite-plus anchor then the vitest anchor for a managed package', async () => {
     const resolveId = getResolveId();
-    const VITEST_ANCHORED = '/bundled/.pnpm/vitest/node_modules/@vitest/expect/dist/index.js';
+    const VITEST_ANCHORED = '/bundled/.pnpm/vitest/node_modules/@vitest/utils/dist/index.js';
     let anchorProbes = 0;
     const { ctx, calls } = makeCtx(({ fromProject }) => {
       if (fromProject) {
-        return { id: '/fake/project/node_modules/@vitest/expect/dist/index.js' };
+        return { id: '/fake/project/node_modules/@vitest/utils/dist/index.js' };
       }
       anchorProbes += 1;
-      // vite-plus anchor misses (@vitest/expect is a dep of vitest, not vite-plus);
-      // the second (vitest) anchor resolves it.
+      // Simulate a layout where the first anchor misses and the Vitest anchor resolves it.
       return anchorProbes >= 2 ? { id: VITEST_ANCHORED } : null;
     });
 
-    const id = idOf(await resolveId.call(ctx, '@vitest/expect', PROJECT_IMPORTER, {}));
+    const id = idOf(await resolveId.call(ctx, '@vitest/utils', PROJECT_IMPORTER, {}));
 
     expect(id).toBe(VITEST_ANCHORED);
     expect(anchorProbes).toBe(2);
@@ -211,10 +222,10 @@ describe('vitePlusVitestResolverPlugin resolveId (bundle-first)', () => {
 
   it('falls back to the project importer only when every bundled anchor misses', async () => {
     const resolveId = getResolveId();
-    const FALLBACK = '/fake/project/node_modules/@vitest/coverage-v8/dist/index.js';
+    const FALLBACK = '/fake/project/node_modules/@vitest/utils/dist/index.js';
     const { ctx, calls } = makeCtx(({ fromProject }) => (fromProject ? { id: FALLBACK } : null));
 
-    const id = idOf(await resolveId.call(ctx, '@vitest/coverage-v8', PROJECT_IMPORTER, {}));
+    const id = idOf(await resolveId.call(ctx, '@vitest/utils', PROJECT_IMPORTER, {}));
 
     expect(id).toBe(FALLBACK);
     // Bundled anchors were probed first, then the project importer as last resort.
@@ -254,6 +265,16 @@ describe('vitePlusVitestResolverPlugin resolveId (bundle-first)', () => {
     const { ctx, calls } = makeCtx(() => ({ id: '/should/not/be/used' }));
 
     expect(idOf(await resolveId.call(ctx, 'react', PROJECT_IMPORTER, {}))).toBeUndefined();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('ignores project-owned Vitest peers', async () => {
+    const resolveId = getResolveId();
+    const { ctx, calls } = makeCtx(() => ({ id: '/should/not/be/used' }));
+
+    expect(
+      idOf(await resolveId.call(ctx, '@vitest/coverage-v8', PROJECT_IMPORTER, {})),
+    ).toBeUndefined();
     expect(calls).toHaveLength(0);
   });
 

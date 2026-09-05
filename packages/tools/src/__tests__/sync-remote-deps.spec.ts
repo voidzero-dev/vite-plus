@@ -2,10 +2,40 @@ import * as semver from 'semver';
 import { describe, expect, test } from 'vitest';
 
 import {
+  alignVitestDependencies,
   mergePnpmWorkspaces,
   syncCargoOxcVersions,
   syncViteDevtoolsDependencies,
 } from '../sync-remote-deps.ts';
+
+describe('alignVitestDependencies()', () => {
+  test('uses the root catalog for managed Vitest dependencies', () => {
+    const pkg = {
+      dependencies: { '@vitest/utils': '4.1.10' },
+      devDependencies: {
+        vitest: '^4.1.10',
+        '@vitest/browser-playwright': '^4.1.6',
+        '@vitest/runner': '4.1.11',
+      },
+    };
+
+    const changes = alignVitestDependencies(pkg, {
+      vitest: '5.0.0',
+      '@vitest/browser-playwright': '5.0.0',
+      '@vitest/utils': '5.0.0',
+    });
+
+    expect(changes).toEqual(['@vitest/utils', 'vitest', '@vitest/browser-playwright']);
+    expect(pkg).toEqual({
+      dependencies: { '@vitest/utils': 'catalog:' },
+      devDependencies: {
+        vitest: 'catalog:',
+        '@vitest/browser-playwright': 'catalog:',
+        '@vitest/runner': '4.1.11',
+      },
+    });
+  });
+});
 
 describe('syncViteDevtoolsDependencies()', () => {
   test('uses the DevTools ranges declared by Vite', () => {
@@ -106,6 +136,17 @@ describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
     const result = mergePnpmWorkspaces(main, rolldown, {}, semver);
 
     expect(result.minimumReleaseAgeExclude).toEqual(['@oxc-parser/*', 'oxc-parser']);
+  });
+});
+
+describe('mergePnpmWorkspaces() Vitest catalog', () => {
+  test('keeps the final Vitest v5 pin when a vendored workspace still requests v4', () => {
+    const main = { catalog: { vitest: '5.0.0' } };
+    const rolldown = { catalog: { vitest: '^4.1.6' } };
+
+    const result = mergePnpmWorkspaces(main, rolldown, {}, semver);
+
+    expect(result.catalog?.vitest).toBe('5.0.0');
   });
 });
 

@@ -7,6 +7,7 @@ import {
   VITE_PLUS_VERSION,
   isForceOverrideMode,
 } from '../../utils/constants.ts';
+import { getVitestEcosystemVersion } from '../../utils/vitest-ecosystem.ts';
 import {
   VITEST_DIRECT_USAGE_EXCLUDED,
   alignVitestEcosystemPackages,
@@ -246,7 +247,7 @@ export function rewritePackageJson(
       pkg.devDependencies ??= {};
       pkg.devDependencies[provider] = getCatalogDependencySpec(
         undefined,
-        VITEST_VERSION,
+        getVitestEcosystemVersion(provider),
         supportCatalog && packageManager !== PackageManager.bun,
         { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
       );

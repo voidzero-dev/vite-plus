@@ -14,6 +14,7 @@ import {
   isForceOverrideMode,
 } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
+import { getVitestEcosystemVersion } from '../../utils/vitest-ecosystem.ts';
 import { type NpmWorkspaces } from '../../utils/workspace.ts';
 import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../../utils/yaml.ts';
 import {
@@ -1010,7 +1011,7 @@ function rewriteYamlCatalogAtPath(
       : catalogAdditions;
     for (const name of additions) {
       if (isAlignableVitestEcosystemPackage(name)) {
-        catalog.set(scalarString(name), scalarString(VITEST_VERSION));
+        catalog.set(scalarString(name), scalarString(getVitestEcosystemVersion(name)));
       }
     }
   }
@@ -1036,7 +1037,7 @@ function rewriteVitestEcosystemYamlCatalog(
       vitestEcosystemPackages.has(name) &&
       isAlignableVitestEcosystemPackage(name)
     ) {
-      catalog.set(item.key, scalarString(VITEST_VERSION));
+      catalog.set(item.key, scalarString(getVitestEcosystemVersion(name)));
     }
   }
 }
@@ -1068,7 +1069,7 @@ function rewriteCatalogObject(
   if (VITEST_IS_MANAGED_OVERRIDE) {
     for (const name of Object.keys(catalog)) {
       if (vitestEcosystemPackages.has(name) && isAlignableVitestEcosystemPackage(name)) {
-        catalog[name] = VITEST_VERSION;
+        catalog[name] = getVitestEcosystemVersion(name);
       }
     }
   }

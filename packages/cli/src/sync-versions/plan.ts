@@ -7,7 +7,10 @@ import { z } from 'zod';
 
 import { detectFormattingOptions } from '../utils/json.ts';
 import { extractOverrideTargetName } from '../utils/package-overrides.ts';
-import { isAlignableVitestEcosystemPackage } from '../utils/vitest-ecosystem.ts';
+import {
+  getVitestEcosystemVersion,
+  isAlignableVitestEcosystemPackage,
+} from '../utils/vitest-ecosystem.ts';
 
 const MAX_MANIFESTS = 256;
 const MAX_MANIFEST_BYTES = 1024 * 1024;
@@ -144,8 +147,13 @@ function targetVersion(name: string, toolchain: SyncVersionsToolchain): string |
   if (name === 'vite-plus' || name === '@voidzero-dev/vite-plus-core') {
     return toolchain.vitePlus;
   }
-  if (name === 'vitest' || isAlignableVitestEcosystemPackage(name)) {
+  if (name === 'vitest') {
     return toolchain.vitest;
+  }
+  if (isAlignableVitestEcosystemPackage(name)) {
+    return name === '@vitest/browser-webdriverio'
+      ? getVitestEcosystemVersion(name)
+      : toolchain.vitest;
   }
   return undefined;
 }

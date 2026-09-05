@@ -32,7 +32,7 @@ const WEBDRIVERIO_PEER_DEP = 'webdriverio';
 
 // Dependencies whose presence before migration signals the user will end up
 // with webdriverio after migration. `@vitest/browser-webdriverio` is the opt-in
-// provider vite-plus keeps in the user's deps (pinned to the bundled vitest)
+// provider vite-plus keeps in the user's deps (at its compatible version)
 // and `webdriverio` is its runtime peer (added via `BROWSER_PROVIDER_PEER_DEPS`);
 // either one means the edgedriver/geckodriver postinstalls must be allowed.
 const WEBDRIVERIO_ALLOW_SIGNAL_DEPS = [WEBDRIVERIO_PEER_DEP, WEBDRIVERIO_PROVIDER] as const;
