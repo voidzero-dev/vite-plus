@@ -4,6 +4,10 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@voidzero-dev/vite-plus-core/package.json', () => ({
+  default: { bundledVersions: { tsdown: '0.99.0' } },
+}));
+
 const { mockConfirm, mockInfo, mockWarn } = vi.hoisted(() => ({
   mockConfirm: vi.fn(),
   mockInfo: vi.fn(),
@@ -29,7 +33,7 @@ vi.mock('../../utils/prompts.ts', () => ({
 
 import { PackageManager } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
-import { TSDOWN_MIGRATE_VERSION, TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
+import { TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { confirmTsupMigration, detectTsupProject, migrateTsupToTsdown } from '../migrator/tsup.ts';
 import { createMigrationReport } from '../report.ts';
@@ -83,7 +87,7 @@ describe('tsup migration', () => {
     mockWarn.mockReset();
   });
 
-  it('passes the package manager as a separate CLI argument', async () => {
+  it('uses the bundled tsdown version and passes the package manager as a separate argument', async () => {
     await expect(
       migrateTsupToTsdown(projectPath, false, PackageManager.npm, 'tsup.config.ts', undefined, {
         silent: true,
@@ -92,14 +96,7 @@ describe('tsup migration', () => {
 
     expect(mockRunCommandSilently).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: [
-          'dlx',
-          `tsdown-migrate@${TSDOWN_MIGRATE_VERSION}`,
-          '--yes',
-          '--package-manager',
-          'npm',
-          '--no-install',
-        ],
+        args: ['dlx', 'tsdown-migrate@0.99.0', '--yes', '--package-manager', 'npm', '--no-install'],
       }),
     );
   });

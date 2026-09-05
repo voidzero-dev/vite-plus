@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
+import corePkg from '@voidzero-dev/vite-plus-core/package.json' with { type: 'json' };
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
-import { TSDOWN_MIGRATE_VERSION, TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
+import { TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
@@ -380,7 +381,7 @@ async function runTsdownMigrateStep(
       command: vpBin,
       args: [
         'dlx',
-        `tsdown-migrate@${TSDOWN_MIGRATE_VERSION}`,
+        `tsdown-migrate@${corePkg.bundledVersions.tsdown}`,
         '--yes',
         '--package-manager',
         packageManager,
