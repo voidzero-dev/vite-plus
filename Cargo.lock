@@ -8691,6 +8691,7 @@ version = "0.0.0"
 dependencies = [
  "base64-simd",
  "flate2",
+ "httpmock",
  "junction",
  "node-semver",
  "serde",
