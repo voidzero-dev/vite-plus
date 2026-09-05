@@ -1,7 +1,7 @@
 {
   "name": "migration-from-tsdown",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown --public-dir public",
     "build:watch": "tsdown --watch",
     "build:dts": "tsdown --dts"
   },

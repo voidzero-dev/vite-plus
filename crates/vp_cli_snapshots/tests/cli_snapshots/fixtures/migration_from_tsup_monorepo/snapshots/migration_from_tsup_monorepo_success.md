@@ -32,7 +32,7 @@ package a gets a converted config
 ```
 import { defineConfig } from 'vite-plus/pack';
 
-export default defineConfig({
+export default defineConfig({ deps: { resolveDepSubpath: true },
   entry: ['src/index.ts'],
   dts: true,
   format: 'cjs',
@@ -74,7 +74,7 @@ package b gets a converted config
 ```
 import { defineConfig } from 'vite-plus/pack';
 
-export default defineConfig({
+export default defineConfig({ deps: { resolveDepSubpath: true },
   entry: ['src/index.ts'],
   dts: true,
   format: 'cjs',
