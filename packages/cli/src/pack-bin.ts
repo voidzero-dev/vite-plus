@@ -128,7 +128,8 @@ cli
   })
   .option('--on-success <command>', 'Command to run on success')
   .option('--copy <dir>', 'Copy files to output dir')
-  .option('--public-dir <dir>', 'Alias for --copy, deprecated')
+  // NOTE: `--public-dir` (deprecated alias for `--copy`) was removed from the
+  // tsdown CLI in v0.23.0, so it is no longer forwarded.
   .option('--tsconfig <tsconfig>', 'Set tsconfig path')
   .option('--unbundle', 'Unbundle mode')
   .option('--root <dir>', 'Root directory of input files')
