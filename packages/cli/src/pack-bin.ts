@@ -8,6 +8,7 @@ import {
   enableDebug,
   type InlineConfig,
   type ResolvedConfig,
+  type TsdownHandle,
 } from '@voidzero-dev/vite-plus-core/pack';
 import { cac } from 'cac';
 
@@ -128,7 +129,8 @@ cli
   })
   .option('--on-success <command>', 'Command to run on success')
   .option('--copy <dir>', 'Copy files to output dir')
-  .option('--public-dir <dir>', 'Alias for --copy, deprecated')
+  // NOTE: `--public-dir` (a deprecated alias for --copy) was removed from the
+  // tsdown CLI in v0.23.0. Use `--copy` instead.
   .option('--tsconfig <tsconfig>', 'Set tsconfig path')
   .option('--unbundle', 'Unbundle mode')
   .option('--root <dir>', 'Root directory of input files')
@@ -145,7 +147,10 @@ cli
       flags.envPrefix = DEFAULT_ENV_PREFIXES;
     }
 
-    async function runBuild() {
+    // tsdown 0.23 turned the `rebuild` callback into `() => Promise<TsdownHandle>`
+    // so a restart can hand back the new handle. The annotation is required
+    // because `runBuild` passes itself as that callback.
+    async function runBuild(): Promise<TsdownHandle> {
       const viteConfig =
         flags.config === false
           ? undefined
@@ -172,7 +177,7 @@ cli
         configs.push(...resolvedConfig);
       }
 
-      await buildWithConfigs(configs, configDeps, runBuild);
+      return await buildWithConfigs(configs, configDeps, runBuild);
     }
 
     await runBuild();

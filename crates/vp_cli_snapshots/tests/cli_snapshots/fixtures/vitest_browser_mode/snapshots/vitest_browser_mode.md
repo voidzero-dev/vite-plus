@@ -6,13 +6,14 @@
 $ vp test
 
  RUN  <version> <workspace>
+      API started at http://localhost:<port>/
 
  ✓  chromium  src/foo.test.js (1 test) <duration>
 
  Test Files  1 passed (1)
       Tests  1 passed (1)
    Start at  <time>
-   Duration  <duration> (transform <duration>, setup <duration>, import <duration>, tests <duration>, environment <duration>)
+   Duration  <duration> (<breakdown>)
 ```
 
 ## `vpt write-file src/foo.js 'export default '\''foo'\'';
@@ -26,13 +27,14 @@ $ vp test
 $ vp test ○ cache miss: 'src/foo.js' modified, executing
 
  RUN  <version> <workspace>
+      API started at http://localhost:<port>/
 
  ✓  chromium  src/foo.test.js (1 test) <duration>
 
  Test Files  1 passed (1)
       Tests  1 passed (1)
    Start at  <time>
-   Duration  <duration> (transform <duration>, setup <duration>, import <duration>, tests <duration>, environment <duration>)
+   Duration  <duration> (<breakdown>)
 ```
 
 ## `vpt write-file src/bar.js 'export default '\''bar'\'';
@@ -46,13 +48,14 @@ $ vp test ○ cache miss: 'src/foo.js' modified, executing
 $ vp test ◉ cache hit, replaying
 
  RUN  <version> <workspace>
+      API started at http://localhost:<port>/
 
  ✓  chromium  src/foo.test.js (1 test) <duration>
 
  Test Files  1 passed (1)
       Tests  1 passed (1)
    Start at  <time>
-   Duration  <duration> (transform <duration>, setup <duration>, import <duration>, tests <duration>, environment <duration>)
+   Duration  <duration> (<breakdown>)
 
 ---
 vp run: cache hit, <duration> saved.

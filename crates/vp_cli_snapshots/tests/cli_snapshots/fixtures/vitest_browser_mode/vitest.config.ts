@@ -1,7 +1,13 @@
 // import { defineProject } from 'vitest/config';
+import { defineConfig } from 'vite-plus';
 import { playwright } from 'vite-plus/test/browser-playwright';
 
-export default {
+// Browser mode needs Vite+'s `defineConfig`: it pins the bundled Vitest through
+// `resolve.alias`, which is the only pin Vite's `optimizeDeps.include` resolver
+// consults. Vitest pre-bundles `vitest` and `vitest/internal/browser` in one
+// pass to keep the collector a single instance, and a project that depends on
+// `vite-plus` alone cannot resolve those subpaths from its own root.
+export default defineConfig({
   plugins: [
     {
       name: 'vitest-browser-mode-suppress-known-vite-logs',
@@ -35,4 +41,4 @@ export default {
       ],
     },
   },
-};
+});

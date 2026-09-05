@@ -370,7 +370,12 @@ const OXC_PACKAGES = new Set([
   'oxlint',
   'oxlint-tsgolint',
 ]);
-const VITEST_DEPS = new Set(['tinybench']);
+// `vitest` is included because vite-plus BUNDLES it as the test runner and
+// pins it exactly (see VITEST_VERSION), so vp's catalog — not rolldown's — is
+// the source of truth. rolldown only uses vitest for its own suites and trails
+// vp across majors (vp 5.0.0 vs rolldown ^4.1.6), which would otherwise abort
+// the merge as a cross-major conflict.
+const VITEST_DEPS = new Set(['tinybench', 'vitest']);
 
 // These packages should always use the highest version
 function syncedPackages(packageName: string): boolean {

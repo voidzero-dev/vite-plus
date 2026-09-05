@@ -306,6 +306,19 @@ static NPM_NOTICE_RE: LazyLock<regex::Regex> =
 // <duration>).
 static START_AT_TIME_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(Start at\s+)\d{1,2}:\d{2}:\d{2}").unwrap());
+// Vitest 5 replaced the Duration line's per-phase durations with each phase's
+// share of tracked time ("Duration 1.2s (transform 47%, import 25%, worker
+// 9%)"). The percentages, WHICH phases appear, and their order (the list is
+// sorted by share) all shift run to run, so the whole breakdown is masked
+// rather than its numbers. Runs after DURATION_RE, which has already turned
+// the leading wall-clock total into <duration>.
+static VITEST_DURATION_BREAKDOWN_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(Duration\s+<duration>) \([^)]*%\)").unwrap());
+// Vitest's browser mode prints the browser API server's URL. The port is a
+// default that falls through to the next free one when it is already bound, so
+// it depends on what else is listening rather than on any fixture input.
+static VITEST_BROWSER_API_URL_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(API started at http://localhost:)\d+").unwrap());
 // `vp env which` prints an `Installed:` field for a global package holding the
 // wall-clock date the install ran, so it drifts with the calendar rather than
 // with any fixture input. Mask by the label context (like the sibling `Node:`
@@ -444,6 +457,9 @@ pub fn redact_output(
     // Redact durations like "0ns", "123ms" or "1.23s" to "<duration>".
     // Runs before version redaction so "1.23s" never half-matches as a version.
     output = DURATION_RE.replace_all(&output, "<duration>").into_owned();
+    output =
+        VITEST_DURATION_BREAKDOWN_RE.replace_all(&output, "${1} (<breakdown>)").into_owned();
+    output = VITEST_BROWSER_API_URL_RE.replace_all(&output, "${1}<port>").into_owned();
 
     // Redact semver-shaped versions (bundled tool versions, Node versions).
     output = VERSION_RE.replace_all(&output, "<version>").into_owned();

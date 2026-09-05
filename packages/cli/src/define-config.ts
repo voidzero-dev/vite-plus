@@ -173,6 +173,101 @@ function getVitestAnchor(): string | null {
 }
 
 /**
+ * Pick a subpath export's runtime (ESM) target, walking nested condition
+ * objects. `types`-only entries (`./globals`, `./jsdom`, …) have no runtime
+ * target and yield `null` so they are never aliased. `require` is skipped
+ * deliberately: aliases feed Vite's ESM pipeline, and Vitest's CJS entries are
+ * throw-stubs (see the note on [[vitePlusRequire]]).
+ */
+function pickEsmExportTarget(entry: unknown): string | null {
+  if (typeof entry === 'string') {
+    return entry;
+  }
+  if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+    return null;
+  }
+  for (const condition of ['import', 'default'] as const) {
+    if (condition in entry) {
+      const target = pickEsmExportTarget((entry as Record<string, unknown>)[condition]);
+      if (target !== null) {
+        return target;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Exact-match `resolve.alias` entries pinning every `vitest` subpath that ships
+ * a runtime entry to the bundled copy.
+ *
+ * [[vitePlusVitestResolverPlugin]]'s `resolveId` hook already pins the family
+ * for anything that flows through the plugin container, but Vitest 5's browser
+ * mode pre-bundles `vitest` together with `vitest/internal/browser` (and
+ * `vitest/internal/traces`) in ONE optimizer pass so esbuild dedupes their
+ * shared stateful chunks — the test collector and the runner — to a single
+ * instance. Vite resolves `optimizeDeps.include` entries with a standalone
+ * resolver that runs only the alias and resolve plugins, never project plugins.
+ * In the layout this whole file exists for (a project depending on `vite-plus`
+ * alone, where pnpm's isolated `node_modules` hides `vitest`), those subpaths
+ * are unresolvable from the project root, so they are silently dropped from the
+ * pass while bare `vitest` — discovered through `resolveId` during the dep scan
+ * — still gets optimized. The tester then loads its own unoptimized copy of the
+ * collector while test files import the optimized one, and the very first
+ * `describe()` fails with `Cannot read properties of undefined (reading
+ * 'config')`.
+ *
+ * The subpath list is read from the bundled `vitest`'s own `exports` map rather
+ * than hard-coded, so it tracks whatever that version pre-bundles. Wildcard
+ * keys are skipped (an alias cannot express a pattern target) along with
+ * `./package.json`, which must keep resolving as a real file.
+ *
+ * Only the `vitest` family is aliased. `@vitest/browser*` are direct `vite-plus`
+ * dependencies that Vitest lists in `optimizeDeps.exclude`, and coverage
+ * providers must keep falling through to the project (see `resolveId`'s last
+ * resort).
+ */
+let bundledVitestAliases: Array<{ find: RegExp; replacement: string }> | undefined;
+function getBundledVitestAliases(): Array<{ find: RegExp; replacement: string }> {
+  if (bundledVitestAliases !== undefined) {
+    return bundledVitestAliases;
+  }
+  bundledVitestAliases = [];
+  const anchor = getVitestAnchor();
+  if (anchor === null) {
+    return bundledVitestAliases;
+  }
+  let exports: Record<string, unknown>;
+  try {
+    exports = JSON.parse(readFileSync(anchor, 'utf8')).exports;
+  } catch {
+    return bundledVitestAliases;
+  }
+  if (exports === null || typeof exports !== 'object') {
+    return bundledVitestAliases;
+  }
+  const packageDir = anchor.slice(0, -'/package.json'.length);
+  for (const [subpath, entry] of Object.entries(exports)) {
+    if (subpath.includes('*') || subpath === './package.json') {
+      continue;
+    }
+    const target = pickEsmExportTarget(entry);
+    if (target === null || !target.startsWith('./')) {
+      continue;
+    }
+    const specifier = subpath === '.' ? 'vitest' : `vitest/${subpath.slice('./'.length)}`;
+    bundledVitestAliases.push({
+      // Anchored so `vitest` never prefix-matches `vitest/internal/browser`;
+      // each subpath resolves through its own exports entry, not by rewriting
+      // the package root and appending a path.
+      find: new RegExp(`^${specifier.replaceAll(/[.*+?^${}()|[\]\\/]/g, '\\$&')}$`),
+      replacement: `${packageDir}/${target.slice('./'.length)}`,
+    });
+  }
+  return bundledVitestAliases;
+}
+
+/**
  * Match the `vitest` / `@vitest/*` family of bare specifiers — the imports a
  * browser-mode Vite dev server must resolve. Any query string is stripped
  * first; relative (`./`), absolute (`/`), and virtual (`\0`) ids never match.
@@ -604,6 +699,24 @@ function vitePlusCoverageVersionGuardPlugin(): PluginOption {
 }
 
 /**
+ * Normalize Vite's two `resolve.alias` spellings to the array form so the
+ * bundled-Vitest entries can be appended. Vite normalizes the object form the
+ * same way, and an object's keys are exact `find` strings.
+ */
+function toAliasArray(alias: unknown): Array<{ find: string | RegExp; replacement: string }> {
+  if (Array.isArray(alias)) {
+    return alias as Array<{ find: string | RegExp; replacement: string }>;
+  }
+  if (alias === null || typeof alias !== 'object') {
+    return [];
+  }
+  return Object.entries(alias as Record<string, string>).map(([find, replacement]) => ({
+    find,
+    replacement,
+  }));
+}
+
+/**
  * Inject the vitest resolver plugin, the auto-inline matcher plugin, and the
  * coverage version guard into a single inline project config. Used both for
  * root configs and for object-shaped entries inside `test.projects`.
@@ -611,13 +724,21 @@ function vitePlusCoverageVersionGuardPlugin(): PluginOption {
  * The shapes overlap (both have an optional top-level `plugins` array and
  * an optional `test.server.deps.inline`), so a shared helper keeps the
  * wiring consistent.
+ *
+ * [[getBundledVitestAliases]] is merged in here rather than from the resolver
+ * plugin's `config` hook: Vitest's browser mode derives the browser server's
+ * optimizer config from the RESOLVED project config, so a plugin-contributed
+ * alias lands too late for `optimizeDeps.include` to resolve against it. The
+ * entries are appended so a project's own alias still wins on first match.
  */
 function injectPluginIntoInlineConfig<
   T extends {
     plugins?: UserConfig['plugins'];
+    resolve?: { alias?: unknown };
     test?: { server?: { deps?: { inline?: unknown } } };
   },
 >(config: T): T {
+  const vitestAliases = getBundledVitestAliases();
   return {
     ...config,
     plugins: [
@@ -626,6 +747,12 @@ function injectPluginIntoInlineConfig<
       vitePlusCoverageVersionGuardPlugin(),
       ...(config.plugins ?? []),
     ],
+    ...(vitestAliases.length > 0 && {
+      resolve: {
+        ...config.resolve,
+        alias: [...toAliasArray(config.resolve?.alias), ...vitestAliases],
+      },
+    }),
   };
 }
 

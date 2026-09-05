@@ -188,6 +188,9 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   // All @vitest/* catalog entries (browser + core direct deps) must stay pinned
   // to the same exact version as `vitest` itself, otherwise the catalog drifts
   // from VITEST_VERSION.
+  // `@vitest/runner` is deliberately not listed: Vitest 5 folded it into core,
+  // so the package stopped publishing after 5.0.0-beta.4 and no longer has a
+  // catalog entry to rewrite.
   const vitestExactVersionPackages = [
     '@vitest/browser',
     '@vitest/browser-playwright',
@@ -196,7 +199,6 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     '@vitest/expect',
     '@vitest/mocker',
     '@vitest/pretty-format',
-    '@vitest/runner',
     '@vitest/snapshot',
     '@vitest/spy',
     '@vitest/utils',
@@ -412,7 +414,12 @@ async function updateTsdownMigrateVersion(
 // README's suffix at build time) is kept in sync here too so the daily PR stays
 // self-consistent without depending on a build step running first.
 async function updateReadmeVitestPins(vitestVersion: string): Promise<void> {
-  const readmePaths = [path.join(ROOT, 'README.md'), path.join(ROOT, 'packages/cli/README.md')];
+  const readmePaths = [
+    path.join(ROOT, 'README.md'),
+    path.join(ROOT, 'packages/cli/README.md'),
+    // The migration guide repeats the same three pins as the READMEs.
+    path.join(ROOT, 'docs/guide/migrate.md'),
+  ];
   // JSON form: `"vitest": "4.1.9"` — npm/Bun `overrides` + Yarn `resolutions` (2 blocks)
   const jsonPattern = /("vitest": ")[\d.]+(?:-[\w.]+)?(")/g;
   // YAML form: `  vitest: 4.1.9` — pnpm-workspace `overrides` (1 block)
