@@ -40,7 +40,7 @@ the converted config uses vite-plus pack
 ```
 import { defineConfig } from 'vite-plus/pack';
 
-export default defineConfig({
+export default defineConfig({ deps: { resolveDepSubpath: true },
   entry: ['src/index.ts'],
   dts: true,
   format: ['esm', 'cjs'],

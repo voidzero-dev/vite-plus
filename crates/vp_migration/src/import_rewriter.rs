@@ -2286,8 +2286,7 @@ fn rewrite_import(
     )?;
     let standalone = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
     if !skip_packages.skip_tsdown && (standalone || is_vite_config_file(file_path)) {
-        let rewritten =
-            crate::vite_config::rewrite_pack_dts_generators(&result.content, standalone);
+        let rewritten = crate::pack_config::rewrite_pack_config(&result.content, standalone);
         result.updated |= rewritten != result.content;
         result.content = rewritten;
     }
@@ -2411,6 +2410,37 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn migrate_pack_configs_in_workspace_packages() {
+        let temp = tempfile::tempdir().unwrap();
+        let package = temp.path().join("packages/library");
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"devDependencies":{"vite-plus":"0.2.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            package.join("package.json"),
+            r#"{"devDependencies":{"vite-plus":"0.2.0"}}"#,
+        )
+        .unwrap();
+        let vite_config = package.join("vite.config.ts");
+        let tsdown_config = package.join("tsdown.config.mts");
+        let source_file = package.join("example.ts");
+        std::fs::write(&vite_config, "export default { pack: { bundle: false } };").unwrap();
+        std::fs::write(&tsdown_config, "export default { publicDir: 'public' };").unwrap();
+        let example = "export default { pack: { bundle: false } };";
+        std::fs::write(&source_file, example).unwrap();
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+        assert!(result.errors.is_empty());
+        assert_eq!(result.modified_files.len(), 2);
+        assert!(std::fs::read_to_string(vite_config).unwrap().contains("unbundle: true"));
+        assert!(std::fs::read_to_string(tsdown_config).unwrap().contains("copy: 'public'"));
+        assert_eq!(std::fs::read_to_string(source_file).unwrap(), example);
+        assert!(rewrite_imports_in_directory(temp.path()).unwrap().modified_files.is_empty());
+    }
 
     #[test]
     fn test_rewrite_import_content_vite() {

@@ -4,8 +4,10 @@ use serde_json::{Map, Value};
 use vp_error::Error;
 
 use crate::{
-    ast_grep, eslint::rewrite_eslint_script, prettier::rewrite_prettier_script,
-    script_rewrite::rewrite_bunx_commands,
+    ast_grep,
+    eslint::rewrite_eslint_script,
+    prettier::rewrite_prettier_script,
+    script_rewrite::{rewrite_bunx_commands, rewrite_pack_flags},
 };
 
 // Marker to replace "cross-env " before ast-grep processing
@@ -29,7 +31,7 @@ fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
     // matches an active rule, then process ordinary commands.
     let rewritten_bunx =
         rewrite_bunx_commands(&preprocessed, |inner| ast_grep::apply_loaded_rules(inner, rules));
-    let result = ast_grep::apply_loaded_rules(&rewritten_bunx, rules);
+    let result = rewrite_pack_flags(&ast_grep::apply_loaded_rules(&rewritten_bunx, rules));
 
     // Step 3: Replace cross-env marker back with "cross-env " (only if we replaced it)
 
@@ -107,6 +109,37 @@ pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrate_pack_copy_flag() {
+        let rules =
+            ast_grep::load_rules(include_str!("../../../packages/cli/rules/vite-tools.yml"))
+                .unwrap();
+        for (input, expected) in [
+            ("tsdown --public-dir public", "vp pack --copy public"),
+            ("vp pack --public-dir=public", "vp pack --copy=public"),
+            (
+                "MODE=prod vp pack --public-dir 'public files'",
+                "MODE=prod vp pack --copy 'public files'",
+            ),
+            (
+                "cross-env MODE=prod tsdown --public-dir public",
+                "cross-env MODE=prod vp pack --copy public",
+            ),
+            ("bunx tsdown --public-dir public", "bunx vp pack --copy public"),
+            (
+                "vp pack --public-dir one && vp pack --public-dir two",
+                "vp pack --copy one && vp pack --copy two",
+            ),
+            ("vp build --public-dir public", "vp build --public-dir public"),
+            ("echo --public-dir public", "echo --public-dir public"),
+            ("vp pack -- --public-dir public", "vp pack -- --public-dir public"),
+        ] {
+            let actual = rewrite_script(input, &rules);
+            assert_eq!(actual, expected);
+            assert_eq!(rewrite_script(&actual, &rules), actual);
+        }
+    }
 
     const RULES_YAML: &str = r#"
 # vite --version / vite -v => vp --version / vp -v (global flags, not dev-specific)

@@ -29,6 +29,9 @@ export default defineConfig({
   outDir: 'dist',
   format: ['esm', 'cjs'],
   dts: { generator: 'tsgo' },
+  unbundle: true,
+  copy: 'public',
+  deps: { resolveDepSubpath: true, onlyBundle: false },
 });
 ```
 
@@ -52,5 +55,8 @@ export default defineConfig({
   outDir: 'dist',
   format: ['esm', 'cjs'],
   dts: { generator: 'tsgo' },
+  unbundle: true,
+  copy: 'public',
+  deps: { resolveDepSubpath: true, onlyBundle: false },
 });
 ```

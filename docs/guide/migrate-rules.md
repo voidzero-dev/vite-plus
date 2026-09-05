@@ -39,6 +39,40 @@ When a default upgrade skips setup actions that would apply, it prints a hint
 to run `vp migrate --full`. Fresh (non Vite+) projects always run the full
 migration.
 
+## Pack Configuration
+
+`vp migrate` updates static `pack` objects in `vite.config.*` and exported
+objects in `tsdown.config.*` for [tsdown 0.23](https://github.com/rolldown/tsdown/releases/tag/v0.23.0).
+This also runs on existing Vite+ projects without `--full`, including workspace
+packages. Arrays and direct objects returned by `defineConfig` callbacks are
+supported. JSON tsdown configs receive the same updates after they merge into
+`vite.config.ts`.
+
+| Previous option                                                    | Updated option                                                                        |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `bundle: false`                                                    | `unbundle: true`                                                                      |
+| `bundle: true`                                                     | Removed; bundling remains the default                                                 |
+| `outExtension`                                                     | `outExtensions`                                                                       |
+| `publicDir`                                                        | `copy`                                                                                |
+| `removeNodeProtocol: true`                                         | `nodeProtocol: 'strip'`                                                               |
+| `injectStyle`                                                      | `css.inject`                                                                          |
+| `inlineOnly` / `deps.onlyAllowBundle`                              | `deps.onlyBundle`                                                                     |
+| `skipNodeModulesBundle: true` / `deps.skipNodeModulesBundle: true` | `deps.neverBundle: true`                                                              |
+| `dts.tsgo` / `dts.oxc`                                             | Select with `dts.generator`; retain generator option objects and remove boolean flags |
+| `dts.cjsReexport`                                                  | Removed; tsdown generates CJS declarations separately                                 |
+| `--public-dir` in `tsdown` or `vp pack` scripts                    | `--copy`                                                                              |
+
+Migration preserves the previous defaults by setting `deps.resolveDepSubpath`
+to `true` when absent. Enabled ATTW checks receive `profile: 'strict'` when
+no profile is set. Explicit values, including `false`, remain unchanged.
+
+The transform does not evaluate configuration code. Objects with spreads,
+computed keys, or duplicate keys, and conflicting old and new options require
+manual review. Dynamic boolean selectors remain unchanged. Unrelated Vite and
+plugin options remain unchanged. Run `vp pack` after migration to check the
+result. Node.js requirements, TypeScript module resolution, and programmatic
+`build()` return values require separate review.
+
 ## Dependency Rules
 
 What happens to each toolchain dependency, at a glance:

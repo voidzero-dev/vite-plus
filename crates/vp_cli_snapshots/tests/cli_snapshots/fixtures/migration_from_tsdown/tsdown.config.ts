@@ -5,4 +5,7 @@ export default defineConfig({
   outDir: 'dist',
   format: ['esm', 'cjs'],
   dts: true,
+  bundle: false,
+  publicDir: 'public',
+  deps: { onlyAllowBundle: false },
 });
