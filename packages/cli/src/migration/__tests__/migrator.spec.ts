@@ -9361,3 +9361,74 @@ describe('collectMigrationSetupPlan non-interactive editor conflicts', () => {
     expect(plan.editorConflictDecisions.get('workspace.xml')).toBe('skip');
   });
 });
+
+// Counts how many times each of `sourceFiles` is read through `fs.readFileSync`
+// while `run()` executes. Used to assert the migration's source-tree scans do
+// not re-read the same file once per signal (#2420).
+function countReadsPerSourceFile(sourceFiles: string[], run: () => void): Map<string, number> {
+  const tracked = new Set(sourceFiles);
+  const counts = new Map<string, number>(sourceFiles.map((file) => [file, 0]));
+  const readFileSync = fs.readFileSync.bind(fs);
+  vi.spyOn(fs, 'readFileSync').mockImplementation(((file: unknown, ...rest: unknown[]) => {
+    if (typeof file === 'string' && tracked.has(file)) {
+      counts.set(file, (counts.get(file) ?? 0) + 1);
+    }
+    return (readFileSync as (...args: unknown[]) => unknown)(file, ...rest);
+  }) as typeof fs.readFileSync);
+  run();
+  return counts;
+}
+
+describe('source-tree scan read amplification (#2420)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-scan-reads-'));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  // Full-miss fixture: no vitest browser/provider references anywhere, no
+  // tsconfig retaining vitest types, and no webdriverio/provider dependency to
+  // short-circuit a scan. Every signal therefore takes its complete miss path,
+  // which is the worst case for traversal count.
+  function writeFullMissProject(fileCount: number): string[] {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'scan-reads',
+        devDependencies: { vite: '^7.0.0' },
+      }),
+    );
+    const srcDir = path.join(tmpDir, 'src');
+    fs.mkdirSync(srcDir);
+    const sourceFiles: string[] = [];
+    for (let index = 0; index < fileCount; index++) {
+      const filePath = path.join(srcDir, `mod-${index}.ts`);
+      fs.writeFileSync(filePath, `export const value${index} = ${index};\n`);
+      sourceFiles.push(filePath);
+    }
+    return sourceFiles;
+  }
+
+  it('reads each source file once during a standalone migration', () => {
+    const sourceFiles = writeFullMissProject(6);
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+
+    const counts = countReadsPerSourceFile(sourceFiles, () => {
+      rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+    });
+
+    // Every eligible source file must be visited, so a zero count would mean the
+    // fixture stopped exercising the scan rather than that the scan got faster.
+    for (const file of sourceFiles) {
+      expect(counts.get(file)).toBeGreaterThan(0);
+    }
+    // Before the single-traversal change this was 5: two provider scans, browser
+    // mode, the retained-vitest-module scan, and a redundant webdriverio rescan.
+    expect(Math.max(...counts.values())).toBe(1);
+  });
+});

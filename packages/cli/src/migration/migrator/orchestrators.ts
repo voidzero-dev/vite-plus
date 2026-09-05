@@ -9,7 +9,7 @@ import {
   applyYarnWorkspaceHoistingFix,
   cleanupDeprecatedTsconfigOptions,
   collectInjectedProviderNames,
-  collectProviderSourceModes,
+  collectPackageSourceScanSignals,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
   dropRemovePackageOverrideKeys,
@@ -45,10 +45,7 @@ import {
   rewriteYarnrcYml,
   setDirectViteEdge,
   setPackageManager,
-  sourceTreeReferencesRetainedVitestModule,
   takePnpmWorkspaceSettings,
-  usesVitestBrowserMode,
-  usesWebdriverioProvider,
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
   wrapLazyPluginsInViteConfig,
@@ -56,6 +53,7 @@ import {
 import { type MigrationReport } from '../report.ts';
 import {
   PROVIDER_OVERRIDE_DROP_NAMES,
+  WEBDRIVERIO_PROVIDER,
   pnpmMajor,
   type CatalogDependencyResolver,
   type PnpmPackageJsonSettings,
@@ -78,12 +76,14 @@ export function rewriteStandaloneProject(
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   // Source-tree scan signals are computed once here and reused below (and inside
   // projectUsesVitestDirectly / collectInjectedProviderNames) so the source tree
-  // is traversed once each instead of repeatedly. They do not depend on
+  // is traversed once instead of repeatedly. They do not depend on
   // package.json contents and no scanned source files are mutated before they
   // are consumed, so the values match the previous lazy per-call scans exactly.
-  const providerSourceModes = collectProviderSourceModes(projectPath);
-  const browserMode = usesVitestBrowserMode(projectPath);
-  const retainedVitestModule = sourceTreeReferencesRetainedVitestModule(projectPath);
+  const {
+    providerSourceModes,
+    browserMode,
+    retainedModule: retainedVitestModule,
+  } = collectPackageSourceScanSignals(projectPath);
   const providerCatalogAdditions = collectInjectedProviderNames(
     projectPath,
     undefined,
@@ -124,8 +124,10 @@ export function rewriteStandaloneProject(
     scripts?: Record<string, string>;
     pnpm?: PnpmPackageJsonSettings;
   }>(packageJsonPath, (pkg) => {
+    // `providerSourceModes` already carries the webdriverio source-scan result
+    // from the single scan above, so reuse it instead of rescanning the tree.
     shouldAllowBrowserProviderBuilds =
-      hasOwnWebdriverioDependency(pkg) || usesWebdriverioProvider(projectPath);
+      hasOwnWebdriverioDependency(pkg) || providerSourceModes[WEBDRIVERIO_PROVIDER] === true;
     const requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg);
     usesVitest = projectUsesVitestDirectly(projectPath, pkg, requiredVitestPeer, true, {
       browserMode,
@@ -535,12 +537,16 @@ export function rewriteMonorepoProject(
     installConfig?: { hoistingLimits?: string };
   }>(packageJsonPath, (pkg) => {
     const requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg);
-    // Compute the browser-mode and retained-module source scans once and reuse
-    // them across rewritePackageJson and projectUsesVitestDirectly: the scans do
-    // not depend on package.json and nothing mutates the source tree between
-    // these reads, so this is identical to the previous per-call scans.
-    const browserMode = usesVitestBrowserMode(projectPath);
-    const retainedVitestModule = sourceTreeReferencesRetainedVitestModule(projectPath);
+    // Compute the browser-mode, retained-module and provider source scans in a
+    // single traversal and reuse them across rewritePackageJson and
+    // projectUsesVitestDirectly: the scans do not depend on package.json and
+    // nothing mutates the source tree between these reads, so this is identical
+    // to the previous per-call scans.
+    const {
+      browserMode,
+      retainedModule: retainedVitestModule,
+      providerSourceModes,
+    } = collectPackageSourceScanSignals(projectPath);
     // rewrite scripts in package.json
     extractedStagedConfig = rewritePackageJson(
       pkg,
@@ -549,7 +555,7 @@ export function rewriteMonorepoProject(
       skipStagedMigration,
       catalogDependencyResolver,
       browserMode,
-      collectProviderSourceModes(projectPath),
+      providerSourceModes,
       projectUsesVitestDirectly(projectPath, pkg, requiredVitestPeer, true, {
         browserMode,
         retainedModule: retainedVitestModule,
