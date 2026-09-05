@@ -446,6 +446,8 @@ pub(crate) fn rewrite_pack_dts_generators(content: &str, standalone: bool) -> St
         // A spread, computed key, or non-boolean selector can affect precedence.
         if children.iter().any(|child| {
             child.kind() == "spread_element"
+                || child.kind() == "shorthand_property_identifier"
+                    && matches!(child.text().as_ref(), "tsgo" | "oxc")
                 || child.field("key").is_some_and(|key| key.kind() == "computed_property_name")
                 || (child.field("key").is_some_and(|key| {
                     pair_key_matches(&key, "tsgo") || pair_key_matches(&key, "oxc")
@@ -1029,6 +1031,8 @@ mod tests {
             "export default { pack: { dts: { tsgo: { path: './tsgo' } } } };",
             "export default { pack: { dts: { tsgo: enabled } } };",
             "export default { pack: { dts: { tsgo: enabled, oxc: true } } };",
+            "export default { pack: { dts: { tsgo, oxc: true } } };",
+            "export default { pack: { dts: { tsgo: true, oxc } } };",
             "export default { pack: { dts: { tsgo: { path: './tsgo' }, oxc: true } } };",
             "export default { pack: { dts: { ...options, tsgo: true } } };",
             "export default { pack: { dts: { [key]: value, tsgo: true } } };",
