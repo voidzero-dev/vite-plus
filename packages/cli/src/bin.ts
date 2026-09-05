@@ -129,11 +129,8 @@ if (maybePrintCommandHelp(args)) {
 } else {
   // All other commands — delegate to Rust core via NAPI binding
   try {
-    // Loading resolve-vite-config also loads define-config, whose runtime
-    // Vitest helpers import `vitest/config`. Keep that import behind the
-    // delegated-command branch so global commands such as `migrate` and
-    // `config` can repair a stale `vitest` package-manager alias before the
-    // removed wrapper is evaluated.
+    // This module imports `vitest/config` through define-config. Load it here
+    // so `migrate` and `config` can handle stale aliases before Vitest loads.
     const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
     const initInspection = inspectInitCommand(command, args.slice(1));
     if (
