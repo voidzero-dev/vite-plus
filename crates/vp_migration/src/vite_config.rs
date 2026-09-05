@@ -414,6 +414,98 @@ fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
     }
 }
 
+/// Convert the boolean declaration-generator options removed in tsdown 0.23.
+/// Only inspect config objects, leaving plugin options and computed values alone.
+pub(crate) fn rewrite_pack_dts_generators(content: &str, standalone: bool) -> String {
+    let grep = SupportLang::TypeScript.ast_grep(content);
+    let root = grep.root();
+    let mut edits = Vec::new();
+    for node in root.dfs() {
+        if node.kind() != "pair"
+            || !node.field("key").is_some_and(|key| pair_key_matches(&key, "dts"))
+        {
+            continue;
+        }
+        let Some(config) = node.parent() else { continue };
+        let config = match config.parent() {
+            Some(parent) if parent.kind() == "array" => parent,
+            _ => config,
+        };
+        let is_pack = config.parent().is_some_and(|pair| {
+            pair.kind() == "pair"
+                && pair.field("key").is_some_and(|key| pair_key_matches(&key, "pack"))
+                && pair.parent().is_some_and(|object| is_direct_recognized_config_object(&object))
+        });
+        if !(is_pack || standalone && is_direct_recognized_config_object(&config)) {
+            continue;
+        }
+        let Some(options) = node.field("value").filter(|value| value.kind() == "object") else {
+            continue;
+        };
+        let children: Vec<_> = options.children().collect();
+        // A spread, computed key, or non-boolean selector can affect precedence.
+        if children.iter().any(|child| {
+            child.kind() == "spread_element"
+                || child.kind() == "shorthand_property_identifier"
+                    && matches!(child.text().as_ref(), "tsgo" | "oxc")
+                || child.field("key").is_some_and(|key| key.kind() == "computed_property_name")
+                || (child.field("key").is_some_and(|key| {
+                    pair_key_matches(&key, "tsgo") || pair_key_matches(&key, "oxc")
+                }) && child
+                    .field("value")
+                    .is_some_and(|value| !matches!(value.kind().as_ref(), "true" | "false")))
+        }) {
+            continue;
+        }
+        let has_generator = children.iter().any(|child| {
+            child.field("key").is_some_and(|key| pair_key_matches(&key, "generator"))
+                || child.kind() == "shorthand_property_identifier" && child.text() == "generator"
+        });
+        let mut generator = None;
+        let mut boolean_options = Vec::new();
+        for (index, child) in children.iter().enumerate() {
+            let Some(key) = child.field("key") else { continue };
+            let name = if pair_key_matches(&key, "tsgo") {
+                "tsgo"
+            } else if pair_key_matches(&key, "oxc") {
+                "oxc"
+            } else {
+                continue;
+            };
+            let Some(value) = child.field("value") else { continue };
+            if !matches!(value.kind().as_ref(), "true" | "false") {
+                continue;
+            }
+            if value.kind() == "true" && (generator.is_none() || name == "tsgo") {
+                generator = Some((index, name));
+            }
+            boolean_options.push(index);
+        }
+        for index in boolean_options {
+            let child = &children[index];
+            if !has_generator
+                && let Some((selected, name)) = generator
+                && selected == index
+            {
+                edits.push((child.range(), format!("generator: '{name}'")));
+                continue;
+            }
+            edits.push((child.range(), String::new()));
+            if let Some(comma) = children[index + 1..].iter().find(|n| n.kind() != "comment")
+                && comma.kind() == ","
+            {
+                edits.push((comma.range(), String::new()));
+            }
+        }
+    }
+    edits.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+    let mut result = content.to_owned();
+    for (range, replacement) in edits {
+        result.replace_range(range, &replacement);
+    }
+    result
+}
+
 fn is_commonjs_config(content: &str, path: Option<&Path>) -> bool {
     if path.is_some_and(|p| {
         p.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| matches!(ext, "cjs" | "cts"))
@@ -896,6 +988,59 @@ fn merge_tsdown_config_content(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_rewrite_pack_dts_generators() {
+        for (input, standalone, expected) in [
+            (
+                "export default defineConfig({ dts: { tsgo: true, sourcemap: true } });",
+                true,
+                "export default defineConfig({ dts: { generator: 'tsgo', sourcemap: true } });",
+            ),
+            (
+                "export default { pack: [{ dts: { 'oxc': true } }, { dts: { tsgo: false } }] };",
+                false,
+                "export default { pack: [{ dts: { generator: 'oxc' } }, { dts: {  } }] };",
+            ),
+            (
+                "export default { pack: { dts: { generator: 'tsc', tsgo: true, oxc: false } } };",
+                false,
+                "export default { pack: { dts: { generator: 'tsc',   } } };",
+            ),
+            (
+                "export default defineConfig([{ dts: { oxc: true, tsgo: true } }]);",
+                true,
+                "export default defineConfig([{ dts: {  generator: 'tsgo' } }]);",
+            ),
+            (
+                "export default { pack: { dts: { tsgo: true /* keep */, sourcemap: true } } };",
+                false,
+                "export default { pack: { dts: { generator: 'tsgo' /* keep */, sourcemap: true } } };",
+            ),
+        ] {
+            let actual = super::rewrite_pack_dts_generators(input, standalone);
+            assert_eq!(actual, expected);
+            assert_eq!(super::rewrite_pack_dts_generators(&actual, standalone), actual);
+        }
+    }
+
+    #[test]
+    fn test_rewrite_pack_dts_generators_preserves_other_options() {
+        for input in [
+            "export default { plugins: [plugin({ dts: { tsgo: true } })] };",
+            "export default { test: { pack: { dts: { tsgo: true } } } };",
+            "export default { pack: { dts: { tsgo: { path: './tsgo' } } } };",
+            "export default { pack: { dts: { tsgo: enabled } } };",
+            "export default { pack: { dts: { tsgo: enabled, oxc: true } } };",
+            "export default { pack: { dts: { tsgo, oxc: true } } };",
+            "export default { pack: { dts: { tsgo: true, oxc } } };",
+            "export default { pack: { dts: { tsgo: { path: './tsgo' }, oxc: true } } };",
+            "export default { pack: { dts: { ...options, tsgo: true } } };",
+            "export default { pack: { dts: { [key]: value, tsgo: true } } };",
+        ] {
+            assert_eq!(super::rewrite_pack_dts_generators(input, false), input);
+        }
+    }
+
     use std::io::Write;
 
     use tempfile::tempdir;

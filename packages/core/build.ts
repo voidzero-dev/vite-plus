@@ -636,29 +636,57 @@ async function brandTsdown() {
     throw new Error('brandTsdown: build error message patterns not found in any build chunk');
   }
 
-  const loggerPatches = [
+  // `ansisColors` lists the bare ansis identifiers a replacement relies on, so we
+  // only try to import colors for the patches that actually applied. tsdown 0.23
+  // dropped ansis for a `node:util` styleText proxy, and those patches need no
+  // imports at all (the proxy is declared in the same chunk).
+  const loggerPatches: {
+    search: string | RegExp;
+    replacement: string;
+    ansisColors?: string[];
+  }[] = [
     {
       search: 'output("warn", `\\n${bgYellow` WARN `} ${message}\\n`);',
       replacement: 'output("warn", `${bold(yellow`warn:`)} ${message}`);',
+      ansisColors: ['bold', 'red'],
     },
     {
       search: 'output("warn", `${bgYellow` WARN `} ${message}\\n`);',
       replacement: 'output("warn", `${bold(yellow`warn:`)} ${message}`);',
+      ansisColors: ['bold', 'red'],
     },
     {
       search: 'output("error", `\\n${bgRed` ERROR `} ${format(msgs)}\\n`);',
       replacement:
         'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
+      ansisColors: ['bold', 'red'],
     },
     {
       search: 'output("error", `${bgRed` ERROR `} ${format(msgs)}\\n`);',
       replacement:
         'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
+      ansisColors: ['bold', 'red'],
     },
     {
       search: 'output("error", `${bold(red`error:`)} ${format(msgs)}`);',
       replacement:
         'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
+      ansisColors: ['bold', 'red'],
+    },
+    // tsdown >= 0.23 formats with a `node:util` styleText proxy instead of ansis.
+    // The proxy binding is local to the logger chunk but rolldown may rename it
+    // (`styleText` → `styleText$1`) to avoid clashing with the `node:util`
+    // import, so capture whatever name it ended up with and reuse it.
+    {
+      search:
+        /output\("warn", `\\n\$\{(styleText\$?\w*)\.bgYellow\(" WARN "\)\} \$\{message\}\\n`\);/g,
+      replacement: 'output("warn", `${$1.bold.yellow("warn:")} ${message}`);',
+    },
+    {
+      search:
+        /output\("error", `\\n\$\{(styleText\$?\w*)\.bgRed\(" ERROR "\)\} \$\{format\(msgs\)\}\\n`\);/g,
+      replacement:
+        'output("error", `${$1.bold.red("error:")} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
     },
   ];
   let loggerPatched = false;
@@ -666,22 +694,31 @@ async function brandTsdown() {
   for (const candidateFile of loggerCandidateFiles) {
     let content = await readFile(candidateFile, 'utf-8');
     let changed = false;
-    for (const { search, replacement } of loggerPatches) {
-      if (content.includes(search)) {
-        content = content.replaceAll(search, replacement);
-        changed = true;
+    const neededColors = new Set<string>();
+    for (const { search, replacement, ansisColors } of loggerPatches) {
+      const matched = typeof search === 'string' ? content.includes(search) : search.test(content);
+      if (!matched) {
+        continue;
       }
+      content = content.replaceAll(search, replacement);
+      for (const color of ansisColors ?? []) {
+        neededColors.add(color);
+      }
+      changed = true;
     }
     if (!changed) {
       continue;
     }
-    // The branded logger output uses `bold(...)` and `red` (see loggerPatches),
-    // but tsdown's logger module only imports the other ansis colors it needs
-    // (`bgRed`, `bgYellow`, `yellow`, ...). Those identifiers only happened to be
-    // in scope when rolldown co-located them in this chunk; newer chunking splits
-    // them out, leaving `bold`/`red` undefined at runtime. Ensure the branded
-    // chunk imports them from the same shared chunk it already pulls colors from.
-    content = await ensureAnsisImports(content, ['bold', 'red'], tsdownDistDir);
+    // The branded ansis logger output uses `bold(...)` and `red` (see
+    // loggerPatches), but tsdown's logger module only imported the other ansis
+    // colors it needed (`bgRed`, `bgYellow`, `yellow`, ...). Those identifiers
+    // only happened to be in scope when rolldown co-located them in this chunk;
+    // newer chunking splits them out, leaving `bold`/`red` undefined at runtime.
+    // Ensure the branded chunk imports them from the same shared chunk it
+    // already pulls colors from.
+    if (neededColors.size > 0) {
+      content = await ensureAnsisImports(content, [...neededColors], tsdownDistDir);
+    }
     await writeFile(candidateFile, content, 'utf-8');
     console.log(`Branded tsdown logger prefixes in ${candidateFile}`);
     loggerPatched = true;

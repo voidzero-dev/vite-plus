@@ -2278,12 +2278,20 @@ fn rewrite_import(
     // whereas `vite-plus` re-exports no `UserConfig` symbol for a rewritten
     // augmentation to merge with. This is layered ON TOP of the package-level
     // skip (a skipped package stays skipped).
-    rewrite_import_content_full(
+    let mut result = rewrite_import_content_full(
         &content,
         skip_packages,
         preserve_vitest_in_nuxt_package,
         is_vite_config_file(file_path),
-    )
+    )?;
+    let standalone = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
+    if !skip_packages.skip_tsdown && (standalone || is_vite_config_file(file_path)) {
+        let rewritten =
+            crate::vite_config::rewrite_pack_dts_generators(&result.content, standalone);
+        result.updated |= rewritten != result.content;
+        result.content = rewritten;
+    }
+    Ok(result)
 }
 
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
