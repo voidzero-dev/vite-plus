@@ -8,6 +8,7 @@ import {
   enableDebug,
   type InlineConfig,
   type ResolvedConfig,
+  type TsdownHandle,
 } from '@voidzero-dev/vite-plus-core/pack';
 import { cac } from 'cac';
 
@@ -146,7 +147,7 @@ cli
       flags.envPrefix = DEFAULT_ENV_PREFIXES;
     }
 
-    async function runBuild() {
+    async function runBuild(): Promise<TsdownHandle> {
       const viteConfig =
         flags.config === false
           ? undefined
@@ -173,7 +174,7 @@ cli
         configs.push(...resolvedConfig);
       }
 
-      await buildWithConfigs(configs, configDeps, runBuild);
+      return buildWithConfigs(configs, configDeps, runBuild);
     }
 
     await runBuild();

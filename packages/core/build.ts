@@ -678,7 +678,8 @@ async function brandTsdown() {
     // (`styleText` → `styleText$1`) to avoid clashing with the `node:util`
     // import, so capture whatever name it ended up with and reuse it.
     {
-      search: /output\("warn", `\\n\$\{(styleText\$?\w*)\.bgYellow\(" WARN "\)\} \$\{message\}\\n`\);/g,
+      search:
+        /output\("warn", `\\n\$\{(styleText\$?\w*)\.bgYellow\(" WARN "\)\} \$\{message\}\\n`\);/g,
       replacement: 'output("warn", `${$1.bold.yellow("warn:")} ${message}`);',
     },
     {
@@ -695,8 +696,7 @@ async function brandTsdown() {
     let changed = false;
     const neededColors = new Set<string>();
     for (const { search, replacement, ansisColors } of loggerPatches) {
-      const matched =
-        typeof search === 'string' ? content.includes(search) : search.test(content);
+      const matched = typeof search === 'string' ? content.includes(search) : search.test(content);
       if (!matched) {
         continue;
       }
