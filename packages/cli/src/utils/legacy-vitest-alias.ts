@@ -13,26 +13,57 @@ function isLegacyVitestAlias(value: unknown): boolean {
   );
 }
 
-function containsLegacyVitestAlias(value: unknown): boolean {
+function containsLegacyVitestAlias(value: unknown, visited = new Set<object>()): boolean {
   if (isLegacyVitestAlias(value)) {
     return true;
   }
-  if (Array.isArray(value)) {
-    return value.some(containsLegacyVitestAlias);
-  }
   if (value !== null && typeof value === 'object') {
-    return Object.values(value).some(containsLegacyVitestAlias);
+    if (visited.has(value)) {
+      return false;
+    }
+    visited.add(value);
+    return Object.values(value).some((entry) => containsLegacyVitestAlias(entry, visited));
   }
   return false;
 }
 
-function readConfigFile(filePath: string): unknown {
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function containsAliasInFields(config: unknown, fields: string[]): boolean {
+  const record = asRecord(config);
+  return fields.some((field) => containsLegacyVitestAlias(record?.[field]));
+}
+
+function containsPackageAlias(config: Record<string, unknown> | undefined): boolean {
+  return (
+    containsAliasInFields(config, [
+      'dependencies',
+      'devDependencies',
+      'optionalDependencies',
+      'peerDependencies',
+      'overrides',
+      'resolutions',
+      'catalog',
+      'catalogs',
+    ]) ||
+    containsAliasInFields(config?.pnpm, ['overrides']) ||
+    containsAliasInFields(config?.workspaces, ['catalog', 'catalogs'])
+  );
+}
+
+function readConfigFile(filePath: string): Record<string, unknown> | undefined {
   if (!fs.existsSync(filePath)) {
     return undefined;
   }
   try {
     const source = fs.readFileSync(filePath, 'utf8');
-    return path.basename(filePath) === 'package.json' ? JSON.parse(source) : parseYaml(source);
+    return asRecord(
+      path.basename(filePath) === 'package.json' ? JSON.parse(source) : parseYaml(source),
+    );
   } catch {
     // Configuration parsing has its own diagnostics. Do not replace them with
     // the stale-alias recovery message when the file is malformed.
@@ -42,17 +73,36 @@ function readConfigFile(filePath: string): unknown {
 
 /**
  * Find a package-manager setting that still aliases Vitest to the deleted
- * `@voidzero-dev/vite-plus-test` wrapper. Walk upward so lifecycle scripts in
- * workspace packages also inspect the root `pnpm-workspace.yaml`.
+ * `@voidzero-dev/vite-plus-test` wrapper. Check the nearest package and its
+ * workspace root, without inspecting unrelated ancestor package settings.
  */
 export function findLegacyVitestAliasConfig(startDir: string): string | undefined {
   let currentDir = path.resolve(startDir);
+  let foundPackage = false;
   while (true) {
-    for (const fileName of ['package.json', 'pnpm-workspace.yaml']) {
-      const filePath = path.join(currentDir, fileName);
-      if (containsLegacyVitestAlias(readConfigFile(filePath))) {
-        return filePath;
+    const packagePath = path.join(currentDir, 'package.json');
+    const pkg = readConfigFile(packagePath);
+    if (!foundPackage && fs.existsSync(packagePath)) {
+      foundPackage = true;
+      if (containsPackageAlias(pkg)) {
+        return packagePath;
       }
+    }
+
+    // Match workspace discovery: the nearest pnpm-workspace.yaml or
+    // package.json with a workspaces field defines the workspace root.
+    // If neither exists, only the nearest package's settings apply.
+    const workspacePath = path.join(currentDir, 'pnpm-workspace.yaml');
+    if (fs.existsSync(workspacePath) || (pkg && Object.hasOwn(pkg, 'workspaces'))) {
+      if (containsPackageAlias(pkg)) {
+        return packagePath;
+      }
+      if (
+        containsAliasInFields(readConfigFile(workspacePath), ['catalog', 'catalogs', 'overrides'])
+      ) {
+        return workspacePath;
+      }
+      return undefined;
     }
 
     const parentDir = path.dirname(currentDir);

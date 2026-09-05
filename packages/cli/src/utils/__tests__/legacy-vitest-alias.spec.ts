@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { findLegacyVitestAliasConfig } from '../legacy-vitest-alias.ts';
 
 describe('findLegacyVitestAliasConfig', () => {
+  const legacyAlias = 'npm:@voidzero-dev/vite-plus-test@0.1.24';
   let projectDir: string;
 
   beforeEach(() => {
@@ -22,12 +23,113 @@ describe('findLegacyVitestAliasConfig', () => {
       path.join(projectDir, 'package.json'),
       JSON.stringify({
         overrides: {
-          vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.24',
+          parent: { vitest: legacyAlias },
         },
       }),
     );
 
     expect(findLegacyVitestAliasConfig(projectDir)).toBe(path.join(projectDir, 'package.json'));
+  });
+
+  it.each([
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+    'resolutions',
+    'catalog',
+  ])('finds aliases in package.json %s', (field) => {
+    fs.writeFileSync(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({ [field]: { vitest: legacyAlias } }),
+    );
+
+    expect(findLegacyVitestAliasConfig(projectDir)).toBe(path.join(projectDir, 'package.json'));
+  });
+
+  it.each([
+    { pnpm: { overrides: { vitest: legacyAlias } } },
+    { catalogs: { testing: { vitest: legacyAlias } } },
+    { workspaces: { packages: ['packages/*'], catalog: { vitest: legacyAlias } } },
+    { workspaces: { packages: ['packages/*'], catalogs: { testing: { vitest: legacyAlias } } } },
+  ])('finds aliases in nested package-manager settings: %j', (config) => {
+    fs.writeFileSync(path.join(projectDir, 'package.json'), JSON.stringify(config));
+
+    expect(findLegacyVitestAliasConfig(projectDir)).toBe(path.join(projectDir, 'package.json'));
+  });
+
+  it.each(['standalone', 'pnpm', 'npm'])('stops at the %s project boundary', (kind) => {
+    const childDir = path.join(projectDir, 'child');
+    const sourceDir = path.join(childDir, 'src');
+    fs.mkdirSync(sourceDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({ devDependencies: { vitest: legacyAlias } }),
+    );
+    fs.writeFileSync(
+      path.join(childDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: { vitest: '4.1.11' },
+        ...(kind === 'npm' ? { workspaces: ['packages/*'] } : {}),
+      }),
+    );
+    if (kind === 'pnpm') {
+      fs.writeFileSync(path.join(childDir, 'pnpm-workspace.yaml'), 'packages: [.]\n');
+    }
+
+    expect(findLegacyVitestAliasConfig(sourceDir)).toBeUndefined();
+  });
+
+  it('finds root npm overrides from a workspace member', () => {
+    const packageDir = path.join(projectDir, 'packages', 'app');
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(path.join(packageDir, 'package.json'), '{}');
+    fs.writeFileSync(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({ workspaces: ['packages/*'], overrides: { vitest: legacyAlias } }),
+    );
+
+    expect(findLegacyVitestAliasConfig(packageDir)).toBe(path.join(projectDir, 'package.json'));
+  });
+
+  it('ignores alias strings in metadata and unrelated settings', () => {
+    fs.writeFileSync(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({
+        description: legacyAlias,
+        config: { example: legacyAlias },
+        pnpm: { metadata: legacyAlias },
+        workspaces: { packages: [], metadata: legacyAlias },
+        devDependencies: { vitest: '4.1.11' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(projectDir, 'pnpm-workspace.yaml'),
+      `packages: [.]\nmetadata: ${legacyAlias}\ncatalog:\n  vitest: 4.1.11\n`,
+    );
+
+    expect(findLegacyVitestAliasConfig(projectDir)).toBeUndefined();
+  });
+
+  it.each([false, true])('handles cyclic YAML with a stale alias present: %s', (hasAlias) => {
+    fs.writeFileSync(path.join(projectDir, 'package.json'), '{}');
+    fs.writeFileSync(
+      path.join(projectDir, 'pnpm-workspace.yaml'),
+      [
+        'packages: [.]',
+        'metadata: &metadata',
+        '  self: *metadata',
+        'overrides: &overrides',
+        '  self: *overrides',
+        '  list: &list [*list]',
+        `  vitest: ${hasAlias ? legacyAlias : '4.1.11'}`,
+        '',
+      ].join('\n'),
+    );
+
+    expect(findLegacyVitestAliasConfig(projectDir)).toBe(
+      hasAlias ? path.join(projectDir, 'pnpm-workspace.yaml') : undefined,
+    );
   });
 
   it('finds a pnpm catalog alias from a workspace package', () => {
