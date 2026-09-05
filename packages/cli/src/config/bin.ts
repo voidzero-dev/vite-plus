@@ -26,7 +26,7 @@ async function main() {
 
   const staleVitestAliasConfig = findLegacyVitestAliasConfig(root);
   if (staleVitestAliasConfig) {
-    const relativeConfigPath = relative(root, staleVitestAliasConfig) || 'package.json';
+    const relativeConfigPath = relative(root, staleVitestAliasConfig);
     errorMsg(
       `Found a stale Vitest alias in ${relativeConfigPath} that points to the removed \`@voidzero-dev/vite-plus-test\` package. Run \`vp migrate\` to update the project before installing dependencies.`,
     );

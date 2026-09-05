@@ -3,28 +3,17 @@ import path from 'node:path';
 
 import { parse as parseYaml } from 'yaml';
 
-const LEGACY_VITEST_PACKAGE = '@voidzero-dev/vite-plus-test';
-const LEGACY_VITEST_ALIAS = `npm:${LEGACY_VITEST_PACKAGE}`;
-
-function isLegacyVitestAlias(value: unknown): boolean {
-  return (
-    typeof value === 'string' &&
-    (value === LEGACY_VITEST_ALIAS || value.startsWith(`${LEGACY_VITEST_ALIAS}@`))
-  );
-}
+const LEGACY_VITEST_ALIAS = 'npm:@voidzero-dev/vite-plus-test';
 
 function containsLegacyVitestAlias(value: unknown, visited = new Set<object>()): boolean {
-  if (isLegacyVitestAlias(value)) {
-    return true;
+  if (typeof value === 'string') {
+    return value === LEGACY_VITEST_ALIAS || value.startsWith(`${LEGACY_VITEST_ALIAS}@`);
   }
-  if (value !== null && typeof value === 'object') {
-    if (visited.has(value)) {
-      return false;
-    }
-    visited.add(value);
-    return Object.values(value).some((entry) => containsLegacyVitestAlias(entry, visited));
+  if (value === null || typeof value !== 'object' || visited.has(value)) {
+    return false;
   }
-  return false;
+  visited.add(value);
+  return Object.values(value).some((entry) => containsLegacyVitestAlias(entry, visited));
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -56,9 +45,6 @@ function containsPackageAlias(config: Record<string, unknown> | undefined): bool
 }
 
 function readConfigFile(filePath: string): Record<string, unknown> | undefined {
-  if (!fs.existsSync(filePath)) {
-    return undefined;
-  }
   try {
     const source = fs.readFileSync(filePath, 'utf8');
     return asRecord(
@@ -82,21 +68,22 @@ export function findLegacyVitestAliasConfig(startDir: string): string | undefine
   while (true) {
     const packagePath = path.join(currentDir, 'package.json');
     const pkg = readConfigFile(packagePath);
-    if (!foundPackage && fs.existsSync(packagePath)) {
+    const isNearestPackage = !foundPackage && fs.existsSync(packagePath);
+    if (isNearestPackage) {
       foundPackage = true;
-      if (containsPackageAlias(pkg)) {
-        return packagePath;
-      }
     }
 
     // Match workspace discovery: the nearest pnpm-workspace.yaml or
     // package.json with a workspaces field defines the workspace root.
     // If neither exists, only the nearest package's settings apply.
     const workspacePath = path.join(currentDir, 'pnpm-workspace.yaml');
-    if (fs.existsSync(workspacePath) || (pkg && Object.hasOwn(pkg, 'workspaces'))) {
-      if (containsPackageAlias(pkg)) {
-        return packagePath;
-      }
+    const isWorkspaceRoot =
+      fs.existsSync(workspacePath) || (pkg !== undefined && Object.hasOwn(pkg, 'workspaces'));
+
+    if ((isNearestPackage || isWorkspaceRoot) && containsPackageAlias(pkg)) {
+      return packagePath;
+    }
+    if (isWorkspaceRoot) {
       if (
         containsAliasInFields(readConfigFile(workspacePath), ['catalog', 'catalogs', 'overrides'])
       ) {

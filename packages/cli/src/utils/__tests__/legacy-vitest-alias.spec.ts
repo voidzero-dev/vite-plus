@@ -10,6 +10,14 @@ describe('findLegacyVitestAliasConfig', () => {
   const legacyAlias = 'npm:@voidzero-dev/vite-plus-test@0.1.24';
   let projectDir: string;
 
+  function writePackageJson(config: Record<string, unknown>, directory?: string): string {
+    const packageDir = directory ?? projectDir;
+    const filePath = path.join(packageDir, 'package.json');
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(config));
+    return filePath;
+  }
+
   beforeEach(() => {
     projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-legacy-vitest-alias-'));
   });
@@ -19,16 +27,9 @@ describe('findLegacyVitestAliasConfig', () => {
   });
 
   it('finds a nested package.json override alias', () => {
-    fs.writeFileSync(
-      path.join(projectDir, 'package.json'),
-      JSON.stringify({
-        overrides: {
-          parent: { vitest: legacyAlias },
-        },
-      }),
-    );
+    const packagePath = writePackageJson({ overrides: { parent: { vitest: legacyAlias } } });
 
-    expect(findLegacyVitestAliasConfig(projectDir)).toBe(path.join(projectDir, 'package.json'));
+    expect(findLegacyVitestAliasConfig(projectDir)).toBe(packagePath);
   });
 
   it.each([
@@ -39,12 +40,9 @@ describe('findLegacyVitestAliasConfig', () => {
     'resolutions',
     'catalog',
   ])('finds aliases in package.json %s', (field) => {
-    fs.writeFileSync(
-      path.join(projectDir, 'package.json'),
-      JSON.stringify({ [field]: { vitest: legacyAlias } }),
-    );
+    const packagePath = writePackageJson({ [field]: { vitest: legacyAlias } });
 
-    expect(findLegacyVitestAliasConfig(projectDir)).toBe(path.join(projectDir, 'package.json'));
+    expect(findLegacyVitestAliasConfig(projectDir)).toBe(packagePath);
   });
 
   it.each([
@@ -53,25 +51,22 @@ describe('findLegacyVitestAliasConfig', () => {
     { workspaces: { packages: ['packages/*'], catalog: { vitest: legacyAlias } } },
     { workspaces: { packages: ['packages/*'], catalogs: { testing: { vitest: legacyAlias } } } },
   ])('finds aliases in nested package-manager settings: %j', (config) => {
-    fs.writeFileSync(path.join(projectDir, 'package.json'), JSON.stringify(config));
+    const packagePath = writePackageJson(config);
 
-    expect(findLegacyVitestAliasConfig(projectDir)).toBe(path.join(projectDir, 'package.json'));
+    expect(findLegacyVitestAliasConfig(projectDir)).toBe(packagePath);
   });
 
   it.each(['standalone', 'pnpm', 'npm'])('stops at the %s project boundary', (kind) => {
     const childDir = path.join(projectDir, 'child');
     const sourceDir = path.join(childDir, 'src');
     fs.mkdirSync(sourceDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(projectDir, 'package.json'),
-      JSON.stringify({ devDependencies: { vitest: legacyAlias } }),
-    );
-    fs.writeFileSync(
-      path.join(childDir, 'package.json'),
-      JSON.stringify({
+    writePackageJson({ devDependencies: { vitest: legacyAlias } });
+    writePackageJson(
+      {
         devDependencies: { vitest: '4.1.11' },
         ...(kind === 'npm' ? { workspaces: ['packages/*'] } : {}),
-      }),
+      },
+      childDir,
     );
     if (kind === 'pnpm') {
       fs.writeFileSync(path.join(childDir, 'pnpm-workspace.yaml'), 'packages: [.]\n');
@@ -82,27 +77,23 @@ describe('findLegacyVitestAliasConfig', () => {
 
   it('finds root npm overrides from a workspace member', () => {
     const packageDir = path.join(projectDir, 'packages', 'app');
-    fs.mkdirSync(packageDir, { recursive: true });
-    fs.writeFileSync(path.join(packageDir, 'package.json'), '{}');
-    fs.writeFileSync(
-      path.join(projectDir, 'package.json'),
-      JSON.stringify({ workspaces: ['packages/*'], overrides: { vitest: legacyAlias } }),
-    );
+    writePackageJson({}, packageDir);
+    const packagePath = writePackageJson({
+      workspaces: ['packages/*'],
+      overrides: { vitest: legacyAlias },
+    });
 
-    expect(findLegacyVitestAliasConfig(packageDir)).toBe(path.join(projectDir, 'package.json'));
+    expect(findLegacyVitestAliasConfig(packageDir)).toBe(packagePath);
   });
 
   it('ignores alias strings in metadata and unrelated settings', () => {
-    fs.writeFileSync(
-      path.join(projectDir, 'package.json'),
-      JSON.stringify({
-        description: legacyAlias,
-        config: { example: legacyAlias },
-        pnpm: { metadata: legacyAlias },
-        workspaces: { packages: [], metadata: legacyAlias },
-        devDependencies: { vitest: '4.1.11' },
-      }),
-    );
+    writePackageJson({
+      description: legacyAlias,
+      config: { example: legacyAlias },
+      pnpm: { metadata: legacyAlias },
+      workspaces: { packages: [], metadata: legacyAlias },
+      devDependencies: { vitest: '4.1.11' },
+    });
     fs.writeFileSync(
       path.join(projectDir, 'pnpm-workspace.yaml'),
       `packages: [.]\nmetadata: ${legacyAlias}\ncatalog:\n  vitest: 4.1.11\n`,
@@ -112,7 +103,7 @@ describe('findLegacyVitestAliasConfig', () => {
   });
 
   it.each([false, true])('handles cyclic YAML with a stale alias present: %s', (hasAlias) => {
-    fs.writeFileSync(path.join(projectDir, 'package.json'), '{}');
+    writePackageJson({});
     fs.writeFileSync(
       path.join(projectDir, 'pnpm-workspace.yaml'),
       [
@@ -134,8 +125,7 @@ describe('findLegacyVitestAliasConfig', () => {
 
   it('finds a pnpm catalog alias from a workspace package', () => {
     const packageDir = path.join(projectDir, 'packages', 'app');
-    fs.mkdirSync(packageDir, { recursive: true });
-    fs.writeFileSync(path.join(packageDir, 'package.json'), '{}');
+    writePackageJson({}, packageDir);
     fs.writeFileSync(
       path.join(projectDir, 'pnpm-workspace.yaml'),
       [
