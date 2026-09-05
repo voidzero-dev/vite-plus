@@ -105,6 +105,18 @@ if (project === 'vinext') {
   }
   await writeFile(workspacePath, patched, 'utf-8');
 
+  // tsdown 0.23 replaces skipNodeModulesBundle with neverBundle.
+  const cloudflareConfigPath = join(repoRoot, 'packages/cloudflare/vite.config.ts');
+  const cloudflareConfig = await readFile(cloudflareConfigPath, 'utf-8');
+  const patchedCloudflareConfig = cloudflareConfig.replace(
+    'skipNodeModulesBundle: true',
+    'neverBundle: true',
+  );
+  if (patchedCloudflareConfig === cloudflareConfig) {
+    throw new Error(`vinext patch: skipNodeModulesBundle not found in ${cloudflareConfigPath}`);
+  }
+  await writeFile(cloudflareConfigPath, patchedCloudflareConfig, 'utf-8');
+
   // The single in-process `integration` project runs serially and its ISR
   // revalidation test sits right at the 30s ceiling under CI load (observed
   // 26.8s on green main runs, 30.0s here) — a borderline timeout, not a real
