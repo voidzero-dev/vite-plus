@@ -89,21 +89,24 @@ jobs:
           show_full_output: 'true'
           prompt: |
             Your goal: after the daily upstream-dependency upgrade, bring the project back
-            to a fully green state. The upgrade script has bumped every dep to the latest
-            version, the `Sync remote and build` step has attempted to merge the rolldown
-            and vite catalogs into the workspace, and the `build-upstream` action has
-            attempted a build — your job is to diagnose and fix every error that surfaced,
-            then prove the fix is complete by running a final validation pass.
+            to a fully green state. The upgrade script has bumped every dep to its latest
+            supported version, the `Sync remote and build` step has attempted to merge the
+            rolldown and vite catalogs into the workspace, and the `build-upstream` action
+            has attempted a build — your job is to diagnose and fix every error that
+            surfaced, then prove the fix is complete by running a final validation pass.
 
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
+            - Vitest is intentionally capped at the latest stable `4.x` release until
+              Vite+ adapts to a newer major. Do not remove or bypass that cap.
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
               working tree, merges their pnpm-workspace catalogs into the root
               `pnpm-workspace.yaml`, and syncs the root `Cargo.toml` oxc crate
               versions to match `rolldown/Cargo.toml`.
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
-            - Package manager: `pnpm`. Do NOT downgrade any dep — we want the latest.
+            - Package manager: `pnpm`. Do not downgrade a dependency selected by the
+              upgrade script. Use the latest version that its compatibility policy allows.
 
             ### Outcomes from earlier steps (both ran with continue-on-error)
             - Sync remote and build: ${{ steps.build.outcome }}
