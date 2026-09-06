@@ -389,10 +389,13 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
+            test-node: 22.18.0
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
+            test-node: 24.11.0
           - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
+            test-node: 26.0.0
     runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -467,9 +470,19 @@ jobs:
         run: vp check
 
       - name: Run unit tests
-        run: RUST_BACKTRACE=1 pnpm test:unit
+        run: vp env exec --node ${{ matrix.test-node }} node packages/cli/dist/bin.js test run
         env:
+          RUST_BACKTRACE: '1'
           RUST_MIN_STACK: 8388608
+
+      - name: Test vendored workspaces with Vitest v5
+        if: runner.os == 'Linux'
+        run: |
+          pnpm --filter @rolldown/test-dev-server build
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:vendored
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
 
       - name: Test global package install (powershell)
         if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}

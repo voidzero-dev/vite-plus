@@ -64,7 +64,7 @@ The audit covers every v5 prerelease, the final [`v5.0.0` release](https://githu
 | [`beta.7`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-beta.7) | the `resolveConfig` return value                                                                                                                       |
 | [`rc.1`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.1)     | project inheritance, nested projects, shared servers, test-name separators, async assertions, failure screenshots, class mocks, and assertion generics |
 | [`rc.2`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.2)     | no new breaking change                                                                                                                                 |
-| [`rc.3`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.3)     | no new breaking change; Istanbul coverage moved to `@vitest/istanbuljs` packages                                                                       |
+| [`rc.3`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.3)     | no new breaking change; Istanbul coverage moved to the `@vitest/istanbul-lib-*` packages                                                               |
 | [`rc.4`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0-rc.4)     | `vitest list` and the programmatic `collect()` API use static parsing by default                                                                       |
 | [`v5.0.0`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0)        | no new breaking change after `rc.4`                                                                                                                    |
 
@@ -86,12 +86,17 @@ Pin the official Vitest packages to the exact version `5.0.0`. Keep the existing
 | `@vitest/ws-client`                                                                           | Do not add a Vite+ shim; report direct use because upstream deprecated it and will not add v5 features                                                                                                                                |
 | `@vitest/browser-webdriverio`                                                                 | Keep as an optional compatibility peer backed by the [community repository](https://github.com/vitest-community/vitest-webdriverio); use a compatible range and test a selected version instead of forcing the runner's exact version |
 | `@vitest/coverage-v8`, `@vitest/coverage-istanbul`, `@vitest/ui`                              | Project-installed optional packages; require the exact runner version                                                                                                                                                                 |
+| `@vitest/web-worker`                                                                          | Project-installed optional package; keep its exact Vitest peer aligned without adding a Vite+ shim                                                                                                                                    |
 
 Replace the resolver's broad `@vitest/*` rule with an explicit supported-package set. In particular, do not redirect a user's standalone `@vitest/expect` to a Vite+ copy. Keep bundle-first resolution for the root `vitest` package, its public subpaths, the official browser packages, and other packages that share runner state. Keep the project fallback for optional peers.
 
+Provide Vitest's required `vite` peer through a published dependency alias to the matching `@voidzero-dev/vite-plus-core` version. Test a Yarn install with no project `vite` or `vitest` dependency; Yarn does not install a missing peer for the bundled runner.
+
 The repository vendors Vite and Rolldown workspaces. Their catalogs still request Vitest v4, and `sync-remote` rejects the v4/v5 major conflict. Prefer upstream v5 updates. If release timing requires a local bridge, add `vitest` to the sync tool's reviewed major-conflict set, align direct `@vitest/*` dependencies in the vendored workspaces, and run their test suites with the resolved v5 graph. Do not leave a hidden mix of v4 and v5 packages in the development lockfile.
 
-Vitest `5.0.0` uses `@vitest/istanbuljs` packages for Istanbul internals. Keep those packages on the project-installed `@vitest/coverage-istanbul` dependency edge. The resolver allowlist must not redirect them to a missing Vite+ copy.
+Run the bridge with `pnpm test:vendored` after building the upstream packages. It preserves the upstream suites' v4 mock-history setting and checks nine existing Vite+ branding differences without editing the vendored test files. Keep upstream Vite's `dedupeInjectedDeps: false` setting so pnpm retains `file:` dependency placement for the SSR externalization and license tests.
+
+Vitest `5.0.0` uses packages from the `vitest-dev/istanbuljs` repository for Istanbul internals: `@vitest/istanbul-lib-coverage`, `@vitest/istanbul-lib-instrument`, `@vitest/istanbul-lib-report`, and `@vitest/istanbul-lib-source-maps`. Keep those packages on the project-installed `@vitest/coverage-istanbul` dependency edge. The resolver allowlist must not redirect them to a missing Vite+ copy.
 
 ### 2. Node.js and Vite prerequisites
 
@@ -107,6 +112,8 @@ This project selects Node 20.19.0. Run `vp env pin 22 --force`, or update the pr
 ```
 
 The migration preflight must inspect `.node-version`, `.nvmrc`, `devEngines.runtime`, `engines.node`, CI matrices, and common container images. It may update a Vite+ runtime pin after confirmation. It must not silently widen a library's public `engines.node` contract.
+
+Read official Node image tags from Dockerfile `FROM` instructions, YAML `image` or `container` fields, and Dev Container image settings. Read the Node feature's `version` option separately; its feature tag does not identify the runtime. Ignore `node:2` properties in application code and comments that mention images.
 
 ### 3. Public `vite-plus/test*` exports
 
@@ -125,6 +132,8 @@ Keep these aliases through the Vite+ 1.x line because each has an exact public t
 Do not create partial shims for `vite-plus/test/runners`, `vite-plus/test/suite`, `vite-plus/test/plugins/runner`, `vite-plus/test/plugins/expect`, or `vite-plus/test/internal/module-runner`. Their old symbols do not have a complete one-to-one v5 implementation with the required shared state. The migration reports them and directs users to `expect`, `TestRunner`, and its static methods from `vite-plus/test` where possible.
 
 Keep the Playwright and Preview provider aliases. Keep the WebDriverIO aliases only when the community peer is installed and compatible. Update `packages/cli/BUNDLING.md` to state which paths mirror upstream and which paths are Vite+ compatibility contracts.
+
+Route the existing browser-context runtime aliases to `vitest/browser`. This includes provider `/context` paths, `vite-plus/test/browser/context`, `vite-plus/test/context`, and `vite-plus/test/plugins/browser-context`. Keep their upstream type declarations and augmentations. In v5, the `@vitest/browser/context` JavaScript export is an error stub; the browser plugin resolves only `vitest/browser` as its virtual context module.
 
 At the time of the final Vitest release, the latest community WebDriverIO provider is `5.0.0-rc.1`. The final Vitest manifest accepts `@vitest/browser-webdriverio` versions `^5.0.0-beta.5 || >=5.0.0`. Test the selected community version against Vitest `5.0.0`; do not hold the official package graph at an earlier release candidate.
 
@@ -155,6 +164,10 @@ This keeps Vite+ aligned with the v5 CLI while giving the user a direct repair.
 ## Migration design
 
 Add a versioned Vitest v5 migration pass. Run its preflight before package changes. Print the report again after edits with unresolved items grouped by file.
+
+Determine the source runner version before updating dependencies, including catalog and installed Vite+ dependencies. Record completion of the v4 compatibility pass in the migration state, including configless projects. A repeated migration must retain explicit v5 settings and must not apply v4 defaults to projects that already use v5. Unresolved findings remain visible on subsequent scans.
+
+Require installed or lockfile evidence when a dependency range spans both v4 and v5. Use portable workspace paths in the committed migration state. Retain deferred source-review findings without applying v4 edits again to a completed project.
 
 ### Behavior-preserving config edits
 
@@ -214,7 +227,11 @@ Apply AST or structured command rewrites for these forms:
 
 Run specific mappings before the current generic `vitest/<subpath>` rewrite. The generic rule must only emit a path present in the final `vite-plus` export map.
 
-Do not infer exact text-match intent from a v4 `toHaveTextContent` call. A string used partial matching in v4, even when the current fixture contains the same complete string. A project can keep `toHaveTextContent` only when the user chooses v5 assertion behavior.
+Do not infer exact text-match intent from a v4 browser `toHaveTextContent` call. A string used partial matching in v4, even when the current fixture contains the same complete string. A browser project can keep `toHaveTextContent` only when the user chooses v5 assertion behavior.
+
+Preserve Node `@testing-library/jest-dom` calls. Determine file ownership from static project roots and include/exclude patterns before renaming a plain `expect()` matcher. Report shared files, dynamic project settings, and browser CLI overrides for review. An `expect.element()` call identifies a browser assertion even when the config is dynamic.
+
+Follow `projects` and `extends` references within test configs, excluding plugin options with those names. Report the root jest-dom type entry for review in Vitest TypeScript configs. Users must load `@testing-library/jest-dom/vitest` through `compilerOptions.types` or an included TypeScript setup file; a JavaScript runtime setup alone does not prove type coverage.
 
 Use an explicit symbol allowlist for `@vitest/runner` migrations:
 
@@ -273,6 +290,8 @@ Migration and documentation must use the exact v5 defaults:
 JSON and JUnit can retain stdout with `{ stdout: true }`. An explicit reporter `outputFile` remains valid except for the HTML reporter's renamed directory option.
 
 The benchmark migration removes the top-level `bench` API; `bench.skip`, `bench.only`, and `bench.todo`; `benchmark.reporters`; `benchmark.outputFile`; `benchmark.compare`; `benchmark.outputJson`; `--compare`; and `--outputJson`. The replacement is the `bench` test-context fixture, regular test modifiers, and the JSON reporter. `Vitest.mode` is always `test`.
+
+Retain supported benchmark options, including `benchmark.enabled` and `benchmark.include`. Block the removed options listed above; report dynamic benchmark settings for review.
 
 The entry-point migration uses these exact mappings:
 
@@ -366,17 +385,36 @@ The earlier investigation spike used `5.0.0-rc.2`. It removed the unavailable ru
 The implementation must pass these gates:
 
 1. `pnpm tsgo`, `vp check`, `pnpm test:unit`, Rust checks for changed global-CLI code, and the CLI snapshot suite.
-2. Package export tests that import every generated `vite-plus/test*` path under Node ESM and TypeScript.
+2. Package export tests that resolve every generated `vite-plus/test*` path under its published conditions and compile all typed paths with TypeScript. Import Node-facing APIs under Node ESM, test-facing APIs inside Vitest, and browser-only APIs inside a browser test. Type-only exports and upstream context-error stubs must retain their upstream behavior; importing a browser-only API in plain Node is not a success condition.
 3. Identity tests that prove `vp test`, `vite-plus/test`, browser providers, custom matchers, and coverage use one runner and assertion state.
 4. Node 22.18, 24.11, and 26 jobs, plus actionable rejection tests for Node 20 and 25 project pins.
-5. npm, pnpm, Yarn PnP, and Bun install and test fixtures.
+5. npm, pnpm, Yarn, and Bun install and test fixtures. Vite+ does not support Yarn PnP runtime resolution. Start the Yarn fixture with PnP, run the documented `vp migrate` conversion to `node_modules`, then execute its tests. Adding PnP runtime support is outside this upgrade.
 6. Configless, single-project, inherited inline-project, `extends: false`, referenced-config, nested-project, and shared-server fixtures. Add a fixture that combines `extends: false` with `sharedViteServer: false`. Assert independent server and plugin-hook behavior without extra inheritance.
 7. Playwright and Preview browser suites. Run the WebDriverIO suite against a verified community release without requiring an exact Vitest patch version.
-8. V8 and Istanbul coverage with matching providers, mismatched-provider rejection, glob threshold checks, and v4/v5 file-list comparison. Verify the final `@vitest/istanbuljs` dependency graph.
+8. V8 and Istanbul coverage with matching providers, mismatched-provider rejection, glob threshold checks, and v4/v5 file-list comparison. Verify the final `@vitest/istanbul-lib-*` dependency graph.
 9. JSON, JUnit, HTML, blob merge, attachments, failure screenshots, and reference-screenshot path fixtures.
 10. UI token, browser session, custom command locator, jsdom, happy-dom, Temporal, custom environment, worker ID, `resolveConfig`, `vitest list`, `Vitest.collect()`, custom matcher, and benchmark migration fixtures.
 11. `ecosystem-ci` cases for `vite-plus-vitest-global-type-minimal-repro`, `vitest-playwright-repro`, and `vite-plus-vitest-type-aug`, followed by the broader ecosystem set.
 12. Vendored Vite and Rolldown tests under the final synchronized dependency graph.
+
+### Implementation validation (2026-09-06)
+
+Local checks on macOS covered the following:
+
+- Node `22.18.0`, `24.11.0`, and `26.0.0`: 70 unit-test files, with 1,240 tests passed and one skipped on each runtime. Type checking, `vp check`, and the docs build passed.
+- Rust: 314 migration tests, the global-CLI Node-range test, and 24 snapshot-redaction tests passed. `cargo fmt --all --check` and Clippy with warnings denied passed for the changed migration and global-CLI crates.
+- `pnpm test:vendored`: 1,904 tests passed and 19 skipped across Vite, Rolldown, Rolldown watch, and dev-server fixture suites. This command does not cover the separate upstream browser playground suites.
+- The full CLI snapshot rerun passed after the closing migration and dependency fixes: 774 cases passed and one was ignored. Three upstream-failure regression cases added during that run passed separate comparison runs. They verify the failures below, not successful browser behavior. The suite includes five package-manager installation cases and covers mixed Node/browser assertions, plugin config references, container runtime pins, jest-dom type guidance, and Yarn without project `vite` or `vitest` dependencies.
+- The three required ecosystem projects passed their prescribed test or type-check commands against the packed checkout. Additional runs covered `vite-plus-jest-dom-repro`, `viteplus-ws-repro`, `vp-config`, and `vite-vue-vercel`. The complete `oxlint-plugin-complexity` workflow passed with lint warnings, including 494 tests. The `vite-plus-monorepo-overrides` check and verification workflow also passed.
+- `tanstack-start-helloworld` passed eight browser tests and its build. `bun-vite-template` passed its validation workflow after the fixture applied the reported jest-dom type-entry repair. On Node `22.18.0`, `rollipop` passed its builds, formatting, and 24 tests; its report-only lint and type-check steps still reported errors.
+- On Node `24.11.0`, `vibe-dashboard` passed formatting, five browser tests, and its build. `nuxt-devtools` passed its build, type check, and 67 tests. Its migration reported an automatic-formatting failure; the prescribed workflow does not include formatting.
+- `reactive-resume` passed formatting, type-aware lint, its build, and 196 tests on Node `24.11.0`. On the same runtime, `vitepress` passed formatting, its build, 69 unit tests, 35 development-mode browser tests, 34 production-mode browser tests, and six initialization tests; one production-mode test was skipped.
+- `frm-stack` passed lint, formatting, type checking, and 24 Docker-backed database tests on Node `24.11.0`. `tiptap` passed its package and demo builds, lint, and 1,920 tests on that runtime. On Node `22.18.0`, `varlet` passed its bootstrap and 921 Istanbul coverage tests; its report-only lint step still reported the documented ambient `declare` error.
+- `vinext` passed its build and checks on Node `24.11.0`. Its unit shard passed 4,615 tests with two skipped on Node `24.20.0`, with loopback requests excluded from the local proxy. The earlier `24.11.0` run exposed Node glob and React stream differences; tests that use `localhost` also failed until the proxy exclusion was set.
+- `dify` passed its build and 41 tests in two files selected by the prescribed test filters. Its build skips type validation; the separate type check failed on the Node/browser matcher conflict below. `npmx.dev` passed formatting, type checking, and 1,652 Node tests. Its browser run passed 819 tests, failed 254, and skipped five; malformed translation-resource URLs reproduced the browser `define` issue below. Its lint step remains report-only.
+- The WebDriverIO fixture passed with community provider `5.0.0-rc.1`. Preview passed with fake timers; locator clicks with real timers still reproduce the upstream failure below.
+
+The stable release gate remains open. Of the 25 active ecosystem projects, 20 passed their prescribed workflows. Preflight blocked `decoders` on its Node `20.x` CI pin, `vue-mini` on its Node `25.9.0` runtime pin, and `yaak` on its Node `20` pin before changing project files. Their maintainers must choose supported test runtimes. `dify` and `npmx.dev` still fail required checks. External Linux and Windows jobs and a published Vite+ prerelease still need validation. Resolve the upstream failures below before the stable rollout.
 
 ## Alternatives
 
@@ -400,3 +438,6 @@ The provider kept its package name and moved to community maintenance. An option
 
 1. Does the final community `@vitest/browser-webdriverio` release pass the Vite+ browser suite with final Vitest v5? If not, document the provider exception and keep affected users on the v4-based Vite+ release.
 2. Will the vendored Vite and Rolldown revisions move to Vitest v5 before the Vite+ release branch? If not, the temporary sync override and all affected upstream suites must land in the same change.
+3. Does Preview support locator clicks with real timers? The final `5.0.0` packages currently fail because the Preview user-event adapter calls `vi.advanceTimersByTimeAsync()` without checking whether fake timers are enabled. A clean npm project with only upstream Vitest and Preview reproduces the failure. The `test_v5_preview` fixture records the failure separately from the passing fake-timer integration case. Do not treat that expected failure as a passed release gate.
+4. Do browser globals receive decoded `define` values? Vitest `5.0.0` assigns JSON-encoded Vite values to browser globals. A string becomes `'"/messages"'` instead of `'/messages'`, and `'false'` remains a string. A clean upstream Preview project reproduces this without Vite+. `npmx.dev` requests quoted translation-resource URLs and fails browser assertions. The `upstream_browser_defines` fixture records the failure; an upstream fix or an approved compatibility patch is required.
+5. Can Node jest-dom and browser matcher declarations coexist? With Vitest and Preview `5.0.0`, importing `vitest/browser` before the jest-dom augmentation rejects Node regex text assertions and CSS custom-property assertions. Reversing the imports passes the same type checks. The `test_v5_upstream_types` fixture verifies both orders with `@testing-library/jest-dom` versions `6.9.1` and `7.0.1`, without Vite+ installed. `dify` still fails its type check even with an explicit jest-dom type entry. Resolve the declaration conflict before enabling the upgrade for affected projects.

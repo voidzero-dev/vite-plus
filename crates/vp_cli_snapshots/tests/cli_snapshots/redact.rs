@@ -14,6 +14,11 @@ static UUID_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 static DURATION_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)?(ns|µs|ms|s)\b").unwrap());
+// Vitest v5 prints the timing breakdown as percentages. Its order and omitted
+// zero-cost phases vary between runs, so redact the complete timing detail.
+static VITEST_TIMING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)(Duration\s+<duration>) \((?:[a-z]+ \d+%(?:, )?)+\)").unwrap()
+});
 // Only v-prefixed versions are masked: tool and runtime banners all print
 // that form (`vite v7.3.2`, `vp v0.2.2`, `Node.js v24.18.0`) and churn on
 // every dep bump, while bare semver literals (`app-1.0.0.tgz`,
@@ -181,6 +186,10 @@ static ASSET_HASH_RE: LazyLock<regex::Regex> =
 // verbatim.
 static LOCAL_REGISTRY_URL_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"http://127\.0\.0\.1:\d+").unwrap());
+static VITEST_API_PORT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"((?:API|Browser runner) started at http://(?:localhost|127\.0\.0\.1):)\d+")
+        .unwrap()
+});
 // npm names its debug log after the wall-clock start of the failing run.
 static NPM_LOG_NAME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}_\d{3}Z(-debug-\d+\.log)").unwrap()
@@ -444,6 +453,7 @@ pub fn redact_output(
     // Redact durations like "0ns", "123ms" or "1.23s" to "<duration>".
     // Runs before version redaction so "1.23s" never half-matches as a version.
     output = DURATION_RE.replace_all(&output, "<duration>").into_owned();
+    output = VITEST_TIMING_RE.replace_all(&output, "$1 (<timing>)").into_owned();
 
     // Redact semver-shaped versions (bundled tool versions, Node versions).
     output = VERSION_RE.replace_all(&output, "<version>").into_owned();
@@ -575,6 +585,7 @@ pub fn redact_output(
     // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
     // log name, live spinner frames, and pnpm's nondeterministic progress lines
     output = LOCAL_REGISTRY_URL_RE.replace_all(&output, "http://127.0.0.1:<port>").into_owned();
+    output = VITEST_API_PORT_RE.replace_all(&output, "${1}<port>").into_owned();
     output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();

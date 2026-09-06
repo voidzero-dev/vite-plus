@@ -1,0 +1,5 @@
+[[case]]
+name = "community_provider_and_browser_protocol"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+steps = [{ argv = ["node", "verify.mjs"], timeout = 180000 }]

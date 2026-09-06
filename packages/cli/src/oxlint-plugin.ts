@@ -4,11 +4,13 @@ import path from 'node:path';
 import { definePlugin, defineRule } from '@oxlint/plugins';
 import type { Context, ESTree } from '@oxlint/plugins';
 
+import cliPackage from '../package.json' with { type: 'json' };
 import {
   PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
 import viteConfigEntryBasenames from './vite-config-entry-basenames.json' with { type: 'json' };
+import vitestV5EntryPoints from './vitest-v5-entry-points.json' with { type: 'json' };
 
 // `declare module 'vitest…'` and `declare module '@vitest/browser…'` are
 // intentionally preserved by `vp migrate` (see migration's import_rewriter and
@@ -104,7 +106,11 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   }
 
   if (specifier.startsWith('vitest/')) {
-    return `vite-plus/test/${specifier.slice('vitest/'.length)}`;
+    if (specifier in vitestV5EntryPoints) {
+      return vitestV5EntryPoints[specifier as keyof typeof vitestV5EntryPoints];
+    }
+    const subpath = `./test/${specifier.slice('vitest/'.length)}`;
+    return subpath in cliPackage.exports ? `vite-plus${subpath.slice(1)}` : null;
   }
 
   if (specifier === '@vitest/browser') {

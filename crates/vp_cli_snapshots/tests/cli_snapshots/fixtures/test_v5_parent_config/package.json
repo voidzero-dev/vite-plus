@@ -1,0 +1,5 @@
+{
+  "name": "test-v5-parent-config",
+  "private": true,
+  "type": "module"
+}

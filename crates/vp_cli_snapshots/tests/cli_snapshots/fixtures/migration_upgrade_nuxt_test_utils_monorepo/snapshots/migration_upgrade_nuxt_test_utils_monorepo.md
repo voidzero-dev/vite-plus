@@ -7,6 +7,13 @@ preserve upstream Vitest package-wide and localize it to the affected workspace
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 2 review items
+
+packages/nuxt/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+
+packages/unit/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
@@ -15,6 +22,14 @@ VITE+ - The Unified Toolchain for the Web
 • 1 file had imports rewritten
 • Kept upstream `vitest` imports in 2 files for @nuxt/test-utils compatibility
 • Package manager settings configured
+! Warnings:
+  - Vitest v5: 2 review items
+
+packages/nuxt/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+
+packages/unit/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
 ```
 
 ## `vpt print-file packages/nuxt/package.json`
@@ -112,5 +127,12 @@ workspace result is idempotent
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 2 review items
+
+packages/nuxt/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+
+packages/unit/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
 This project is already using Vite+! Happy coding!
 ```

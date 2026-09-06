@@ -1,0 +1,60 @@
+[[case]]
+name = "npm_install_and_runtime"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.9.4"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts", "--", "--no-audit", "--no-fund"], snapshot = false, timeout = 180000 },
+  ["vp", "test", "run"],
+]
+
+[[case]]
+name = "pnpm_install_and_runtime"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.24.0"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false, timeout = 180000 },
+  ["vp", "test", "run"],
+]
+
+[[case]]
+name = "bun_install_and_runtime"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.3.11"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false, timeout = 180000 },
+  ["vp", "test", "run"],
+]
+
+[[case]]
+name = "yarn_without_project_vite_or_vitest"
+vp = "global"
+local-registry = true
+env = { YARN_ENABLE_SCRIPTS = "0" }
+comment = "Install only vite-plus: its dependency graph must provide Vitest's Vite peer without a project Vite or Vitest dependency."
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"test-v5-yarn-peer\",\"private\":true,\"type\":\"module\",\"packageManager\":\"yarn@4.12.0\",\"devDependencies\":{\"vite-plus\":\"latest\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false, timeout = 180000 },
+  ["node", "--input-type=module", "-e", "import assert from 'node:assert/strict'; import { createRequire } from 'node:module'; import { defineConfig } from 'vite-plus/test/config'; const require = createRequire(import.meta.resolve('vite-plus/package.json')); assert.equal(require('vite/package.json').name, '@voidzero-dev/vite-plus-core'); assert.equal(require('vite/package.json').version, require('@voidzero-dev/vite-plus-core/package.json').version); assert.equal(typeof defineConfig, 'function'); console.log('Vitest Vite peer uses the bundled core');"],
+  ["vp", "test", "run"],
+]
+
+[[case]]
+name = "yarn_pnp_conversion_and_runtime"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+env = { YARN_ENABLE_SCRIPTS = "0" }
+comment = "Vite+ does not support PnP; validate the documented conversion to node-modules before executing the v5 runner."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.12.0"], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: pnp\n"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false, timeout = 180000 },
+  ["vpt", "stat-file", ".pnp.cjs", "--assert", "file"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], timeout = 180000 },
+  ["vpt", "print-file", ".yarnrc.yml"],
+  ["vp", "test", "run"],
+]

@@ -1,0 +1,7 @@
+{
+  "vitest/coverage": "vite-plus/test/node",
+  "vitest/reporters": "vite-plus/test/node",
+  "vitest/environments": "vite-plus/test/runtime",
+  "vitest/snapshot": "vite-plus/test/runtime",
+  "vitest/mocker": "vite-plus/test/mocker"
+}

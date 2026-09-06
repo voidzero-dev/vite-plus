@@ -1,5 +1,10 @@
 # migration_upgrade_browser_webdriverio_pnpm
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
 source-only WebdriverIO provider should be restored
@@ -48,7 +53,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
   vitest: <version>
-  '@vitest/browser-webdriverio': <version>
+  '@vitest/browser-webdriverio': ^5.0.0-beta.5 || >=5.0.0
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'

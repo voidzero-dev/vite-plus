@@ -18,7 +18,7 @@ VITE+ - The Unified Toolchain for the Web
 check .node-version is created with v prefix stripped
 
 ```
-25.8.2
+24.11.0
 ```
 
 ## `vpt stat-file .nvmrc --assert-not file`

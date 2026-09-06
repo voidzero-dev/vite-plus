@@ -348,7 +348,7 @@ impl JsExecutor {
     }
 
     /// Prepare a JS command with the entry point resolved.
-    fn prepare_js_entry(
+    async fn prepare_js_entry(
         &self,
         project_path: &AbsolutePath,
         node_binary: &AbsolutePath,
@@ -367,6 +367,10 @@ impl JsExecutor {
                 scripts_dir.join("bin.js")
             }
         };
+
+        if args.first().is_some_and(|arg| arg == "test") {
+            validate_test_runtime(&entry_point, node_binary).await?;
+        }
 
         tracing::debug!("Delegating to CLI via JS entry point: {:?} {:?}", entry_point, args);
 
@@ -390,7 +394,7 @@ impl JsExecutor {
         bin_prefix: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
-        let cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
+        let cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args).await?;
         Ok(vp_command::execute_with_terminal_guard(cmd).await?)
     }
 
@@ -402,7 +406,7 @@ impl JsExecutor {
         bin_prefix: &AbsolutePath,
         args: &[String],
     ) -> Result<Output, Error> {
-        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
+        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args).await?;
         let output = cmd.output().await?;
         Ok(output)
     }
@@ -437,6 +441,52 @@ impl JsExecutor {
             None
         }
     }
+}
+
+/// Check the engine of the exact CLI selected for delegation before loading JS.
+/// Query the binary itself so system-first mode is checked as well as managed Node.
+async fn validate_test_runtime(
+    entry_point: &AbsolutePath,
+    node_binary: &AbsolutePath,
+) -> Result<(), Error> {
+    let Some(package_dir) = entry_point.parent().and_then(AbsolutePath::parent) else {
+        return Ok(());
+    };
+    let package_file = package_dir.join("package.json");
+    let Ok(source) = tokio::fs::read_to_string(package_file.as_path()).await else {
+        return Ok(());
+    };
+    let package: serde_json::Value = serde_json::from_str(&source)?;
+    let Some(engine) = package
+        .get("engines")
+        .and_then(|engines| engines.get("node"))
+        .and_then(serde_json::Value::as_str)
+    else {
+        return Ok(());
+    };
+    let result = Command::new(node_binary.as_path()).arg("--version").output().await?;
+    if !result.status.success() {
+        return Err(Error::UserMessage(
+            "Could not determine the selected Node.js version for vp test.".into(),
+        ));
+    }
+    check_test_node_engine(engine, String::from_utf8_lossy(&result.stdout).trim())
+}
+
+fn check_test_node_engine(engine: &str, version: &str) -> Result<(), Error> {
+    let version = version.strip_prefix('v').unwrap_or(version);
+    let range = node_semver::Range::parse(engine).map_err(|_| {
+        Error::ConfigError(vt_str::format!("Invalid vite-plus Node.js engine: {engine}"))
+    })?;
+    let selected = node_semver::Version::parse(version).map_err(|_| {
+        Error::ConfigError(vt_str::format!("Invalid selected Node.js version: {version}"))
+    })?;
+    if !range.satisfies(&selected) {
+        return Err(Error::UserMessage(vt_str::format!(
+            "vp test requires Node {engine}.\nThis project selects Node {version}. Run `vp env pin 22 --force`, or update the project's runtime range."
+        )));
+    }
+    Ok(())
 }
 
 /// Resolve the version of the project-local `vite-plus`, if one is installed.
@@ -518,6 +568,21 @@ async fn find_system_node_runtime() -> Option<JsRuntime> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_vitest_v5_node_engine() {
+        let engine = "^22.18.0 || ^24.11.0 || >=26.0.0";
+        for version in ["22.18.0", "24.11.0", "26.0.0", "v26.1.0"] {
+            assert!(check_test_node_engine(engine, version).is_ok(), "{version}");
+        }
+        for version in ["20.19.0", "22.12.0", "24.0.0", "25.0.0"] {
+            let error = check_test_node_engine(engine, version).unwrap_err().to_string();
+            assert!(error.contains("vp env pin 22 --force"), "{error}");
+            assert!(error.contains(version), "{error}");
+        }
+        // An installed v4 CLI still has its own supported Node range.
+        assert!(check_test_node_engine("^20.19.0 || >=22.18.0", "20.19.0").is_ok());
+    }
 
     /// Shared VP_HOME for tests that download a real Node.js runtime: pinning
     /// isolates them from concurrent scopes, and one shared root keeps the

@@ -7,11 +7,27 @@ migration should work with bun object-form workspaces
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 2 review items
+
+packages/app/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+
+packages/utils/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+
 ✔ Merged .oxlintrc.json into vite.config.ts
 ◇ Migrated . to Vite+ <version>
 • Node <version>  bun <version>
 • 2 config updates applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
+! Warnings:
+  - Vitest v5: 2 review items
+
+packages/app/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+
+packages/utils/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
 ```
 
 ## `vpt print-file vite.config.ts`
@@ -43,6 +59,7 @@ export default defineConfig({
       }
     ]
   },
+  test: { clearMocks: false },
   plugins: lazyPlugins(() => [react()]),
 });
 ```

@@ -1,0 +1,11 @@
+[[case]]
+name = "environments_temporal_html_and_worker_startup"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund"], snapshot = false, timeout = 120000 },
+  { argv = ["vp", "test", "run", "--reporter=default", "--reporter=html", "--maxWorkers=1"], timeout = 120000 },
+  { argv = ["vpt", "stat-file", ".vitest/index.html", "--assert", "file"] },
+  { argv = ["node", "verify-ui.mjs"], timeout = 120000 },
+  { argv = ["node", "verify-worker.mjs"], timeout = 120000, comment = "A failed worker must produce a controlled diagnostic and a nonzero exit status." },
+]

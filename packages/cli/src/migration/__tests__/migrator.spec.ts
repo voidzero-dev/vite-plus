@@ -12,6 +12,7 @@ import {
   SETUP_VP_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITEST_VERSION,
+  VITEST_WEBDRIVERIO_RANGE,
 } from '../../utils/constants.js';
 import { createMigrationReport } from '../report.js';
 
@@ -739,7 +740,10 @@ describe('rewritePackageJson', () => {
     };
     rewritePackageJson(pkg, PackageManager.pnpm);
     // Standalone (supportCatalog=false) → concrete pinned spec.
-    expect(pkg.devDependencies).toHaveProperty('@vitest/browser-webdriverio', VITEST_VERSION);
+    expect(pkg.devDependencies).toHaveProperty(
+      '@vitest/browser-webdriverio',
+      VITEST_WEBDRIVERIO_RANGE,
+    );
     expect(pkg.devDependencies).toHaveProperty('webdriverio', '*');
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
   });
@@ -6032,7 +6036,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       allowBuilds: Record<string, boolean>;
       catalog: Record<string, string>;
     };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -6118,7 +6122,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
         catalog: Record<string, string>;
       };
-      expect(workspace.catalog[`@vitest/browser-${provider}`]).toBe(VITEST_VERSION);
+      expect(workspace.catalog[`@vitest/browser-${provider}`]).toBe(
+        provider === 'webdriverio' ? VITEST_WEBDRIVERIO_RANGE : VITEST_VERSION,
+      );
       expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
         `from 'vite-plus/test/${subpath}'`,
       );
@@ -6250,7 +6256,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       allowBuilds: Record<string, boolean>;
       catalog: Record<string, string>;
     };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -6287,7 +6293,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       allowBuilds: Record<string, boolean>;
       catalog: Record<string, string>;
     };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -6334,7 +6340,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalog: Record<string, string>;
       allowBuilds: Record<string, boolean>;
     };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
     expect(yaml.catalog.vitest).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
@@ -6363,7 +6369,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(overrides['some-other-pkg']).toBe('1.0.0');
     // Provider normalized to the bundled vitest version, peer ensured.
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
     expect(devDeps.webdriverio).toBe('*');
   });
 
@@ -6417,7 +6423,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // Unrelated comparator-range override preserved.
     expect(overrides['some-other-pkg@>=1']).toBe('1.0.0');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
     expect(devDeps.webdriverio).toBe('*');
   });
 
@@ -6445,7 +6451,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
       catalog?: Record<string, string>;
     };
-    expect(yarnrc.catalog?.['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
+    expect(yarnrc.catalog?.['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
   });
 
   it('drops only global/glob/vite-plus-parent yarn SELECTOR-shaped @vitest/browser-webdriverio resolutions', () => {
