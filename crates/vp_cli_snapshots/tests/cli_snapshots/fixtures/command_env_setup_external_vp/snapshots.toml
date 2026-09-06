@@ -6,6 +6,7 @@ steps = [
   { argv = ["vpt", "mkdir", "-p", "external", "home"], comment = "Prepare isolated external install and VP_HOME", snapshot = false },
   { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], comment = "Simulate a Homebrew-style vp outside VP_HOME", snapshot = false },
   { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["vpt", "touch-file", "external/.vp-setup-complete"], comment = "The external package manager has already set up this binary", snapshot = false },
   { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], comment = "Project Node.js version", snapshot = false },
   { argv = ["vpt", "write-file", "home/js_runtime/node/22.18.0/bin/node", "#!/bin/sh\necho vp-managed-node-22.18.0\n"], comment = "Preinstall managed Node runtime", snapshot = false },
   { argv = ["vpt", "chmod", "+x", "home/js_runtime/node/22.18.0/bin/node"], snapshot = false },

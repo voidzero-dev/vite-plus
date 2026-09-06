@@ -1,0 +1,57 @@
+[[case]]
+name = "command_self_setup"
+vp = "global"
+steps = [
+  { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete"], snapshot = false },
+  { argv = ["vp", "--help"], envs = [["VP_SELF_SETUP_SUPPORT_CHECK", "1"]], comment = "The capability probe does not perform setup" },
+  ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "missing"],
+  { argv = ["vp", "not-a-command"], comment = "An unmarked deployed binary consumes the invocation as setup, without parsing the command", snapshot = false },
+  ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "file"],
+  { argv = ["vp", "not-a-command"], comment = "Once marked, the binary dispatches commands normally", continue-on-failure = true },
+]
+
+[[case]]
+name = "command_self_setup_retry"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete", "$VP_HOME/env"], snapshot = false },
+  { argv = ["vpt", "mkdir", "$VP_HOME/env"], snapshot = false },
+  { argv = ["vp", "env", "setup", "--refresh"], comment = "A failed setup does not mark the deployed binary as complete", continue-on-failure = true },
+  ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-r", "$VP_HOME/env"], snapshot = false },
+  { argv = ["vp", "env", "setup", "--refresh"], comment = "The same upgrade handoff retries setup after the failure is repaired", snapshot = false },
+  ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "file"],
+]
+
+[[case]]
+name = "command_self_setup_bootstrap_options"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external", "home", "user"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["vpt", "write-file", "user/.bashrc", "# Existing shell configuration\n"], snapshot = false },
+  { argv = ["./external/vp"], tty = false, envs = [["HOME", "${workspace}/user"], ["VP_HOME", "${workspace}/home"], ["VP_SKIP_DEPS_INSTALL", "1"], ["VP_VERSION", "bootstrap-test"], ["VP_NODE_MANAGER", "no"], ["VP_SELF_SETUP_NO_MODIFY_PATH", "1"]], comment = "A piped standalone binary installs with the bootstrap's choices", snapshot = false },
+  ["vpt", "stat-file", "home/current/bin/.vp-setup-complete", "--assert", "file"],
+  ["vpt", "print-file", "home/config.json"],
+  ["vpt", "print-file", "user/.bashrc"],
+  ["vpt", "stat-file", "user/.zshenv", "--assert", "missing"],
+]
+
+[[case]]
+name = "command_self_setup_shell_warning"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external", "home", "user/.bashrc"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["bash", "-c", "./external/vp > setup.log 2>&1"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", "${workspace}/home"], ["VP_SKIP_DEPS_INSTALL", "1"], ["VP_VERSION", "bootstrap-test"], ["VP_NODE_MANAGER", "no"]], comment = "An unreadable shell profile warns without preventing installation", snapshot = false },
+  ["vpt", "grep-file", "setup.log", "Could not configure shell profiles"],
+  ["vpt", "stat-file", "home/current/bin/.vp-setup-complete", "--assert", "file"],
+  ["vpt", "stat-file", "user/.bashrc", "--assert", "dir"],
+  { argv = ["./home/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"]], comment = "The installed CLI accepts commands after the warning", snapshot = false },
+]

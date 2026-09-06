@@ -760,6 +760,8 @@ jobs:
           $initialBinDir = Join-Path $initialVersionDir "bin"
           New-Item -ItemType Directory -Path $initialBinDir | Out-Null
           Copy-Item $currentVp (Join-Path $initialBinDir "vp.exe")
+          # Preserve installed state so the first invocation executes upgrade.
+          Copy-Item (Join-Path (Split-Path $currentVp) ".vp-setup-complete") $initialBinDir
           New-Item -ItemType Junction -Path (Join-Path $tempVpHome "current") -Target $initialVersionDir | Out-Null
 
           $env:VP_HOME = $tempVpHome
@@ -815,6 +817,8 @@ jobs:
           initial_bin_dir="$temp_vp_home/$version/bin"
           mkdir -p "$initial_bin_dir"
           cp "$current_vp" "$initial_bin_dir/vp"
+          # Preserve installed state so the first invocation executes upgrade.
+          cp "$(dirname "$current_vp")/.vp-setup-complete" "$initial_bin_dir/"
           chmod +x "$initial_bin_dir/vp"
           # Relative symlink, matching swap_current_link's `current -> <version>`.
           ln -s "$version" "$temp_vp_home/current"

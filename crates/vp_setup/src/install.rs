@@ -96,6 +96,15 @@ pub async fn extract_platform_package(
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
 const PINNED_PNPM_VERSION: &str = "10.33.0";
 
+/// A reused target version must run its own setup again before accepting commands.
+pub async fn clear_self_setup_marker(version_dir: &AbsolutePath) -> Result<(), Error> {
+    match tokio::fs::remove_file(version_dir.join("bin").join(crate::SELF_SETUP_MARKER)).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
 /// Generate a wrapper `package.json` that declares `vite-plus` as a dependency.
 ///
 /// The `packageManager` field pins pnpm to a known-good version, ensuring
@@ -479,7 +488,9 @@ fn remove_windows_current_link(current_link: &AbsolutePath) -> Result<(), Error>
     Ok(())
 }
 
-/// Refresh shims by running `vp env setup --refresh` with the new binary.
+/// Hand off to the newly activated binary using the legacy refresh command.
+/// New binaries without a setup marker intercept this invocation as self-setup;
+/// legacy rollback targets still execute `env setup --refresh` normally.
 pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
     let vp_binary = install_dir.join("current").join("bin").join(crate::VP_BINARY_NAME);
 
@@ -656,6 +667,24 @@ pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn invalidate_only_the_target_versions_setup() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
+        let old = root.join("1.0.0");
+        let target = root.join("1.1.0");
+        for version in [&old, &target] {
+            tokio::fs::create_dir_all(version.join("bin")).await.unwrap();
+            tokio::fs::write(version.join("bin").join(crate::SELF_SETUP_MARKER), b"")
+                .await
+                .unwrap();
+        }
+        clear_self_setup_marker(&target).await.unwrap();
+        assert!(!target.join("bin").join(crate::SELF_SETUP_MARKER).as_path().exists());
+        assert!(old.join("bin").join(crate::SELF_SETUP_MARKER).as_path().is_file());
+        clear_self_setup_marker(&target).await.unwrap();
+    }
 
     #[test]
     fn forced_active_version_installs_to_unique_semver_dir() {

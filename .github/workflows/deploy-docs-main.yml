@@ -13,6 +13,8 @@ on:
       - 'docs/**'
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
+      - 'packages/cli/install-legacy.sh'
+      - 'packages/cli/install-legacy.ps1'
       - '.github/workflows/deploy-docs-main.yml'
       - '.github/actions/deploy-docs/**'
 

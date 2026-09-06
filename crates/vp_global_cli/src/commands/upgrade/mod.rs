@@ -205,6 +205,8 @@ async fn install_platform_and_main(
     let previous_version = install::save_previous_version(install_dir).await?;
     tracing::debug!("Previous version: {:?}", previous_version);
 
+    install::clear_self_setup_marker(version_dir).await?;
+
     // Swap current link — POINT OF NO RETURN
     install::swap_current_link(install_dir, install_dir_name).await?;
 

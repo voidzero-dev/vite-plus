@@ -2,3 +2,6 @@
 .wrangler
 public/install.sh
 public/install.ps1
+
+public/install-legacy.sh
+public/install-legacy.ps1

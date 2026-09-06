@@ -2,6 +2,8 @@
 //!
 //! This binary provides a download-and-run installation experience for Windows,
 //! complementing the existing PowerShell installer (`install.ps1`).
+//! Like the scripts, it delegates installation to the downloaded binary's self-setup.
+//! The `legacy` module installs older binaries that do not support that protocol.
 //!
 //! Modeled after `rustup-init.exe`:
 //! - Console-based (no GUI)
@@ -18,6 +20,7 @@
 )]
 
 mod cli;
+mod legacy;
 
 #[cfg(windows)]
 mod windows_path;
@@ -116,22 +119,11 @@ async fn run(mut opts: cli::Options, dirs: VpDirs) -> i32 {
     code
 }
 
-/// Install the resolved version.
-#[allow(clippy::print_stdout)]
+/// Bootstrap the target binary; permanent installation belongs to its self-setup.
 async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Resolve and verify the download before touching the installation.
     let platform_suffix = platform::detect_platform_suffix()?;
-    if !opts.quiet {
-        print_info(&format!("detected platform: {platform_suffix}"));
-    }
-
-    // Read the installed version first. This operation does not create a
-    // directory. Create the installation root after target-version validation.
-    let current_version = install::read_current_version(&dirs.data).await;
-
     let version_or_tag = opts.version.as_deref().unwrap_or(&opts.tag);
-
-    // Resolve the target version first. If it matches the installed version,
-    // skip the platform package request.
     if !opts.quiet {
         print_info(&format!("resolving version '{version_or_tag}'..."));
     }
@@ -140,116 +132,82 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
     if !vp_setup::supports_split_layout(&target_version) {
         return Err(format!(
             "vp-setup does not support vite-plus {target_version}. Install vite-plus 0.3.0 or later."
-        )
-        .into());
+        ).into());
     }
+    let resolved = registry::resolve_platform_package(
+        &target_version,
+        &platform_suffix,
+        opts.registry.as_deref(),
+    )
+    .await?;
+    let data =
+        download_with_progress(&HttpClient::new(), &resolved.platform_tarball_url, opts.quiet)
+            .await?;
+    integrity::verify_integrity(&data, &resolved.platform_integrity)?;
+    let temporary = tempfile::tempdir()?;
+    let directory = AbsolutePathBuf::new(temporary.path().to_path_buf())
+        .ok_or("Installer temporary directory must be absolute")?;
+    install::extract_platform_package(&data, &directory).await?;
+    let binary = directory.join("bin").join(VP_BINARY_NAME);
 
-    // Same version only if the binary is intact — a corrupted install needs a full reinstall.
-    // `is_install_dir_for_version` also matches `{version}+force.*` dirs left by a forced
-    // reinstall (`vp upgrade <version> --force`), so re-running setup recognizes them as
-    // already installed instead of re-downloading.
-    let same_version = current_version
-        .as_deref()
-        .is_some_and(|current| install::is_install_dir_for_version(current, &target_version))
-        && tokio::fs::try_exists(dirs.data.join("current").join("bin").join(VP_BINARY_NAME))
-            .await
-            .unwrap_or(false);
-
-    if same_version {
-        if !opts.quiet {
-            print_info(&format!("version {target_version} already installed, verifying setup..."));
-        }
-    } else if let Some(ref current) = current_version {
-        if !opts.quiet {
-            print_info(&format!("upgrading from {current} to {target_version}"));
-        }
-    }
-
-    if !same_version {
-        // Only fetch platform metadata + download when we actually need to install
-        let resolved = registry::resolve_platform_package(
-            &target_version,
-            &platform_suffix,
-            opts.registry.as_deref(),
-        )
+    // 2. Match the script bootstrap protocol. Old binaries see --help instead of opening a picker.
+    let probe = tokio::process::Command::new(binary.as_path())
+        .arg("--help")
+        .env(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK, "1")
+        .output()
         .await?;
+    if !probe.status.success() || probe.stdout != b"vite-plus-self-setup-v1\n" {
+        return legacy::install(opts, dirs, &target_version, &data).await;
+    }
 
-        if !opts.quiet {
-            print_info(&format!("downloading vite-plus@{target_version} for {platform_suffix}..."));
-        }
-        let client = HttpClient::new();
-        let platform_data =
-            download_with_progress(&client, &resolved.platform_tarball_url, opts.quiet).await?;
-
-        if !opts.quiet {
-            print_info("verifying integrity...");
-        }
-        integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
-
-        let install_dir = &dirs.data;
-        let version_dir = install_dir.join(&target_version);
-        tokio::fs::create_dir_all(&version_dir).await?;
-
-        let result = install_new_version(
-            opts,
-            &platform_data,
-            &version_dir,
-            install_dir,
-            &target_version,
-            current_version.is_some(),
+    // 3. The menu supplies setup choices; interactive runs may still need release-age consent.
+    let mut command = tokio::process::Command::new(binary.as_path());
+    command
+        .env_remove(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK)
+        .env("VP_NODE_MANAGER", if opts.no_node_manager { "no" } else { "yes" })
+        .env(
+            vp_shared::env_vars::VP_SELF_SETUP_NO_MODIFY_PATH,
+            if opts.no_modify_path { "1" } else { "0" },
         )
-        .await;
-
-        // On failure, clean up the partial version directory (matches vp upgrade behavior)
-        if result.is_err() {
-            let _ = tokio::fs::remove_dir_all(&version_dir).await;
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(registry) = opts.registry.as_deref() {
+        command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY_UPPER, registry);
+    }
+    if !opts.yes && !opts.quiet {
+        let status = command
+            .stdin(std::process::Stdio::inherit())
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .status()
+            .await?;
+        if !status.success() {
+            return Err(format!("Vite+ setup failed ({status})").into());
         }
-
-        result?;
-    }
-
-    // --- Post-activation setup (always runs, even for same-version repair) ---
-    // All steps below are best-effort: the core install succeeded once `current`
-    // points at the right version.
-
-    if !opts.quiet {
-        print_info("setting up shims...");
-    }
-    if let Err(e) = setup_bin_shims(&dirs).await {
-        print_warn(&format!("Shim setup failed (non-fatal): {e}"));
-    }
-
-    if !opts.no_node_manager {
-        if !opts.quiet {
-            print_info("setting up Node.js and package-manager version management...");
+    } else if opts.quiet {
+        let output = command.output().await?;
+        if !output.status.success() {
+            io::stdout().write_all(&output.stdout)?;
+            io::stderr().write_all(&output.stderr)?;
+            return Err(format!("Vite+ setup failed ({})", output.status).into());
         }
-        match install::refresh_shims(&dirs.data).await {
-            Ok(()) if current_version.is_none() => {
-                let vp_binary = dirs.data.join("current").join("bin").join(VP_BINARY_NAME);
-                let preference_result = tokio::process::Command::new(vp_binary.as_path())
-                    .args(["env", "on"])
-                    .output()
-                    .await;
-                if !preference_result.is_ok_and(|output| output.status.success()) {
-                    print_warn("Failed to record environment management preference.");
-                }
-            }
-            Ok(()) => {}
-            Err(e) => {
-                print_warn(&format!("Node.js and package-manager setup failed (non-fatal): {e}"))
-            }
-        }
-    } else if let Err(e) = install::create_env_files(&dirs.data).await {
-        print_warn(&format!("Env file creation failed (non-fatal): {e}"));
-    }
-
-    if !opts.no_modify_path {
-        let bin_dir_str = dirs.bin.as_path().to_string_lossy().to_string();
-        if let Err(e) = modify_path(&bin_dir_str, opts.quiet) {
-            print_warn(&format!("PATH modification failed (non-fatal): {e}"));
+    } else {
+        let mut child = command.spawn()?;
+        let mut stdout = child.stdout.take().ok_or("Missing setup stdout pipe")?;
+        let mut stderr = child.stderr.take().ok_or("Missing setup stderr pipe")?;
+        // Drain both streams while the child runs, including output without line breaks.
+        let mut terminal_stdout = tokio::io::stdout();
+        let mut terminal_stderr = tokio::io::stderr();
+        let (status, _, _) = tokio::try_join!(
+            child.wait(),
+            tokio::io::copy(&mut stdout, &mut terminal_stdout),
+            tokio::io::copy(&mut stderr, &mut terminal_stderr),
+        )?;
+        if !status.success() {
+            return Err(format!("Vite+ setup failed ({status})").into());
         }
     }
-
     Ok(())
 }
 
@@ -349,112 +307,6 @@ fn auto_detect_node_manager_for_state(state: NodeShimState, interactive: bool) -
     interactive
 }
 
-/// Extract, install deps, and activate a new version. Separated so the caller
-/// can clean up the version directory on failure.
-async fn install_new_version(
-    opts: &cli::Options,
-    platform_data: &[u8],
-    version_dir: &AbsolutePathBuf,
-    install_dir: &AbsolutePathBuf,
-    version: &str,
-    has_previous: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if !opts.quiet {
-        print_info("extracting binary...");
-    }
-    install::extract_platform_package(platform_data, version_dir).await?;
-
-    let binary_path = version_dir.join("bin").join(VP_BINARY_NAME);
-    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        return Err("Binary not found after extraction. The download may be corrupted.".into());
-    }
-    #[cfg(windows)]
-    if !tokio::fs::try_exists(version_dir.join("bin").join("vp-shim.exe")).await.unwrap_or(false) {
-        return Err(
-            "vp-setup did not find vp-shim.exe after extraction. The downloaded package can be corrupt."
-                .into(),
-        );
-    }
-
-    install::generate_wrapper_package_json(version_dir, version).await?;
-
-    if !opts.quiet {
-        print_info("installing dependencies (this may take a moment)...");
-    }
-    install::install_production_deps(version_dir, opts.registry.as_deref(), opts.yes, version)
-        .await?;
-
-    let previous_version =
-        if has_previous { install::save_previous_version(install_dir).await? } else { None };
-    install::swap_current_link(install_dir, version).await?;
-
-    // Cleanup with both new and previous versions protected (matches vp upgrade)
-    let mut protected = vec![version];
-    if let Some(ref prev) = previous_version {
-        protected.push(prev.as_str());
-    }
-    if let Err(e) =
-        install::cleanup_old_versions(install_dir, vp_setup::MAX_VERSIONS_KEEP, &protected).await
-    {
-        print_warn(&format!("Old version cleanup failed (non-fatal): {e}"));
-    }
-
-    Ok(())
-}
-
-/// Windows locks running `.exe` files — rename the old one out of the way before copying.
-#[cfg(windows)]
-async fn replace_windows_exe(
-    src: &vt_path::AbsolutePathBuf,
-    dst: &vt_path::AbsolutePathBuf,
-    bin_dir: &vt_path::AbsolutePathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let old_name = format!(
-        "vp.exe.{}.old",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-    );
-    let _ = tokio::fs::rename(dst, &bin_dir.join(&old_name)).await;
-    tokio::fs::copy(src, dst).await?;
-    Ok(())
-}
-
-/// Set up the `<BIN>/vp` entry point (trampoline copy on Windows, symlink on Unix).
-async fn setup_bin_shims(dirs: &VpDirs) -> Result<(), Box<dyn std::error::Error>> {
-    let bin_dir = &dirs.bin;
-    tokio::fs::create_dir_all(bin_dir).await?;
-
-    #[cfg(windows)]
-    {
-        let shim_src = dirs.data.join("current").join("bin").join("vp-shim.exe");
-        let shim_dst = bin_dir.join("vp.exe");
-
-        replace_windows_exe(&shim_src, &shim_dst, &bin_dir).await?;
-        dirs.write_shim_pointer("vp")?;
-
-        // Best-effort cleanup of old shim files
-        if let Ok(mut entries) = tokio::fs::read_dir(&bin_dir).await {
-            while let Ok(Some(entry)) = entries.next_entry().await {
-                if entry.file_name().to_string_lossy().ends_with(".old") {
-                    let _ = tokio::fs::remove_file(entry.path()).await;
-                }
-            }
-        }
-    }
-
-    #[cfg(unix)]
-    {
-        let current_vp = dirs.data.join("current").join("bin").join("vp");
-        let link_path = bin_dir.join("vp");
-        let _ = tokio::fs::remove_file(&link_path).await;
-        tokio::fs::symlink(current_vp.as_path(), &link_path).await?;
-    }
-
-    Ok(())
-}
-
 async fn download_with_progress(
     client: &HttpClient,
     url: &str,
@@ -483,26 +335,6 @@ async fn download_with_progress(
 fn prepare_dirs() -> Result<VpDirs, Box<dyn std::error::Error>> {
     vp_shared::validate_vp_dir_env()?;
     Ok(vp_shared::EnvConfig::get().dirs.clone())
-}
-
-#[allow(clippy::print_stdout)]
-fn modify_path(bin_dir: &str, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(windows)]
-    {
-        windows_path::add_to_user_path(bin_dir)?;
-        if !quiet {
-            print_info("added to User PATH (restart your terminal to pick up changes)");
-        }
-    }
-
-    #[cfg(not(windows))]
-    {
-        if !quiet {
-            print_info(&format!("add {bin_dir} to your shell's PATH"));
-        }
-    }
-
-    Ok(())
 }
 
 #[allow(clippy::print_stdout)]

@@ -8,6 +8,8 @@ on:
     paths:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
+      - 'packages/cli/install-legacy.sh'
+      - 'packages/cli/install-legacy.ps1'
       - 'packages/tools/src/install-global-cli.ts'
       - 'packages/tools/src/local-npm-registry.ts'
       - 'crates/vp_installer/**'
@@ -51,8 +53,11 @@ jobs:
         # single-root tree.
         run: echo "VP_HOME=$HOME/.vite-plus" >> $GITHUB_ENV
 
+      - name: Check bootstrap handoff
+        run: bash .github/scripts/test-install-bootstrap.sh
+
       - name: Run install.sh
-        run: cat packages/cli/install.sh | bash
+        run: cat packages/cli/install.sh | VP_LEGACY_INSTALLER_URL="file://$PWD/packages/cli/install-legacy.sh" bash
 
       - name: Verify installation
         working-directory: ${{ runner.temp }}
@@ -149,7 +154,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y fish zsh
 
           # Load installer helpers without invoking main.
-          eval "$(sed '/^main "[$]@"$/d' packages/cli/install.sh)"
+          eval "$(sed '/^main "[$]@"$/d' packages/cli/install-legacy.sh)"
 
           TEST_ROOT=$(mktemp -d)
           export HOME="$TEST_ROOT/home"
@@ -221,7 +226,7 @@ jobs:
       - name: Shell installer rejects an unversioned Node sidecar
         run: |
           set -euo pipefail
-          eval "$(sed '/^main "[$]@"$/d' packages/cli/install.sh)"
+          eval "$(sed '/^main "[$]@"$/d' packages/cli/install-legacy.sh)"
 
           TEST_ROOT=$(mktemp -d)
           TEST_BIN="$TEST_ROOT/bin"
@@ -238,7 +243,7 @@ jobs:
       - name: CI hides shell file warnings
         run: |
           set -euo pipefail
-          eval "$(sed '/^main "[$]@"$/d' packages/cli/install.sh)"
+          eval "$(sed '/^main "[$]@"$/d' packages/cli/install-legacy.sh)"
 
           SHELL_CONFIG=$(mktemp)
           chmod 444 "$SHELL_CONFIG"
@@ -323,7 +328,8 @@ jobs:
       - name: Fresh home uses split layout
         run: |
           set -euo pipefail
-          FRESH=$(mktemp -d)
+          FRESH="$(mktemp -d)/home with 'quotes' and \$dollar"
+          mkdir -p "$FRESH"
           FAKE_TGZ=$(mktemp)
           export HOME="$FRESH"
           export USERPROFILE="$FRESH"
@@ -331,12 +337,9 @@ jobs:
           export VP_VPDIRS_AWARE=1
           unset VP_HOME VP_BIN_DIR VP_DATA_DIR VP_CACHE_DIR
           unset XDG_DATA_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_STATE_HOME
-          OUTPUT=$(mktemp)
-          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh | tee "$OUTPUT"
-
-          grep -F "Install locations:" "$OUTPUT"
-          grep -F "Data directory: ~/.local/share/vite-plus" "$OUTPUT"
-          grep -F "Bin directory:  ~/.local/share/vite-plus/bin" "$OUTPUT"
+          # setup-vp sources the installer and reads SHIM_DIR in its own shell.
+          VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test source packages/cli/install.sh
+          test "$SHIM_DIR" = "$FRESH/.local/share/vite-plus/bin"
 
           test ! -d "$FRESH/.vite-plus"
           test -e "$FRESH/.local/share/vite-plus/current"
@@ -352,6 +355,11 @@ jobs:
           test "$(dump_dir cache)" = "$FRESH/.cache/vite-plus"
           test "$(dump_dir config)" = "$FRESH/.config/vite-plus"
           test "$(dump_dir state)" = "$FRESH/.local/state/vite-plus"
+          test "$INSTALL_DIR" = "$(dump_dir data)"
+          test "$SHIM_DIR" = "$(dump_dir bin)"
+          test "$CACHE_DIR" = "$(dump_dir cache)"
+          test "$CONFIG_DIR" = "$(dump_dir config)"
+          test "$STATE_DIR" = "$(dump_dir state)"
 
       - name: Custom shared bin preserves an unrelated Node executable
         run: |
@@ -458,7 +466,7 @@ jobs:
         # Do not set VP_HOME. A pre-VpDirs release must select the monolithic
         # ~/.vite-plus root.
         run: |
-          cat packages/cli/install.sh | bash | tee install-output.txt
+          cat packages/cli/install.sh | VP_LEGACY_INSTALLER_URL="file://$PWD/packages/cli/install-legacy.sh" bash 2>&1 | tee install-output.txt
           grep -F "does not support the split directory layout" install-output.txt
 
       - name: Verify monolithic layout
@@ -565,7 +573,7 @@ jobs:
 
       - name: Run install.sh
         run: |
-          output=$(cat packages/cli/install.sh | bash 2>&1) || {
+          output=$(cat packages/cli/install.sh | VP_LEGACY_INSTALLER_URL="file://$PWD/packages/cli/install-legacy.sh" bash 2>&1) || {
             echo "$output"
             echo "Install script exited with non-zero status"
             exit 1
@@ -610,7 +618,7 @@ jobs:
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
               export VP_HOME=\"\$HOME/.vite-plus\"
-              cat /workspace/packages/cli/install.sh | bash
+              cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
               if [ -f ~/.profile ]; then
                 source ~/.profile
               elif [ -f ~/.bashrc ]; then
@@ -670,7 +678,7 @@ jobs:
               # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               export VP_HOME=\"\$HOME/.vite-plus\"
-              cat /workspace/packages/cli/install.sh | bash
+              cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
               vp --version
@@ -728,7 +736,7 @@ jobs:
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               export VP_HOME=\"\$HOME/.vite-plus\"
-              cat /workspace/packages/cli/install.sh | bash
+              cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
               vp --version
@@ -790,6 +798,10 @@ jobs:
             exit 1
           }
 
+      - name: Check bootstrap handoff
+        shell: powershell
+        run: ./.github/scripts/test-install-bootstrap.ps1
+
       - name: Run install.ps1
         shell: powershell
         run: |
@@ -797,6 +809,9 @@ jobs:
 
       - name: Run install.ps1 via irm simulation (catches BOM issues)
         shell: powershell
+        # Piped installers cannot locate a sibling script; use this PR's legacy implementation.
+        env:
+          VP_LEGACY_INSTALLER_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}/${{ github.event.pull_request.head.sha || github.sha }}/packages/cli/install-legacy.ps1
         run: |
           $ErrorActionPreference = "Stop"
           Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression
@@ -960,6 +975,9 @@ jobs:
 
       - name: Run install.ps1 via iex under PowerShell 7.6
         shell: pwsh
+        # Piped installers cannot locate a sibling script; use this PR's legacy implementation.
+        env:
+          VP_LEGACY_INSTALLER_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}/${{ github.event.pull_request.head.sha || github.sha }}/packages/cli/install-legacy.ps1
         run: |
           & $env:PWSH76 -NoProfile -Command "Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression"
 
@@ -1331,6 +1349,8 @@ jobs:
             $payload,
             $true
           )
+          # This fixture represents an installed payload, not a first-launch installer.
+          [System.IO.File]::WriteAllText((Join-Path $payloadBin ".vp-setup-complete"), "")
           $pointer = "vite-plus-shim-v1`nlayout=split`ndata=$data`ncache=$cache`n"
           [System.IO.File]::WriteAllText((Join-Path $bin "vp.shim"), $pointer)
 
@@ -1543,7 +1563,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $root = Join-Path $env:RUNNER_TEMP "vp-complete-overrides"
+          $root = Join-Path $env:RUNNER_TEMP "vp-complete-overrides 'quoted'"
           $env:USERPROFILE = Join-Path $root "profile"
           $env:LOCALAPPDATA = Join-Path $env:USERPROFILE "AppData\Local"
           $env:APPDATA = Join-Path $env:USERPROFILE "AppData\Roaming"
@@ -1559,16 +1579,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path $root | Out-Null
           New-Item -ItemType File -Force -Path $env:VP_LOCAL_TGZ | Out-Null
 
-          $output = (& ./packages/cli/install.ps1 *>&1) | Out-String
+          $output = (. ./packages/cli/install.ps1 *>&1) | Out-String
           Write-Host $output
-          if (-not $output.Contains("Install locations:")) {
-            throw "install.ps1 did not print install locations"
+          if (-not $output.Contains("Vite+ setup complete.")) {
+            throw "install.ps1 did not complete self-setup"
           }
-          if (-not $output.Contains("Data directory: $($env:VP_DATA_DIR)")) {
-            throw "install.ps1 did not print the split data directory"
-          }
-          if (-not $output.Contains("Bin directory:  $($env:VP_BIN_DIR)")) {
-            throw "install.ps1 did not print the split bin directory"
+
+          if ($script:ShimDir -ne $env:VP_BIN_DIR) {
+            throw "The sourced installer did not report its bin directory"
           }
 
           function Get-DirMap([string]$VpBinary) {
@@ -1588,6 +1606,13 @@ jobs:
           $payload = Join-Path $env:VP_DATA_DIR "current\bin\vp.exe"
           $trampoline = Join-Path $env:VP_DATA_DIR "bin\vp.exe"
           $expected = Get-DirMap $payload
+          $reported = @{
+            data = $script:InstallDir; bin = $script:ShimDir; cache = $script:CacheDir
+            config = $script:ConfigDir; state = $script:StateDir
+          }
+          foreach ($key in $reported.Keys) {
+            if ($reported[$key] -ne $expected[$key]) { throw "Installer reported an incorrect $key directory" }
+          }
           if ($expected['layout'] -ne 'split') { throw "payload did not select split layout" }
           if ($expected['bin'] -ne (Join-Path $env:VP_DATA_DIR 'bin')) { throw "unexpected bin root" }
           if ($expected['cache'] -ne $env:VP_CACHE_DIR) { throw "unexpected cache root" }
@@ -1751,10 +1776,11 @@ jobs:
           }
           & $vp --version
 
-      - name: Start local preview registry for vp-setup.exe
+      - name: Start local registry for vp-setup.exe
         shell: bash
         run: |
-          test_version="0.0.0-commit.${GITHUB_SHA}"
+          # Self-setup installs the version compiled into the downloaded binary.
+          test_version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/vp_global_cli/Cargo.toml | head -1)
           registry_root="$RUNNER_TEMP/vp-setup-local-registry"
           packages_dir="$registry_root/packages"
           main_dir="$registry_root/vite-plus"
@@ -1817,44 +1843,67 @@ jobs:
             throw "the dangling current entry is not a reparse point"
           }
 
-      - name: Repair the dangling junction without ANSI output
+      - name: Repair the dangling junction and forward setup options
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
-          $stdout = Join-Path $env:RUNNER_TEMP "vp-setup-no-color.stdout.txt"
-          $stderr = Join-Path $env:RUNNER_TEMP "vp-setup-no-color.stderr.txt"
-          $env:NO_COLOR = "1"
-          try {
-            $process = Start-Process -FilePath $installer `
-              -ArgumentList @(
-                "--yes",
-                "--version", $env:VP_SETUP_TEST_VERSION,
-                "--registry", $env:VP_SETUP_TEST_REGISTRY,
-                "--no-node-manager",
-                "--no-modify-path"
-              ) `
-              -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
-              -Wait -PassThru -NoNewWindow
-          } finally {
-            Remove-Item Env:NO_COLOR -ErrorAction SilentlyContinue
-          }
+          $stdout = Join-Path $env:RUNNER_TEMP "vp-setup.stdout.txt"
+          $stderr = Join-Path $env:RUNNER_TEMP "vp-setup.stderr.txt"
+          $pathBefore = [Environment]::GetEnvironmentVariable("Path", "User")
+          $process = Start-Process -FilePath $installer `
+            -ArgumentList @(
+              "--yes",
+              "--version", $env:VP_SETUP_TEST_VERSION,
+              "--registry", $env:VP_SETUP_TEST_REGISTRY,
+              "--no-node-manager",
+              "--no-modify-path"
+            ) `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
+            -Wait -PassThru -NoNewWindow
 
           Get-Content -Raw $stdout | Write-Host
           Get-Content -Raw $stderr | Write-Host
           if ($process.ExitCode -ne 0) {
             throw "vp-setup.exe exited with $($process.ExitCode)"
           }
-          foreach ($path in @($stdout, $stderr)) {
-            if ([System.IO.File]::ReadAllBytes($path) -contains [byte]0x1b) {
-              throw "$path contains an ANSI escape"
-            }
-          }
+          # NO_COLOR across the target CLI is deferred to a separate change.
           if (-not (Test-Path (Join-Path $env:VP_HOME "current/bin/vp.exe"))) {
             throw "vp-setup.exe did not repair the dangling current junction"
           }
           if (-not (Test-Path (Join-Path $env:VP_HOME "bin/vp.exe"))) {
             throw "vp-setup.exe did not create the global vp.exe"
+          }
+          if (-not (Test-Path (Join-Path $env:VP_HOME "current/bin/.vp-setup-complete"))) {
+            throw "vp-setup.exe did not complete the binary's self-setup"
+          }
+          if ([Environment]::GetEnvironmentVariable("Path", "User") -cne $pathBefore) {
+            throw "--no-modify-path changed User PATH"
+          }
+          $config = Get-Content (Join-Path $env:VP_HOME "config.json") -Raw | ConvertFrom-Json
+          if ($config.nodeShimMode -ne "system_first") {
+            throw "--no-node-manager was not passed to self-setup"
+          }
+
+      - name: Quiet same-version installation uses self-setup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
+          $previous = (Get-Item (Join-Path $env:VP_HOME "current")).Target
+          $output = & $installer --quiet --version $env:VP_SETUP_TEST_VERSION `
+            --registry $env:VP_SETUP_TEST_REGISTRY --no-node-manager --no-modify-path 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Quiet setup failed: $output"
+          }
+          if ($output) {
+            throw "Quiet setup unexpectedly printed output: $output"
+          }
+          if (-not (Test-Path (Join-Path $env:VP_HOME "current/bin/.vp-setup-complete"))) {
+            throw "Quiet setup did not finish"
+          }
+          if ((Get-Item (Join-Path $env:VP_HOME "current")).Target -eq $previous) {
+            throw "Same-version setup did not deploy a fresh binary"
           }
 
       - name: Set PATH

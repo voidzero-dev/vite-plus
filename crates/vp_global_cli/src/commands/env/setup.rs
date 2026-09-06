@@ -19,6 +19,7 @@ use std::process::ExitStatus;
 
 #[cfg(windows)]
 use indoc::formatdoc;
+use vp_shared::output;
 
 use crate::{
     commands::{
@@ -54,6 +55,16 @@ impl EnvShell {
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
+    execute_for_binary(&std::env::current_exe()?, refresh, refresh, env_only).await
+}
+
+// Self-setup must create shims for the deployed binary, not the temporary download.
+pub(crate) async fn execute_for_binary(
+    current_exe: &std::path::Path,
+    refresh: bool,
+    refresh_entrypoints: bool,
+    env_only: bool,
+) -> Result<ExitStatus, Error> {
     let config = vp_shared::EnvConfig::get();
     let dirs = &config.dirs;
 
@@ -64,17 +75,17 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     create_env_files().await?;
 
     if env_only {
-        println!("{}", help::render_heading("Setup"));
-        println!("  Updated shell environment files.");
-        println!("  Run {} to verify setup.", help::accent_command("vp env doctor"));
+        output::raw(&help::render_heading("Setup"));
+        output::raw("  Updated shell environment files.");
+        output::raw(&format!("  Run {} to verify setup.", help::accent_command("vp env doctor")));
         return Ok(ExitStatus::default());
     }
 
     let bin_dir = &dirs.bin;
 
-    println!("{}", help::render_heading("Setup"));
-    println!("  Preparing vite-plus environment.");
-    println!();
+    output::raw(&help::render_heading("Setup"));
+    output::raw("  Preparing vite-plus environment.");
+    output::raw("");
 
     // Ensure bin directory exists
     tokio::fs::create_dir_all(bin_dir).await?;
@@ -86,18 +97,17 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     #[cfg(windows)]
     tokio::fs::write(bin_dir.join("vp-use.cmd"), vp_use_cmd_content(&config)).await?;
 
-    // Get the current executable path (for shims)
-    let current_exe = std::env::current_exe()?;
-
     // Create wrapper script in bin/
-    setup_vp_wrapper(&current_exe, bin_dir, refresh).await?;
+    setup_vp_wrapper(current_exe, bin_dir, refresh_entrypoints).await?;
 
     // Create default tool shims
     let mut created = Vec::new();
     let mut skipped = Vec::new();
 
     for tool in crate::shim::DEFAULT_SHIM_TOOLS {
-        let result = create_shim(&current_exe, bin_dir, tool, refresh).await?;
+        let refresh_tool =
+            if matches!(*tool, "vpx" | "vpr") { refresh_entrypoints } else { refresh };
+        let result = create_shim(current_exe, bin_dir, tool, refresh_tool).await?;
         if result {
             created.push(*tool);
         } else {
@@ -122,40 +132,40 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
 
     #[cfg(windows)]
     if refresh {
-        if let Err(e) = refresh_package_shims(bin_dir).await {
+        if let Err(e) = refresh_package_shims(current_exe, bin_dir).await {
             tracing::warn!("Failed to refresh package shims: {}", e);
         }
     }
 
     // Best-effort cleanup of .old files from rename-before-copy on Windows
     #[cfg(windows)]
-    if refresh {
+    if refresh || refresh_entrypoints {
         cleanup_old_files(bin_dir).await;
     }
 
     // Print results
     if !created.is_empty() {
-        println!("{}", help::render_heading("Created Shims"));
+        output::raw(&help::render_heading("Created Shims"));
         for tool in &created {
             let shim_path = bin_dir.join(shim_filename(tool));
-            println!("  {}", shim_path.as_path().display());
+            output::raw(&format!("  {}", shim_path.as_path().display()));
         }
     }
 
     if !skipped.is_empty() && !refresh {
         if !created.is_empty() {
-            println!();
+            output::raw("");
         }
-        println!("{}", help::render_heading("Skipped Shims"));
+        output::raw(&help::render_heading("Skipped Shims"));
         for tool in &skipped {
             let shim_path = bin_dir.join(shim_filename(tool));
-            println!("  {}", shim_path.as_path().display());
+            output::raw(&format!("  {}", shim_path.as_path().display()));
         }
-        println!();
-        println!("  Use --refresh to update existing shims.");
+        output::raw("");
+        output::raw("  Use --refresh to update existing shims.");
     }
 
-    println!();
+    output::raw("");
     print_path_instructions(&dirs.config);
 
     Ok(ExitStatus::default())
@@ -250,14 +260,13 @@ async fn setup_vp_wrapper(
 
     #[cfg(windows)]
     {
-        let _ = current_exe;
         let bin_vp_exe = bin_dir.join("vp.exe");
 
         // Create trampoline bin/vp.exe that forwards to current\bin\vp.exe
         let should_create = refresh || !tokio::fs::try_exists(&bin_vp_exe).await.unwrap_or(false);
 
         if should_create {
-            let trampoline_src = get_trampoline_path()?;
+            let trampoline_src = trampoline_path_for_binary(current_exe)?;
             // On refresh, the existing vp.exe may still be running (the trampoline
             // that launched us). Windows prevents overwriting a running exe, so we
             // rename it to a timestamped .old file first, then copy the new one.
@@ -395,11 +404,11 @@ async fn create_unix_shim(
 /// See: <https://github.com/voidzero-dev/vite-plus/issues/835>
 #[cfg(windows)]
 async fn create_windows_shim(
-    _source: &std::path::Path,
+    source: &std::path::Path,
     bin_dir: &vt_path::AbsolutePath,
     tool: &str,
 ) -> Result<(), Error> {
-    let trampoline_src = get_trampoline_path()?;
+    let trampoline_src = trampoline_path_for_binary(source)?;
     let shim_path = bin_dir.join(format!("{tool}.exe"));
     tokio::fs::copy(trampoline_src.as_path(), &shim_path).await?;
     write_shim_pointer_beside(shim_path.as_path());
@@ -417,7 +426,10 @@ async fn create_windows_shim(
 /// Discovers all package binaries tracked by BinConfig with `source: Vp`
 /// and replaces their `.exe` with the current trampoline.
 #[cfg(windows)]
-async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Error> {
+async fn refresh_package_shims(
+    current_exe: &std::path::Path,
+    bin_dir: &vt_path::AbsolutePath,
+) -> Result<(), Error> {
     use super::bin_config::BinConfig;
 
     let package_bins = BinConfig::find_all_vp_source().await?;
@@ -426,7 +438,7 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
         return Ok(());
     }
 
-    let trampoline_src = get_trampoline_path()?;
+    let trampoline_src = trampoline_path_for_binary(current_exe)?;
 
     for bin_name in &package_bins {
         // Default shims and vp are already refreshed by the main loop.
@@ -467,6 +479,13 @@ fn write_shim_pointer_beside(exe_path: &std::path::Path) {
 /// In tests, `VP_TRAMPOLINE_PATH` can override the resolved path.
 #[cfg(windows)]
 pub(crate) fn get_trampoline_path() -> Result<vt_path::AbsolutePathBuf, Error> {
+    trampoline_path_for_binary(&std::env::current_exe()?)
+}
+
+#[cfg(windows)]
+fn trampoline_path_for_binary(
+    current_exe: &std::path::Path,
+) -> Result<vt_path::AbsolutePathBuf, Error> {
     // Allow tests to override the trampoline path
     if let Ok(override_path) = std::env::var(vp_shared::env_vars::VP_TRAMPOLINE_PATH) {
         let path = std::path::PathBuf::from(override_path);
@@ -476,7 +495,6 @@ pub(crate) fn get_trampoline_path() -> Result<vt_path::AbsolutePathBuf, Error> {
         }
     }
 
-    let current_exe = std::env::current_exe()?;
     let bin_dir = current_exe
         .parent()
         .ok_or_else(|| Error::Other("Cannot find parent directory of vp.exe".into()))?;
@@ -943,12 +961,12 @@ fn render_nu_path_ref(path_ref: &str) -> String {
 }
 
 /// Escape a value for a POSIX-shell double-quoted string.
-pub(super) fn escape_posix_double_quoted_string(value: &str) -> String {
+pub(crate) fn escape_posix_double_quoted_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('$', "\\$").replace('`', "\\`").replace('"', "\\\"")
 }
 
 /// Escape a value for a Fish double-quoted string.
-pub(super) fn escape_fish_double_quoted_string(value: &str) -> String {
+pub(crate) fn escape_fish_double_quoted_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('$', "\\$").replace('"', "\\\"")
 }
 
@@ -964,13 +982,13 @@ fn escape_home_relative_double_quoted_path(path_ref: &str, escape: fn(&str) -> S
 ///
 /// Example: `vp "home\with spaces"` → `vp \"home\\with spaces\"`
 /// https://www.nushell.sh/book/working_with_strings.html#double-quoted-strings
-pub(super) fn escape_nu_double_quoted_string(value: &str) -> String {
+pub(crate) fn escape_nu_double_quoted_string(value: &str) -> String {
     // `vp "home\with spaces"` → `vp \"home\\with spaces\"`
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Escape a value for a PowerShell single-quoted string.
-pub(super) fn escape_powershell_single_quoted_string(value: &str) -> String {
+pub(crate) fn escape_powershell_single_quoted_string(value: &str) -> String {
     value.replace('\'', "''")
 }
 
@@ -1103,45 +1121,45 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
         (env_path.clone(), env_path)
     };
 
-    println!("{}", help::render_heading("Next Steps"));
-    println!("  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
-    println!();
-    println!("  . \"{env_path}/env\"");
-    println!();
-    println!("  For fish shell, add to ~/.config/fish/config.fish:");
-    println!();
-    println!("  source \"{env_path}/env.fish\"");
-    println!();
-    println!("  For Nushell, add to ~/.config/nushell/config.nu:");
-    println!();
-    println!("  source '{nu_env_path}/env.nu'");
-    println!();
-    println!("  For PowerShell, add to your $PROFILE:");
-    println!();
-    println!("  . \"{env_path}/env.ps1\"");
-    println!();
-    println!("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
+    output::raw(&help::render_heading("Next Steps"));
+    output::raw("  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
+    output::raw("");
+    output::raw(&format!("  . \"{env_path}/env\""));
+    output::raw("");
+    output::raw("  For fish shell, add to ~/.config/fish/config.fish:");
+    output::raw("");
+    output::raw(&format!("  source \"{env_path}/env.fish\""));
+    output::raw("");
+    output::raw("  For Nushell, add to ~/.config/nushell/config.nu:");
+    output::raw("");
+    output::raw(&format!("  source '{nu_env_path}/env.nu'"));
+    output::raw("");
+    output::raw("  For PowerShell, add to your $PROFILE:");
+    output::raw("");
+    output::raw(&format!("  . \"{env_path}/env.ps1\""));
+    output::raw("");
+    output::raw("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
 
     #[cfg(target_os = "macos")]
     {
-        println!("  - macOS: Add to ~/.profile or use launchd");
+        output::raw("  - macOS: Add to ~/.profile or use launchd");
     }
 
     #[cfg(target_os = "linux")]
     {
-        println!("  - Linux: Add to ~/.profile for display manager integration");
+        output::raw("  - Linux: Add to ~/.profile for display manager integration");
     }
 
     #[cfg(target_os = "windows")]
     {
-        println!("  - Windows: System Properties -> Environment Variables -> Path");
+        output::raw("  - Windows: System Properties -> Environment Variables -> Path");
     }
 
-    println!();
-    println!(
+    output::raw("");
+    output::raw(&format!(
         "  Restart your terminal and IDE, then run {} to verify.",
         help::accent_command("vp env doctor")
-    );
+    ));
 }
 
 #[cfg(test)]
@@ -1788,6 +1806,27 @@ mod tests {
                     !pointer.exists(),
                     "setup without --refresh must not claim a skipped executable"
                 );
+
+                // Reusing a bin directory must refresh Vite+ entrypoints without replacing Node.
+                for tool in ["vp", "vpx", "vpr"] {
+                    tokio::fs::write(bin_dir.join(format!("{tool}.exe")), b"old-entrypoint")
+                        .await
+                        .unwrap();
+                    tokio::fs::write(bin_dir.join(format!("{tool}.shim")), b"old-data-root")
+                        .await
+                        .unwrap();
+                }
+                execute_for_binary(&std::env::current_exe().unwrap(), false, true, false)
+                    .await
+                    .unwrap();
+                let dirs = &vp_shared::EnvConfig::get().dirs;
+                for tool in ["vp", "vpx", "vpr"] {
+                    let entrypoint = bin_dir.join(format!("{tool}.exe"));
+                    assert_eq!(tokio::fs::read(&entrypoint).await.unwrap(), b"fake-trampoline");
+                    assert!(dirs.owns_windows_trampoline(&entrypoint));
+                }
+                assert_eq!(tokio::fs::read(&node).await.unwrap(), b"foreign-node");
+                assert!(!pointer.exists());
             },
         )
         .await;
