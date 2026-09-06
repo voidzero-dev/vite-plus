@@ -17,7 +17,7 @@ VITE+ - The Unified Toolchain for the Web
     vite             → <version>
 • Package manager settings configured
 ! Warnings:
-  - vite.config.ts: Cannot safely combine external with skipNodeModulesBundle. Migrate this pack config manually; its options were left unchanged.
+  - vite.config.ts: Cannot safely combine external with skipNodeModulesBundle. Migrate this pack config manually; its options were left unchanged. See https://tsdown.dev/options/dependencies#migration-from-deprecated-options
 ```
 
 ## `vpt print-file vite.config.ts`
@@ -43,7 +43,7 @@ VITE+ - The Unified Toolchain for the Web
 • Dependencies:
     vite   → <version>
 ! Warnings:
-  - vite.config.ts: Cannot safely combine external with skipNodeModulesBundle. Migrate this pack config manually; its options were left unchanged.
+  - vite.config.ts: Cannot safely combine external with skipNodeModulesBundle. Migrate this pack config manually; its options were left unchanged. See https://tsdown.dev/options/dependencies#migration-from-deprecated-options
 ```
 
 ## `vpt print-file vite.config.ts`

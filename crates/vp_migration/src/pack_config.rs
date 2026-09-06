@@ -191,7 +191,11 @@ pub(crate) fn can_edit_object<D: Doc>(node: &Node<'_, D>) -> bool {
     true
 }
 
-const EXTERNAL_SKIP_WARNING: &str = "Cannot safely combine external with skipNodeModulesBundle. Migrate this pack config manually; its options were left unchanged.";
+const EXTERNAL_SKIP_WARNING: &str = concat!(
+    "Cannot safely combine external with skipNodeModulesBundle. ",
+    "Migrate this pack config manually; its options were left unchanged. ",
+    "See https://tsdown.dev/options/dependencies#migration-from-deprecated-options",
+);
 
 pub(crate) fn pack_config_warnings(content: &str, standalone: bool) -> Vec<String> {
     let grep = SupportLang::TypeScript.ast_grep(content);
