@@ -43,9 +43,11 @@ describe('isNpmPackageAvailable', () => {
 
     expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://registry.npmjs.org/@scope%2fpkg', {
       headers: { accept: 'application/vnd.npm.install-v1+json' },
+      signal: undefined,
     });
     expect(fetchImpl).toHaveBeenNthCalledWith(2, 'https://registry.npmjs.org/pkg/-/pkg-1.2.3.tgz', {
       method: 'HEAD',
+      signal: undefined,
     });
   });
 
@@ -140,7 +142,81 @@ describe('waitForNpmPackages', () => {
       }),
     ).rejects.toThrow('Timed out after 5s waiting for npm propagation: pkg@1.2.3');
 
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  test('checks the deadline before each package', async () => {
+    let currentTime = 0;
+    const fetchImpl = vi.fn<FetchLike>(async () => {
+      currentTime = 5_000;
+      return response(404);
+    });
+
+    await expect(
+      waitForNpmPackages(
+        [
+          { name: 'first', version: '1.2.3' },
+          { name: 'second', version: '1.2.3' },
+        ],
+        {
+          registry: 'https://registry.npmjs.org',
+          fetchImpl,
+          minSeconds: 0,
+          timeoutSeconds: 5,
+          pollSeconds: 1,
+          sleep: async () => {},
+          now: () => currentTime,
+          log: vi.fn(),
+        },
+      ),
+    ).rejects.toThrow('Timed out after 5s waiting for npm propagation: first@1.2.3, second@1.2.3');
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  test('aborts a stalled request at the deadline and skips later packages', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn<FetchLike>(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            const signal = init?.signal;
+            if (!signal) {
+              reject(new Error('missing abort signal'));
+              return;
+            }
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          }),
+      );
+
+      const result = waitForNpmPackages(
+        [
+          { name: 'first', version: '1.2.3' },
+          { name: 'second', version: '1.2.3' },
+        ],
+        {
+          registry: 'https://registry.npmjs.org',
+          fetchImpl,
+          minSeconds: 0,
+          timeoutSeconds: 5,
+          pollSeconds: 1,
+          sleep: async () => {},
+          now: Date.now,
+          log: vi.fn(),
+        },
+      );
+      const error = result.catch((caught: unknown) => caught);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      await expect(error).resolves.toEqual(
+        new Error('Timed out after 5s waiting for npm propagation: first@1.2.3, second@1.2.3'),
+      );
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(fetchImpl.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

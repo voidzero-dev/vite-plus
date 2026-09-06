@@ -21,7 +21,7 @@ interface AbbreviatedPackument {
 
 export type FetchLike = (
   url: string,
-  init?: { method?: string; headers?: Record<string, string> },
+  init?: { method?: string; headers?: Record<string, string>; signal?: AbortSignal },
 ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
 export interface WaitForNpmPackagesOptions {
@@ -40,13 +40,18 @@ function escapePackageName(name: string): string {
   return name.replace('/', '%2f');
 }
 
+type NpmRegistryRequestOptions = Pick<WaitForNpmPackagesOptions, 'registry' | 'fetchImpl'> & {
+  signal?: AbortSignal;
+};
+
 async function fetchNpmPackument(
   name: string,
-  options: Pick<WaitForNpmPackagesOptions, 'registry' | 'fetchImpl'>,
+  options: NpmRegistryRequestOptions,
 ): Promise<AbbreviatedPackument | null> {
   const registry = options.registry.replace(/\/+$/, '');
   const response = await options.fetchImpl(`${registry}/${escapePackageName(name)}`, {
     headers: { accept: ABBREVIATED_PACKUMENT_ACCEPT },
+    signal: options.signal,
   });
   if (response.status === 404) {
     return null;
@@ -60,7 +65,7 @@ async function fetchNpmPackument(
 /** Checks whether npm has made an immutable package version visible. */
 export async function isNpmPackagePublished(
   pkg: NpmPackageVersion,
-  options: Pick<WaitForNpmPackagesOptions, 'registry' | 'fetchImpl'>,
+  options: NpmRegistryRequestOptions,
 ): Promise<boolean> {
   const packument = await fetchNpmPackument(pkg.name, options);
   return packument?.versions?.[pkg.version] !== undefined;
@@ -72,7 +77,7 @@ export async function isNpmPackagePublished(
  */
 export async function isNpmPackageAvailable(
   pkg: NpmPackageVersion,
-  options: Pick<WaitForNpmPackagesOptions, 'registry' | 'fetchImpl'>,
+  options: NpmRegistryRequestOptions,
 ): Promise<boolean> {
   const packument = await fetchNpmPackument(pkg.name, options);
   const tarball = packument?.versions?.[pkg.version]?.dist?.tarball;
@@ -80,8 +85,21 @@ export async function isNpmPackageAvailable(
     return false;
   }
 
-  const tarballResponse = await options.fetchImpl(tarball, { method: 'HEAD' });
+  const tarballResponse = await options.fetchImpl(tarball, {
+    method: 'HEAD',
+    signal: options.signal,
+  });
   return tarballResponse.ok;
+}
+
+function propagationTimeoutError(
+  pending: ReadonlyMap<string, string>,
+  timeoutSeconds: number,
+): Error {
+  const packageList = [...pending].map(([name, version]) => `${name}@${version}`).join(', ');
+  return new Error(
+    `Timed out after ${timeoutSeconds}s waiting for npm propagation: ${packageList}`,
+  );
 }
 
 /**
@@ -104,13 +122,27 @@ export async function waitForNpmPackages(
 
   while (pending.size > 0) {
     for (const [name, version] of pending) {
+      const remainingMilliseconds = deadline - options.now();
+      if (remainingMilliseconds <= 0) {
+        throw propagationTimeoutError(pending, options.timeoutSeconds);
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), remainingMilliseconds);
       try {
-        if (await isNpmPackageAvailable({ name, version }, options)) {
+        if (
+          await isNpmPackageAvailable({ name, version }, { ...options, signal: controller.signal })
+        ) {
           options.log(`  ${name}@${version}: available`);
           pending.delete(name);
         }
       } catch (error) {
+        if (controller.signal.aborted || options.now() >= deadline) {
+          throw propagationTimeoutError(pending, options.timeoutSeconds);
+        }
         options.log(`  ${name}@${version}: check failed, retrying (${String(error)})`);
+      } finally {
+        clearTimeout(timeout);
       }
     }
 
@@ -118,12 +150,11 @@ export async function waitForNpmPackages(
       break;
     }
     if (options.now() >= deadline) {
-      const packageList = [...pending].map(([name, version]) => `${name}@${version}`).join(', ');
-      throw new Error(
-        `Timed out after ${options.timeoutSeconds}s waiting for npm propagation: ${packageList}`,
-      );
+      throw propagationTimeoutError(pending, options.timeoutSeconds);
     }
-    await options.sleep(options.pollSeconds * 1000);
+    await options.sleep(
+      Math.min(options.pollSeconds * 1000, Math.max(0, deadline - options.now())),
+    );
   }
 
   if (options.minSeconds > 0) {
