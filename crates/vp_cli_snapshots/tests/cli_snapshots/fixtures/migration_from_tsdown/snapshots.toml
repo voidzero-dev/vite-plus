@@ -12,3 +12,15 @@ steps = [
   { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite.config.ts", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_from_tsdown_tsgo"
+vp = "global"
+comment = "Convert dts.tsgo to dts.generator and preserve the result on a second migration."
+steps = [
+  { argv = ["vpt", "replace-file-content", "tsdown.config.ts", "dts: true", "dts: { tsgo: true }"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "tsdown.config.ts"], comment = "check dts.generator replaces dts.tsgo" },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "tsdown.config.ts"], comment = "check the migrated config is unchanged" },
+]

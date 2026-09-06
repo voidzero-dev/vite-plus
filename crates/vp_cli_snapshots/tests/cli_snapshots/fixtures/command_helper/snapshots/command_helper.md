@@ -81,7 +81,6 @@ Options:
   --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: TSDOWN_)
   --on-success <command>        Command to run on success
   --copy <dir>                  Copy files to output dir
-  --public-dir <dir>            Alias for --copy, deprecated
   --tsconfig <tsconfig>         Set tsconfig path
   --unbundle                    Unbundle mode
   --root <dir>                  Root directory of input files

@@ -899,7 +899,6 @@ const commandHelpDocs = {
           },
           { label: '--on-success <command>', description: 'Command to run on success' },
           { label: '--copy <dir>', description: 'Copy files to output dir' },
-          { label: '--public-dir <dir>', description: 'Alias for --copy, deprecated' },
           { label: '--tsconfig <tsconfig>', description: 'Set tsconfig path' },
           { label: '--unbundle', description: 'Unbundle mode' },
           { label: '--root <dir>', description: 'Root directory of input files' },
