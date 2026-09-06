@@ -80,3 +80,25 @@ steps = [
   { argv = ["vp", "migrate", "--no-interactive"] },
   { argv = ["vpt", "print-file", "vite.config.ts"] },
 ]
+
+[[case]]
+name = "migration_pack_tsdown_023_no_external"
+vp = "global"
+comment = "Migrate noExternal patterns, references, and callbacks and confirm the dependency remains bundled."
+steps = [
+  { argv = ["vpt", "cp", "no-external.config.txt", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "cp", "no-external-entry.txt", "src/index.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies", '{"@fixture/pack-bundled":"file:./pack-dependency"}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "install"], snapshot = false, timeout = 120000 },
+  { argv = ["vpt", "stat-file", "node_modules/@fixture/pack-bundled/index.js", "--assert", "file"] },
+  { argv = ["vp", "pack", "--fail-on-warn"], snapshot = false },
+  { argv = ["vpt", "print-file", "dist/literal/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/reference/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/callback/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/method/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/control/index.mjs"] },
+]

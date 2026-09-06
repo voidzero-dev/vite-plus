@@ -416,6 +416,7 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
     });
     let source = move_option(&source, "injectStyle", "css", "inject", false);
     let source = move_option(&source, "inlineOnly", "deps", "onlyBundle", false);
+    let source = move_option(&source, "noExternal", "deps", "alwaysBundle", false);
     let source = move_option(&source, "skipNodeModulesBundle", "deps", "neverBundle", true);
     edit_object(&source, |config| {
         config.set_default("deps", "{ resolveDepSubpath: true }");
@@ -424,8 +425,10 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
 
 fn move_option(source: &str, old: &str, group: &str, new: &str, boolean: bool) -> String {
     edit_object(source, |config| {
-        let Some(value) = config.value(old) else { return };
+        let Some(property) = config.property(old) else { return };
+        let value = config.value(old);
         if boolean {
+            let Some(value) = &value else { return };
             match value.kind().as_ref() {
                 "false" => {
                     config.remove(old);
@@ -435,6 +438,20 @@ fn move_option(source: &str, old: &str, group: &str, new: &str, boolean: bool) -
                 _ => return,
             }
         }
+        let replacement = if let Some(value) = value {
+            format!("{new}: {}", value.text())
+        } else if property.kind() == "method_definition"
+            && !property.children().any(|child| matches!(child.kind().as_ref(), "get" | "set"))
+        {
+            let Some(name) = property.field("name") else { return };
+            apply_edits(
+                &property.text(),
+                vec![(name.range(), new.to_owned())],
+                property.range().start,
+            )
+        } else {
+            return;
+        };
         if let Some(namespace) = config.value(group) {
             if namespace.kind() != "object" {
                 return;
@@ -442,7 +459,7 @@ fn move_option(source: &str, old: &str, group: &str, new: &str, boolean: bool) -
             let mut moved = false;
             let updated = edit_object(&namespace.text(), |options| {
                 if options.property(new).is_none() {
-                    options.set_default(new, &value.text());
+                    options.additions.push(replacement.clone());
                     moved = true;
                 }
             });
@@ -453,12 +470,9 @@ fn move_option(source: &str, old: &str, group: &str, new: &str, boolean: bool) -
         } else if config.property(group).is_none() {
             let defaults = if group == "deps" { ", resolveDepSubpath: true" } else { "" };
             // Replace in place so comments on the old option stay attached.
-            if let Some(property) = config.property(old) {
-                config.edits.push((
-                    property.range(),
-                    format!("{group}: {{ {new}: {}{defaults} }}", value.text()),
-                ));
-            }
+            config
+                .edits
+                .push((property.range(), format!("{group}: {{ {replacement}{defaults} }}")));
         }
     })
 }
@@ -496,6 +510,65 @@ mod tests {
             "{ external: ['foo'], skipNodeModulesBundle: true, inputOptions: { treeshake: false } }",
         );
         assert!(actual.contains("external: ['foo'], treeshake: false"), "{actual}");
+    }
+
+    #[test]
+    fn migrates_no_external_values_without_evaluation() {
+        for value in [
+            "['foo', /^@vendor\\//]",
+            "'foo'",
+            "/^@vendor\\//",
+            "bundlePatterns",
+            "getBundlePatterns()",
+            "production ? ['foo'] : []",
+            "(id) => id === 'foo'",
+            "function (id) { return id === 'foo'; }",
+        ] {
+            for deps in ["", ", deps: { onlyBundle: ['foo'] }", ", deps: { neverBundle: true }"] {
+                let actual = migrate(&format!("{{ noExternal: {value}{deps} }}"));
+                assert!(actual.contains(&format!("alwaysBundle: {value}")), "{actual}");
+                assert!(!actual.contains("noExternal"), "{actual}");
+                assert!(actual.contains("resolveDepSubpath: true"), "{actual}");
+                assert!(pack_config_warnings(&actual, false).is_empty());
+            }
+        }
+        let actual = migrate("{ noExternal }");
+        assert!(actual.contains("alwaysBundle: noExternal"), "{actual}");
+    }
+
+    #[test]
+    fn migrates_no_external_methods_in_standalone_callbacks() {
+        for deps in ["", ", deps: { onlyBundle: ['foo'] }"] {
+            let input = format!(
+                "export default defineConfig(() => ({{ noExternal(id) {{ /* match */ return id === 'foo'; }}{deps} }}));"
+            );
+            let actual = rewrite_pack_config(&input, true);
+            assert!(
+                actual.contains("alwaysBundle(id) { /* match */ return id === 'foo'; }"),
+                "{actual}"
+            );
+            assert!(!actual.contains("noExternal"), "{actual}");
+            assert!(pack_config_warnings(&actual, true).is_empty());
+            assert_eq!(rewrite_pack_config(&actual, true), actual);
+        }
+    }
+
+    #[test]
+    fn preserves_no_external_conflicts_and_unknown_deps() {
+        for deps in [
+            "customDeps",
+            "{ ...customDeps }",
+            "{ alwaysBundle: ['bar'] }",
+            "{ alwaysBundle(id) { return id === 'bar'; } }",
+        ] {
+            for option in ["noExternal: bundlePatterns", "noExternal(id) { return id === 'foo'; }"]
+            {
+                let actual = migrate(&format!("{{ {option}, deps: {deps} }}"));
+                assert!(actual.contains(option), "{actual}");
+                assert!(!actual.contains("alwaysBundle: bundlePatterns"), "{actual}");
+                assert!(!actual.contains("alwaysBundle(id) { return id === 'foo'; }"), "{actual}");
+            }
+        }
     }
 
     #[test]

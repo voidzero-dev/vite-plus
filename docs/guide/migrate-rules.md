@@ -57,6 +57,7 @@ supported. JSON tsdown configs receive the same updates after they merge into
 | `removeNodeProtocol: true`                                         | `nodeProtocol: 'strip'`                                                               |
 | `injectStyle`                                                      | `css.inject`                                                                          |
 | `inlineOnly` / `deps.onlyAllowBundle`                              | `deps.onlyBundle`                                                                     |
+| `noExternal`                                                       | `deps.alwaysBundle`                                                                   |
 | `skipNodeModulesBundle: true` / `deps.skipNodeModulesBundle: true` | `deps.neverBundle: true`                                                              |
 | `dts.tsgo` / `dts.oxc`                                             | Select with `dts.generator`; retain generator option objects and remove boolean flags |
 | `dts.cjsReexport`                                                  | Removed; tsdown generates CJS declarations separately                                 |
@@ -65,6 +66,10 @@ supported. JSON tsdown configs receive the same updates after they merge into
 Migration preserves the previous defaults by setting `deps.resolveDepSubpath`
 to `true` when absent. Enabled ATTW checks receive `profile: 'strict'` when
 no profile is set. Explicit values, including `false`, remain unchanged.
+
+`noExternal` moves to `deps.alwaysBundle`, preserving matcher expressions,
+references, and callback methods. Existing `deps.alwaysBundle` values remain
+unchanged.
 
 When `external` accompanies either `skipNodeModulesBundle` form, static matchers
 and references to local constants move to `inputOptions.external` before
