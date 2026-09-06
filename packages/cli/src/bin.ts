@@ -21,7 +21,6 @@ import { fmt } from './resolve-fmt.ts';
 import { lint } from './resolve-lint.ts';
 import { pack } from './resolve-pack.ts';
 import { test } from './resolve-test.ts';
-import { resolveUniversalViteConfig } from './resolve-vite-config.ts';
 import { vite } from './resolve-vite.ts';
 import { accent, errorMsg, log } from './utils/terminal.ts';
 
@@ -130,6 +129,9 @@ if (maybePrintCommandHelp(args)) {
 } else {
   // All other commands — delegate to Rust core via NAPI binding
   try {
+    // This module imports `vitest/config` through define-config. Load it here
+    // so `migrate` and `config` can handle stale aliases before Vitest loads.
+    const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
     const initInspection = inspectInitCommand(command, args.slice(1));
     if (
       initInspection.handled &&

@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_stale_vitest_alias_startup"
+vp = "global"
+link-node-modules = true
+steps = [
+  { argv = ["node", "setup-local.mjs"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "config", "--no-hooks", "--no-agent"], envs = [["npm_lifecycle_event", "prepare"]], comment = "prepare should report the stale alias instead of loading its native binding", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], envs = [["VP_SKIP_INSTALL", "1"]], comment = "migrate should start without loading the stale Vitest alias", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the stale Vitest dependency should be removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the stale catalog alias and override should be removed", continue-on-failure = true },
+]

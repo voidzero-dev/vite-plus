@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { parseConfigArgs } from '../../binding/index.js';
 import { updateExistingAgentInstructions } from '../utils/agent.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
+import { findLegacyVitestAliasConfig } from '../utils/legacy-vitest-alias.ts';
 import { defaultInteractive, promptGitHooks } from '../utils/prompts.ts';
-import { log } from '../utils/terminal.ts';
+import { errorMsg, log } from '../utils/terminal.ts';
 import {
   install,
   isGitHooksEnvDisabled,
@@ -22,6 +23,15 @@ async function main() {
   const lifecycleEvent = process.env.npm_lifecycle_event;
   const isLifecycleScript = lifecycleEvent === 'prepare' || lifecycleEvent === 'postinstall';
   const root = process.cwd();
+
+  const staleVitestAliasConfig = findLegacyVitestAliasConfig(root);
+  if (staleVitestAliasConfig) {
+    const relativeConfigPath = relative(root, staleVitestAliasConfig);
+    errorMsg(
+      `Found a stale Vitest alias in ${relativeConfigPath} that points to the removed \`@voidzero-dev/vite-plus-test\` package. Run \`vp migrate\` to update the project before installing dependencies.`,
+    );
+    process.exit(1);
+  }
 
   // --- Step 1: Hooks setup ---
   // Prefer CLI flag, then last-used dir from local git config, then default.

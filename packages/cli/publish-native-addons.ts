@@ -1,4 +1,3 @@
-import { execSync } from 'node:child_process';
 import { copyFileSync, existsSync, chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -6,6 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 import { NapiCli, parseTriple } from '@napi-rs/cli';
 
+import { publishNpmPackageFromEnv } from '../../.github/scripts/publish-npm-package.ts';
+import {
+  type NpmPackageVersion,
+  waitForNpmPackagesFromEnv,
+} from '../../.github/scripts/wait-for-npm-packages.ts';
 import pkg from './package.json' with { type: 'json' };
 import { editJsonFile, readJsonFile } from './src/utils/json.ts';
 
@@ -93,6 +97,8 @@ const cliPackageJson = readJsonFile(join(currentDir, 'package.json')) as {
   repository?: unknown;
   optionalDependencies?: Record<string, string>;
 };
+// Lockstep versioning: every generated platform package uses the CLI version.
+const cliVersion = cliPackageJson.version;
 
 // napi-rs prePublish injects the platform packages into this package's
 // `optionalDependencies`. Release builds of core rewrite bundled Rolldown's
@@ -120,36 +126,21 @@ editJsonFile(join(repoRoot, 'packages', 'core', 'package.json'), (corePkgJson) =
     ...nativePlatformPins,
   },
 }));
+const platformPackages = Object.keys(nativePlatformPins).map((name) => ({
+  name,
+  version: cliVersion,
+}));
 
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';
+const publishArgs = ['publish', '--tag', npmTag, '--access', 'public'];
 if (!skipNpmPublish) {
   for (const file of platformDirs) {
-    try {
-      const output = execSync(`npm publish --tag ${npmTag} --access public`, {
-        cwd: join(currentDir, 'npm', file),
-        env: process.env,
-        stdio: 'pipe',
-      });
-      process.stdout.write(output);
-    } catch (e) {
-      if (
-        e instanceof Error &&
-        e.message.includes('You cannot publish over the previously published versions')
-      ) {
-        // eslint-disable-next-line no-console
-        console.info(e.message);
-        // eslint-disable-next-line no-console
-        console.warn(`${file} has been published, skipping`);
-      } else {
-        throw e;
-      }
-    }
+    const platformDir = join(npmDir, file);
+    const platformPackage = readJsonFile(join(platformDir, 'package.json')) as NpmPackageVersion;
+    await publishNpmPackageFromEnv(platformPackage, 'npm', publishArgs, platformDir);
   }
 }
-
-// Lockstep versioning: the CLI platform packages publish at the same version.
-const cliVersion = cliPackageJson.version;
 
 // Create and publish separate @voidzero-dev/vite-plus-cli-{platform} packages
 const cliNpmDir = join(currentDir, 'cli-npm');
@@ -206,6 +197,7 @@ for (const napiTarget of pkg.napi.targets) {
     repository: cliPackageJson.repository,
   };
   writeFileSync(join(platformCliDir, 'package.json'), JSON.stringify(cliPackage, null, 2) + '\n');
+  platformPackages.push(cliPackage);
 
   if (skipNpmPublish) {
     // eslint-disable-next-line no-console
@@ -216,17 +208,19 @@ for (const napiTarget of pkg.napi.targets) {
   }
 
   // Publish CLI package
-  execSync(`npm publish --tag ${npmTag} --access public`, {
-    cwd: platformCliDir,
-    env: process.env,
-    stdio: 'inherit',
-  });
+  const result = await publishNpmPackageFromEnv(cliPackage, 'npm', publishArgs, platformCliDir);
 
-  // eslint-disable-next-line no-console
-  console.log(`Published CLI package: @voidzero-dev/vite-plus-cli-${platform}@${cliVersion}`);
+  if (result === 'published') {
+    // eslint-disable-next-line no-console
+    console.log(`Published CLI package: @voidzero-dev/vite-plus-cli-${platform}@${cliVersion}`);
+  }
 }
 
-// Clean up cli-npm directory (skipped when caller still needs the prepared dirs).
+// npm can accept uploads before scanning makes them installable. Wait for the
+// platform packages before publishing core and the CLI, which pin their versions.
 if (!skipNpmPublish) {
+  await waitForNpmPackagesFromEnv(platformPackages);
+
+  // Preview releases still need the prepared directories.
   rmSync(cliNpmDir, { recursive: true, force: true });
 }
