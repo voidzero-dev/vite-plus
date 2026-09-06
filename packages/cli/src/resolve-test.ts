@@ -10,13 +10,59 @@
  * Used for: `vite-plus test` command
  */
 
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 
 import { DEFAULT_ENVS, resolveBundled } from './utils/constants.ts';
 
 interface VitestPackageJson {
   bin?: string | Record<string, string>;
+}
+
+/** Explain v5's directory-local config lookup without changing runner arguments. */
+export function parentTestConfigDiagnostic(cwd: string, args: readonly string[]): string | null {
+  const options = args.slice(0, args.includes('--') ? args.indexOf('--') : args.length);
+  if (
+    options.some(
+      (arg) =>
+        ['--help', '-h', '--version', '-v', '--config', '-c'].includes(arg) ||
+        arg.startsWith('--config=') ||
+        /^-c.+/.test(arg),
+    )
+  ) {
+    return null;
+  }
+  let root = cwd;
+  for (let index = 0; index < options.length; index++) {
+    const arg = options[index];
+    if (arg === '--root' || arg === '-r') {
+      if (!options[index + 1]) {
+        return null;
+      }
+      root = resolve(cwd, options[++index]);
+    } else if (arg.startsWith('--root=')) {
+      root = resolve(cwd, arg.slice('--root='.length));
+    }
+  }
+  const names = ['vitest', 'vite'].flatMap((name) =>
+    ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((ext) => `${name}.config.${ext}`),
+  );
+  const findConfig = (dir: string) => names.find((name) => existsSync(join(dir, name)));
+  if (findConfig(root)) {
+    return null;
+  }
+  for (let parent = dirname(root); parent !== root; root = parent, parent = dirname(parent)) {
+    const name = findConfig(parent);
+    if (name) {
+      const config = relative(cwd, join(parent, name)).replaceAll('\\', '/');
+      const quoted = /[\s'"$`]/.test(config) ? `'${config.replaceAll("'", "'\\''")}'` : config;
+      return (
+        `No test config was found in this directory.\n` +
+        `A config exists at ${config}. Run \`vp test --config ${quoted} --dir .\`.`
+      );
+    }
+  }
+  return null;
 }
 
 /**

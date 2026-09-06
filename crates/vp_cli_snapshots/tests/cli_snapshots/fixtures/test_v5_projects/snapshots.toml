@@ -1,0 +1,9 @@
+[[case]]
+name = "project_runtime_matrix"
+vp = "local"
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "vendor/jest-extended", "node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "vendor/vitest", "node_modules"], snapshot = false },
+  { argv = ["node", "verify.mjs"], timeout = 120000 },
+]

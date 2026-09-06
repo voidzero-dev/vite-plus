@@ -1,10 +1,32 @@
-const VITEST_ALIGN_EXCLUDED = new Set([
-  '@vitest/eslint-plugin',
-  // Deprecated at 0.33.0 and replaced by @vitest/coverage-v8. It does not
-  // publish versions on Vitest's current release line.
-  '@vitest/coverage-c8',
+import { VITEST_VERSION, VITEST_WEBDRIVERIO_RANGE } from './constants.ts';
+
+/** Official packages that share the bundled runner's release version. */
+export const VITEST_EXACT_VERSION_PACKAGES: ReadonlySet<string> = new Set([
+  '@vitest/browser',
+  '@vitest/browser-playwright',
+  '@vitest/browser-preview',
+  '@vitest/coverage-v8',
+  '@vitest/coverage-istanbul',
+  '@vitest/mocker',
+  '@vitest/pretty-format',
+  '@vitest/snapshot',
+  '@vitest/spy',
+  '@vitest/ui',
+  '@vitest/utils',
+  '@vitest/web-worker',
+]);
+
+/** Optional peers fall back to the project; unrelated @vitest packages do not redirect. */
+export const VITEST_RESOLVER_PACKAGES: ReadonlySet<string> = new Set([
+  'vitest',
+  ...VITEST_EXACT_VERSION_PACKAGES,
+  '@vitest/browser-webdriverio',
 ]);
 
 export function isAlignableVitestEcosystemPackage(name: string): boolean {
-  return name.startsWith('@vitest/') && !VITEST_ALIGN_EXCLUDED.has(name);
+  return VITEST_EXACT_VERSION_PACKAGES.has(name) || name === '@vitest/browser-webdriverio';
+}
+
+export function vitestEcosystemVersion(name: string): string {
+  return name === '@vitest/browser-webdriverio' ? VITEST_WEBDRIVERIO_RANGE : VITEST_VERSION;
 }

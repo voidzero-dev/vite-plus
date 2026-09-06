@@ -1,5 +1,5 @@
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -370,7 +370,66 @@ const OXC_PACKAGES = new Set([
   'oxlint',
   'oxlint-tsgolint',
 ]);
-const VITEST_DEPS = new Set(['tinybench']);
+// Temporary bridge until both pinned upstream workspaces use Vitest v5.
+const VITEST_DEPS = new Set(['tinybench', 'vitest']);
+
+export function alignVendoredVitestDependencies(rootDir: string, version: string): void {
+  for (const vendor of [VITE_DIR, ROLLDOWN_DIR]) {
+    const packagesDir = join(rootDir, vendor, 'packages');
+    const dirs = [
+      join(rootDir, vendor),
+      ...readdirSync(packagesDir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(packagesDir, entry.name)),
+    ];
+    for (const dir of dirs) {
+      const file = join(dir, 'package.json');
+      if (!existsSync(file)) {
+        continue;
+      }
+      const source = readFileSync(file, 'utf8');
+      const pkg = JSON.parse(source) as Record<string, Record<string, string>>;
+      let changed = false;
+      for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+        for (const name of Object.keys(pkg[field] ?? {})) {
+          if (name !== 'vitest' && !name.startsWith('@vitest/')) {
+            continue;
+          }
+          if (['@vitest/runner', '@vitest/expect'].includes(name)) {
+            throw new Error(`Migrate removed ${name} use in ${file} before synchronizing Vitest`);
+          }
+          // Only the official packages in the root catalog share the runner version.
+          if (
+            name !== 'vitest' &&
+            ![
+              '@vitest/browser',
+              '@vitest/browser-playwright',
+              '@vitest/browser-preview',
+              '@vitest/mocker',
+              '@vitest/pretty-format',
+              '@vitest/snapshot',
+              '@vitest/spy',
+              '@vitest/utils',
+              '@vitest/ui',
+              '@vitest/coverage-v8',
+              '@vitest/coverage-istanbul',
+            ].includes(name)
+          ) {
+            continue;
+          }
+          if (pkg[field][name] !== version && !pkg[field][name].startsWith('catalog:')) {
+            pkg[field][name] = version;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
+        log(`Aligned Vitest dependencies in ${file} to ${version}`);
+      }
+    }
+  }
+}
 
 // These packages should always use the highest version
 function syncedPackages(packageName: string): boolean {
@@ -903,6 +962,12 @@ export async function syncRemote() {
   const yamlContent = mergeWorkspaceYaml(mainSrc, rolldownSrc, rolldownViteSrc, yaml, semver);
 
   writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');
+
+  const vitestVersion = (yaml.parse(yamlContent) as PnpmWorkspace).catalog?.vitest;
+  if (!vitestVersion || !semver.valid(vitestVersion)) {
+    throw new Error('The Vitest catalog entry must be an exact version');
+  }
+  alignVendoredVitestDependencies(rootDir, vitestVersion);
 
   log('✓ pnpm-workspace.yaml updated successfully!');
 

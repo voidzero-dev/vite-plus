@@ -4,15 +4,14 @@ import path from 'node:path';
 import { YAMLMap } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
-import {
-  VITEST_VERSION,
-  VITE_PLUS_NAME,
-  VITE_PLUS_OVERRIDE_PACKAGES,
-} from '../../utils/constants.ts';
+import { VITE_PLUS_NAME, VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { extractOverrideTargetName } from '../../utils/package-overrides.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
-import { isAlignableVitestEcosystemPackage } from '../../utils/vitest-ecosystem.ts';
+import {
+  isAlignableVitestEcosystemPackage,
+  vitestEcosystemVersion,
+} from '../../utils/vitest-ecosystem.ts';
 import {
   bootstrapProjectPaths,
   getCatalogDependencySpec,
@@ -623,7 +622,7 @@ export function getAlignedVitestEcosystemDependencySpec(
   // catalog-ized — so the toolchain and its ecosystem share one catalog source
   // of truth. rewriteCatalog adds the matching catalog entry (keyed on the
   // catalog owning `vitest`), keeping the two writers consistent and idempotent.
-  return getCatalogDependencySpec(current, VITEST_VERSION, supportCatalog, {
+  return getCatalogDependencySpec(current, vitestEcosystemVersion(dependencyName), supportCatalog, {
     dependencyField,
     dependencyName,
     packageManager,
@@ -695,7 +694,7 @@ export function vitestEcosystemCatalogReferencesPending(
       if (
         isAlignableVitestEcosystemPackage(name) &&
         spec.startsWith('catalog:') &&
-        catalogDependencyResolver(spec, name) !== VITEST_VERSION
+        catalogDependencyResolver(spec, name) !== vitestEcosystemVersion(name)
       ) {
         return true;
       }

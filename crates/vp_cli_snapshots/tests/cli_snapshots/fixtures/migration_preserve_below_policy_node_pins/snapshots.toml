@@ -2,8 +2,10 @@
 name = "migration_preserve_below_policy_node_pins"
 vp = "global"
 steps = [
-  { argv = ["vp", "migrate", "--no-interactive"], comment = "existing Vite+ project: a Node pin below the supported range is preserved, not raised (native binding supports Node >=20)", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "reject a Node pin below the new CLI engine before modifying the project; never raise it silently", continue-on-failure = true },
   { argv = ["vpt", "print-file", ".node-version"], comment = "stays 24.3.0", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "engines.node stays 24.x and devEngines.runtime node stays ^24 (preserved, not raised)", continue-on-failure = true },
-  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "vite-stack catalog updated to the migration target", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "catalog remains unchanged after failed preflight", continue-on-failure = true },
+  { argv = ["vpt", "write-file", ".node-version", "24.11.0\n"], comment = "the user explicitly selects a supported runtime", snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration can proceed without changing the public engine contract", continue-on-failure = true },
 ]

@@ -2,6 +2,8 @@
 
 `vp test` runs tests with [Vitest](https://vitest.dev).
 
+The bundled runner uses Vitest `5.0.0` and requires Node `^22.18.0 || ^24.11.0 || >=26.0.0`. For existing projects, follow [Upgrade to Vitest 5](./vitest-v5.md) before updating dependencies.
+
 ## Overview
 
 `vp test` is built on [Vitest](https://vitest.dev/), so you get a Vite-native test runner that reuses your Vite config and plugins, supports Jest-style expectations, snapshots, and coverage, and handles modern ESM, TypeScript, and JSX projects cleanly.
