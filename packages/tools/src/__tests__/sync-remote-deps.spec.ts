@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import * as semver from 'semver';
 import { describe, expect, test } from 'vitest';
 
@@ -19,6 +23,106 @@ describe('vendored Vitest v5 bridge', () => {
     expect(merged.catalog?.vitest).toBe('5.0.0');
   });
 
+  test.each(['=4.1.11', '^5.1.0', '5.2.0', '^6.0.0'])(
+    'preserves the selected exact runner version against upstream %s',
+    (upstream) => {
+      const merged = mergePnpmWorkspaces(
+        { catalog: { vitest: '5.0.0' } },
+        { catalog: { vitest: upstream } },
+        {},
+        semver,
+      );
+      expect(merged.catalog?.vitest).toBe('5.0.0');
+    },
+  );
+
+  test('aligns official catalog entries to the selected runner and preserves the community provider', () => {
+    const merged = mergePnpmWorkspaces(
+      {
+        catalog: {
+          vitest: '5.1.2',
+          '@vitest/browser': '5.0.0',
+          '@vitest/browser-webdriverio': '5.0.0-rc.1',
+        },
+      },
+      {
+        catalog: {
+          vitest: '^4.1.6',
+          '@vitest/browser': '^5.2.0',
+          '@vitest/browser-webdriverio': '5.3.0',
+          '@vitest/utils': '4.1.11',
+          '@vitest/expect': '4.1.11',
+          '@vitest/runner': '4.1.11',
+          '@vitest/eslint-plugin': '^1.0.0',
+        },
+      },
+      {
+        catalog: {
+          '@vitest/coverage-v8': '4.1.11',
+          '@vitest/coverage-istanbul': '^4.1.11',
+          '@vitest/ui': '^5.2.0',
+          '@vitest/web-worker': '4.1.11',
+        },
+      },
+      semver,
+    );
+    expect(merged.catalog).toEqual({
+      vitest: '5.1.2',
+      '@vitest/browser': '5.1.2',
+      '@vitest/browser-webdriverio': '5.0.0-rc.1',
+      '@vitest/utils': '5.1.2',
+      '@vitest/coverage-v8': '5.1.2',
+      '@vitest/coverage-istanbul': '5.1.2',
+      '@vitest/ui': '5.1.2',
+      '@vitest/web-worker': '5.1.2',
+      '@vitest/eslint-plugin': '^1.0.0',
+    });
+  });
+
+  test.each(['^5.0.0', '=5.0.0', '4.1.11', '6.0.0', '5.1.0-beta.1'])(
+    'rejects an unreviewed root runner version %s',
+    (vitest) => {
+      expect(() => mergePnpmWorkspaces({ catalog: { vitest } }, {}, {}, semver)).toThrow(
+        'The root Vitest catalog entry must be an exact stable v5 version',
+      );
+    },
+  );
+
+  test('does not infer a missing root pin from an upstream catalog', () => {
+    expect(() => mergePnpmWorkspaces({}, { catalog: { vitest: '^4.1.6' } }, {}, semver)).toThrow(
+      'The root Vitest catalog entry must be an exact stable v5 version',
+    );
+  });
+
+  test('still resolves tinybench to the higher major version', () => {
+    const merged = mergePnpmWorkspaces(
+      { catalog: { tinybench: '^6.0.0' } },
+      { catalog: { tinybench: '^2.9.0' } },
+      {},
+      semver,
+    );
+    expect(merged.catalog?.tinybench).toBe('^6.0.0');
+  });
+
+  test.each(['@vitest/expect', '@vitest/runner'])(
+    'rejects actual dependencies on removed package %s',
+    (name) => {
+      const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-'));
+      try {
+        mkdirSync(join(root, 'vite', 'packages'), { recursive: true });
+        writeFileSync(
+          join(root, 'vite', 'package.json'),
+          JSON.stringify({ devDependencies: { [name]: 'catalog:' } }),
+        );
+        expect(() => alignVendoredVitestDependencies(root, '5.0.0')).toThrow(
+          `Migrate removed ${name} use`,
+        );
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   test('aligns direct workspace dependencies and leaves fixture manifests alone', () => {
     const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-'));
     try {
@@ -33,7 +137,12 @@ describe('vendored Vitest v5 bridge', () => {
         writeFileSync(
           join(root, vendor, 'packages', 'test', 'package.json'),
           JSON.stringify({
-            devDependencies: { vitest: 'catalog:', '@vitest/utils': '4.1.10' },
+            devDependencies: {
+              vitest: 'catalog:',
+              '@vitest/utils': '4.1.10',
+              '@vitest/web-worker': 'catalog:legacy',
+              '@vitest/browser-webdriverio': '^5.0.0-beta.5',
+            },
           }),
         );
         writeFileSync(
@@ -49,7 +158,12 @@ describe('vendored Vitest v5 bridge', () => {
         expect(
           JSON.parse(readFileSync(join(root, vendor, 'packages', 'test', 'package.json'), 'utf8'))
             .devDependencies,
-        ).toEqual({ vitest: 'catalog:', '@vitest/utils': '5.0.0' });
+        ).toEqual({
+          vitest: 'catalog:',
+          '@vitest/utils': '5.0.0',
+          '@vitest/web-worker': '5.0.0',
+          '@vitest/browser-webdriverio': '^5.0.0-beta.5',
+        });
       }
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -262,6 +376,3 @@ oxc_ast = { git = "https://example.com/oxc", rev = "abc" }
     expect(content).toContain('oxc_ast = { git = "https://example.com/oxc", rev = "abc" }');
   });
 });
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
