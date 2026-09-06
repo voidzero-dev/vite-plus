@@ -97,8 +97,9 @@ jobs:
 
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
-            - Vitest is intentionally capped at the latest stable `4.x` release until
-              Vite+ adapts to a newer major. Do not remove or bypass that cap.
+            - Vitest is capped at the latest stable `5.x` release. Keep the exact
+              version selected by the upgrade script when merging upstream catalogs.
+              Official Vitest packages must use that version. Do not bypass the cap.
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
               working tree, merges their pnpm-workspace catalogs into the root
@@ -119,7 +120,7 @@ jobs:
                cross-major semver conflict in the merged catalog, e.g.
                `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses to
                auto-resolve cross-major conflicts for packages outside its synced list
-               (oxc-*, vitest deps). For passthrough deps that vp does NOT import
+               (oxc-* and tinybench). For passthrough deps that vp does NOT import
                directly (e.g. `diff`, `acorn`, `astring`, anything only present in
                `rolldown/scripts/package.json` or vite's internals), bump vp's
                `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
