@@ -30,8 +30,10 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   plugins: [foo()],
   test: {
+    clearMocks: false,
     dir: join(import.meta.dirname, 'test'),
     browser: {
+      locators: { exact: false },
       enabled: true,
       provider: playwright(),
       headless: true,
@@ -86,7 +88,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vitest: <version>
   vite-plus: <version>
-  '@vitest/browser-webdriverio': <version>
+  '@vitest/browser-webdriverio': ^5.0.0-beta.5 || >=5.0.0
   '@vitest/browser-playwright': <version>
   '@vitest/coverage-v8': <version>
 allowBuilds:

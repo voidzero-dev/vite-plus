@@ -1,0 +1,10 @@
+{
+  "name": "test-v5-coverage",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "vite-plus": "latest",
+    "@vitest/coverage-v8": "5.0.0",
+    "@vitest/coverage-istanbul": "5.0.0"
+  }
+}

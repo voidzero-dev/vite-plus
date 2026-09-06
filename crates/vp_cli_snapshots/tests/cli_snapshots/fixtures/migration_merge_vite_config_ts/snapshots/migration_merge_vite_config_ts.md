@@ -53,8 +53,10 @@ export default defineConfig({
   },
   plugins: lazyPlugins(() => [react()]),
   test: {
+    clearMocks: false,
     dir: join(import.meta.dirname, 'test'),
     browser: {
+      locators: { exact: false },
       enabled: true,
       provider: playwright(),
       headless: true,
