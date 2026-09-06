@@ -67,8 +67,9 @@ to `true` when absent. Enabled ATTW checks receive `profile: 'strict'` when
 no profile is set. Explicit values, including `false`, remain unchanged.
 
 When `external` accompanies either `skipNodeModulesBundle` form, static matchers
-move to `inputOptions.external` before `deps.neverBundle` is set. This preserves
-the original matching rules, including external file paths. Unsupported matchers,
+and references to local constants move to `inputOptions.external` before
+`deps.neverBundle` is set. Constant declarations and references stay intact.
+This preserves the original matching rules, including external file paths. Unsupported matchers,
 conflicting `inputOptions`, and declaration-specific dependency rules leave the
 pack object unchanged and produce a manual-migration warning.
 

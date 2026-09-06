@@ -262,8 +262,87 @@ fn is_static_external<D: Doc>(value: &Node<'_, D>) -> bool {
         "array" => value.children().all(|child| {
             matches!(child.kind().as_ref(), "[" | "]" | "," | "comment" | "string" | "regex")
         }),
+        "identifier" | "shorthand_property_identifier" => {
+            constant_initializer(value).is_some_and(|initializer| is_static_external(&initializer))
+        }
+        "as_expression" | "satisfies_expression" | "parenthesized_expression" => value
+            .children()
+            .find(|child| !matches!(child.kind().as_ref(), "(" | "comment"))
+            .is_some_and(|inner| is_static_external(&inner)),
         _ => false,
     }
+}
+
+/// Follow a local const binding without replacing the reference or evaluating
+/// its initializer. Stop at shadowing bindings and unsupported lexical scopes.
+fn constant_initializer<'a, D: Doc>(reference: &Node<'a, D>) -> Option<Node<'a, D>> {
+    let name = reference.text();
+    let mentions_name = |pattern: &Node<'_, D>| pattern.dfs().any(|node| node.text() == name);
+    for scope in reference.ancestors() {
+        match scope.kind().as_ref() {
+            "program" | "statement_block" => {
+                for statement in scope.children() {
+                    let declaration = statement.field("declaration").unwrap_or(statement);
+                    if matches!(
+                        declaration.kind().as_ref(),
+                        "lexical_declaration" | "variable_declaration"
+                    ) {
+                        for declarator in declaration
+                            .children()
+                            .filter(|node| node.kind() == "variable_declarator")
+                        {
+                            let Some(binding) = declarator.field("name") else { continue };
+                            if !mentions_name(&binding) {
+                                continue;
+                            }
+                            // Only earlier bindings qualify. This also prevents
+                            // cycles when following aliases between constants.
+                            return (binding.kind() == "identifier"
+                                && declaration
+                                    .field("kind")
+                                    .is_some_and(|kind| kind.text() == "const")
+                                && declarator.range().end < reference.range().start)
+                                .then(|| declarator.field("value"))
+                                .flatten();
+                        }
+                    } else if declaration
+                        .field("name")
+                        .is_some_and(|binding| mentions_name(&binding))
+                    {
+                        return None;
+                    }
+                }
+            }
+            "arrow_function"
+            | "function_expression"
+            | "function_declaration"
+            | "generator_function"
+            | "generator_function_declaration"
+            | "method_definition" => {
+                if ["parameter", "parameters", "name"]
+                    .iter()
+                    .any(|field| scope.field(field).is_some_and(|pattern| mentions_name(&pattern)))
+                {
+                    return None;
+                }
+                // A var declaration can shadow an outer constant even when it
+                // appears in a nested block of the callback.
+                if scope.dfs().filter(|node| node.kind() == "variable_declaration").any(
+                    |declaration| {
+                        declaration.children().any(|declarator| {
+                            declarator.field("name").is_some_and(|binding| mentions_name(&binding))
+                        })
+                    },
+                ) {
+                    return None;
+                }
+            }
+            "catch_clause" | "for_statement" | "for_in_statement" | "switch_body"
+            | "with_statement" | "class" | "class_declaration" | "internal_module" => return None,
+            _ => {}
+        }
+    }
+    None
 }
 
 fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
@@ -417,6 +496,78 @@ mod tests {
             "{ external: ['foo'], skipNodeModulesBundle: true, inputOptions: { treeshake: false } }",
         );
         assert!(actual.contains("external: ['foo'], treeshake: false"), "{actual}");
+    }
+
+    #[test]
+    fn migrates_constant_external_references_without_warnings() {
+        for declarations in [
+            "const externalOptions = ['foo', './external.js'];",
+            "const externalOptions: string[] = (['foo']);",
+            "export const externalOptions = ['foo', './external.js'] as const;",
+            "const externalOptions = ['foo'] satisfies string[];",
+            "const patterns = ['foo']; const externalOptions = patterns;",
+            "const patterns = ['foo'], externalOptions = patterns;",
+            "const externalOptions = /^virtual:/;",
+            "const externalOptions = 'foo';",
+        ] {
+            for skip in ["skipNodeModulesBundle: true", "deps: { skipNodeModulesBundle: true }"] {
+                for (standalone, config) in [
+                    (
+                        false,
+                        format!(
+                            "export default {{ pack: {{ external: externalOptions, {skip} }} }};"
+                        ),
+                    ),
+                    (
+                        false,
+                        format!(
+                            "export default defineConfig(() => ({{ pack: {{ external: externalOptions, {skip} }} }}));"
+                        ),
+                    ),
+                    (
+                        true,
+                        format!(
+                            "export default defineConfig({{ external: externalOptions, {skip} }});"
+                        ),
+                    ),
+                ] {
+                    let input = format!("{declarations}\n{config}");
+                    let actual = rewrite_pack_config(&input, standalone);
+                    assert!(actual.starts_with(declarations), "{actual}");
+                    assert!(
+                        actual.contains("inputOptions: { external: externalOptions }"),
+                        "{actual}"
+                    );
+                    assert!(actual.contains("neverBundle: true"), "{actual}");
+                    assert!(!actual.contains("skipNodeModulesBundle"), "{actual}");
+                    assert!(pack_config_warnings(&actual, standalone).is_empty());
+                    assert_eq!(rewrite_pack_config(&actual, standalone), actual);
+                }
+            }
+        }
+        let input = "export default defineConfig(() => { const external = ['foo']; return { pack: { external, skipNodeModulesBundle: true } }; });";
+        let actual = rewrite_pack_config(input, false);
+        assert!(actual.contains("inputOptions: { external: external }"), "{actual}");
+        assert!(!actual.contains("skipNodeModulesBundle"), "{actual}");
+        assert!(pack_config_warnings(&actual, false).is_empty());
+    }
+
+    #[test]
+    fn does_not_confuse_unknown_or_shadowed_external_references_with_constants() {
+        for input in [
+            "let externalOptions = ['foo']; export default { pack: { external: externalOptions, skipNodeModulesBundle: true } };",
+            "const externalOptions = getExternal(); export default { pack: { external: externalOptions, skipNodeModulesBundle: true } };",
+            "const externalOptions = '/foo/'; export default { pack: { external: externalOptions, skipNodeModulesBundle: true } };",
+            "const externalOptions = other; const other = externalOptions; export default { pack: { external: externalOptions, skipNodeModulesBundle: true } };",
+            "const externalOptions = ['foo']; export default defineConfig((externalOptions) => ({ pack: { external: externalOptions, skipNodeModulesBundle: true } }));",
+            "const externalOptions = ['foo']; export default defineConfig(({ externalOptions }) => ({ pack: { external: externalOptions, skipNodeModulesBundle: true } }));",
+            "const externalOptions = ['foo']; export default defineConfig(() => { let externalOptions = getExternal(); return { pack: { external: externalOptions, skipNodeModulesBundle: true } }; });",
+            "const externalOptions = ['foo']; export default defineConfig(() => { const externalOptions = '/foo/'; return { pack: { external: externalOptions, skipNodeModulesBundle: true } }; });",
+            "const externalOptions = ['foo']; export default defineConfig(() => { if (custom) { var externalOptions = getExternal(); } return { pack: { external: externalOptions, skipNodeModulesBundle: true } }; });",
+        ] {
+            assert_eq!(rewrite_pack_config(input, false), input);
+            assert_eq!(pack_config_warnings(input, false), [EXTERNAL_SKIP_WARNING]);
+        }
     }
 
     #[test]

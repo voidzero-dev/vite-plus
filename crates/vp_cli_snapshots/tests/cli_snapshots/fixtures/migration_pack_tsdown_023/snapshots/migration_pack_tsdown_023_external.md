@@ -25,6 +25,9 @@ VITE+ - The Unified Toolchain for the Web
 ## `vpt print-file vite.config.ts`
 
 ```
+const externalOptions = ['foo', './external.js'];
+const externalAlias = externalOptions;
+
 export default {
   pack: [
     {
@@ -39,6 +42,20 @@ export default {
       outDir: 'dist/nested',
       dts: false,
       inputOptions: { external: ['foo', './external.js'] },
+      deps: { resolveDepSubpath: true, neverBundle: true },
+    },
+    {
+      entry: 'src/index.ts',
+      outDir: 'dist/constant',
+      dts: false,
+      inputOptions: { external: externalOptions },
+      deps: { neverBundle: true, resolveDepSubpath: true },
+    },
+    {
+      entry: 'src/index.ts',
+      outDir: 'dist/alias',
+      dts: false,
+      inputOptions: { external: externalAlias },
       deps: { resolveDepSubpath: true, neverBundle: true },
     },
   ],
@@ -57,6 +74,22 @@ export { externalValue, foo };
 ```
 
 ## `vpt print-file dist/nested/index.mjs`
+
+```
+import { foo } from "foo";
+import { externalValue } from "./external.js";
+export { externalValue, foo };
+```
+
+## `vpt print-file dist/constant/index.mjs`
+
+```
+import { foo } from "foo";
+import { externalValue } from "./external.js";
+export { externalValue, foo };
+```
+
+## `vpt print-file dist/alias/index.mjs`
 
 ```
 import { foo } from "foo";

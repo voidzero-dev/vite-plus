@@ -35,6 +35,8 @@ steps = [
   { argv = ["vp", "pack"], snapshot = false },
   { argv = ["vpt", "print-file", "dist/top/index.mjs"] },
   { argv = ["vpt", "print-file", "dist/nested/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/constant/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/alias/index.mjs"] },
   { argv = ["vp", "migrate", "--no-interactive"] },
 ]
 
@@ -58,13 +60,23 @@ steps = [
 ]
 
 [[case]]
-name = "migration_pack_tsdown_023_manual"
+name = "migration_pack_tsdown_023_external_constants"
 vp = "global"
-comment = "Report unsupported external matchers without changing the pack options."
+comment = "Migrate constant external references with both skip forms without a manual-migration warning."
 steps = [
-  { argv = ["vpt", "cp", "manual.config.txt", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "cp", "external-constants.config.txt", "vite.config.ts"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"] },
   { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_external_conflicts"
+vp = "global"
+comment = "Report conflicting dependency rules while preserving the pack options."
+steps = [
+  { argv = ["vpt", "cp", "external-conflicts.config.txt", "vite.config.ts"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"] },
   { argv = ["vpt", "print-file", "vite.config.ts"] },
 ]
