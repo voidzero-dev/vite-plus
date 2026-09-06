@@ -1,7 +1,7 @@
-// import { defineProject } from 'vitest/config';
+import { defineConfig } from 'vite-plus';
 import { playwright } from 'vite-plus/test/browser-playwright';
 
-export default {
+export default defineConfig({
   plugins: [
     {
       name: 'vitest-browser-mode-suppress-known-vite-logs',
@@ -35,4 +35,4 @@ export default {
       ],
     },
   },
-};
+});

@@ -2,6 +2,7 @@
 name = "migration_monorepo_yarn4"
 vp = "global"
 steps = [
+  { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"4.1.11\"}"], comment = "record the original runner version without adding a direct dependency", snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should merge vite.config.ts and remove oxlintrc", continue-on-failure = true },
   { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite.config.ts", continue-on-failure = true },
   { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"], comment = "check .oxlintrc.json is removed", continue-on-failure = true },

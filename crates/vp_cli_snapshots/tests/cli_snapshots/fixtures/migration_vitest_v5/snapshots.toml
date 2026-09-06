@@ -1,0 +1,94 @@
+[[case]]
+name = "compatibility"
+vp = "global"
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "print-file", "example.test.ts"],
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", ".vite-plus/migrations.json"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "node_preflight"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "20.19.0\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "example.test.ts"],
+]
+
+[[case]]
+name = "node_container_scope"
+vp = "global"
+comment = "Check the runtime image and feature option, not source properties or Dev Container feature tags."
+steps = [
+  { argv = ["vpt", "write-file", "worker.js", "export const options = { node:2 };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".devcontainer/devcontainer.json", "{\"features\":{\"ghcr.io/devcontainers/features/node:1\":{\"version\":\"lts\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "Dockerfile", "# FROM node:20\nFROM node:20-alpine AS build\nRUN echo node:2\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vpt", "write-file", "Dockerfile", "# FROM node:20\nFROM node:24.11.0-alpine AS build\nRUN echo node:2\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "worker.js"],
+  ["vpt", "print-file", ".devcontainer/devcontainer.json"],
+]
+
+[[case]]
+name = "mixed_project_assertions"
+vp = "global"
+comment = "Keep Node DOM matchers, migrate browser matchers, and retain review findings for shared transform inputs across repeated migrations."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { projects: [{ test: { name: 'node', include: ['node.test.ts', 'shared.test.ts'] } }, { test: { name: 'browser', browser: { enabled: true }, include: ['browser.test.ts', 'shared.test.ts'] } }] } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "node.test.ts", "import { expect } from 'vitest';\nexpect(element).toHaveTextContent('partial');\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "browser.test.ts", "import { expect } from 'vitest';\nawait expect.element(element)['toHaveTextContent']('partial');\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "shared.test.ts", "import { expect } from 'vitest';\nexpect(element).toHaveTextContent('partial');\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "node.test.ts"],
+  ["vpt", "print-file", "browser.test.ts"],
+  ["vpt", "print-file", "shared.test.ts"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "plugin_projects_and_dom_types"
+vp = "global"
+comment = "Do not scan plugin project paths as Vitest configs; report the Jest-only DOM type entry without changing a mixed test contract."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vitest/config';\nconst config = defineConfig({ plugins: [{ name: 'paths', projects: ['./tsconfig.json', './plugin-options.ts'] }], test: {} });\nexport default config;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.json", "{\"compilerOptions\":{\"types\":[\"@testing-library/jest-dom\",\"vitest/globals\"]}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "plugin-options.ts", "export default { test: {} };\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "plugin-options.ts"],
+  ["vpt", "print-file", "tsconfig.json"],
+]
+
+[[case]]
+name = "removed_api_preflight"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "custom-runner.ts", "import { startTests } from '@vitest/runner';\nstartTests([]);\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "api_conflict_preflight"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { api: { port: 1 }, browser: { api: { port: 2 } } } };\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "benchmark_preflight"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "example.bench.ts", "import { bench } from 'vitest';\nbench('old benchmark', () => 20 + 22);\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "example.bench.ts"],
+]

@@ -44,7 +44,10 @@ const guideSidebar = [
       {
         text: 'Migrate to Vite+',
         link: '/guide/migrate',
-        items: [{ text: 'Migration Rules', link: '/guide/migrate-rules' }],
+        items: [
+          { text: 'Migration Rules', link: '/guide/migrate-rules' },
+          { text: 'Upgrade to Vitest 5', link: '/guide/vitest-v5' },
+        ],
       },
       { text: 'Update Vite+', link: '/guide/upgrade-project' },
       { text: 'Package Management', link: '/guide/install' },

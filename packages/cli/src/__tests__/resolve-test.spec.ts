@@ -4,10 +4,42 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { test } from '../resolve-test.js';
+import { parentTestConfigDiagnostic, test } from '../resolve-test.js';
 import { resolve, resolveBundled } from '../utils/constants.js';
 
 describe('resolve-test', () => {
+  describe('parent config diagnostic', () => {
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'vp-parent-test-config-'));
+      mkdirSync(join(dir, 'sub'));
+      writeFileSync(join(dir, 'vite.config.ts'), 'export default {}');
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it('reports a parent config without selecting it', () => {
+      expect(parentTestConfigDiagnostic(join(dir, 'sub'), ['run'])).toBe(
+        'No test config was found in this directory.\n' +
+          'A config exists at ../vite.config.ts. Run `vp test --config ../vite.config.ts --dir .`.',
+      );
+    });
+
+    it.each([
+      ['--config', '../vite.config.ts'],
+      ['--config=../vite.config.ts'],
+      ['-c', '../vite.config.ts'],
+      ['--help'],
+      ['--root', '..'],
+    ])('respects explicit options %j', (...args) => {
+      expect(parentTestConfigDiagnostic(join(dir, 'sub'), args)).toBeNull();
+    });
+
+    it('prefers a config in the selected directory', () => {
+      writeFileSync(join(dir, 'sub', 'vitest.config.mts'), 'export default {}');
+      expect(parentTestConfigDiagnostic(join(dir, 'sub'), [])).toBeNull();
+    });
+  });
+
   it('resolves a vitest binary that exists', async () => {
     const { binPath } = await test();
 

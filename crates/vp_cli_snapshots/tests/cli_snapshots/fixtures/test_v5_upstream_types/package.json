@@ -1,0 +1,12 @@
+{
+  "name": "test-v5-upstream-types",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "devDependencies": {
+    "vitest": "5.0.0",
+    "@vitest/browser-preview": "5.0.0",
+    "@testing-library/jest-dom": "6.9.1",
+    "typescript": "6.0.3"
+  }
+}

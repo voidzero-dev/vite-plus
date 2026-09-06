@@ -1,5 +1,10 @@
 # migration_skip_vite_dependency
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
 migration should skip rewriting vite imports when vite is in dependencies
@@ -7,6 +12,10 @@ migration should skip rewriting vite imports when vite is in dependencies
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 1 review item
+
+package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied, 1 file had imports rewritten

@@ -248,14 +248,14 @@ if (project === 'nuxt-devtools') {
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
 
-// Mirror VITE_PLUS_OVERRIDE_PACKAGES: pin `vitest` only. The `@vitest/*` family
-// are exact deps of `vitest`, so a single `vitest` override cascades them.
+// Mirror VITE_PLUS_OVERRIDE_PACKAGES: pin `vitest` only. Vitest pins its
+// internal dependencies; the migration aligns optional browser providers.
 //
 // Coverage providers are intentionally NOT in the shipped override map (the
 // product leaves them user-owned; the runtime guard fail-fasts on a skew). But
 // this rig FORCE-INSTALLS the locally built vitest, and many ecosystem projects
 // pin an older `@vitest/coverage-*` in their lockfile. Without alignment, the
-// forced runner (4.1.9) skews from the project's pinned provider and the guard
+// forced runner skews from the project's pinned provider and the guard
 // aborts `vp test --coverage` — testing an incoherent combo no real install has.
 // Pin the providers here so the E2E coverage step runs against a consistent
 // runner+provider pair, exactly as a user who followed the guard's advice would.
@@ -307,6 +307,26 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
   stdio: 'inherit',
   env: migrateEnv,
 });
+
+if (project === 'bun-vite-template') {
+  // The pinned template runs Vitest only. Its JS setup file loads jest-dom's
+  // Vitest runtime, but allowJs: false excludes that file from type checking.
+  // Apply the migration report's manual type-entry repair for this fixture.
+  const tsconfigPath = join(repoRoot, 'tsconfig.json');
+  const tsconfig = JSON.parse(await readFile(tsconfigPath, 'utf-8'));
+  const types = tsconfig.compilerOptions?.types;
+  if (
+    !Array.isArray(types) ||
+    !types.includes('vitest/globals') ||
+    !types.includes('@testing-library/jest-dom')
+  ) {
+    throw new Error('bun-vite-template patch: expected the pinned Jest DOM type configuration');
+  }
+  tsconfig.compilerOptions.types = types.map((type) =>
+    type === '@testing-library/jest-dom' ? '@testing-library/jest-dom/vitest' : type,
+  );
+  await writeFile(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`);
+}
 
 if (project === 'tiptap') {
   // Keep Tiptap's upstream lint semantics. Migration enables type-aware type

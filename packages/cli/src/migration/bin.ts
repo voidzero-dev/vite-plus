@@ -38,9 +38,11 @@ import { checkRolldownCompatibility } from './compat/runner.ts';
 import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
 import {
   addFrameworkShim,
+  applyVitestV5Migration,
   checkVitestVersion,
   checkViteVersion,
   collectToolchainVersionChanges,
+  createVitestV5CompatibilityConfig,
   confirmPrettierMigration,
   detectEslintProject,
   detectFramework,
@@ -52,6 +54,8 @@ import {
   detectYarnPnpMode,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
+  finishVitestV5Migration,
+  formatVitestV5Findings,
   hasFrameworkShim,
   detectLegacyGitHooksMigrationCandidate,
   injectLintTypeCheckDefaults,
@@ -66,10 +70,14 @@ import {
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  planVitestV5Migration,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
+  vitestV5ConfiglessProjects,
+  vitestV5NeedsMigration,
   type Framework,
   type NodeVersionManagerDetection,
+  type VitestV5MigrationPlan,
 } from './migrator.ts';
 import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
@@ -687,10 +695,38 @@ async function downloadSupportedPackageManager(options: {
   return downloadResult;
 }
 
+async function completeVitestV5Migration(
+  plan: VitestV5MigrationPlan,
+  interactive: boolean,
+  report: MigrationReport,
+) {
+  if (interactive) {
+    for (const directory of vitestV5ConfiglessProjects(plan)) {
+      const confirmed = await prompts.confirm({
+        message: `Create a minimal Vitest v4 compatibility config in ${displayRelative(directory, plan.rootDir) || '.'}? A new config can change config discovery and project structure.`,
+        initialValue: false,
+      });
+      if (prompts.isCancel(confirmed)) {
+        cancelAndExit();
+      }
+      if (confirmed) {
+        createVitestV5CompatibilityConfig(plan, directory);
+      }
+    }
+  }
+  const findings = finishVitestV5Migration(plan);
+  report.warnings = report.warnings.filter((warning) => !warning.startsWith('Vitest v5:'));
+  const summary = formatVitestV5Findings({ rootDir: plan.rootDir, findings });
+  if (summary) {
+    addMigrationWarning(report, summary);
+  }
+}
+
 async function executeMigrationPlan(
   workspaceInfoOptional: WorkspaceInfoOptional,
   plan: MigrationPlan,
   interactive: boolean,
+  vitestV5Plan: VitestV5MigrationPlan,
   preExistingChangedPaths?: ReadonlySet<string>,
 ): Promise<{
   installDurationMs: number;
@@ -699,6 +735,7 @@ async function executeMigrationPlan(
   report: MigrationReport;
 }> {
   const report = createMigrationReport();
+  applyVitestV5Migration(vitestV5Plan);
   const migrationProgress = interactive ? prompts.spinner({ indicator: 'timer' }) : undefined;
   let migrationProgressStarted = false;
   const updateMigrationProgress = (message: string) => {
@@ -857,6 +894,9 @@ async function executeMigrationPlan(
   }
 
   // 8. Install git hooks
+  clearMigrationProgress();
+  await completeVitestV5Migration(vitestV5Plan, interactive, report);
+
   if (plan.shouldSetupHooks) {
     updateMigrationProgress('Configuring git hooks');
     installGitHooks(
@@ -978,6 +1018,17 @@ async function main() {
   const initialChangedPaths = await collectChangedFormatPaths(workspaceInfoOptional.rootDir);
   const preExistingChangedPaths = initialChangedPaths ? new Set(initialChangedPaths) : undefined;
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
+  const vitestV5Plan = planVitestV5Migration(workspaceInfoOptional);
+  const vitestV5Preflight = formatVitestV5Findings(vitestV5Plan);
+  if (vitestV5Preflight) {
+    prompts.log.warn(vitestV5Preflight);
+  }
+  if (vitestV5Plan.findings.some((finding) => finding.severity === 'block')) {
+    cancelAndExit(
+      'Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.',
+      1,
+    );
+  }
 
   // Early return if already using Vite+ (only finalization/setup migrations may be needed)
   // In force-override mode (file: tgz overrides), skip this check and run full migration
@@ -995,11 +1046,15 @@ async function main() {
       workspaceInfoOptional.packageManagerVersion,
       options.interactive,
     );
-    let didMigrate = false;
+    let didMigrate = vitestV5NeedsMigration(vitestV5Plan);
+    applyVitestV5Migration(vitestV5Plan);
     let installDurationMs = 0;
     let finalInstallOk = true;
     let canFormatMigratedProject = !process.env.VP_SKIP_INSTALL;
     const report = createMigrationReport();
+    // Preflight findings were already printed. Add the remaining findings
+    // after actual edits; review-only items must not force an otherwise
+    // up-to-date project through dependency reconciliation on every run.
     const migrationProgress = options.interactive
       ? prompts.spinner({ indicator: 'timer' })
       : undefined;
@@ -1390,6 +1445,8 @@ async function main() {
     }
 
     if (needsInstall) {
+      clearMigrationProgress();
+      await completeVitestV5Migration(vitestV5Plan, options.interactive, report);
       const resolved = await ensureExistingPackageManager();
       updateMigrationProgress('Installing dependencies');
       const resolvedVersion = resolved?.version ?? packageManagerVersion;
@@ -1463,6 +1520,10 @@ async function main() {
     }
 
     // Check for Rolldown-incompatible config patterns (root + workspace packages)
+    if (!needsInstall) {
+      clearMigrationProgress();
+      await completeVitestV5Migration(vitestV5Plan, options.interactive, report);
+    }
     await checkWorkspaceRolldownCompatibility(
       workspaceInfoOptional,
       report,
@@ -1523,6 +1584,7 @@ async function main() {
     workspaceInfoOptional,
     plan,
     options.interactive,
+    vitestV5Plan,
     preExistingChangedPaths,
   );
   showMigrationSummary({

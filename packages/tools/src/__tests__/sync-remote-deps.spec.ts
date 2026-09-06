@@ -2,10 +2,60 @@ import * as semver from 'semver';
 import { describe, expect, test } from 'vitest';
 
 import {
+  alignVendoredVitestDependencies,
   mergePnpmWorkspaces,
   syncCargoOxcVersions,
   syncViteDevtoolsDependencies,
 } from '../sync-remote-deps.ts';
+
+describe('vendored Vitest v5 bridge', () => {
+  test('resolves the reviewed Vitest major catalog conflict', () => {
+    const merged = mergePnpmWorkspaces(
+      { catalog: { vitest: '5.0.0' } },
+      { catalog: { vitest: '^4.1.6' } },
+      { catalog: { vitest: '^4.1.10' } },
+      semver,
+    );
+    expect(merged.catalog?.vitest).toBe('5.0.0');
+  });
+
+  test('aligns direct workspace dependencies and leaves fixture manifests alone', () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-'));
+    try {
+      for (const vendor of ['vite', 'rolldown']) {
+        mkdirSync(join(root, vendor, 'packages', 'test', 'fixtures'), { recursive: true });
+        writeFileSync(
+          join(root, vendor, 'package.json'),
+          JSON.stringify({
+            devDependencies: { vitest: '^4.0.0', '@vitest/eslint-plugin': '^1.0.0' },
+          }),
+        );
+        writeFileSync(
+          join(root, vendor, 'packages', 'test', 'package.json'),
+          JSON.stringify({
+            devDependencies: { vitest: 'catalog:', '@vitest/utils': '4.1.10' },
+          }),
+        );
+        writeFileSync(
+          join(root, vendor, 'packages', 'test', 'fixtures', 'package.json'),
+          '\ufeff{}',
+        );
+      }
+      alignVendoredVitestDependencies(root, '5.0.0');
+      for (const vendor of ['vite', 'rolldown']) {
+        expect(
+          JSON.parse(readFileSync(join(root, vendor, 'package.json'), 'utf8')).devDependencies,
+        ).toEqual({ vitest: '5.0.0', '@vitest/eslint-plugin': '^1.0.0' });
+        expect(
+          JSON.parse(readFileSync(join(root, vendor, 'packages', 'test', 'package.json'), 'utf8'))
+            .devDependencies,
+        ).toEqual({ vitest: 'catalog:', '@vitest/utils': '5.0.0' });
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('syncViteDevtoolsDependencies()', () => {
   test('uses the DevTools ranges declared by Vite', () => {
@@ -212,3 +262,6 @@ oxc_ast = { git = "https://example.com/oxc", rev = "abc" }
     expect(content).toContain('oxc_ast = { git = "https://example.com/oxc", rev = "abc" }');
   });
 });
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
