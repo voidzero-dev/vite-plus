@@ -35,6 +35,7 @@ import corePkg from '../core/package.json' with { type: 'json' };
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = 'vitest';
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
+const CORE_IMPORT_SPECIFIER = 'vite';
 const NATIVE_BUILD_TIME_PATH = join(projectDir, 'binding', 'vite-plus.build-time');
 const UTC_BUILD_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
@@ -237,33 +238,36 @@ async function syncCorePackageExports() {
   console.log('  Creating ./client');
   await writeFile(
     join(distDir, 'client.d.ts'),
-    `/// <reference types="${CORE_PACKAGE_NAME}/client" />\n`,
+    `/// <reference types="${CORE_IMPORT_SPECIFIER}/client" />\n`,
   );
 
   // Create ./pack/client shim (types only) - ambient type declarations for tsdown bundler features
   console.log('  Creating ./pack/client');
   await writeFile(
     join(distDir, 'pack-client.d.ts'),
-    `/// <reference types="${CORE_PACKAGE_NAME}/pack/client" />\n`,
+    `/// <reference types="${CORE_IMPORT_SPECIFIER}/pack/client" />\n`,
   );
 
   // Create ./module-runner shim
   console.log('  Creating ./module-runner');
   await writeFile(
     join(distDir, 'module-runner.js'),
-    `export * from '${CORE_PACKAGE_NAME}/module-runner';\n`,
+    `export * from '${CORE_IMPORT_SPECIFIER}/module-runner';\n`,
   );
   await writeFile(
     join(distDir, 'module-runner.d.ts'),
-    `export * from '${CORE_PACKAGE_NAME}/module-runner';\n`,
+    `export * from '${CORE_IMPORT_SPECIFIER}/module-runner';\n`,
   );
 
   // Create ./internal shim
   console.log('  Creating ./internal');
-  await writeFile(join(distDir, 'internal.js'), `export * from '${CORE_PACKAGE_NAME}/internal';\n`);
+  await writeFile(
+    join(distDir, 'internal.js'),
+    `export * from '${CORE_IMPORT_SPECIFIER}/internal';\n`,
+  );
   await writeFile(
     join(distDir, 'internal.d.ts'),
-    `export * from '${CORE_PACKAGE_NAME}/internal';\n`,
+    `export * from '${CORE_IMPORT_SPECIFIER}/internal';\n`,
   );
 
   // Create ./dist/client/* shims by reading core's dist/vite/client files
@@ -283,10 +287,13 @@ async function syncCorePackageExports() {
       continue;
     }
     if (file.endsWith('.js') || file.endsWith('.mjs') || file.endsWith('.cjs')) {
-      await writeFile(shimPath, `export * from '${CORE_PACKAGE_NAME}/dist/client/${file}';\n`);
+      await writeFile(shimPath, `export * from '${CORE_IMPORT_SPECIFIER}/dist/client/${file}';\n`);
     } else if (file.endsWith('.d.ts') || file.endsWith('.d.mts') || file.endsWith('.d.cts')) {
       const baseFile = file.replace(/\.d\.[mc]?ts$/, '');
-      await writeFile(shimPath, `export * from '${CORE_PACKAGE_NAME}/dist/client/${baseFile}';\n`);
+      await writeFile(
+        shimPath,
+        `export * from '${CORE_IMPORT_SPECIFIER}/dist/client/${baseFile}';\n`,
+      );
     } else {
       // Copy non-JS/TS files directly (e.g., CSS, source maps)
       await copyFile(srcPath, shimPath);
@@ -343,7 +350,7 @@ async function syncTypesDir(srcDir: string, destDir: string, relativePath: strin
       // Use 'export type *' since we're re-exporting from a .d.ts file
       await writeFile(
         destPath,
-        `export type * from '${CORE_PACKAGE_NAME}/types/${entryRelPath}';\n`,
+        `export type * from '${CORE_IMPORT_SPECIFIER}/types/${entryRelPath}';\n`,
       );
     }
   }

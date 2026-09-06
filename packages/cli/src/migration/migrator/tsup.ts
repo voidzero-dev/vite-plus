@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import corePkg from '@voidzero-dev/vite-plus-core/package.json' with { type: 'json' };
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import corePkg from 'vite/package.json' with { type: 'json' };
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';

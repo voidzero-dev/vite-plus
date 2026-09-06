@@ -182,6 +182,11 @@ peer dependency would make bundled commands depend on the user's installation.
 Audit the release and preview packers, local npm registry, toolchain manifest,
 and migration metadata readers for canonical-name resolution assumptions.
 Keep standalone core installations and their native binding resolution intact.
+Yarn PnP is not a supported runtime layout. The existing migrator converts it
+to `nodeLinker: node-modules`, as documented in
+[Yarn migration rules](../docs/guide/migrate-rules.md#yarn). This proposal keeps
+that behavior; it does not add PnP runtime support.
+
 Consumers that import core by its published name must declare that dependency;
 they cannot rely on the CLI exposing it through hoisting.
 
@@ -273,16 +278,16 @@ Workspace links can conceal the alias duplication. Add CLI regressions to the
 [PTY snapshot suite](../crates/vp_cli_snapshots/tests/cli_snapshots/README.md)
 and API/type coverage in the corresponding package tests.
 
-| Area                        | Required coverage                                                                                                        |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| SSR regression              | Original TanStack reproduction and latest supported TanStack; HTTP 200 and both guards pass                              |
-| Module identity             | ESM, CommonJS, module-runner, and CLI-created environments share the expected APIs                                       |
-| Package layouts             | Bun, npm, pnpm, Yarn with `node_modules`, Yarn PnP, pnpm global virtual store, and monorepos with separate peer contexts |
-| CLI without a project alias | Install `vite-plus` alone; resolve bundled commands and public APIs from its required dependency                         |
-| Invalid installations       | Missing dependency, upstream Vite override, stale core alias, and version mismatch produce actionable CLI errors         |
-| Types and commands          | Generated declarations, Vite/Vitest config augmentation, `vp dev`, `vp build`, `vp preview`, `vp test`, and `vp pack`    |
-| Distribution                | Release, preview, and local-registry tarballs declare the intended alias and retain standalone core binding support      |
-| Upgrade                     | Reinstall an existing project with the new CLI and matching aliases; exercise migration and version synchronization      |
+| Area                        | Required coverage                                                                                                                                        |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SSR regression              | Original TanStack reproduction and latest supported TanStack; HTTP 200 and both guards pass                                                              |
+| Module identity             | ESM, CommonJS, module-runner, and CLI-created environments share the expected APIs                                                                       |
+| Package layouts             | Bun, npm, pnpm, Yarn with `node_modules`, existing PnP-to-`node_modules` migration, pnpm global virtual store, and monorepos with separate peer contexts |
+| CLI without a project alias | Install `vite-plus` alone; resolve bundled commands and public APIs from its required dependency                                                         |
+| Invalid installations       | Missing dependency, upstream Vite override, stale core alias, and version mismatch produce actionable CLI errors                                         |
+| Types and commands          | Generated declarations, Vite/Vitest config augmentation, `vp dev`, `vp build`, `vp preview`, `vp test`, and `vp pack`                                    |
+| Distribution                | Release, preview, and local-registry tarballs declare the intended alias and retain standalone core binding support                                      |
+| Upgrade                     | Reinstall an existing project with the new CLI and matching aliases; exercise migration and version synchronization                                      |
 
 The release gate is a source-built install that shares runtime identity in the
 supported layouts. If a package manager creates separate peer variants that
@@ -291,7 +296,7 @@ break the regression, resolve that case before shipping or revise this design.
 ## Open questions
 
 1. Can the CLI's alias dependency and each plugin's Vite peer resolve to the
-   same runtime across the supported monorepo and PnP layouts? The prototype
+   same runtime across the supported monorepo layouts? The prototype
    covered single-project installs.
 2. Which existing configuration types require changes when the CLI augments
    `vite` alongside Vitest? Declaration tests must settle this before release.

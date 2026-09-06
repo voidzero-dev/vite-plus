@@ -10,6 +10,7 @@
 
 import { join } from 'node:path';
 
+import { resolveCore } from './resolve-core.ts';
 import { DEFAULT_ENVS } from './utils/constants.ts';
 
 /**
@@ -25,6 +26,7 @@ export async function pack(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
+  resolveCore('/pack');
   // Resolve the bundled Tsdown CLI
   const binPath = join(import.meta.dirname, 'pack-bin.js');
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import module from 'node:module';
 
+import { cac } from 'cac';
 import {
   buildWithConfigs,
   resolveUserConfig,
@@ -9,8 +10,7 @@ import {
   type InlineConfig,
   type ResolvedConfig,
   type TsdownHandle,
-} from '@voidzero-dev/vite-plus-core/pack';
-import { cac } from 'cac';
+} from 'vite/pack';
 
 import { resolveViteConfig } from './resolve-vite-config.ts';
 

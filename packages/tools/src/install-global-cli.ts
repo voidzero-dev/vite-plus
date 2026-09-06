@@ -333,8 +333,6 @@ function getWindowsPowerShellCommand(): string {
  * references to the main tgz and sibling @voidzero-dev/* tgz files, then running npm install.
  */
 function installCiDeps(versionDir: string, mainTgzPath: string) {
-  const tgzDir = path.dirname(mainTgzPath);
-
   // Extract vite-plus's package.json from the tgz to find @voidzero-dev/* deps
   // On Windows, use the system tar (bsdtar) which handles Windows paths natively.
   // Git Bash's GNU tar misinterprets drive letters (D:, C:) as remote host references,
@@ -354,18 +352,33 @@ function installCiDeps(versionDir: string, mainTgzPath: string) {
   const vitePlusPkg = JSON.parse(readFileSync(path.join(tempDir, 'package.json'), 'utf-8'));
   rmSync(tempDir, { recursive: true, force: true });
 
+  const wrapperPkg = createCiInstallPackage(vitePlusPkg.dependencies ?? {}, mainTgzPath);
+
+  writeFileSync(path.join(versionDir, 'package.json'), JSON.stringify(wrapperPkg, null, 2) + '\n');
+
+  execSync('npm install --no-audit --no-fund --legacy-peer-deps', {
+    cwd: versionDir,
+    stdio: 'inherit',
+  });
+}
+
+/** Build a CI install manifest from the packed CLI's declared dependencies. */
+export function createCiInstallPackage(vitePlusDeps: Record<string, string>, mainTgzPath: string) {
+  const tgzDir = path.dirname(mainTgzPath);
   // Build wrapper deps: vite-plus from tgz + @voidzero-dev/* from sibling tgz files
   const wrapperDeps: Record<string, string> = {
     'vite-plus': `file:${mainTgzPath}`,
   };
 
-  const vitePlusDeps: Record<string, string> = vitePlusPkg.dependencies ?? {};
-  for (const [name, version] of Object.entries(vitePlusDeps)) {
-    if (!name.startsWith('@voidzero-dev/')) {
+  for (const [name, specifier] of Object.entries(vitePlusDeps)) {
+    const alias = /^npm:(@voidzero-dev\/[^@]+)@(.+)$/.exec(specifier);
+    const packageName = alias?.[1] ?? name;
+    const version = alias?.[2] ?? specifier;
+    if (!packageName.startsWith('@voidzero-dev/')) {
       continue;
     }
     // @voidzero-dev/vite-plus-core@0.0.0 -> voidzero-dev-vite-plus-core-0.0.0.tgz
-    const tgzName = name.replace('@', '').replace('/', '-') + `-${version}.tgz`;
+    const tgzName = packageName.replace('@', '').replace('/', '-') + `-${version}.tgz`;
     const tgzFilePath = path.join(tgzDir, tgzName);
     if (existsSync(tgzFilePath)) {
       wrapperDeps[name] = `file:${tgzFilePath}`;
@@ -375,19 +388,19 @@ function installCiDeps(versionDir: string, mainTgzPath: string) {
     }
   }
 
-  const wrapperPkg = {
+  return {
     name: 'vp-global',
     version: '0.0.0',
     private: true,
     dependencies: wrapperDeps,
+    // Override the CLI's registry dependencies too. A top-level file dependency
+    // alone does not force npm to use that tarball for a transitive npm alias.
+    overrides: Object.fromEntries(
+      Object.keys(wrapperDeps)
+        .filter((name) => name !== 'vite-plus')
+        .map((name) => [name, `$${name}`]),
+    ),
   };
-
-  writeFileSync(path.join(versionDir, 'package.json'), JSON.stringify(wrapperPkg, null, 2) + '\n');
-
-  execSync('npm install --no-audit --no-fund --legacy-peer-deps', {
-    cwd: versionDir,
-    stdio: 'inherit',
-  });
 }
 
 /**

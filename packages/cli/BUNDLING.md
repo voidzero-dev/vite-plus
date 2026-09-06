@@ -13,6 +13,20 @@ The CLI package uses a **4-step build process**:
 
 This architecture allows users to import everything from a single package (`vite-plus`) as a drop-in replacement for `vite`, without needing to know about the separate `@voidzero-dev/vite-plus-core` bundle or `vitest`.
 
+## Core Dependency Identity
+
+The CLI declares its core dependency as `vite`, using
+`workspace:@voidzero-dev/vite-plus-core@*` in the workspace and an exact npm
+alias in packed releases. Runtime imports and generated shims use `vite` and
+its subpaths. This gives the CLI and plugins the same dependency name and
+avoids separate core instances under the alias and canonical package name.
+
+`resolve-core.ts` resolves the alias from the selected CLI package. It checks
+that the dependency and any project-level Vite alias identify the expected
+core release before starting Vite or packaging commands. Keep the canonical
+name in release metadata and alias targets; it identifies the published
+package, not the runtime import specifier.
+
 ## Build Steps
 
 ### Step 1: tsdown Build (`buildWithTsdown`)
@@ -24,7 +38,7 @@ Bundles all CLI entry points using tsdown (configured in `tsdown.config.ts`). Th
 - Public API entries: `bin`, `index`, `define-config`, `fmt`, `lint`, `pack`, `pack-bin`
 - Global command entries: `create`, `migrate`, `version`, `config`, `hooks`, `mcp`, `staged`
 - All third-party dependencies are inlined at build time
-- Only packages that must be resolved at runtime stay external (NAPI binding, `@voidzero-dev/vite-plus-core`, `vitest`, `oxfmt`, `oxlint`)
+- Only packages that must be resolved at runtime stay external (NAPI binding, `vite`, `vitest`, `oxfmt`, `oxlint`)
 - Code splitting creates shared chunks for code used by multiple entries
 - DTS (`.d.ts`) files are generated for all entries
 
@@ -77,13 +91,13 @@ Creates shim files that re-export from `@voidzero-dev/vite-plus-core`, enabling 
 
 ```typescript
 // dist/client.d.ts (triple-slash reference for ambient types)
-/// <reference types="@voidzero-dev/vite-plus-core/client" />
+/// <reference types="vite/client" />
 
 // dist/module-runner.js
-export * from '@voidzero-dev/vite-plus-core/module-runner';
+export * from 'vite/module-runner';
 
 // dist/types/importMeta.d.ts (type-only export)
-export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
+export type * from 'vite/types/importMeta.d.ts';
 ```
 
 **Note on export ordering**: In `package.json`, the `./types/internal/*` export (set to `null`) must appear before `./types/*` for correct precedence. More specific patterns must precede wildcards.
@@ -309,7 +323,7 @@ For `./types/*` exports, shim files use `export type *` syntax (TypeScript 5.0+)
 
 ```typescript
 // dist/types/importMeta.d.ts
-export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
+export type * from 'vite/types/importMeta.d.ts';
 ```
 
 This is important because `./types/*` only exposes `.d.ts` files and should never include runtime code.
@@ -331,7 +345,7 @@ The `./client` export uses a triple-slash reference instead of a regular export 
 
 ```typescript
 // dist/client.d.ts
-/// <reference types="@voidzero-dev/vite-plus-core/client" />
+/// <reference types="vite/client" />
 ```
 
 This allows TypeScript to pick up types like `import.meta.hot`, CSS module types, and asset imports without explicit imports.
@@ -525,6 +539,7 @@ See `package.json` for the complete list of exports.
 ```typescript
 // Core package name for Vite compatibility exports
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
+const CORE_IMPORT_SPECIFIER = 'vite';
 
 // Test package name for re-exports (vitest itself, not a bundled wrapper)
 const TEST_PACKAGE_NAME = 'vitest';

@@ -1,4 +1,4 @@
-const vite = require('@voidzero-dev/vite-plus-core');
+const vite = require('vite');
 
 const {
   configDefaults,

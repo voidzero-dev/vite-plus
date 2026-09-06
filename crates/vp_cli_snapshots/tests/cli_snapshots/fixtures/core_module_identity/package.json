@@ -1,0 +1,13 @@
+{
+  "name": "core-module-identity",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+  }
+}
