@@ -1259,10 +1259,13 @@ jobs:
               # The image must actually lack the CA bundle, or this job stops
               # guarding anything.
               test ! -e /etc/ssl/certs/ca-certificates.crt
+              # Exercise commands on the mounted build without installing a published package.
+              touch /usr/local/bin/.vp-setup-complete
               vp --version
               # HTTPS to nodejs.org through the shared client; exits nonzero
               # without the bundled-roots fallback.
-              vp env list-remote --lts
+              vp env list-remote --lts --json > /tmp/vp-versions.json
+              node -e "const versions = require(\"/tmp/vp-versions.json\"); if (!versions.node?.length) process.exit(1)"
             '
 
   install-e2e-test:
