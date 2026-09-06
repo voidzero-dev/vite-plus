@@ -87,9 +87,11 @@ const ZED_SETTINGS = {
       {
         format_on_save: 'on',
         prettier: { allowed: false },
-        formatter: [{ language_server: { name: 'oxfmt' } }],
-        // Only the JavaScript entry runs the oxc fix-all code action on save
-        ...(language === 'JavaScript' ? { code_action: 'source.fixAll.oxc' } : {}),
+        formatter: [
+          { language_server: { name: 'oxfmt' } },
+          // Only the JavaScript entry runs the oxc fix-all code action on save.
+          ...(language === 'JavaScript' ? [{ code_action: 'source.fixAll.oxc' }] : []),
+        ],
       },
     ]),
   ),

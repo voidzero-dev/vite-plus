@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { findLatestStableVersionForMajor } from './upgrade-deps-utils.ts';
+
 const ROOT = process.cwd();
 const META_DIR = process.env.UPGRADE_DEPS_META_DIR;
 
@@ -29,6 +31,10 @@ type LatestTagOptions = {
 type NpmLatestResponse = {
   version?: unknown;
   dependencies?: Record<string, string>;
+};
+
+type NpmPackumentResponse = {
+  versions?: Record<string, unknown>;
 };
 
 type UpstreamVersions = {
@@ -64,6 +70,9 @@ type PnpmWorkspaceEntry = {
 };
 
 const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
+// Vitest major upgrades can change the bundled API, export shims, and CLI
+// behavior. Advance this only after Vite+ has adapted to the new major.
+const SUPPORTED_VITEST_MAJOR = 4;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
@@ -144,6 +153,23 @@ async function getLatestNpmVersion(packageName: string): Promise<string> {
     throw new Error(`Invalid npm response for ${packageName}: missing version field`);
   }
   return data.version;
+}
+
+async function getLatestNpmVersionForMajor(packageName: string, major: number): Promise<string> {
+  const res = await fetch(`https://registry.npmjs.org/${packageName}`, {
+    headers: { accept: 'application/vnd.npm.install-v1+json' },
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
+    );
+  }
+  const data = (await res.json()) as NpmPackumentResponse;
+  const version = findLatestStableVersionForMajor(Object.keys(data.versions ?? {}), major);
+  if (!version) {
+    throw new Error(`No stable ${major}.x version found for ${packageName}`);
+  }
+  return version;
 }
 
 // Read a dependency range from the latest published version of `packageName`,
@@ -554,7 +580,7 @@ const [
   oxcParserVersion,
   oxcTransformVersion,
 ] = await Promise.all([
-  getLatestNpmVersion('vitest'),
+  getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
   getLatestNpmVersion('tsdown'),
   getLatestNpmVersion('tsdown-migrate'),
   // Mirror exactly what the bundled @tsdown/css depends on.
