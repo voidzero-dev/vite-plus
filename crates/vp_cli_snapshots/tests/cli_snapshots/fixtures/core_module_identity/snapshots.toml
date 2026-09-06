@@ -9,6 +9,22 @@ steps = [
 ]
 
 [[case]]
+name = "core_module_identity_repackaged_version"
+vp = "global"
+local-registry = true
+comment = "CI can stamp the package version after building the CLI. The resolver must compare installed manifests rather than an inlined build-time version."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "node_modules/vite-plus/package.json", "version", "0.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "node_modules/vite-plus/package.json", "dependencies.vite", "npm:@voidzero-dev/vite-plus-core@0.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "node_modules/vite/package.json", "version", "0.0.0"], snapshot = false },
+  ["node", "check-api.mjs"],
+  ["vp", "dev"],
+  ["vp", "build"],
+  ["vp", "pack", "entry.js"],
+]
+
+[[case]]
 name = "core_module_identity_yarn"
 vp = "global"
 local-registry = true

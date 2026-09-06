@@ -27,7 +27,7 @@ Bundled APIs resolve without a project Vite dependency
 
 ```
 
-  VITE <version>
+  VITE+ <version>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help

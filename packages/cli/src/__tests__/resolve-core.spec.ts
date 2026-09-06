@@ -25,6 +25,18 @@ function writeCore(
   writeFileSync(join(directory, 'pack.js'), '');
 }
 
+function writeCli(directory: string, version = cliPkg.version) {
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    join(directory, 'package.json'),
+    JSON.stringify({
+      name: 'vite-plus',
+      version,
+      exports: { './package.json': './package.json' },
+    }),
+  );
+}
+
 describe('resolveCore', () => {
   let root: string;
   let project: string;
@@ -37,6 +49,7 @@ describe('resolveCore', () => {
     mkdirSync(project);
     cliModule = join(root, 'cli', 'dist', 'bin.js');
     bundled = join(root, 'cli', 'node_modules', 'vite');
+    writeCli(join(root, 'cli'));
     writeCore(bundled);
   });
 
@@ -53,6 +66,29 @@ describe('resolveCore', () => {
     writeCore(join(project, 'node_modules', 'vite'));
     expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
   });
+
+  it.each(['0.0.0', '0.0.0-commit.1234567'])(
+    'uses the installed CLI manifest after repacking as %s',
+    (version) => {
+      writeCli(join(root, 'cli'), version);
+      writeCore(bundled, '@voidzero-dev/vite-plus-core', version);
+      writeCore(join(project, 'node_modules', 'vite'), '@voidzero-dev/vite-plus-core', version);
+      expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
+      expect(resolveCore('/pack', project, cliModule)).toBe(join(bundled, 'pack.js'));
+    },
+  );
+
+  it.each(['project', 'bundled'])(
+    'still rejects a mismatched %s core after repacking the CLI',
+    (location) => {
+      writeCli(join(root, 'cli'), '0.0.0');
+      writeCore(bundled, '@voidzero-dev/vite-plus-core', '0.0.0');
+      writeCore(location === 'project' ? join(project, 'node_modules', 'vite') : bundled);
+      expect(() => resolveCore('', project, cliModule)).toThrow(
+        `Expected @voidzero-dev/vite-plus-core@0.0.0, but found @voidzero-dev/vite-plus-core@${cliPkg.version}`,
+      );
+    },
+  );
 
   it('does not fall back to the project when the CLI dependency is missing', () => {
     writeCore(join(project, 'node_modules', 'vite'));
