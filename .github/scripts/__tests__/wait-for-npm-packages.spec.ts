@@ -1,19 +1,40 @@
 /// <reference types="node" />
 
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
   type FetchLike,
+  type WaitForNpmPackagesOptions,
   isNpmPackageAvailable,
   parseNpmPackageSpec,
   waitForNpmPackages,
 } from '../wait-for-npm-packages.ts';
+import { response, stalledFetch } from './npm-registry.ts';
 
-function response(status: number, body?: unknown) {
+const pkg = { name: 'pkg', version: '1.2.3' };
+const tarball = 'https://registry.npmjs.org/pkg/-/pkg-1.2.3.tgz';
+const packument = { versions: { '1.2.3': { dist: { tarball } } } };
+const pendingPackages = [
+  { name: 'first', version: '1.2.3' },
+  { name: 'second', version: '1.2.3' },
+];
+
+function options(
+  fetchImpl: FetchLike,
+  overrides: Partial<WaitForNpmPackagesOptions> = {},
+): WaitForNpmPackagesOptions {
   return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
+    registry: 'https://registry.npmjs.org',
+    fetchImpl,
+    minSeconds: 0,
+    timeoutSeconds: 5,
+    pollSeconds: 1,
+    sleep: vi.fn(
+      (milliseconds) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)),
+    ),
+    now: Date.now,
+    log: vi.fn(),
+    ...overrides,
   };
 }
 
@@ -21,22 +42,12 @@ describe('isNpmPackageAvailable', () => {
   test('checks the abbreviated packument and its tarball', async () => {
     const fetchImpl = vi
       .fn<FetchLike>()
-      .mockResolvedValueOnce(
-        response(200, {
-          versions: {
-            '1.2.3': {
-              dist: {
-                tarball: 'https://registry.npmjs.org/pkg/-/pkg-1.2.3.tgz',
-              },
-            },
-          },
-        }),
-      )
+      .mockResolvedValueOnce(response(200, packument))
       .mockResolvedValueOnce(response(200));
 
     await expect(
       isNpmPackageAvailable(
-        { name: '@scope/pkg', version: '1.2.3' },
+        { ...pkg, name: '@scope/pkg' },
         { registry: 'https://registry.npmjs.org/', fetchImpl },
       ),
     ).resolves.toBe(true);
@@ -45,178 +56,89 @@ describe('isNpmPackageAvailable', () => {
       headers: { accept: 'application/vnd.npm.install-v1+json' },
       signal: undefined,
     });
-    expect(fetchImpl).toHaveBeenNthCalledWith(2, 'https://registry.npmjs.org/pkg/-/pkg-1.2.3.tgz', {
+    expect(fetchImpl).toHaveBeenNthCalledWith(2, tarball, {
       method: 'HEAD',
       signal: undefined,
     });
   });
 
   test('is unavailable while the version or tarball is missing', async () => {
-    const missingVersion = vi.fn<FetchLike>().mockResolvedValue(
-      response(200, {
-        versions: { '1.2.2': {} },
-      }),
-    );
-    await expect(
-      isNpmPackageAvailable(
-        { name: 'pkg', version: '1.2.3' },
-        { registry: 'https://registry.npmjs.org', fetchImpl: missingVersion },
-      ),
-    ).resolves.toBe(false);
+    const missingVersion = vi
+      .fn<FetchLike>()
+      .mockResolvedValue(response(200, { versions: { '1.2.2': {} } }));
+    await expect(isNpmPackageAvailable(pkg, options(missingVersion))).resolves.toBe(false);
 
     const missingTarball = vi
       .fn<FetchLike>()
-      .mockResolvedValueOnce(
-        response(200, {
-          versions: {
-            '1.2.3': {
-              dist: {
-                tarball: 'https://registry.npmjs.org/pkg/-/pkg-1.2.3.tgz',
-              },
-            },
-          },
-        }),
-      )
+      .mockResolvedValueOnce(response(200, packument))
       .mockResolvedValueOnce(response(404));
-    await expect(
-      isNpmPackageAvailable(
-        { name: 'pkg', version: '1.2.3' },
-        { registry: 'https://registry.npmjs.org', fetchImpl: missingTarball },
-      ),
-    ).resolves.toBe(false);
+    await expect(isNpmPackageAvailable(pkg, options(missingTarball))).resolves.toBe(false);
   });
 });
 
 describe('waitForNpmPackages', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
   test('polls until available and always settles after the successful read', async () => {
-    let currentTime = 0;
-    const sleep = vi.fn(async (milliseconds: number) => {
-      currentTime += milliseconds;
-    });
     const fetchImpl = vi
       .fn<FetchLike>()
       .mockResolvedValueOnce(response(404))
-      .mockResolvedValueOnce(
-        response(200, {
-          versions: {
-            '1.2.3': {
-              dist: {
-                tarball: 'https://registry.npmjs.org/pkg/-/pkg-1.2.3.tgz',
-              },
-            },
-          },
-        }),
-      )
+      .mockResolvedValueOnce(response(200, packument))
       .mockResolvedValueOnce(response(200));
+    const waitOptions = options(fetchImpl, { minSeconds: 60, timeoutSeconds: 600, pollSeconds: 5 });
+    const result = waitForNpmPackages([pkg], waitOptions);
 
-    await waitForNpmPackages([{ name: 'pkg', version: '1.2.3' }], {
-      registry: 'https://registry.npmjs.org',
-      fetchImpl,
-      minSeconds: 60,
-      timeoutSeconds: 600,
-      pollSeconds: 5,
-      sleep,
-      now: () => currentTime,
-      log: vi.fn(),
-    });
+    await vi.advanceTimersByTimeAsync(65_000);
+    await result;
 
-    expect(sleep.mock.calls).toEqual([[5_000], [60_000]]);
+    expect(waitOptions.sleep).toHaveBeenCalledTimes(2);
+    expect(waitOptions.sleep).toHaveBeenNthCalledWith(1, 5_000);
+    expect(waitOptions.sleep).toHaveBeenNthCalledWith(2, 60_000);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   test('retries transient read failures until the timeout', async () => {
-    let currentTime = 0;
     const fetchImpl = vi.fn<FetchLike>().mockRejectedValue(new Error('temporary failure'));
+    const waitOptions = options(fetchImpl, { pollSeconds: 2 });
+    const result = expect(waitForNpmPackages([pkg], waitOptions)).rejects.toThrow(
+      'Timed out after 5s waiting for npm propagation: pkg@1.2.3',
+    );
 
-    await expect(
-      waitForNpmPackages([{ name: 'pkg', version: '1.2.3' }], {
-        registry: 'https://registry.npmjs.org',
-        fetchImpl,
-        minSeconds: 0,
-        timeoutSeconds: 5,
-        pollSeconds: 5,
-        sleep: async (milliseconds) => {
-          currentTime += milliseconds;
-        },
-        now: () => currentTime,
-        log: vi.fn(),
-      }),
-    ).rejects.toThrow('Timed out after 5s waiting for npm propagation: pkg@1.2.3');
+    await vi.advanceTimersByTimeAsync(5_000);
+    await result;
 
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(waitOptions.sleep).toHaveBeenLastCalledWith(1_000);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   test('checks the deadline before each package', async () => {
-    let currentTime = 0;
     const fetchImpl = vi.fn<FetchLike>(async () => {
-      currentTime = 5_000;
+      vi.setSystemTime(Date.now() + 5_000);
       return response(404);
     });
 
-    await expect(
-      waitForNpmPackages(
-        [
-          { name: 'first', version: '1.2.3' },
-          { name: 'second', version: '1.2.3' },
-        ],
-        {
-          registry: 'https://registry.npmjs.org',
-          fetchImpl,
-          minSeconds: 0,
-          timeoutSeconds: 5,
-          pollSeconds: 1,
-          sleep: async () => {},
-          now: () => currentTime,
-          log: vi.fn(),
-        },
-      ),
-    ).rejects.toThrow('Timed out after 5s waiting for npm propagation: first@1.2.3, second@1.2.3');
+    await expect(waitForNpmPackages(pendingPackages, options(fetchImpl))).rejects.toThrow(
+      'Timed out after 5s waiting for npm propagation: first@1.2.3, second@1.2.3',
+    );
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   test('aborts a stalled request at the deadline and skips later packages', async () => {
-    vi.useFakeTimers();
-    try {
-      const fetchImpl = vi.fn<FetchLike>(
-        (_url, init) =>
-          new Promise((_resolve, reject) => {
-            const signal = init?.signal;
-            if (!signal) {
-              reject(new Error('missing abort signal'));
-              return;
-            }
-            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-          }),
-      );
+    const fetchImpl = vi.fn(stalledFetch);
+    const result = expect(waitForNpmPackages(pendingPackages, options(fetchImpl))).rejects.toThrow(
+      'Timed out after 5s waiting for npm propagation: first@1.2.3, second@1.2.3',
+    );
 
-      const result = waitForNpmPackages(
-        [
-          { name: 'first', version: '1.2.3' },
-          { name: 'second', version: '1.2.3' },
-        ],
-        {
-          registry: 'https://registry.npmjs.org',
-          fetchImpl,
-          minSeconds: 0,
-          timeoutSeconds: 5,
-          pollSeconds: 1,
-          sleep: async () => {},
-          now: Date.now,
-          log: vi.fn(),
-        },
-      );
-      const error = result.catch((caught: unknown) => caught);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await result;
 
-      await vi.advanceTimersByTimeAsync(5_000);
-
-      await expect(error).resolves.toEqual(
-        new Error('Timed out after 5s waiting for npm propagation: first@1.2.3, second@1.2.3'),
-      );
-      expect(fetchImpl).toHaveBeenCalledTimes(1);
-      expect(fetchImpl.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
@@ -225,9 +147,6 @@ test('parseNpmPackageSpec supports scoped and unscoped package names', () => {
     name: '@scope/pkg',
     version: '1.2.3',
   });
-  expect(parseNpmPackageSpec('pkg@1.2.3')).toEqual({
-    name: 'pkg',
-    version: '1.2.3',
-  });
+  expect(parseNpmPackageSpec('pkg@1.2.3')).toEqual(pkg);
   expect(() => parseNpmPackageSpec('@scope/pkg')).toThrow('name@version');
 });

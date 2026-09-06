@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { NapiCli, parseTriple } from '@napi-rs/cli';
 
 import { publishNpmPackageFromEnv } from '../../.github/scripts/publish-npm-package.ts';
-import { waitForNpmPackagesFromEnv } from '../../.github/scripts/wait-for-npm-packages.ts';
+import {
+  type NpmPackageVersion,
+  waitForNpmPackagesFromEnv,
+} from '../../.github/scripts/wait-for-npm-packages.ts';
 import pkg from './package.json' with { type: 'json' };
 import { editJsonFile, readJsonFile } from './src/utils/json.ts';
 
@@ -123,26 +126,19 @@ editJsonFile(join(repoRoot, 'packages', 'core', 'package.json'), (corePkgJson) =
     ...nativePlatformPins,
   },
 }));
-const publishedPlatformPackages = Object.keys(nativePlatformPins).map((name) => ({
+const platformPackages = Object.keys(nativePlatformPins).map((name) => ({
   name,
   version: cliVersion,
 }));
 
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';
+const publishArgs = ['publish', '--tag', npmTag, '--access', 'public'];
 if (!skipNpmPublish) {
   for (const file of platformDirs) {
-    const platformDir = join(currentDir, 'npm', file);
-    const platformPackageJson = readJsonFile(join(platformDir, 'package.json')) as {
-      name: string;
-      version: string;
-    };
-    await publishNpmPackageFromEnv(
-      { name: platformPackageJson.name, version: platformPackageJson.version },
-      'npm',
-      ['publish', '--tag', npmTag, '--access', 'public'],
-      platformDir,
-    );
+    const platformDir = join(npmDir, file);
+    const platformPackage = readJsonFile(join(platformDir, 'package.json')) as NpmPackageVersion;
+    await publishNpmPackageFromEnv(platformPackage, 'npm', publishArgs, platformDir);
   }
 }
 
@@ -201,10 +197,7 @@ for (const napiTarget of pkg.napi.targets) {
     repository: cliPackageJson.repository,
   };
   writeFileSync(join(platformCliDir, 'package.json'), JSON.stringify(cliPackage, null, 2) + '\n');
-  publishedPlatformPackages.push({
-    name: cliPackage.name,
-    version: cliVersion,
-  });
+  platformPackages.push(cliPackage);
 
   if (skipNpmPublish) {
     // eslint-disable-next-line no-console
@@ -215,12 +208,7 @@ for (const napiTarget of pkg.napi.targets) {
   }
 
   // Publish CLI package
-  const result = await publishNpmPackageFromEnv(
-    { name: cliPackage.name, version: cliVersion },
-    'npm',
-    ['publish', '--tag', npmTag, '--access', 'public'],
-    platformCliDir,
-  );
+  const result = await publishNpmPackageFromEnv(cliPackage, 'npm', publishArgs, platformCliDir);
 
   if (result === 'published') {
     // eslint-disable-next-line no-console
@@ -228,16 +216,11 @@ for (const napiTarget of pkg.napi.targets) {
   }
 }
 
-// `npm publish` returns when npm accepts an upload, before publish-time scanning
-// necessarily makes that version installable. Core and the main CLI pin the
-// native packages at this exact version, while the installers fetch the CLI
-// platform packages directly. Do not continue the release until every
-// platform packument and tarball can be fetched.
+// npm can accept uploads before scanning makes them installable. Wait for the
+// platform packages before publishing core and the CLI, which pin their versions.
 if (!skipNpmPublish) {
-  await waitForNpmPackagesFromEnv(publishedPlatformPackages);
-}
+  await waitForNpmPackagesFromEnv(platformPackages);
 
-// Clean up cli-npm directory (skipped when caller still needs the prepared dirs).
-if (!skipNpmPublish) {
+  // Preview releases still need the prepared directories.
   rmSync(cliNpmDir, { recursive: true, force: true });
 }

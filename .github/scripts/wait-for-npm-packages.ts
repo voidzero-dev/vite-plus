@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 /** The registry used by the release workflow. */
@@ -36,10 +37,6 @@ export interface WaitForNpmPackagesOptions {
   log: (message: string) => void;
 }
 
-function escapePackageName(name: string): string {
-  return name.replace('/', '%2f');
-}
-
 type NpmRegistryRequestOptions = Pick<WaitForNpmPackagesOptions, 'registry' | 'fetchImpl'> & {
   signal?: AbortSignal;
 };
@@ -49,7 +46,7 @@ async function fetchNpmPackument(
   options: NpmRegistryRequestOptions,
 ): Promise<AbbreviatedPackument | null> {
   const registry = options.registry.replace(/\/+$/, '');
-  const response = await options.fetchImpl(`${registry}/${escapePackageName(name)}`, {
+  const response = await options.fetchImpl(`${registry}/${name.replace('/', '%2f')}`, {
     headers: { accept: ABBREVIATED_PACKUMENT_ACCEPT },
     signal: options.signal,
   });
@@ -130,9 +127,11 @@ export async function waitForNpmPackages(
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), remainingMilliseconds);
       try {
-        if (
-          await isNpmPackageAvailable({ name, version }, { ...options, signal: controller.signal })
-        ) {
+        const available = await isNpmPackageAvailable(
+          { name, version },
+          { ...options, signal: controller.signal },
+        );
+        if (available) {
           options.log(`  ${name}@${version}: available`);
           pending.delete(name);
         }
@@ -149,12 +148,11 @@ export async function waitForNpmPackages(
     if (pending.size === 0) {
       break;
     }
-    if (options.now() >= deadline) {
+    const remainingMilliseconds = deadline - options.now();
+    if (remainingMilliseconds <= 0) {
       throw propagationTimeoutError(pending, options.timeoutSeconds);
     }
-    await options.sleep(
-      Math.min(options.pollSeconds * 1000, Math.max(0, deadline - options.now())),
-    );
+    await options.sleep(Math.min(options.pollSeconds * 1000, remainingMilliseconds));
   }
 
   if (options.minSeconds > 0) {
@@ -200,7 +198,7 @@ export async function waitForNpmPackagesFromEnv(
     minSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_MIN_SECONDS', 60),
     timeoutSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_TIMEOUT_SECONDS', 600),
     pollSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_POLL_SECONDS', 5),
-    sleep: (milliseconds) => new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)),
+    sleep,
     now: Date.now,
     log: console.log,
   });

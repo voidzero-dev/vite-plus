@@ -59,13 +59,12 @@ export async function publishNpmPackage(
   const lookupTimeout = setTimeout(() => controller.abort(), NPM_PACKAGE_LOOKUP_TIMEOUT_MS);
 
   try {
-    if (
-      await isNpmPackagePublished(options.pkg, {
-        registry: options.registry,
-        fetchImpl: options.fetchImpl,
-        signal: controller.signal,
-      })
-    ) {
+    const published = await isNpmPackagePublished(options.pkg, {
+      registry: options.registry,
+      fetchImpl: options.fetchImpl,
+      signal: controller.signal,
+    });
+    if (published) {
       options.log(`${spec} is already published; skipping upload.`);
       return 'already-published';
     }
@@ -77,16 +76,20 @@ export async function publishNpmPackage(
     clearTimeout(lookupTimeout);
   }
 
-  const result = await options.runCommand(options.command, options.args, options.cwd);
-  if (result.exitCode === 0) {
+  const { exitCode, output, error } = await options.runCommand(
+    options.command,
+    options.args,
+    options.cwd,
+  );
+  if (exitCode === 0) {
     return 'published';
   }
-  if (isAlreadyPublishedError(result.output)) {
+  if (isAlreadyPublishedError(output)) {
     options.log(`${spec} was accepted by an earlier attempt; skipping upload.`);
     return 'already-published';
   }
 
-  const detail = result.error?.message ?? `exit code ${String(result.exitCode)}`;
+  const detail = error?.message ?? `exit code ${String(exitCode)}`;
   throw new Error(`Failed to publish ${spec}: ${detail}`);
 }
 

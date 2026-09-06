@@ -9,16 +9,9 @@ import {
   publishNpmPackage,
 } from '../publish-npm-package.ts';
 import type { FetchLike } from '../wait-for-npm-packages.ts';
+import { response, stalledFetch } from './npm-registry.ts';
 
 const pkg = { name: '@scope/pkg', version: '1.2.3' };
-
-function response(status: number, body?: unknown) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  };
-}
 
 function options(fetchImpl: FetchLike, runCommand: PublishCommandRunner): PublishNpmPackageOptions {
   return {
@@ -97,36 +90,28 @@ describe('publishNpmPackage', () => {
     expect(publishOptions.warn).toHaveBeenCalledOnce();
   });
 
-  test('publishes after a stalled preflight read times out', async () => {
+  test('publishes after a stalled preflight read times out', async ({ onTestFinished }) => {
     vi.useFakeTimers();
-    try {
-      const fetchImpl = vi.fn<FetchLike>(
-        (_url, init) =>
-          new Promise((_resolve, reject) => {
-            const signal = init?.signal;
-            if (!signal) {
-              reject(new Error('missing abort signal'));
-              return;
-            }
-            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-          }),
-      );
-      const runCommand = vi.fn<PublishCommandRunner>().mockResolvedValue({
-        exitCode: 0,
-        output: 'published',
-      });
-      const publishOptions = options(fetchImpl, runCommand);
-      const result = publishNpmPackage(publishOptions);
-
-      await vi.advanceTimersByTimeAsync(10_000);
-
-      await expect(result).resolves.toBe('published');
-      expect(publishOptions.warn).toHaveBeenCalledOnce();
-      expect(runCommand).toHaveBeenCalledWith('npm', ['publish'], '/workspace/pkg');
-      expect(fetchImpl.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
-    } finally {
+    onTestFinished(() => {
       vi.useRealTimers();
-    }
+    });
+    const fetchImpl = vi.fn(stalledFetch);
+    const runCommand = vi.fn<PublishCommandRunner>().mockResolvedValue({
+      exitCode: 0,
+      output: 'published',
+    });
+    const publishOptions = options(fetchImpl, runCommand);
+    const result = publishNpmPackage(publishOptions);
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(runCommand).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(result).resolves.toBe('published');
+    expect(publishOptions.warn).toHaveBeenCalledOnce();
+    expect(runCommand).toHaveBeenCalledWith('npm', ['publish'], '/workspace/pkg');
+    expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
