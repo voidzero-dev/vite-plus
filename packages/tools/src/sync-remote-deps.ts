@@ -370,8 +370,24 @@ const OXC_PACKAGES = new Set([
   'oxlint',
   'oxlint-tsgolint',
 ]);
-// Temporary bridge until both pinned upstream workspaces use Vitest v5.
-const VITEST_DEPS = new Set(['tinybench', 'vitest']);
+// These official packages share the runner version selected by upgrade-deps.ts.
+// Community packages, such as browser-webdriverio, have independent versions.
+const VITEST_EXACT_VERSION_PACKAGES = new Set([
+  'vitest',
+  '@vitest/browser',
+  '@vitest/browser-playwright',
+  '@vitest/browser-preview',
+  '@vitest/coverage-v8',
+  '@vitest/coverage-istanbul',
+  '@vitest/mocker',
+  '@vitest/pretty-format',
+  '@vitest/snapshot',
+  '@vitest/spy',
+  '@vitest/ui',
+  '@vitest/utils',
+  '@vitest/web-worker',
+]);
+const REMOVED_VITEST_PACKAGES = new Set(['@vitest/runner', '@vitest/expect']);
 
 export function alignVendoredVitestDependencies(rootDir: string, version: string): void {
   for (const vendor of [VITE_DIR, ROLLDOWN_DIR]) {
@@ -392,32 +408,14 @@ export function alignVendoredVitestDependencies(rootDir: string, version: string
       let changed = false;
       for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
         for (const name of Object.keys(pkg[field] ?? {})) {
-          if (name !== 'vitest' && !name.startsWith('@vitest/')) {
-            continue;
-          }
-          if (['@vitest/runner', '@vitest/expect'].includes(name)) {
+          if (REMOVED_VITEST_PACKAGES.has(name)) {
             throw new Error(`Migrate removed ${name} use in ${file} before synchronizing Vitest`);
           }
-          // Only the official packages in the root catalog share the runner version.
-          if (
-            name !== 'vitest' &&
-            ![
-              '@vitest/browser',
-              '@vitest/browser-playwright',
-              '@vitest/browser-preview',
-              '@vitest/mocker',
-              '@vitest/pretty-format',
-              '@vitest/snapshot',
-              '@vitest/spy',
-              '@vitest/utils',
-              '@vitest/ui',
-              '@vitest/coverage-v8',
-              '@vitest/coverage-istanbul',
-            ].includes(name)
-          ) {
+          if (!VITEST_EXACT_VERSION_PACKAGES.has(name)) {
             continue;
           }
-          if (pkg[field][name] !== version && !pkg[field][name].startsWith('catalog:')) {
+          // Only the default catalog is aligned during sync; named catalogs can still use v4.
+          if (pkg[field][name] !== version && pkg[field][name] !== 'catalog:') {
             pkg[field][name] = version;
             changed = true;
           }
@@ -433,7 +431,7 @@ export function alignVendoredVitestDependencies(rootDir: string, version: string
 
 // These packages should always use the highest version
 function syncedPackages(packageName: string): boolean {
-  if (OXC_PACKAGES.has(packageName) || VITEST_DEPS.has(packageName)) {
+  if (OXC_PACKAGES.has(packageName) || packageName === 'tinybench') {
     return true;
   }
   return OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix));
@@ -590,26 +588,34 @@ export function mergePnpmWorkspaces(
   packagesSet.add(`${VITE_DIR}/packages/*`);
   result.packages = Array.from(packagesSet);
 
-  // Merge catalog
-  const catalog: Record<string, string> = { ...main.catalog };
-
-  // Add all entries from rolldown catalog
-  for (const [pkg, version] of Object.entries(rolldown.catalog || {})) {
-    if (catalog[pkg]) {
-      // Merge versions
-      catalog[pkg] = mergeSemverVersions(catalog[pkg], version, pkg, semver);
-    } else {
-      catalog[pkg] = version;
-    }
-  }
-
-  // Add all entries from vite catalog (if it has one)
-  for (const [pkg, version] of Object.entries(rolldownVite.catalog || {})) {
-    if (catalog[pkg]) {
-      // Merge versions
-      catalog[pkg] = mergeSemverVersions(catalog[pkg], version, pkg, semver);
-    } else {
-      catalog[pkg] = version;
+  // The upgrade script selects the latest supported Vitest release and updates
+  // the runtime constant with it. Upstream catalogs must not replace that pin.
+  const vitestVersion = main.catalog?.vitest;
+  const catalog: Record<string, string> = {};
+  for (const workspace of [main, rolldown, rolldownVite]) {
+    for (const [pkg, version] of Object.entries(workspace.catalog || {})) {
+      if (REMOVED_VITEST_PACKAGES.has(pkg)) {
+        // Unused upstream entries are harmless; actual dependency uses fail in
+        // alignVendoredVitestDependencies instead of reinstalling removed packages.
+        continue;
+      }
+      if (VITEST_EXACT_VERSION_PACKAGES.has(pkg)) {
+        if (
+          !vitestVersion ||
+          !/^5\.\d+\.\d+$/.test(vitestVersion) ||
+          semver.valid(vitestVersion) !== vitestVersion
+        ) {
+          throw new Error('The root Vitest catalog entry must be an exact stable v5 version');
+        }
+        catalog[pkg] = vitestVersion;
+      } else if (pkg === '@vitest/browser-webdriverio' && main.catalog?.[pkg]) {
+        // This community provider does not share the official release schedule.
+        catalog[pkg] = main.catalog[pkg];
+      } else {
+        catalog[pkg] = catalog[pkg]
+          ? mergeSemverVersions(catalog[pkg], version, pkg, semver)
+          : version;
+      }
     }
   }
 
@@ -961,12 +967,11 @@ export async function syncRemote() {
   // Merge upstream catalogs into the main workspace while preserving its comments.
   const yamlContent = mergeWorkspaceYaml(mainSrc, rolldownSrc, rolldownViteSrc, yaml, semver);
 
-  writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');
-
   const vitestVersion = (yaml.parse(yamlContent) as PnpmWorkspace).catalog?.vitest;
   if (!vitestVersion || !semver.valid(vitestVersion)) {
     throw new Error('The Vitest catalog entry must be an exact version');
   }
+  writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');
   alignVendoredVitestDependencies(rootDir, vitestVersion);
 
   log('✓ pnpm-workspace.yaml updated successfully!');
