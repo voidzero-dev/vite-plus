@@ -96,6 +96,38 @@ describe('publishNpmPackage', () => {
     await expect(publishNpmPackage(publishOptions)).resolves.toBe('published');
     expect(publishOptions.warn).toHaveBeenCalledOnce();
   });
+
+  test('publishes after a stalled preflight read times out', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn<FetchLike>(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            const signal = init?.signal;
+            if (!signal) {
+              reject(new Error('missing abort signal'));
+              return;
+            }
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          }),
+      );
+      const runCommand = vi.fn<PublishCommandRunner>().mockResolvedValue({
+        exitCode: 0,
+        output: 'published',
+      });
+      const publishOptions = options(fetchImpl, runCommand);
+      const result = publishNpmPackage(publishOptions);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      await expect(result).resolves.toBe('published');
+      expect(publishOptions.warn).toHaveBeenCalledOnce();
+      expect(runCommand).toHaveBeenCalledWith('npm', ['publish'], '/workspace/pkg');
+      expect(fetchImpl.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 test('recognizes npm immutable-version errors only', () => {

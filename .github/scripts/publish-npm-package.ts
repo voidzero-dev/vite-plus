@@ -10,6 +10,8 @@ import {
   parseNpmPackageSpec,
 } from './wait-for-npm-packages.ts';
 
+const NPM_PACKAGE_LOOKUP_TIMEOUT_MS = 10_000;
+
 export interface PublishCommandResult {
   exitCode: number | null;
   output: string;
@@ -53,12 +55,15 @@ export async function publishNpmPackage(
   options: PublishNpmPackageOptions,
 ): Promise<PublishNpmPackageResult> {
   const spec = `${options.pkg.name}@${options.pkg.version}`;
+  const controller = new AbortController();
+  const lookupTimeout = setTimeout(() => controller.abort(), NPM_PACKAGE_LOOKUP_TIMEOUT_MS);
 
   try {
     if (
       await isNpmPackagePublished(options.pkg, {
         registry: options.registry,
         fetchImpl: options.fetchImpl,
+        signal: controller.signal,
       })
     ) {
       options.log(`${spec} is already published; skipping upload.`);
@@ -68,6 +73,8 @@ export async function publishNpmPackage(
     // A transient read failure must not prevent the publish attempt. If this is
     // a rerun, npm's immutable-version response is handled below.
     options.warn(`Could not check whether ${spec} is published; trying upload (${String(error)})`);
+  } finally {
+    clearTimeout(lookupTimeout);
   }
 
   const result = await options.runCommand(options.command, options.args, options.cwd);
