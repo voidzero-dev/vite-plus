@@ -429,6 +429,7 @@ pub(crate) fn rewrite_pack_dts_generators(content: &str, standalone: bool) -> St
         let Some(config) = node.parent() else { continue };
         if !crate::pack_config::is_pack_object(&config, standalone)
             || !crate::pack_config::can_edit_object(&config)
+            || crate::pack_config::external_skip_needs_manual_migration(&config)
         {
             continue;
         }

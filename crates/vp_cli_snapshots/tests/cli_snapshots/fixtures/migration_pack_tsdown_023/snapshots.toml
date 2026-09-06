@@ -22,3 +22,49 @@ steps = [
   { argv = ["vpt", "stat-file", "dist/index.d.mts", "--assert", "file"] },
   { argv = ["vpt", "print-file", "dist/public/asset.txt"] },
 ]
+
+[[case]]
+name = "migration_pack_tsdown_023_external"
+vp = "global"
+comment = "Preserve external matchers when either skipNodeModulesBundle form becomes deps.neverBundle."
+steps = [
+  { argv = ["vpt", "cp", "external.config.txt", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "cp", "external-entry.txt", "src/index.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "pack"], snapshot = false },
+  { argv = ["vpt", "print-file", "dist/top/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/nested/index.mjs"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_concise_methods"
+vp = "global"
+comment = "Migrate a standalone concise arrow and method options, then check unbundled files and copied assets."
+steps = [
+  { argv = ["vpt", "cp", "concise.config.txt", "tsdown.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import packConfig from './tsdown.config.js';\nexport default { pack: packConfig({}) };\n"], snapshot = false },
+  { argv = ["vpt", "cp", "concise-entry.txt", "src/index.ts"], snapshot = false },
+  { argv = ["vpt", "cp", "helper.txt", "src/helper.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "tsdown.config.ts"] },
+  { argv = ["vp", "pack"] },
+  { argv = ["vpt", "stat-file", "dist/index.custom.js", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "dist/helper.custom.js", "--assert", "file"] },
+  { argv = ["vpt", "print-file", "dist/assets/asset.txt"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "tsdown.config.ts"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_manual"
+vp = "global"
+comment = "Report unsupported external matchers without changing the pack options."
+steps = [
+  { argv = ["vpt", "cp", "manual.config.txt", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]

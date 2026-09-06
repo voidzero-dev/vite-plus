@@ -1,0 +1,18 @@
+export default {
+  pack: [
+    {
+      entry: 'src/index.ts',
+      outDir: 'dist/top',
+      dts: false,
+      external: ['foo', './external.js'],
+      skipNodeModulesBundle: true,
+    },
+    {
+      entry: 'src/index.ts',
+      outDir: 'dist/nested',
+      dts: false,
+      external: ['foo', './external.js'],
+      deps: { skipNodeModulesBundle: true },
+    },
+  ],
+};

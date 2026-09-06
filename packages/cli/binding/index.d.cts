@@ -3450,6 +3450,8 @@ export interface BatchRewriteResult {
   preservedVitestFiles: Array<string>;
   /** Files that had errors */
   errors: Array<BatchRewriteError>;
+  /** Pack configurations that need manual migration */
+  warnings: Array<BatchRewriteError>;
 }
 
 /** Configuration options passed from JavaScript to Rust. */

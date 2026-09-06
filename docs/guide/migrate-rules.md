@@ -66,6 +66,12 @@ Migration preserves the previous defaults by setting `deps.resolveDepSubpath`
 to `true` when absent. Enabled ATTW checks receive `profile: 'strict'` when
 no profile is set. Explicit values, including `false`, remain unchanged.
 
+When `external` accompanies either `skipNodeModulesBundle` form, static matchers
+move to `inputOptions.external` before `deps.neverBundle` is set. This preserves
+the original matching rules, including external file paths. Unsupported matchers,
+conflicting `inputOptions`, and declaration-specific dependency rules leave the
+pack object unchanged and produce a manual-migration warning.
+
 The transform does not evaluate configuration code. Objects with spreads,
 computed keys, or duplicate keys, and conflicting old and new options require
 manual review. Dynamic boolean selectors remain unchanged. Unrelated Vite and

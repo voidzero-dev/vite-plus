@@ -18,8 +18,11 @@ pub(crate) fn rewrite_pack_config(content: &str, standalone: bool) -> String {
         if !is_pack_object(&object, standalone) {
             continue;
         }
+        if external_skip_needs_manual_migration(&object) {
+            continue;
+        }
         let source = object.text();
-        let rewritten = rewrite_options(&source);
+        let rewritten = rewrite_options(&object);
         if rewritten != source {
             edits.push((object.range(), rewritten));
         }
@@ -30,16 +33,18 @@ pub(crate) fn rewrite_pack_config(content: &str, standalone: bool) -> String {
 
 pub(crate) fn is_pack_object<D: Doc>(object: &Node<'_, D>, standalone: bool) -> bool {
     let mut value = object.clone();
-    while let Some(parent) = value.parent() {
+    loop {
+        // The recognizer needs the object *inside* a concise arrow's parentheses.
+        if standalone && is_top_config_value(&value) {
+            return true;
+        }
+        let Some(parent) = value.parent() else { break };
         match parent.kind().as_ref() {
             "array" | "parenthesized_expression" | "satisfies_expression" | "as_expression" => {
                 value = parent;
             }
             _ => break,
         }
-    }
-    if standalone && is_top_config_value(&value) {
-        return true;
     }
     value.parent().is_some_and(|pair| {
         pair.kind() == "pair"
@@ -71,6 +76,23 @@ fn apply_edits(content: &str, mut edits: Vec<Edit>, offset: usize) -> String {
     result
 }
 
+fn find_property<'a, D: Doc>(node: &Node<'a, D>, name: &str) -> Option<Node<'a, D>> {
+    node.children().find(|child| {
+        child
+            .field("key")
+            .or_else(|| child.field("name"))
+            .is_some_and(|key| pair_key_matches(&key, name))
+            || child.kind() == "shorthand_property_identifier" && child.text() == name
+    })
+}
+
+fn property_value<'a, D: Doc>(node: &Node<'a, D>, name: &str) -> Option<Node<'a, D>> {
+    let property = find_property(node, name)?;
+    property
+        .field("value")
+        .or_else(|| (property.kind() == "shorthand_property_identifier").then_some(property))
+}
+
 /// Edits only direct properties. Spreads, duplicate keys and computed keys make
 /// property precedence unknown, so leave such objects for manual migration.
 struct ObjectEditor<'a, D: Doc> {
@@ -81,20 +103,11 @@ struct ObjectEditor<'a, D: Doc> {
 
 impl<'a, D: Doc> ObjectEditor<'a, D> {
     fn property(&self, name: &str) -> Option<Node<'a, D>> {
-        self.node.children().find(|child| {
-            child
-                .field("key")
-                .or_else(|| child.field("name"))
-                .is_some_and(|key| pair_key_matches(&key, name))
-                || child.kind() == "shorthand_property_identifier" && child.text() == name
-        })
+        find_property(&self.node, name)
     }
 
     fn value(&self, name: &str) -> Option<Node<'a, D>> {
-        let property = self.property(name)?;
-        property
-            .field("value")
-            .or_else(|| (property.kind() == "shorthand_property_identifier").then_some(property))
+        property_value(&self.node, name)
     }
 
     fn remove(&mut self, name: &str) {
@@ -112,7 +125,7 @@ impl<'a, D: Doc> ObjectEditor<'a, D> {
         if self.property(new).is_some() {
             return;
         }
-        if let Some(key) = property.field("key") {
+        if let Some(key) = property.field("key").or_else(|| property.field("name")) {
             self.edits.push((key.range(), new.to_owned()));
         } else if property.kind() == "shorthand_property_identifier" {
             self.edits.push((property.range(), format!("{new}: {old}")));
@@ -178,10 +191,89 @@ pub(crate) fn can_edit_object<D: Doc>(node: &Node<'_, D>) -> bool {
     true
 }
 
-fn rewrite_options(source: &str) -> String {
+const EXTERNAL_SKIP_WARNING: &str = "Cannot safely combine external with skipNodeModulesBundle. Migrate this pack config manually; its options were left unchanged.";
+
+pub(crate) fn pack_config_warnings(content: &str, standalone: bool) -> Vec<String> {
+    let grep = SupportLang::TypeScript.ast_grep(content);
+    if grep.root().dfs().any(|node| {
+        node.kind() == "object"
+            && is_pack_object(&node, standalone)
+            && external_skip_needs_manual_migration(&node)
+    }) {
+        vec![EXTERNAL_SKIP_WARNING.to_owned()]
+    } else {
+        Vec::new()
+    }
+}
+
+fn has_external_skip<D: Doc>(config: &Node<'_, D>) -> bool {
+    if find_property(config, "external").is_none() {
+        return false;
+    }
+    property_value(config, "skipNodeModulesBundle").is_some_and(|value| value.kind() == "true")
+        || property_value(config, "deps").is_some_and(|deps| {
+            deps.kind() == "object"
+                && property_value(&deps, "skipNodeModulesBundle")
+                    .is_some_and(|value| value.kind() == "true")
+        })
+}
+
+pub(crate) fn external_skip_needs_manual_migration<D: Doc>(config: &Node<'_, D>) -> bool {
+    if !has_external_skip(config) {
+        return false;
+    }
+    if !can_edit_object(config)
+        || property_value(config, "external").is_none_or(|value| !is_static_external(&value))
+    {
+        return true;
+    }
+    for (namespace, conflicts) in
+        [("deps", &["neverBundle", "dts"][..]), ("inputOptions", &["external"][..])]
+    {
+        if find_property(config, namespace).is_some() {
+            let Some(value) = property_value(config, namespace) else { return true };
+            if value.kind() != "object"
+                || !can_edit_object(&value)
+                || conflicts.iter().any(|name| find_property(&value, name).is_some())
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn is_static_external<D: Doc>(value: &Node<'_, D>) -> bool {
+    match value.kind().as_ref() {
+        // tsdown interprets a top-level '/pattern/' string as a regular
+        // expression. Leave that form, and dynamic matchers, for manual review.
+        "string" => {
+            let text = value.text();
+            let regex_string = text.as_bytes().get(1) == Some(&b'/')
+                && text.as_bytes().get(text.len() - 2) == Some(&b'/');
+            !(text.contains('\\') || regex_string)
+        }
+        "regex" => true,
+        // Array entries pass through tsdown without string-to-regexp conversion.
+        "array" => value.children().all(|child| {
+            matches!(child.kind().as_ref(), "[" | "]" | "," | "comment" | "string" | "regex")
+        }),
+        _ => false,
+    }
+}
+
+fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
+    // Rolldown can retain the original static matcher while tsdown's deps
+    // plugin handles neverBundle: true. Avoid overriding DTS-specific matchers
+    // or user inputOptions; those combinations are reported for manual review.
+    let source = if has_external_skip(object) {
+        move_option(&object.text(), "external", "inputOptions", "external", false)
+    } else {
+        object.text().into_owned()
+    };
     // First update nested namespaces; subsequent moves see the new keys and
     // cannot create duplicate deps/css objects or overwrite explicit settings.
-    let source = edit_object(source, |config| {
+    let source = edit_object(&source, |config| {
         for name in ["deps", "dts", "attw"] {
             let Some(value) = config.value(name) else { continue };
             if value.kind() != "object" {
@@ -299,6 +391,86 @@ mod tests {
         let grep = SupportLang::TypeScript.ast_grep(&actual);
         assert!(!grep.root().dfs().any(|node| node.kind() == "ERROR"), "{actual}");
         actual
+    }
+
+    #[test]
+    fn migrates_static_external_with_both_skip_forms() {
+        for external in
+            ["['foo']", "['foo', /^virtual:/, './local.js']", "'foo'", "/^virtual:/", "[]"]
+        {
+            for skip in ["skipNodeModulesBundle: true", "deps: { skipNodeModulesBundle: true }"] {
+                let actual = migrate(&format!("{{ external: {external}, {skip} }}"));
+                assert!(
+                    actual.contains(&format!("inputOptions: {{ external: {external} }}")),
+                    "{actual}"
+                );
+                assert!(actual.contains("neverBundle: true"), "{actual}");
+                assert!(!actual.contains("skipNodeModulesBundle"), "{actual}");
+                assert!(pack_config_warnings(&actual, false).is_empty());
+            }
+        }
+        let actual = migrate(
+            "{ external: ['foo'], skipNodeModulesBundle: true, inputOptions: { treeshake: false } }",
+        );
+        assert!(actual.contains("external: ['foo'], treeshake: false"), "{actual}");
+    }
+
+    #[test]
+    fn unsafe_external_combinations_stay_unchanged_and_warn() {
+        for options in [
+            "external: dynamicExternal",
+            "external",
+            "external: (id) => id === 'foo'",
+            "external: '/foo/'",
+            "external: ['foo'], inputOptions: customOptions",
+            "external: ['foo'], inputOptions: { ...customOptions }",
+            "external: ['foo'], inputOptions: { external: ['bar'] }",
+            "external: ['foo'], inputOptions: { external() {} }",
+            "external: ['foo'], ...otherOptions",
+        ] {
+            for skip in ["skipNodeModulesBundle: true", "deps: { skipNodeModulesBundle: true }"] {
+                let input = format!(
+                    "export default {{ pack: {{ {options}, {skip}, bundle: false, dts: {{ tsgo: true }} }} }};"
+                );
+                assert_eq!(rewrite_pack_config(&input, false), input);
+                assert_eq!(pack_config_warnings(&input, false), [EXTERNAL_SKIP_WARNING]);
+            }
+        }
+        let input = "export default { pack: { external: ['foo'], deps: { skipNodeModulesBundle: true, dts: { neverBundle: ['types'] } } } };";
+        assert_eq!(rewrite_pack_config(input, false), input);
+        assert_eq!(pack_config_warnings(input, false), [EXTERNAL_SKIP_WARNING]);
+        for input in [
+            "export default { pack: { external: ['foo'], skipNodeModulesBundle: false } };",
+            "export default { plugins: [plugin({ external, skipNodeModulesBundle: true })] };",
+        ] {
+            assert!(pack_config_warnings(input, false).is_empty());
+        }
+    }
+
+    #[test]
+    fn standalone_concise_arrows_migrate_unbundle_and_generator() {
+        for input in [
+            "export default defineConfig(() => ({ bundle: false, dts: { tsgo: true } }));",
+            "export default defineConfig(async () => ({ bundle: false, dts: { tsgo: true } }));",
+            "export default defineConfig(() => ([{ bundle: false, dts: { tsgo: true } }]));",
+            "export default defineConfig(() => (({ bundle: false, dts: { tsgo: true } }) satisfies UserConfig));",
+            "export default defineConfig(() => { return { bundle: false, dts: { tsgo: true } }; });",
+        ] {
+            let actual = rewrite_pack_config(input, true);
+            assert!(actual.contains("unbundle: true"), "{actual}");
+            assert!(actual.contains("generator: 'tsgo'"), "{actual}");
+            assert!(!actual.contains("tsgo: true"), "{actual}");
+            assert_eq!(rewrite_pack_config(&actual, true), actual);
+        }
+    }
+
+    #[test]
+    fn renames_method_options_without_changing_bodies() {
+        let input = "export default defineConfig({ outExtension() { return { js: '.custom.js' }; }, async 'publicDir'() { /* assets */ return ['assets']; } });";
+        let actual = rewrite_pack_config(input, true);
+        assert!(actual.contains("outExtensions() { return { js: '.custom.js' }; }"), "{actual}");
+        assert!(actual.contains("async copy() { /* assets */ return ['assets']; }"), "{actual}");
+        assert_eq!(rewrite_pack_config(&actual, true), actual);
     }
 
     #[test]
