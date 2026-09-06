@@ -196,6 +196,14 @@ When done, force-push the updated branch history:
 git push --force-with-lease
 ```
 
+## Release and recovery
+
+The [release workflow](.github/workflows/release.yml) publishes packages in dependency order: platform packages → `@voidzero-dev/vite-plus-core` → `vite-plus`. After each tier, it waits up to 10 minutes for the exact versions and their tarballs to become available. It then waits another 60 seconds for CDN propagation.
+
+A propagation timeout fails the release job and stops subsequent steps. This does not mean npm rejected the upload; npm may have accepted it and still be scanning the packages.
+
+Once the packages become available, open the failed workflow run in GitHub Actions and select **Re-run failed jobs**. The workflow skips versions that npm has published and checks availability again before continuing. Keep the same version.
+
 ## Pull upstream dependencies
 
 > [!NOTE]

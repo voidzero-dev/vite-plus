@@ -11,10 +11,10 @@ export const DEFAULT_NPM_REGISTRY = 'https://registry.npmjs.org';
  */
 const ABBREVIATED_PACKUMENT_ACCEPT = 'application/vnd.npm.install-v1+json';
 
-export interface NpmPackageVersion {
+export type NpmPackageVersion = {
   name: string;
   version: string;
-}
+};
 
 interface AbbreviatedPackument {
   versions?: Record<string, { dist?: { tarball?: string } }>;
