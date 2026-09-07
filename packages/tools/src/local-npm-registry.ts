@@ -539,10 +539,11 @@ function buildRegistryEnv(registry: string): Record<string, string> {
   const noProxy = [process.env.NO_PROXY ?? process.env.no_proxy, '127.0.0.1']
     .filter(Boolean)
     .join(',');
-  // Windows snapshot jobs put TEMP on a ReFS Dev Drive, where Bun's
+  // Windows CI snapshot jobs put TEMP on a ReFS Dev Drive, where Bun's
   // cache/temp renames can fail with ENOTSUP. Keep its throwaway cache in
   // the user profile and its temporary files on the same filesystem.
-  const bunCacheRoot = process.platform === 'win32' ? homedir() : tmpdir();
+  const bunCacheRoot =
+    process.platform === 'win32' && process.env.CI != null ? homedir() : tmpdir();
   const bunCacheDir = mkdtempSync(path.join(bunCacheRoot, 'vp-local-registry-bun-'));
   return {
     NPM_CONFIG_REGISTRY: registry,
