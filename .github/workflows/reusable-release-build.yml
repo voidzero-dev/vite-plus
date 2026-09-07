@@ -56,7 +56,7 @@ jobs:
       - name: Rustup Adds Target
         run: rustup target add ${{ matrix.settings.target }}
 
-      - uses: oxc-project/setup-node@d59b270414aa7d0eed947eed4eb5b0b8a675f01d # v1.4.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
       - name: Set build version
         shell: bash
