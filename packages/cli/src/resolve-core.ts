@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
+import { readNearestPackageJson } from './utils/package.ts';
+
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 
 function checkCoreVersion(packageJsonPath: string, expectedVersion: string): void {
@@ -37,8 +39,19 @@ export function resolveCore(
   }
   checkCoreVersion(packageJsonPath, expectedVersion);
 
-  // A migrated project's alias must match the CLI release. Without a project
-  // alias, the required dependency above still supplies the bundled commands.
+  // npm can hoist an upstream Vite peer even when the project only declares
+  // vite-plus. Validate Vite only when the nearest package declares it.
+  const projectPackage = readNearestPackageJson(cwd);
+  const declaresVite = [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+  ].some((field) => Object.hasOwn(projectPackage?.[field] ?? {}, 'vite'));
+  if (!declaresVite) {
+    return require.resolve(`vite${subpath}`);
+  }
+
   const projectRequire = createRequire(join(cwd, 'package.json'));
   let projectPackageJsonPath: string | undefined;
   try {

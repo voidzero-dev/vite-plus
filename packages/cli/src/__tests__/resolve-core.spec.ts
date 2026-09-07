@@ -47,6 +47,12 @@ describe('resolveCore', () => {
     root = realpathSync(mkdtempSync(join(tmpdir(), 'vp-core-resolver-')));
     project = join(root, 'project');
     mkdirSync(project);
+    writeFileSync(
+      join(project, 'package.json'),
+      JSON.stringify({
+        devDependencies: { vite: `npm:@voidzero-dev/vite-plus-core@${cliPkg.version}` },
+      }),
+    );
     cliModule = join(root, 'cli', 'dist', 'bin.js');
     bundled = join(root, 'cli', 'node_modules', 'vite');
     writeCli(join(root, 'cli'));
@@ -58,9 +64,34 @@ describe('resolveCore', () => {
   });
 
   it('supports a CLI installation without a project-level vite alias', () => {
+    writeFileSync(
+      join(project, 'package.json'),
+      JSON.stringify({ devDependencies: { 'vite-plus': cliPkg.version } }),
+    );
     expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
     expect(resolveCore('/pack', project, cliModule)).toBe(join(bundled, 'pack.js'));
   });
+
+  it('ignores an upstream Vite peer hoisted by npm in a CLI-only project', () => {
+    writeFileSync(
+      join(project, 'package.json'),
+      JSON.stringify({ devDependencies: { 'vite-plus': cliPkg.version } }),
+    );
+    writeCore(join(project, 'node_modules', 'vite'), 'vite', '8.2.2');
+    expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
+    expect(resolveCore('/pack', project, cliModule)).toBe(join(bundled, 'pack.js'));
+  });
+
+  it.each(['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'])(
+    'validates an explicit Vite declaration in %s from a project subdirectory',
+    (field) => {
+      writeFileSync(join(project, 'package.json'), JSON.stringify({ [field]: { vite: '^8.0.0' } }));
+      writeCore(join(project, 'node_modules', 'vite'), 'vite', '8.2.2');
+      const subdirectory = join(project, 'src');
+      mkdirSync(subdirectory);
+      expect(() => resolveCore('', subdirectory, cliModule)).toThrow('found vite@8.2.2');
+    },
+  );
 
   it('keeps the same anchor as static exports when the project has a matching copy', () => {
     writeCore(join(project, 'node_modules', 'vite'));

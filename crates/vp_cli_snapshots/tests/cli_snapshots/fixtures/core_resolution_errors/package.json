@@ -1,5 +1,8 @@
 {
   "name": "core-resolution-errors",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+  }
 }
