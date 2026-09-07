@@ -91,7 +91,7 @@ jobs:
           save-cache: false
           cache-key: cli-e2e-test-x86_64-unknown-linux-gnu
 
-      - uses: oxc-project/setup-node@d59b270414aa7d0eed947eed4eb5b0b8a675f01d # v1.4.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
       # Format-check with the oxfmt of this commit instead of the released one.
       # A release carries the oxfmt it shipped with, which trails the catalog
@@ -253,7 +253,7 @@ jobs:
         with:
           name: windows-test-archive
 
-      - uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
+      - uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2.87.4
         with:
           tool: cargo-nextest
 
@@ -346,7 +346,7 @@ jobs:
         with:
           files: .
 
-      - uses: oxc-project/setup-node@d59b270414aa7d0eed947eed4eb5b0b8a675f01d # v1.4.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -406,7 +406,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-${{ matrix.target }}
 
-      - uses: oxc-project/setup-node@d59b270414aa7d0eed947eed4eb5b0b8a675f01d # v1.4.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -944,7 +944,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-snapshot-test-${{ matrix.target }}
 
-      - uses: oxc-project/setup-node@d59b270414aa7d0eed947eed4eb5b0b8a675f01d # v1.4.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1058,7 +1058,7 @@ jobs:
         shell: bash
         run: mkdir -p "$TEMP" "$TMP"
 
-      - uses: oxc-project/setup-node@d59b270414aa7d0eed947eed4eb5b0b8a675f01d # v1.4.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1102,7 +1102,7 @@ jobs:
         with:
           name: windows-snapshot-test-archive
 
-      - uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
+      - uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2.87.4
         with:
           tool: cargo-nextest
 
@@ -1145,7 +1145,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-musl
 
-      - uses: oxc-project/setup-node@d59b270414aa7d0eed947eed4eb5b0b8a675f01d # v1.4.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1279,7 +1279,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: install-e2e-test
 
-      - uses: oxc-project/setup-node@d59b270414aa7d0eed947eed4eb5b0b8a675f01d # v1.4.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1388,7 +1388,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: install-e2e-test-sfw-${{ matrix.os }}
 
-      - uses: oxc-project/setup-node@d59b270414aa7d0eed947eed4eb5b0b8a675f01d # v1.4.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
