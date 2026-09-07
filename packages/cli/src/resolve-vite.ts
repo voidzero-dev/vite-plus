@@ -10,10 +10,36 @@
  */
 
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
+import { cac } from 'cac';
+
+import type { JsCommandContext } from '../binding/index.js';
 import { resolveCore } from './resolve-core.ts';
 import { DEFAULT_ENVS } from './utils/constants.ts';
+
+export function resolveViteRoot({ cwd, args }: JsCommandContext): string {
+  const cli = cac();
+  const command = cli.command('[root]').allowUnknownOptions();
+  // Match Vite's boolean options so cac does not consume the following root
+  // as an option value. Other Vite options accept a required or optional value.
+  for (const flag of [
+    '--clearScreen',
+    '--cors',
+    '--strictPort',
+    '--force',
+    '--experimentalBundle',
+    '--emptyOutDir',
+    '-w, --watch',
+    '--app',
+    '-h, --help',
+    '-v, --version',
+  ]) {
+    command.option(flag, '');
+  }
+  const parsed = cli.parse(['node', 'vite', ...args], { run: false });
+  return resolve(cwd, parsed.args[0] ?? '.');
+}
 
 /**
  * Resolves the Vite binary path and environment variables.
@@ -24,11 +50,17 @@ import { DEFAULT_ENVS } from './utils/constants.ts';
  *
  * The CLI and its public re-exports use the same declared `vite` alias.
  */
-export async function vite(): Promise<{
+export async function vite(
+  err: Error | null,
+  context: JsCommandContext,
+): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  const vitePackagePath = dirname(resolveCore());
+  if (err) {
+    throw err;
+  }
+  const vitePackagePath = dirname(resolveCore('', resolveViteRoot(context)));
   const binPath = join(vitePackagePath, 'cli.js');
   if (!existsSync(binPath)) {
     throw new Error(`Could not find the bundled Vite CLI at ${binPath}. Run \`vp install\`.`);

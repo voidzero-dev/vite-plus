@@ -3456,12 +3456,12 @@ export interface BatchRewriteResult {
 
 /** Configuration options passed from JavaScript to Rust. */
 export interface CliOptions {
-  lint: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  fmt: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  vite: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  test: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  pack: (err: Error | null) => Promise<JsCommandResolvedResult>;
-  doc: (err: Error | null) => Promise<JsCommandResolvedResult>;
+  lint: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
+  fmt: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
+  vite: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
+  test: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
+  pack: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
+  doc: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
   cwd?: string;
   /** Whether the user supplied the global `-C` option. */
   explicitChdir?: boolean;
@@ -3610,6 +3610,12 @@ export declare function hasConfigKey(viteConfigPath: string, configKey: string):
 export interface HooksArgs {
   command: 'enable' | 'disable' | 'status';
   hooksDir?: string;
+}
+
+/** Execution context after command dispatch selects the working directory. */
+export interface JsCommandContext {
+  cwd: string;
+  args: Array<string>;
 }
 
 /** Result returned by JavaScript resolver functions. */

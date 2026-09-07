@@ -67,12 +67,12 @@ pub fn ensure_blocking_stdio() {
 /// Configuration options passed from JavaScript to Rust.
 #[napi(object, object_to_js = false)]
 pub struct CliOptions {
-    pub lint: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub fmt: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub pack: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub doc: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    pub lint: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub fmt: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub vite: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub test: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub pack: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub doc: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
     /// Whether the user supplied the global `-C` option.
     pub explicit_chdir: Option<bool>,
@@ -84,6 +84,13 @@ pub struct CliOptions {
     pub vite_plus_package_path: String,
     /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
     pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
+}
+
+/// Execution context after command dispatch selects the working directory.
+#[napi(object, object_from_js = false)]
+pub struct JsCommandContext {
+    pub cwd: String,
+    pub args: Vec<String>,
 }
 
 /// Result returned by JavaScript resolver functions.
@@ -105,15 +112,21 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
 /// Create a boxed resolver function from a ThreadsafeFunction
 /// NOTE: Uses anyhow::Error to avoid NAPI type interference with vp_error::Error
 fn create_resolver(
-    tsf: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    tsf: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     error_message: &'static str,
 ) -> BoxedResolverFn {
-    Box::new(move || {
+    Box::new(move |cwd, args| {
+        let context = cwd
+            .as_path()
+            .to_str()
+            .map(|cwd| JsCommandContext { cwd: cwd.to_string(), args: args.to_vec() });
         let tsf = tsf.clone();
         Box::pin(async move {
             // Call JS function - map napi::Error to anyhow::Error
             let promise: Promise<JsCommandResolvedResult> = tsf
-                .call_async(Ok(()))
+                .call_async(Ok(
+                    context.ok_or_else(|| anyhow::anyhow!("command cwd is not valid UTF-8"))?
+                ))
                 .await
                 .map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 

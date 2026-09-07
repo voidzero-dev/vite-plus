@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use vt::{Command, ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest};
+use vt_path::AbsolutePath;
 use vt_str::Str;
 
 /// Resolved configuration from vite.config.ts
@@ -138,8 +139,12 @@ pub(super) enum CLIArgs {
 
 /// Type alias for boxed async resolver function
 /// NOTE: Uses anyhow::Error to avoid NAPI type inference issues
-pub type BoxedResolverFn =
-    Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<ResolveCommandResult>> + 'static>>>;
+pub type BoxedResolverFn = Box<
+    dyn Fn(
+        &AbsolutePath,
+        &[String],
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<ResolveCommandResult>> + 'static>>,
+>;
 
 /// Type alias for vite config resolver function (takes package path, returns JSON string)
 /// Uses Arc for cloning and Send + Sync for use in UserConfigLoader

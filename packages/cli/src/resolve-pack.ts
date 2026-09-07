@@ -10,6 +10,7 @@
 
 import { join } from 'node:path';
 
+import type { JsCommandContext } from '../binding/index.js';
 import { resolveCore } from './resolve-core.ts';
 import { DEFAULT_ENVS } from './utils/constants.ts';
 
@@ -22,11 +23,17 @@ import { DEFAULT_ENVS } from './utils/constants.ts';
  *
  * Tsdown is a tool that provides a library for building JavaScript/TypeScript libraries.
  */
-export async function pack(): Promise<{
+export async function pack(
+  err: Error | null,
+  { cwd }: JsCommandContext,
+): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  resolveCore('/pack');
+  if (err) {
+    throw err;
+  }
+  resolveCore('/pack', cwd);
   // Resolve the bundled Tsdown CLI
   const binPath = join(import.meta.dirname, 'pack-bin.js');
 

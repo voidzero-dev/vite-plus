@@ -134,7 +134,9 @@ a repository-wide string replacement.
 Review the `UserConfig` augmentation in `define-config.ts` with declaration
 generation enabled. Vitest augments `vite` too, so the implementation must
 check both augmentations together and retain the public Vite+ configuration
-types.
+types. Keep the explicit `test?: VitestInlineConfig` field: npm can install a
+separate upstream Vite peer for Vitest even when the project has a matching
+core alias.
 
 ### Command resolution and version checks
 
@@ -158,12 +160,19 @@ Before invoking a core-specific command entry, read the resolved
 The check must distinguish the core package version from its bundled Vite
 version. For example, core `0.3.0` bundles Vite `8.2.2`.
 
-If the active project's `vite` resolves to upstream Vite or a different core
-version, report the expected and actual packages and their locations. Ask the
-user to align the aliases and reinstall. A project without a resolvable
-top-level `vite` may use the CLI's declared dependency. A matching version in
+Check the nearest package manifest for an explicit `vite` dependency before
+validating the project's resolved copy. If that copy resolves to upstream
+Vite or a different core version, report the expected and actual packages and
+their locations. Ask the user to align the aliases and reinstall. A project
+that declares only `vite-plus` uses the CLI's dependency even if npm hoists an
+upstream Vite peer for Vitest. A matching version in
 a different peer context needs the layout validation described below; version
 equality alone does not establish module identity.
+
+Use the command's execution directory for project validation, including
+`-C`, workspace defaults, and task dispatch. For Vite commands, resolve the
+positional root from that directory. Keep the selected CLI as the anchor for
+its required dependency.
 
 Apply these checks before the CLI starts Vite or loads its packaging entry.
 Retain the distinction between pure `vite.defineConfig()` and the Vite+
