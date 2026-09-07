@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { findViteConfigUp } from '../resolve-vite-config.js';
+import { findViteConfigUp, resolveViteConfig } from '../resolve-vite-config.js';
 
 describe('findViteConfigUp', () => {
   let tempDir: string;
@@ -116,5 +116,131 @@ describe('findViteConfigUp', () => {
 
     const result = findViteConfigUp(subDir, tempDir);
     expect(result).toBe(path.join(tempDir, 'vite.config.mjs'));
+  });
+});
+
+describe('resolveViteConfig export conditions', () => {
+  let tempDir: string;
+  let originalNodeOptions: string | undefined;
+
+  beforeEach(() => {
+    tempDir = fs.realpathSync(mkdtempSync(path.join(tmpdir(), 'vite-config-conditions-test-')));
+    originalNodeOptions = process.env.NODE_OPTIONS;
+  });
+
+  afterEach(() => {
+    if (originalNodeOptions !== undefined) {
+      process.env.NODE_OPTIONS = originalNodeOptions;
+    } else {
+      delete process.env.NODE_OPTIONS;
+    }
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('resolves self-referencing package via custom condition from NODE_OPTIONS (--conditions=dev)', async () => {
+    const pkgJson = {
+      name: '@test-scope/thing',
+      type: 'module',
+      exports: {
+        './rules': {
+          dev: './src/rules.ts',
+          default: './dist/rules.js',
+        },
+      },
+    };
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify(pkgJson, null, 2));
+
+    const srcDir = path.join(tempDir, 'src');
+    fs.mkdirSync(srcDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(srcDir, 'rules.ts'),
+      'export const customRule = { name: "custom-rule-from-dev-condition" };\n',
+    );
+
+    const configTs = `
+      import { customRule } from '@test-scope/thing/rules';
+      export default {
+        lint: {
+          plugins: [customRule],
+        },
+      };
+    `;
+    fs.writeFileSync(path.join(tempDir, 'vite.config.ts'), configTs);
+
+    process.env.NODE_OPTIONS = `${originalNodeOptions || ''} --conditions=dev`.trim();
+    const config = await resolveViteConfig(tempDir);
+    expect(config).toBeDefined();
+    expect(config.lint?.plugins).toEqual([{ name: 'custom-rule-from-dev-condition' }]);
+  });
+
+  it('resolves self-referencing package via -C short flag in NODE_OPTIONS', async () => {
+    const pkgJson = {
+      name: '@test-scope/short-flag',
+      type: 'module',
+      exports: {
+        './plugin': {
+          custom: './src/plugin.ts',
+          default: './dist/plugin.js',
+        },
+      },
+    };
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify(pkgJson, null, 2));
+
+    const srcDir = path.join(tempDir, 'src');
+    fs.mkdirSync(srcDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(srcDir, 'plugin.ts'),
+      'export const flagPlugin = { id: "short-flag-condition" };\n',
+    );
+
+    const configTs = `
+      import { flagPlugin } from '@test-scope/short-flag/plugin';
+      export default {
+        lint: {
+          plugins: [flagPlugin],
+        },
+      };
+    `;
+    fs.writeFileSync(path.join(tempDir, 'vite.config.ts'), configTs);
+
+    process.env.NODE_OPTIONS = `${originalNodeOptions || ''} -C custom`.trim();
+    const config = await resolveViteConfig(tempDir);
+    expect(config).toBeDefined();
+    expect(config.lint?.plugins).toEqual([{ id: 'short-flag-condition' }]);
+  });
+
+  it('fails to resolve without custom condition when dist does not exist', async () => {
+    const pkgJson = {
+      name: '@test-scope/fail-case',
+      type: 'module',
+      exports: {
+        './rules': {
+          dev: './src/rules.ts',
+          default: './dist/rules.js',
+        },
+      },
+    };
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify(pkgJson, null, 2));
+
+    const srcDir = path.join(tempDir, 'src');
+    fs.mkdirSync(srcDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(srcDir, 'rules.ts'),
+      'export const customRule = { name: "custom-rule" };\n',
+    );
+
+    const configTs = `
+      import { customRule } from '@test-scope/fail-case/rules';
+      export default {
+        lint: {
+          plugins: [customRule],
+        },
+      };
+    `;
+    fs.writeFileSync(path.join(tempDir, 'vite.config.ts'), configTs);
+
+    // No condition set in NODE_OPTIONS
+    delete process.env.NODE_OPTIONS;
+    await expect(resolveViteConfig(tempDir)).rejects.toThrow();
   });
 });

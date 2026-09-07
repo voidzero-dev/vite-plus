@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { readNearestPackageJson } from './utils/package.ts';
 
@@ -58,14 +58,28 @@ export function resolveCore(
   modulePath = import.meta.url,
 ): string {
   const cliRequire = createRequire(modulePath);
-  // Read the selected CLI's installed manifest. A static JSON import is inlined
-  // during the build, before CI and preview packers can stamp a new version.
+  const cliPackageJsonPath = cliRequire.resolve('vite-plus/package.json');
   const { version: expectedVersion } = JSON.parse(
-    readFileSync(cliRequire.resolve('vite-plus/package.json'), 'utf8'),
+    readFileSync(cliPackageJsonPath, 'utf8'),
   ) as { version: string };
+  const cliDir = dirname(cliPackageJsonPath);
   let corePackageJsonPath: string;
   try {
     corePackageJsonPath = cliRequire.resolve('vite/package.json');
+    let curr = cliDir;
+    let isBundled = false;
+    while (true) {
+      if (corePackageJsonPath.startsWith(join(curr, 'node_modules') + '/')) {
+        isBundled = true;
+        break;
+      }
+      const parent = dirname(curr);
+      if (parent === curr) break;
+      curr = parent;
+    }
+    if (!isBundled) {
+      throw new Error('Resolved outside CLI directory');
+    }
   } catch (cause) {
     throw new Error('Could not resolve the bundled Vite dependency. Run `vp install`.', { cause });
   }

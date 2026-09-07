@@ -197,5 +197,148 @@ export function brandVite(rootDir: string = process.cwd()) {
     ),
   );
 
+  // 7. nodeResolve.ts: Support Node export conditions (e.g. NODE_OPTIONS=--conditions=dev)
+  const nodeResolveFile = join(nodeDir, 'nodeResolve.ts');
+  const nodeResolveResults = [
+    replaceInFile(
+      nodeResolveFile,
+      `/**
+ * Resolve like Node.js using Vite's resolution algorithm with preconfigured options.
+ */
+export function nodeResolveWithVite(
+  id: string,
+  importer: string | undefined,
+  options: NodeResolveWithViteOptions,
+): string | undefined {
+  return tryNodeResolve(id, importer, {
+    root: options.root,
+    isBuild: true,
+    isProduction: true,
+    preferRelative: false,
+    tryIndex: true,
+    mainFields: [],
+    conditions: [
+      'node',
+      ...(isModuleSyncConditionEnabled ? ['module-sync'] : []),
+    ],`,
+      `/**
+ * Extract Node condition names from process.execArgv and process.env.NODE_OPTIONS.
+ */
+export function getNodeConditions(): string[] {
+  const conditions = new Set<string>()
+  function parseArgs(args: string[]) {
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i]
+      if (arg === '-C' || arg === '--conditions') {
+        if (i + 1 < args.length) conditions.add(args[++i])
+      } else if (arg.startsWith('--conditions=')) {
+        conditions.add(arg.slice('--conditions='.length))
+      }
+    }
+  }
+  if (process.execArgv) parseArgs(process.execArgv)
+  if (process.env.NODE_OPTIONS) {
+    const parts = process.env.NODE_OPTIONS.match(/(?:[^\\s"']+|"[^"]*"|'[^']*')+/g) || []
+    parseArgs(
+      parts.map((p) =>
+        (p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))
+          ? p.slice(1, -1)
+          : p,
+      ),
+    )
+  }
+  return Array.from(conditions)
+}
+
+/**
+ * Resolve like Node.js using Vite's resolution algorithm with preconfigured options.
+ */
+export function nodeResolveWithVite(
+  id: string,
+  importer: string | undefined,
+  options: NodeResolveWithViteOptions,
+): string | undefined {
+  return tryNodeResolve(id, importer, {
+    root: options.root,
+    isBuild: true,
+    isProduction: true,
+    preferRelative: false,
+    tryIndex: true,
+    mainFields: [],
+    conditions: [
+      'node',
+      ...(isModuleSyncConditionEnabled ? ['module-sync'] : []),
+      ...getNodeConditions(),
+    ],`,
+    ),
+  ];
+  logPatch(
+    'nodeResolve.ts',
+    'Supported Node conditions in nodeResolveWithVite',
+    nodeResolveResults.includes('patched') ? 'patched' : 'already',
+  );
+
+  // 8. config.ts: Support Node conditions and bundle TS sources in bundleConfigFile
+  const configResults = [
+    replaceInFile(
+      configFile,
+      "import { nodeResolveWithVite } from './nodeResolve'",
+      "import { getNodeConditions, nodeResolveWithVite } from './nodeResolve'",
+    ),
+    replaceInFile(
+      configFile,
+      `    resolve: {
+      mainFields: ['main'],
+    },`,
+      `    resolve: {
+      mainFields: ['main'],
+      conditionNames: getNodeConditions(),
+    },`,
+    ),
+    replaceInFile(
+      configFile,
+      `            // always no-externalize json files as rolldown does not support import attributes
+            if (idFsPath.endsWith('.json')) {
+              return idFsPath
+            }`,
+      `            // always no-externalize json and ts files as rolldown does not support import attributes / node cannot always run ts directly
+            if (idFsPath.endsWith('.json') || /\\.(?:[cm]?ts|tsx)$/.test(idFsPath)) {
+              return idFsPath
+            }`,
+    ),
+  ];
+  logPatch(
+    'config.ts',
+    'Supported Node conditions and TS inlining in bundleConfigFile',
+    configResults.includes('patched') ? 'patched' : 'already',
+  );
+
+  // 9. ssr/runnerImport.ts: Support Node conditions in runnerImport
+  const runnerImportFile = join(nodeDir, 'ssr', 'runnerImport.ts');
+  const runnerImportResults = [
+    replaceInFile(
+      runnerImportFile,
+      "import type { InlineConfig } from '../config'",
+      "import type { InlineConfig } from '../config'\nimport { getNodeConditions } from '../nodeResolve'",
+    ),
+    replaceInFile(
+      runnerImportFile,
+      `            conditions: [
+              'node',
+              ...(isModuleSyncConditionEnabled ? ['module-sync'] : []),
+            ],`,
+      `            conditions: [
+              'node',
+              ...(isModuleSyncConditionEnabled ? ['module-sync'] : []),
+              ...getNodeConditions(),
+            ],`,
+    ),
+  ];
+  logPatch(
+    'ssr/runnerImport.ts',
+    'Supported Node conditions in runnerImport',
+    runnerImportResults.includes('patched') ? 'patched' : 'already',
+  );
+
   log('Done!');
 }
