@@ -1,6 +1,6 @@
 [package]
 name = "vp_global_cli"
-version = "0.3.0"
+version = "0.3.1"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
