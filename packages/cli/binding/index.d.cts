@@ -3616,6 +3616,14 @@ export interface JsCommandResolvedResult {
   envs: Record<string, string>;
 }
 
+/** Merge a dynamic config into a top-level Vite config key by importing it. */
+export declare function mergeDynamicConfig(
+  viteConfigPath: string,
+  configPath: string,
+  importName: string,
+  configKey: string,
+): MergeJsonConfigResult;
+
 /**
  * Merge JSON configuration file into vite config file
  *

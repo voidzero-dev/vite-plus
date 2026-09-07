@@ -117,6 +117,38 @@ describe('package.json exports map', () => {
   });
 });
 
+describe('Vite+ Oxc subpaths preserve runtime exports', () => {
+  it.each([
+    ['oxlint', 'vite-plus/lint', () => import('oxlint'), () => import('vite-plus/lint')],
+    ['oxfmt', 'vite-plus/fmt', () => import('oxfmt'), () => import('vite-plus/fmt')],
+  ] as const)(
+    're-exports every %s runtime helper from %s',
+    async (upstream, subpath, loadUpstream, loadVitePlus) => {
+      const [vitePlusModule, upstreamModule] = await Promise.all([loadVitePlus(), loadUpstream()]);
+      const expected = namedValueExports(upstreamModule);
+      expect(expected.length, `sanity: ${upstream} should expose value exports`).toBeGreaterThan(0);
+      const missing = expected.filter(
+        (key) =>
+          !(key in vitePlusModule) ||
+          (vitePlusModule as Record<string, unknown>)[key] === undefined,
+      );
+      expect(missing, `${upstream} value exports missing from ${subpath}`).toEqual([]);
+    },
+  );
+
+  it.each([
+    ['oxlint', 'vite-plus/lint'],
+    ['oxfmt', 'vite-plus/fmt'],
+  ] as const)('exposes the %s helpers to require(%s)', (upstream, subpath) => {
+    const vitePlusModule = requireFromHere(subpath) as Record<string, unknown>;
+    const upstreamModule = requireFromHere(upstream) as Record<string, unknown>;
+    const missing = namedValueExports(upstreamModule).filter(
+      (key) => !(key in vitePlusModule) || vitePlusModule[key] === undefined,
+    );
+    expect(missing, `${upstream} value exports missing from ${subpath}`).toEqual([]);
+  });
+});
+
 /**
  * Migration rewrites the `vitest/config` specifier to bare `vite-plus` (see the
  * Rust `import_rewriter.rs` rule and the `prefer-vite-plus-imports` oxlint rule

@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_dynamic_oxc_configs"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should import dynamic Oxc configs into Vite+", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "oxlint.config.ts"], comment = "check oxlint config and helper import", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "oxfmt.config.mts"], comment = "check oxfmt config and helper import", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check dynamic configs imported into vite config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check bundled Oxc dependencies removed", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "run migration again to check idempotency", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite config remains unchanged", continue-on-failure = true },
+]

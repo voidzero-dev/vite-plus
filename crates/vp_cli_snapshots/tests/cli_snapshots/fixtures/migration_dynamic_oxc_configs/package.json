@@ -1,0 +1,12 @@
+{
+  "name": "migration-dynamic-oxc-configs",
+  "scripts": {
+    "lint": "oxlint",
+    "format": "oxfmt --write"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.1.0",
+    "oxlint": "^1.0.0",
+    "vite": "^7.0.0"
+  }
+}
