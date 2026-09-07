@@ -118,8 +118,8 @@ export default defineConfig([
       // a `.ts` one compiled with `module: commonjs`, emits its import as
       // `require()`, which an ESM-only export would reject.
       //
-      // `lint-plugins-dev` deliberately has no CJS build: `oxlint/plugins-dev`
-      // is ESM-only upstream, so the shim mirrors exactly what upstream can do.
+      // `lint-plugins-dev` uses one ESM entry for both import and require,
+      // matching `oxlint/plugins-dev`. Node can load it synchronously.
       'lint-plugins': './src/lint-plugins.ts',
     },
     outDir: 'dist',

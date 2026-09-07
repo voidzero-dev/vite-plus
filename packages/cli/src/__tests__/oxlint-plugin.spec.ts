@@ -131,6 +131,12 @@ new RuleTester({
     // Oxlint's config surface still lives in the `oxlint` package. Only the
     // plugin authoring API moved. A redirect would break these imports.
     `import { defineConfig } from 'oxlint'`,
+    `import { "defineConfig" as cfg } from 'oxlint'`,
+    `export { 'defineConfig' as cfg } from 'oxlint'`,
+    {
+      code: `import type { 'OxlintConfig' as Config } from 'oxlint'`,
+      filename: 'types.ts',
+    },
     {
       code: `import type { OxlintConfig, OxlintOverride } from 'oxlint'`,
       filename: 'types.ts',
@@ -149,8 +155,7 @@ new RuleTester({
     // A default or namespace binding disqualifies the statement too:
     // vite-plus/lint/plugins has no default export.
     `import oxlint, { defineRule } from 'oxlint'`,
-    // `import x = require(...)` has require semantics, and the vite-plus lint
-    // subpaths are ESM-only.
+    // Import-equals declarations stay unchanged, matching the migrator.
     {
       code: `import plugins = require('@oxlint/plugins')`,
       filename: 'plugin.cts',

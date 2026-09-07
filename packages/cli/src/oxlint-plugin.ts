@@ -516,9 +516,8 @@ export const preferVitePlusImportsRule = defineRule({
         );
       },
       TSExternalModuleReference(node) {
-        // `import plugins = require('...')` has require semantics, and the
-        // `vite-plus/lint/*` subpaths are ESM-only, so they are skipped here
-        // for the same reason the migrate rewriter skips `require()`.
+        // Keep import-equals declarations unchanged, matching the migrator's
+        // treatment of require calls.
         if (
           node.expression.type === 'Literal' &&
           typeof node.expression.value === 'string' &&

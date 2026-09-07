@@ -76,7 +76,7 @@
     },
     "./lint/plugins-dev": {
       "types": "./dist/lint-plugins-dev.d.ts",
-      "import": "./dist/lint-plugins-dev.js"
+      "default": "./dist/lint-plugins-dev.js"
     },
     "./oxlint-plugin": {
       "module-sync": "./dist/oxlint-plugin.js",

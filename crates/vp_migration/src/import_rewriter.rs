@@ -1615,9 +1615,8 @@ fix: $NEW_IMPORT
 ///
 /// `@oxlint/plugins` and `oxlint/plugins-dev` are unambiguous. They expose only
 /// the plugin API and the dev-time utilities, so import, export, and dynamic
-/// `import()` statements all rewrite. `require()` does NOT: the
-/// `vite-plus/lint/*` exports are ESM-only, so a rewritten `require()` would
-/// fail to resolve with ERR_PACKAGE_PATH_NOT_EXPORTED.
+/// `import()` statements all rewrite. The rules leave `require()` unchanged;
+/// dependency cleanup retains `@oxlint/plugins` when these references remain.
 ///
 /// The rewrite skips a package that declares `oxlint` or `@oxlint/plugins` in
 /// `dependencies` or `peerDependencies`. Those are published Oxlint plugins,
@@ -1750,7 +1749,7 @@ rule:
             stopBy: end
             has:
               field: name
-              regex: ^(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)$
+              regex: ^['"]?(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)['"]?$
 transform:
   NEW_IMPORT:
     replace:
@@ -1777,7 +1776,7 @@ rule:
             stopBy: end
             has:
               field: name
-              regex: ^(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)$
+              regex: ^['"]?(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)['"]?$
       - not:
           has:
             kind: namespace_import
@@ -4117,6 +4116,33 @@ export default defineConfig({});"#;
     }
 
     #[test]
+    fn test_rewrite_import_content_oxlint_quoted_config_names_are_preserved() {
+        let content = r#"import { "defineConfig" as cfg } from 'oxlint';
+import type { 'OxlintConfig' as Config } from 'oxlint';
+import { 'defineConfig' as cfg2, defineRule } from 'oxlint';
+export { "defineConfig" as config } from 'oxlint';
+export type { 'OxlintOverride' as Override } from 'oxlint';"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_quoted_plugin_names() {
+        let content = r#"import { "defineRule" as rule } from 'oxlint';
+export { 'definePlugin' as plugin } from 'oxlint';"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { "defineRule" as rule } from 'vite-plus/lint/plugins';
+export { 'definePlugin' as plugin } from 'vite-plus/lint/plugins';"#
+        );
+    }
+
+    #[test]
     fn test_rewrite_import_content_oxlint_ambiguous_forms_are_left_alone() {
         // No named specifier means no way to tell the config surface from the
         // plugin API, so these stay put rather than risk a wrong rewrite.
@@ -4245,8 +4271,8 @@ export const legacy = 'oxlint';"#;
 
     #[test]
     fn test_rewrite_import_content_oxlint_require_is_left_alone() {
-        // `vite-plus/lint/plugins` is an ESM-only export, so a rewritten
-        // `require()` would fail with ERR_PACKAGE_PATH_NOT_EXPORTED.
+        // The rules preserve require calls even though the exports support
+        // CommonJS. Dependency cleanup must retain these referenced packages.
         let cjs = r#"const { defineRule } = require('@oxlint/plugins');
 const { RuleTester } = require('oxlint/plugins-dev');"#;
 
@@ -4257,8 +4283,7 @@ const { RuleTester } = require('oxlint/plugins-dev');"#;
 
     #[test]
     fn test_rewrite_import_content_oxlint_dynamic_import_still_rewrites() {
-        // Dynamic `import()` resolves through the `import` condition, so the
-        // ESM-only export is reachable.
+        // Dynamic import resolves through the shim's ESM entry.
         let dynamic = r#"const plugins = await import('@oxlint/plugins');"#;
 
         let result = rewrite_import_content(dynamic, &SkipPackages::default()).unwrap();

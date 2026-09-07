@@ -218,12 +218,12 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
 function sourceTreeMatches(
   projectPath: string,
   matchesContent: (content: string) => boolean,
-  // Cross nested package.json boundaries. Off by default, because most signals
-  // are per-package and a sub-package is scanned on its own pass. On for the
-  // dependency-retention check, where a nested example or fixture directory
-  // that is not a workspace member would otherwise go unscanned while still
-  // resolving the root's dependency.
-  crossPackageBoundaries = false,
+  options: {
+    // Nested examples can resolve the root's dependency through source or
+    // package imports, even when they are not workspace members.
+    crossPackageBoundaries?: boolean;
+    includePackageImports?: boolean;
+  } = {},
 ): boolean {
   const scanDir = (dir: string, isRoot: boolean): boolean => {
     let entries: fs.Dirent[];
@@ -235,7 +235,7 @@ function sourceTreeMatches(
     // A nested package.json marks a separate workspace package — it is migrated
     // (and scanned) on its own pass, so don't let its files leak into this one.
     if (
-      !crossPackageBoundaries &&
+      !options.crossPackageBoundaries &&
       !isRoot &&
       entries.some((e) => e.isFile() && e.name === 'package.json')
     ) {
@@ -250,9 +250,20 @@ function sourceTreeMatches(
         if (scanDir(entryPath, false)) {
           return true;
         }
-      } else if (entry.isFile() && VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name))) {
+      } else if (
+        entry.isFile() &&
+        (VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name)) ||
+          (options.includePackageImports && entry.name === 'package.json'))
+      ) {
         try {
-          if (matchesContent(fs.readFileSync(entryPath, 'utf8'))) {
+          let content = fs.readFileSync(entryPath, 'utf8');
+          if (entry.name === 'package.json') {
+            // Check alias targets without counting the dependency declaration
+            // itself as a use. JSON serialization includes conditional targets.
+            const pkg = JSON.parse(content) as { imports?: unknown };
+            content = JSON.stringify(pkg.imports ?? {});
+          }
+          if (matchesContent(content)) {
             return true;
           }
         } catch {
@@ -350,14 +361,8 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
   return modes;
 }
 
-// CommonJS forms that reach the Oxlint plugin API. The rewrite deliberately
-// leaves these alone, because `vite-plus/lint/plugins*` is ESM-only and a
-// rewritten `require()` would fail with ERR_PACKAGE_PATH_NOT_EXPORTED. A
-// project that still has one therefore needs its direct `@oxlint/plugins`
-// dependency: under pnpm's strict layout the transitive copy inside
-// `vite-plus` is not resolvable from the plugin file.
 /**
- * True when the source tree still names `@oxlint/plugins` anywhere.
+ * True when source or package import aliases still name `@oxlint/plugins`.
  *
  * Deliberately a plain substring scan over the FINAL source, run after the
  * import rewrite. By then every form the rewrite handles has already become a
@@ -371,13 +376,10 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
  * the only question that matters: does anything still need this package?
  */
 export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): boolean {
-  return sourceTreeMatches(
-    projectPath,
-    (content) => content.includes('@oxlint/plugins'),
-    // Nested non-workspace packages (examples, fixtures) resolve the root's
-    // dependency by walking up, so they must be scanned before it is deleted.
-    true,
-  );
+  return sourceTreeMatches(projectPath, (content) => content.includes('@oxlint/plugins'), {
+    crossPackageBoundaries: true,
+    includePackageImports: true,
+  });
 }
 
 /**
