@@ -79,6 +79,7 @@ async fn run(source: &Path) -> Result<(), Error> {
             .iter()
             .any(|name| std::fs::symlink_metadata(dirs.bin.join(name)).is_ok())
         && !env.is_ci
+        && std::env::var(env_vars::VP_SELF_SETUP_REPLACE_EXISTING).as_deref() != Ok("1")
         && !confirm(
             &format!("Replace existing Vite+ commands in {}?", dirs.bin.as_path().display()),
             false,
@@ -347,6 +348,8 @@ async fn remove_previous_install(previous: Option<&AbsolutePath>) -> Result<(), 
     for _ in 0..2 {
         let result = tokio::process::Command::new(binary.as_path())
             .args(["implode", "--yes"])
+            // The old installation must dispatch implode instead of returning bootstrap paths.
+            .env_remove(env_vars::VP_SELF_SETUP_SHELL)
             .env(env_vars::VP_HOME, previous.as_path())
             .output()
             .await;

@@ -164,6 +164,7 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
     let mut command = tokio::process::Command::new(binary.as_path());
     command
         .env_remove(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK)
+        .env(vp_shared::env_vars::VP_SELF_SETUP_REPLACE_EXISTING, if opts.yes { "1" } else { "0" })
         .env("VP_NODE_MANAGER", if opts.no_node_manager { "no" } else { "yes" })
         .env(
             vp_shared::env_vars::VP_SELF_SETUP_NO_MODIFY_PATH,

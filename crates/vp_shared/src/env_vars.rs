@@ -203,6 +203,9 @@ pub const VP_SELF_SETUP_SUPPORT_CHECK: &str = "VP_SELF_SETUP_SUPPORT_CHECK";
 /// Skip persistent shell/PATH changes during first-start installation.
 pub const VP_SELF_SETUP_NO_MODIFY_PATH: &str = "VP_SELF_SETUP_NO_MODIFY_PATH";
 
+/// Bootstrap consent to replace existing Vite+ entrypoints during unattended setup.
+pub const VP_SELF_SETUP_REPLACE_EXISTING: &str = "VP_SELF_SETUP_REPLACE_EXISTING";
+
 /// Keys in [`VP_DUMP_DIRS`] output. Each value uses one `<key>\t<value>` line.
 /// The `vp_global_cli` printer and `vp-setup` parser share these values.
 /// `install.sh` and `install.ps1` use the same keys.

@@ -1885,25 +1885,34 @@ jobs:
             throw "--no-node-manager was not passed to self-setup"
           }
 
-      - name: Quiet same-version installation uses self-setup
+      - name: Unattended same-version installation works outside CI
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $installer = Join-Path $env:DEV_DRIVE "target/release/vp-setup.exe"
-          $previous = (Get-Item (Join-Path $env:VP_HOME "current")).Target
-          $output = & $installer --quiet --version $env:VP_SETUP_TEST_VERSION `
-            --registry $env:VP_SETUP_TEST_REGISTRY --no-node-manager --no-modify-path 2>&1
-          if ($LASTEXITCODE -ne 0) {
-            throw "Quiet setup failed: $output"
-          }
-          if ($output) {
-            throw "Quiet setup unexpectedly printed output: $output"
-          }
-          if (-not (Test-Path (Join-Path $env:VP_HOME "current/bin/.vp-setup-complete"))) {
-            throw "Quiet setup did not finish"
-          }
-          if ((Get-Item (Join-Path $env:VP_HOME "current")).Target -eq $previous) {
-            throw "Same-version setup did not deploy a fresh binary"
+          $previousCi = $env:CI
+          try {
+            # CI bypasses replacement confirmation and would hide lost --yes consent.
+            Remove-Item Env:CI -ErrorAction SilentlyContinue
+            foreach ($mode in @('--yes', '--quiet')) {
+              $previous = (Get-Item (Join-Path $env:VP_HOME "current")).Target
+              $output = & $installer $mode --version $env:VP_SETUP_TEST_VERSION `
+                --registry $env:VP_SETUP_TEST_REGISTRY --no-node-manager --no-modify-path 2>&1
+              if ($LASTEXITCODE -ne 0) {
+                throw "$mode setup failed: $output"
+              }
+              if ($mode -eq '--quiet' -and $output) {
+                throw "Quiet setup unexpectedly printed output: $output"
+              }
+              if (-not (Test-Path (Join-Path $env:VP_HOME "current/bin/.vp-setup-complete"))) {
+                throw "$mode setup did not finish"
+              }
+              if ((Get-Item (Join-Path $env:VP_HOME "current")).Target -eq $previous) {
+                throw "Same-version setup did not deploy a fresh binary"
+              }
+            }
+          } finally {
+            $env:CI = $previousCi
           }
 
       - name: Set PATH
