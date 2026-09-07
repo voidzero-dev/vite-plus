@@ -201,6 +201,8 @@ pub struct BatchRewriteResult {
     pub preserved_vitest_files: Vec<String>,
     /// Files that had errors
     pub errors: Vec<BatchRewriteError>,
+    /// Pack configurations that need manual migration
+    pub warnings: Vec<BatchRewriteError>,
 }
 
 /// Merge tsdown config into vite config by importing it
@@ -309,6 +311,14 @@ pub fn rewrite_imports_in_directory(
             .preserved_vitest_files
             .iter()
             .map(|p| p.to_string_lossy().to_string())
+            .collect(),
+        warnings: result
+            .warnings
+            .iter()
+            .map(|(p, m)| BatchRewriteError {
+                path: p.to_string_lossy().to_string(),
+                message: m.clone(),
+            })
             .collect(),
         errors: result
             .errors

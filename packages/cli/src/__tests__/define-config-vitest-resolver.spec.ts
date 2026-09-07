@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import type { Plugin } from '@voidzero-dev/vite-plus-core';
+import type { Plugin } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import { defineConfig, defineProject, isVitestFamilySpecifier } from '../define-config.ts';

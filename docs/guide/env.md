@@ -32,6 +32,18 @@ latest LTS.
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
+::: tip Using pnpm with Vite+ runtime management
+pnpm can also manage the runtime declared in `devEngines.runtime`. When both pnpm and Vite+ manage Node.js, they can download the same version separately or select different versions, causing inconsistent behavior between commands.
+
+If you want Vite+ to manage Node.js, pnpm 11+ supports disabling pnpm's automatic runtime management globally with [`runtimeOnFail`](https://pnpm.io/settings/cli#runtimeonfail):
+
+```bash
+pnpm config set --global runtimeOnFail ignore
+```
+
+This setting also disables pnpm's automatic management of other declared runtimes, including Bun and Deno. Consider whether any of your projects rely on that behavior before setting it globally.
+:::
+
 Package-manager selection uses this priority:
 
 1. Explicit command override

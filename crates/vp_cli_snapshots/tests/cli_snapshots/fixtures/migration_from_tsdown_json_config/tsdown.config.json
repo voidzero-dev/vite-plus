@@ -2,7 +2,11 @@
   "entry": "src/index.ts",
   "outDir": "dist",
   "format": ["esm", "cjs"],
-  "dts": true,
+  "dts": { "oxc": true, "cjsReexport": false },
+  "bundle": false,
+  "publicDir": "public",
+  "injectStyle": true,
+  "deps": { "onlyAllowBundle": false },
   "inputOptions": {
     "cwd": "./src"
   }

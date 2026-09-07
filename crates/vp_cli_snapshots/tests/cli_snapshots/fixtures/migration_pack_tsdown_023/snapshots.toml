@@ -1,0 +1,104 @@
+[[case]]
+name = "migration_pack_tsdown_023"
+vp = "global"
+comment = "Upgrade an existing Vite+ pack config without --full and preserve it on a second migration."
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vpt", "print-file", "package.json"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_build"
+vp = "global"
+comment = "Build a migrated library and check that static assets and declarations are emitted."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { pack: { entry: 'src/index.ts', bundle: false, publicDir: 'public', removeNodeProtocol: true, dts: { oxc: true, cjsReexport: false } } };"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vp", "run", "build"] },
+  { argv = ["vpt", "stat-file", "dist/index.mjs", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "dist/index.d.mts", "--assert", "file"] },
+  { argv = ["vpt", "print-file", "dist/public/asset.txt"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_external"
+vp = "global"
+comment = "Preserve external matchers when either skipNodeModulesBundle form becomes deps.neverBundle."
+steps = [
+  { argv = ["vpt", "cp", "external.config.txt", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "cp", "external-entry.txt", "src/index.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "pack"], snapshot = false },
+  { argv = ["vpt", "print-file", "dist/top/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/nested/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/constant/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/alias/index.mjs"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_concise_methods"
+vp = "global"
+comment = "Migrate a standalone concise arrow and method options, then check unbundled files and copied assets."
+steps = [
+  { argv = ["vpt", "cp", "concise.config.txt", "tsdown.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import packConfig from './tsdown.config.js';\nexport default { pack: packConfig({}) };\n"], snapshot = false },
+  { argv = ["vpt", "cp", "concise-entry.txt", "src/index.ts"], snapshot = false },
+  { argv = ["vpt", "cp", "helper.txt", "src/helper.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "tsdown.config.ts"] },
+  { argv = ["vp", "pack"] },
+  { argv = ["vpt", "stat-file", "dist/index.custom.js", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "dist/helper.custom.js", "--assert", "file"] },
+  { argv = ["vpt", "print-file", "dist/assets/asset.txt"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "tsdown.config.ts"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_external_constants"
+vp = "global"
+comment = "Migrate constant external references with both skip forms without a manual-migration warning."
+steps = [
+  { argv = ["vpt", "cp", "external-constants.config.txt", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_external_conflicts"
+vp = "global"
+comment = "Report conflicting dependency rules while preserving the pack options."
+steps = [
+  { argv = ["vpt", "cp", "external-conflicts.config.txt", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]
+
+[[case]]
+name = "migration_pack_tsdown_023_no_external"
+vp = "global"
+comment = "Migrate noExternal patterns, references, and callbacks and confirm the dependency remains bundled."
+steps = [
+  { argv = ["vpt", "cp", "no-external.config.txt", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "cp", "no-external-entry.txt", "src/index.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies", '{"@fixture/pack-bundled":"file:./pack-dependency"}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "install"], snapshot = false, timeout = 120000 },
+  { argv = ["vpt", "stat-file", "node_modules/@fixture/pack-bundled/index.js", "--assert", "file"] },
+  { argv = ["vp", "pack", "--fail-on-warn"], snapshot = false },
+  { argv = ["vpt", "print-file", "dist/literal/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/reference/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/callback/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/method/index.mjs"] },
+  { argv = ["vpt", "print-file", "dist/control/index.mjs"] },
+]

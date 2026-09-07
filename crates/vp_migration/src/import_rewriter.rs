@@ -2115,6 +2115,8 @@ struct RewriteResult {
     pub updated: bool,
     /// Whether an upstream `vitest` specifier was intentionally preserved.
     pub preserved_vitest: bool,
+    /// Pack configurations that need manual migration.
+    pub warnings: Vec<String>,
 }
 
 /// Result of rewriting imports in multiple files
@@ -2128,11 +2130,13 @@ pub struct BatchRewriteResult {
     pub preserved_vitest_files: Vec<PathBuf>,
     /// Files that had errors (path, error message)
     pub errors: Vec<(PathBuf, String)>,
+    /// Pack configurations that need manual migration.
+    pub warnings: Vec<(PathBuf, String)>,
 }
 
 enum FileResult {
-    Modified,
-    Unchanged,
+    Modified(Vec<String>),
+    Unchanged(Vec<String>),
     Error(String),
 }
 
@@ -2200,7 +2204,7 @@ pub fn rewrite_imports_in_directory_with_options(
         .map(|(file_path, package_context)| {
             let skip_packages = package_context.skip_packages;
             if skip_packages.all_skipped() {
-                return (file_path, FileResult::Unchanged, false);
+                return (file_path, FileResult::Unchanged(Vec::new()), false);
             }
 
             match rewrite_import(
@@ -2213,10 +2217,18 @@ pub fn rewrite_imports_in_directory_with_options(
                         if let Err(e) = std::fs::write(&file_path, &rewrite_result.content) {
                             (file_path, FileResult::Error(e.to_string()), false)
                         } else {
-                            (file_path, FileResult::Modified, rewrite_result.preserved_vitest)
+                            (
+                                file_path,
+                                FileResult::Modified(rewrite_result.warnings),
+                                rewrite_result.preserved_vitest,
+                            )
                         }
                     } else {
-                        (file_path, FileResult::Unchanged, rewrite_result.preserved_vitest)
+                        (
+                            file_path,
+                            FileResult::Unchanged(rewrite_result.warnings),
+                            rewrite_result.preserved_vitest,
+                        )
                     }
                 }
                 Err(e) => (file_path, FileResult::Error(e.to_string()), false),
@@ -2230,15 +2242,21 @@ pub fn rewrite_imports_in_directory_with_options(
         unchanged_files: Vec::new(),
         preserved_vitest_files: Vec::new(),
         errors: Vec::new(),
+        warnings: Vec::new(),
     };
 
     for (file_path, file_result, preserved_vitest) in results {
         if preserved_vitest {
             batch_result.preserved_vitest_files.push(file_path.clone());
         }
+        if let FileResult::Modified(warnings) | FileResult::Unchanged(warnings) = &file_result {
+            batch_result
+                .warnings
+                .extend(warnings.iter().map(|message| (file_path.clone(), message.clone())));
+        }
         match file_result {
-            FileResult::Modified => batch_result.modified_files.push(file_path),
-            FileResult::Unchanged => batch_result.unchanged_files.push(file_path),
+            FileResult::Modified(_) => batch_result.modified_files.push(file_path),
+            FileResult::Unchanged(_) => batch_result.unchanged_files.push(file_path),
             FileResult::Error(msg) => batch_result.errors.push((file_path, msg)),
         }
     }
@@ -2286,10 +2304,10 @@ fn rewrite_import(
     )?;
     let standalone = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
     if !skip_packages.skip_tsdown && (standalone || is_vite_config_file(file_path)) {
-        let rewritten =
-            crate::vite_config::rewrite_pack_dts_generators(&result.content, standalone);
+        let rewritten = crate::pack_config::rewrite_pack_config(&result.content, standalone);
         result.updated |= rewritten != result.content;
         result.content = rewritten;
+        result.warnings = crate::pack_config::pack_config_warnings(&result.content, standalone);
     }
     Ok(result)
 }
@@ -2343,6 +2361,7 @@ fn rewrite_import_content_full(
             content: content.to_string(),
             updated: false,
             preserved_vitest: false,
+            warnings: Vec::new(),
         });
     }
 
@@ -2401,7 +2420,7 @@ fn rewrite_import_content_full(
         &mut preserved_vitest,
     );
 
-    Ok(RewriteResult { content: new_content, updated, preserved_vitest })
+    Ok(RewriteResult { content: new_content, updated, preserved_vitest, warnings: Vec::new() })
 }
 
 #[cfg(test)]
@@ -2411,6 +2430,52 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn reports_unchanged_pack_configs_that_need_manual_migration() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("vite.config.ts");
+        let content = "export default { pack: { external: externalOptions, deps: { skipNodeModulesBundle: true }, bundle: false, dts: { tsgo: true } } };";
+        std::fs::write(&file, content).unwrap();
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+        assert!(result.modified_files.is_empty());
+        assert!(result.errors.is_empty());
+        assert_eq!(result.warnings.len(), 1);
+        assert_eq!(result.warnings[0].0, file);
+        assert!(result.warnings[0].1.contains("Migrate this pack config manually"));
+        assert_eq!(std::fs::read_to_string(file).unwrap(), content);
+    }
+
+    #[test]
+    fn migrate_pack_configs_in_workspace_packages() {
+        let temp = tempfile::tempdir().unwrap();
+        let package = temp.path().join("packages/library");
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"devDependencies":{"vite-plus":"0.2.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            package.join("package.json"),
+            r#"{"devDependencies":{"vite-plus":"0.2.0"}}"#,
+        )
+        .unwrap();
+        let vite_config = package.join("vite.config.ts");
+        let tsdown_config = package.join("tsdown.config.mts");
+        let source_file = package.join("example.ts");
+        std::fs::write(&vite_config, "export default { pack: { bundle: false } };").unwrap();
+        std::fs::write(&tsdown_config, "export default { publicDir: 'public' };").unwrap();
+        let example = "export default { pack: { bundle: false } };";
+        std::fs::write(&source_file, example).unwrap();
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+        assert!(result.errors.is_empty());
+        assert_eq!(result.modified_files.len(), 2);
+        assert!(std::fs::read_to_string(vite_config).unwrap().contains("unbundle: true"));
+        assert!(std::fs::read_to_string(tsdown_config).unwrap().contains("copy: 'public'"));
+        assert_eq!(std::fs::read_to_string(source_file).unwrap(), example);
+        assert!(rewrite_imports_in_directory(temp.path()).unwrap().modified_files.is_empty());
+    }
 
     #[test]
     fn test_rewrite_import_content_vite() {

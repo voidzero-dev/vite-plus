@@ -1,4 +1,4 @@
-import type { Plugin } from '@voidzero-dev/vite-plus-core';
+import type { Plugin } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import {

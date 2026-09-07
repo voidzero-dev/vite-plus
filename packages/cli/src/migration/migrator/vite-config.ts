@@ -528,6 +528,10 @@ export function rewriteAllImports(
   const preserved = result.preservedVitestFiles.length;
   const errors = result.errors.length;
 
+  for (const warning of result.warnings) {
+    warnMigration(`${displayRelative(warning.path)}: ${warning.message}`, report);
+  }
+
   if (report) {
     report.rewrittenImportFileCount += modified;
     report.preservedUpstreamVitestImportFileCount += preserved;

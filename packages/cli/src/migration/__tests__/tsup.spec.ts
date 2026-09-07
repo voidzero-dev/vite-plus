@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@voidzero-dev/vite-plus-core/package.json', () => ({
+vi.mock('vite/package.json', () => ({
   default: { bundledVersions: { tsdown: '0.99.0' } },
 }));
 

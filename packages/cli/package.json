@@ -368,10 +368,10 @@
     "@vitest/snapshot": "catalog:",
     "@vitest/spy": "catalog:",
     "@vitest/utils": "catalog:",
-    "@voidzero-dev/vite-plus-core": "workspace:*",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
+    "vite": "workspace:@voidzero-dev/vite-plus-core@*",
     "vitest": "catalog:"
   },
   "devDependencies": {
@@ -399,7 +399,6 @@
     "semver": "catalog:",
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",
-    "vite": "workspace:*",
     "yaml": "catalog:",
     "zod": "catalog:"
   },

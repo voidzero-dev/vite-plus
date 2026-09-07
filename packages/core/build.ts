@@ -498,81 +498,6 @@ async function bundleTsdown() {
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
 }
 
-// Ensure a bundled chunk has the given ansis color helpers (e.g. `bold`, `red`).
-// Rolldown can inline ansis into the logger chunk or keep it in a shared chunk.
-// For the latter layout, add imports for any missing helpers by resolving their
-// minified aliases from the shared chunk's own `export { ... }` map.
-async function ensureAnsisImports(
-  content: string,
-  names: string[],
-  distDir: string,
-): Promise<string> {
-  // Scan every relative chunk import in the branded logger chunk. Which shared
-  // chunk holds the ansis colors depends on rolldown's chunking and has moved
-  // between versions (e.g. `main-*.js` → `ansis-*.js`), so we don't assume a
-  // fixed chunk name: instead we append each missing color to whichever imported
-  // chunk actually re-exports it.
-  const importRe = /import \{([^}]*)\} from "(\.\/[^"]+\.js)";/g;
-  const imports = [...content.matchAll(importRe)];
-  // Every binding already in scope across all imports (its local name).
-  const localNames = new Set<string>();
-  for (const [, bindings] of imports) {
-    for (const binding of bindings.split(',')) {
-      const trimmed = binding.trim();
-      if (!trimmed) {
-        continue;
-      }
-      const aliased = trimmed.match(/\bas\s+([A-Za-z0-9_$]+)$/);
-      localNames.add(aliased ? aliased[1] : trimmed);
-    }
-  }
-  // Rolldown can also inline ansis into the logger chunk. Detect its destructured
-  // declarations so we do not try to import a binding that is already local.
-  const isLocallyDeclared = (name: string) =>
-    new RegExp(`\\b(?:const|let|var)\\s+(?:${name}\\b|\\{[^}]*\\b${name}\\b)`).test(content);
-  const missing = names.filter((name) => !localNames.has(name) && !isLocallyDeclared(name));
-  if (missing.length === 0) {
-    return content;
-  }
-  if (imports.length === 0) {
-    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
-  }
-
-  // Group missing colors by the imported chunk that re-exports them. Chunks
-  // re-export colors as `<local> as <alias>` (e.g. `bold as i`); the consumer
-  // side imports `<alias> as <local>`, so capture the alias here.
-  const additionsBySpecifier = new Map<string, string[]>();
-  for (const name of missing) {
-    let resolved = false;
-    for (const [, , specifier] of imports) {
-      const chunkContent = await readFile(join(distDir, specifier.slice(2)), 'utf-8');
-      const exportAlias = chunkContent.match(new RegExp(`\\b${name} as ([A-Za-z0-9_$]+)`));
-      if (!exportAlias) {
-        continue;
-      }
-      const additions = additionsBySpecifier.get(specifier) ?? [];
-      additions.push(`${exportAlias[1]} as ${name}`);
-      additionsBySpecifier.set(specifier, additions);
-      resolved = true;
-      break;
-    }
-    if (!resolved) {
-      throw new Error(`ensureAnsisImports: \`${name}\` is not re-exported from any imported chunk`);
-    }
-  }
-
-  let result = content;
-  for (const [fullImport, bindings, specifier] of imports) {
-    const additions = additionsBySpecifier.get(specifier);
-    if (!additions) {
-      continue;
-    }
-    const newImport = `import { ${bindings.trim().replace(/,$/, '')}, ${additions.join(', ')} } from "${specifier}";`;
-    result = result.replace(fullImport, newImport);
-  }
-  return result;
-}
-
 async function brandTsdown() {
   const tsdownDistDir = join(projectDir, 'dist/tsdown');
   const buildFiles = await glob(toPosixPath(join(tsdownDistDir, 'build-*.js')), { absolute: true });
@@ -636,47 +561,9 @@ async function brandTsdown() {
     throw new Error('brandTsdown: build error message patterns not found in any build chunk');
   }
 
-  // `ansisColors` lists the bare ansis identifiers a replacement relies on, so we
-  // only try to import colors for the patches that actually applied. tsdown 0.23
-  // dropped ansis for a `node:util` styleText proxy, and those patches need no
-  // imports at all (the proxy is declared in the same chunk).
-  const loggerPatches: {
-    search: string | RegExp;
-    replacement: string;
-    ansisColors?: string[];
-  }[] = [
-    {
-      search: 'output("warn", `\\n${bgYellow` WARN `} ${message}\\n`);',
-      replacement: 'output("warn", `${bold(yellow`warn:`)} ${message}`);',
-      ansisColors: ['bold', 'red'],
-    },
-    {
-      search: 'output("warn", `${bgYellow` WARN `} ${message}\\n`);',
-      replacement: 'output("warn", `${bold(yellow`warn:`)} ${message}`);',
-      ansisColors: ['bold', 'red'],
-    },
-    {
-      search: 'output("error", `\\n${bgRed` ERROR `} ${format(msgs)}\\n`);',
-      replacement:
-        'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
-      ansisColors: ['bold', 'red'],
-    },
-    {
-      search: 'output("error", `${bgRed` ERROR `} ${format(msgs)}\\n`);',
-      replacement:
-        'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
-      ansisColors: ['bold', 'red'],
-    },
-    {
-      search: 'output("error", `${bold(red`error:`)} ${format(msgs)}`);',
-      replacement:
-        'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
-      ansisColors: ['bold', 'red'],
-    },
-    // tsdown >= 0.23 formats with a `node:util` styleText proxy instead of ansis.
-    // The proxy binding is local to the logger chunk but rolldown may rename it
-    // (`styleText` → `styleText$1`) to avoid clashing with the `node:util`
-    // import, so capture whatever name it ended up with and reuse it.
+  // The styleText proxy is local to the logger chunk, but Rolldown may rename
+  // it to avoid a binding conflict. Capture and reuse its emitted name.
+  const loggerPatches = [
     {
       search:
         /output\("warn", `\\n\$\{(styleText\$?\w*)\.bgYellow\(" WARN "\)\} \$\{message\}\\n`\);/g,
@@ -694,30 +581,15 @@ async function brandTsdown() {
   for (const candidateFile of loggerCandidateFiles) {
     let content = await readFile(candidateFile, 'utf-8');
     let changed = false;
-    const neededColors = new Set<string>();
-    for (const { search, replacement, ansisColors } of loggerPatches) {
-      const matched = typeof search === 'string' ? content.includes(search) : search.test(content);
-      if (!matched) {
+    for (const { search, replacement } of loggerPatches) {
+      if (!search.test(content)) {
         continue;
       }
       content = content.replaceAll(search, replacement);
-      for (const color of ansisColors ?? []) {
-        neededColors.add(color);
-      }
       changed = true;
     }
     if (!changed) {
       continue;
-    }
-    // The branded ansis logger output uses `bold(...)` and `red` (see
-    // loggerPatches), but tsdown's logger module only imported the other ansis
-    // colors it needed (`bgRed`, `bgYellow`, `yellow`, ...). Those identifiers
-    // only happened to be in scope when rolldown co-located them in this chunk;
-    // newer chunking splits them out, leaving `bold`/`red` undefined at runtime.
-    // Ensure the branded chunk imports them from the same shared chunk it
-    // already pulls colors from.
-    if (neededColors.size > 0) {
-      content = await ensureAnsisImports(content, [...neededColors], tsdownDistDir);
     }
     await writeFile(candidateFile, content, 'utf-8');
     console.log(`Branded tsdown logger prefixes in ${candidateFile}`);

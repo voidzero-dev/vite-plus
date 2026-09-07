@@ -1,0 +1,20 @@
+[[case]]
+name = "core_command_root_dispatch"
+vp = ["local", "global"]
+local-registry = true
+comment = "The workspace declares upstream Vite. Only the target app declares the matching core alias. Check positional roots, -C, defaultPackage, and task dispatch."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  ["node", "check-layout.mjs"],
+  ["vp", "build", "packages/app"],
+  ["vp", "build", "--mode", "production", "--emptyOutDir", "packages/app"],
+  ["vp", "dev", "packages/app"],
+  ["vp", "preview", "--strictPort", "packages/app"],
+  ["vp", "-C", "packages/app", "build"],
+  ["vp", "build"],
+  ["vp", "pack"],
+  ["vp", "run", "--filter", "app", "build"],
+  ["vp", "run", "--filter", "app", "pack"],
+  { argv = ["vp", "build", "."], continue-on-failure = true },
+  ["vp", "-C", ".", "pack", "packages/app/src/index.ts"],
+]

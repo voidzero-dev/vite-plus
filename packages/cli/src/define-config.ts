@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
+import type { PluginOption, UserConfig } from 'vite';
 import {
   defineConfig as viteDefineConfig,
   defineProject as viteDefineProject,
@@ -22,7 +22,7 @@ import type { RunConfig } from './run-config.ts';
 import type { StagedConfig } from './staged-config.ts';
 import { CONFIG_METADATA_ENV, VITEST_VERSION } from './utils/constants.ts';
 
-declare module '@voidzero-dev/vite-plus-core' {
+declare module 'vite' {
   interface UserConfig {
     /**
      * Options for oxlint
@@ -94,12 +94,8 @@ declare module '@voidzero-dev/vite-plus-core' {
     };
 
     /**
-     * Vitest test configuration.
-     *
-     * Vitest augments vite's `UserConfig` with a `test` field via
-     * `declare module 'vite'`, but vite-plus-core is a fork of vite so that
-     * augmentation does not apply here. Re-declare it locally so user
-     * configs like `defineConfig({ test: { globals: true } })` typecheck.
+     * Vitest may augment a separate Vite copy, for example an npm peer dependency.
+     * Keep the public test field on the CLI's core types in that layout too.
      */
     test?: VitestInlineConfig;
   }
@@ -565,10 +561,7 @@ const coverageGuardedVitestInstances = new WeakSet<object>();
 function vitePlusCoverageVersionGuardPlugin(): PluginOption {
   return {
     name: 'vite-plus:coverage-version-guard',
-    // `configureVitest` is a Vitest-specific plugin hook absent from Vite's
-    // `Plugin` type (vite-plus-core is a vite fork, so Vitest's `declare module
-    // 'vite'` augmentation does not reach it). Cast the object so the extra hook
-    // type-checks; Vitest invokes it via `getSortedPluginHooks('configureVitest')`.
+    // Vitest invokes this hook via `getSortedPluginHooks('configureVitest')`.
     configureVitest(context: VitestConfigureContext) {
       const { vitest } = context;
       // Coverage is global and the provider is imported once from the runner, so
