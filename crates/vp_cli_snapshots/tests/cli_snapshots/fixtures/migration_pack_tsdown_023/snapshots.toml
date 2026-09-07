@@ -84,6 +84,7 @@ steps = [
 [[case]]
 name = "migration_pack_tsdown_023_no_external"
 vp = "global"
+local-registry = true
 comment = "Migrate noExternal patterns, references, and callbacks and confirm the dependency remains bundled."
 steps = [
   { argv = ["vpt", "cp", "no-external.config.txt", "vite.config.ts"], snapshot = false },
