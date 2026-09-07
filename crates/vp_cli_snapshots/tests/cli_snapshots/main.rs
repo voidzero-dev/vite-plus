@@ -1103,6 +1103,11 @@ fn start_local_registry(
     if let Some(profile) = std::env::var_os("USERPROFILE") {
         cmd.env("USERPROFILE", profile);
     }
+    // The registry uses CI to keep Bun's cache off the Windows Dev Drive.
+    // Preserve it only for this helper; fixture commands stay isolated.
+    if let Some(ci) = std::env::var_os("CI") {
+        cmd.env("CI", ci);
+    }
     group_leader(&mut cmd);
     let mut child = cmd
         .spawn()
