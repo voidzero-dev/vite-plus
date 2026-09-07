@@ -69,16 +69,6 @@ impl SubcommandResolver {
         envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
         cwd: &AbsolutePath,
     ) -> anyhow::Result<ResolvedSubcommand> {
-        self.resolve_inner(subcommand, resolved_vite_config, envs, cwd).await
-    }
-
-    async fn resolve_inner(
-        &self,
-        subcommand: SynthesizableSubcommand,
-        resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
-        envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-        cwd: &AbsolutePath,
-    ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
             SynthesizableSubcommand::Lint { mut args } => {
                 let cli_options = self.cli_options()?;

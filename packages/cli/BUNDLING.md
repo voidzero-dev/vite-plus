@@ -21,11 +21,11 @@ alias in packed releases. Runtime imports and generated shims use `vite` and
 its subpaths. This gives the CLI and plugins the same dependency name and
 avoids separate core instances under the alias and canonical package name.
 
-`resolve-core.ts` resolves the alias from the selected CLI package. It checks
-that the dependency and any project-level Vite alias identify the expected
-core release before starting Vite or packaging commands. Keep the canonical
-name in release metadata and alias targets; it identifies the published
-package, not the runtime import specifier.
+`resolve-core.ts` resolves the alias from the selected CLI package and checks
+its core version. It also checks any Vite dependency declared by the command's
+target project. An incidental hoisted peer does not trigger project validation.
+These checks run before Vite or packaging commands start. Keep the canonical
+name in release metadata and alias targets to identify the published package.
 
 ## Build Steps
 

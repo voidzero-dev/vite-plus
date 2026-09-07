@@ -19,26 +19,11 @@ function checkCoreVersion(packageJsonPath: string, expectedVersion: string): voi
   }
 }
 
-/** Resolve the same core dependency as the CLI's static `vite` re-exports. */
-export function resolveCore(
-  subpath = '',
-  cwd = process.cwd(),
-  modulePath = import.meta.url,
-): string {
-  const require = createRequire(modulePath);
-  // Read the selected CLI's installed manifest. A static JSON import is inlined
-  // during the build, before CI and preview packers can stamp a new version.
-  const { version: expectedVersion } = JSON.parse(
-    readFileSync(require.resolve('vite-plus/package.json'), 'utf8'),
-  ) as { version: string };
-  let packageJsonPath: string;
-  try {
-    packageJsonPath = require.resolve('vite/package.json');
-  } catch (cause) {
-    throw new Error('Could not resolve the bundled Vite dependency. Run `vp install`.', { cause });
-  }
-  checkCoreVersion(packageJsonPath, expectedVersion);
-
+function checkProjectCoreVersion(
+  cwd: string,
+  corePackageJsonPath: string,
+  expectedVersion: string,
+): void {
   // npm can hoist an upstream Vite peer even when the project only declares
   // vite-plus. Validate Vite only when the nearest package declares it.
   const projectPackage = readNearestPackageJson(cwd);
@@ -49,7 +34,7 @@ export function resolveCore(
     'peerDependencies',
   ].some((field) => Object.hasOwn(projectPackage?.[field] ?? {}, 'vite'));
   if (!declaresVite) {
-    return require.resolve(`vite${subpath}`);
+    return;
   }
 
   const projectRequire = createRequire(join(cwd, 'package.json'));
@@ -61,9 +46,31 @@ export function resolveCore(
       throw cause;
     }
   }
-  if (projectPackageJsonPath && projectPackageJsonPath !== packageJsonPath) {
+  if (projectPackageJsonPath && projectPackageJsonPath !== corePackageJsonPath) {
     checkCoreVersion(projectPackageJsonPath, expectedVersion);
   }
+}
 
-  return require.resolve(`vite${subpath}`);
+/** Resolve the same core dependency as the CLI's static `vite` re-exports. */
+export function resolveCore(
+  subpath = '',
+  cwd = process.cwd(),
+  modulePath = import.meta.url,
+): string {
+  const cliRequire = createRequire(modulePath);
+  // Read the selected CLI's installed manifest. A static JSON import is inlined
+  // during the build, before CI and preview packers can stamp a new version.
+  const { version: expectedVersion } = JSON.parse(
+    readFileSync(cliRequire.resolve('vite-plus/package.json'), 'utf8'),
+  ) as { version: string };
+  let corePackageJsonPath: string;
+  try {
+    corePackageJsonPath = cliRequire.resolve('vite/package.json');
+  } catch (cause) {
+    throw new Error('Could not resolve the bundled Vite dependency. Run `vp install`.', { cause });
+  }
+  checkCoreVersion(corePackageJsonPath, expectedVersion);
+  checkProjectCoreVersion(cwd, corePackageJsonPath, expectedVersion);
+
+  return cliRequire.resolve(`vite${subpath}`);
 }

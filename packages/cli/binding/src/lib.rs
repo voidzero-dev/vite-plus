@@ -119,19 +119,16 @@ fn create_resolver(
         let context = cwd
             .as_path()
             .to_str()
-            .map(|cwd| JsCommandContext { cwd: cwd.to_string(), args: args.to_vec() });
+            .map(|cwd| JsCommandContext { cwd: cwd.to_string(), args: args.to_vec() })
+            .ok_or_else(|| anyhow::anyhow!("command cwd is not valid UTF-8"));
         let tsf = tsf.clone();
         Box::pin(async move {
-            // Call JS function - map napi::Error to anyhow::Error
-            let promise: Promise<JsCommandResolvedResult> = tsf
-                .call_async(Ok(
-                    context.ok_or_else(|| anyhow::anyhow!("command cwd is not valid UTF-8"))?
-                ))
+            let promise = tsf
+                .call_async(Ok(context?))
                 .await
                 .map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 
-            // Await the promise
-            let resolved: JsCommandResolvedResult =
+            let resolved =
                 promise.await.map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 
             Ok(resolved.into())

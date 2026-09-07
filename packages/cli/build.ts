@@ -221,7 +221,7 @@ function buildWithTsdown() {
  *
  * @throws Error if core package is not built (missing dist directories)
  */
-async function syncCorePackageExports() {
+async function syncCorePackageExports(): Promise<void> {
   console.log('\nSyncing core package exports...');
 
   const distDir = join(projectDir, 'dist');
@@ -248,27 +248,12 @@ async function syncCorePackageExports() {
     `/// <reference types="${CORE_IMPORT_SPECIFIER}/pack/client" />\n`,
   );
 
-  // Create ./module-runner shim
-  console.log('  Creating ./module-runner');
-  await writeFile(
-    join(distDir, 'module-runner.js'),
-    `export * from '${CORE_IMPORT_SPECIFIER}/module-runner';\n`,
-  );
-  await writeFile(
-    join(distDir, 'module-runner.d.ts'),
-    `export * from '${CORE_IMPORT_SPECIFIER}/module-runner';\n`,
-  );
-
-  // Create ./internal shim
-  console.log('  Creating ./internal');
-  await writeFile(
-    join(distDir, 'internal.js'),
-    `export * from '${CORE_IMPORT_SPECIFIER}/internal';\n`,
-  );
-  await writeFile(
-    join(distDir, 'internal.d.ts'),
-    `export * from '${CORE_IMPORT_SPECIFIER}/internal';\n`,
-  );
+  for (const subpath of ['module-runner', 'internal']) {
+    console.log(`  Creating ./${subpath}`);
+    const reExport = `export * from '${CORE_IMPORT_SPECIFIER}/${subpath}';\n`;
+    await writeFile(join(distDir, `${subpath}.js`), reExport);
+    await writeFile(join(distDir, `${subpath}.d.ts`), reExport);
+  }
 
   // Create ./dist/client/* shims by reading core's dist/vite/client files
   console.log('  Creating ./dist/client/*');

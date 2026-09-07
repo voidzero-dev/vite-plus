@@ -25,12 +25,6 @@ import { CONFIG_METADATA_ENV, VITEST_VERSION } from './utils/constants.ts';
 declare module 'vite' {
   interface UserConfig {
     /**
-     * Vitest may augment a separate Vite copy, for example an npm peer dependency.
-     * Keep the public test field on the CLI's core types in that layout too.
-     */
-    test?: VitestInlineConfig;
-
-    /**
      * Options for oxlint
      */
     lint?: OxlintConfig;
@@ -98,6 +92,12 @@ declare module 'vite' {
        */
       templates?: CreateTemplateEntry[];
     };
+
+    /**
+     * Vitest may augment a separate Vite copy, for example an npm peer dependency.
+     * Keep the public test field on the CLI's core types in that layout too.
+     */
+    test?: VitestInlineConfig;
   }
 }
 
