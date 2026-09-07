@@ -1,4 +1,5 @@
 name: Publish preview build
+run-name: 'Preview PR #${{ github.event.pull_request.number }}: ${{ github.event.label.name }}'
 
 # BUILD WORKFLOW. Builds a labeled PR and packs its packages into a workflow
 # artifact. It holds no secrets and no OIDC permission, so it is safe to run
@@ -28,7 +29,8 @@ on:
     types: [labeled]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Unrelated labels must not cancel a preview build for the same PR.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.label.name }}
   cancel-in-progress: true
 
 jobs:

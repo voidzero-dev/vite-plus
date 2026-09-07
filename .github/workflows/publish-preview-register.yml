@@ -1,4 +1,5 @@
 name: Register preview build
+run-name: 'Register preview: ${{ github.event.workflow_run.head_branch }} (build #${{ github.event.workflow_run.run_number }}: ${{ github.event.workflow_run.conclusion }})'
 
 # PUBLISHING WORKFLOW. Takes the artifact built by "Publish preview build",
 # publishes it to the registry bridge, and comments on the PR. It is the only
@@ -47,8 +48,9 @@ env:
   IMAGE: ghcr.io/voidzero-dev/vite-plus
 
 concurrency:
-  # Keyed on the built commit, so a re-label or re-run coalesces.
-  group: register-preview-${{ github.event.workflow_run.head_sha }}
+  # Successful builds share a commit group so a re-label or re-run coalesces.
+  # Other completions must not replace a pending publish in that group.
+  group: register-preview-${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_sha || github.event.workflow_run.id }}
   # NOT cancel-in-progress. Cancelling a publish part-way is what left the
   # bridge with a packument/tarball mismatch on 2026-07-02; the action registers
   # the ref last precisely so an interrupted run stays invisible, and cancelling
