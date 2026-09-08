@@ -3,8 +3,17 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CommandResolution {
     Run(ResolvedCommand),
+    PnpmInteractiveUpdate(PnpmInteractiveUpdate),
     Noop,
     InvalidArgument(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PnpmInteractiveUpdate {
+    pub(crate) outdated: ResolvedCommand,
+    pub(crate) update: ResolvedCommand,
+    pub(crate) latest: bool,
+    pub(crate) include_github_actions: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -10,7 +10,7 @@ use std::os::fd::{BorrowedFd, RawFd};
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},
-    process::{ExitStatus, Stdio},
+    process::{ExitStatus, Output, Stdio},
 };
 
 use fspy::AccessMode;
@@ -199,6 +199,35 @@ where
     cmd.args(&prefix_args).args(&args).envs(envs);
     let status = cmd.status().await?;
     Ok(status)
+}
+
+/// Run a command and capture stdout while leaving stderr attached to the terminal.
+///
+/// This uses the same binary and Windows shim resolution as [`run_command`].
+pub async fn capture_stdout<I, S>(
+    bin_name: &str,
+    args: I,
+    envs: &HashMap<String, String>,
+    cwd: impl AsRef<AbsolutePath>,
+) -> Result<Output, Error>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let cwd = cwd.as_ref();
+    let (program, prefix_args) = resolve_program(bin_name, envs, cwd)?;
+    let args: Vec<OsString> = args.into_iter().map(|s| s.as_ref().to_owned()).collect();
+    tracing::debug!(
+        target: "vp_command::spawn",
+        program = %program.as_path().display(),
+        prefix_args = ?prefix_args,
+        args = ?args,
+        cwd = %cwd.as_path().display(),
+        "spawn with captured stdout",
+    );
+    let mut cmd = build_command(&program, cwd);
+    cmd.args(&prefix_args).args(&args).envs(envs).stdout(Stdio::piped()).stderr(Stdio::inherit());
+    cmd.output().await.map_err(Into::into)
 }
 
 /// Run a command with fspy tracking.

@@ -13,7 +13,9 @@ base64-simd = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cow-utils = { workspace = true }
 crossterm = { workspace = true }
+dialoguer = { workspace = true }
 flate2 = { workspace = true }
+form_urlencoded = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
 indicatif = { workspace = true }
