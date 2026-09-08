@@ -216,6 +216,32 @@ function sourceTreeMatches(
   projectPath: string,
   matchesContent: (content: string) => boolean,
 ): boolean {
+  return sourceTreeMatchesEach(projectPath, [matchesContent])[0];
+}
+
+/**
+ * Evaluate several independent content predicates in a SINGLE traversal.
+ *
+ * Each eligible source file is read exactly once and offered to every predicate
+ * that has not yet matched. Traversal stops as soon as every predicate has
+ * matched, mirroring the early return of a single-predicate scan.
+ *
+ * Semantics per predicate are identical to running `sourceTreeMatches` for it
+ * on its own — same traversal order, same skip directories, same nested-package
+ * boundary, same "unreadable file is ignored" behaviour. Only the number of
+ * reads changes: N predicates cost one pass instead of N.
+ */
+function sourceTreeMatchesEach(
+  projectPath: string,
+  predicates: readonly ((content: string) => boolean)[],
+): boolean[] {
+  const results = Array.from({ length: predicates.length }, () => false);
+  let undecided = predicates.length;
+  if (undecided === 0) {
+    return results;
+  }
+
+  // Returns true to unwind the whole traversal once nothing is left to decide.
   const scanDir = (dir: string, isRoot: boolean): boolean => {
     let entries: fs.Dirent[];
     try {
@@ -238,23 +264,54 @@ function sourceTreeMatches(
           return true;
         }
       } else if (entry.isFile() && VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name))) {
+        let content: string;
         try {
-          if (matchesContent(fs.readFileSync(entryPath, 'utf8'))) {
-            return true;
-          }
+          content = fs.readFileSync(entryPath, 'utf8');
         } catch {
           // Unreadable file — ignore and keep scanning.
+          continue;
+        }
+        for (let index = 0; index < predicates.length; index++) {
+          if (results[index]) {
+            continue;
+          }
+          if (predicates[index](content)) {
+            results[index] = true;
+            undecided--;
+          }
+        }
+        if (undecided === 0) {
+          return true;
         }
       }
     }
     return false;
   };
 
-  return scanDir(projectPath, true);
+  scanDir(projectPath, true);
+  return results;
+}
+
+// A hint list as a reusable content predicate, so the same matcher can be run
+// standalone or enrolled in a combined multi-signal traversal.
+function hintMatcher(hints: readonly string[]): (content: string) => boolean {
+  return (content) => hints.some((hint) => content.includes(hint));
 }
 
 function sourceTreeReferencesAny(projectPath: string, hints: readonly string[]): boolean {
-  return sourceTreeMatches(projectPath, (content) => hints.some((hint) => content.includes(hint)));
+  return sourceTreeMatches(projectPath, hintMatcher(hints));
+}
+
+// Source surfaces that deliberately retain the upstream `vitest` package
+// identity. Extracted so the combined scan and the standalone helper share one
+// definition. See `sourceTreeReferencesRetainedVitestModule`.
+function matchesRetainedVitestModule(content: string): boolean {
+  return (
+    /\bdeclare\s+module\s+['"]vitest(?:\/[^'"]*)?['"]/.test(content) ||
+    content.includes('vitest/package.json') ||
+    /\brequire\.resolve\s*\(\s*['"]vitest(?:\/[^'"]*)?['"]/.test(content) ||
+    /\bimport\.meta\.resolve\s*\(\s*['"]vitest(?:\/[^'"]*)?['"]/.test(content)
+  );
 }
 
 function findPackageTsconfigFiles(projectPath: string): string[] {
@@ -298,14 +355,7 @@ export function hasNuxtTestUtilsDependency(pkg: DependencyBag): boolean {
 export function sourceTreeReferencesRetainedVitestModule(projectPath: string): boolean {
   return (
     findPackageTsconfigFiles(projectPath).some(hasVitestTypesInTsconfig) ||
-    sourceTreeMatches(projectPath, (content) => {
-      return (
-        /\bdeclare\s+module\s+['"]vitest(?:\/[^'"]*)?['"]/.test(content) ||
-        content.includes('vitest/package.json') ||
-        /\brequire\.resolve\s*\(\s*['"]vitest(?:\/[^'"]*)?['"]/.test(content) ||
-        /\bimport\.meta\.resolve\s*\(\s*['"]vitest(?:\/[^'"]*)?['"]/.test(content)
-      );
-    })
+    sourceTreeMatches(projectPath, matchesRetainedVitestModule)
   );
 }
 
@@ -327,12 +377,65 @@ export function usesWebdriverioProvider(projectPath: string): boolean {
 // yet (e.g. a `vite.config.ts` importing the provider via a `vite-plus/test`
 // shim). Mirrors `usesWebdriverioProvider`'s scan for each provider.
 export function collectProviderSourceModes(projectPath: string): Record<string, boolean> {
+  const matches = sourceTreeMatchesEach(
+    projectPath,
+    OPT_IN_BROWSER_PROVIDERS.map((provider) =>
+      hintMatcher(BROWSER_PROVIDER_SPECIFIER_HINTS[provider]),
+    ),
+  );
   const modes: Record<string, boolean> = {};
-  for (const provider of OPT_IN_BROWSER_PROVIDERS) {
-    modes[provider] = sourceTreeReferencesAny(
-      projectPath,
-      BROWSER_PROVIDER_SPECIFIER_HINTS[provider],
-    );
-  }
+  OPT_IN_BROWSER_PROVIDERS.forEach((provider, index) => {
+    modes[provider] = matches[index];
+  });
   return modes;
+}
+
+/** All per-package source-scan signals the migration needs for one package. */
+export interface PackageSourceScanSignals {
+  /** @see usesVitestBrowserMode */
+  browserMode: boolean;
+  /** @see sourceTreeReferencesRetainedVitestModule */
+  retainedModule: boolean;
+  /** @see collectProviderSourceModes */
+  providerSourceModes: Record<string, boolean>;
+}
+
+/**
+ * Collect every per-package source signal in ONE traversal of the package tree.
+ *
+ * `usesVitestBrowserMode`, `sourceTreeReferencesRetainedVitestModule` and each
+ * provider scan in `collectProviderSourceModes` all walk the same file set with
+ * the same rules, so running them separately read every eligible source file
+ * once per signal. Enrolling them as predicates in a single pass makes that one
+ * read per file while leaving each individual result unchanged.
+ *
+ * The tsconfig `types` short-circuit of `sourceTreeReferencesRetainedVitestModule`
+ * is preserved: when a tsconfig already settles the retained-module signal, its
+ * source predicate is not enrolled at all, so the tree is not scanned for it.
+ */
+export function collectPackageSourceScanSignals(projectPath: string): PackageSourceScanSignals {
+  const retainedFromTsconfig = findPackageTsconfigFiles(projectPath).some(hasVitestTypesInTsconfig);
+
+  const predicates: ((content: string) => boolean)[] = [
+    hintMatcher(VITEST_BROWSER_SPECIFIER_HINTS),
+    ...OPT_IN_BROWSER_PROVIDERS.map((provider) =>
+      hintMatcher(BROWSER_PROVIDER_SPECIFIER_HINTS[provider]),
+    ),
+  ];
+  if (!retainedFromTsconfig) {
+    predicates.push(matchesRetainedVitestModule);
+  }
+
+  const matches = sourceTreeMatchesEach(projectPath, predicates);
+
+  const providerSourceModes: Record<string, boolean> = {};
+  OPT_IN_BROWSER_PROVIDERS.forEach((provider, index) => {
+    providerSourceModes[provider] = matches[index + 1];
+  });
+
+  return {
+    browserMode: matches[0],
+    retainedModule: retainedFromTsconfig || matches[1 + OPT_IN_BROWSER_PROVIDERS.length] === true,
+    providerSourceModes,
+  };
 }
