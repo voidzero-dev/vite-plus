@@ -118,7 +118,7 @@
     "yuku-parser": "^0.9.3"
   },
   "devDependencies": {
-    "@ast-grep/napi": "^0.43.0",
+    "@ast-grep/napi": "^0.45.0",
     "@babel/generator": "^7.28.5",
     "@babel/parser": "^7.28.5",
     "@babel/types": "^7.28.5",
