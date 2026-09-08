@@ -117,18 +117,7 @@ describe('package.json exports map', () => {
   });
 });
 
-/**
- * Migration rewrites Oxlint JS-plugin authoring imports to
- * `vite-plus/lint/plugins` and `vite-plus/lint/plugins-dev`. See the
- * `rewrite-oxlint-plugin-*` rules in `import_rewriter.rs` and
- * `rewriteVitePlusImportSpecifier` in `oxlint-plugin.ts`.
- *
- * That rewrite exists so a user's plugin file reaches the API through
- * `vite-plus` instead of pinning its own `@oxlint/plugins`. These entrypoints
- * MUST therefore stay resolvable, and they MUST keep re-exporting the upstream
- * surface. If either breaks, every migrated plugin fails when `vp lint` loads
- * it.
- */
+// Migrated plugins depend on these entry points resolving the upstream APIs.
 describe('Oxlint JS-plugin authoring entrypoints', () => {
   it('re-exports the full @oxlint/plugins value surface', async () => {
     const [lintPlugins, oxlintPlugins] = await Promise.all([

@@ -186,24 +186,11 @@ export function rewritePackageJson(
   const hasBrowserDepSignal = VITEST_BROWSER_DEP_NAMES.some((name) =>
     dependencyGroups.some(({ dependencies }) => dependencies?.[name] !== undefined),
   );
-  // A `dependencies` / `peerDependencies` edge on the Oxlint plugin API marks a
-  // published Oxlint plugin: the API is part of what it ships against, not a
-  // tool it runs. The import rewrite leaves such a package's source on `oxlint`
-  // (`skip_oxlint`), so its manifest edge is preserved too. Stripping it would
-  // leave the source importing a package the manifest no longer declares.
-  //
-  // Optional `@oxlint/plugins` also supplies a published runtime integration.
+  // Published plugins keep their upstream imports and the dependencies that
+  // supply them, including optional @oxlint/plugins integrations.
   const ownsOxlintApi = packageOwnsOxlintApi(pkg);
-  // `@oxlint/plugins` often becomes dead weight once the import rewrite points
-  // the authoring API at `vite-plus/lint/plugins`, but not always: the rewrite
-  // preserves several forms. The deletion therefore happens AFTER the rewrite,
-  // in `dropDeadOxlintPluginsDependency`, where the question is simply whether
-  // anything still names the package.
-  //
-  // The `vite-plus` edge is still decided here, though. A leaf whose only
-  // migration signal is this dependency will have its imports repointed at
-  // `vite-plus/lint/plugins`, so it needs a direct `vite-plus` edge to resolve
-  // them under an isolated layout such as Yarn PnP.
+  // Rewritten imports need a direct vite-plus dependency. Defer removal of
+  // @oxlint/plugins until dropDeadOxlintPluginsDependency checks the final source.
   if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined && !ownsOxlintApi) {
     needVitePlus = true;
   }

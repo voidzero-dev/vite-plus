@@ -1569,59 +1569,22 @@ fix: $NEW_IMPORT
 
 /// ast-grep rules for rewriting Oxlint JS-plugin authoring imports.
 ///
-/// The mapping:
-/// - `import { defineRule } from '@oxlint/plugins'` → `'vite-plus/lint/plugins'`
-/// - `import { RuleTester } from 'oxlint/plugins-dev'` → `'vite-plus/lint/plugins-dev'`
-/// - `import { defineRule } from 'oxlint'` → `'vite-plus/lint/plugins'`
+/// - `@oxlint/plugins` → `vite-plus/lint/plugins`
+/// - `oxlint/plugins-dev` → `vite-plus/lint/plugins-dev`
+/// - Named plugin API imports/exports from `oxlint` → `vite-plus/lint/plugins`
 ///
-/// `rewriteVitePlusImportSpecifier` in `oxlint-plugin.ts` repeats this mapping
-/// for the lint autofix. Both implementations MUST stay in sync.
+/// Keep the mapping and config-name denylist in sync with `oxlint-plugin.ts`.
+/// The shims use the bundled linter's API and resolve under strict pnpm layouts.
 ///
-/// Why this exists: vite-plus bundles Oxlint, so the migration strips `oxlint`
-/// from the project. A JS plugin that imports the authoring API by either name
-/// then stops resolving, and `vp lint` fails to load the plugin.
+/// Bare `oxlint` also exposes config APIs. Rewrite a statement only when all
+/// bindings are named and outside that config surface. Leave mixed, default,
+/// namespace, side-effect, export-all, and dynamic-import forms unchanged.
 ///
-/// The rewrite points those imports at `vite-plus` rather than re-adding
-/// `@oxlint/plugins` as a direct dependency. This locks the API to the bundled
-/// linter, so the user pins nothing. It also resolves from any package that
-/// already has `vite-plus`. A direct `@oxlint/plugins` import does not:
-/// `@oxlint/plugins` is only a transitive dependency, which pnpm's strict
-/// layout hides from a user's plugin file.
-///
-/// The bare `oxlint` specifier is ambiguous. It still serves the CONFIG surface
-/// (`defineConfig`, `OxlintConfig`, `OxlintOverride`, and so on), which must
-/// keep resolving against the standalone package. So the rewrite applies only
-/// to an `import` statement that names a specifier outside that config surface.
-/// The check is therefore a small, stable denylist, not an ever-growing list of
-/// plugin type names. An unrecognized name falls on the side of fixing the
-/// breakage.
-///
-/// A statement that mixes the two surfaces, such as
-/// `import { defineConfig, defineRule } from 'oxlint'`, is left alone. The
-/// rewrite replaces the whole specifier, so moving it would strip
-/// `defineConfig` of its module. Splitting the statement is the user's call.
-///
-/// A statement carrying a default or namespace binding alongside named ones,
-/// such as `import oxlint, { defineRule } from 'oxlint'`, is left alone for the
-/// same reason: `vite-plus/lint/plugins` has no default export.
-///
-/// A named re-export, `export { defineRule } from 'oxlint'`, names the surface
-/// just as clearly as an import, so it rewrites under the same rules. A bare
-/// `export * from 'oxlint'` names nothing and is left alone.
-///
-/// These forms name no specifier, so the rewrite skips them: namespace imports
-/// (`import * as`), default imports, bare side-effect imports,
-/// `require('oxlint')`, and `import('oxlint')`.
-///
-/// `@oxlint/plugins` and `oxlint/plugins-dev` are unambiguous. They expose only
-/// the plugin API and the dev-time utilities, so import, export, and dynamic
-/// `import()` statements all rewrite. The rules leave `require()` unchanged;
-/// dependency cleanup retains `@oxlint/plugins` when these references remain.
-///
-/// The rewrite skips a package that declares `oxlint` or `@oxlint/plugins` in
-/// `dependencies` or `peerDependencies`, or declares optional `@oxlint/plugins`.
-/// Those are published Oxlint plugins, and their consumers may not have Vite+.
-/// See `SkipPackages::skip_oxlint`.
+/// The other two specifiers expose only plugin APIs, so their import, export,
+/// dynamic-import, and import-type forms all rewrite. Preserve require calls
+/// and module augmentations; cleanup retains any remaining `@oxlint/plugins` use.
+/// Published plugins are exempt because consumers may not have Vite+; see
+/// `SkipPackages::skip_oxlint`.
 const REWRITE_OXLINT_PLUGIN_RULES: &str = r#"---
 id: rewrite-oxlint-plugins-import
 language: TypeScript
@@ -2190,11 +2153,8 @@ struct SkipPackages {
     skip_tsdown: bool,
     /// Skip rewriting Oxlint JS-plugin API imports (`oxlint` or `@oxlint/plugins`
     /// is in peerDependencies or dependencies, or @oxlint/plugins is optional).
-    /// A package that declares either as a runtime/peer edge is a published
-    /// Oxlint plugin: its consumers may be running plain Oxlint, so redirecting
-    /// the authoring API at `vite-plus` would break them.
-    /// A devDependency is not a signal: it is just how a
-    /// project's own in-repo plugin gets its types.
+    /// Published plugin consumers may not have Vite+. DevDependencies alone
+    /// do not mark a published plugin and do not prevent rewriting.
     skip_oxlint: bool,
 }
 
@@ -2212,14 +2172,8 @@ pub struct RewriteImportsOptions {
     pub preserve_vitest_in_nuxt_packages: bool,
     /// Directories of packages that declared `oxlint` or `@oxlint/plugins` in
     /// `dependencies` or `peerDependencies`, or optional `@oxlint/plugins`,
-    /// BEFORE the migration edited their manifests.
-    ///
-    /// `rewritePackageJson` strips `oxlint` (it is in `REMOVE_PACKAGES`) before
-    /// import rewriting reads the manifests, so `get_package_rewrite_context`
-    /// can no longer see that signal on disk. The caller captures it up front
-    /// and passes it here, otherwise a published Oxlint plugin that declared
-    /// the legacy `oxlint` package would lose its exemption and get rewritten
-    /// to depend on Vite+.
+    /// before migration. Capture these before manifest edits so ownership
+    /// does not depend on which dependency declarations survive those edits.
     pub oxlint_owner_dirs: Vec<PathBuf>,
 }
 
@@ -2440,10 +2394,7 @@ pub fn rewrite_imports_in_directory_with_options(
 
     // Pre-compute package context for each file (requires mutable cache, done sequentially).
     let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();
-    // Packages whose manifest declared `oxlint` / `@oxlint/plugins` before the
-    // migration edited it. Matched by the package DIRECTORY because the
-    // manifest itself no longer carries the signal (see `oxlint_owner_dirs`).
-    let oxlint_owner_dirs: HashSet<PathBuf> = options.oxlint_owner_dirs.iter().cloned().collect();
+    let oxlint_owner_dirs: HashSet<PathBuf> = options.oxlint_owner_dirs.into_iter().collect();
 
     let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
@@ -2451,15 +2402,15 @@ pub fn rewrite_imports_in_directory_with_options(
         .map(|file_path| {
             let package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
-                    let mut context = *package_context_cache
-                        .entry(package_json_path.clone())
-                        .or_insert_with(|| get_package_rewrite_context(&package_json_path));
-                    if let Some(package_dir) = package_json_path.parent()
-                        && oxlint_owner_dirs.contains(package_dir)
-                    {
-                        context.skip_packages.skip_oxlint = true;
-                    }
-                    context
+                    *package_context_cache.entry(package_json_path.clone()).or_insert_with(|| {
+                        let mut context = get_package_rewrite_context(&package_json_path);
+                        if let Some(package_dir) = package_json_path.parent()
+                            && oxlint_owner_dirs.contains(package_dir)
+                        {
+                            context.skip_packages.skip_oxlint = true;
+                        }
+                        context
+                    })
                 } else {
                     PackageRewriteContext::default()
                 };
@@ -4597,6 +4548,39 @@ export default defineConfig({});"#;
 
         let skip = get_skip_packages_from_package_json(&package_json_path);
         assert!(!skip.skip_oxlint);
+    }
+
+    #[test]
+    fn test_captured_oxlint_ownership_stops_at_nested_package_boundary() {
+        let temp = tempdir().unwrap();
+        std::fs::write(temp.path().join("package.json"), "{}").unwrap();
+        let nested = temp.path().join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        std::fs::write(nested.join("package.json"), "{}").unwrap();
+        let content = "import { defineRule } from '@oxlint/plugins';";
+        let root_files = [temp.path().join("plugin.js"), temp.path().join("rule.js")];
+        let nested_file = nested.join("plugin.js");
+        for file in root_files.iter().chain(std::iter::once(&nested_file)) {
+            std::fs::write(file, content).unwrap();
+        }
+
+        let result = rewrite_imports_in_directory_with_options(
+            temp.path(),
+            RewriteImportsOptions {
+                oxlint_owner_dirs: vec![temp.path().to_path_buf()],
+                ..RewriteImportsOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.modified_files, vec![nested_file.clone()]);
+        for file in root_files {
+            assert_eq!(std::fs::read_to_string(file).unwrap(), content);
+        }
+        assert_eq!(
+            std::fs::read_to_string(nested_file).unwrap(),
+            "import { defineRule } from 'vite-plus/lint/plugins';"
+        );
     }
 
     #[test]

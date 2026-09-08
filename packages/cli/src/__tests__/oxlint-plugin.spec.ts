@@ -1,7 +1,9 @@
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { RuleTester } from 'oxlint/plugins-dev';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createDefaultVitePlusLintConfig,
@@ -125,6 +127,70 @@ describe('rewriteVitePlusImportSpecifier', () => {
     // specifier alone cannot decide it, so the rule checks each import
     // statement.
     expect(rewriteVitePlusImportSpecifier('oxlint')).toBeNull();
+  });
+});
+
+function checkImports(filename: string, preservedSpecifiers: readonly string[]): void {
+  const tests: RuleTester.TestCases = { valid: [], invalid: [] };
+  for (const [specifier, binding, replacement] of [
+    ['vitest', 'expect', 'vite-plus/test'],
+    ['@oxlint/plugins', 'defineRule', 'vite-plus/lint/plugins'],
+  ]) {
+    const code = `import { ${binding} } from '${specifier}'`;
+    if (preservedSpecifiers.includes(specifier)) {
+      tests.valid.push({ filename, code });
+    } else {
+      tests.invalid.push({
+        filename,
+        code,
+        output: `import { ${binding} } from '${replacement}'`,
+        errors: [{ messageId: 'preferVitePlusImports' }],
+      });
+    }
+  }
+  new RuleTester().run(PREFER_VITE_PLUS_IMPORTS_RULE_NAME, preferVitePlusImportsRule, tests);
+}
+
+describe('package import exceptions', () => {
+  let projectPath: string;
+
+  beforeEach(() => {
+    projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-lint-package-exceptions-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectPath, { recursive: true, force: true });
+  });
+
+  it('refreshes independent exceptions when the manifest changes', () => {
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const states = [
+      { pkg: { devDependencies: { '@nuxt/test-utils': '*' } }, preserved: ['vitest'] },
+      { pkg: { peerDependencies: { '@oxlint/plugins': '*' } }, preserved: ['@oxlint/plugins'] },
+      { pkg: { optionalDependencies: { '@oxlint/plugins': '*' } }, preserved: ['@oxlint/plugins'] },
+      { pkg: { devDependencies: { '@oxlint/plugins': '*' } }, preserved: [] },
+    ];
+    for (const [index, { pkg, preserved }] of states.entries()) {
+      fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+      // Explicit timestamps avoid filesystem precision affecting invalidation.
+      fs.utimesSync(packageJsonPath, 100 + index, 100 + index);
+      checkImports(path.join(projectPath, 'rule.ts'), preserved);
+      checkImports(path.join(projectPath, 'other.ts'), preserved);
+    }
+  });
+
+  it('does not inherit exceptions across nested package boundaries', () => {
+    fs.writeFileSync(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({ dependencies: { '@nuxt/test-utils': '*', '@oxlint/plugins': '*' } }),
+    );
+    const nestedPath = path.join(projectPath, 'nested');
+    fs.mkdirSync(nestedPath);
+    fs.writeFileSync(path.join(nestedPath, 'package.json'), '{}');
+
+    checkImports(path.join(projectPath, 'rule.ts'), ['vitest', '@oxlint/plugins']);
+    checkImports(path.join(nestedPath, 'rule.ts'), []);
+    checkImports(path.join(projectPath, 'other.ts'), ['vitest', '@oxlint/plugins']);
   });
 });
 

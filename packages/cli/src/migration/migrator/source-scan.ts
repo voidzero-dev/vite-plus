@@ -231,7 +231,7 @@ function sourceTreeMatches(
   } = {},
 ): boolean {
   const skipDirs = options.skipDirs ?? VITEST_SCAN_SKIP_DIRS;
-  const scanDir = (dir: string, isRoot: boolean): boolean => {
+  function scanDir(dir: string, isRoot: boolean): boolean {
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -278,7 +278,7 @@ function sourceTreeMatches(
       }
     }
     return false;
-  };
+  }
 
   return scanDir(projectPath, true);
 }
@@ -368,21 +368,12 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
 }
 
 /**
- * True when source or package import aliases still name `@oxlint/plugins`.
- *
- * Deliberately a plain substring scan over the FINAL source, run after the
- * import rewrite. By then every form the rewrite handles has already become a
- * `vite-plus/lint/*` specifier, so anything left is a form it preserves: a
- * `require()`, an `import x = require()`, a JSDoc `@typedef {import(...)}`, a
- * template-literal call, or a plain string.
- *
- * Enumerating those syntaxes ahead of the rewrite was the wrong shape. It meant
- * predicting the rewriter with regexes, and each missed spelling silently
- * deleted a dependency that was still load-bearing. Scanning afterwards asks
- * the only question that matters: does anything still need this package?
+ * Check final source, build output, and package import aliases after rewriting.
+ * A substring scan conservatively retains references the rewriter leaves alone,
+ * including require calls, type references, and strings.
  */
 export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): boolean {
-  return sourceTreeMatches(projectPath, (content) => content.includes('@oxlint/plugins'), {
+  return sourceTreeMatches(projectPath, (content) => content.includes(OXLINT_PLUGINS_PACKAGE), {
     crossPackageBoundaries: true,
     includePackageImports: true,
     skipDirs: OXLINT_RETENTION_SKIP_DIRS,
@@ -404,10 +395,7 @@ export function dropDeadOxlintPluginsDependency(
   for (const dir of dirs) {
     const packageJsonPath = path.join(dir, 'package.json');
     const pkg = readPackageJsonIfExists(packageJsonPath);
-    if (!pkg) {
-      continue;
-    }
-    if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] === undefined) {
+    if (pkg?.devDependencies?.[OXLINT_PLUGINS_PACKAGE] === undefined) {
       continue;
     }
     if (packageOwnsOxlintApi(pkg) || sourceTreeReferencesOxlintPluginsPackage(dir)) {

@@ -340,12 +340,8 @@ export function packageOwnsOxlintApi(pkg: DependencyBag): boolean {
 }
 
 /**
- * Collect the directories of packages that own the Oxlint plugin API, so the
- * import rewriter can exempt them.
- *
- * Must run BEFORE `rewritePackageJson`. That function strips `oxlint` (it is in
- * {@link REMOVE_PACKAGES}), and the import rewriter reads the manifests only
- * afterwards, by which point the signal is gone from disk.
+ * Capture plugin owners before manifest edits, so the import rewriter can
+ * preserve their upstream API imports after those edits.
  */
 export function collectOxlintOwnerDirs(
   rootDir: string,
@@ -355,10 +351,7 @@ export function collectOxlintOwnerDirs(
   const candidates = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
   for (const dir of candidates) {
     const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
-    if (!pkg) {
-      continue;
-    }
-    if (packageOwnsOxlintApi(pkg)) {
+    if (pkg && packageOwnsOxlintApi(pkg)) {
       owners.push(dir);
     }
   }
