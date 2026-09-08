@@ -206,7 +206,9 @@ async fn run(source: &Path) -> Result<(), Error> {
 
     // 3. Run setup in this process. Spawning the unmarked binary here would reenter self-setup.
     tokio::fs::create_dir_all(&dirs.bin).await?;
-    // Declining management must preserve foreign executables in a shared bin directory.
+    // Declining management preserves regular files, but create_shim can still replace foreign Unix symlinks.
+    // The default bin directory is private to Vite+, so we accept this limitation for custom shared directories
+    // rather than add the complexity of reliably identifying which symlinks belong to Vite+.
     let refresh = node_manager != NodeManager::SystemFirst;
     // Windows entrypoints must point at this installation even when Node management is declined.
     setup::execute_for_binary(binary.as_path(), refresh, cfg!(windows) || refresh, false).await?;

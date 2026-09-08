@@ -106,7 +106,7 @@ print_curl_error() {
     echo ""
   fi
   exit 1
-}
+} >&2
 
 curl_with_error_handling() {
   local url=""
