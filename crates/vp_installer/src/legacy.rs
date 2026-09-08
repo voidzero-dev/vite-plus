@@ -137,8 +137,7 @@ async fn install_new_version(
     if !opts.quiet {
         print_info("installing dependencies (this may take a moment)...");
     }
-    install::install_production_deps(version_dir, opts.registry.as_deref(), opts.yes, version)
-        .await?;
+    install::install_production_deps(version_dir, opts.registry.as_deref()).await?;
 
     let previous_version =
         if has_previous { install::save_previous_version(install_dir).await? } else { None };
