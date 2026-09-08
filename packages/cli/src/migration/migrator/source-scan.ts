@@ -8,7 +8,7 @@ import { projectUsesVitestDirectly } from '../migrator.ts';
 import {
   OPT_IN_BROWSER_PROVIDERS,
   OXLINT_PLUGINS_PACKAGE,
-  OXLINT_PLUGIN_API_PACKAGES,
+  packageOwnsOxlintApi,
   PLAYWRIGHT_PROVIDER,
   WEBDRIVERIO_PROVIDER,
   readPackageJsonIfExists,
@@ -191,6 +191,10 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
   '.cache',
 ]);
 
+// Built plugins can still load the original API after migration. Only installed
+// dependencies and version-control metadata are irrelevant to retention.
+const OXLINT_RETENTION_SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn']);
+
 /**
  * Detect whether a package uses vitest's browser mode.
  *
@@ -223,8 +227,10 @@ function sourceTreeMatches(
     // package imports, even when they are not workspace members.
     crossPackageBoundaries?: boolean;
     includePackageImports?: boolean;
+    skipDirs?: ReadonlySet<string>;
   } = {},
 ): boolean {
+  const skipDirs = options.skipDirs ?? VITEST_SCAN_SKIP_DIRS;
   const scanDir = (dir: string, isRoot: boolean): boolean => {
     let entries: fs.Dirent[];
     try {
@@ -244,7 +250,7 @@ function sourceTreeMatches(
     for (const entry of entries) {
       const entryPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (VITEST_SCAN_SKIP_DIRS.has(entry.name)) {
+        if (skipDirs.has(entry.name)) {
           continue;
         }
         if (scanDir(entryPath, false)) {
@@ -379,6 +385,7 @@ export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): b
   return sourceTreeMatches(projectPath, (content) => content.includes('@oxlint/plugins'), {
     crossPackageBoundaries: true,
     includePackageImports: true,
+    skipDirs: OXLINT_RETENTION_SKIP_DIRS,
   });
 }
 
@@ -386,9 +393,8 @@ export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): b
  * Drop `@oxlint/plugins` from devDependencies once nothing names it any more.
  *
  * Runs AFTER the import rewrite, so the scan sees final source. Skips a package
- * that owns the API as a published contract (`dependencies` or
- * `peerDependencies`), and skips any package whose source still names it
- * through a form the rewrite preserves.
+ * that owns the API as a runtime or peer dependency, and skips any package
+ * whose source or build output still names it.
  */
 export function dropDeadOxlintPluginsDependency(
   rootDir: string,
@@ -401,31 +407,20 @@ export function dropDeadOxlintPluginsDependency(
     if (!pkg) {
       continue;
     }
-    const declaredIn = (['devDependencies', 'optionalDependencies'] as const).filter(
-      (field) => pkg?.[field]?.[OXLINT_PLUGINS_PACKAGE] !== undefined,
-    );
-    if (declaredIn.length === 0) {
+    if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] === undefined) {
       continue;
     }
-    const ownsApi = OXLINT_PLUGIN_API_PACKAGES.some(
-      (name) =>
-        pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
-    );
-    if (ownsApi || sourceTreeReferencesOxlintPluginsPackage(dir)) {
+    if (packageOwnsOxlintApi(pkg) || sourceTreeReferencesOxlintPluginsPackage(dir)) {
       continue;
     }
     editJsonFile<{
       devDependencies?: Record<string, string>;
-      optionalDependencies?: Record<string, string>;
     }>(packageJsonPath, (json) => {
-      let changed = false;
-      for (const field of declaredIn) {
-        if (json[field]?.[OXLINT_PLUGINS_PACKAGE]) {
-          delete json[field][OXLINT_PLUGINS_PACKAGE];
-          changed = true;
-        }
+      if (json.devDependencies?.[OXLINT_PLUGINS_PACKAGE] === undefined) {
+        return undefined;
       }
-      return changed ? json : undefined;
+      delete json.devDependencies[OXLINT_PLUGINS_PACKAGE];
+      return json;
     });
   }
 }

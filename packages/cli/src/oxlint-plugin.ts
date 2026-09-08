@@ -284,7 +284,7 @@ const oxlintOwnerPackageCache = new Map<string, { mtimeMs: number; ownsOxlintApi
 
 /**
  * True when the nearest package.json declares `oxlint` or `@oxlint/plugins` in
- * `dependencies` or `peerDependencies`.
+ * `dependencies` or `peerDependencies`, or has optional `@oxlint/plugins`.
  *
  * That shape marks a published Oxlint plugin, whose consumers may run plain
  * Oxlint. Rewriting its source to import from `vite-plus` would break them, so
@@ -319,12 +319,15 @@ function nearestPackageOwnsOxlintApi(filename: string): boolean {
         const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
           dependencies?: Record<string, string>;
           peerDependencies?: Record<string, string>;
+          optionalDependencies?: Record<string, string>;
         };
-        ownsOxlintApi = [pkg.dependencies, pkg.peerDependencies].some(
-          (dependencies) =>
-            dependencies?.[OXLINT_PACKAGE] !== undefined ||
-            dependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined,
-        );
+        ownsOxlintApi =
+          pkg.optionalDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined ||
+          [pkg.dependencies, pkg.peerDependencies].some(
+            (dependencies) =>
+              dependencies?.[OXLINT_PACKAGE] !== undefined ||
+              dependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined,
+          );
       } catch {
         // Invalid or unreadable package metadata cannot opt into the exception.
       }

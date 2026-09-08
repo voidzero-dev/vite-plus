@@ -27,6 +27,14 @@ const oxlintPluginPackageFilename = path.join(
   import.meta.dirname,
   'fixtures/oxlint-plugin-package/rule.ts',
 );
+const oxlintOptionalPluginPackageFilename = path.join(
+  import.meta.dirname,
+  'fixtures/oxlint-optional-plugin-package/rule.ts',
+);
+const oxlintOptionalToolPackageFilename = path.join(
+  import.meta.dirname,
+  'fixtures/oxlint-optional-tool-package/rule.ts',
+);
 
 describe('oxlint plugin config defaults', () => {
   it('adds vite-plus js plugin and lint rule defaults', () => {
@@ -180,6 +188,14 @@ new RuleTester({
       code: `import { RuleTester } from 'oxlint/plugins-dev'`,
       filename: oxlintPluginPackageFilename,
     },
+    // An optional runtime API is also part of a published plugin's contract.
+    ...[
+      `import { defineRule } from '@oxlint/plugins'`,
+      `export { definePlugin } from '@oxlint/plugins'`,
+      `const plugins = await import('@oxlint/plugins')`,
+      `import { defineRule } from 'oxlint'`,
+      `import { RuleTester } from 'oxlint/plugins-dev'`,
+    ].map((code) => ({ code, filename: oxlintOptionalPluginPackageFilename })),
     // `declare module` keeps the upstream module identity, so augmentations
     // still merge with the upstream declarations.
     {
@@ -273,6 +289,13 @@ new RuleTester({
     },
   ],
   invalid: [
+    {
+      // Optional oxlint retains the existing tool-migration policy.
+      code: `import { defineRule } from 'oxlint'`,
+      filename: oxlintOptionalToolPackageFilename,
+      errors: 1,
+      output: `import { defineRule } from 'vite-plus/lint/plugins'`,
+    },
     {
       code: `import { definePlugin, defineRule } from '@oxlint/plugins'`,
       errors: 1,

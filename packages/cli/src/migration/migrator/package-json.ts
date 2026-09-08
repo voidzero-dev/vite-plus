@@ -29,6 +29,7 @@ import {
   OPT_IN_BROWSER_PROVIDERS,
   OXLINT_PLUGINS_PACKAGE,
   OXLINT_PLUGIN_API_PACKAGES,
+  packageOwnsOxlintApi,
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
@@ -191,12 +192,8 @@ export function rewritePackageJson(
   // (`skip_oxlint`), so its manifest edge is preserved too. Stripping it would
   // leave the source importing a package the manifest no longer declares.
   //
-  // Both groups are checked, matching `collectOxlintOwnerDirs`. A peer-only
-  // check would preserve the source of a plugin that declares `oxlint` under
-  // `dependencies` while deleting the edge that provides it.
-  const ownsOxlintApi = OXLINT_PLUGIN_API_PACKAGES.some(
-    (name) => pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
-  );
+  // Optional `@oxlint/plugins` also supplies a published runtime integration.
+  const ownsOxlintApi = packageOwnsOxlintApi(pkg);
   // `@oxlint/plugins` often becomes dead weight once the import rewrite points
   // the authoring API at `vite-plus/lint/plugins`, but not always: the rewrite
   // preserves several forms. The deletion therefore happens AFTER the rewrite,
@@ -207,13 +204,7 @@ export function rewritePackageJson(
   // migration signal is this dependency will have its imports repointed at
   // `vite-plus/lint/plugins`, so it needs a direct `vite-plus` edge to resolve
   // them under an isolated layout such as Yarn PnP.
-  // An optional install edge provisions the API the same way a dev one does,
-  // so it is the same signal.
-  if (
-    (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined ||
-      pkg.optionalDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined) &&
-    !ownsOxlintApi
-  ) {
+  if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined && !ownsOxlintApi) {
     needVitePlus = true;
   }
   // remove packages that are replaced with vite-plus

@@ -1619,8 +1619,9 @@ fix: $NEW_IMPORT
 /// dependency cleanup retains `@oxlint/plugins` when these references remain.
 ///
 /// The rewrite skips a package that declares `oxlint` or `@oxlint/plugins` in
-/// `dependencies` or `peerDependencies`. Those are published Oxlint plugins,
-/// and their consumers may not have Vite+. See `SkipPackages::skip_oxlint`.
+/// `dependencies` or `peerDependencies`, or declares optional `@oxlint/plugins`.
+/// Those are published Oxlint plugins, and their consumers may not have Vite+.
+/// See `SkipPackages::skip_oxlint`.
 const REWRITE_OXLINT_PLUGIN_RULES: &str = r#"---
 id: rewrite-oxlint-plugins-import
 language: TypeScript
@@ -2188,10 +2189,11 @@ struct SkipPackages {
     /// Skip rewriting tsdown imports (tsdown is in peerDependencies or dependencies)
     skip_tsdown: bool,
     /// Skip rewriting Oxlint JS-plugin API imports (`oxlint` or `@oxlint/plugins`
-    /// is in peerDependencies or dependencies). A package that declares either
-    /// as a runtime/peer edge is a published Oxlint plugin: its consumers may be
-    /// running plain Oxlint, so redirecting the authoring API at `vite-plus`
-    /// would break them. A devDependency is not a signal: it is just how a
+    /// is in peerDependencies or dependencies, or @oxlint/plugins is optional).
+    /// A package that declares either as a runtime/peer edge is a published
+    /// Oxlint plugin: its consumers may be running plain Oxlint, so redirecting
+    /// the authoring API at `vite-plus` would break them.
+    /// A devDependency is not a signal: it is just how a
     /// project's own in-repo plugin gets its types.
     skip_oxlint: bool,
 }
@@ -2209,8 +2211,8 @@ pub struct RewriteImportsOptions {
     /// whose nearest package.json declares `@nuxt/test-utils`.
     pub preserve_vitest_in_nuxt_packages: bool,
     /// Directories of packages that declared `oxlint` or `@oxlint/plugins` in
-    /// `dependencies` or `peerDependencies` BEFORE the migration edited their
-    /// manifests.
+    /// `dependencies` or `peerDependencies`, or optional `@oxlint/plugins`,
+    /// BEFORE the migration edited their manifests.
     ///
     /// `rewritePackageJson` strips `oxlint` (it is in `REMOVE_PACKAGES`) before
     /// import rewriting reads the manifests, so `get_package_rewrite_context`
@@ -2348,7 +2350,8 @@ fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContex
             skip_oxlint: has_package("peerDependencies", "oxlint")
                 || has_package("dependencies", "oxlint")
                 || has_package("peerDependencies", "@oxlint/plugins")
-                || has_package("dependencies", "@oxlint/plugins"),
+                || has_package("dependencies", "@oxlint/plugins")
+                || has_package("optionalDependencies", "@oxlint/plugins"),
         },
         uses_nuxt_test_utils: ["dependencies", "devDependencies", "optionalDependencies"]
             .into_iter()
@@ -4594,6 +4597,44 @@ export default defineConfig({});"#;
 
         let skip = get_skip_packages_from_package_json(&package_json_path);
         assert!(!skip.skip_oxlint);
+    }
+
+    #[test]
+    fn test_optional_oxlint_plugin_api_is_preserved() {
+        let temp = tempdir().unwrap();
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"optionalDependencies":{"@oxlint/plugins":"^1.79.0"}}"#,
+        )
+        .unwrap();
+        let file = temp.path().join("plugin.js");
+        let content = "import { defineRule } from '@oxlint/plugins';";
+        std::fs::write(&file, content).unwrap();
+
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+
+        assert!(result.modified_files.is_empty());
+        assert_eq!(std::fs::read_to_string(file).unwrap(), content);
+    }
+
+    #[test]
+    fn test_optional_oxlint_keeps_existing_rewrite_policy() {
+        let temp = tempdir().unwrap();
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"optionalDependencies":{"oxlint":"^1.79.0"}}"#,
+        )
+        .unwrap();
+        let file = temp.path().join("plugin.js");
+        std::fs::write(&file, "import { defineRule } from 'oxlint';").unwrap();
+
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+
+        assert_eq!(result.modified_files, vec![file.clone()]);
+        assert_eq!(
+            std::fs::read_to_string(file).unwrap(),
+            "import { defineRule } from 'vite-plus/lint/plugins';"
+        );
     }
 
     #[test]

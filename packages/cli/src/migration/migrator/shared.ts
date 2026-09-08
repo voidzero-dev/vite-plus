@@ -323,12 +323,21 @@ export function pnpmMajor(version: string | undefined): number | undefined {
 }
 
 // Packages that own the Oxlint JS-plugin authoring API as a published contract.
-// A package that declares either in `dependencies` or `peerDependencies` is a
-// published Oxlint plugin, so its source must keep resolving the API from that
-// package rather than from `vite-plus`.
+// Optional `@oxlint/plugins` is also a runtime contract for consumers of a
+// published integration. Optional `oxlint` keeps the existing tool policy.
 export const OXLINT_PLUGINS_PACKAGE = '@oxlint/plugins';
 
 export const OXLINT_PLUGIN_API_PACKAGES = ['oxlint', OXLINT_PLUGINS_PACKAGE] as const;
+
+export function packageOwnsOxlintApi(pkg: DependencyBag): boolean {
+  return (
+    pkg.optionalDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined ||
+    OXLINT_PLUGIN_API_PACKAGES.some(
+      (name) =>
+        pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
+    )
+  );
+}
 
 /**
  * Collect the directories of packages that own the Oxlint plugin API, so the
@@ -349,11 +358,7 @@ export function collectOxlintOwnerDirs(
     if (!pkg) {
       continue;
     }
-    const owns = OXLINT_PLUGIN_API_PACKAGES.some(
-      (name) =>
-        pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
-    );
-    if (owns) {
+    if (packageOwnsOxlintApi(pkg)) {
       owners.push(dir);
     }
   }

@@ -280,8 +280,13 @@ The migration leaves three forms alone:
 - Bare side-effect `oxlint` imports, for the same reason.
 
 The migration also skips a package that declares `oxlint` or `@oxlint/plugins`
-in `dependencies` or `peerDependencies`. That shape marks a published Oxlint
-plugin. Its consumers may not run Vite+.
+in `dependencies` or `peerDependencies`, or `@oxlint/plugins` in
+`optionalDependencies`. These dependencies can supply a published Oxlint plugin.
+Its consumers may not run Vite+.
+
+The cleanup retains a development dependency on `@oxlint/plugins` when source,
+package import aliases, or built plugins still reference it. This includes
+ignored output in directories such as `dist`, `build`, and `out`.
 
 ### What Is Never Rewritten
 
