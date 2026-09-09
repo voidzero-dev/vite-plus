@@ -50,7 +50,22 @@ prefer-vite-plus-imports reports the three legacy authoring specifiers
  4 │
    ╰────
 
-Found 0 warnings and 3 errors.
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/lint/plugins' instead of 'oxlint' in Vite+ projects.
+   ╭─[src/legacy-imports.ts:6:38]
+ 5 │ export { defineRule, definePlugin, RuleTester };
+ 6 │ export { 'defineRule' as rule } from 'oxlint';
+   ·                                      ────────
+ 7 │ export type { 'Context' as RuleContext } from 'oxlint';
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/lint/plugins' instead of 'oxlint' in Vite+ projects.
+   ╭─[src/legacy-imports.ts:7:47]
+ 6 │ export { 'defineRule' as rule } from 'oxlint';
+ 7 │ export type { 'Context' as RuleContext } from 'oxlint';
+   ·                                               ────────
+   ╰────
+
+Found 0 warnings and 5 errors.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
@@ -80,6 +95,8 @@ import { definePlugin } from 'vite-plus/lint/plugins';
 import { RuleTester } from 'vite-plus/lint/plugins-dev';
 
 export { defineRule, definePlugin, RuleTester };
+export { 'defineRule' as rule } from 'vite-plus/lint/plugins';
+export type { 'Context' as RuleContext } from 'vite-plus/lint/plugins';
 ```
 
 ## `vp lint src/legacy-imports.ts`

@@ -207,6 +207,11 @@ new RuleTester({
     `import { defineConfig } from 'oxlint'`,
     `import { "defineConfig" as cfg } from 'oxlint'`,
     `export { 'defineConfig' as cfg } from 'oxlint'`,
+    `export { 'defineRule' as rule, 'defineConfig' as cfg } from 'oxlint'`,
+    {
+      code: `export type { 'OxlintConfig' as Config } from 'oxlint'`,
+      filename: 'types.ts',
+    },
     {
       code: `import type { 'OxlintConfig' as Config } from 'oxlint'`,
       filename: 'types.ts',
@@ -243,6 +248,10 @@ new RuleTester({
     `export { defineConfig } from 'oxlint'`,
     // A published Oxlint plugin keeps resolving the API from its own peer.
     {
+      code: `export { 'defineRule' as rule } from 'oxlint'`,
+      filename: oxlintPluginPackageFilename,
+    },
+    {
       code: `import { defineRule } from '@oxlint/plugins'`,
       filename: oxlintPluginPackageFilename,
     },
@@ -260,6 +269,7 @@ new RuleTester({
       `export { definePlugin } from '@oxlint/plugins'`,
       `const plugins = await import('@oxlint/plugins')`,
       `import { defineRule } from 'oxlint'`,
+      `export { 'defineRule' as rule } from 'oxlint'`,
       `import { RuleTester } from 'oxlint/plugins-dev'`,
     ].map((code) => ({ code, filename: oxlintOptionalPluginPackageFilename })),
     // `declare module` keeps the upstream module identity, so augmentations
@@ -395,6 +405,22 @@ new RuleTester({
       code: `export { defineRule } from 'oxlint'`,
       errors: 1,
       output: `export { defineRule } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `export { 'defineRule' as rule } from 'oxlint'`,
+      errors: 1,
+      output: `export { 'defineRule' as rule } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `export { "definePlugin" as plugin, defineRule as rule } from "oxlint"`,
+      errors: 1,
+      output: `export { "definePlugin" as plugin, defineRule as rule } from "vite-plus/lint/plugins"`,
+    },
+    {
+      code: `export type { 'Context' as RuleContext } from 'oxlint'`,
+      errors: 1,
+      filename: 'types.ts',
+      output: `export type { 'Context' as RuleContext } from 'vite-plus/lint/plugins'`,
     },
     {
       code: `import { page } from '@vitest/browser/context'`,

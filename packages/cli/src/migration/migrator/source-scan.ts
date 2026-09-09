@@ -224,9 +224,9 @@ function sourceTreeMatches(
   matchesContent: (content: string) => boolean,
   options: {
     // Nested examples can resolve the root's dependency through source or
-    // package imports, even when they are not workspace members.
+    // package imports/scripts, even when they are not workspace members.
     crossPackageBoundaries?: boolean;
-    includePackageImports?: boolean;
+    includePackageReferences?: boolean;
     skipDirs?: ReadonlySet<string>;
   } = {},
 ): boolean {
@@ -259,15 +259,15 @@ function sourceTreeMatches(
       } else if (
         entry.isFile() &&
         (VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name)) ||
-          (options.includePackageImports && entry.name === 'package.json'))
+          (options.includePackageReferences && entry.name === 'package.json'))
       ) {
         try {
           let content = fs.readFileSync(entryPath, 'utf8');
           if (entry.name === 'package.json') {
-            // Check alias targets without counting the dependency declaration
-            // itself as a use. JSON serialization includes conditional targets.
-            const pkg = JSON.parse(content) as { imports?: unknown };
-            content = JSON.stringify(pkg.imports ?? {});
+            // Check alias targets and inline scripts without counting dependency
+            // declarations as uses. Serialization includes conditional targets.
+            const pkg = JSON.parse(content) as { imports?: unknown; scripts?: unknown };
+            content = JSON.stringify({ imports: pkg.imports, scripts: pkg.scripts });
           }
           if (matchesContent(content)) {
             return true;
@@ -368,14 +368,14 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
 }
 
 /**
- * Check final source, build output, and package import aliases after rewriting.
+ * Check final source, build output, package import aliases, and package scripts.
  * A substring scan conservatively retains references the rewriter leaves alone,
  * including require calls, type references, and strings.
  */
 export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): boolean {
   return sourceTreeMatches(projectPath, (content) => content.includes(OXLINT_PLUGINS_PACKAGE), {
     crossPackageBoundaries: true,
-    includePackageImports: true,
+    includePackageReferences: true,
     skipDirs: OXLINT_RETENTION_SKIP_DIRS,
   });
 }

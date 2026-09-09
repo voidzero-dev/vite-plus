@@ -156,12 +156,8 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   return null;
 }
 
-function importedName(specifier: ESTree.ImportSpecifier): string | undefined {
-  const imported = specifier.imported;
-  if (imported.type === 'Identifier') {
-    return imported.name;
-  }
-  return typeof imported.value === 'string' ? imported.value : undefined;
+function moduleBindingName(node: ESTree.ImportSpecifier['imported']): string {
+  return node.type === 'Identifier' ? node.name : node.value;
 }
 
 // Replacing the source affects the whole import. Require named plugin bindings
@@ -172,7 +168,7 @@ function importsOxlintPluginApi(node: ESTree.ImportDeclaration): boolean {
     node.specifiers.every(
       (specifier) =>
         specifier.type === 'ImportSpecifier' &&
-        !OXLINT_CONFIG_SURFACE_EXPORTS.has(importedName(specifier) ?? ''),
+        !OXLINT_CONFIG_SURFACE_EXPORTS.has(moduleBindingName(specifier.imported)),
     )
   );
 }
@@ -333,10 +329,9 @@ function reportLegacyOxlintPluginApiExport(
   if (node.specifiers.length === 0) {
     return;
   }
-  const allPluginApi = node.specifiers.every((specifier) => {
-    const local = specifier.local;
-    return local.type === 'Identifier' && !OXLINT_CONFIG_SURFACE_EXPORTS.has(local.name);
-  });
+  const allPluginApi = node.specifiers.every(
+    (specifier) => !OXLINT_CONFIG_SURFACE_EXPORTS.has(moduleBindingName(specifier.local)),
+  );
   if (!allPluginApi) {
     return;
   }

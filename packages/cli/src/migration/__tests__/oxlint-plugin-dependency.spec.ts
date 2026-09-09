@@ -25,6 +25,61 @@ describe('Oxlint plugin dependency cleanup', () => {
     fs.rmSync(projectPath, { recursive: true, force: true });
   });
 
+  it.each([`node -e "require('@oxlint/plugins')"`, `node -e "import('@oxlint/plugins')"`])(
+    'retains a dependency used by the inline script %s',
+    (script) => {
+      const pkg = {
+        scripts: { 'check-plugin': script },
+        devDependencies: { '@oxlint/plugins': '^1.79.0' },
+      };
+      rewritePackageJson(pkg, PackageManager.pnpm);
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+
+      expect(pkg.scripts['check-plugin']).toBe(script);
+      expect(sourceTreeReferencesOxlintPluginsPackage(projectPath)).toBe(true);
+      dropDeadOxlintPluginsDependency(projectPath);
+
+      expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+    },
+  );
+
+  it('retains a dependency used by a nested non-workspace package script', () => {
+    const pkg = { devDependencies: { '@oxlint/plugins': '^1.79.0' } };
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+    const examplePath = path.join(projectPath, 'example');
+    fs.mkdirSync(examplePath);
+    fs.writeFileSync(
+      path.join(examplePath, 'package.json'),
+      JSON.stringify({ scripts: { 'check-plugin': `node -e "require('@oxlint/plugins')"` } }),
+    );
+
+    dropDeadOxlintPluginsDependency(projectPath);
+
+    expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+  });
+
+  it('ignores dependency declarations and descriptive metadata when scripts use vite-plus', () => {
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const metadata = {
+      description: 'Previously used @oxlint/plugins',
+      scripts: { 'check-plugin': `node -e "require('vite-plus/lint/plugins')"` },
+    };
+    fs.writeFileSync(
+      packageJsonPath,
+      JSON.stringify({ ...metadata, devDependencies: { '@oxlint/plugins': '^1.79.0' } }),
+    );
+
+    expect(sourceTreeReferencesOxlintPluginsPackage(projectPath)).toBe(false);
+    dropDeadOxlintPluginsDependency(projectPath);
+
+    expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual({
+      ...metadata,
+      devDependencies: {},
+    });
+  });
+
   it.each(['devDependencies', 'optionalDependencies'] as const)(
     'retains an import alias target in %s',
     (field) => {
