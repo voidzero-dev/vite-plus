@@ -1,6 +1,7 @@
 [[case]]
 name = "command_upgrade_parent_workspace_stale_lockfile"
 vp = "global"
+skip-platforms = ["windows"]
 comment = "Regression test for #2639: an upgrade invoked outside a parent pnpm workspace must not read its stale lockfile."
 steps = [
   { argv = ["node", "setup.mjs"], snapshot = false },
@@ -14,6 +15,7 @@ steps = [
 [[case]]
 name = "command_upgrade_parent_workspace_valid_lockfile"
 vp = "global"
+skip-platforms = ["windows"]
 comment = "An upgrade must install its own dependencies even when the parent workspace lockfile is valid."
 steps = [
   { argv = ["node", "setup.mjs", "--valid-lockfile"], snapshot = false },
