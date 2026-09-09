@@ -119,9 +119,6 @@
   },
   "devDependencies": {
     "@ast-grep/napi": "^0.43.0",
-    "@babel/generator": "^7.28.5",
-    "@babel/parser": "^7.28.5",
-    "@babel/types": "^7.28.5",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",
