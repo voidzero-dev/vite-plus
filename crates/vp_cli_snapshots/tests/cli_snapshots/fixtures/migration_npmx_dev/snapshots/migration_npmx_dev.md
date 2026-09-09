@@ -20,16 +20,16 @@ VITE+ - The Unified Toolchain for the Web
 
 ## `vpt print-file package.json`
 
-@vitest/* should become catalog without adding redundant playwright alongside @playwright/test:
+@vitest/browser-playwright and @vitest/coverage-v8 should become catalog:
 
 ```
 {
   "name": "npmx",
   "private": true,
   "devDependencies": {
-    "@playwright/test": "1.60.0",
     "@vitest/browser-playwright": "catalog:",
     "@vitest/coverage-v8": "catalog:",
+    "playwright": "1.60.0",
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
