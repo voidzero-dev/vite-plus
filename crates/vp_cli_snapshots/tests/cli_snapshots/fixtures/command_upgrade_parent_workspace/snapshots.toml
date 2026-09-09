@@ -1,0 +1,24 @@
+[[case]]
+name = "command_upgrade_parent_workspace_stale_lockfile"
+vp = "global"
+comment = "Regression test for #2639: an upgrade invoked outside a parent pnpm workspace must not read its stale lockfile."
+steps = [
+  { argv = ["node", "setup.mjs"], snapshot = false },
+  # Pin the released payload so the test also runs when the checkout version is unpublished.
+  { argv = ["vp", "upgrade", "0.3.1", "--force"], envs = [["VP_HOME", "${workspace}/home/.vite-plus"]], timeout = 120000, snapshot = false },
+  { argv = ["vpt", "stat-file", "home/.vite-plus/current/node_modules/vite-plus/package.json", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "home/node_modules", "home/apps-ts/kami/node_modules", "--assert", "missing"] },
+  { argv = ["vpt", "print-file", "home/pnpm-lock.yaml"], comment = "The parent workspace lockfile is unchanged." },
+]
+
+[[case]]
+name = "command_upgrade_parent_workspace_valid_lockfile"
+vp = "global"
+comment = "An upgrade must install its own dependencies even when the parent workspace lockfile is valid."
+steps = [
+  { argv = ["node", "setup.mjs", "--valid-lockfile"], snapshot = false },
+  { argv = ["vp", "upgrade", "0.3.1", "--force"], envs = [["VP_HOME", "${workspace}/home/.vite-plus"]], timeout = 120000, snapshot = false },
+  { argv = ["vpt", "stat-file", "home/.vite-plus/current/node_modules/vite-plus/package.json", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "home/node_modules", "home/apps-ts/kami/node_modules", "--assert", "missing"] },
+  { argv = ["vpt", "print-file", "home/pnpm-lock.yaml"], comment = "The parent workspace lockfile is unchanged." },
+]

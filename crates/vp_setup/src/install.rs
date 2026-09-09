@@ -171,8 +171,8 @@ pub async fn write_upgrade_log(
 
 /// Install production dependencies with managed Node.js LTS and pinned pnpm.
 ///
-/// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install [--registry <url>]` with `CI=true`.
-/// On failure, writes stdout+stderr to `{version_dir}/upgrade.log` for debugging.
+/// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace [--registry <url>]`
+/// with `CI=true`. On failure, writes stdout+stderr to the parent directory's `upgrade.log`.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
@@ -182,7 +182,8 @@ pub async fn install_production_deps(
     // Keep the bypass local to this Vite+ installation.
     write_release_age_overrides(version_dir).await?;
 
-    let mut args = vec!["install"];
+    // An ancestor workspace must not capture the install or supply its lockfile.
+    let mut args = vec!["install", "--ignore-workspace"];
     if let Some(registry_url) = registry {
         args.push("--registry");
         args.push(registry_url);
