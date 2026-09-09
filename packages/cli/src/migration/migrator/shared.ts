@@ -82,10 +82,14 @@ export const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
   '@vitest/browser-webdriverio': 'webdriverio',
 };
 
+// Packages that include runtime peer as a dependency.
+const RUNTIME_PEER_INCLUDED_BY: Record<string, readonly string[]> = {
+  playwright: ['@playwright/test'],
+};
+
 // Lockstep sibling packages whose declared version a browser provider's runtime
 // framework peer should reuse (they publish together). Keyed by the peer name.
 export const PROVIDER_PEER_VERSION_SIBLINGS: Record<string, readonly string[]> = {
-  playwright: ['@playwright/test'],
   webdriverio: ['@wdio/cli', '@wdio/globals'],
 };
 
@@ -96,6 +100,17 @@ export function findDeclaredSpec(pkg: DependencyBag, name: string): string | und
     pkg.devDependencies?.[name] ??
     pkg.peerDependencies?.[name] ??
     pkg.optionalDependencies?.[name]
+  );
+}
+
+// A provider's runtime peer is available when declared directly or included by
+// another declared package.
+export function hasProviderPeerDependency(pkg: DependencyBag, runtimePeer: string): boolean {
+  return (
+    findDeclaredSpec(pkg, runtimePeer) !== undefined ||
+    (RUNTIME_PEER_INCLUDED_BY[runtimePeer] ?? []).some(
+      (packageName) => findDeclaredSpec(pkg, packageName) !== undefined,
+    )
   );
 }
 

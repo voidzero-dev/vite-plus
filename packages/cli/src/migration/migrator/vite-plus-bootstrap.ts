@@ -55,6 +55,7 @@ import {
 import { type DependencyVersionChange, type MigrationReport } from '../report.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
+  hasProviderPeerDependency,
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
   REMOVE_PACKAGES,
@@ -405,10 +406,7 @@ function reconcileVitePlusBootstrapPackage(
       );
     }
     const frameworkPeer = BROWSER_PROVIDER_PEER_DEPS[provider];
-    const frameworkPresent = dependencyGroups.some(
-      (dependencies) => dependencies?.[frameworkPeer] !== undefined,
-    );
-    if (frameworkPeer && !frameworkPresent) {
+    if (!hasProviderPeerDependency(pkg, frameworkPeer)) {
       pkg.devDependencies ??= {};
       pkg.devDependencies[frameworkPeer] = resolveProviderPeerSpec(
         pkg,

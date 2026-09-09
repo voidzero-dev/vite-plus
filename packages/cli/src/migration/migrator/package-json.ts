@@ -24,7 +24,7 @@ import {
 } from '../migrator.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
-  findDeclaredSpec,
+  hasProviderPeerDependency,
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
   OXLINT_PLUGINS_PACKAGE,
@@ -280,8 +280,7 @@ export function rewritePackageJson(
       );
     }
     const peer = BROWSER_PROVIDER_PEER_DEPS[provider]; // 'webdriverio' / 'playwright'
-    const peerPresent = findDeclaredSpec(pkg, peer);
-    if (peer && !peerPresent) {
+    if (!hasProviderPeerDependency(pkg, peer)) {
       pkg.devDependencies ??= {};
       pkg.devDependencies[peer] = resolveProviderPeerSpec(
         pkg,
