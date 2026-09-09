@@ -917,12 +917,9 @@ fn indent_multiline(s: &str, spaces: usize) -> String {
     let indent = " ".repeat(spaces);
     let lines: Vec<&str> = s.lines().collect();
 
-    if lines.len() <= 1 {
-        return s.to_string();
-    }
-
     // First line doesn't get indented (it's on the same line as the key)
     // Subsequent lines get the specified indent
+    // Join even single-line input so the generated comma stays inside the YAML block.
     lines
         .iter()
         .enumerate()
@@ -1887,6 +1884,31 @@ export default defineConfig({});"#;
         let input = "first\nsecond\nthird";
         let expected = "first\n    second\n    third";
         assert_eq!(indent_multiline(input, 4), expected);
+    }
+
+    #[test]
+    fn test_indent_multiline_trailing_line_endings() {
+        for ending in ["\n", "\r\n"] {
+            assert_eq!(indent_multiline(&format!("single line{ending}"), 4), "single line");
+            assert_eq!(
+                indent_multiline(&format!("first{ending}second{ending}"), 4),
+                "first\n    second"
+            );
+        }
+    }
+
+    #[test]
+    fn test_merge_single_line_json_config_with_trailing_line_endings() {
+        let vite_config = "export default defineConfig({ plugins: [] });";
+        for ending in ["", "\n", "\r\n"] {
+            let oxfmt_config = format!("{{\"singleQuote\":true}}{ending}");
+            let result = merge_json_config_content(vite_config, &oxfmt_config, "fmt").unwrap();
+            assert!(result.updated);
+            assert_eq!(
+                result.content,
+                "export default defineConfig({\n  fmt: {\"singleQuote\":true},\n  plugins: []\n});"
+            );
+        }
     }
 
     #[test]
