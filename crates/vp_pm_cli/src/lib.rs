@@ -12,6 +12,7 @@ mod config;
 mod dispatch;
 mod error;
 mod helpers;
+mod lifecycle_env;
 mod package_manager;
 mod request;
 pub(crate) mod resolution;
@@ -24,6 +25,7 @@ pub use dispatch::{
     dispatch_with_resolved_package_manager,
 };
 pub use error::Error;
+pub use lifecycle_env::LifecycleEnvContext;
 pub use package_manager::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerBuilder,
     PackageManagerResolution, PackageManagerSource, PackageManagerType, download_package_manager,
