@@ -128,6 +128,30 @@ mod tests {
     }
 
     #[test]
+    fn only_npm_installs_disable_npm_update_notifications() {
+        for (client, version, expected) in [
+            (PackageManagerType::Npm, "11.13.0", Some("false")),
+            (PackageManagerType::Npm, "12.0.2", Some("false")),
+            (PackageManagerType::Npm, "latest", Some("false")),
+            (PackageManagerType::Pnpm, "12.3.4", None),
+            (PackageManagerType::Yarn, "4.0.0", None),
+            (PackageManagerType::Bun, "1.0.0", None),
+        ] {
+            let manager = package_manager(client, version);
+            let resolution = resolve_for_manager(&manager, InstallArgs::default()).unwrap();
+            let CommandResolution::Run(command) = resolution.outcome else {
+                panic!("expected install command");
+            };
+
+            assert_eq!(
+                command.env.get("npm_config_update_notifier").map(String::as_str),
+                expected,
+                "{client}@{version}"
+            );
+        }
+    }
+
+    #[test]
     fn only_pnpm_installs_disable_update_notifications() {
         for (client, version, expected) in [
             (PackageManagerType::Pnpm, "11.25.0", Some("false")),
