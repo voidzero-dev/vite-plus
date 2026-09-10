@@ -149,7 +149,11 @@ function chain(
 export function migrateVitestV5Source(file: string, source: string, options: SourceOptions) {
   const editor = new SourceEditor(file, source);
   const asyncFunctions = new Set<t.Node>();
-  const apiName = (p: NodePath, node: t.Node) => testApiName(p, node, options.globals);
+  // Import edits are offset-based, so bindings still refer to the old module
+  // while this traversal visits the assertions that must migrate with them.
+  const apiName = (p: NodePath, node: t.Node) =>
+    testApiName(p, node, options.globals) ??
+    (importedName(p, node, EXPECT_SOURCES) === 'expect' ? 'expect' : undefined);
   const canAwait = (p: NodePath) => {
     const fn = p.getFunctionParent();
     if (!fn) {
