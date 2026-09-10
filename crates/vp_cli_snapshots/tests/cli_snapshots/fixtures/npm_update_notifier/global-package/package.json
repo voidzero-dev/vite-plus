@@ -1,0 +1,8 @@
+{
+  "name": "global-update-notifier-test",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "postinstall": "node -e \"require('node:assert/strict').equal(process.env.npm_config_update_notifier, 'false')\""
+  }
+}
