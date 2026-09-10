@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const { copyFileSync, mkdirSync, symlinkSync } = require('node:fs');
+const { copyFileSync, mkdirSync, symlinkSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
 
 const mode = process.argv[2];
@@ -12,6 +12,8 @@ if (mode === 'multiple') {
     const dir = path.resolve(name);
     mkdirSync(dir);
     copyFileSync(path.join(bin, 'vp'), path.join(dir, 'vp'));
+    // These copies represent completed installations, so shim calls must skip self-setup.
+    writeFileSync(path.join(dir, '.vp-setup-complete'), '');
     symlinkSync('vp', path.join(dir, 'node'));
     paths.push(dir);
   }

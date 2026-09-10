@@ -79,7 +79,7 @@ export default defineConfig({
     tasks: {
       'generate:icons': {
         command: 'node scripts/generate-icons.js',
-        envs: ['ICON_THEME'],
+        env: ['ICON_THEME'],
       },
     },
   },

@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vp run build:site",
-    "build:cloudflare": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vitepress build",
-    "build:netlify": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vitepress build",
+    "build": "node .vitepress/scripts/copy-installers.mjs && vp run build:site",
+    "build:cloudflare": "node .vitepress/scripts/copy-installers.mjs && vitepress build",
+    "build:netlify": "node .vitepress/scripts/copy-installers.mjs && vitepress build",
     "preview": "vitepress preview",
     "update-trusted-stack-stats": "node .vitepress/theme/data/fetch-trusted-stack-stats.ts"
   },
