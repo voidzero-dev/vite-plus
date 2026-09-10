@@ -161,9 +161,12 @@ async fn resolve_package_manager_info(
     scope: EnvScope,
     config: &config::Config,
 ) -> Result<Option<PackageManagerInfo>, Error> {
-    let selected = package_manager::resolve_current_spec(cwd).await?.filter(|resolution| {
-        scope.package_manager().is_none_or(|expected| expected == resolution.package_manager_type)
-    });
+    let selected = if let Some(expected) = scope.package_manager() {
+        vp_pm_cli::resolve_environment_package_manager_spec(cwd, None, None)?
+            .filter(|resolution| resolution.package_manager_type == expected)
+    } else {
+        package_manager::resolve_current_spec(cwd).await?
+    };
     let selected_type = selected
         .as_ref()
         .map(|resolution| resolution.package_manager_type)

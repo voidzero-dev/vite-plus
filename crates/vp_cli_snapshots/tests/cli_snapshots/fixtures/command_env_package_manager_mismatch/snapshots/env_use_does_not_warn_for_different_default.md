@@ -12,6 +12,6 @@
 a different fallback manager does not warn
 
 ```
-export VP_PACKAGE_MANAGER=yarn@4.12.0
+export VP_YARN_VERSION=4.12.0
 Using yarn <version> (resolved from 4.12.0)
 ```

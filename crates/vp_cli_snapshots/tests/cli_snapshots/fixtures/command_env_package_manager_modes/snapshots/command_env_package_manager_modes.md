@@ -14,7 +14,7 @@ Selected commands and shims will now prefer system tools, falling back to manage
 Run `vp env on` to always use Vite+ managed tools.
 ```
 
-## `VP_PACKAGE_MANAGER=pnpm@10.18.0 VP_BYPASS=${PATH} vp env current pnpm --json`
+## `VP_PNPM_VERSION=10.18.0 VP_BYPASS=${PATH} vp env current pnpm --json`
 
 pnpm uses its individual mode
 
@@ -23,7 +23,7 @@ pnpm uses its individual mode
   "package_manager": {
     "name": "pnpm",
     "version": "<version>",
-    "source": "VP_PACKAGE_MANAGER",
+    "source": "VP_PNPM_VERSION",
     "bin_paths": {
       "pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm",
       "pnpx": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpx"
@@ -34,7 +34,7 @@ pnpm uses its individual mode
 }
 ```
 
-## `VP_PACKAGE_MANAGER=bun@1.2.3 vp env current bun --json`
+## `VP_BUN_VERSION=1.2.3 vp env current bun --json`
 
 bun keeps the shared managed mode
 
@@ -43,7 +43,7 @@ bun keeps the shared managed mode
   "package_manager": {
     "name": "bun",
     "version": "<version>",
-    "source": "VP_PACKAGE_MANAGER",
+    "source": "VP_BUN_VERSION",
     "bin_paths": {
       "bun": "<home>/.vite-plus/package_manager/bun/<version>/bun/bin/bun",
       "bunx": "<home>/.vite-plus/package_manager/bun/<version>/bun/bin/bunx"
@@ -68,7 +68,7 @@ Selected commands and shims will now use Vite+ managed tools.
 Run `vp env off` to prefer system tools instead.
 ```
 
-## `VP_PACKAGE_MANAGER=pnpm@10.18.0 vp env current pnpm --json`
+## `VP_PNPM_VERSION=10.18.0 vp env current pnpm --json`
 
 pnpm returns to the shared managed mode
 
@@ -77,7 +77,7 @@ pnpm returns to the shared managed mode
   "package_manager": {
     "name": "pnpm",
     "version": "<version>",
-    "source": "VP_PACKAGE_MANAGER",
+    "source": "VP_PNPM_VERSION",
     "bin_paths": {
       "pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm",
       "pnpx": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpx"

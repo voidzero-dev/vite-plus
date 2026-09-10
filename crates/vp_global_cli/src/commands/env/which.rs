@@ -151,7 +151,7 @@ async fn execute_package_manager_tool(
     let Some(expected_type) = PackageManagerType::from_tool(tool) else {
         return Ok(None);
     };
-    let resolution = package_manager::resolve_current_for(cwd, Some(expected_type)).await?;
+    let resolution = package_manager::resolve_shim_for(cwd, expected_type).await?;
     let (version, source) = match &resolution {
         Some(resolution) => (
             resolution.version.to_string(),
