@@ -13,6 +13,7 @@ import { type SourceOptions, type VitestV5Finding } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
 import {
   findVitestV5ConfigFiles,
+  findVitestV5MergedConfigFiles,
   migrateVitestV5Config,
   resolveVitestV5BrowserModes,
 } from '../vitest-v5/config.ts';
@@ -468,6 +469,7 @@ function scanAndRewriteFile(
   source: string,
   project: ProjectPlan,
   browserMode: boolean | undefined,
+  mergedConfig: boolean,
 ): { content: string; findings: VitestV5Finding[] } {
   const findings: VitestV5Finding[] = [];
   scanNode(file, source, findings);
@@ -504,7 +506,7 @@ function scanAndRewriteFile(
         findings.push(...review.findings.filter(({ code }) => pending.includes(code)));
       }
       if (project.configFiles.has(file)) {
-        const configResult = migrateVitestV5Config(file, content, project.options);
+        const configResult = migrateVitestV5Config(file, content, project.options, mergedConfig);
         content = configResult.content;
         findings.push(...configResult.findings);
       }
@@ -700,6 +702,7 @@ export function planVitestV5Migration(
     }
   }
   const allConfigs = findVitestV5ConfigFiles(allSources);
+  const mergedConfigs = findVitestV5MergedConfigFiles(allSources, allConfigs);
   const browserPossible = [...allSources.values()].some((source) => BROWSER_SIGNAL.test(source));
   const browserCliOverride = [...allSources].some(
     ([file, source]) =>
@@ -786,6 +789,7 @@ export function planVitestV5Migration(
         source,
         project,
         browserCliOverride ? undefined : browserModes.get(file),
+        mergedConfigs.has(file),
       );
       findings.push(...result.findings);
       if (source !== result.content) {
@@ -910,6 +914,10 @@ export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Fi
   const findings: VitestV5Finding[] = [];
   const state = structuredClone(plan.state);
   const projectConfigs = currentProjectConfigs(plan);
+  const configSources = new Map(
+    [...projectConfigs.values()].flat().map((file) => [file, fs.readFileSync(file, 'utf8')]),
+  );
+  const mergedConfigs = findVitestV5MergedConfigFiles(configSources, new Set(configSources.keys()));
   for (const project of plan.projects) {
     if (!project.active || !project.sourceVersion) {
       continue;
@@ -918,7 +926,12 @@ export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Fi
     for (const file of configs) {
       const before = fs.readFileSync(file, 'utf8');
       try {
-        const result = migrateVitestV5Config(file, before, project.options);
+        const result = migrateVitestV5Config(
+          file,
+          before,
+          project.options,
+          mergedConfigs.has(file),
+        );
         findings.push(...result.findings);
         if (
           !result.findings.some((finding) => finding.severity === 'block') &&

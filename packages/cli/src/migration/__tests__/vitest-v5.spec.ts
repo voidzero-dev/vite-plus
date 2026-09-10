@@ -203,6 +203,98 @@ export default defineConfig({ test: { projects: [
     expect(config(input, false).content).toBe(input);
   });
 
+  it.each([
+    `export default mergeConfig(
+      defineConfig({ test: { clearMocks: true } }),
+      defineConfig({ test: { environment: 'jsdom' } }),
+    );`,
+    `const base = defineConfig({ test: { clearMocks: true } });
+const overrides = defineConfig({ test: { environment: 'jsdom' } });
+export default mergeConfig(base, overrides);`,
+    `export default defineConfig(mergeConfig(
+      { test: { clearMocks: true } },
+      defineProject({ test: { environment: 'jsdom' } }),
+    ));`,
+  ])('does not insert defaults into merged config fragments: %s', (body) => {
+    const input = `import { defineConfig, defineProject, mergeConfig } from 'vitest/config';\n${body}`;
+    const result = config(input);
+    expect(result.content).toBe(input);
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({ code: 'merged-config-defaults', severity: 'review' }),
+    );
+  });
+
+  it('leaves defaults in imported merge fragments for review across migration runs', () => {
+    const base = `import { defineConfig } from 'vitest/config';
+export default defineConfig({ test: { clearMocks: true, browser: { locators: { exact: true } } } });`;
+    const overrides = `import { defineConfig } from 'vitest/config';
+export default defineConfig({ test: { browser: { enabled: true } } });`;
+    const root = project({
+      'vitest.config.ts': `import { mergeConfig } from 'vitest/config';
+import base from './base';
+import overrides from './overrides';
+export default mergeConfig(base, overrides);`,
+      'base.ts': base,
+      'overrides.ts': overrides,
+    });
+    const plan = planProject(root);
+    expect(plan.changes).toEqual([]);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({
+        file: path.join(root, 'overrides.ts'),
+        code: 'merged-config-defaults',
+      }),
+    );
+    applyVitestV5Migration(plan);
+    const findings = finishVitestV5Migration(plan);
+    expect(fs.readFileSync(path.join(root, 'base.ts'), 'utf8')).toBe(base);
+    expect(fs.readFileSync(path.join(root, 'overrides.ts'), 'utf8')).toBe(overrides);
+    expect(findings.some(({ code }) => code === 'merged-config-defaults')).toBe(true);
+    expect(planProject(root).changes).toEqual([]);
+  });
+
+  it.each(['true', 'false'])(
+    'preserves inherited locators.exact: %s without a child override',
+    (exact) => {
+      const result = config(`export default { test: {
+  browser: { enabled: true, locators: { exact: ${exact} } },
+  projects: [{ extends: true, test: { browser: { enabled: true } } }],
+} };`);
+      expect(result.content.match(/locators:/g)).toHaveLength(1);
+      expect(result.content).toContain(`locators: { exact: ${exact} }`);
+      expect(result.findings).toEqual([]);
+      expect(config(result.content).content).toBe(result.content);
+    },
+  );
+
+  it('adds locator defaults to an inheriting child when its parent has no browser options', () => {
+    const result = config(`export default { test: {
+  projects: [{ extends: true, test: { browser: { enabled: true } } }],
+} };`);
+    expect(result.content).toContain('locators: { exact: false }');
+    expect(result.findings).toEqual([]);
+  });
+
+  it('adds the locator default only to the parent browser config', () => {
+    const result = config(`export default { test: {
+  browser: { enabled: true },
+  projects: [{ extends: true, test: { browser: { enabled: true } } }],
+} };`);
+    expect(result.content.match(/locators:/g)).toHaveLength(1);
+    expect(result.content).toContain('locators: { exact: false }');
+  });
+
+  it('does not override dynamic inherited browser settings', () => {
+    const result = config(`export default { test: {
+  browser: sharedBrowser,
+  projects: [{ extends: true, test: { browser: { enabled: true } } }],
+} };`);
+    expect(result.content).not.toContain('exact: false');
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({ code: 'dynamic-project', severity: 'review' }),
+    );
+  });
+
   it('does not guess dynamic projects or spread options', () => {
     const result = config(`export default { test: { ...shared, projects: [() => project] } };`);
     expect(result.content).not.toContain('clearMocks');
@@ -402,6 +494,28 @@ test('x', () => assert(() => {}).toThrow(''));`;
     expect(result.content).toContain("assert(() => {}).toThrow('')");
     expect(result.content).toContain('toThrow(/^$/)');
   });
+
+  it.each(['@vitest/expect', 'vite-plus/test/plugins/expect'])(
+    'migrates assertions from %s in the same pass as their imports',
+    (specifier) => {
+      const result = source(`import { expect as check } from '${specifier}';
+import { test } from 'vitest';
+function helper(check) { check(() => {}).toThrow(''); }
+test('works', () => {
+  check(() => { throw new Error('boom'); }).not.toThrow('');
+  check(Promise.resolve(1)).resolves.toBe(1);
+  check.element(el).toHaveTextContent('partial');
+});`);
+      expect(result.content).toContain("import { expect as check } from 'vite-plus/test'");
+      expect(result.content).toContain("function helper(check) { check(() => {}).toThrow(''); }");
+      expect(result.content).toContain('.not.toThrow(/^$/)');
+      expect(result.content).toContain("test('works', async () =>");
+      expect(result.content).toContain('await check(Promise.resolve(1)).resolves.toBe(1)');
+      expect(result.content).toContain("await check.element(el).toMatchTextContent('partial')");
+      expect(result.findings).toEqual([]);
+      expect(source(result.content).content).toBe(result.content);
+    },
+  );
 
   it('only makes async-compatible callbacks async', () => {
     const result = source(`import { test, describe, expect } from 'vitest';
