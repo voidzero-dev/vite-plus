@@ -5,7 +5,13 @@ import { rewriteScripts } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
-import { hasTsconfigTypesToRewrite, rewriteAllImports, rewriteTsconfigTypes } from '../migrator.ts';
+import { detectConfigs } from '../detector.ts';
+import {
+  hasTsconfigTypesToRewrite,
+  mergeViteConfigFiles,
+  rewriteAllImports,
+  rewriteTsconfigTypes,
+} from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
@@ -76,6 +82,7 @@ export type CoreMigrationFinalizationResult = {
   scripts: boolean;
   tsconfigTypes: boolean;
   imports: boolean;
+  oxcConfigs: boolean;
 };
 
 function getCoreMigrationProjectPaths(workspaceInfo: CoreMigrationWorkspace): string[] {
@@ -140,6 +147,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
     scripts: false,
     tsconfigTypes: false,
     imports: false,
+    oxcConfigs: false,
   };
 
   if (pending.scripts) {
@@ -156,6 +164,28 @@ export function finalizeCoreMigrationForExistingVitePlus(
   }
 
   result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, true);
+
+  // A failed migration may have installed Vite+ before merging these files.
+  // Finish that core work without opting into unrelated first-time setup.
+  for (const projectPath of projectPaths) {
+    const configs = detectConfigs(projectPath);
+    const standaloneConfigs = [configs.oxlintConfig, configs.oxfmtConfig].filter(
+      (config) => config !== undefined,
+    );
+    if (standaloneConfigs.length === 0) {
+      continue;
+    }
+    mergeViteConfigFiles(
+      projectPath,
+      silent,
+      report,
+      workspaceInfo.packages,
+      workspaceInfo.rootDir,
+    );
+    if (standaloneConfigs.some((config) => !fs.existsSync(path.join(projectPath, config)))) {
+      result.oxcConfigs = true;
+    }
+  }
 
   return result;
 }

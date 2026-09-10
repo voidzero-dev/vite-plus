@@ -1,0 +1,15 @@
+[[case]]
+name = "migration_existing_oxc_configs"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "finish a leftover Oxfmt config even when Vite+ is already installed" },
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"],
+  { argv = ["vp", "fmt", "src/index.ts"], comment = "the migrated options must affect formatting" },
+  ["vpt", "print-file", "src/index.ts"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a completed migration should be a no-op on retry" },
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "stat-file", "AGENTS.md", "--assert-not", "file"],
+  ["vpt", "stat-file", ".vite-hooks", "--assert-not", "dir"],
+  ["vpt", "stat-file", ".vscode", "--assert-not", "dir"],
+]
