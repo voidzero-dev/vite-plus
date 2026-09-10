@@ -263,10 +263,6 @@ export function getStoredHooksDir(): string | null {
   return gitConfigGet(PREFERENCE_DIR_KEY, { local: true });
 }
 
-export function setStoredHooksDir(dir: string): { ok: boolean; error?: string } {
-  return gitConfigSet(PREFERENCE_DIR_KEY, dir);
-}
-
 function getStoredHooksPrefix(): string | null {
   const value = gitConfigGet(PREFERENCE_PREFIX_KEY, { local: true });
   if (value == null) {

@@ -666,89 +666,37 @@ crates/vp_global_cli/
 
 ### Shim Dispatch Flow
 
-1. Check `VP_BYPASS` environment variable → bypass to system tool (filters all listed directories from PATH)
-2. Check `VP_TOOL_RECURSION` → if set, use passthrough mode
-3. Check shim mode from config:
-   - If `system_first`: try system tool first, fallback to managed; appends own bin dir to `VP_BYPASS` before exec to prevent loops with multiple installations
-   - If `managed`: use vite-plus managed Node.js
-4. Resolve version (with mtime-based caching)
-5. Ensure Node.js is installed (download if needed)
-6. Locate tool binary in the installed Node.js
-7. Prepend real node bin dir to PATH for child processes
-8. Set `VP_TOOL_RECURSION=1` to prevent recursion
-9. Execute the tool (Unix: `execve`, Windows: spawn)
+1. Check `VP_PATH_INJECTED_TOOLS` for the invoked tool. If present, find its real binary in PATH, excluding Vite+ shims.
+2. Check `VP_BYPASS` and the configured managed/system-first mode.
+3. Resolve and install the requested runtime or package manager when needed.
+4. Prepare child PATH through the shared tool-path helper, recording each supplied tool and its aliases.
+5. Execute the real binary with both PATH and `VP_PATH_INJECTED_TOOLS`.
 
-### Shim Recursion Prevention
+### Injected Tool Tracking
 
-To prevent infinite loops when shims invoke other shims, vite-plus uses environment variable markers:
+`VP_PATH_INJECTED_TOOLS` is a comma-separated set such as `node,npm,npx,pnpm,pnpx`.
+It records tools whose real binary directories Vite+ has prepared in PATH, rather
+than whether any ancestor has run a shim. A tool missing from the set goes through
+normal resolution. A recorded tool uses PATH lookup with the existing self/shim
+exclusions, preventing recursive execution of Vite+ itself.
 
-**Environment Variable**: `VP_TOOL_RECURSION`
+The shared helper constructs PATH and the tool set together. Injection of another
+manager adds its tools without discarding the inherited set. Explicit
+`vp env exec --node` and `--package-manager` selections prepend the requested
+versions and update the child environment. Ordinary Unix shims, Windows
+trampolines, and `vp env exec` shim mode share the same dispatch behavior.
 
-**Mechanism:**
+Package-manager installations report the executables available in their bin
+directory; a system installation may lack an alias. Bundled npm follows the
+selected Node runtime, while an independently selected npm keeps its own bin
+directory ahead of the runtime's bundled npm.
+JS delegation retains the order of directories already on PATH. Explicit version
+selection promotes its selected directories instead; both use the shared helper's
+existing `PrependOptions` policy.
 
-1. When a shim executes the real binary, it sets `VP_TOOL_RECURSION=1`
-2. Subsequent shim invocations check this variable
-3. If set, shims use **passthrough mode** (skip version resolution, use current PATH)
-4. `vp env exec` explicitly **removes** this variable to force re-evaluation
-
-**Environment Variable**: `VP_BYPASS` (PATH-style list)
-
-**SystemFirst Loop Prevention:**
-
-When multiple vite-plus installations exist in PATH and `system_first` mode is active, each installation could find the other's shim as the "system tool", causing an infinite exec loop. To prevent this:
-
-1. In `system_first` mode, before exec'ing the found system tool, the current installation appends its own bin directory to `VP_BYPASS`
-2. The next installation sees `VP_BYPASS` is set and enters bypass mode via `find_system_tool()`
-3. `find_system_tool()` filters all directories listed in `VP_BYPASS` (plus its own bin dir) from PATH
-4. This ensures the search skips all known vite-plus bin directories and finds the real system binary (or errors cleanly)
-5. `VP_BYPASS` is preserved through `vp env exec` so loop protection remains active
-
-**Flow Diagram:**
-
-```
-User runs: node app.js
-    │
-    ▼
-Shim checks VP_TOOL_RECURSION
-    │
-    ├── Not set → Resolve version, set RECURSION=1, exec real node
-    │
-    └── Set → Passthrough mode (use current PATH)
-```
-
-**Code Example:**
-
-```rust
-const RECURSION_ENV_VAR: &str = "VP_TOOL_RECURSION";
-
-fn execute_shim() {
-    if env::var(RECURSION_ENV_VAR).is_ok() {
-        // Passthrough: context already evaluated
-        execute_with_current_path();
-    } else {
-        // First invocation: resolve version and set marker
-        let version = resolve_version();
-        let path = build_path_for_version(version);
-
-        env::set_var(RECURSION_ENV_VAR, "1");
-        execute_with_path(path);
-    }
-}
-
-fn execute_run_command() {
-    // Clear marker to force re-evaluation
-    env::remove_var(RECURSION_ENV_VAR);
-
-    let version = parse_version_from_args();
-    execute_with_version(version);
-}
-```
-
-**Why This Matters:**
-
-- Prevents infinite loops when Node scripts spawn other Node processes
-- Allows `vp env exec` to override versions mid-execution
-- Ensures consistent behavior in complex process trees
+`VP_BYPASS` remains a separate PATH-style list of Vite+ directories to exclude.
+It prevents loops between multiple installations in system-first mode and is
+preserved through `vp env exec`.
 
 ## Design Decisions
 
@@ -1966,7 +1914,9 @@ When `--node` is **not provided** and the first command is a shim tool:
 
 Both use the **exact same code path** as Unix symlinks (`shim::dispatch()`), ensuring identical behavior across platforms. On Windows, trampoline `.exe` shims set `VP_SHIM_TOOL` to enter shim dispatch mode.
 
-**Important**: The `VP_TOOL_RECURSION` environment variable is cleared before dispatch to ensure fresh version resolution, even when invoked from within a context where the variable is already set (e.g., when pnpm runs through the vite-plus shim).
+`VP_PATH_INJECTED_TOOLS` is preserved through shim dispatch. Marked tools use PATH passthrough only when a real executable remains available, excluding Vite+ symlinks and trampolines from any installation. If a child replaces PATH and removes that executable, normal tool resolution resumes. Bundled npm and npx can be recovered beside the selected Node executable, following Node symlinks to their installation.
+
+A direct `vp env exec` starts a fresh tool selection, honoring the target directory and environment overrides. Shim wrappers instead inherit the parent's selections. Choosing a system-first package manager preserves an already selected Node runtime and the existing PATH order.
 
 ### Explicit Version Mode Behavior
 
@@ -1975,7 +1925,7 @@ When `--node` **is provided**:
 1. **Version Resolution**: Specified versions are resolved to exact versions
 2. **Auto-Install**: If the version isn't installed, it's downloaded automatically
 3. **PATH Construction**: Constructs PATH with specified version's bin directory
-4. **Recursion Reset**: Clears `VP_TOOL_RECURSION` to force context re-evaluation
+4. **Tool Tracking**: Records the supplied tools in `VP_PATH_INJECTED_TOOLS`, together with the new PATH
 
 ### Examples
 
@@ -2163,7 +2113,7 @@ $ vp env --current --json
 | `VP_LOG`                 | Log level: debug, info, warn, error                                                             | `warn`         |
 | `VP_DEBUG_SHIM`          | Enable extra shim diagnostics                                                                   | unset          |
 | `VP_BYPASS`              | PATH-style list of bin dirs to skip when finding system tools; set `=1` to bypass shim entirely | unset          |
-| `VP_TOOL_RECURSION`      | **Internal**: Prevents shim recursion                                                           | unset          |
+| `VP_PATH_INJECTED_TOOLS` | **Internal**: Records tools with real binary directories injected into PATH                     | unset          |
 | `VP_ENV_USE_EVAL_ENABLE` | **Internal**: Set by shell wrappers to signal that `vp env use` output will be eval'd           | unset          |
 
 ## Unix-Specific Considerations
@@ -2326,7 +2276,7 @@ env-doctor/
 10. Implement `vp env unpin` as alias for `pin --unpin`
 11. Implement `vp env list` (local) and `vp env list-remote` (remote) to show versions
 12. Implement `vp env clean` to remove unused managed runtime and package-manager caches
-13. Implement recursion prevention (`VP_TOOL_RECURSION`)
+13. Implement injected-tool tracking (`VP_PATH_INJECTED_TOOLS`)
 14. Implement `vp env exec --node <version>` command
 
 ### Phase 2: Full Tool Support (P1)

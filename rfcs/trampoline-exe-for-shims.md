@@ -173,7 +173,7 @@ sequence:
 3. `SetEnvironmentVariableW` sets the directory layout. A single-root pointer
    sets `VP_HOME`. A split pointer removes `VP_HOME`. It sets `VP_DATA_DIR`,
    `VP_BIN_DIR`, and `VP_CACHE_DIR`. Tool shims also set `VP_SHIM_TOOL`. They
-   remove `VP_TOOL_RECURSION`.
+   preserve `VP_PATH_INJECTED_TOOLS` for tool-specific PATH reuse.
 4. The child command line starts with `"<DATA>\current\bin\vp.exe"`. The code
    appends the raw `GetCommandLineW` text after the program argument. It uses
    the MSVC `argv[0]` rule. Quotation marks start or stop quoted mode.
@@ -221,15 +221,15 @@ only KERNEL32.
 
 The sidecar controls the directory environment inherited by `vp.exe`:
 
-| Variable            | When                    | Trampoline action                                      |
-| ------------------- | ----------------------- | ------------------------------------------------------ |
-| `VP_HOME`           | Single-root layout      | Sets all Vite+ directories from the sidecar data root  |
-| `VP_HOME`           | Split layout            | Removes the value so it cannot override separate roots |
-| `VP_DATA_DIR`       | Split layout            | Sets the payload and state root                        |
-| `VP_BIN_DIR`        | Split layout            | Sets the directory that contains the shim              |
-| `VP_CACHE_DIR`      | Split layout            | Sets the cache root                                    |
-| `VP_SHIM_TOOL`      | Tool shims, except `vp` | Selects the named tool for shim dispatch               |
-| `VP_TOOL_RECURSION` | Tool shims              | Removes the value so nested shims resolve versions     |
+| Variable                 | When                    | Trampoline action                                      |
+| ------------------------ | ----------------------- | ------------------------------------------------------ |
+| `VP_HOME`                | Single-root layout      | Sets all Vite+ directories from the sidecar data root  |
+| `VP_HOME`                | Split layout            | Removes the value so it cannot override separate roots |
+| `VP_DATA_DIR`            | Split layout            | Sets the payload and state root                        |
+| `VP_BIN_DIR`             | Split layout            | Sets the directory that contains the shim              |
+| `VP_CACHE_DIR`           | Split layout            | Sets the cache root                                    |
+| `VP_SHIM_TOOL`           | Tool shims, except `vp` | Selects the named tool for shim dispatch               |
+| `VP_PATH_INJECTED_TOOLS` | Tool shims              | Preserves the tools already injected into PATH         |
 
 ### Ctrl+C Handling
 
@@ -252,7 +252,7 @@ The trampoline installs a console control handler that returns `TRUE` (1):
 Trampoline (node.exe + node.shim)
   → loads the recorded directory layout
   → sets VP_SHIM_TOOL=node and the directory variables
-  → removes VP_TOOL_RECURSION
+  → preserves VP_PATH_INJECTED_TOOLS
   → spawns <DATA>/current/bin/vp.exe with the original argument tail
     → detect_shim_tool() reads env var → "node"
     → dispatch("node", args)

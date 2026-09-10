@@ -1,0 +1,160 @@
+[[case]]
+name = "nested_pnpm_preserves_inherited_npm"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "22.18.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.5.0"], snapshot = false },
+  { argv = ["vp", "env", "on", "npm"], snapshot = false },
+  { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
+  { argv = ["npx", "--version"], snapshot = false },
+  { argv = ["pnpm", "--version"], cwd = "pnpm-child", snapshot = false },
+  { argv = ["npx", "--offline", "--call", "node assert-inherited-npm.cjs"], comment = "A child project can add its pinned pnpm without replacing the parent's Node or npm/npx" },
+]
+
+[[case]]
+name = "global_package_keeps_its_node_after_npx"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "--node", "22.18.0", "./runtime-probe"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "injected-runtime-probe"], comment = "Inherited bundled npm must not replace the global package's selected Node" },
+]
+
+[[case]]
+name = "global_package_keeps_independent_npm_pin"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.5.0"], snapshot = false },
+  { argv = ["vp", "env", "on", "npm"], snapshot = false },
+  { argv = ["vp", "install", "-g", "--node", "22.18.0", "./runtime-probe"], snapshot = false },
+  { argv = ["npx", "--version"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "injected-runtime-probe 10.5.0"], comment = "A separately pinned npm keeps precedence over the selected Node's bundled npm" },
+]
+
+[[case]]
+name = "system_npm_does_not_claim_missing_npx"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.5.0"], snapshot = false },
+  { argv = ["vp", "env", "on", "npm"], snapshot = false },
+  { argv = ["npm", "--version"], snapshot = false },
+  { argv = ["node", "setup-system-npm.cjs"], snapshot = false },
+  { argv = ["vp", "env", "off", "npm"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-npm${PATH_SEPARATOR}/usr/bin${PATH_SEPARATOR}/bin"]], comment = "An absent system alias resolves normally instead of entering injected-tool passthrough" },
+]
+
+[[case]]
+name = "js_delegation_preserves_explicit_npm"
+vp = "global"
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "js-cli", "node_modules/vite-plus"], snapshot = false },
+  { tty = false, argv = ["vp", "env", "exec", "--node", "22.18.0", "--npm", "10.5.0", "npm", "--version"], snapshot = false },
+  { tty = false, argv = ["vp", "env", "exec", "--node", "22.18.0", "--npm", "10.5.0", "vp", "create"], comment = "Entering the JS CLI must retain the explicitly selected npm ahead of bundled npm" },
+]
+
+[[case]]
+name = "inherited_marker_after_path_reset"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "exec", "--node", "22.18.0", "node", "assert-inherited-path.cjs", "reset"], comment = "A retained marker must allow normal resolution after a child removes the injected Node directory" },
+]
+
+[[case]]
+name = "inherited_marker_skips_other_trampoline"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "exec", "--node", "22.18.0", "node", "assert-inherited-path.cjs", "trampoline"], comment = "A trampoline from another installation must not be mistaken for the injected Node" },
+]
+
+[[case]]
+name = "env_exec_resolves_target_project"
+vp = "global"
+steps = [
+  { argv = ["node", "assert-env-exec-selection.cjs", "project"], comment = "Explicit env exec resolves the target directory instead of reusing the parent Node" },
+]
+
+[[case]]
+name = "env_exec_resolves_environment_override"
+vp = "global"
+steps = [
+  { argv = ["node", "assert-env-exec-selection.cjs", "environment"], comment = "Explicit env exec honors a new VP_NODE_VERSION override" },
+]
+
+[[case]]
+name = "env_exec_wrapper_inherits_parent_node"
+vp = "global"
+steps = [
+  { argv = ["node", "assert-env-exec-selection.cjs", "wrapper"], comment = "Legacy shim wrappers retain the Node selected by their parent" },
+]
+
+[[case]]
+name = "system_pnpm_inherits_global_package_node"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "--node", "22.18.0", "./runtime-probe"], snapshot = false },
+  { argv = ["node", "setup-system-pnpm.cjs"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "injected-pnpm-probe"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-pnpm${PATH_SEPARATOR}${PATH}"]], comment = "System-first pnpm inherits the global package's Node instead of reselecting the project's Node" },
+]
+
+[[case]]
+name = "system_pnpm_preserves_independent_npm_pin"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.5.0"], snapshot = false },
+  { argv = ["vp", "env", "on", "npm"], snapshot = false },
+  { argv = ["vp", "install", "-g", "--node", "22.18.0", "./runtime-probe"], snapshot = false },
+  { argv = ["node", "setup-system-pnpm.cjs"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "injected-pnpm-probe 10.5.0"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-pnpm${PATH_SEPARATOR}${PATH}"]], comment = "Reusing Node for system pnpm must also retain independent npm precedence" },
+]
+
+[[case]]
+name = "unix_shims_from_multiple_installations"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "exec", "--node", "22.18.0", "node", "assert-unix-shim-path.cjs", "multiple"], comment = "Unix shims pointing to different vp binaries must not execute one another" },
+]
+
+[[case]]
+name = "bundled_npm_after_partial_path_reset"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@10.19.0"], snapshot = false },
+  { argv = ["vp", "env", "on", "npm"], snapshot = false },
+  { argv = ["vp", "env", "exec", "--node", "22.18.0", "node", "assert-unix-shim-path.cjs", "partial"], comment = "A retained Node symlink provides the installation for restoring bundled npm and npx" },
+]
+
+[[case]]
+name = "bundled_npm_ignores_uninherited_system_runtime"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "on", "npm"], snapshot = false },
+  { argv = ["vp", "env", "exec", "--node", "20.18.0", "node", "assert-unix-shim-path.cjs", "system"], comment = "Uninherited npm/npx come from the selected Node, even with another runtime on PATH" },
+]
+
+[[case]]
+name = "bundled_npm_through_system_node_shim"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "20.18.0"], snapshot = false },
+  { argv = ["vp", "env", "exec", "--node", "22.18.0", "node", "assert-system-node-shim.cjs", "setup"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vp", "env", "on", "npm"], snapshot = false },
+  { argv = ["./system-shims/node", "assert-system-node-shim.cjs"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-shims${PATH_SEPARATOR}/usr/bin${PATH_SEPARATOR}/bin"]], comment = "Launch the external Node shim directly so npm/npx resolve through vp without inheriting VP_BYPASS" },
+  { argv = ["./system-shims/node", "assert-system-node-shim.cjs", "preload"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-shims${PATH_SEPARATOR}/usr/bin${PATH_SEPARATOR}/bin"]], comment = "Preload output cannot corrupt the runtime probe, and npm/npx and their Node children still execute the preload" },
+]
+
+[[case]]
+name = "explicit_npm_after_partial_path_reset"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "exec", "--node", "22.18.0", "--npm", "10.5.0", "node", "assert-unix-shim-path.cjs", "partial", "10.5.0"], comment = "An explicit npm selection still takes priority over bundled npm after a PATH reset" },
+]

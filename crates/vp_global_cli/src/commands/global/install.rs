@@ -15,7 +15,7 @@ use owo_colors::OwoColorize;
 use tokio::process::Command;
 use uuid::Uuid;
 use vp_js_runtime::NodeProvider;
-use vp_shared::{format_path_prepended, output};
+use vp_shared::{PrependOptions, ToolPathEnv, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 
 use crate::{
@@ -551,11 +551,13 @@ async fn install_one(
 
     // 2. Run npm install with prefix set to the final installation directory.
     //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
+    let mut env = ToolPathEnv::from_env();
+    env.prepend(node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
     let output = Command::new(npm_path.as_path())
         .args(["install", "-g", "--no-fund", &package_spec])
         .env("npm_config_prefix", install_dir.as_path())
         .env("npm_config_update_notifier", "false")
-        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .envs(env.into_envs())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)

@@ -18,7 +18,7 @@
 
 use std::{collections::HashMap, io::BufReader};
 
-use vp_shared::{PrependOptions, output, prepend_to_path_env};
+use vp_shared::{PrependOptions, output, prepend_tools_to_path_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{error::Error, js_executor::JsExecutor};
@@ -133,11 +133,11 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         runtime.get_bin_prefix()
     };
 
-    // Use dedupe_anywhere=true to check if node bin already exists anywhere in PATH
-    let options = PrependOptions { dedupe_anywhere: true };
-    if prepend_to_path_env(&node_bin_prefix, options) {
-        tracing::debug!("Set PATH to include {:?}", node_bin_prefix);
-    }
+    prepend_tools_to_path_env(
+        &node_bin_prefix,
+        &["node"],
+        PrependOptions { dedupe_anywhere: true },
+    )?;
     if let Some(package_manager) = env::package_manager::resolve_current_spec(project_path).await? {
         if config.package_manager_shim_mode_for(package_manager.package_manager_type)
             == env::config::ShimMode::SystemFirst
@@ -146,9 +146,8 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
             )
             && let Some(bin_dir) = system_path.parent()
         {
-            if prepend_to_path_env(bin_dir, PrependOptions { dedupe_anywhere: true }) {
-                tracing::debug!("Set PATH to include system package manager {:?}", bin_dir);
-            }
+            let tool = package_manager.package_manager_type.to_string();
+            prepend_tools_to_path_env(bin_dir, &[&tool], PrependOptions { dedupe_anywhere: true })?;
             return Ok(());
         }
     }
@@ -160,9 +159,11 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         )
         .await?;
         let bin_dir = install_dir.join("bin");
-        if prepend_to_path_env(&bin_dir, PrependOptions { dedupe_anywhere: true }) {
-            tracing::debug!("Set PATH to include {:?}", bin_dir);
-        }
+        prepend_tools_to_path_env(
+            &bin_dir,
+            package_manager.package_manager_type.bin_names(),
+            PrependOptions { dedupe_anywhere: true },
+        )?;
     }
 
     Ok(())

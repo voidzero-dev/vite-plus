@@ -163,21 +163,24 @@ impl VpDirs {
     /// executable.
     #[must_use]
     pub fn owns_windows_trampoline(&self, exe_path: &std::path::Path) -> bool {
-        if !exe_path.is_file() {
-            return false;
-        }
-        let Ok(bytes) = std::fs::read(exe_path.with_extension(SHIM_POINTER_EXTENSION)) else {
-            return false;
-        };
-        let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes.as_slice());
-        let Ok(text) = std::str::from_utf8(bytes) else {
-            return false;
-        };
-        let Some(data) = shim_pointer_data(text) else {
-            return false;
-        };
-        std::path::Path::new(data) == self.data.as_path()
+        windows_trampoline_data(exe_path).is_some_and(|data| data == self.data.as_path())
     }
+}
+
+/// Whether an executable has a Vite+ trampoline sidecar, from any installation.
+#[must_use]
+pub fn is_windows_trampoline(exe_path: &std::path::Path) -> bool {
+    windows_trampoline_data(exe_path).is_some()
+}
+
+fn windows_trampoline_data(exe_path: &std::path::Path) -> Option<std::path::PathBuf> {
+    if !exe_path.is_file() {
+        return None;
+    }
+    let bytes = std::fs::read(exe_path.with_extension(SHIM_POINTER_EXTENSION)).ok()?;
+    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes.as_slice());
+    let text = std::str::from_utf8(bytes).ok()?;
+    shim_pointer_data(text).map(std::path::PathBuf::from)
 }
 
 fn shim_pointer_data(text: &str) -> Option<&str> {
@@ -232,6 +235,7 @@ mod tests {
             std::fs::write(node.as_path(), b"trampoline-or-foreign").unwrap();
 
             assert!(!config.dirs.owns_windows_trampoline(node.as_path()));
+            assert!(!is_windows_trampoline(node.as_path()));
 
             std::fs::write(
                 node.as_path().with_extension(SHIM_POINTER_EXTENSION),
@@ -239,9 +243,19 @@ mod tests {
             )
             .unwrap();
             assert!(!config.dirs.owns_windows_trampoline(node.as_path()));
+            assert!(!is_windows_trampoline(node.as_path()));
+
+            std::fs::write(
+                node.as_path().with_extension(SHIM_POINTER_EXTENSION),
+                format!("\u{feff}{SHIM_POINTER_HEADER}\nlayout=single-root\ndata=other-install\n"),
+            )
+            .unwrap();
+            assert!(!config.dirs.owns_windows_trampoline(node.as_path()));
+            assert!(is_windows_trampoline(node.as_path()));
 
             config.dirs.write_shim_pointer("node").unwrap();
             assert!(config.dirs.owns_windows_trampoline(node.as_path()));
+            assert!(is_windows_trampoline(node.as_path()));
         });
     }
 
