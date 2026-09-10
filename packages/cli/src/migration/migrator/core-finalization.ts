@@ -8,6 +8,7 @@ import { rulesDir } from '../../utils/path.ts';
 import { detectConfigs } from '../detector.ts';
 import {
   hasTsconfigTypesToRewrite,
+  mergeTsdownConfigFile,
   mergeViteConfigFiles,
   rewriteAllImports,
   rewriteTsconfigTypes,
@@ -83,6 +84,7 @@ export type CoreMigrationFinalizationResult = {
   tsconfigTypes: boolean;
   imports: boolean;
   oxcConfigs: boolean;
+  tsdownConfig: boolean;
 };
 
 function getCoreMigrationProjectPaths(workspaceInfo: CoreMigrationWorkspace): string[] {
@@ -148,6 +150,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
     tsconfigTypes: false,
     imports: false,
     oxcConfigs: false,
+    tsdownConfig: false,
   };
 
   if (pending.scripts) {
@@ -164,6 +167,13 @@ export function finalizeCoreMigrationForExistingVitePlus(
   }
 
   result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, true);
+
+  // Partial migrations can already have a Vite+ dependency while leaving
+  // tsdown.config.* undiscoverable by vp pack. Finalize those configs on the
+  // existing-Vite+ path just as the fresh migration path does.
+  for (const projectPath of projectPaths) {
+    result.tsdownConfig = mergeTsdownConfigFile(projectPath, silent, report) || result.tsdownConfig;
+  }
 
   // A failed migration may have installed Vite+ before merging these files.
   // Finish that core work without opting into unrelated first-time setup.

@@ -174,11 +174,12 @@ export function mergeTsdownConfigFile(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
-): void {
+): boolean {
   const configs = detectConfigs(projectPath);
   if (!configs.tsdownConfig) {
-    return;
+    return false;
   }
+  const createdViteConfig = !configs.viteConfig;
   const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
 
   const fullViteConfigPath = path.join(projectPath, viteConfig);
@@ -187,11 +188,34 @@ export function mergeTsdownConfigFile(
   // For JSON files, merge content directly and delete the file
   if (configs.tsdownConfig.endsWith('.json')) {
     mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.tsdownConfig, 'pack', silent, report);
-    return;
+    return createdViteConfig || !fs.existsSync(fullTsdownConfigPath);
   }
 
   // For TS/JS files, import the config file
   const tsdownRelativePath = `./${configs.tsdownConfig}`;
+  // Do not prepend a second `pack` key when the config is already wired under
+  // a different local import name. If a pack config exists but does not import
+  // this tsdown config, leave both files untouched and keep the manual follow-up.
+  if (hasConfigKey(fullViteConfigPath, 'pack')) {
+    const viteConfigContent = fs.readFileSync(fullViteConfigPath, 'utf8');
+    const runtimeImportPath = tsdownRelativePath
+      .replace(/\.mts$/, '.mjs')
+      .replace(/\.cts$/, '.cjs')
+      .replace(/\.ts$/, '.js');
+    const importsTsdownConfig = [tsdownRelativePath, runtimeImportPath].some(
+      (importPath) =>
+        viteConfigContent.includes(`from '${importPath}'`) ||
+        viteConfigContent.includes(`from "${importPath}"`),
+    );
+    if (!importsTsdownConfig) {
+      infoMigration(
+        `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/guide/migrate#tsdown`,
+        report,
+      );
+    }
+    return false;
+  }
+
   const result = mergeTsdownConfig(fullViteConfigPath, tsdownRelativePath);
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
@@ -209,6 +233,7 @@ export function mergeTsdownConfigFile(
     `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/guide/migrate#tsdown`,
     report,
   );
+  return createdViteConfig || result.updated;
 }
 
 /**

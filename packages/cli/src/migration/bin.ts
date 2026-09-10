@@ -1115,7 +1115,8 @@ async function main() {
       coreMigrationResult.scripts ||
       coreMigrationResult.tsconfigTypes ||
       coreMigrationResult.imports ||
-      coreMigrationResult.oxcConfigs
+      coreMigrationResult.oxcConfigs ||
+      coreMigrationResult.tsdownConfig
     ) {
       didMigrate = true;
     }

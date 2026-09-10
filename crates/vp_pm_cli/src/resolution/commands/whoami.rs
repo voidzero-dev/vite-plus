@@ -99,6 +99,10 @@ mod tests {
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["whoami"]);
+        assert_eq!(
+            command.env.get("npm_config_update_notifier").map(String::as_str),
+            Some("false")
+        );
     }
 
     #[test]

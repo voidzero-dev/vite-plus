@@ -407,7 +407,7 @@ async fn main() -> ExitCode {
         // Shim mode - dispatch to the appropriate tool. stdout belongs to the
         // wrapped tool; route vp's own output to stderr.
         output::route_user_output_to_stderr();
-        let exit_code = shim::dispatch(&tool, &args[1..]).await;
+        let exit_code = shim::dispatch(&tool, &args[1..], vp_shared::ToolPathEnv::from_env()).await;
         return ExitCode::from(exit_code as u8);
     }
 

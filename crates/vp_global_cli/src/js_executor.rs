@@ -7,7 +7,7 @@ use std::process::{ExitStatus, Output};
 
 use tokio::process::Command;
 use vp_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project};
-use vp_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
+use vp_shared::{PrependOptions, ToolPathEnv, env_vars};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{
@@ -126,23 +126,17 @@ impl JsExecutor {
     fn create_js_command(
         runtime_binary: &AbsolutePath,
         runtime_bin_prefix: &AbsolutePath,
-    ) -> Command {
+    ) -> Result<Command, Error> {
         let mut cmd = Command::new(runtime_binary.as_path());
         if let Ok(bin_path) = Self::get_bin_path() {
             tracing::debug!("Set VP_CLI_BIN to {:?}", bin_path);
             cmd.env(env_vars::VP_CLI_BIN, bin_path.as_path());
         }
 
-        // Prepend runtime bin to PATH so child processes can find the JS runtime
-        let options = PrependOptions { dedupe_anywhere: true };
-        if let PrependResult::Prepended(new_path) =
-            format_path_with_prepend(runtime_bin_prefix.as_path(), options)
-        {
-            tracing::debug!("Set PATH to {:?}", new_path);
-            cmd.env("PATH", new_path);
-        }
-
-        cmd
+        let mut env = ToolPathEnv::from_env();
+        env.prepend(runtime_bin_prefix, &["node"], PrependOptions { dedupe_anywhere: true })?;
+        cmd.envs(env.into_envs());
+        Ok(cmd)
     }
 
     /// Get the CLI's package.json directory (parent of `scripts_dir`).
@@ -326,7 +320,7 @@ impl JsExecutor {
         let scripts_dir = self.get_scripts_dir()?;
         let entry_point = scripts_dir.join("bin.js");
 
-        let mut cmd = Self::create_js_command(&node_binary, &bin_prefix);
+        let mut cmd = Self::create_js_command(&node_binary, &bin_prefix)?;
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
         vp_command::sync_child_pwd(&mut cmd, project_path);
 
@@ -376,7 +370,7 @@ impl JsExecutor {
 
         tracing::debug!("Delegating to CLI via JS entry point: {:?} {:?}", entry_point, args);
 
-        let mut cmd = Self::create_js_command(node_binary, bin_prefix);
+        let mut cmd = Self::create_js_command(node_binary, bin_prefix)?;
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
         if let Some(raw_subcommand) = &self.raw_subcommand {
             cmd.env(vp_shared::env_vars::VP_RAW_SUBCOMMAND, raw_subcommand);
@@ -615,7 +609,7 @@ mod tests {
             )
         };
 
-        let cmd = JsExecutor::create_js_command(&runtime_binary, &runtime_bin_prefix);
+        let cmd = JsExecutor::create_js_command(&runtime_binary, &runtime_bin_prefix).unwrap();
 
         // The command should use the node binary directly
         assert_eq!(cmd.as_std().get_program(), OsStr::new(expected_program));

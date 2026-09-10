@@ -110,8 +110,8 @@ pub const VP_GLOBAL_CLI_JS_SCRIPTS_DIR: &str = "VP_GLOBAL_CLI_JS_SCRIPTS_DIR";
 /// Value is a `PATH`-style list of directories to bypass.
 pub const VP_BYPASS: &str = "VP_BYPASS";
 
-/// Recursion guard for `vp env exec` — prevents infinite shim loops.
-pub const VP_TOOL_RECURSION: &str = "VP_TOOL_RECURSION";
+/// Comma-separated tools whose real binary directories have been injected into PATH.
+pub const VP_PATH_INJECTED_TOOLS: &str = "VP_PATH_INJECTED_TOOLS";
 
 /// Set by shim dispatch to record the active Node.js version.
 pub const VP_ACTIVE_NODE: &str = "VP_ACTIVE_NODE";
