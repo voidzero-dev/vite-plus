@@ -1,0 +1,6 @@
+{
+  "name": "oxlint-optional-tool-example",
+  "optionalDependencies": {
+    "oxlint": "^1.79.0"
+  }
+}

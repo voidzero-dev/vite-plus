@@ -523,15 +523,6 @@ importers:
       '@ast-grep/napi':
         specifier: ^0.43.0
         version: 0.43.0
-      '@babel/generator':
-        specifier: ^7.28.5
-        version: 7.29.8
-      '@babel/parser':
-        specifier: ^7.28.5
-        version: 7.29.8
-      '@babel/types':
-        specifier: ^7.28.5
-        version: 7.29.8
       '@emnapi/core':
         specifier: 'catalog:'
         version: 2.0.0-alpha.4

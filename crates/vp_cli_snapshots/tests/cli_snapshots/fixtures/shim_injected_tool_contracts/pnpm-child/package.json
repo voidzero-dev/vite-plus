@@ -1,0 +1,5 @@
+{
+  "name": "pnpm-child",
+  "private": true,
+  "packageManager": "pnpm@10.19.0"
+}

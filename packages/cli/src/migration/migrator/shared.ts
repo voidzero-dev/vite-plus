@@ -82,10 +82,14 @@ export const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
   '@vitest/browser-webdriverio': 'webdriverio',
 };
 
+// Packages that include runtime peer as a dependency.
+const RUNTIME_PEER_INCLUDED_BY: Record<string, readonly string[]> = {
+  playwright: ['@playwright/test'],
+};
+
 // Lockstep sibling packages whose declared version a browser provider's runtime
 // framework peer should reuse (they publish together). Keyed by the peer name.
 export const PROVIDER_PEER_VERSION_SIBLINGS: Record<string, readonly string[]> = {
-  playwright: ['@playwright/test'],
   webdriverio: ['@wdio/cli', '@wdio/globals'],
 };
 
@@ -96,6 +100,17 @@ export function findDeclaredSpec(pkg: DependencyBag, name: string): string | und
     pkg.devDependencies?.[name] ??
     pkg.peerDependencies?.[name] ??
     pkg.optionalDependencies?.[name]
+  );
+}
+
+// A provider's runtime peer is available when declared directly or included by
+// another declared package.
+export function hasProviderPeerDependency(pkg: DependencyBag, runtimePeer: string): boolean {
+  return (
+    findDeclaredSpec(pkg, runtimePeer) !== undefined ||
+    (RUNTIME_PEER_INCLUDED_BY[runtimePeer] ?? []).some(
+      (packageName) => findDeclaredSpec(pkg, packageName) !== undefined,
+    )
   );
 }
 
@@ -320,4 +335,40 @@ export function readPackageJsonIfExists(packageJsonPath: string): DependencyBag 
 export function pnpmMajor(version: string | undefined): number | undefined {
   const coerced = version ? semver.coerce(version)?.version : undefined;
   return coerced ? semver.major(coerced) : undefined;
+}
+
+// Packages that own the Oxlint JS-plugin authoring API as a published contract.
+// Optional `@oxlint/plugins` is also a runtime contract for consumers of a
+// published integration. Optional `oxlint` keeps the existing tool policy.
+export const OXLINT_PLUGINS_PACKAGE = '@oxlint/plugins';
+
+export const OXLINT_PLUGIN_API_PACKAGES = ['oxlint', OXLINT_PLUGINS_PACKAGE] as const;
+
+export function packageOwnsOxlintApi(pkg: DependencyBag): boolean {
+  return (
+    pkg.optionalDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined ||
+    OXLINT_PLUGIN_API_PACKAGES.some(
+      (name) =>
+        pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
+    )
+  );
+}
+
+/**
+ * Capture plugin owners before manifest edits, so the import rewriter can
+ * preserve their upstream API imports after those edits.
+ */
+export function collectOxlintOwnerDirs(
+  rootDir: string,
+  packages?: readonly { path: string }[],
+): string[] {
+  const owners: string[] = [];
+  const candidates = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+  for (const dir of candidates) {
+    const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
+    if (pkg && packageOwnsOxlintApi(pkg)) {
+      owners.push(dir);
+    }
+  }
+  return owners;
 }

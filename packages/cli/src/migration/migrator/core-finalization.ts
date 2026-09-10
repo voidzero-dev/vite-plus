@@ -5,7 +5,12 @@ import { rewriteScripts } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
-import { hasTsconfigTypesToRewrite, rewriteAllImports, rewriteTsconfigTypes } from '../migrator.ts';
+import {
+  hasTsconfigTypesToRewrite,
+  mergeTsdownConfigFile,
+  rewriteAllImports,
+  rewriteTsconfigTypes,
+} from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
@@ -76,6 +81,7 @@ export type CoreMigrationFinalizationResult = {
   scripts: boolean;
   tsconfigTypes: boolean;
   imports: boolean;
+  tsdownConfig: boolean;
 };
 
 function getCoreMigrationProjectPaths(workspaceInfo: CoreMigrationWorkspace): string[] {
@@ -140,6 +146,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
     scripts: false,
     tsconfigTypes: false,
     imports: false,
+    tsdownConfig: false,
   };
 
   if (pending.scripts) {
@@ -156,6 +163,13 @@ export function finalizeCoreMigrationForExistingVitePlus(
   }
 
   result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, true);
+
+  // Partial migrations can already have a Vite+ dependency while leaving
+  // tsdown.config.* undiscoverable by vp pack. Finalize those configs on the
+  // existing-Vite+ path just as the fresh migration path does.
+  for (const projectPath of projectPaths) {
+    result.tsdownConfig = mergeTsdownConfigFile(projectPath, silent, report) || result.tsdownConfig;
+  }
 
   return result;
 }

@@ -7,7 +7,7 @@ use futures::{StreamExt, stream::FuturesUnordered};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use tar::Archive;
 use tokio::process::Command;
-use vp_shared::format_path_prepended;
+use vp_shared::{PrependOptions, ToolPathEnv};
 use vt_path::{AbsolutePathBuf, current_dir};
 
 use crate::{commands::env::config::resolve_version, error::Error};
@@ -60,9 +60,11 @@ async fn npm_view(
     package_spec: &str,
     field: &str,
 ) -> Result<Vec<u8>, Error> {
+    let mut env = ToolPathEnv::from_env();
+    env.prepend(node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
     let output = Command::new(npm_path.as_path())
         .args(["view", "-g", package_spec, field, "--json"])
-        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .envs(env.into_envs())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

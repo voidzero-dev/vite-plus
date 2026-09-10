@@ -133,10 +133,6 @@ mod portable {
 
         if tool_name != "vp" {
             cmd.env("VP_SHIM_TOOL", tool_name);
-            // A nested shim must resolve the version again.
-            // It must not use passthrough mode.
-            // This name must match vp_shared::env_vars::VP_TOOL_RECURSION.
-            cmd.env_remove("VP_TOOL_RECURSION");
         }
 
         // 4. Execute and propagate the exit code.

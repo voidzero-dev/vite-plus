@@ -632,10 +632,9 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
   });
 
-  it('pins the provider framework peer to a lockstep sibling instead of * (npmx.dev #27)', () => {
-    // `playwright` and `@playwright/test` release in lockstep, so a newly-added
-    // `playwright` peer should reuse the pinned @playwright/test version rather
-    // than a non-deterministic `*`.
+  it('does not add playwright when @playwright/test already provides it', () => {
+    // `@playwright/test` has a dependency on `playwright`,
+    // so adding a second direct dependency is redundant.
     const pkg = {
       devDependencies: {
         '@vitest/browser-playwright': '^4.0.0',
@@ -644,7 +643,7 @@ describe('rewritePackageJson', () => {
       },
     };
     rewritePackageJson(pkg, PackageManager.pnpm);
-    expect(pkg.devDependencies).toHaveProperty('playwright', '1.60.0');
+    expect(pkg.devDependencies).not.toHaveProperty('playwright');
   });
 
   it('injects a direct vite devDependency for an npm project that uses an opt-in browser provider', async () => {
@@ -3406,6 +3405,56 @@ describe('ensureVitePlusBootstrap', () => {
       catalog: Record<string, string>;
     };
     expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('does not add playwright on upgrade when @playwright/test already provides it', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'browser-app',
+        devDependencies: {
+          '@playwright/test': '1.60.0',
+          'vite-plus': 'catalog:',
+        },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      [
+        "import { defineConfig } from 'vite-plus';",
+        "import { playwright } from 'vite-plus/test/browser-playwright';",
+        'export default defineConfig({ test: { browser: { enabled: true, provider: playwright() } } });',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies).not.toHaveProperty('playwright');
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+    expect(pkg.devDependencies['@vitest/browser-playwright']).toBe('catalog:');
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
@@ -8747,6 +8796,7 @@ describe('existing Vite+ core migration finalization', () => {
       scripts: true,
       tsconfigTypes: true,
       imports: true,
+      tsdownConfig: false,
     });
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -8800,6 +8850,85 @@ describe('existing Vite+ core migration finalization', () => {
       scripts: Record<string, string>;
     };
     expect(appPkg.scripts.dev).toBe('vp dev');
+  });
+
+  it('makes a leftover tsdown config discoverable in an existing Vite+ project', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }, null, 2),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsdown.config.ts'),
+      `import { defineConfig } from 'tsdown';
+
+export default defineConfig({
+  entry: { index: 'src/index.ts', utils: 'src/utils.ts' },
+});
+`,
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true)).toEqual({
+      scripts: false,
+      tsconfigTypes: false,
+      imports: true,
+      tsdownConfig: true,
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      "import tsdownConfig from './tsdown.config.js';",
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      'pack: tsdownConfig',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'tsdown.config.ts'), 'utf8')).toContain(
+      "from 'vite-plus/pack'",
+    );
+
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true)).toEqual({
+      scripts: false,
+      tsconfigTypes: false,
+      imports: false,
+      tsdownConfig: false,
+    });
+  });
+
+  it('preserves a tsdown config already wired to pack under a different import name', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }, null, 2),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import packConfig from './tsdown.config.js';
+
+export default { pack: packConfig({}) };
+`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsdown.config.ts'),
+      `import { defineConfig } from 'tsdown';
+
+export default defineConfig({ entry: 'src/index.ts' });
+`,
+    );
+
+    const originalViteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
+    const report = createMigrationReport();
+    const result = finalizeCoreMigrationForExistingVitePlus(
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      true,
+      report,
+    );
+
+    expect(result).toEqual({
+      scripts: false,
+      tsconfigTypes: false,
+      imports: true,
+      tsdownConfig: false,
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(originalViteConfig);
+    expect(report.tsdownImportCount).toBe(0);
+    expect(report.manualSteps).toEqual([]);
   });
 });
 

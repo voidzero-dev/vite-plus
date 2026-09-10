@@ -3,7 +3,7 @@
 //! On Unix, uses execve to replace the current process.
 //! On Windows, spawns the process and waits for completion.
 
-use vp_shared::{exit_code_from_status, output};
+use vp_shared::{ToolPathEnv, exit_code_from_status, output};
 use vt_path::AbsolutePath;
 
 /// Keep the child's `PWD` consistent with the process cwd; the std-Command
@@ -23,9 +23,9 @@ fn sync_child_pwd(cmd: &mut std::process::Command) {
 ///
 /// Unlike `exec_tool()`, this does NOT replace the current process on Unix,
 /// allowing the caller to run code after the tool exits.
-pub fn spawn_tool(path: &AbsolutePath, args: &[String]) -> i32 {
+pub fn spawn_tool(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 {
     let mut cmd = std::process::Command::new(path.as_path());
-    cmd.args(args);
+    cmd.args(args).envs(env.into_envs());
     sync_child_pwd(&mut cmd);
     match cmd.status() {
         Ok(status) => exit_code_from_status(status),
@@ -39,25 +39,25 @@ pub fn spawn_tool(path: &AbsolutePath, args: &[String]) -> i32 {
 /// Execute a tool, replacing the current process on Unix.
 ///
 /// Returns an exit code on Windows or if exec fails on Unix.
-pub fn exec_tool(path: &AbsolutePath, args: &[String]) -> i32 {
+pub fn exec_tool(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 {
     #[cfg(unix)]
     {
-        exec_unix(path, args)
+        exec_unix(path, args, env)
     }
 
     #[cfg(windows)]
     {
-        exec_windows(path, args)
+        exec_windows(path, args, env)
     }
 }
 
 /// Unix: Use exec to replace the current process.
 #[cfg(unix)]
-fn exec_unix(path: &AbsolutePath, args: &[String]) -> i32 {
+fn exec_unix(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 {
     use std::os::unix::process::CommandExt;
 
     let mut cmd = std::process::Command::new(path.as_path());
-    cmd.args(args);
+    cmd.args(args).envs(env.into_envs());
     sync_child_pwd(&mut cmd);
 
     // exec replaces the current process - this only returns on error
@@ -68,6 +68,6 @@ fn exec_unix(path: &AbsolutePath, args: &[String]) -> i32 {
 
 /// Windows: Spawn the process and wait for completion.
 #[cfg(windows)]
-fn exec_windows(path: &AbsolutePath, args: &[String]) -> i32 {
-    spawn_tool(path, args)
+fn exec_windows(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 {
+    spawn_tool(path, args, env)
 }

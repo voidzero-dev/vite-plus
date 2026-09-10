@@ -117,6 +117,50 @@ describe('package.json exports map', () => {
   });
 });
 
+// Migrated plugins depend on these entry points resolving the upstream APIs.
+describe('Oxlint JS-plugin authoring entrypoints', () => {
+  it('re-exports the full @oxlint/plugins value surface', async () => {
+    const [lintPlugins, oxlintPlugins] = await Promise.all([
+      import('vite-plus/lint/plugins'),
+      import('@oxlint/plugins'),
+    ]);
+    const expected = namedValueExports(oxlintPlugins);
+    expect(expected.length, 'sanity: @oxlint/plugins should expose value exports').toBeGreaterThan(
+      0,
+    );
+    const missing = expected.filter(
+      (key) => !(key in lintPlugins) || (lintPlugins as Record<string, unknown>)[key] === undefined,
+    );
+    expect(missing, '@oxlint/plugins value exports missing from vite-plus/lint/plugins').toEqual(
+      [],
+    );
+  });
+
+  it('serves the authoring API to CommonJS too', () => {
+    // A `.cts` plugin, or a `.ts` one compiled with `module: commonjs`, emits
+    // its import as `require()`. `@oxlint/plugins` ships CJS, so the shim does
+    // too. `plugins-dev` instead exposes its ESM entry to both module systems.
+    const plugins = requireFromHere('vite-plus/lint/plugins') as Record<string, unknown>;
+    expect(plugins.defineRule).toBeTypeOf('function');
+    expect(plugins.definePlugin).toBeTypeOf('function');
+  });
+
+  it('exposes RuleTester from vite-plus/lint/plugins-dev', async () => {
+    const ruleTester = await import('vite-plus/lint/plugins-dev');
+    expect(ruleTester.RuleTester).toBeTypeOf('function');
+  });
+
+  it('serves the same RuleTester to CommonJS', async () => {
+    // Static imports in .cts files compile to require() after migration.
+    const ruleTester = requireFromHere('vite-plus/lint/plugins-dev') as Record<string, unknown>;
+    const upstream = requireFromHere('oxlint/plugins-dev') as Record<string, unknown>;
+    const esm = await import('vite-plus/lint/plugins-dev');
+    expect(ruleTester.RuleTester).toBeTypeOf('function');
+    expect(ruleTester.RuleTester).toBe(upstream.RuleTester);
+    expect(ruleTester.RuleTester).toBe(esm.RuleTester);
+  });
+});
+
 /**
  * Migration rewrites the `vitest/config` specifier to bare `vite-plus` (see the
  * Rust `import_rewriter.rs` rule and the `prefer-vite-plus-imports` oxlint rule
