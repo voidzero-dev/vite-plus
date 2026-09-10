@@ -1114,7 +1114,8 @@ async function main() {
     if (
       coreMigrationResult.scripts ||
       coreMigrationResult.tsconfigTypes ||
-      coreMigrationResult.imports
+      coreMigrationResult.imports ||
+      coreMigrationResult.tsdownConfig
     ) {
       didMigrate = true;
     }
