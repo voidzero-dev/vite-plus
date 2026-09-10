@@ -60,6 +60,10 @@ where
         command
             .env
             .insert("PATH".to_string(), vp_shared::format_path_prepended(manager.get_bin_prefix()));
+        if manager.client == PackageManagerType::Pnpm {
+            // Vite+ manages pnpm, so its self-update notification is not useful here.
+            command.env.insert("PNPM_CONFIG_UPDATE_NOTIFIER".to_string(), "false".to_string());
+        }
     }
 
     Ok(resolution)
@@ -76,7 +80,7 @@ fn parse_version(manager: &PackageManager) -> Result<Version, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resolution::ApproveBuildsArgs;
+    use crate::resolution::{ApproveBuildsArgs, InstallArgs};
 
     fn package_manager(client: PackageManagerType, version: &str) -> PackageManager {
         let workspace_root = vt_path::current_dir().unwrap();
@@ -121,5 +125,28 @@ mod tests {
                 ..
             } if version == "latest"
         ));
+    }
+
+    #[test]
+    fn only_pnpm_installs_disable_update_notifications() {
+        for (client, version, expected) in [
+            (PackageManagerType::Pnpm, "11.25.0", Some("false")),
+            (PackageManagerType::Pnpm, "12.3.4", Some("false")),
+            (PackageManagerType::Npm, "11.0.0", None),
+            (PackageManagerType::Yarn, "4.0.0", None),
+            (PackageManagerType::Bun, "1.0.0", None),
+        ] {
+            let manager = package_manager(client, version);
+            let resolution = resolve_for_manager(&manager, InstallArgs::default()).unwrap();
+            let CommandResolution::Run(command) = resolution.outcome else {
+                panic!("expected install command");
+            };
+
+            assert_eq!(
+                command.env.get("PNPM_CONFIG_UPDATE_NOTIFIER").map(String::as_str),
+                expected,
+                "{client}@{version}"
+            );
+        }
     }
 }
