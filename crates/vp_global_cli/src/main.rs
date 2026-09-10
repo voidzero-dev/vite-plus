@@ -19,6 +19,7 @@ mod commands;
 mod error;
 mod help;
 mod js_executor;
+mod self_setup;
 mod shim;
 mod upgrade_check;
 
@@ -364,6 +365,12 @@ fn dump_dirs_from_env_config() -> bool {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // Probe before tracing, directory resolution, or argument dispatch can emit output.
+    if env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK).is_some() {
+        println!("vite-plus-self-setup-v1");
+        return ExitCode::SUCCESS;
+    }
+
     #[cfg(windows)]
     if let Some(code) = commands::implode::maybe_run_deferred_delete_helper(std::env::args_os()) {
         return ExitCode::from(code);
@@ -374,8 +381,18 @@ async fn main() -> ExitCode {
     // Initialize tracing
     vp_shared::init_tracing();
 
+    // Internal directory queries are also used by the local installer before deployment.
     if dump_dirs_from_env_config() {
         return ExitCode::SUCCESS;
+    }
+
+    match self_setup::maybe_run().await {
+        Ok(Some(code)) => return code,
+        Ok(None) => {}
+        Err(error) => {
+            output::error(&error.to_string());
+            return ExitCode::FAILURE;
+        }
     }
 
     let mut args: Vec<String> = std::env::args().collect();
@@ -407,7 +424,7 @@ async fn main() -> ExitCode {
         // Shim mode - dispatch to the appropriate tool. stdout belongs to the
         // wrapped tool; route vp's own output to stderr.
         output::route_user_output_to_stderr();
-        let exit_code = shim::dispatch(&tool, &args[1..]).await;
+        let exit_code = shim::dispatch(&tool, &args[1..], vp_shared::ToolPathEnv::from_env()).await;
         return ExitCode::from(exit_code as u8);
     }
 

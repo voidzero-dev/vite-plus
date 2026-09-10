@@ -6,3 +6,14 @@ steps = [
   { argv = ["vpx", "--help"], comment = "should show vpx help message", continue-on-failure = true },
   { argv = ["vpx", "-s", "cowsay", "hello"], comment = "should run cowsay via dlx fallback", continue-on-failure = true },
 ]
+
+[[case]]
+name = "vpx_system_command_preserves_local_bin_path"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules/.bin"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/.bin/probe", "#!/bin/sh\necho local-probe\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "node_modules/.bin/probe"], snapshot = false },
+  { argv = ["vpx", "sh", "-c", "probe"], comment = "System commands launched through vpx can still spawn project-local binaries" },
+]

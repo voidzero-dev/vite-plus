@@ -153,6 +153,8 @@ jobs:
           }
           trap cleanup EXIT
           tar -xzf "vp-${{ matrix.settings.target }}.tar.gz" -C "${archive_dir}"
+          # Skip first-start setup because this build's preview packages are not published yet.
+          touch "${archive_dir}/.vp-setup-complete"
 
           node --input-type=module -e '
             const before = JSON.stringify({ devDependencies: { "vite-plus": "0.0.0" } }) + "\n";

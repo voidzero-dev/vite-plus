@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, process::Stdio, sync::Arc};
 use owo_colors::OwoColorize;
 use petgraph::prelude::DiGraphMap;
 use vp_error::Error;
+use vp_shared::{PrependOptions, ToolPathEnv};
 use vt::ExitStatus;
 use vt_path::AbsolutePathBuf;
 use vt_workspace::{PackageNodeIndex, package_graph::IndexedPackageGraph};
@@ -106,26 +107,24 @@ pub(super) async fn execute_exec_workspace(
     let use_caller_cwd = is_cwd_only;
 
     // Build base PATH: <pm_bin>:<workspace_root/node_modules/.bin>:<original_PATH>
-    let base_path_dirs: Vec<std::path::PathBuf> = {
-        let mut dirs = Vec::new();
-        // Include the package-manager bin directory. An unverified package
-        // manager stops the run. vp does not drop it from PATH in silence.
-        match vp_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
-            Ok(pm) => dirs.push(pm.get_bin_prefix().as_path().to_path_buf()),
-            Err(error) if error.is_integrity_failure() => return Err(error),
-            Err(error) => {
-                tracing::debug!(?error, "failed to resolve package manager for exec PATH setup");
-            }
+    let mut base_env = ToolPathEnv::from_env();
+    let ws_bin = workspace_root.path.join("node_modules").join(".bin");
+    if ws_bin.as_path().is_dir() {
+        base_env.prepend(&ws_bin, &[], PrependOptions::default())?;
+    }
+    // An unverified package manager stops the run; other resolution failures
+    // leave the inherited tools available.
+    match vp_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
+        Ok(pm) => {
+            base_env.prepend(pm.get_bin_prefix(), &pm.bin_names(), PrependOptions::default())?
         }
-        // Include workspace root's node_modules/.bin
-        let ws_bin = workspace_root.path.join("node_modules").join(".bin");
-        if ws_bin.as_path().is_dir() {
-            dirs.push(ws_bin.as_path().to_path_buf());
+        Err(error) if error.is_integrity_failure() => return Err(error),
+        Err(error) => {
+            tracing::debug!(?error, "failed to resolve package manager for exec PATH setup");
         }
-        dirs.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
-        dirs
-    };
-    let base_path = std::env::join_paths(&base_path_dirs).unwrap_or_default();
+    }
+    let [(_, base_path), (_, injected_tools)] = base_env.into_envs();
+    let base_path_dirs: Vec<_> = std::env::split_paths(&base_path).collect();
 
     let cmd_display = args.command.join(" ");
 
@@ -156,6 +155,7 @@ pub(super) async fn execute_exec_workspace(
                 exec_dir,
             )?;
             cmd.env("PATH", &path_env)
+                .env(vp_shared::env_vars::VP_PATH_INJECTED_TOOLS, &injected_tools)
                 .env("VP_PACKAGE_NAME", &pkg_name)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
@@ -247,7 +247,9 @@ pub(super) async fn execute_exec_workspace(
                 }
                 Err(e) => return Err(e),
             };
-            cmd.env("PATH", &path_env).env("VP_PACKAGE_NAME", pkg_name);
+            cmd.env("PATH", &path_env)
+                .env(vp_shared::env_vars::VP_PATH_INJECTED_TOOLS, &injected_tools)
+                .env("VP_PACKAGE_NAME", pkg_name);
 
             let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
             let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
