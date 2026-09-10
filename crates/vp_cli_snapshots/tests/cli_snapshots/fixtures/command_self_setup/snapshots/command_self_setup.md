@@ -17,9 +17,9 @@ vite-plus-self-setup-v1
 <home>/.vite-plus/current/bin/.vp-setup-complete: missing
 ```
 
-## `vp not-a-command`
+## `vp --help`
 
-An unmarked deployed binary consumes the invocation as setup, without parsing the command
+An unmarked deployed binary completes setup and executes the requested command
 
 
 ## `vpt stat-file $VP_HOME/current/bin/.vp-setup-complete --assert file`

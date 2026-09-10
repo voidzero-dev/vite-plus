@@ -387,8 +387,8 @@ async fn main() -> ExitCode {
     }
 
     match self_setup::maybe_run().await {
-        Ok(true) => return ExitCode::SUCCESS,
-        Ok(false) => {}
+        Ok(Some(code)) => return code,
+        Ok(None) => {}
         Err(error) => {
             output::error(&error.to_string());
             return ExitCode::FAILURE;

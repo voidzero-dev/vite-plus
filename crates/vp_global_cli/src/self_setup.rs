@@ -1,8 +1,8 @@
-//! First-start installation. A completed binary accepts commands; an unmarked one only sets up.
+//! First-start installation followed by command execution through the deployed binary.
 
 mod shell;
 
-use std::path::Path;
+use std::{path::Path, process::ExitCode};
 
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install};
@@ -14,7 +14,7 @@ use crate::{
     error::Error,
 };
 
-pub(crate) async fn maybe_run() -> Result<bool, Error> {
+pub(crate) async fn maybe_run() -> Result<Option<ExitCode>, Error> {
     let shell = std::env::var(env_vars::VP_SELF_SETUP_SHELL).ok();
     if let Some(shell) = shell.as_deref() {
         if !matches!(shell, "sh" | "powershell") {
@@ -32,17 +32,46 @@ pub(crate) async fn maybe_run() -> Result<bool, Error> {
     if bin.join(SELF_SETUP_MARKER).try_exists()? {
         if let Some(shell) = shell.as_deref() {
             print_shell_result(shell);
-            return Ok(true);
+            return Ok(Some(ExitCode::SUCCESS));
         }
-        return Ok(false);
+        return Ok(None);
     }
 
     vp_shared::validate_vp_dir_env().map_err(|error| Error::Other(error.to_string().into()))?;
-    run(&binary).await?;
+    // Setup diagnostics must not pollute the original command's machine-readable stdout.
+    output::route_user_output_to_stderr();
+    let installed_binary = run(&binary).await?;
     if let Some(shell) = shell.as_deref() {
         print_shell_result(shell);
+        return Ok(Some(ExitCode::SUCCESS));
     }
-    Ok(true)
+    let mut args = std::env::args_os();
+    let argv0 = args.next();
+    let shim_tool =
+        argv0.as_deref().and_then(|name| name.to_str()).and_then(crate::shim::detect_shim_tool);
+    if args.len() == 0 && shim_tool.is_none() && std::env::var_os("VP_COMPLETE").is_none() {
+        return Ok(Some(ExitCode::SUCCESS));
+    }
+    // Re-enter through the marked installation, inheriting cwd, environment and stdio.
+    let mut command = std::process::Command::new(installed_binary.as_path());
+    command.args(args);
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+
+        if let Some(argv0) = argv0 {
+            command.arg0(argv0);
+        }
+        Err(command.exec().into())
+    }
+    #[cfg(windows)]
+    {
+        if let Some(tool) = shim_tool {
+            command.env(env_vars::VP_SHIM_TOOL, tool);
+        }
+        let status = command.status()?;
+        Ok(Some(ExitCode::from(vp_shared::exit_code_from_status(status) as u8)))
+    }
 }
 
 // Only successful setup emits executable output; logs use stderr in this mode.
@@ -68,7 +97,7 @@ fn print_shell_result(shell: &str) {
 }
 
 /// Setup Vite+ for the first run
-async fn run(source: &Path) -> Result<(), Error> {
+async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
     let env = EnvConfig::get();
     let dirs = &env.dirs;
     let active_binary = dirs.data.join("current").join("bin").join(VP_BINARY_NAME);
@@ -231,7 +260,7 @@ async fn run(source: &Path) -> Result<(), Error> {
     // A failure above leaves the marker absent so a later launch can retry.
     tokio::fs::write(version_dir.join("bin").join(SELF_SETUP_MARKER), b"").await?;
     output::success("Vite+ setup complete.");
-    Ok(())
+    Ok(binary)
 }
 
 fn interactive() -> bool {
