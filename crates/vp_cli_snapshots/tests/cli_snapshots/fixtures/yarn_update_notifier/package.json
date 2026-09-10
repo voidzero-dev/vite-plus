@@ -1,0 +1,6 @@
+{
+  "name": "yarn-update-notifier",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "yarn@1.22.22"
+}
