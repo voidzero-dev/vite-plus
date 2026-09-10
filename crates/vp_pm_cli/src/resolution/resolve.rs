@@ -1,4 +1,5 @@
 use semver::Version;
+use vp_shared::{PrependOptions, ToolPathEnv};
 
 use crate::{
     Error, PackageManager, PackageManagerType,
@@ -57,9 +58,11 @@ where
     };
 
     if let CommandResolution::Run(command) = &mut resolution.outcome {
-        command
-            .env
-            .insert("PATH".to_string(), vp_shared::format_path_prepended(manager.get_bin_prefix()));
+        let mut env = ToolPathEnv::from_env();
+        env.prepend(manager.get_bin_prefix(), &manager.bin_names(), PrependOptions::default())?;
+        for (key, value) in env.into_envs() {
+            command.env.insert(key.to_string(), value.to_string_lossy().into_owned());
+        }
         match manager.client {
             PackageManagerType::Pnpm => {
                 // Vite+ manages pnpm, so its self-update notification is not useful here.
