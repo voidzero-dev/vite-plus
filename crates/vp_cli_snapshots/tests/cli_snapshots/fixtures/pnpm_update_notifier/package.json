@@ -1,0 +1,9 @@
+{
+  "name": "pnpm-update-notifier",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "postinstall": "node -e \"console.log('PNPM_CONFIG_UPDATE_NOTIFIER=' + process.env.PNPM_CONFIG_UPDATE_NOTIFIER)\""
+  }
+}

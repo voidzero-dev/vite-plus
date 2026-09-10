@@ -1,0 +1,13 @@
+{
+  "name": "oxlint-plugin-example",
+  "version": "1.0.0",
+  "scripts": {
+    "lint": "oxlint ."
+  },
+  "peerDependencies": {
+    "oxlint": "^1.0.0"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

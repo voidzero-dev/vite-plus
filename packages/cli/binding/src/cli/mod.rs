@@ -26,7 +26,7 @@ pub use types::{
 };
 use vp_error::Error;
 pub use vp_shared::init_tracing;
-use vp_shared::{PrependOptions, env_vars, prepend_to_path_env};
+use vp_shared::{PrependOptions, env_vars, prepend_tools_to_path_env};
 use vt::{ExitStatus, Session, SessionConfig};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
@@ -269,7 +269,7 @@ async fn execute_vite_task_command(
     match vp_pm_cli::PackageManager::builder(&cwd).build().await {
         Ok(pm) => {
             let bin_prefix = pm.get_bin_prefix();
-            let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
+            prepend_tools_to_path_env(&bin_prefix, &pm.bin_names(), PrependOptions::default())?;
         }
         Err(error) if error.is_integrity_failure() => return Err(error),
         Err(error) => {

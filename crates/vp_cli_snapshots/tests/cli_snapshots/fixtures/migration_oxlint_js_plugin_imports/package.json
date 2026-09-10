@@ -1,0 +1,11 @@
+{
+  "name": "migration-oxlint-js-plugin-imports",
+  "scripts": {
+    "lint": "oxlint ."
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "^1.0.0",
+    "oxlint": "^1.0.0",
+    "vite": "^7.0.0"
+  }
+}

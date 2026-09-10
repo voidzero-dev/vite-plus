@@ -1,0 +1,37 @@
+[[case]]
+name = "lint_oxlint_plugin_api"
+vp = "local"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = [
+    "vp",
+    "lint",
+    "src/uses-foo.ts",
+  ], comment = "the local JS plugin imports its API from vite-plus/lint/plugins. It declares no @oxlint/plugins dependency. A reported diagnostic therefore proves the export resolved and loaded", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "lint",
+    "src/legacy-imports.ts",
+  ], comment = "prefer-vite-plus-imports reports the three legacy authoring specifiers", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "lint",
+    "src/config-surface.ts",
+  ], comment = "oxlint still owns defineConfig and OxlintOverride, so these are clean", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "lint",
+    "--fix",
+    "src/legacy-imports.ts",
+  ], comment = "the autofix matches what vp migrate rewrites", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "src/legacy-imports.ts",
+  ], continue-on-failure = true },
+  { argv = [
+    "vp",
+    "lint",
+    "src/legacy-imports.ts",
+  ], comment = "confirm the rewritten file is clean", continue-on-failure = true },
+]

@@ -1,0 +1,17 @@
+[[case]]
+name = "migration_oxlint_built_plugin"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["vpt", "mkdir", "dist"], snapshot = false },
+  { argv = ["vpt", "cp", "plugin.cjs", "dist/plugin.cjs"], snapshot = false },
+  { argv = ["vpt", "rm", "plugin.cjs"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vpt", "print-file", "package.json"], comment = "The ignored build artifact still needs a direct @oxlint/plugins dependency." },
+  { argv = ["vpt", "print-file", "dist/plugin.cjs"], comment = "Migration does not rewrite or rebuild the ignored CommonJS plugin." },
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "lint", "src/input.js"], comment = "After a strict pnpm reinstall, the built plugin loads and reports its rule." },
+]
