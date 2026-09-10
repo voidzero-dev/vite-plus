@@ -148,6 +148,70 @@ export function findVitestV5ConfigFiles(sources: ReadonlyMap<string, string>): S
   return files;
 }
 
+function hasConfigMerge(editor: SourceEditor): boolean {
+  let found = false;
+  traverse(editor.ast, {
+    CallExpression(p) {
+      if (importedName(p, p.node.callee, CONFIG_SOURCES) === 'mergeConfig') {
+        found = true;
+      }
+    },
+  });
+  return found;
+}
+
+/** Defaults on one merge fragment can override explicit settings in another.
+ * Include local imported configs so the preflight and finalization agree. */
+export function findVitestV5MergedConfigFiles(
+  sources: ReadonlyMap<string, string>,
+  configFiles: ReadonlySet<string>,
+): Set<string> {
+  const merged = new Set<string>();
+  const imports = new Map<string, string[]>();
+  const extensions = ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs', '.tsx', '.jsx'];
+  for (const file of configFiles) {
+    try {
+      const editor = new SourceEditor(file, sources.get(file)!);
+      if (hasConfigMerge(editor)) {
+        merged.add(file);
+      }
+      const dependencies: string[] = [];
+      for (const node of editor.ast.program.body) {
+        if (
+          node.type !== 'ImportDeclaration' &&
+          node.type !== 'ExportNamedDeclaration' &&
+          node.type !== 'ExportAllDeclaration'
+        ) {
+          continue;
+        }
+        const reference = node.source?.value;
+        if (!reference?.startsWith('.')) {
+          continue;
+        }
+        const target = path.resolve(path.dirname(file), reference);
+        const dependency = [
+          target,
+          target.replace(/\.([cm]?)js$/, '.$1ts'),
+          ...extensions.map((extension) => `${target}${extension}`),
+          ...extensions.map((extension) => path.join(target, `index${extension}`)),
+        ].find((candidate) => configFiles.has(candidate));
+        if (dependency) {
+          dependencies.push(dependency);
+        }
+      }
+      imports.set(file, dependencies);
+    } catch {
+      // The normal config pass reports unsupported syntax.
+    }
+  }
+  for (const file of merged) {
+    for (const dependency of imports.get(file) ?? []) {
+      merged.add(dependency);
+    }
+  }
+  return merged;
+}
+
 interface BrowserTestScope {
   root?: string;
   include?: string[];
@@ -373,9 +437,23 @@ export function resolveVitestV5BrowserModes(
   );
 }
 
-export function migrateVitestV5Config(file: string, source: string, options: SourceOptions) {
+export function migrateVitestV5Config(
+  file: string,
+  source: string,
+  options: SourceOptions,
+  mergedConfig = false,
+) {
   const editor = new SourceEditor(file, source);
   const visited = new Set<t.ObjectExpression>();
+  const merged = mergedConfig || hasConfigMerge(editor);
+  const preserveDefaults = options.preserveV4 && !merged;
+  if (merged && (options.preserveV4 || options.reviewV4)) {
+    editor.report(
+      undefined,
+      'merged-config-defaults',
+      'Review the effective merged config before adding v4 defaults for clearMocks, browser locators, fake timers, reporters, and projects. Defaults were not added to config fragments because they can override explicit settings in another fragment.',
+    );
+  }
 
   function nested(
     object: t.ObjectExpression,
@@ -442,7 +520,7 @@ export function migrateVitestV5Config(file: string, source: string, options: Sou
           }
         }
       }
-      if (!options.preserveV4 || !['json', 'junit'].includes(name.value)) {
+      if (!preserveDefaults || !['json', 'junit'].includes(name.value)) {
         continue;
       }
       if (output && (!staticObject(output.value) || objectProperty(output.value, name.value))) {
@@ -475,14 +553,21 @@ export function migrateVitestV5Config(file: string, source: string, options: Sou
     }
   }
 
-  function testOptions(test: t.ObjectExpression, inherits: boolean) {
-    if (options.preserveV4 && !inherits) {
+  function testOptions(
+    test: t.ObjectExpression,
+    inherits: boolean,
+    parentTest?: t.ObjectExpression,
+  ) {
+    if (preserveDefaults && !inherits) {
       editor.add(test, 'clearMocks', 'false');
     }
     const browser = objectProperty(test, 'browser');
     if (browser && staticObject(browser.value)) {
       const value = browser.value;
-      if (options.preserveV4) {
+      // An inherited browser config already receives its defaults at the parent.
+      // Do not replace its explicit or dynamic locator setting in the child.
+      const inheritsBrowser = inherits && parentTest && objectProperty(parentTest, 'browser');
+      if (preserveDefaults && !inheritsBrowser) {
         nested(value, 'locators', 'exact: false', (locators) =>
           editor.add(locators, 'exact', 'false'),
         );
@@ -526,7 +611,7 @@ export function migrateVitestV5Config(file: string, source: string, options: Sou
       );
     }
 
-    if (options.preserveV4 && options.temporalPolyfill) {
+    if (preserveDefaults && options.temporalPolyfill) {
       nested(test, 'fakeTimers', "toNotFake: ['Temporal']", (timers) =>
         editor.add(timers, 'toNotFake', "['Temporal']"),
       );
@@ -545,7 +630,7 @@ export function migrateVitestV5Config(file: string, source: string, options: Sou
       }
       const thresholds = objectProperty(coverage.value, 'thresholds');
       if (
-        options.preserveV4 &&
+        preserveDefaults &&
         thresholds &&
         staticObject(thresholds.value) &&
         isTrue(objectProperty(thresholds.value, 'perFile')?.value)
@@ -614,7 +699,7 @@ export function migrateVitestV5Config(file: string, source: string, options: Sou
       return;
     }
     const hasInline = projects.value.elements.some((item) => item && item.type !== 'StringLiteral');
-    if (hasInline && options.preserveV4) {
+    if (hasInline && preserveDefaults) {
       editor.add(test, 'sharedViteServer', 'false');
     }
     for (const project of projects.value.elements) {
@@ -630,21 +715,21 @@ export function migrateVitestV5Config(file: string, source: string, options: Sou
         continue;
       }
       const extendsValue = objectProperty(project, 'extends');
-      if (options.preserveV4) {
+      if (preserveDefaults) {
         editor.add(project, 'extends', 'false');
       }
-      config(project, isTrue(extendsValue?.value));
+      config(project, isTrue(extendsValue?.value), test);
     }
   }
 
-  function config(object: t.ObjectExpression, inherits = false) {
+  function config(object: t.ObjectExpression, inherits = false, parentTest?: t.ObjectExpression) {
     if (visited.has(object)) {
       return;
     }
     visited.add(object);
     const test = objectProperty(object, 'test');
     if (!test) {
-      if (options.preserveV4 && !inherits) {
+      if (preserveDefaults && !inherits) {
         editor.add(
           object,
           'test',
@@ -652,7 +737,7 @@ export function migrateVitestV5Config(file: string, source: string, options: Sou
         );
       }
     } else if (staticObject(test.value)) {
-      testOptions(test.value, inherits);
+      testOptions(test.value, inherits, parentTest);
     } else {
       editor.report(
         test,
