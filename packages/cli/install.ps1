@@ -38,6 +38,10 @@ $PrVersion = $env:VP_PR_VERSION
 # pulls a coherent, clearly-defined test build.
 $BridgeDownloadBase = "https://registry-bridge.viteplus.dev/voidzero-dev/vite-plus"
 $BridgeRegistry = "https://registry-bridge.viteplus.dev/"
+$SupportedProvenancePredicateTypes = @(
+    "https://slsa.dev/provenance/v1",
+    "https://slsa.dev/provenance/v0.2"
+)
 
 function Write-Info {
     param([string]$Message)
@@ -618,6 +622,72 @@ function Get-VersionFromMetadata {
     return $metadata.version
 }
 
+function Get-PlatformPackageMetadata {
+    param(
+        [string]$PackageName,
+        [string]$Version
+    )
+
+    $encodedPackageName = [System.Uri]::EscapeDataString($PackageName)
+    $metadataUrl = "$NpmRegistry/$encodedPackageName/$Version"
+    try {
+        $metadata = Invoke-RestMethod -Uri $metadataUrl -Headers @{ Accept = "application/json" }
+    } catch {
+        if (Test-IsInstallStopException $_) { throw }
+        $errorMsg = $_.ErrorDetails.Message
+        if ($errorMsg) {
+            try {
+                $errorJson = $errorMsg | ConvertFrom-Json
+                if ($errorJson.error) {
+                    Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $($errorJson.error)`n  URL: $metadataUrl"
+                }
+            } catch {
+                if (Test-IsInstallStopException $_) { throw }
+                # JSON parsing failed, fall through to the generic network error.
+            }
+        }
+        Write-Error-Exit "Failed to fetch CLI package metadata from: $metadataUrl`nError: $_"
+    }
+
+    # Some custom registries return JSON using a non-JSON content type. Match
+    # Get-PackageMetadata by parsing that raw string before inspecting fields.
+    if ($metadata -is [string]) {
+        try {
+            $metadata = $metadata | ConvertFrom-Json
+        } catch {
+            if (Test-IsInstallStopException $_) { throw }
+            Write-Error-Exit "Failed to parse CLI package metadata '${PackageName}@${Version}'`n  URL: $metadataUrl"
+        }
+    }
+    if ($metadata.error) {
+        Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $($metadata.error)`n  URL: $metadataUrl"
+    }
+
+    return $metadata
+}
+
+function Get-VerifiedPlatformTarballUrl {
+    param(
+        [object]$Metadata,
+        [string]$PackageName,
+        [string]$Version
+    )
+
+    # Registry signatures and trusted-publisher labels are not substitutes for
+    # npm provenance. Check the typed object path so package-defined top-level
+    # fields cannot satisfy the gate, and deny unknown predicates before download.
+    $predicateType = $Metadata.dist.attestations.provenance.predicateType
+    if (-not $predicateType -or $SupportedProvenancePredicateTypes -notcontains $predicateType) {
+        Write-Error-Exit "Refusing to install ${PackageName}@${Version}: the package does not contain supported npm provenance metadata. Vite+ only installs release binaries published with npm provenance."
+    }
+
+    $tarballUrl = $Metadata.dist.tarball
+    if (-not $tarballUrl) {
+        Write-Error-Exit "CLI package metadata for ${PackageName}@${Version} does not include dist.tarball"
+    }
+    return [string]$tarballUrl
+}
+
 function Get-PlatformSuffix {
     param([string]$Platform)
     # Windows needs -msvc suffix, other platforms map directly
@@ -963,7 +1033,8 @@ function Main {
             $platformUrl = "$BridgeDownloadBase/@voidzero-dev/vite-plus-cli-$platformSuffix@$PrVersion"
         } else {
             $packageName = "@voidzero-dev/vite-plus-cli-$platformSuffix"
-            $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$platformSuffix-$ViteVersion.tgz"
+            $platformMetadata = Get-PlatformPackageMetadata -PackageName $packageName -Version $ViteVersion
+            $platformUrl = Get-VerifiedPlatformTarballUrl -Metadata $platformMetadata -PackageName $packageName -Version $ViteVersion
         }
 
         $platformTempFile = New-TemporaryFile
