@@ -10,7 +10,7 @@
 ## `vpt chmod +x $VP_HOME/package_manager/npm/10.9.4/npm/bin/npm`
 
 
-## `vp env current pm --json`
+## `vp env current npm --json`
 
 current reports the package-manager session file path
 
@@ -19,8 +19,8 @@ current reports the package-manager session file path
   "package_manager": {
     "name": "npm",
     "version": "<version>",
-    "source": ".session-package-manager",
-    "source_path": "<home>/.vite-plus/.session-package-manager",
+    "source": ".session-npm-version",
+    "source_path": "<home>/.vite-plus/.session-npm-version",
     "bin_paths": {
       "npm": "<home>/.vite-plus/package_manager/npm/<version>/npm/bin/npm",
       "npx": "<home>/.vite-plus/package_manager/npm/<version>/npm/bin/npx"
@@ -40,5 +40,5 @@ VITE+ - The Unified Toolchain for the Web
 
 <home>/.vite-plus/package_manager/npm/<version>/npm/bin/npm
   Package:    npm@10.9.4
-  Source:     <home>/.vite-plus/.session-package-manager
+  Source:     <home>/.vite-plus/.session-npm-version
 ```

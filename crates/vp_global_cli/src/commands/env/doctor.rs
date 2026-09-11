@@ -323,10 +323,12 @@ async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePat
 }
 
 async fn check_package_manager_session_override() {
-    let environment = vp_shared::EnvConfig::get().package_manager.clone();
-    let session = config::read_session_package_manager().await;
-    if let Some(value) = environment.or(session) {
-        print_check(" ", "PM session", &value);
+    for kind in package_manager::ALL_PACKAGE_MANAGERS {
+        let environment = package_manager::environment_version(kind);
+        let session = config::read_session_package_manager(kind).await;
+        if let Some(value) = environment.or(session) {
+            print_check(" ", "PM session", &format!("{kind}@{value}"));
+        }
     }
 }
 
@@ -335,25 +337,28 @@ async fn check_package_manager_resolution(
     scope: EnvScope,
     config: &config::Config,
 ) -> bool {
-    let selected = match package_manager::resolve_current_spec(cwd).await {
-        Ok(selected) => selected.filter(|resolution| {
-            scope
-                .package_manager()
-                .is_none_or(|expected| expected == resolution.package_manager_type)
-        }),
-        Err(error) => {
-            print_check(&output::CROSS.red().to_string(), "Package manager", &error.to_string());
-            return false;
+    let selected_type = if let Some(kind) = scope.package_manager() {
+        Some(kind)
+    } else {
+        match package_manager::resolve_current_spec(cwd).await {
+            Ok(selected) => selected.map(|resolution| resolution.package_manager_type),
+            Err(error) => {
+                print_check(
+                    &output::CROSS.red().to_string(),
+                    "Package manager",
+                    &error.to_string(),
+                );
+                return false;
+            }
         }
     };
-    let Some(selected) = selected else {
+    let Some(selected_type) = selected_type else {
         print_check(" ", "Package manager", "not selected");
         return true;
     };
 
-    if config.package_manager_shim_mode_for(selected.package_manager_type) == ShimMode::SystemFirst
-        && let Some(system_binary) =
-            shim::find_system_tool(&selected.package_manager_type.to_string())
+    if config.package_manager_shim_mode_for(selected_type) == ShimMode::SystemFirst
+        && let Some(system_binary) = shim::find_system_tool(&selected_type.to_string())
     {
         let Some(version) = try_get_tool_version(&system_binary).await else {
             print_check(" ", "Source", "system PATH");
@@ -370,7 +375,7 @@ async fn check_package_manager_resolution(
         print_check(
             " ",
             "Version",
-            &format!("{}@{version}", selected.package_manager_type).bright_green().to_string(),
+            &format!("{selected_type}@{version}").bright_green().to_string(),
         );
         print_check(
             &output::CHECK.green().to_string(),
@@ -380,7 +385,11 @@ async fn check_package_manager_resolution(
         return true;
     }
 
-    match package_manager::resolve_current_for(cwd, scope.package_manager()).await {
+    let resolution = match scope.package_manager() {
+        Some(kind) => package_manager::resolve_shim_for(cwd, kind).await,
+        None => package_manager::resolve_current(cwd).await,
+    };
+    match resolution {
         Ok(Some(resolution)) => {
             print_check(" ", "Source", &resolution.source);
             print_check(

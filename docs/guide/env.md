@@ -47,16 +47,36 @@ This setting also disables pnpm's automatic management of other declared runtime
 Package-manager selection uses this priority:
 
 1. Explicit command override
-2. `VP_PACKAGE_MANAGER` or the shell-session override
+2. `VP_PACKAGE_MANAGER`
 3. Top-level `packageManager`
 4. `devEngines.packageManager`
 5. Lockfile or manager-specific configuration
 6. The named package manager's global default version
 7. The named shim's latest release
 
-`VP_PACKAGE_MANAGER` selects the manager and version for commands such as `vp install`. Direct package-manager shims ignore this variable and continue to resolve their versions from the session file, project configuration, and family default.
+`VP_PACKAGE_MANAGER` selects the manager and version for commands such as `vp install`. Direct package-manager shims ignore this variable and use independent version overrides:
 
-A project selection controls only its named shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Alias pairs are `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The resolved version is cached for one hour and an expired cache remains available when the registry cannot be reached. The directly invoked npm shim keeps its Node-bundled fallback, while an explicit `vp env ... npm` family scope uses standalone npm's latest release.
+| Variable          | Shims             |
+| ----------------- | ----------------- |
+| `VP_NPM_VERSION`  | `npm`, `npx`      |
+| `VP_PNPM_VERSION` | `pnpm`, `pnpx`    |
+| `VP_YARN_VERSION` | `yarn`, `yarnpkg` |
+| `VP_BUN_VERSION`  | `bun`, `bunx`     |
+
+These variables accept a version or range, such as `10.18.0`, `10`, or `latest`, and override the matching shim's project and default versions. They do not change the manager or version selected by `vp install`.
+
+`vp env use pnpm@10.20.0` sets `VP_PNPM_VERSION` for the current shell, just as `vp env use node@22` sets `VP_NODE_VERSION`. Each package manager has its own override, so switching Yarn does not clear a pnpm override. `vp env use` does not set or clear `VP_PACKAGE_MANAGER`.
+
+Direct shims resolve their version from the matching environment variable, then the matching session file when no shell wrapper is available, then project configuration and the family default. `vp env current pnpm` and `vp env which pnpm` inspect this shim selection; `vp env current pm` reports the manager selected for vp commands.
+
+```bash
+VP_PACKAGE_MANAGER=pnpm@10.18.0 vp install
+VP_PNPM_VERSION=10.20.0 pnpm --version
+```
+
+The overrides apply in managed mode. A package manager can also perform its own version switching after Vite+ launches it; for example, pnpm's `managePackageManagerVersions` setting may switch back to the version in `package.json`.
+
+A project selection applies only to its matching shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The resolved version is cached for one hour and an expired cache remains available when the registry cannot be reached. The directly invoked npm shim keeps its Node-bundled fallback, while an explicit `vp env ... npm` family scope uses standalone npm's latest release.
 
 A fresh install uses the split platform layout by default. On Unix, Vite+
 stores managed runtimes and related files in `~/.local/share/vite-plus`. It
@@ -132,7 +152,8 @@ vp-use --unset
 Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` in the bin directory on Windows.
 
 In CI, `vp env use` can run without shell initialization. It writes a temporary
-Node.js or package-manager session file in the resolved state directory. Later
+session file per runtime or package manager in the resolved state directory,
+such as `.session-node-version` or `.session-pnpm-version`. Later
 shim calls in the same job use these files to resolve the same environment.
 
 ### Manage
@@ -177,7 +198,8 @@ vp env install                # Install the complete resolved environment
 vp env default node@24        # Set the global Node.js default
 vp env default pnpm@10        # Set pnpm's global default version
 vp env use 20 pnpm@10         # Override both components for this shell
-vp env use --unset pm         # Remove only the PM session override
+vp env use --unset pnpm       # Remove only the pnpm session version
+vp env use --unset pm         # Remove all package-manager session versions
 vp env clean                  # Remove unused managed Node.js and package manager versions
 
 # Inspect

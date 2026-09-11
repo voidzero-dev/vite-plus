@@ -7,7 +7,7 @@ Explicit npm family scopes use standalone registry npm; only the directly invoke
 an explicit npm scope exports the standalone npm fallback
 
 ```
-export VP_PACKAGE_MANAGER=npm@12.0.2
+export VP_NPM_VERSION=12.0.2
 Using npm <version> (resolved from registry fallback)
 ```
 

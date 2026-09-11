@@ -160,3 +160,12 @@ steps = [
   { argv = ["vp", "env", "on", "npm"], snapshot = false },
   { argv = ["vp", "env", "exec", "--node", "22.18.0", "node", "assert-unix-shim-path.cjs", "partial", "10.5.0"], comment = "A project npm pin still takes priority over bundled npm after a PATH reset" },
 ]
+
+[[case]]
+name = "explicit_npm_after_partial_path_reset"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_NPM_VERSION = "10.9.4" }
+steps = [
+  { argv = ["vp", "env", "exec", "--node", "22.18.0", "--npm", "10.5.0", "node", "assert-unix-shim-path.cjs", "partial", "10.5.0"], comment = "An explicit npm version overrides the inherited version and survives a PATH reset" },
+]
