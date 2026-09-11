@@ -1,0 +1,10 @@
+{
+  "name": "command-update-global-dev-engines",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.20.0",
+      "onFail": "download"
+    }
+  }
+}

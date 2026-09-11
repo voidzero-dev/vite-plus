@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_eslint_rerun_dual_config"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should detect vite-plus + eslint and auto-migrate eslint", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check eslint removed and scripts rewritten", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "eslint.config.mjs", "--assert-not", "file"], comment = "check flat config is removed", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".eslintrc", "--assert-not", "file"], comment = "check legacy config is also removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check oxlint config merged into vite.config.ts", continue-on-failure = true },
+]

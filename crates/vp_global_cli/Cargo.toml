@@ -1,0 +1,59 @@
+[package]
+name = "vp_global_cli"
+version = "0.3.1"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[[bin]]
+name = "vp"
+path = "src/main.rs"
+
+[dependencies]
+base64-simd = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+clap_complete = { workspace = true, features = ["unstable-dynamic"] }
+directories = { workspace = true }
+dialoguer = { workspace = true }
+dunce = { workspace = true }
+futures = { workspace = true }
+flate2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+node-semver = { workspace = true }
+thiserror = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+owo-colors = { workspace = true }
+same-file = { workspace = true }
+oxc_resolver = { workspace = true }
+rustc-hash = { workspace = true }
+crossterm = { workspace = true }
+indexmap = { workspace = true }
+indicatif = { workspace = true }
+indoc = { workspace = true }
+vp_error = { workspace = true }
+vp_js_runtime = { workspace = true }
+vp_pm_cli = { workspace = true }
+vt_path = { workspace = true }
+vp_command = { workspace = true }
+vp_cli_help = { workspace = true }
+vp_setup = { workspace = true }
+vp_shared = { workspace = true }
+vp_toolchain = { workspace = true }
+vt_str = { workspace = true }
+vt_workspace = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+
+[dev-dependencies]
+serial_test = { workspace = true }
+temp-env = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
+
+[lints]
+workspace = true

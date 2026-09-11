@@ -1,0 +1,7 @@
+{
+  "name": "probe-bin",
+  "version": "1.0.0",
+  "bin": {
+    "probe": "bin.js"
+  }
+}

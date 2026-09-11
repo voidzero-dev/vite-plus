@@ -1,0 +1,5 @@
+{
+  "name": "command-pm-approve-builds-pnpm10-old",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.31.0"
+}

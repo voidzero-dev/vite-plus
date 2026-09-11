@@ -1,6 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp run dev # synthetic dev (vp dev) should have cache disabled even with cacheScripts"
-  ]
-}

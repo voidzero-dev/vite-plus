@@ -1,0 +1,7 @@
+{
+  "name": "pm-dedupe-npm",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "npm@11.13.0"
+}

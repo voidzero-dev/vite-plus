@@ -1,0 +1,6 @@
+[[case]]
+name = "command_preview"
+vp = "local"
+steps = [
+  { argv = ["vp", "preview", "--port", "12312312312"], comment = "intentionally use an invalid port (exceeds 0-65535) to trigger port error", continue-on-failure = true },
+]

@@ -1,0 +1,7 @@
+[[case]]
+name = "command_pack_concurrency"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pack", "--concurrency", "1", "src/index.ts"], comment = "should bundle with tsdown --concurrency flag forwarded", continue-on-failure = true },
+]

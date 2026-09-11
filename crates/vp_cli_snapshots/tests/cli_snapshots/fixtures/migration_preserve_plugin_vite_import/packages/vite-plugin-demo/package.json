@@ -1,0 +1,9 @@
+{
+  "name": "vite-plugin-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.ts",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

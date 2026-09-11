@@ -1,0 +1,13 @@
+{
+  "name": "@env-node-child-process-npm/node",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "20.18.0",
+      "onFail": "download"
+    }
+  }
+}

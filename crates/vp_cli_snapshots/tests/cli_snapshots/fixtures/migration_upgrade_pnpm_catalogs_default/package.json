@@ -1,0 +1,14 @@
+{
+  "name": "migration-upgrade-pnpm-catalogs-default",
+  "devDependencies": {
+    "vite": "catalog:build",
+    "vite-plus": "catalog:build"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

@@ -1,4 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": ["vp upgrade --rollback # should fail with no previous version"]
-}

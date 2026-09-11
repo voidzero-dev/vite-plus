@@ -1,8 +1,0 @@
-{
-  "commands": [
-    { "command": "git init", "ignoreOutput": true },
-    { "command": "git config core.hooksPath .husky/_", "ignoreOutput": true },
-    "vp config --hooks-only # should replace .husky/_ with .vite-hooks/_",
-    "git config --local core.hooksPath # should be .vite-hooks/_"
-  ]
-}

@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_monorepo_skip_vite_peer_dependency"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve vite peer contracts in workspace packages", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/vite-plugin/src/index.ts"], comment = "vite-plugin has vite in peerDeps: vite imports stay public, vitest rewrites", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check root package.json (no peerDependencies)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/vite-plugin/package.json"], comment = "vite peer range is preserved", continue-on-failure = true },
+]

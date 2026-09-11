@@ -1,0 +1,9 @@
+{
+  "name": "migration-preserve-editor-jsonc-comments",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "oxfmt": "1",
+    "oxlint": "1"
+  }
+}

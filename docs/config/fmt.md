@@ -1,6 +1,6 @@
 # Format Config
 
-`vp fmt` and `vp check` read Oxfmt settings from the `fmt` block in `vite.config.ts`. See [Oxfmt's configuration](https://oxc.rs/docs/guide/usage/formatter/config.html) for details.
+`vp fmt` and `vp check` read Oxfmt settings from the `fmt` block in the root `vite.config.ts`. See [Oxfmt's configuration](https://oxc.rs/docs/guide/usage/formatter/config.html) for details.
 
 ## Example
 
@@ -17,4 +17,6 @@ export default defineConfig({
 });
 ```
 
-For package-specific formatting settings in a workspace, use [`fmt.overrides`](/guide/monorepo#format-overrides) from the root `vite.config.ts`.
+For file- or package-specific formatting settings, use [`fmt.overrides`](/guide/monorepo#format-overrides) from the root `vite.config.ts`.
+
+Vite+ does not currently support nested format configuration. See [troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details and how to give feedback on future support.

@@ -1,0 +1,10 @@
+[[case]]
+name = "command_config_update_agents"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "config"], tty = false, comment = "should auto-update agent instructions", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "AGENTS.md", "Custom instructions here."], comment = "user content above the managed block preserved", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "AGENTS.md", "More custom content below."], comment = "user content below the managed block preserved", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "AGENTS.md", "OUTDATED CONTENT", ], comment = "outdated content replaced (grep-file prints missing)", continue-on-failure = true },
+]

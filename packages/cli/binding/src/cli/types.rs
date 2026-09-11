@@ -3,10 +3,9 @@ use std::{ffi::OsStr, future::Future, pin::Pin, sync::Arc};
 use clap::{Parser, Subcommand};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use vite_str::Str;
-use vite_task::{
-    Command, ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest,
-};
+use vt::{Command, ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest};
+use vt_path::AbsolutePath;
+use vt_str::Str;
 
 /// Resolved configuration from vite.config.ts
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -15,6 +14,7 @@ pub(crate) struct ResolvedUniversalViteConfig {
     pub(crate) config_file: Option<String>,
     pub(crate) lint: Option<serde_json::Value>,
     pub(crate) fmt: Option<serde_json::Value>,
+    pub(crate) check: Option<serde_json::Value>,
     pub(crate) run: Option<serde_json::Value>,
 }
 
@@ -35,7 +35,7 @@ pub enum SynthesizableSubcommand {
         args: Vec<String>,
     },
     /// Format code
-    #[command(disable_help_flag = true)]
+    #[command(disable_help_flag = true, visible_alias = "format")]
     Fmt {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
@@ -81,6 +81,9 @@ pub enum SynthesizableSubcommand {
         /// Auto-fix format and lint issues
         #[arg(long)]
         fix: bool,
+        /// Disable reporting on warnings, only errors are reported
+        #[arg(long)]
+        quiet: bool,
         /// Skip format check
         #[arg(long = "no-fmt")]
         no_fmt: bool,
@@ -96,21 +99,19 @@ pub enum SynthesizableSubcommand {
     },
 }
 
-impl SynthesizableSubcommand {
-    /// Return the command name string for use in `VP_COMMAND` env var.
-    pub(super) fn command_name(&self) -> &'static str {
-        match self {
-            Self::Lint { .. } => "lint",
-            Self::Fmt { .. } => "fmt",
-            Self::Build { .. } => "build",
-            Self::Test { .. } => "test",
-            Self::Pack { .. } => "pack",
-            Self::Dev { .. } => "dev",
-            Self::Preview { .. } => "preview",
-            Self::Doc { .. } => "doc",
-            Self::Check { .. } => "check",
-        }
-    }
+#[derive(Debug, clap::Args)]
+pub struct ToolchainArgs {
+    /// Tool or package names to show
+    #[arg(value_name = "TOOLS")]
+    pub tools: Vec<String>,
+
+    /// Print the graph as JSON
+    #[arg(long)]
+    pub json: bool,
+
+    /// Use the global Vite+ toolchain
+    #[arg(long)]
+    pub global: bool,
 }
 
 /// Top-level CLI argument parser for vite-plus.
@@ -127,16 +128,23 @@ pub(super) enum CLIArgs {
 
     /// Package manager commands (install, add, remove, update, dedupe, …)
     #[command(flatten)]
-    PackageManager(vite_pm_cli::PackageManagerCommand),
+    PackageManager(vp_pm_cli::PackageManagerCommand),
 
     /// Execute a command from local node_modules/.bin
     Exec(crate::exec::ExecArgs),
+
+    /// Show active Vite+ tools, versions, and relationships
+    Toolchain(ToolchainArgs),
 }
 
 /// Type alias for boxed async resolver function
 /// NOTE: Uses anyhow::Error to avoid NAPI type inference issues
-pub type BoxedResolverFn =
-    Box<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<ResolveCommandResult>> + 'static>>>;
+pub type BoxedResolverFn = Box<
+    dyn Fn(
+        &AbsolutePath,
+        &[String],
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<ResolveCommandResult>> + 'static>>,
+>;
 
 /// Type alias for vite config resolver function (takes package path, returns JSON string)
 /// Uses Arc for cloning and Send + Sync for use in UserConfigLoader
@@ -154,6 +162,8 @@ pub struct CliOptions {
     pub test: BoxedResolverFn,
     pub pack: BoxedResolverFn,
     pub doc: BoxedResolverFn,
+    pub toolchain_manifest_path: String,
+    pub vite_plus_package_path: String,
     pub resolve_universal_vite_config: ViteConfigResolverFn,
 }
 
@@ -180,4 +190,11 @@ pub(crate) struct CapturedCommandOutput {
     pub(crate) status: ExitStatus,
     pub(crate) stdout: String,
     pub(crate) stderr: String,
+}
+
+/// Convert a child's exit status to the vite-task `ExitStatus`, preserving
+/// the `128 + signal` mapping. A `From` impl is blocked by the orphan rule:
+/// both types are foreign here.
+pub(crate) fn exit_status_from(status: std::process::ExitStatus) -> ExitStatus {
+    ExitStatus(vp_shared::exit_code_from_status(status) as u8)
 }

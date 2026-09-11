@@ -1,0 +1,16 @@
+[[case]]
+name = "command_unlink_pnpm11"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "unlink", "-h"], comment = "should show help message", continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", "../unlink-test-lib"], comment = "create test library" },
+  { argv = ["vpt", "write-file", "../unlink-test-lib/package.json", "{\"name\": \"unlink-test-lib\", \"version\": \"1.0.0\"}\n"], continue-on-failure = true },
+  { argv = ["vp", "link", "../unlink-test-lib"], comment = "link the library first" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "unlink", "unlink-test-lib", "--", "--no-frozen-lockfile"], comment = "should unlink the package (pnpm v11 requires --no-frozen-lockfile under CI=true)" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "link", "../unlink-test-lib"], comment = "link again", continue-on-failure = true },
+  { argv = ["vp", "unlink", "--", "--no-frozen-lockfile"], comment = "should unlink all packages" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

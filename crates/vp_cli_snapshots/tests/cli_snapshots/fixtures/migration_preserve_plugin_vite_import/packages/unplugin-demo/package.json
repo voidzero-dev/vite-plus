@@ -1,0 +1,9 @@
+{
+  "name": "unplugin-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

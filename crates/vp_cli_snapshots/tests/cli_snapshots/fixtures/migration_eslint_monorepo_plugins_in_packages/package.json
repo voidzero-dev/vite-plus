@@ -1,0 +1,12 @@
+{
+  "name": "migration-eslint-monorepo-plugins-in-packages",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-config-airbnb": "^19.0.0",
+    "vite": "^7.0.0"
+  },
+  "packageManager": "pnpm@10.18.0"
+}

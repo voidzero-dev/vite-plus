@@ -13,6 +13,7 @@
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  */
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -52,10 +53,7 @@ function replaceInFile(
   );
 }
 
-function removeAnyInFile(
-  filePath: string,
-  searches: Array<string | RegExp>,
-): 'patched' | 'already' {
+function removeAnyInFile(filePath: string, searches: Array<string | RegExp>): 'patched' {
   const content = readFileSync(filePath, 'utf-8');
   for (const search of searches) {
     if (typeof search === 'string') {
@@ -73,7 +71,11 @@ function removeAnyInFile(
       return 'patched';
     }
   }
-  return 'already';
+  throw new Error(
+    `[brand-vite] Patch failed in ${filePath}:\n` +
+      `  Could not find any expected search pattern.\n` +
+      `  The upstream code may have changed. Please update the search patterns in brand-vite.ts.`,
+  );
 }
 
 function logPatch(file: string, desc: string, result: 'patched' | 'already') {
@@ -86,6 +88,11 @@ function logPatch(file: string, desc: string, result: 'patched' | 'already') {
 
 export function brandVite(rootDir: string = process.cwd()) {
   log('Applying Vite+ branding patches...');
+
+  // Always patch raw upstream sources, including when sync-remote already applied branding.
+  execFileSync('git', ['restore', '--source=HEAD', '--', '.'], {
+    cwd: join(rootDir, VITE_DIR),
+  });
 
   const nodeDir = join(rootDir, VITE_NODE_DIR);
 
@@ -132,8 +139,8 @@ export function brandVite(rootDir: string = process.cwd()) {
   const buildFile = join(nodeDir, 'build.ts');
   const buildResults = [
     removeAnyInFile(buildFile, [
-      / {4}logger\.info\(\n {6}colors\.[a-zA-Z]+\(\n {8}`vite v\$\{VERSION\} \$\{colors\.green\(\n {10}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {8}\)\}`,\n {6}\),\n {4}\)\n/,
-      / {4}logger\.info\(\n {6}colors\.[a-zA-Z]+\(\n {8}`vite\+ v\$\{VITE_PLUS_VERSION\} \$\{colors\.green\(\n {10}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {8}\)\}`,\n {6}\),\n {4}\)\n/,
+      / {2}logger\.info\(\n {4}colors\.[a-zA-Z]+\(\n {6}`vite v\$\{VERSION\} \$\{colors\.green\(\n {8}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {6}\)\}`,\n {4}\),\n {2}\)\n/,
+      / {2}logger\.info\(\n {4}colors\.[a-zA-Z]+\(\n {6}`vite\+ v\$\{VITE_PLUS_VERSION\} \$\{colors\.green\(\n {8}`building \$\{environment\.name\} environment for \$\{environment\.config\.mode\}\.\.\.`,\n {6}\)\}`,\n {4}\),\n {2}\)\n/,
     ]),
     replaceInFile(buildFile, '`[vite]: Rolldown failed', '`[vite+]: Rolldown failed'),
   ];
@@ -169,6 +176,25 @@ export function brandVite(rootDir: string = process.cwd()) {
     'plugins/reporter.ts',
     'Suppressed redundant version-only native reporter line',
     reporterResults.includes('patched') ? 'patched' : 'already',
+  );
+
+  // 6. config.ts: Suppress the `configLoader: 'native'` migration notice.
+  // Vite+ manages config loading on the user's behalf and reads the config
+  // through the bundle loader for many commands (check/lint/fmt/build/run),
+  // where this upstream notice is pure noise across vp's output. The
+  // compat-check plugin only collects incompatibilities to feed the warning
+  // (its transform always returns null), so never registering it leaves the
+  // `nativeIncompatibilities` list empty and no warning is emitted. The `false`
+  // guard keeps the import referenced so the type-check stays clean.
+  const configFile = join(nodeDir, 'config.ts');
+  logPatch(
+    'config.ts',
+    'Suppressed native config loader migration notice',
+    replaceInFile(
+      configFile,
+      '      !process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),',
+      "      // Vite+ manages config loading, so Vite's native-config-loader\n      // migration notice is noise. Never register the compat-check plugin.\n      false &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),",
+    ),
   );
 
   log('Done!');

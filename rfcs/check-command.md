@@ -162,7 +162,7 @@ This replaces the manual `vp fmt && vp lint --fix` workflow with a single comman
 
 ### Rust Global CLI
 
-Add `Check` variant to `Commands` enum in `crates/vite_global_cli/src/cli.rs`:
+Add `Check` variant to `Commands` enum in `crates/vp_global_cli/src/cli.rs`:
 
 ```rust
 #[command(disable_help_flag = true)]
@@ -193,7 +193,7 @@ No new resolver needed — `vp check` reuses existing `resolve-lint.ts` and `res
 
 ### Key Files
 
-1. `crates/vite_global_cli/src/cli.rs` — `Check` command variant and routing
+1. `crates/vp_global_cli/src/cli.rs` — `Check` command variant and routing
 2. `packages/cli/binding/src/cli.rs` — `SynthesizableSubcommand::Check` definition, delegates to `check` module
 3. `packages/cli/binding/src/check/mod.rs` — Check command orchestration (`execute_check`)
 4. `packages/cli/binding/src/check/analysis.rs` — Output parsing and analysis types

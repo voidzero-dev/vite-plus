@@ -2,10 +2,11 @@ use std::{collections::BTreeMap, process::Stdio, sync::Arc};
 
 use owo_colors::OwoColorize;
 use petgraph::prelude::DiGraphMap;
-use vite_error::Error;
-use vite_path::AbsolutePathBuf;
-use vite_task::ExitStatus;
-use vite_workspace::{PackageNodeIndex, package_graph::IndexedPackageGraph};
+use vp_error::Error;
+use vp_shared::{PrependOptions, ToolPathEnv};
+use vt::ExitStatus;
+use vt_path::AbsolutePathBuf;
+use vt_workspace::{PackageNodeIndex, package_graph::IndexedPackageGraph};
 
 use super::args::ExecArgs;
 
@@ -19,19 +20,20 @@ pub(super) async fn execute_exec_workspace(
 ) -> Result<ExitStatus, Error> {
     // Find workspace root and load package graph
     let (workspace_root, _) =
-        vite_workspace::find_workspace_root(cwd).map_err(|e| Error::Anyhow(e.into()))?;
+        vt_workspace::find_workspace_root(cwd).map_err(|e| Error::Anyhow(e.into()))?;
     let graph =
-        vite_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
+        vt_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
 
     // Index the graph for O(1) lookups
     let indexed = IndexedPackageGraph::index(graph);
 
     // Build the query from exec flags
-    let cwd_arc: Arc<vite_path::AbsolutePath> = cwd.clone().into();
+    let fail_if_no_match = args.packages.fail_if_no_match;
+    let cwd_arc: Arc<vt_path::AbsolutePath> = cwd.clone().into();
     let (query, is_cwd_only) = match args.packages.into_package_query(None, &cwd_arc) {
         Ok(result) => result,
         Err(e) => {
-            vite_shared::output::error(&vite_str::format!("{e}"));
+            vp_shared::output::error(&vt_str::format!("{e}"));
             return Ok(ExitStatus(1));
         }
     };
@@ -40,17 +42,27 @@ pub(super) async fn execute_exec_workspace(
     let resolution = match indexed.resolve_query(&query) {
         Ok(result) => result,
         Err(e) => {
-            vite_shared::output::error(&vite_str::format!("{e}"));
+            vp_shared::output::error(&vt_str::format!("{e}"));
             return Ok(ExitStatus(1));
         }
     };
 
+    if fail_if_no_match && !resolution.unmatched_selectors.is_empty() {
+        let unmatched_selectors = resolution
+            .unmatched_selectors
+            .iter()
+            .map(vt_str::Str::as_str)
+            .collect::<Vec<_>>()
+            .join(", ");
+        vp_shared::output::error(&vt_str::format!(
+            "No packages matched the filter: {unmatched_selectors}"
+        ));
+        return Ok(ExitStatus(1));
+    }
+
     // Warn about unmatched selectors
     for selector in &resolution.unmatched_selectors {
-        vite_shared::output::warn(&vite_str::format!(
-            "No packages matched the filter '{}'",
-            selector
-        ));
+        vp_shared::output::warn(&vt_str::format!("No packages matched the filter '{}'", selector));
     }
 
     let package_graph = indexed.package_graph();
@@ -72,7 +84,7 @@ pub(super) async fn execute_exec_workspace(
         {
             selected = selected[pos..].to_vec();
         } else {
-            vite_shared::output::error(&vite_str::format!(
+            vp_shared::output::error(&vt_str::format!(
                 "Package '{}' not found in selected packages",
                 resume_pkg
             ));
@@ -81,7 +93,7 @@ pub(super) async fn execute_exec_workspace(
     }
 
     if selected.is_empty() {
-        vite_shared::output::warn("No packages matched the filter(s)");
+        vp_shared::output::warn("No packages matched the filter(s)");
         return Ok(ExitStatus::SUCCESS);
     }
 
@@ -95,21 +107,24 @@ pub(super) async fn execute_exec_workspace(
     let use_caller_cwd = is_cwd_only;
 
     // Build base PATH: <pm_bin>:<workspace_root/node_modules/.bin>:<original_PATH>
-    let base_path_dirs: Vec<std::path::PathBuf> = {
-        let mut dirs = Vec::new();
-        // Include package manager bin dir
-        if let Ok(pm) = vite_install::PackageManager::builder(&*workspace_root.path).build().await {
-            dirs.push(pm.get_bin_prefix().as_path().to_path_buf());
+    let mut base_env = ToolPathEnv::from_env();
+    let ws_bin = workspace_root.path.join("node_modules").join(".bin");
+    if ws_bin.as_path().is_dir() {
+        base_env.prepend(&ws_bin, &[], PrependOptions::default())?;
+    }
+    // An unverified package manager stops the run; other resolution failures
+    // leave the inherited tools available.
+    match vp_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
+        Ok(pm) => {
+            base_env.prepend(pm.get_bin_prefix(), &pm.bin_names(), PrependOptions::default())?
         }
-        // Include workspace root's node_modules/.bin
-        let ws_bin = workspace_root.path.join("node_modules").join(".bin");
-        if ws_bin.as_path().is_dir() {
-            dirs.push(ws_bin.as_path().to_path_buf());
+        Err(error) if error.is_integrity_failure() => return Err(error),
+        Err(error) => {
+            tracing::debug!(?error, "failed to resolve package manager for exec PATH setup");
         }
-        dirs.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
-        dirs
-    };
-    let base_path = std::env::join_paths(&base_path_dirs).unwrap_or_default();
+    }
+    let [(_, base_path), (_, injected_tools)] = base_env.into_envs();
+    let base_path_dirs: Vec<_> = std::env::split_paths(&base_path).collect();
 
     let cmd_display = args.command.join(" ");
 
@@ -130,7 +145,7 @@ pub(super) async fn execute_exec_workspace(
             let pkg_path = &pkg.absolute_path;
 
             let path_env = build_package_path_env(pkg_path, &base_path_dirs, &base_path);
-            let exec_dir: &vite_path::AbsolutePath =
+            let exec_dir: &vt_path::AbsolutePath =
                 if use_caller_cwd { cwd.as_ref() } else { pkg_path };
             let mut cmd = build_exec_command(
                 args.shell_mode,
@@ -140,6 +155,7 @@ pub(super) async fn execute_exec_workspace(
                 exec_dir,
             )?;
             cmd.env("PATH", &path_env)
+                .env(vp_shared::env_vars::VP_PATH_INJECTED_TOOLS, &injected_tools)
                 .env("VP_PACKAGE_NAME", &pkg_name)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
@@ -168,12 +184,12 @@ pub(super) async fn execute_exec_workspace(
         let mut worst_exit = 0u8;
         for (name, output, duration) in &results {
             if show_prefix {
-                vite_shared::output::raw(&vite_str::format!("{name}$ {cmd_display}"));
+                vp_shared::output::raw(&vt_str::format!("{name}$ {cmd_display}"));
             }
             use std::io::Write;
             let _ = std::io::stdout().write_all(&output.stdout);
             let _ = std::io::stderr().write_all(&output.stderr);
-            let code = output.status.code().unwrap_or(1) as u8;
+            let code = vp_shared::exit_code_from_status(output.status) as u8;
             if code > worst_exit {
                 worst_exit = code;
             }
@@ -201,12 +217,12 @@ pub(super) async fn execute_exec_workspace(
             let path_env = build_package_path_env(pkg_path, &base_path_dirs, &base_path);
 
             if show_prefix {
-                vite_shared::output::raw(&vite_str::format!("{pkg_name}$ {cmd_display}"));
+                vp_shared::output::raw(&vt_str::format!("{pkg_name}$ {cmd_display}"));
             }
 
             let start = std::time::Instant::now();
 
-            let exec_dir: &vite_path::AbsolutePath =
+            let exec_dir: &vt_path::AbsolutePath =
                 if use_caller_cwd { cwd.as_ref() } else { pkg_path };
             let mut cmd = match build_exec_command(
                 args.shell_mode,
@@ -220,7 +236,7 @@ pub(super) async fn execute_exec_workspace(
                     let command = args.command[0].bright_blue().to_string();
                     let vp_install = "`vp install`".bright_blue().to_string();
                     let vpx = "`vpx`".bright_blue().to_string();
-                    vite_shared::output::error(&vite_str::format!(
+                    vp_shared::output::error(&vt_str::format!(
                         "Command '{}' not found in node_modules/.bin\n\n\
                          Run {} to install dependencies, or use {} for invoking remote commands.",
                         command,
@@ -231,12 +247,14 @@ pub(super) async fn execute_exec_workspace(
                 }
                 Err(e) => return Err(e),
             };
-            cmd.env("PATH", &path_env).env("VP_PACKAGE_NAME", pkg_name);
+            cmd.env("PATH", &path_env)
+                .env(vp_shared::env_vars::VP_PATH_INJECTED_TOOLS, &injected_tools)
+                .env("VP_PACKAGE_NAME", pkg_name);
 
             let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
             let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
             let duration = start.elapsed();
-            let code = status.code().unwrap_or(1) as u8;
+            let code = vp_shared::exit_code_from_status(status) as u8;
 
             if args.report_summary {
                 let pkg_status = if code == 0 { "passed" } else { "failed" };
@@ -265,7 +283,7 @@ pub(super) async fn execute_exec_workspace(
         if let Err(e) =
             std::fs::write(report_path.as_path(), serde_json::to_string_pretty(&report).unwrap())
         {
-            vite_shared::output::error(&vite_str::format!(
+            vp_shared::output::error(&vt_str::format!(
                 "Failed to write vp-exec-summary.json: {}",
                 e
             ));
@@ -277,7 +295,7 @@ pub(super) async fn execute_exec_workspace(
 
 /// Build a PATH value for a package, prepending its local node_modules/.bin.
 fn build_package_path_env(
-    pkg_path: &vite_path::AbsolutePath,
+    pkg_path: &vt_path::AbsolutePath,
     base_path_dirs: &[std::path::PathBuf],
     base_path: &std::ffi::OsStr,
 ) -> std::ffi::OsString {
@@ -298,13 +316,13 @@ fn build_exec_command(
     command: &[String],
     cmd_display: &str,
     path_env: &std::ffi::OsStr,
-    pkg_path: &vite_path::AbsolutePath,
+    pkg_path: &vt_path::AbsolutePath,
 ) -> Result<tokio::process::Command, Error> {
     if shell_mode {
-        Ok(vite_command::build_shell_command(cmd_display, pkg_path))
+        Ok(vp_command::build_shell_command(cmd_display, pkg_path))
     } else {
-        let bin_path = vite_command::resolve_bin(&command[0], Some(path_env), pkg_path)?;
-        let mut cmd = vite_command::build_command(&bin_path, pkg_path);
+        let bin_path = vp_command::resolve_bin(&command[0], Some(path_env), pkg_path)?;
+        let mut cmd = vp_command::build_command(&bin_path, pkg_path);
         if command.len() > 1 {
             cmd.args(&command[1..]);
         }
@@ -341,14 +359,14 @@ mod tests {
 
     use petgraph::prelude::DiGraphMap;
     use rustc_hash::FxHashSet;
-    use vite_path::{AbsolutePathBuf, RelativePathBuf};
-    use vite_workspace::{DependencyType, PackageInfo, PackageJson, PackageNodeIndex};
+    use vt_path::{AbsolutePathBuf, RelativePathBuf};
+    use vt_workspace::{DependencyType, PackageInfo, PackageJson, PackageNodeIndex};
 
     use super::*;
 
     /// Create a cross-platform absolute path for tests.
     /// On Unix `/workspace/...`, on Windows `C:\workspace\...`.
-    fn test_absolute_path(suffix: &str) -> Arc<vite_path::AbsolutePath> {
+    fn test_absolute_path(suffix: &str) -> Arc<vt_path::AbsolutePath> {
         #[cfg(windows)]
         let base = PathBuf::from(format!("C:\\workspace{}", suffix.replace('/', "\\")));
         #[cfg(not(windows))]
@@ -362,7 +380,7 @@ mod tests {
     /// - lib-c has no workspace dependencies
     /// - root (workspace root, empty path)
     fn build_test_graph()
-    -> petgraph::graph::DiGraph<PackageInfo, DependencyType, vite_workspace::PackageIx> {
+    -> petgraph::graph::DiGraph<PackageInfo, DependencyType, vt_workspace::PackageIx> {
         let mut graph = petgraph::graph::DiGraph::default();
 
         let root = graph.add_node(PackageInfo {
@@ -395,7 +413,7 @@ mod tests {
 
     /// Build a DiGraphMap subgraph from selected node indices and the original graph edges.
     fn build_subgraph(
-        graph: &petgraph::graph::DiGraph<PackageInfo, DependencyType, vite_workspace::PackageIx>,
+        graph: &petgraph::graph::DiGraph<PackageInfo, DependencyType, vt_workspace::PackageIx>,
         selected: &[PackageNodeIndex],
     ) -> DiGraphMap<PackageNodeIndex, ()> {
         use petgraph::visit::EdgeRef;

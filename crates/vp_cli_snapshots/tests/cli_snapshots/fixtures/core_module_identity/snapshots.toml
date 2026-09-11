@@ -1,0 +1,146 @@
+[[case]]
+name = "core_module_identity_bun"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["node", "check-api.mjs"],
+  ["vp", "dev"],
+]
+
+[[case]]
+name = "core_module_identity_repackaged_version"
+vp = "global"
+local-registry = true
+comment = "CI can stamp the package version after building the CLI. The resolver must compare installed manifests rather than an inlined build-time version."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "node_modules/vite-plus/package.json", "version", "0.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "node_modules/vite-plus/package.json", "dependencies.vite", "npm:@voidzero-dev/vite-plus-core@0.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "node_modules/vite/package.json", "version", "0.0.0"], snapshot = false },
+  ["node", "check-api.mjs"],
+  ["vp", "dev"],
+  ["vp", "build"],
+  ["vp", "pack", "entry.js"],
+]
+
+[[case]]
+name = "core_module_identity_yarn"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "resolutions.vite", "npm:@voidzero-dev/vite-plus-core@latest"], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\nenableScripts: false\n"], snapshot = false },
+  { argv = ["vp", "install"], timeout = 120000, snapshot = false },
+  ["node", "check-api.mjs"],
+  ["vp", "dev"],
+]
+
+[[case]]
+name = "core_module_identity_npm"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@11.11.0"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["node", "check-api.mjs"],
+  ["vp", "dev"],
+]
+
+[[case]]
+name = "core_module_identity_pnpm"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.24.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "overrides:\n  vite: npm:@voidzero-dev/vite-plus-core@latest\nminimumReleaseAge: 0\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["node", "check-api.mjs"],
+  ["vp", "dev"],
+]
+
+[[case]]
+name = "core_module_identity_without_project_alias"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"core-module-identity\",\"private\":true,\"type\":\"module\",\"devDependencies\":{\"vite-plus\":\"latest\"},\"packageManager\":\"pnpm@11.24.0\"}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "hoist: false\nminimumReleaseAge: 0\noverrides:\n  vite: npm:@voidzero-dev/vite-plus-core@latest\n"], snapshot = false },
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "from 'vite';", "from 'vite-plus';"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["node", "check-bundled.mjs"],
+  ["vp", "dev"],
+  ["vp", "build"],
+  ["vp", "test", "run"],
+  ["vp", "pack", "entry.js"],
+]
+
+[[case]]
+name = "core_module_identity_pnpm_global_store"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.24.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "enableGlobalVirtualStore: true\noverrides:\n  vite: npm:@voidzero-dev/vite-plus-core@latest\nminimumReleaseAge: 0\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["node", "check-api.mjs"],
+  ["vp", "dev"],
+]
+
+[[case]]
+name = "core_module_identity_pnpm_peer_contexts"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.24.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - packages/*\nresolvePeersFromWorkspaceRoot: false\noverrides:\n  vite: npm:@voidzero-dev/vite-plus-core@latest\nminimumReleaseAge: 0\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/a/package.json", "{\"name\":\"app-a\",\"private\":true,\"type\":\"module\",\"devDependencies\":{\"vite\":\"npm:@voidzero-dev/vite-plus-core@latest\",\"vite-plus\":\"latest\",\"@types/node\":\"22.20.1\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/b/package.json", "{\"name\":\"app-b\",\"private\":true,\"type\":\"module\",\"devDependencies\":{\"vite\":\"npm:@voidzero-dev/vite-plus-core@latest\",\"vite-plus\":\"latest\",\"@types/node\":\"24.10.3\"}}\n"], snapshot = false },
+  { argv = ["vpt", "cp", "check-api.mjs", "packages/a/check-api.mjs"], snapshot = false },
+  { argv = ["vpt", "cp", "check-api.mjs", "packages/b/check-api.mjs"], snapshot = false },
+  { argv = ["vpt", "cp", "vite.config.ts", "packages/a/vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "cp", "vite.config.ts", "packages/b/vite.config.ts"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  { argv = ["node", "check-api.mjs"], cwd = "packages/a" },
+  { argv = ["vp", "dev"], cwd = "packages/a" },
+  { argv = ["node", "check-api.mjs"], cwd = "packages/b" },
+  { argv = ["vp", "dev"], cwd = "packages/b" },
+]
+
+[[case]]
+name = "core_module_identity_npm_cli_only_no_override"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"core-module-identity\",\"private\":true,\"type\":\"module\",\"packageManager\":\"npm@11.11.0\",\"devDependencies\":{\"vite-plus\":\"latest\"}}\n"], snapshot = false },
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "from 'vite';", "from 'vite-plus';"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  { argv = ["node", "check-npm-layout.mjs"] },
+  { argv = ["node", "check-bundled.mjs"] },
+  { argv = ["vp", "dev"] },
+  { argv = ["vp", "build"] },
+  { argv = ["vp", "pack", "entry.js"] },
+  { argv = ["vpt", "write-file", "typecheck/package.json", "{\"name\":\"typecheck-tools\",\"private\":true,\"dependencies\":{\"typescript\":\"6.0.3\"},\"packageManager\":\"npm@11.11.0\"}\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], cwd = "typecheck", snapshot = false },
+  { argv = ["vpt", "cp", "check-config.mts", "check-config.cts"], snapshot = false },
+  { argv = ["node", "typecheck/node_modules/typescript/bin/tsc", "--noEmit", "--skipLibCheck", "--module", "NodeNext", "--target", "ESNext", "check-config.mts", "check-config.cts"] },
+]
+
+[[case]]
+name = "core_module_identity_npm_matching_alias_no_override"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"core-module-identity\",\"private\":true,\"type\":\"module\",\"packageManager\":\"npm@11.11.0\",\"devDependencies\":{\"vite-plus\":\"latest\",\"vite\":\"npm:@voidzero-dev/vite-plus-core@latest\"}}\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  { argv = ["node", "check-npm-layout.mjs"] },
+  { argv = ["node", "check-api.mjs"] },
+  { argv = ["vp", "dev"] },
+  { argv = ["vp", "build"] },
+  { argv = ["vp", "pack", "entry.js"] },
+  { argv = ["vpt", "write-file", "typecheck/package.json", "{\"name\":\"typecheck-tools\",\"private\":true,\"dependencies\":{\"typescript\":\"6.0.3\"},\"packageManager\":\"npm@11.11.0\"}\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], cwd = "typecheck", snapshot = false },
+  { argv = ["vpt", "cp", "check-config.mts", "check-config.cts"], snapshot = false },
+  { argv = ["node", "typecheck/node_modules/typescript/bin/tsc", "--noEmit", "--skipLibCheck", "--module", "NodeNext", "--target", "ESNext", "check-config.mts", "check-config.cts"] },
+]

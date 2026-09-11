@@ -1,0 +1,11 @@
+{
+  "name": "command-prune-bun",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "packageManager": "bun@1.4.0"
+}

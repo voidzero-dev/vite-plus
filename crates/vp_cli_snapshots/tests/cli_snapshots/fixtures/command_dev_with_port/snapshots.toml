@@ -1,0 +1,7 @@
+[[case]]
+name = "command_dev_with_port"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "dev", "--port", "12312312312"], comment = "intentionally use an invalid port (exceeds 0-65535) to trigger port error", continue-on-failure = true },
+]

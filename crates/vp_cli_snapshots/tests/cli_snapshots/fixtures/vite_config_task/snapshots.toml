@@ -1,0 +1,6 @@
+[[case]]
+name = "vite_config_task"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "build"], continue-on-failure = true },
+]

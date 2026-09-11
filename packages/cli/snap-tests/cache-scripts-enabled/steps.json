@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp run hello # first run should be cache miss",
-    "vp run hello # second run should be cache hit"
-  ]
-}

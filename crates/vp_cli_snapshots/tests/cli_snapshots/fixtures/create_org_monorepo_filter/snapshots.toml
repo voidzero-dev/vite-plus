@@ -1,0 +1,7 @@
+[[case]]
+name = "create_org_monorepo_filter"
+vp = "local"
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "@your-org", "--no-interactive"], comment = "inside monorepo, hides monorepo:true entries + shows omitted footer", continue-on-failure = true },
+]

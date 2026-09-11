@@ -12,8 +12,14 @@ dist
 dist-ssr
 *.local
 
+# dotenv environment variable files
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
+!.vscode/settings.json
 !.vscode/extensions.json
 .idea
 .DS_Store

@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_agent_claude"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--agent", "claude", "--no-interactive"], comment = "migration with --agent claude should write CLAUDE.md", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "CLAUDE.md", "<!--VITE PLUS START-->"], comment = "CLAUDE.md was created with the Vite+ agent block", continue-on-failure = true },
+]

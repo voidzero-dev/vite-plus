@@ -1,3 +1,0 @@
-> vp build
-> cat dist/index.html | grep 'sync-plugin-injected' # sync vitePlugins() should apply plugins during build
-  <!-- sync-plugin-injected --></body>

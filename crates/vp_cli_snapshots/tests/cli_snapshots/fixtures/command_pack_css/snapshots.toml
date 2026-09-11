@@ -1,0 +1,8 @@
+[[case]]
+name = "command_pack_css"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pack", "src/index.ts", "--minify"], comment = "bundles CSS via the bundled @tsdown/css + lightningcss (issue #1586)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "dist/style.css"], comment = "lightningcss-optimized output proves @tsdown/css ran", continue-on-failure = true },
+]

@@ -1,0 +1,11 @@
+[[case]]
+name = "cache_clean"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "hello"], comment = "create the cache for 'echo hello'", continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "hit the cache", continue-on-failure = true },
+  { argv = ["vp", "cache", "clean"], comment = "clean the cache", continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "cache miss after clean", continue-on-failure = true },
+  { argv = ["vp", "cache", "clean"], cwd = "subfolder", comment = "cache can be located and cleaned from subfolder", continue-on-failure = true },
+  { argv = ["vp", "run", "hello"], comment = "cache miss after clean", continue-on-failure = true },
+]

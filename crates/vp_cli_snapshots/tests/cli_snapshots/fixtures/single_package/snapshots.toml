@@ -1,0 +1,19 @@
+[[case]]
+name = "build_in_place"
+vp = ["local", "global"]
+comment = """
+Regression guard: a single-package repo (no workspaces field) never goes
+through target elicitation. Bare vp build runs in place even in an
+interactive terminal: no picker, no Selected line, no listing
+(rfcs/cwd-flag.md, resolution order step "anywhere else").
+"""
+steps = [["vp", "build"]]
+
+[[case]]
+name = "pack_in_place"
+vp = ["local", "global"]
+comment = "Same guard for vp pack: the standalone library packs in place via tsdown's default entry."
+steps = [
+  ["vp", "pack"],
+  { argv = ["vpt", "list-dir", "dist"], comment = "output lands in the repo itself" },
+]

@@ -1,7 +1,0 @@
-{
-  "commands": [
-    "vp create --help # show help",
-    "vp create --list # list templates",
-    "vp create --no-interactive # run in non-interactive mode without template name will show error"
-  ]
-}

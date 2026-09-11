@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_monorepo_husky_v8_preserves_lint_staged"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should warn about husky v8, preserve all lint-staged config", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "root lint-staged config should still be in package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], comment = "app lint-staged config should still be in package.json", continue-on-failure = true },
+]

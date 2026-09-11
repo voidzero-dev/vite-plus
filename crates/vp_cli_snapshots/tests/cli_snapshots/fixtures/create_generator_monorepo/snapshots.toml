@@ -1,0 +1,20 @@
+[[case]]
+name = "create_generator_monorepo"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = """
+Scaffolds a generator, installs its deps (so its `bin/index.ts` can import
+`bingo`), then runs it through the registered `create.templates` entry. The
+`vp install` step is what lets a scaffolded artifact run in the isolated
+runner without the legacy symlink-all-node_modules behavior.
+"""
+steps = [
+  { argv = ["vp", "create", "vite:generator", "--no-interactive", "--directory", "tools/my-generator"], comment = "scaffold a generator; auto-registers it in create.templates", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "create.templates entry appended, existing defaultTemplate preserved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tools/my-generator/package.json"], comment = "generator package (bingo dependency is the run hint; no marker keyword)", continue-on-failure = true },
+  { argv = ["vp", "install"], comment = "install workspace deps so the generator's bin can import bingo", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "create", "my-generator", "--no-interactive", "--", "--name", "demo-pkg", "--directory", "demo-pkg", "--offline"], comment = "resolve via the registered create.templates entry", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tools/demo-pkg/package.json"], comment = "generated next to the generator under tools/, not the apps/ parent", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tools/demo-pkg/src/index.ts"], continue-on-failure = true },
+]

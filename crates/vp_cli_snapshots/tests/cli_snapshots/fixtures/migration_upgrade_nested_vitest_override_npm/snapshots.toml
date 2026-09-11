@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_upgrade_nested_vitest_override_npm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "nested Vitest override is user-owned and not pending removal", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "object-valued override is preserved", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "nested override must not make migration permanently pending", continue-on-failure = true },
+]

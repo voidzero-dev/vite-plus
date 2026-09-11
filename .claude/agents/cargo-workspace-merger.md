@@ -70,7 +70,7 @@ Provide:
 
 ## Important Considerations
 
-- Use `vite_path` types for path operations as per project conventions
+- Use `vt_path` types for path operations as per project conventions
 - Dependencies with `path` references in the child workspace may need path adjustments
 - Feature flags on dependencies must be preserved
 - Optional dependencies must maintain their optional status

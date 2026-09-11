@@ -1,0 +1,6 @@
+[[case]]
+name = "check_fix_lint_error_not_swallowed"
+vp = "local"
+steps = [
+  { argv = ["vp", "check", "--fix", "src/index.js"], comment = "real lint error with --fix and paths (suppress_unmatched active), error must not be swallowed", continue-on-failure = true },
+]

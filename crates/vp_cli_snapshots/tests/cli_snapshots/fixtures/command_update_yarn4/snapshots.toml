@@ -1,0 +1,16 @@
+[[case]]
+name = "command_update_yarn4"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "update", "testnpm2"], comment = "should update package within semver range" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "rm", "testnpm2"], comment = "should to absolute latest version" },
+  ["vp", "add", "testnpm2@1.0.0", "-D"],
+  ["vp", "update", "testnpm2", "--latest"],
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "-D"], comment = "should update and ignore -D options" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "--recursive"], comment = "should update all packages but won't change the package.json" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

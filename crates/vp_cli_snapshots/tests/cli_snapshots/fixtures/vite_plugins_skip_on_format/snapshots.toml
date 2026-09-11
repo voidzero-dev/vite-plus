@@ -1,0 +1,6 @@
+[[case]]
+name = "vite_plugins_skip_on_format"
+vp = "local"
+steps = [
+  { argv = ["vp", "format", "src/"], comment = "the `format` alias should not load plugins (heavy-plugin.ts throws if imported)", continue-on-failure = true },
+]

@@ -1,5 +1,9 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { RuleTester } from 'oxlint/plugins-dev';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createDefaultVitePlusLintConfig,
@@ -9,6 +13,30 @@ import {
   VITE_PLUS_OXLINT_PLUGIN_SPECIFIER,
 } from '../oxlint-plugin-config.js';
 import { preferVitePlusImportsRule, rewriteVitePlusImportSpecifier } from '../oxlint-plugin.js';
+
+const nuxtTestFilename = path.join(
+  import.meta.dirname,
+  'fixtures/nuxt-test-utils/component.spec.ts',
+);
+const nuxtUnitTestFilename = path.join(
+  import.meta.dirname,
+  'fixtures/nuxt-test-utils/unit.spec.ts',
+);
+// A package that declares `@oxlint/plugins` as a peer is a published Oxlint
+// plugin. Its consumers may run plain Oxlint, so the autofix must not move its
+// authoring imports to `vite-plus`.
+const oxlintPluginPackageFilename = path.join(
+  import.meta.dirname,
+  'fixtures/oxlint-plugin-package/rule.ts',
+);
+const oxlintOptionalPluginPackageFilename = path.join(
+  import.meta.dirname,
+  'fixtures/oxlint-optional-plugin-package/rule.ts',
+);
+const oxlintOptionalToolPackageFilename = path.join(
+  import.meta.dirname,
+  'fixtures/oxlint-optional-tool-package/rule.ts',
+);
 
 describe('oxlint plugin config defaults', () => {
   it('adds vite-plus js plugin and lint rule defaults', () => {
@@ -66,6 +94,10 @@ describe('rewriteVitePlusImportSpecifier', () => {
     expect(rewriteVitePlusImportSpecifier('@vitest/browser/locators')).toBe(
       'vite-plus/test/locators',
     );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser/matchers')).toBe(
+      'vite-plus/test/matchers',
+    );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser/utils')).toBe('vite-plus/test/utils');
     expect(rewriteVitePlusImportSpecifier('@vitest/browser-playwright/context')).toBe(
       'vite-plus/test/browser/context',
     );
@@ -79,7 +111,86 @@ describe('rewriteVitePlusImportSpecifier', () => {
       'vite-plus/test/browser/providers/webdriverio',
     );
     expect(rewriteVitePlusImportSpecifier('@vitest/browser-playwright/locators')).toBeNull();
+    // `vitest/package.json` must NOT be rewritten — `vite-plus` does not export
+    // `./test/package.json`, so rewriting would break resolution. Mirrors the
+    // migrate rewriter's exclusion.
+    expect(rewriteVitePlusImportSpecifier('vitest/package.json')).toBeNull();
+    // ...but other `vitest/<sub>` specifiers still rewrite normally.
+    expect(rewriteVitePlusImportSpecifier('vitest/node')).toBe('vite-plus/test/node');
     expect(rewriteVitePlusImportSpecifier('tsx')).toBeNull();
+  });
+
+  it('maps the Oxlint plugin authoring API to vite-plus', () => {
+    expect(rewriteVitePlusImportSpecifier('@oxlint/plugins')).toBe('vite-plus/lint/plugins');
+    expect(rewriteVitePlusImportSpecifier('oxlint/plugins-dev')).toBe('vite-plus/lint/plugins-dev');
+    // The bare `oxlint` specifier still serves the config surface. The
+    // specifier alone cannot decide it, so the rule checks each import
+    // statement.
+    expect(rewriteVitePlusImportSpecifier('oxlint')).toBeNull();
+  });
+});
+
+function checkImports(filename: string, preservedSpecifiers: readonly string[]): void {
+  const tests: RuleTester.TestCases = { valid: [], invalid: [] };
+  for (const [specifier, binding, replacement] of [
+    ['vitest', 'expect', 'vite-plus/test'],
+    ['@oxlint/plugins', 'defineRule', 'vite-plus/lint/plugins'],
+  ]) {
+    const code = `import { ${binding} } from '${specifier}'`;
+    if (preservedSpecifiers.includes(specifier)) {
+      tests.valid.push({ filename, code });
+    } else {
+      tests.invalid.push({
+        filename,
+        code,
+        output: `import { ${binding} } from '${replacement}'`,
+        errors: [{ messageId: 'preferVitePlusImports' }],
+      });
+    }
+  }
+  new RuleTester().run(PREFER_VITE_PLUS_IMPORTS_RULE_NAME, preferVitePlusImportsRule, tests);
+}
+
+describe('package import exceptions', () => {
+  let projectPath: string;
+
+  beforeEach(() => {
+    projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-lint-package-exceptions-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectPath, { recursive: true, force: true });
+  });
+
+  it('refreshes independent exceptions when the manifest changes', () => {
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const states = [
+      { pkg: { devDependencies: { '@nuxt/test-utils': '*' } }, preserved: ['vitest'] },
+      { pkg: { peerDependencies: { '@oxlint/plugins': '*' } }, preserved: ['@oxlint/plugins'] },
+      { pkg: { optionalDependencies: { '@oxlint/plugins': '*' } }, preserved: ['@oxlint/plugins'] },
+      { pkg: { devDependencies: { '@oxlint/plugins': '*' } }, preserved: [] },
+    ];
+    for (const [index, { pkg, preserved }] of states.entries()) {
+      fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+      // Explicit timestamps avoid filesystem precision affecting invalidation.
+      fs.utimesSync(packageJsonPath, 100 + index, 100 + index);
+      checkImports(path.join(projectPath, 'rule.ts'), preserved);
+      checkImports(path.join(projectPath, 'other.ts'), preserved);
+    }
+  });
+
+  it('does not inherit exceptions across nested package boundaries', () => {
+    fs.writeFileSync(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({ dependencies: { '@nuxt/test-utils': '*', '@oxlint/plugins': '*' } }),
+    );
+    const nestedPath = path.join(projectPath, 'nested');
+    fs.mkdirSync(nestedPath);
+    fs.writeFileSync(path.join(nestedPath, 'package.json'), '{}');
+
+    checkImports(path.join(projectPath, 'rule.ts'), ['vitest', '@oxlint/plugins']);
+    checkImports(path.join(nestedPath, 'rule.ts'), []);
+    checkImports(path.join(projectPath, 'other.ts'), ['vitest', '@oxlint/plugins']);
   });
 });
 
@@ -91,6 +202,93 @@ new RuleTester({
   valid: [
     `import { defineConfig } from 'vite-plus'`,
     `export { expect } from 'vite-plus/test'`,
+    // Oxlint's config surface still lives in the `oxlint` package. Only the
+    // plugin authoring API moved. A redirect would break these imports.
+    `import { defineConfig } from 'oxlint'`,
+    `import { "defineConfig" as cfg } from 'oxlint'`,
+    `export { 'defineConfig' as cfg } from 'oxlint'`,
+    `export { 'defineRule' as rule, 'defineConfig' as cfg } from 'oxlint'`,
+    {
+      code: `export type { 'OxlintConfig' as Config } from 'oxlint'`,
+      filename: 'types.ts',
+    },
+    {
+      code: `import type { 'OxlintConfig' as Config } from 'oxlint'`,
+      filename: 'types.ts',
+    },
+    {
+      code: `import type { OxlintConfig, OxlintOverride } from 'oxlint'`,
+      filename: 'types.ts',
+    },
+    // These name no binding, so nothing tells the config surface from the
+    // plugin API. The rule leaves them alone instead of risking a wrong
+    // autofix.
+    `import oxlint from 'oxlint'`,
+    `import * as oxlint from 'oxlint'`,
+    `import 'oxlint'`,
+    `import { defineRule } from 'vite-plus/lint/plugins'`,
+    `import { RuleTester } from 'vite-plus/lint/plugins-dev'`,
+    // A statement that mixes the two surfaces stays put: the autofix replaces
+    // the whole specifier, and vite-plus/lint/plugins exports no defineConfig.
+    `import { defineConfig, defineRule } from 'oxlint'`,
+    // A default or namespace binding disqualifies the statement too:
+    // vite-plus/lint/plugins has no default export.
+    `import oxlint, { defineRule } from 'oxlint'`,
+    // Import-equals declarations stay unchanged, matching the migrator.
+    {
+      code: `import plugins = require('@oxlint/plugins')`,
+      filename: 'plugin.cts',
+    },
+    {
+      code: `import tester = require('oxlint/plugins-dev')`,
+      filename: 'plugin.cts',
+    },
+    // `export *` names nothing, and a config-surface re-export is correct.
+    `export * from 'oxlint'`,
+    `export { defineConfig } from 'oxlint'`,
+    // A published Oxlint plugin keeps resolving the API from its own peer.
+    {
+      code: `export { 'defineRule' as rule } from 'oxlint'`,
+      filename: oxlintPluginPackageFilename,
+    },
+    {
+      code: `import { defineRule } from '@oxlint/plugins'`,
+      filename: oxlintPluginPackageFilename,
+    },
+    {
+      code: `import { defineRule } from 'oxlint'`,
+      filename: oxlintPluginPackageFilename,
+    },
+    {
+      code: `import { RuleTester } from 'oxlint/plugins-dev'`,
+      filename: oxlintPluginPackageFilename,
+    },
+    // An optional runtime API is also part of a published plugin's contract.
+    ...[
+      `import { defineRule } from '@oxlint/plugins'`,
+      `export { definePlugin } from '@oxlint/plugins'`,
+      `const plugins = await import('@oxlint/plugins')`,
+      `import { defineRule } from 'oxlint'`,
+      `export { 'defineRule' as rule } from 'oxlint'`,
+      `import { RuleTester } from 'oxlint/plugins-dev'`,
+    ].map((code) => ({ code, filename: oxlintOptionalPluginPackageFilename })),
+    // `declare module` keeps the upstream module identity, so augmentations
+    // still merge with the upstream declarations.
+    {
+      code: `declare module '@oxlint/plugins' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module 'oxlint' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module 'oxlint/plugins-dev' {}`,
+      filename: 'types.ts',
+    },
+    // `vitest/package.json` must NOT be autofixed — `vite-plus` has no
+    // `./test/package.json` export, so a rewrite would break resolution.
+    `import pkg from 'vitest/package.json'`,
     {
       code: `declare module 'vite-plus/test/browser' {}`,
       filename: 'types.ts',
@@ -107,16 +305,141 @@ new RuleTester({
       code: `type TestFn = typeof import('vite-plus/test')['test']`,
       filename: 'types.ts',
     },
+    // `declare module 'vitest…'` / `declare module '@vitest/browser…'` are
+    // intentionally NOT autofixed — they target the upstream module identity
+    // so type augmentations merge with what `vite-plus/test*` re-exports.
+    {
+      code: `declare module 'vitest' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module 'vitest/node' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module '@vitest/browser' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module '@vitest/browser/context' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module '@vitest/browser-playwright' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module '@vitest/browser-playwright/context' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      filename: nuxtTestFilename,
+    },
+    {
+      code: `import { expect } from 'vitest';\nimport { startVitest } from 'vitest/node';\nimport { defineConfig } from 'vitest/config';`,
+      filename: nuxtUnitTestFilename,
+    },
+    // Issue #2004: `vite`/`vite/*` are flagged only in config entry files, so
+    // non-config files keep their `vite` imports (vite-plus is not a guaranteed
+    // superset of vite's exposed surface). vitest/tsdown/@vitest are unaffected.
+    {
+      code: `import { defineConfig } from 'vite'`,
+      filename: 'src/main.ts',
+    },
+    {
+      code: `import { createServer } from 'vite'`,
+      filename: path.join(import.meta.dirname, 'server.ts'),
+    },
+    {
+      code: `type Api = Pick<typeof import('vite'), 'createBuilder' | 'loadConfigFromFile'>`,
+      filename: 'src/deploy.ts',
+    },
+    {
+      code: `declare module 'vite' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `import 'vite/client'`,
+      filename: 'src/env.ts',
+    },
   ],
   invalid: [
     {
+      // Optional oxlint retains the existing tool-migration policy.
+      code: `import { defineRule } from 'oxlint'`,
+      filename: oxlintOptionalToolPackageFilename,
+      errors: 1,
+      output: `import { defineRule } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `import { definePlugin, defineRule } from '@oxlint/plugins'`,
+      errors: 1,
+      output: `import { definePlugin, defineRule } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `import { RuleTester } from "oxlint/plugins-dev"`,
+      errors: 1,
+      output: `import { RuleTester } from "vite-plus/lint/plugins-dev"`,
+    },
+    {
+      // The pre-`@oxlint/plugins` authoring API. `oxlint` no longer exports
+      // it, and the migration strips the dependency it came from.
+      code: `import { defineRule } from 'oxlint'`,
+      errors: 1,
+      output: `import { defineRule } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `import type { Context, ESTree } from 'oxlint'`,
+      errors: 1,
+      filename: 'types.ts',
+      output: `import type { Context, ESTree } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `import { defineRule as rule } from "oxlint"`,
+      errors: 1,
+      output: `import { defineRule as rule } from "vite-plus/lint/plugins"`,
+    },
+    {
+      // A named re-export identifies the surface just as an import does.
+      code: `export { defineRule } from 'oxlint'`,
+      errors: 1,
+      output: `export { defineRule } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `export { 'defineRule' as rule } from 'oxlint'`,
+      errors: 1,
+      output: `export { 'defineRule' as rule } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `export { "definePlugin" as plugin, defineRule as rule } from "oxlint"`,
+      errors: 1,
+      output: `export { "definePlugin" as plugin, defineRule as rule } from "vite-plus/lint/plugins"`,
+    },
+    {
+      code: `export type { 'Context' as RuleContext } from 'oxlint'`,
+      errors: 1,
+      filename: 'types.ts',
+      output: `export type { 'Context' as RuleContext } from 'vite-plus/lint/plugins'`,
+    },
+    {
+      code: `import { page } from '@vitest/browser/context'`,
+      errors: 1,
+      filename: nuxtUnitTestFilename,
+      output: `import { page } from 'vite-plus/test/browser/context'`,
+    },
+    {
+      // `vite`/`vite/*` are flagged only in config entry files (issue #2004);
+      // in every other file they are preserved (see valid cases above).
       code: `import { defineConfig } from 'vite'`,
       errors: 1,
+      filename: 'vite.config.ts',
       output: `import { defineConfig } from 'vite-plus'`,
     },
     {
       code: `export { defineConfig } from "vite"`,
       errors: 1,
+      filename: 'vitest.config.ts',
       output: `export { defineConfig } from "vite-plus"`,
     },
     {
@@ -131,22 +454,20 @@ new RuleTester({
       output: `type TestFn = typeof import('vite-plus/test')['test']`,
     },
     {
-      code: `declare module '@vitest/browser-playwright' {}`,
-      errors: 1,
-      filename: 'types.ts',
-      output: `declare module 'vite-plus/test/browser-playwright' {}`,
-    },
-    {
-      code: `declare module '@vitest/browser-playwright/context' {}`,
-      errors: 1,
-      filename: 'types.ts',
-      output: `declare module 'vite-plus/test/browser/context' {}`,
-    },
-    {
       code: `type BrowserClient = typeof import('@vitest/browser/client')`,
       errors: 1,
       filename: 'types.ts',
       output: `type BrowserClient = typeof import('vite-plus/test/client')`,
+    },
+    {
+      code: `import { expect } from '@vitest/browser/matchers'`,
+      errors: 1,
+      output: `import { expect } from 'vite-plus/test/matchers'`,
+    },
+    {
+      code: `import { getElementError } from '@vitest/browser/utils'`,
+      errors: 1,
+      output: `import { getElementError } from 'vite-plus/test/utils'`,
     },
     {
       code: `type PlaywrightProvider = typeof import('@vitest/browser-playwright/provider')`,
@@ -157,13 +478,27 @@ new RuleTester({
     {
       code: `import foo = require('vite/client')`,
       errors: 1,
-      filename: 'types.ts',
+      filename: 'vite.config.cts',
       output: `import foo = require('vite-plus/client')`,
     },
     {
+      // In a config file both `vitest` and `vite` are flagged.
       code: `export * from 'vitest';\nimport { defineConfig } from 'vite';`,
       errors: 2,
+      filename: 'vite.config.ts',
       output: `export * from 'vite-plus/test';\nimport { defineConfig } from 'vite-plus';`,
+    },
+    {
+      code: `import { vi } from 'vitest';\nimport { startVitest } from 'vitest/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      errors: 2,
+      filename: path.join(import.meta.dirname, 'ordinary.spec.ts'),
+      output: `import { vi } from 'vite-plus/test';\nimport { startVitest } from 'vite-plus/test/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+    },
+    {
+      code: `import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      errors: 1,
+      filename: path.join(import.meta.dirname, 'ordinary.spec.ts'),
+      output: `import { vi } from 'vite-plus/test';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
     },
   ],
 });

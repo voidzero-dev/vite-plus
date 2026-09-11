@@ -1,0 +1,17 @@
+{
+  "@vp-smoke/hello": {
+    "name": "@vp-smoke/hello",
+    "dist-tags": { "latest": "1.0.0" },
+    "versions": {
+      "1.0.0": {
+        "name": "@vp-smoke/hello",
+        "version": "1.0.0",
+        "dist": {
+          "tarball": "{REGISTRY}/@vp-smoke/hello/-/vp-smoke-hello-1.0.0.tgz",
+          "integrity": "sha512-BiKAWKkRFBN/ykbODaV/cgf+x1Y4g4jamhsR3YmLkJCH4/YcBuJv06CDG2kSzDuaZqdDbp/Wxl/zRqoXPYdNWg==",
+          "shasum": "154a47decc3af9a6b8c85e761b5a7394a15a6238"
+        }
+      }
+    }
+  }
+}

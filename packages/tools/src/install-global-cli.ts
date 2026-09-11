@@ -21,6 +21,36 @@ const isWindows = process.platform === 'win32';
 const LOCAL_DEV_PREFIX = 'local-dev';
 const pad2 = (n: number) => n.toString().padStart(2, '0');
 
+function pinCiLegacyHome() {
+  // CI workflows still use `~/.vite-plus/bin/vp` (#2371). Set VP_HOME so the
+  // bootstrap uses the monolithic root. The resolver uses `~/.vite-plus` only
+  // when it contains an install with a `current` link. An empty directory does
+  // not select the monolithic layout.
+  if (process.env.CI == null || process.env.VP_HOME != null) {
+    return;
+  }
+  process.env.VP_HOME = path.join(os.homedir(), '.vite-plus');
+}
+
+function readDataDirFromVp(vpBinary: string): string {
+  const output = execFileSync(vpBinary, [], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      VP_DUMP_DIRS: '1',
+    },
+  });
+  const dataDir = output
+    .split(/\r?\n/)
+    .map((line) => line.split('\t'))
+    .find((parts) => parts[0] === 'data' && parts[1])?.[1]
+    ?.trim();
+  if (!dataDir) {
+    throw new Error(`vp did not print a data directory (VP_DUMP_DIRS=1): ${output}`);
+  }
+  return dataDir;
+}
+
 function localDevVersion(): string {
   const now = new Date();
   const date = `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}`;
@@ -82,14 +112,12 @@ export function installGlobalCli() {
   }
 
   try {
-    const installDir = path.join(os.homedir(), '.vite-plus');
-
     // Locate the Rust vp binary (built by cargo or copied by CI)
     const binaryName = isWindows ? 'vp.exe' : 'vp';
     const binaryPath = findVpBinary(binaryName);
     if (!binaryPath) {
       console.error(`Error: vp binary not found in ${getTargetDirs().join(', ')}`);
-      console.error('Run "cargo build -p vite_global_cli --release" first.');
+      console.error('Run "cargo build -p vp_global_cli --release" first.');
       process.exit(1);
     }
 
@@ -98,15 +126,17 @@ export function installGlobalCli() {
     if (isWindows) {
       const shimPath = path.join(path.dirname(binaryPath), 'vp-shim.exe');
       if (!existsSync(shimPath)) {
-        console.error(`Error: vp-shim.exe not found at ${shimPath}`);
-        console.error('Build it with: cargo build -p vite_trampoline --release');
+        console.error(`Error: vp-shim.exe does not exist at ${shimPath}`);
+        console.error('Build it with: node packages/tools/src/build-trampoline.ts --release');
         process.exit(1);
       }
     }
 
     const localDevVer = localDevVersion();
+    pinCiLegacyHome();
+    const installDir = readDataDirFromVp(binaryPath);
 
-    // Clean up old local-dev directories to avoid accumulation
+    // Clean up old local-dev directories under the EnvConfig data root.
     if (existsSync(installDir)) {
       const currentInstallPath = getCurrentInstallPath(installDir);
       for (const entry of readdirSync(installDir)) {
@@ -132,7 +162,6 @@ export function installGlobalCli() {
       ...(process.env as Record<string, string>),
       VP_LOCAL_TGZ: tgzPath,
       VP_LOCAL_BINARY: binaryPath,
-      VP_HOME: installDir,
       VP_VERSION: localDevVer,
       CI: 'true',
       // Skip vp install in install.sh — we handle deps ourselves:
@@ -303,9 +332,7 @@ function getWindowsPowerShellCommand(): string {
  * Install dependencies for CI by generating a wrapper package.json with file: protocol
  * references to the main tgz and sibling @voidzero-dev/* tgz files, then running npm install.
  */
-function installCiDeps(versionDir: string, mainTgzPath: string) {
-  const tgzDir = path.dirname(mainTgzPath);
-
+function installCiDeps(versionDir: string, mainTgzPath: string): void {
   // Extract vite-plus's package.json from the tgz to find @voidzero-dev/* deps
   // On Windows, use the system tar (bsdtar) which handles Windows paths natively.
   // Git Bash's GNU tar misinterprets drive letters (D:, C:) as remote host references,
@@ -325,33 +352,7 @@ function installCiDeps(versionDir: string, mainTgzPath: string) {
   const vitePlusPkg = JSON.parse(readFileSync(path.join(tempDir, 'package.json'), 'utf-8'));
   rmSync(tempDir, { recursive: true, force: true });
 
-  // Build wrapper deps: vite-plus from tgz + @voidzero-dev/* from sibling tgz files
-  const wrapperDeps: Record<string, string> = {
-    'vite-plus': `file:${mainTgzPath}`,
-  };
-
-  const vitePlusDeps: Record<string, string> = vitePlusPkg.dependencies ?? {};
-  for (const [name, version] of Object.entries(vitePlusDeps)) {
-    if (!name.startsWith('@voidzero-dev/')) {
-      continue;
-    }
-    // @voidzero-dev/vite-plus-core@0.0.0 -> voidzero-dev-vite-plus-core-0.0.0.tgz
-    const tgzName = name.replace('@', '').replace('/', '-') + `-${version}.tgz`;
-    const tgzFilePath = path.join(tgzDir, tgzName);
-    if (existsSync(tgzFilePath)) {
-      wrapperDeps[name] = `file:${tgzFilePath}`;
-      console.log(`  ${name}: ${version} -> file:${tgzFilePath}`);
-    } else {
-      console.warn(`Warning: tgz not found for ${name}@${version}: ${tgzFilePath}`);
-    }
-  }
-
-  const wrapperPkg = {
-    name: 'vp-global',
-    version: '0.0.0',
-    private: true,
-    dependencies: wrapperDeps,
-  };
+  const wrapperPkg = createCiInstallPackage(vitePlusPkg.dependencies ?? {}, mainTgzPath);
 
   writeFileSync(path.join(versionDir, 'package.json'), JSON.stringify(wrapperPkg, null, 2) + '\n');
 
@@ -359,6 +360,57 @@ function installCiDeps(versionDir: string, mainTgzPath: string) {
     cwd: versionDir,
     stdio: 'inherit',
   });
+}
+
+interface CiInstallPackage {
+  name: string;
+  version: string;
+  private: boolean;
+  dependencies: Record<string, string>;
+  overrides: Record<string, string>;
+}
+
+/** Build a CI install manifest from the packed CLI's declared dependencies. */
+export function createCiInstallPackage(
+  vitePlusDeps: Record<string, string>,
+  mainTgzPath: string,
+): CiInstallPackage {
+  const tgzDir = path.dirname(mainTgzPath);
+  // Build wrapper deps: vite-plus from tgz + @voidzero-dev/* from sibling tgz files
+  const wrapperDeps: Record<string, string> = {
+    'vite-plus': `file:${mainTgzPath}`,
+  };
+  const overrides: Record<string, string> = {};
+
+  for (const [name, specifier] of Object.entries(vitePlusDeps)) {
+    const alias = /^npm:(@voidzero-dev\/[^@]+)@(.+)$/.exec(specifier);
+    const packageName = alias?.[1] ?? name;
+    const version = alias?.[2] ?? specifier;
+    if (!packageName.startsWith('@voidzero-dev/')) {
+      continue;
+    }
+    // @voidzero-dev/vite-plus-core@0.0.0 -> voidzero-dev-vite-plus-core-0.0.0.tgz
+    const tgzName = packageName.replace('@', '').replace('/', '-') + `-${version}.tgz`;
+    const tgzFilePath = path.join(tgzDir, tgzName);
+    if (existsSync(tgzFilePath)) {
+      wrapperDeps[name] = `file:${tgzFilePath}`;
+      // Point transitive aliases at the same tarball as the wrapper dependency.
+      if (name !== 'vite-plus') {
+        overrides[name] = `$${name}`;
+      }
+      console.log(`  ${name}: ${version} -> file:${tgzFilePath}`);
+    } else {
+      console.warn(`Warning: tgz not found for ${name}@${version}: ${tgzFilePath}`);
+    }
+  }
+
+  return {
+    name: 'vp-global',
+    version: '0.0.0',
+    private: true,
+    dependencies: wrapperDeps,
+    overrides,
+  };
 }
 
 /**

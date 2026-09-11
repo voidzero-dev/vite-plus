@@ -1,0 +1,751 @@
+//! Global help documents and routing.
+
+use clap::{CommandFactory, error::ErrorKind};
+pub use vp_cli_help::{
+    HelpDoc, HelpRow, HelpSection, accent, accent_command, print_help_doc, render_heading,
+    render_help_doc,
+};
+
+fn row(label: &'static str, description: &'static str) -> HelpRow {
+    HelpRow { label: label.into(), description: vec![description.into()] }
+}
+
+fn section_rows(title: &'static str, rows: Vec<HelpRow>) -> HelpSection {
+    HelpSection::Rows { title: title.into(), rows }
+}
+
+fn section_lines(title: &'static str, lines: Vec<&'static str>) -> HelpSection {
+    HelpSection::Lines { title: title.into(), lines: lines.into_iter().map(Into::into).collect() }
+}
+
+fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static str> {
+    match command_path {
+        [] => Some("https://viteplus.dev/guide/"),
+        [
+            "install" | "add" | "remove" | "update" | "dedupe" | "outdated" | "list" | "ls" | "why"
+            | "info" | "view" | "show" | "link" | "unlink" | "rebuild" | "pm",
+            ..,
+        ] => Some("https://viteplus.dev/guide/install"),
+        ["dlx"] => Some("https://viteplus.dev/guide/vpx"),
+        ["env", ..] => Some("https://viteplus.dev/guide/env"),
+        ["toolchain"] => Some("https://viteplus.dev/guide/upgrade"),
+        ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
+        ["implode"] => Some("https://viteplus.dev/guide/implode"),
+        _ => None,
+    }
+}
+
+fn is_section_heading(line: &str) -> bool {
+    let trimmed = line.trim_end();
+    !trimmed.is_empty() && !trimmed.starts_with(' ') && trimmed.ends_with(':')
+}
+
+fn split_alias_suffix(description: &str) -> Option<(&str, &str)> {
+    let description = description.strip_suffix(']')?;
+    let (description, aliases) = description.rsplit_once(" [aliases: ")?;
+    if aliases.trim().is_empty() {
+        return None;
+    }
+    Some((description, aliases))
+}
+
+fn normalize_alias_suffix(label: String, description: String) -> (String, String) {
+    if label.starts_with('-') {
+        return (label, description);
+    }
+
+    let Some((description_without_aliases, aliases)) = split_alias_suffix(&description) else {
+        return (label, description);
+    };
+
+    (format!("{label}, {aliases}"), description_without_aliases.to_string())
+}
+
+fn split_label_and_description(content: &str) -> Option<(String, String)> {
+    let bytes = content.as_bytes();
+    let mut i = 0;
+
+    while i + 1 < bytes.len() {
+        if bytes[i] == b' ' && bytes[i + 1] == b' ' {
+            let mut j = i + 2;
+            while j < bytes.len() && bytes[j] == b' ' {
+                j += 1;
+            }
+
+            let label = content[..i].trim_end();
+            let description = content[j..].trim_start();
+            if !label.is_empty() && !description.is_empty() {
+                return Some((label.to_string(), description.to_string()));
+            }
+            i = j;
+            continue;
+        }
+        i += 1;
+    }
+
+    None
+}
+
+fn parse_rows(lines: &[String]) -> Vec<HelpRow> {
+    parse_rows_with_alias_normalization(lines, false)
+}
+
+fn parse_command_rows(lines: &[String]) -> Vec<HelpRow> {
+    parse_rows_with_alias_normalization(lines, true)
+}
+
+fn parse_rows_with_alias_normalization(
+    lines: &[String],
+    normalize_alias_suffixes: bool,
+) -> Vec<HelpRow> {
+    let mut rows = Vec::new();
+
+    for line in lines {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let leading = line.chars().take_while(|c| *c == ' ').count();
+        let content = line.trim_start();
+        if content.is_empty() {
+            continue;
+        }
+
+        if let Some((label, description)) = split_label_and_description(content) {
+            let (label, description) = if normalize_alias_suffixes {
+                normalize_alias_suffix(label, description)
+            } else {
+                (label, description)
+            };
+            rows.push(HelpRow { label: label.into(), description: vec![description.into()] });
+            continue;
+        }
+
+        if leading >= 4 && content.starts_with('-') {
+            rows.push(HelpRow { label: content.to_string().into(), description: vec![] });
+            continue;
+        }
+
+        if leading >= 4 {
+            if let Some(last) = rows.last_mut() {
+                last.description.push(content.to_string().into());
+                continue;
+            }
+        }
+
+        rows.push(HelpRow { label: content.to_string().into(), description: vec![] });
+    }
+
+    rows
+}
+
+fn strip_ansi(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            match chars.peek().copied() {
+                // CSI sequence (for example: \x1b[1m)
+                Some('[') => {
+                    let _ = chars.next();
+                    for c in chars.by_ref() {
+                        if ('@'..='~').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                // OSC sequence (for example: hyperlinks)
+                Some(']') => {
+                    let _ = chars.next();
+                    let mut prev = '\0';
+                    for c in chars.by_ref() {
+                        if c == '\u{7}' || (prev == '\u{1b}' && c == '\\') {
+                            break;
+                        }
+                        prev = c;
+                    }
+                }
+                _ => {}
+            }
+            continue;
+        }
+
+        output.push(ch);
+    }
+
+    output
+}
+
+fn parse_clap_help_to_doc(raw_help: &str) -> Option<HelpDoc> {
+    let normalized = raw_help.replace("\r\n", "\n");
+    let lines: Vec<String> = normalized.lines().map(strip_ansi).collect();
+    let usage_index = lines.iter().position(|line| line.starts_with("Usage: "))?;
+    let usage = lines[usage_index].trim_start_matches("Usage: ").trim().to_string();
+
+    let summary = lines[..usage_index]
+        .iter()
+        .map(|line| line.trim_end())
+        .filter(|line| !line.trim().is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+
+    let mut sections = Vec::new();
+    let mut i = usage_index + 1;
+    while i < lines.len() {
+        if lines[i].trim().is_empty() {
+            i += 1;
+            continue;
+        }
+
+        if !is_section_heading(&lines[i]) {
+            i += 1;
+            continue;
+        }
+
+        let title = lines[i].trim_end().trim_end_matches(':').to_string();
+        i += 1;
+
+        let mut body = Vec::new();
+        while i < lines.len() {
+            if is_section_heading(&lines[i]) {
+                break;
+            }
+            body.push(lines[i].trim_end().to_string());
+            i += 1;
+        }
+
+        let first_non_empty = body.iter().position(|line| !line.trim().is_empty());
+        let last_non_empty = body.iter().rposition(|line| !line.trim().is_empty());
+        let body = match (first_non_empty, last_non_empty) {
+            (Some(start), Some(end)) if start <= end => body[start..=end].to_vec(),
+            _ => vec![],
+        };
+
+        let row_sections =
+            matches!(title.as_str(), "Arguments" | "Options" | "Commands" | "Subcommands");
+        if row_sections {
+            let rows = if matches!(title.as_str(), "Commands" | "Subcommands") {
+                parse_command_rows(&body)
+            } else {
+                parse_rows(&body)
+            };
+            sections.push(HelpSection::Rows { title: title.into(), rows });
+        } else {
+            let lines = body
+                .into_iter()
+                .filter(|line| !line.trim().is_empty())
+                .map(Into::into)
+                .collect::<Vec<_>>();
+            sections.push(HelpSection::Lines { title: title.into(), lines });
+        }
+    }
+
+    Some(HelpDoc {
+        usage: usage.into(),
+        summary: summary.into_iter().map(Into::into).collect(),
+        sections,
+        documentation_url: None,
+    })
+}
+
+pub fn top_level_help_doc() -> HelpDoc {
+    HelpDoc {
+        usage: "vp [COMMAND]".into(),
+        summary: Vec::new(),
+        sections: vec![
+            section_rows(
+                "Start",
+                vec![
+                    row("create", "Create a new project from a template"),
+                    row("migrate", "Migrate an existing project to Vite+"),
+                    row("config", "Configure hooks and agent integration"),
+                    row("hooks", "Manage the Git hook dispatcher"),
+                    row("staged", "Run linters on staged files"),
+                    row(
+                        "install, i",
+                        "Install all dependencies, or add packages if package names are provided",
+                    ),
+                    row("env", "Manage Node.js and package managers"),
+                ],
+            ),
+            section_rows(
+                "Develop",
+                vec![
+                    row("dev", "Run the development server"),
+                    row("check", "Run format, lint, and type checks"),
+                    row("lint", "Lint code"),
+                    row("fmt, format", "Format code"),
+                    row("test", "Run tests"),
+                ],
+            ),
+            section_rows(
+                "Execute",
+                vec![
+                    row("run", "Run tasks (also available as standalone `vpr`)"),
+                    row("exec", "Execute a command from local node_modules/.bin"),
+                    row("node", "Run a Node.js script (shorthand for `env exec node`)"),
+                    row("dlx", "Execute a package binary without installing it as a dependency"),
+                    row("cache", "Manage the task cache"),
+                ],
+            ),
+            section_rows(
+                "Build",
+                vec![
+                    row("build", "Build for production"),
+                    row("pack", "Build library"),
+                    row("preview", "Preview production build"),
+                ],
+            ),
+            section_rows(
+                "Manage Dependencies",
+                vec![
+                    row("add", "Add packages to dependencies"),
+                    row("remove, rm, un, uninstall", "Remove packages from dependencies"),
+                    row("update, up", "Update packages to their latest versions"),
+                    row("dedupe", "Deduplicate dependencies by removing older versions"),
+                    row("outdated", "Check for outdated packages"),
+                    row("list, ls", "List installed packages"),
+                    row("why, explain", "Show why a package is installed"),
+                    row("info, view, show", "View package information from the registry"),
+                    row("link, ln", "Link packages for local development"),
+                    row("unlink", "Unlink packages"),
+                    row("rebuild", "Rebuild native modules"),
+                    row("pm", "Forward a command to the package manager"),
+                ],
+            ),
+            section_rows(
+                "Maintain",
+                vec![
+                    row("toolchain", "Show active Vite+ tools, versions, and relationships"),
+                    row("upgrade", "Update vp itself to the latest version"),
+                    row("implode", "Remove vp and all related data"),
+                ],
+            ),
+        ],
+        documentation_url: documentation_url_for_command_path(&[]).map(Into::into),
+    }
+}
+
+fn env_help_doc() -> HelpDoc {
+    HelpDoc {
+        usage: "vp env [COMMAND]".into(),
+        summary: vec!["Manage Node.js and package-manager environments".into()],
+        sections: vec![
+            section_rows(
+                "Setup",
+                vec![
+                    row("setup", "Create or update shims in VP_HOME/bin"),
+                    row("on", "Enable managed mode for selected environment scopes"),
+                    row("off", "Enable system-first mode for selected environment scopes"),
+                    row("print", "Print PATH setup for the resolved environment"),
+                ],
+            ),
+            section_rows(
+                "Manage",
+                vec![
+                    row("default", "Set or show global environment defaults"),
+                    row("pin", "Pin Node.js and package-manager versions in the project"),
+                    row("unpin", "Remove project environment pins (alias for `pin --unpin`)"),
+                    row("use", "Activate an environment for this shell session"),
+                    row("install, i", "Install a resolved or explicit environment"),
+                    row("uninstall, uni", "Uninstall explicit component versions"),
+                    row("clean", "Remove unused runtimes and package managers"),
+                    row("exec, run", "Execute a command in a resolved or explicit environment"),
+                ],
+            ),
+            section_rows(
+                "Inspect",
+                vec![
+                    row("current", "Show current environment information"),
+                    row("doctor", "Run diagnostics and show environment status"),
+                    row("which", "Show path to the tool that would be executed"),
+                    row("list, ls", "List locally installed environment components"),
+                    row(
+                        "list-remote, ls-remote",
+                        "List available versions from component registries",
+                    ),
+                ],
+            ),
+            section_lines(
+                "Examples",
+                vec![
+                    "  Setup:",
+                    "    vp env setup                  # Create Node.js and package-manager shims",
+                    "    vp env on                     # Manage Node.js and package managers",
+                    "    vp env off pm                 # Prefer system package managers only",
+                    "    vp env off pnpm               # Prefer system pnpm only",
+                    "    vp env print                  # Print PATH setup for both components",
+                    "",
+                    "  Manage:",
+                    "    vp env default 22.19.0        # Set the Node.js default",
+                    "    vp env default pnpm@12        # Set pnpm's default version",
+                    "    vp env pin 22.19.0            # Pin Node.js for this project",
+                    "    vp env use 22.19.0            # Use Node.js in this shell",
+                    "    vp env clean                  # Clean all unused managed versions",
+                    "",
+                    "  Inspect:",
+                    "    vp env current                # Show current resolved environment",
+                    "    vp env current --json         # JSON output for automation",
+                    "    vp env doctor                 # Check environment configuration",
+                    "    vp env which node             # Show which node binary will be used",
+                    "    vp env list node              # List only Node.js installations",
+                    "    vp env list-remote --lts      # List only Node.js LTS versions",
+                    "",
+                    "  Execute:",
+                    "    vp env exec --node lts node -v               # Override Node.js",
+                    "    vp env exec --package-manager pnpm@12 pnpm i # Override the package manager",
+                    "    vp env exec node -v                          # Resolve both components",
+                ],
+            ),
+            section_lines(
+                "Related Commands",
+                vec![
+                    "  vp install -g <package>       # Install a package globally",
+                    "  vp uninstall -g <package>     # Uninstall a package globally",
+                    "  vp update -g [package]        # Update global packages",
+                    "  vp outdated -g [package]      # List outdated packages",
+                    "  vp list -g [package]          # List global packages",
+                ],
+            ),
+        ],
+        documentation_url: documentation_url_for_command_path(&["env"]).map(Into::into),
+    }
+}
+
+pub(crate) fn is_help_flag(arg: &str) -> bool {
+    matches!(arg, "-h" | "--help")
+}
+
+pub(crate) fn has_help_flag_before_terminator(args: &[String]) -> bool {
+    args.iter().take_while(|arg| arg.as_str() != "--").any(|arg| is_help_flag(arg))
+}
+
+fn skip_clap_unified_help(command: &str) -> bool {
+    matches!(
+        command,
+        "create"
+            | "migrate"
+            | "config"
+            | "hooks"
+            | "staged"
+            | "dev"
+            | "build"
+            | "preview"
+            | "test"
+            | "lint"
+            | "fmt"
+            | "check"
+            | "pack"
+            | "run"
+            | "exec"
+            | "cache"
+    )
+}
+
+fn should_skip_parent_help_for_unknown_direct_nested_child(
+    command_path: &[String],
+    argv: &[String],
+    index: usize,
+) -> bool {
+    matches!(command_path, [command] if matches!(command.as_str(), "pm" | "env"))
+        && argv.get(index).is_some_and(|arg| !arg.starts_with('-'))
+        && has_help_flag_before_terminator(&argv[index..])
+}
+
+pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
+    if argv.len() < 3 {
+        return false;
+    }
+
+    let command = crate::cli::Args::command();
+    let mut current = &command;
+    let mut path_len = 0;
+    let mut index = 1;
+    let mut first_command_name: Option<String> = None;
+    let mut command_path = Vec::new();
+
+    while index < argv.len() {
+        let arg = &argv[index];
+        if is_help_flag(arg) {
+            index += 1;
+            continue;
+        }
+        if arg.starts_with('-') {
+            break;
+        }
+
+        let Some(next) = current.find_subcommand(arg) else {
+            break;
+        };
+
+        if first_command_name.is_none() {
+            first_command_name = Some(next.get_name().to_string());
+        }
+
+        command_path.push(next.get_name().to_string());
+        current = next;
+        path_len += 1;
+        index += 1;
+    }
+
+    if path_len == 0 {
+        return false;
+    }
+
+    if should_skip_parent_help_for_unknown_direct_nested_child(&command_path, argv, index) {
+        return false;
+    }
+
+    let Some(first_command_name) = first_command_name else {
+        return false;
+    };
+    if skip_clap_unified_help(&first_command_name) {
+        return false;
+    }
+
+    // Respect `--` option terminator: flags after `--` belong to the wrapped
+    // command and should not trigger CLI help rewriting.
+    if !has_help_flag_before_terminator(&argv[1..]) {
+        return false;
+    }
+
+    if command_path.len() == 1 && command_path[0] == "env" {
+        print_help_doc(&env_help_doc());
+        return true;
+    }
+
+    let mut command_path_refs = Vec::with_capacity(command_path.len());
+    for segment in &command_path {
+        command_path_refs.push(segment.as_str());
+    }
+    print_unified_clap_help_for_path(&command_path_refs)
+}
+
+pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
+    if command_path == ["env"] {
+        print_help_doc(&env_help_doc());
+        return true;
+    }
+
+    let mut help_args = vec!["vp".to_string()];
+    help_args.extend(command_path.iter().map(ToString::to_string));
+    help_args.push("--help".to_string());
+
+    let raw_help = match crate::cli::try_parse_args_from(help_args) {
+        Err(error) if matches!(error.kind(), ErrorKind::DisplayHelp) => error.to_string(),
+        _ => return false,
+    };
+
+    let Some(doc) = parse_clap_help_to_doc(&raw_help) else {
+        return false;
+    };
+    let doc = HelpDoc {
+        documentation_url: documentation_url_for_command_path(command_path).map(Into::into),
+        ..doc
+    };
+
+    print_help_doc(&doc);
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        HelpDoc, documentation_url_for_command_path, has_help_flag_before_terminator,
+        parse_clap_help_to_doc, parse_command_rows, parse_rows, render_help_doc,
+        should_skip_parent_help_for_unknown_direct_nested_child, split_label_and_description,
+        strip_ansi,
+    };
+
+    #[test]
+    fn parse_rows_supports_wrapped_option_labels() {
+        let lines = vec![
+            "  -P, --prod            Do not install devDependencies".to_string(),
+            "  --no-optional".to_string(),
+            "                        Do not install optionalDependencies".to_string(),
+        ];
+
+        let rows = parse_rows(&lines);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].label, "-P, --prod");
+        assert_eq!(rows[0].description, vec!["Do not install devDependencies"]);
+        assert_eq!(rows[1].label, "--no-optional");
+        assert_eq!(rows[1].description, vec!["Do not install optionalDependencies"]);
+    }
+
+    #[test]
+    fn parse_rows_moves_command_alias_suffixes_to_labels() {
+        let lines = vec![
+            "  list  List installed packages [aliases: ls]".to_string(),
+            "  view  View package information from the registry [aliases: info, show]".to_string(),
+        ];
+
+        let rows = parse_command_rows(&lines);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].label, "list, ls");
+        assert_eq!(rows[0].description, vec!["List installed packages"]);
+        assert_eq!(rows[1].label, "view, info, show");
+        assert_eq!(rows[1].description, vec!["View package information from the registry"]);
+    }
+
+    #[test]
+    fn parse_rows_leaves_non_terminal_alias_text_unchanged() {
+        let lines = vec!["  search  Search [aliases: lookup] packages in the registry".to_string()];
+
+        let rows = parse_command_rows(&lines);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "search");
+        assert_eq!(rows[0].description, vec!["Search [aliases: lookup] packages in the registry"]);
+    }
+
+    #[test]
+    fn parse_rows_leaves_option_alias_suffixes_unchanged() {
+        let lines = vec!["  -h, --help  Print help [aliases: ?]".to_string()];
+
+        let rows = parse_rows(&lines);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "-h, --help");
+        assert_eq!(rows[0].description, vec!["Print help [aliases: ?]"]);
+    }
+
+    #[test]
+    fn parse_rows_leaves_argument_alias_suffixes_unchanged() {
+        let lines = vec!["  <PACKAGE>  Package to inspect [aliases: pkg]".to_string()];
+
+        let rows = parse_rows(&lines);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "<PACKAGE>");
+        assert_eq!(rows[0].description, vec!["Package to inspect [aliases: pkg]"]);
+    }
+
+    #[test]
+    fn split_label_and_description_preserves_plain_rows() {
+        let (label, description) =
+            split_label_and_description("list  List installed packages").expect("row should split");
+        assert_eq!(label, "list");
+        assert_eq!(description, "List installed packages");
+    }
+
+    #[test]
+    fn parse_clap_help_extracts_usage_summary_and_sections() {
+        let raw_help = "\
+Add packages to dependencies
+
+Usage: vp add [OPTIONS] <PACKAGES>...
+
+Arguments:
+  <PACKAGES>...  Packages to add
+
+Options:
+  -h, --help  Print help
+";
+
+        let doc = parse_clap_help_to_doc(raw_help).expect("should parse clap help text");
+        assert_eq!(doc.usage, "vp add [OPTIONS] <PACKAGES>...");
+        assert_eq!(doc.summary, vec!["Add packages to dependencies"]);
+        assert_eq!(doc.sections.len(), 2);
+    }
+
+    #[test]
+    fn help_flag_before_terminator_is_detected() {
+        let args = vec!["vpx".to_string(), "--help".to_string()];
+        assert!(has_help_flag_before_terminator(&args));
+    }
+
+    #[test]
+    fn help_flag_after_terminator_is_ignored() {
+        let args = vec!["vpx".to_string(), "--".to_string(), "--help".to_string()];
+        assert!(!has_help_flag_before_terminator(&args));
+    }
+
+    #[test]
+    fn skips_parent_help_for_unknown_pm_child_with_help() {
+        let args = vec!["vp", "pm", "apprev-build", "--help"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        assert!(should_skip_parent_help_for_unknown_direct_nested_child(
+            &["pm".to_string()],
+            &args,
+            2,
+        ));
+    }
+
+    #[test]
+    fn keeps_unified_help_for_valid_pm_child_with_help() {
+        let args = vec!["vp", "pm", "approve-builds", "--help"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        assert!(!should_skip_parent_help_for_unknown_direct_nested_child(
+            &["pm".to_string(), "approve-builds".to_string()],
+            &args,
+            3,
+        ));
+    }
+
+    #[test]
+    fn keeps_unified_help_for_parent_help() {
+        let args = vec!["vp", "env", "--help"].into_iter().map(String::from).collect::<Vec<_>>();
+        assert!(!should_skip_parent_help_for_unknown_direct_nested_child(
+            &["env".to_string()],
+            &args,
+            2,
+        ));
+    }
+
+    #[test]
+    fn strip_ansi_removes_csi_sequences() {
+        let input = "\u{1b}[1mOptions:\u{1b}[0m";
+        assert_eq!(strip_ansi(input), "Options:");
+    }
+
+    #[test]
+    fn parse_clap_help_with_ansi_sequences() {
+        let raw_help = "\
+\u{1b}[1mAdd packages to dependencies\u{1b}[0m
+
+\u{1b}[1mUsage:\u{1b}[0m vp add [OPTIONS] <PACKAGES>...
+
+\u{1b}[1mArguments:\u{1b}[0m
+  <PACKAGES>...  Packages to add
+
+\u{1b}[1mOptions:\u{1b}[0m
+  -h, --help  Print help
+";
+
+        let doc = parse_clap_help_to_doc(raw_help).expect("should parse clap help text");
+        assert_eq!(doc.usage, "vp add [OPTIONS] <PACKAGES>...");
+        assert_eq!(doc.summary, vec!["Add packages to dependencies"]);
+        assert_eq!(doc.sections.len(), 2);
+    }
+
+    #[test]
+    fn docs_url_is_mapped_for_grouped_commands() {
+        assert_eq!(
+            documentation_url_for_command_path(&["add"]),
+            Some("https://viteplus.dev/guide/install")
+        );
+        assert_eq!(
+            documentation_url_for_command_path(&["env", "list"]),
+            Some("https://viteplus.dev/guide/env")
+        );
+        assert_eq!(
+            documentation_url_for_command_path(&["implode"]),
+            Some("https://viteplus.dev/guide/implode")
+        );
+    }
+
+    #[test]
+    fn render_help_doc_appends_documentation_footer() {
+        let output = render_help_doc(&HelpDoc {
+            usage: "vp demo".into(),
+            summary: vec![],
+            sections: vec![],
+            documentation_url: Some("https://viteplus.dev/guide/demo".into()),
+        });
+
+        assert!(strip_ansi(&output).contains("Documentation: https://viteplus.dev/guide/demo"));
+    }
+}

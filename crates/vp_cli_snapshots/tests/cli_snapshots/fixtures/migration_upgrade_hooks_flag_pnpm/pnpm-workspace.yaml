@@ -1,0 +1,10 @@
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@^0.1.21
+  vitest: npm:@voidzero-dev/vite-plus-test@^0.1.21
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'

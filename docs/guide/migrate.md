@@ -4,7 +4,7 @@
 
 ## Overview
 
-This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, and Prettier setups into Vite+.
+This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, Prettier, and tsup setups into Vite+.
 
 Use it when you want to take an existing project and move it onto the Vite+ defaults instead of wiring each tool by hand.
 
@@ -22,6 +22,9 @@ The positional `PATH` argument is optional.
 
 - If omitted, `vp migrate` migrates the current directory
 - If provided, it migrates that target directory instead
+- For a monorepo, the target must be the workspace root. Vite+ cannot
+  migrate one workspace member, because migration updates the package-manager
+  configuration, the catalogs, and the lockfiles that all members share.
 
 ```bash
 vp migrate
@@ -48,6 +51,10 @@ The `migrate` command is designed to move existing projects onto Vite+ quickly. 
 - Updates scripts to the Vite+ command surface
 - Can set up commit hooks
 - Can write agent and editor configuration files
+- Formats the migrated project
+
+See [Migration Rules](./migrate-rules.md) for the exact dependency, source
+rewrite, and package-manager behavior.
 
 Most projects will require further manual adjustments after running `vp migrate`.
 
@@ -63,7 +70,41 @@ After running the migration:
 - Run `vp install`
 - Run `vp check`
 - Run `vp test`
-- Run `vp build`
+- Run `vp build` (or `vp pack` if you are building a library)
+
+## Manual Installation & Migration
+
+If you are manually migrating a project to Vite+, install these dev dependencies first:
+
+```bash
+vp install -D vite-plus
+```
+
+You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
+
+```json
+"overrides": {
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+  "vitest": "4.1.11"
+}
+```
+
+If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
+
+```yaml
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: 4.1.11
+```
+
+Or, if you are using Yarn:
+
+```json
+"resolutions": {
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+  "vitest": "4.1.11"
+}
+```
 
 ## Migration Prompt
 
@@ -75,14 +116,14 @@ Migrate this project to Vite+. Vite+ replaces the current split tooling around r
 After the migration:
 
 - Confirm `vite` imports were rewritten to `vite-plus` where needed
-- Confirm `vitest` imports were rewritten to `vite-plus/test` where needed
-- Remove old `vite` and `vitest` dependencies only after those rewrites are confirmed
+- Confirm `vitest` imports were rewritten to `vite-plus/test` (and `@vitest/browser*` to `vite-plus/test/browser*`) where needed
+- On pnpm, keep the `vite`, `vitest` dependency entries configured by `vp migrate` so the workspace aliases and overrides stay effective; with other package managers, you can remove them once those rewrites are confirmed
 - Move remaining tool-specific config into the appropriate blocks in `vite.config.ts`
 
 Command mapping to keep in mind:
 
 - `vp run <script>` is the equivalent of `pnpm run <script>`
-- `vp test` runs the built-in test command, while `vp run test` runs the `test` script from `package.json`
+- `vp dev` and `vp test` always run the built-ins; `vp run dev` and `vp run test` run the `dev` and `test` scripts from `package.json`
 - `vp install`, `vp add`, and `vp remove` delegate through the package manager declared by `packageManager`
 - `vp dev`, `vp build`, `vp preview`, `vp lint`, `vp fmt`, `vp check`, and `vp pack` replace the corresponding standalone tools
 - Prefer `vp check` for validation loops
@@ -96,19 +137,29 @@ Summarize the migration at the end and report any manual follow-up still require
 
 ### Vitest
 
-Vitest is automatically migrated through `vp migrate`. If you are migrating manually, you have to update all the imports to `vite-plus/test` instead:
+Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@4.x` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
+
+Browser mode is more nuanced. `vite-plus` bundles the base browser runtime (`@vitest/browser`) and the preview provider (`@vitest/browser-preview`), but the **Playwright** and **WebdriverIO** providers stay opt-in: `@vitest/browser-playwright` (with its `playwright` peer) and `@vitest/browser-webdriverio` (with its `webdriverio` peer) are **not** shipped with `vite-plus`, so non-browser projects never pull them in. `vp migrate` detects the provider you actually use and adds it — pinned to the bundled vitest version — together with its framework. If you migrate manually and use one of these providers, install the provider package and its framework yourself so `vite-plus/test/browser-playwright` / `vite-plus/test/browser-webdriverio` can resolve.
+
+If you are migrating manually, update all the imports to `vite-plus/test*` instead:
 
 ```ts
 // before
+import { defineConfig } from 'vitest/config';
 import { describe, expect, it, vi } from 'vitest';
+import { playwright } from '@vitest/browser-playwright';
 
 const { page } = await import('@vitest/browser/context');
 
 // after
+import { defineConfig } from 'vite-plus';
 import { describe, expect, it, vi } from 'vite-plus/test';
+import { playwright } from 'vite-plus/test/browser-playwright';
 
 const { page } = await import('vite-plus/test/browser/context');
 ```
+
+`declare module 'vitest'` / `declare module '@vitest/browser*'` augmentations are intentionally **not** rewritten — `vite-plus/test*` is a thin re-export of upstream `vitest*`, so type augmentations have to target the upstream module identity to merge correctly. Leave those `declare module` statements pointing at `'vitest'` / `'@vitest/browser*'`.
 
 ### tsdown
 
@@ -154,7 +205,25 @@ export default defineConfig({
 });
 ```
 
-After migrating, remove lint-staged from your dependencies and delete any lint-staged config files. See the [Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
+When no existing hook policy owns the workflow, `vp migrate` can move supported lint-staged rules
+and remove the old configuration and dependency. If an existing hook tool is preserved, keep
+lint-staged in place until you convert that hook policy manually. See the
+[Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
+
+### Git hook tools
+
+The `vp migrate` command does not automatically convert Husky setups. When Husky is detected,
+Vite+ leaves its hooks, lifecycle scripts, configuration, and dependencies unchanged and shows a
+warning. You can migrate the project manually using the [Commit hooks guide](/guide/commit-hooks).
+
+Existing project-owned Vite+ hooks are also preserved. The default staged workflow is introduced
+only when no existing hook policy is found.
+
+If your project currently uses `lefthook`, `simple-git-hooks`, or `yorkie`, `vp migrate` will leave your existing configuration alone and show a warning. This happens even if you choose to set up hooks during the prompt or include the `--hooks` flag.
+
+If you want to move one of those tools over to Vite+ manually, you can follow these steps. First, move your staged-file commands into the `staged` block within `vite.config.ts`. Then, update your lifecycle script so it runs `vp config`. You will also need to create a Vite+ hook at `.vite-hooks/pre-commit` that runs `vp staged`. Run `vp hooks enable` (or `vp config`) to install the dispatcher and set `core.hooksPath`. Finally, once you have confirmed that the Vite+ hook is working as expected, you can remove the old tool's configuration and dependency.
+
+Use `vp hooks status` to verify the dispatcher is active, and `vp hooks disable` if you need to turn it off again in this clone. You can find more details about the full Vite+ hook setup in the [Commit hooks guide](/guide/commit-hooks).
 
 ## Examples
 

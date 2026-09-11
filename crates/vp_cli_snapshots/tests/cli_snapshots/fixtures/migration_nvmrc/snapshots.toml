@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_nvmrc"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should detect .nvmrc and auto-migrate to .node-version", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".node-version"], comment = "check .node-version is created with v prefix stripped", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".nvmrc", "--assert-not", "file"], comment = "check .nvmrc is removed", continue-on-failure = true },
+]

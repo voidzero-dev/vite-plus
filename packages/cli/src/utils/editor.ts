@@ -4,8 +4,18 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  applyEdits,
+  type FormattingOptions,
+  type JSONPath,
+  modify,
+  type ModificationOptions,
+  parse as parseJsonc,
+} from 'jsonc-parser';
 
-import { readJsonFile, writeJsonFile } from './json.ts';
+import { getVpDirs } from '../../binding/index.js';
+import { PackageManager } from '../types/package.ts';
+import { detectFormattingOptions, writeJsonFile } from './json.ts';
 
 // Language-specific overrides because user-level [lang] settings beat the workspace default
 const VSCODE_LANGUAGE_OVERRIDES = {
@@ -18,7 +28,8 @@ const VSCODE_LANGUAGE_OVERRIDES = {
 const VSCODE_SETTINGS = {
   'editor.defaultFormatter': 'oxc.oxc-vscode',
   ...VSCODE_LANGUAGE_OVERRIDES,
-  'oxc.fmt.configPath': './vite.config.ts',
+  'oxc.disableNestedConfig': true,
+  'oxc.fmt.disableNestedConfig': true,
   'editor.formatOnSave': true,
   // Oxfmt does not support partial formatting
   'editor.formatOnSaveMode': 'file',
@@ -46,101 +57,87 @@ const ZED_SETTINGS = {
     oxfmt: {
       initialization_options: {
         settings: {
-          configPath: './vite.config.ts',
+          'fmt.configPath': './vite.config.ts',
           run: 'onSave',
         },
       },
     },
   },
-  languages: {
-    CSS: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    GraphQL: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    Handlebars: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    HTML: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    JavaScript: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-      code_action: 'source.fixAll.oxc',
-    },
-    JSX: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    JSON: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    JSON5: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    JSONC: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    Less: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    Markdown: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    MDX: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    SCSS: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    TypeScript: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    TSX: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    'Vue.js': {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-    YAML: {
-      format_on_save: 'on',
-      prettier: { allowed: false },
-      formatter: [{ language_server: { name: 'oxfmt' } }],
-    },
-  },
+  languages: Object.fromEntries(
+    [
+      'CSS',
+      'GraphQL',
+      'Handlebars',
+      'HTML',
+      'JavaScript',
+      'JSX',
+      'JSON',
+      'JSON5',
+      'JSONC',
+      'Less',
+      'Markdown',
+      'MDX',
+      'SCSS',
+      'TypeScript',
+      'TSX',
+      'Vue.js',
+      'YAML',
+    ].map((language) => [
+      language,
+      {
+        format_on_save: 'on',
+        prettier: { allowed: false },
+        formatter: [
+          { language_server: { name: 'oxfmt' } },
+          // Only the JavaScript entry runs the oxc fix-all code action on save.
+          ...(language === 'JavaScript' ? [{ code_action: 'source.fixAll.oxc' }] : []),
+        ],
+      },
+    ]),
+  ),
 } as const;
+
+const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ExternalDependencies">
+    <plugin id="com.github.oxc.project.oxcintellijplugin" />
+  </component>
+</project>
+`;
+
+function jetbrainsNodeInterpreterPath(): string {
+  return path.join(getVpDirs().bin, process.platform === 'win32' ? 'node.exe' : 'node');
+}
+
+function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PropertiesComponent">
+    <![CDATA[${JSON.stringify(
+      {
+        keyToString: {
+          'javascript.preferred.runtime.type.id': 'node',
+          nodejs_interpreter_path: jetbrainsNodeInterpreterPath(),
+          nodejs_package_manager_path: packageManager,
+        },
+      },
+      null,
+      2,
+    )}]]>
+  </component>
+</project>
+`;
+}
+
+const JETBRAINS_OXFMT_SETTINGS = `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="OxfmtSettings">
+    <option name="preferOxfmtCodeStyleSettings" value="true" />
+  </component>
+</project>
+`;
+
+type EditorConfigValue = Record<string, unknown> | string;
 
 export const EDITORS = [
   {
@@ -160,6 +157,23 @@ export const EDITORS = [
       'settings.json': ZED_SETTINGS as Record<string, unknown>,
     },
   },
+  {
+    id: 'jetbrains',
+    label: 'JetBrains (IntelliJ, WebStorm, etc)',
+    targetDir: '.idea',
+    files: {
+      'externalDependencies.xml': JETBRAINS_EXTERNAL_DEPENDENCIES,
+      // Placeholder; writeEditorConfig() regenerates this with the resolved package manager.
+      'workspace.xml': jetbrainsWorkspaceConfig(PackageManager.pnpm),
+      'OxfmtSettings.xml': JETBRAINS_OXFMT_SETTINGS,
+    },
+  },
+] as const;
+
+// Deprecated aliases kept for backwards-compatible `--editor` values; not shown as TUI options.
+const EDITOR_ALIASES = [
+  { id: 'intellij', alias: 'jetbrains' },
+  { id: 'webstorm', alias: 'jetbrains' },
 ] as const;
 
 export type EditorId = (typeof EDITORS)[number]['id'];
@@ -265,10 +279,6 @@ export async function selectEditors({
   return undefined;
 }
 
-export function detectExistingEditor(projectRoot: string): EditorId | undefined {
-  return detectExistingEditors(projectRoot)?.[0];
-}
-
 export function detectExistingEditors(projectRoot: string): EditorId[] | undefined {
   const editors: EditorId[] = [];
   for (const option of EDITORS) {
@@ -329,6 +339,7 @@ export async function writeEditorConfigs({
   conflictDecisions,
   silent = false,
   extraVsCodeSettings,
+  packageManager = PackageManager.pnpm,
 }: {
   projectRoot: string;
   editorId: EditorSelection;
@@ -336,6 +347,7 @@ export async function writeEditorConfigs({
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent?: boolean;
   extraVsCodeSettings?: Record<string, string>;
+  packageManager?: PackageManager;
 }) {
   const editorIds = normalizeEditorSelection(editorId);
   if (editorIds.length === 0) {
@@ -350,6 +362,7 @@ export async function writeEditorConfigs({
       conflictDecisions,
       silent,
       extraVsCodeSettings,
+      packageManager,
     });
   }
 }
@@ -361,6 +374,7 @@ async function writeEditorConfig({
   conflictDecisions,
   silent,
   extraVsCodeSettings,
+  packageManager,
 }: {
   projectRoot: string;
   editorId: EditorId;
@@ -368,6 +382,7 @@ async function writeEditorConfig({
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent: boolean;
   extraVsCodeSettings?: Record<string, string>;
+  packageManager: PackageManager;
 }) {
   const editorConfig = EDITORS.find((e) => e.id === editorId);
   if (!editorConfig) {
@@ -378,11 +393,14 @@ async function writeEditorConfig({
   await fsPromises.mkdir(targetDir, { recursive: true });
 
   for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
-    const incoming =
+    const incoming: EditorConfigValue =
       editorId === 'vscode' && fileName === 'settings.json' && extraVsCodeSettings
         ? { ...extraVsCodeSettings, ...baseIncoming }
-        : baseIncoming;
+        : editorId === 'jetbrains' && fileName === 'workspace.xml'
+          ? jetbrainsWorkspaceConfig(packageManager)
+          : baseIncoming;
     const filePath = path.join(targetDir, fileName);
+    const jsonFormat = isJsonLikeFile(fileName);
 
     if (fs.existsSync(filePath)) {
       const displayPath = `${editorConfig.targetDir}/${fileName}`;
@@ -398,13 +416,17 @@ async function writeEditorConfig({
             `${displayPath} already exists.\n  ` +
             styleText(
               'gray',
-              `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.`,
+              jsonFormat
+                ? `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.`
+                : `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Overwrite replaces the existing file with the generated config.`,
             ),
           options: [
             {
-              label: 'Merge',
+              label: jsonFormat ? 'Merge' : 'Overwrite',
               value: 'merge',
-              hint: 'Merge new settings into existing file',
+              hint: jsonFormat
+                ? 'Merge new settings into existing file'
+                : 'Replace existing file with generated config',
             },
             {
               label: 'Skip',
@@ -416,12 +438,21 @@ async function writeEditorConfig({
         });
         conflictAction = prompts.isCancel(action) || action === 'skip' ? 'skip' : 'merge';
       } else {
-        // Non-interactive: always merge (safe because existing keys are never overwritten)
-        conflictAction = 'merge';
+        // Non-interactive: merge JSON safely, skip non-JSON to avoid destructive overwrite.
+        conflictAction = jsonFormat ? 'merge' : 'skip';
       }
 
       if (conflictAction === 'merge') {
-        mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath, silent);
+        if (jsonFormat) {
+          if (!isPlainObject(incoming)) {
+            throw new Error(
+              `Cannot merge editor config: ${displayPath} incoming value is not JSON`,
+            );
+          }
+          mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath, silent);
+        } else {
+          writeTextEditorConfig(filePath, incoming, displayPath, silent);
+        }
       } else {
         if (!silent) {
           prompts.log.info(`Skipped writing ${displayPath}`);
@@ -430,11 +461,46 @@ async function writeEditorConfig({
       continue;
     }
 
-    writeJsonFile(filePath, incoming);
+    if (jsonFormat) {
+      if (!isPlainObject(incoming)) {
+        throw new Error(
+          `Cannot write editor config: ${editorConfig.targetDir}/${fileName} must be JSON`,
+        );
+      }
+      writeJsonFile(filePath, incoming);
+    } else {
+      writeTextEditorConfig(filePath, incoming, `${editorConfig.targetDir}/${fileName}`, silent);
+    }
     if (!silent) {
       prompts.log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
     }
   }
+}
+
+export function isJsonLikeFile(fileName: string): boolean {
+  const ext = path.extname(fileName).toLowerCase();
+  return ext === '.json' || ext === '.jsonc';
+}
+
+function writeTextEditorConfig(
+  filePath: string,
+  incoming: EditorConfigValue,
+  displayPath: string,
+  silent = false,
+) {
+  if (typeof incoming !== 'string') {
+    throw new Error(`Cannot write editor config: ${displayPath} must be text content`);
+  }
+
+  const existingText = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : undefined;
+  if (existingText === incoming) {
+    if (!silent) {
+      prompts.log.info(`No changes needed for ${displayPath}`);
+    }
+    return;
+  }
+
+  fs.writeFileSync(filePath, incoming, 'utf-8');
 }
 
 function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
@@ -444,6 +510,12 @@ function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
   return [...new Set(Array.isArray(editorId) ? editorId : [editorId])];
 }
 
+/**
+ * Merge incoming settings into an existing editor JSON/JSONC file by patching the
+ * original text with `jsonc-parser` instead of re-serializing a merged object.
+ * This preserves comments, key order, trailing commas, and untouched formatting.
+ * Existing values always win; only missing keys/branches are inserted.
+ */
 function mergeAndWriteEditorConfig(
   filePath: string,
   incoming: Record<string, unknown>,
@@ -451,58 +523,116 @@ function mergeAndWriteEditorConfig(
   displayPath: string,
   silent = false,
 ) {
-  const existing = readJsonFile(filePath, true);
-  const merged = mergeEditorConfigs(existing, incoming, fileName);
-  writeJsonFile(filePath, merged);
+  const originalText = fs.readFileSync(filePath, 'utf-8');
+  const existing = parseJsonc(originalText) as unknown;
+  if (!isPlainObject(existing)) {
+    throw new Error(`Cannot merge editor config: ${displayPath} is not a JSON object`);
+  }
+
+  const formattingOptions = detectFormattingOptions(originalText);
+  const newText =
+    fileName === 'extensions.json'
+      ? mergeExtensionsText(originalText, existing, incoming, formattingOptions)
+      : mergeSettingsText(originalText, existing, incoming, formattingOptions);
+
+  // Do not rewrite when the merge produced no changes (keeps the operation idempotent).
+  if (newText === originalText) {
+    if (!silent) {
+      prompts.log.info(`No changes needed for ${displayPath}`);
+    }
+    return;
+  }
+
+  fs.writeFileSync(filePath, newText, 'utf-8');
   if (!silent) {
     prompts.log.success(`Merged editor config into ${displayPath}`);
   }
 }
 
-function mergeEditorConfigs(
-  existing: Record<string, unknown>,
-  incoming: Record<string, unknown>,
-  fileName: string,
-): Record<string, unknown> {
-  if (fileName === 'extensions.json') {
-    const existingRecs = Array.isArray(existing['recommendations'])
-      ? (existing['recommendations'] as string[])
-      : [];
-    const incomingRecs = Array.isArray(incoming['recommendations'])
-      ? (incoming['recommendations'] as string[])
-      : [];
-    return {
-      ...existing,
-      recommendations: [...new Set([...existingRecs, ...incomingRecs])],
-    };
-  }
-
-  return deepMerge(existing, incoming);
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function deepMerge(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
-  const result = { ...target };
-  for (const [key, value] of Object.entries(source)) {
-    if (!(key in result)) {
-      result[key] = value;
-    } else if (
-      typeof result[key] === 'object' &&
-      result[key] !== null &&
-      !Array.isArray(result[key]) &&
-      typeof value === 'object' &&
-      value !== null &&
-      !Array.isArray(value)
-    ) {
-      result[key] = deepMerge(
-        result[key] as Record<string, unknown>,
-        value as Record<string, unknown>,
-      );
+/** Apply a single `jsonc-parser` modification to `text` and return the patched text. */
+function applyJsoncEdit(
+  text: string,
+  path: JSONPath,
+  value: unknown,
+  options: ModificationOptions,
+): string {
+  return applyEdits(text, modify(text, path, value, options));
+}
+
+/**
+ * Deep-merge missing keys from `incoming` into the existing text. Inserts a whole
+ * branch when it is absent, and recurses only when both sides are non-array objects
+ * so comments inside existing branches are preserved.
+ */
+function mergeSettingsText(
+  text: string,
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+  formattingOptions: FormattingOptions,
+): string {
+  let currentText = text;
+  const insertMissing = (
+    existingNode: Record<string, unknown>,
+    incomingNode: Record<string, unknown>,
+    basePath: JSONPath,
+  ) => {
+    for (const [key, value] of Object.entries(incomingNode)) {
+      const fullPath = [...basePath, key];
+      if (!(key in existingNode)) {
+        currentText = applyJsoncEdit(currentText, fullPath, value, { formattingOptions });
+      } else if (isPlainObject(existingNode[key]) && isPlainObject(value)) {
+        insertMissing(existingNode[key], value, fullPath);
+      }
+      // Otherwise the existing value wins and is left untouched.
     }
+  };
+  insertMissing(existing, incoming, []);
+  return currentText;
+}
+
+/**
+ * For `extensions.json`, append missing recommendations without rebuilding the array,
+ * so comments inside the array survive. Existing entries always win.
+ */
+function mergeExtensionsText(
+  text: string,
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+  formattingOptions: FormattingOptions,
+): string {
+  const incomingRecs = Array.isArray(incoming['recommendations'])
+    ? (incoming['recommendations'] as unknown[])
+    : [];
+  const existingValue = existing['recommendations'];
+
+  // No existing recommendations key: insert the incoming array as-is.
+  if (!('recommendations' in existing)) {
+    return applyJsoncEdit(text, ['recommendations'], incomingRecs, { formattingOptions });
   }
-  return result;
+
+  // Unexpected non-array value: existing user value wins, leave it untouched.
+  if (!Array.isArray(existingValue)) {
+    return text;
+  }
+
+  const existingRecs = new Set<unknown>(existingValue);
+  let currentText = text;
+  let nextIndex = existingValue.length;
+  for (const rec of incomingRecs) {
+    if (existingRecs.has(rec)) {
+      continue;
+    }
+    currentText = applyJsoncEdit(currentText, ['recommendations', nextIndex], rec, {
+      formattingOptions,
+      isArrayInsertion: true,
+    });
+    nextIndex++;
+  }
+  return currentText;
 }
 
 function resolveEditorId(editor: string): EditorId | undefined {
@@ -510,7 +640,19 @@ function resolveEditorId(editor: string): EditorId | undefined {
   const match = EDITORS.find(
     (option) => option.id === normalized || option.label.toLowerCase() === normalized,
   );
-  return match?.id;
+  if (match) {
+    return match.id;
+  }
+
+  const aliasMatch = EDITOR_ALIASES.find((option) => option.id === normalized);
+  if (aliasMatch) {
+    prompts.log.warn(
+      `--editor ${aliasMatch.id} was passed; use --editor ${aliasMatch.alias} instead, as it's the canonical ID for that editor.`,
+    );
+    return aliasMatch.alias;
+  }
+
+  return undefined;
 }
 
 function resolveEditorIds(editors: readonly string[]): EditorId[] | undefined {

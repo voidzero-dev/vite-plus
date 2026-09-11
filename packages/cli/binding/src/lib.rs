@@ -22,6 +22,8 @@ mod exec;
 // These modules export NAPI functions only called from JavaScript at runtime.
 // allow(dead_code) suppresses warnings in the test target which doesn't link NAPI.
 #[allow(dead_code)]
+mod js_command_args;
+#[allow(dead_code)]
 mod migration;
 #[allow(dead_code)]
 mod package_manager;
@@ -32,7 +34,7 @@ use std::{collections::HashMap, error::Error as StdError, ffi::OsStr, fmt::Write
 
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
-use vite_path::current_dir;
+use vt_path::current_dir;
 
 use crate::cli::{
     BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult, ViteConfigResolverFn,
@@ -42,6 +44,7 @@ use crate::cli::{
 #[napi_derive::module_init]
 #[allow(clippy::disallowed_macros)]
 pub fn init() {
+    vp_shared::ensure_blocking_stdio();
     crate::cli::init_tracing();
 
     // Install a Vite+ panic hook so panics are correctly attributed to Vite+.
@@ -55,20 +58,39 @@ pub fn init() {
     }));
 }
 
+/// Re-enable blocking stdio after Node.js has initialized its lazy standard streams.
+#[napi]
+pub fn ensure_blocking_stdio() {
+    vp_shared::ensure_blocking_stdio();
+}
+
 /// Configuration options passed from JavaScript to Rust.
 #[napi(object, object_to_js = false)]
 pub struct CliOptions {
-    pub lint: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub fmt: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub vite: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub test: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub pack: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
-    pub doc: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    pub lint: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub fmt: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub vite: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub test: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub pack: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
+    pub doc: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
+    /// Whether the user supplied the global `-C` option.
+    pub explicit_chdir: Option<bool>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
     pub args: Option<Vec<String>>,
+    /// Generated toolchain manifest shipped with this vite-plus package.
+    pub toolchain_manifest_path: String,
+    /// Root directory of this vite-plus package.
+    pub vite_plus_package_path: String,
     /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
     pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
+}
+
+/// Execution context after command dispatch selects the working directory.
+#[napi(object, object_from_js = false)]
+pub struct JsCommandContext {
+    pub cwd: String,
+    pub args: Vec<String>,
 }
 
 /// Result returned by JavaScript resolver functions.
@@ -88,22 +110,25 @@ impl From<JsCommandResolvedResult> for ResolveCommandResult {
 }
 
 /// Create a boxed resolver function from a ThreadsafeFunction
-/// NOTE: Uses anyhow::Error to avoid NAPI type interference with vite_error::Error
+/// NOTE: Uses anyhow::Error to avoid NAPI type interference with vp_error::Error
 fn create_resolver(
-    tsf: Arc<ThreadsafeFunction<(), Promise<JsCommandResolvedResult>>>,
+    tsf: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     error_message: &'static str,
 ) -> BoxedResolverFn {
-    Box::new(move || {
+    Box::new(move |cwd, args| {
+        let context = cwd
+            .as_path()
+            .to_str()
+            .map(|cwd| JsCommandContext { cwd: cwd.to_string(), args: args.to_vec() })
+            .ok_or_else(|| anyhow::anyhow!("command cwd is not valid UTF-8"));
         let tsf = tsf.clone();
         Box::pin(async move {
-            // Call JS function - map napi::Error to anyhow::Error
-            let promise: Promise<JsCommandResolvedResult> = tsf
-                .call_async(Ok(()))
+            let promise = tsf
+                .call_async(Ok(context?))
                 .await
                 .map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 
-            // Await the promise
-            let resolved: JsCommandResolvedResult =
+            let resolved =
                 promise.await.map_err(|e| anyhow::anyhow!("{}: {}", error_message, e))?;
 
             Ok(resolved.into())
@@ -133,11 +158,16 @@ fn create_vite_config_resolver(
 }
 
 fn format_error_message(error: &(dyn StdError + 'static)) -> String {
-    let mut message = error.to_string();
+    let mut previous = error.to_string();
+    let mut message = previous.clone();
     let mut source = error.source();
 
     while let Some(current) = source {
-        let _ = write!(message, "\n* {current}");
+        let current_message = current.to_string();
+        if current_message != previous {
+            let _ = write!(message, "\n* {current_message}");
+        }
+        previous = current_message;
         source = current.source();
     }
 
@@ -147,7 +177,7 @@ fn format_error_message(error: &(dyn StdError + 'static)) -> String {
 /// Main entry point for the CLI, called from JavaScript.
 ///
 /// This is an async function that spawns a new thread for the non-Send async code
-/// from vite_task, while allowing the NAPI async context to continue running
+/// from vt, while allowing the NAPI async context to continue running
 /// and process JavaScript callbacks (via ThreadsafeFunction).
 #[napi]
 pub async fn run(options: CliOptions) -> Result<i32> {
@@ -166,6 +196,9 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let doc_tsf = options.doc;
     let resolve_universal_vite_config_tsf = options.resolve_universal_vite_config;
     let args = options.args;
+    let explicit_chdir = options.explicit_chdir.unwrap_or(false);
+    let toolchain_manifest_path = options.toolchain_manifest_path;
+    let vite_plus_package_path = options.vite_plus_package_path;
 
     // Create a channel to receive the result from the worker thread
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -182,6 +215,8 @@ pub async fn run(options: CliOptions) -> Result<i32> {
             test: create_resolver(test_tsf, "Failed to resolve test command"),
             pack: create_resolver(pack_tsf, "Failed to resolve pack command"),
             doc: create_resolver(doc_tsf, "Failed to resolve doc command"),
+            toolchain_manifest_path,
+            vite_plus_package_path,
             resolve_universal_vite_config: create_vite_config_resolver(
                 resolve_universal_vite_config_tsf,
             ),
@@ -195,8 +230,9 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 
         // Run the CLI in a LocalSet to allow non-Send futures
         let local = tokio::task::LocalSet::new();
-        let result =
-            local.block_on(&rt, async { crate::cli::main(cwd, Some(cli_options), args).await });
+        let result = local.block_on(&rt, async {
+            crate::cli::main(cwd, Some(cli_options), args, explicit_chdir).await
+        });
 
         // Send the result back to the NAPI async context
         let _ = tx.send(result);
@@ -210,7 +246,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     match result {
         Ok(exit_status) => Ok(exit_status.0.into()),
         Err(e) => match e {
-            vite_error::Error::UserCancelled => Ok(130),
+            vp_error::Error::UserCancelled => Ok(130),
             _ => {
                 tracing::error!("Rust error: {:?}", e);
                 Err(napi::Error::from_reason(format_error_message(&e)))
@@ -219,17 +255,43 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     }
 }
 
+/// Resolved on-disk category roots from [`vp_shared::EnvConfig`].
+#[napi(object)]
+pub struct VpDirsJs {
+    pub bin: String,
+    pub data: String,
+    pub cache: String,
+    pub config: String,
+    pub state: String,
+}
+
+/// Resolved on-disk category roots from [`vp_shared::EnvConfig`].
+///
+/// JavaScript must not read `VP_HOME` / `VP_*_DIR` / `XDG_*` itself;
+/// this is the JS surface of the same `EnvConfig::get().dirs` Rust uses.
+#[napi]
+pub fn get_vp_dirs() -> VpDirsJs {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    VpDirsJs {
+        bin: dirs.bin.as_path().to_string_lossy().into_owned(),
+        data: dirs.data.as_path().to_string_lossy().into_owned(),
+        cache: dirs.cache.as_path().to_string_lossy().into_owned(),
+        config: dirs.config.as_path().to_string_lossy().into_owned(),
+        state: dirs.state.as_path().to_string_lossy().into_owned(),
+    }
+}
+
 /// Render the Vite+ header using the Rust implementation.
 #[napi]
 pub fn vite_plus_header() -> String {
-    vite_shared::header::vite_plus_header()
+    vp_shared::header::vite_plus_header()
 }
 
 /// Whether the Vite+ banner should be emitted in the current environment.
 ///
-/// Mirrors `vite_shared::header::should_print_header` so both CLIs apply
+/// Mirrors `vp_shared::header::should_print_header` so both CLIs apply
 /// the same TTY + git-hook gating without duplicating the rules in JS.
 #[napi]
 pub fn should_print_vite_plus_header() -> bool {
-    vite_shared::header::should_print_header()
+    vp_shared::header::should_print_header()
 }

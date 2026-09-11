@@ -1,0 +1,11 @@
+[[case]]
+name = "command_update_global_dev_engines"
+vp = "global"
+comment = "Global updates ignore the current project's package-manager requirement."
+steps = [
+  { argv = ["vp", "install", "-g", "testnpm2@1.0.0"], snapshot = false, continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g", "--latest"], continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "remove", "-g", "testnpm2"], continue-on-failure = true },
+]

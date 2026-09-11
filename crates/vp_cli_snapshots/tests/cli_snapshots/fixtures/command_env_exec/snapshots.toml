@@ -1,0 +1,7 @@
+[[case]]
+name = "command_env_exec"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "exec", "--node", "20.19", "node", "-v"], comment = "Run node with specific major version", continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "--node", "20.19", "node", "-e", "console.log('Hello from Node ' + process.version)"], comment = "Run inline script", continue-on-failure = true },
+]

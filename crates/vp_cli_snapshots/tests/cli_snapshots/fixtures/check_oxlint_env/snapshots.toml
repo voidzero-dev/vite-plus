@@ -1,0 +1,6 @@
+[[case]]
+name = "check_oxlint_env"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint", "--type-aware"], comment = "should error that ./invalid-path doesn't exist", envs = [["OXLINT_TSGOLINT_PATH", "./invalid-path"]], continue-on-failure = true },
+]

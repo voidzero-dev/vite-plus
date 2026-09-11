@@ -1,5 +1,0 @@
-{
-  "commands": [
-    "vp lint src/ # Test that lint ignorePatterns works - ignored files should not be linted"
-  ]
-}

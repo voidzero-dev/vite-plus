@@ -155,7 +155,7 @@ if tool == "vpx" {
 
 ### Windows
 
-On Windows, `vpx.exe` is a trampoline executable (consistent with existing `node.exe`, `npm.exe`, `npx.exe` shims). It detects its tool name from its own filename (`vpx`), sets `VITE_PLUS_SHIM_TOOL=vpx`, and spawns `vp.exe`. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
+On Windows, `vpx.exe` is a trampoline executable (consistent with existing `node.exe`, `npm.exe`, `npx.exe` shims). It detects its tool name from its own filename (`vpx`), sets `VP_SHIM_TOOL=vpx`, and spawns `vp.exe`. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
 
 ### Setup
 
@@ -273,7 +273,7 @@ When a version is explicitly specified in the package spec, the command skips al
 
 ### 1. Shim Detection
 
-**File**: `crates/vite_global_cli/src/shim/mod.rs`
+**File**: `crates/vp_global_cli/src/shim/mod.rs`
 
 Add `vpx` recognition to `detect_shim_tool()`:
 
@@ -289,7 +289,7 @@ if argv0_tool == "vpx" {
 
 ### 2. Dispatch Handler
 
-**File**: `crates/vite_global_cli/src/shim/dispatch.rs`
+**File**: `crates/vp_global_cli/src/shim/dispatch.rs`
 
 Handle `vpx` in the dispatch logic (delegates to `commands/vpx.rs`):
 
@@ -303,12 +303,11 @@ The dispatch module also exposes helper functions as `pub(crate)` for vpx to reu
 
 - `find_package_for_binary()` — looks up which globally installed package provides a binary
 - `locate_package_binary()` — locates the actual binary path inside a package
-- `ensure_installed()` — ensures a Node.js version is downloaded
-- `locate_tool()` — locates a tool binary within a Node.js installation
+- `ensure_installed()` — ensures a Node.js version is installed and returns its executable path
 
 ### 3. Binary Resolution (`commands/vpx.rs`)
 
-**File**: `crates/vite_global_cli/src/commands/vpx.rs`
+**File**: `crates/vp_global_cli/src/commands/vpx.rs`
 
 Resolution order (when no version spec, no --package flag, and not shell mode):
 
@@ -319,17 +318,19 @@ if let Some(local_bin) = find_local_binary(cwd, &cmd_name) { ... }
 // 2. Global vp packages — uses dispatch::find_package_for_binary()
 if let Some(global_bin) = find_global_binary(&cmd_name).await { ... }
 
-// 3. System PATH — uses which::which_in() with filtered PATH
+// 3. System PATH — uses vp_command::resolve_bin() with filtered PATH
 if let Some(path_bin) = find_on_path(&cmd_name) { ... }
 
 // 4. Remote download — delegates to DlxCommand
 ```
 
-Before executing any found binary, `prepend_node_modules_bin_to_path()` walks up from cwd and prepends all existing `node_modules/.bin` directories to PATH.
+Before executing a binary found through local, global, or system PATH lookup, `prepend_node_modules_bin_to_path()` walks up from cwd and adds existing `node_modules/.bin` directories to a child `ToolPathEnv`. It prepends missing directories and preserves the position of directories already on PATH. Inherited tool markers are retained; these local directories do not add tools to `VP_PATH_INJECTED_TOOLS`.
+
+For a globally installed binary, vpx first injects the directory for the package's recorded Node.js version and records `node` in `VP_PATH_INJECTED_TOOLS`. Execution passes the prepared PATH and tool markers together to the child process.
 
 ### 4. Setup
 
-**File**: `crates/vite_global_cli/src/commands/env/setup.rs`
+**File**: `crates/vp_global_cli/src/commands/env/setup.rs`
 
 Add `vpx` to the shim creation:
 

@@ -1,3 +1,0 @@
-{
-  "commands": ["vp lint package.json # non-lintable file, should exit non-zero"]
-}

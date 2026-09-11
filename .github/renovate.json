@@ -1,23 +1,60 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>Boshen/renovate"],
+  "description": "Skip lockfile artifact updates (npm and cargo): they fail in Renovate's clone because vite/ and rolldown/ are gitignored. The renovate-lockfiles workflow regenerates lockfiles on renovate/** pushes; gitIgnoredAuthors keeps Renovate managing branches with its commits. ignorePaths excludes test fixtures: their deps are test data, and the migration_monorepo_pnpm_overrides_dependency_selector fixture's multi-level pnpm override selector aborts the whole Renovate scan with ERR_PNPM_INVALID_SELECTOR.",
+  "gitIgnoredAuthors": ["278573678+voidzero-guard[bot]@users.noreply.github.com"],
+  "skipArtifactsUpdate": true,
   "ignorePaths": [
-    "packages/cli/snap-tests/**",
-    "packages/cli/snap-tests-global/**",
-    "packages/cli/snap-tests-todo/**",
     "bench/fixtures/**",
+    "crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**",
+    "packages/cli/src/__tests__/fixtures/**",
     "rolldown/**",
     "vite/**"
   ],
+  "customManagers": [
+    {
+      "description": "Keep the exact setup-vp migration target current.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^packages\\/cli\\/src\\/utils\\/constants\\.ts$/"],
+      "matchStrings": ["export const SETUP_VP_VERSION = '(?<currentValue>[^']+)';"],
+      "depNameTemplate": "voidzero-dev/setup-vp",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    }
+  ],
   "packageRules": [
     {
-      "description": "Disable all npm updates (lockfile updates fail because vite/patches/* is gitignored)",
+      "description": "Ignore upstream toolchain npm packages (vendored via sync-remote or bumped by the proactive catalog workflow); everything else stays enabled so security alerts get fixed.",
       "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "rolldown",
+        "/^oxc-.*/",
+        "@oxc-node/*",
+        "@oxc-project/*",
+        "@tsdown/css",
+        "@tsdown/exe",
+        "@vitejs/devtools",
+        "lightningcss",
+        "oxfmt",
+        "oxlint",
+        "oxlint-tsgolint",
+        "tsdown",
+        "vite",
+        "vitest",
+        "vitest-dev"
+      ],
       "enabled": false
     },
     {
-      "description": "Disable all cargo updates (lockfile updates fail because rolldown/ is gitignored)",
+      "description": "Ignore oxc crate updates (bumped by the proactive catalog workflow); other cargo crates stay enabled.",
       "matchManagers": ["cargo"],
+      "matchPackageNames": ["/^oxc([_-].*)?$/"],
+      "enabled": false
+    },
+    {
+      "description": "Ignore vite-task git dependency digest updates: every crate from that repository shares one revision and is bumped by hand with the bump-vite-task skill. Match the git source, not crate names, so crates added upstream (pty_terminal_test, snapshot_test, vt_select) stay covered without editing a list here.",
+      "matchDatasources": ["git-refs"],
+      "matchPackageNames": ["https://github.com/voidzero-dev/vite-task.git"],
       "enabled": false
     }
   ]

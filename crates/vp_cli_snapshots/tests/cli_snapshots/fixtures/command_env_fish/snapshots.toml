@@ -1,0 +1,22 @@
+[[case]]
+name = "command_env_fish_setup"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["fish"]
+steps = [
+  { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "$project\with spaces"']], snapshot = false },
+  { argv = ["vpt", "cp", "assert_setup.fish", 'vp "$project\with spaces"/assert_setup.fish'], snapshot = false },
+  { argv = ["fish", "--no-config", "assert_setup.fish"], cwd = 'vp "$project\with spaces"', comment = "loads the generated env.fish and verifies Fish path setup and command passthrough", envs = [["EXPECTED_VP_HOME", "${workspace}"], ["PATH", "${workspace}/bin:${workspace}/bin:${PATH}"]] },
+]
+
+[[case]]
+name = "command_env_fish_use"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["fish"]
+steps = [
+  { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "$project\with spaces"']], snapshot = false },
+  { argv = ["vpt", "cp", "assert_use.fish", 'vp "$project\with spaces"/assert_use.fish'], snapshot = false },
+  { argv = ["vpt", "write-file", 'vp "$project\with spaces"/.node-version', "22.18.0"], snapshot = false },
+  { argv = ["fish", "--no-config", "assert_use.fish"], cwd = 'vp "$project\with spaces"', comment = "verifies the Fish wrapper help, explicit use, unset, file-based use, and failure branches", envs = [["PATH", "${workspace}/bin:${PATH}"]] },
+]

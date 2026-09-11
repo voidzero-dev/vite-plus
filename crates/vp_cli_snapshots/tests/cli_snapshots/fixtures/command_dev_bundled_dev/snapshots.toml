@@ -1,0 +1,14 @@
+# Regression test for PR #2384: the core build rewrites CLIENT_ENTRY and
+# ENV_ENTRY to dist/vite/client/, but it left BUNDLED_DEV_CLIENT_ENTRY at
+# dist/client/. With `experimental.bundledDev` enabled, Vite reads that
+# path with fs.readFileSync, so `vp dev` fails at startup with ENOENT.
+[[case]]
+name = "command_dev_bundled_dev"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], comment = "dev server with experimental.bundledDev enabled starts and serves the bundled dev client", continue-on-failure = true, interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]

@@ -1,0 +1,16 @@
+{
+  "name": "migration-upgrade-peer-vitest-catalog-pnpm",
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "vitest": "catalog:test"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

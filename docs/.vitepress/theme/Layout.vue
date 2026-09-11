@@ -6,7 +6,6 @@ import { nextTick, onUnmounted, watch } from 'vue';
 
 import Footer from './components/Footer.vue';
 import Home from './layouts/Home.vue';
-// import Error404 from "./layouts/Error404.vue";
 
 const { frontmatter, isDark } = useData();
 const { Layout: BaseLayout } = BaseTheme;

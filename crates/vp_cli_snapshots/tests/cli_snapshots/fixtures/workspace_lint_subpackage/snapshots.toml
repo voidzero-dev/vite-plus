@@ -1,0 +1,7 @@
+[[case]]
+name = "workspace_lint_subpackage"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "lint"], cwd = "packages/app-a", comment = "sub-workspace has no-console:off but root has no-console:warn", continue-on-failure = true },
+]

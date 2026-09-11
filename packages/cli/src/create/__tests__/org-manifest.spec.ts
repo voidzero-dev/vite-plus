@@ -1,12 +1,86 @@
+import { createHash } from 'node:crypto';
+
+import { createTarGzip } from 'nanotar';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  CreateConfigSchemaError,
   filterManifestForContext,
   OrgManifestSchemaError,
   parseOrgScopedSpec,
   readOrgManifest,
+  validateCreateTemplates,
   type OrgTemplateEntry,
 } from '../org-manifest.js';
+
+describe('validateCreateTemplates', () => {
+  it('returns an empty array when create.templates is absent', () => {
+    expect(validateCreateTemplates(undefined)).toEqual([]);
+  });
+
+  it('returns an empty array for an empty list', () => {
+    expect(validateCreateTemplates([])).toEqual([]);
+  });
+
+  it('accepts valid lean entries and drops org-only fields', () => {
+    const entries = validateCreateTemplates([
+      { name: 'component', description: 'UI component', template: './tools/create-component' },
+      // a stray `monorepo` field is not part of the lean schema and is ignored
+      {
+        name: 'service',
+        description: 'Backend service',
+        template: 'million-finding',
+        monorepo: true,
+      },
+    ]);
+    expect(entries).toEqual([
+      { name: 'component', description: 'UI component', template: './tools/create-component' },
+      { name: 'service', description: 'Backend service', template: 'million-finding' },
+    ]);
+  });
+
+  it('throws on a non-array value', () => {
+    expect(() => validateCreateTemplates({})).toThrow(CreateConfigSchemaError);
+    expect(() => validateCreateTemplates({})).toThrow(/must be an array/);
+  });
+
+  it('throws on a missing or empty required field', () => {
+    expect(() => validateCreateTemplates([{ name: 'a', description: 'a' }])).toThrow(
+      /create\.templates\[0]\.template must be a non-empty string/,
+    );
+    expect(() => validateCreateTemplates([{ name: '', description: 'a', template: 'a' }])).toThrow(
+      /create\.templates\[0]\.name must be a non-empty string/,
+    );
+  });
+
+  it('throws on the reserved __vp_ name prefix', () => {
+    expect(() =>
+      validateCreateTemplates([{ name: '__vp_x', description: 'a', template: 'a' }]),
+    ).toThrow(/uses the reserved `__vp_` prefix/);
+  });
+
+  it('throws on the reserved vite: name prefix', () => {
+    // A local entry named like a builtin would shadow it in `vp create`.
+    expect(() =>
+      validateCreateTemplates([{ name: 'vite:application', description: 'a', template: 'a' }]),
+    ).toThrow(/uses the reserved `vite:` prefix/);
+  });
+
+  it('throws on a relative template that escapes the root', () => {
+    expect(() =>
+      validateCreateTemplates([{ name: 'a', description: 'a', template: '../outside' }]),
+    ).toThrow(/escapes the package root/);
+  });
+
+  it('throws on duplicate names', () => {
+    expect(() =>
+      validateCreateTemplates([
+        { name: 'dup', description: 'a', template: 'a' },
+        { name: 'dup', description: 'b', template: 'b' },
+      ]),
+    ).toThrow(/duplicates an earlier entry/);
+  });
+});
 
 describe('parseOrgScopedSpec', () => {
   it('returns null for non-scoped specs', () => {
@@ -67,6 +141,8 @@ describe('filterManifestForContext', () => {
   });
 });
 
+const TARBALL_URL = 'https://registry.npmjs.org/@your-org/create/-/create-1.0.0.tgz';
+
 function packument(
   vpTemplates: unknown,
   extra: Record<string, unknown> = {},
@@ -79,7 +155,7 @@ function packument(
       '1.0.0': {
         version: '1.0.0',
         dist: {
-          tarball: 'https://registry.npmjs.org/@your-org/create/-/create-1.0.0.tgz',
+          tarball: TARBALL_URL,
           integrity: 'sha512-fake',
         },
         createConfig: vpTemplates !== undefined ? { templates: vpTemplates } : undefined,
@@ -100,6 +176,37 @@ function mockFetchJson(body: unknown, status = 200): ReturnType<typeof vi.spyOn>
   } as unknown as Response);
 }
 
+/** Resolve the requested URL from any of `fetch`'s accepted input shapes. */
+function requestUrl(input: string | URL | Request): string {
+  return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+}
+
+/** A real npm-pack-shaped tarball containing only a package.json. */
+async function tarballWith(packageJson: unknown): Promise<Uint8Array> {
+  return await createTarGzip([
+    {
+      name: 'package/package.json',
+      data: new TextEncoder().encode(JSON.stringify(packageJson)),
+    },
+  ]);
+}
+
+/**
+ * Mock fetch to serve the packument for the registry URL and a real tarball
+ * `Response` (with a streamable body) for the `.tgz` URL.
+ */
+function mockFetchPackumentAndTarball(
+  packumentBody: unknown,
+  tarBytes: Uint8Array,
+): ReturnType<typeof vi.spyOn> {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    if (requestUrl(input).endsWith('.tgz')) {
+      return new Response(tarBytes.slice().buffer, { status: 200 });
+    }
+    return new Response(JSON.stringify(packumentBody), { status: 200 });
+  });
+}
+
 describe('readOrgManifest', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -110,8 +217,64 @@ describe('readOrgManifest', () => {
     expect(await readOrgManifest('@your-org')).toBeNull();
   });
 
-  it('returns null when the package has no createConfig.templates field', async () => {
-    mockFetchJson(packument(undefined));
+  it('returns null when neither the packument nor the tarball has createConfig.templates', async () => {
+    // No `createConfig` in the packument triggers the tarball fallback; the
+    // tarball's package.json lacks the field too, so the result is still null.
+    const tarBytes = await tarballWith({ name: '@your-org/create', version: '1.0.0' });
+    const spy = mockFetchPackumentAndTarball(
+      packument(undefined, { dist: { tarball: TARBALL_URL } }),
+      tarBytes,
+    );
+    expect(await readOrgManifest('@your-org')).toBeNull();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to the tarball package.json when the registry strips createConfig from the packument', async () => {
+    // GitHub Packages (and potentially other registries) omit custom fields
+    // from packument version metadata while the published tarball keeps the
+    // full package.json.
+    const tarBytes = await tarballWith({
+      name: '@your-org/create',
+      version: '1.0.0',
+      createConfig: {
+        templates: [{ name: 'web', description: 'Web app', template: './templates/web' }],
+      },
+    });
+    const integrity = `sha512-${createHash('sha512').update(tarBytes).digest('base64')}`;
+    const spy = mockFetchPackumentAndTarball(
+      packument(undefined, { dist: { tarball: TARBALL_URL, integrity } }),
+      tarBytes,
+    );
+    const manifest = await readOrgManifest('@your-org');
+    expect(manifest).not.toBeNull();
+    expect(manifest?.templates).toEqual([
+      { name: 'web', description: 'Web app', template: './templates/web' },
+    ]);
+    expect(manifest?.tarballUrl).toBe(TARBALL_URL);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not download the tarball when the packument carries the manifest', async () => {
+    const spy = mockFetchJson(
+      packument([{ name: 'web', description: 'Web app', template: './templates/web' }]),
+    );
+    expect(await readOrgManifest('@your-org')).not.toBeNull();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a tarball probe failure as "no manifest" so passthrough still works', async () => {
+    // A normal @scope/create package (no manifest anywhere) whose tarball
+    // cannot be probed — e.g. a download error — must not turn into a hard
+    // failure; `null` lets the caller fall through to the passthrough path.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (requestUrl(input).endsWith('.tgz')) {
+        throw new Error('network unreachable');
+      }
+      return new Response(
+        JSON.stringify(packument(undefined, { dist: { tarball: TARBALL_URL } })),
+        { status: 200 },
+      );
+    });
     expect(await readOrgManifest('@your-org')).toBeNull();
   });
 
@@ -345,5 +508,31 @@ describe('readOrgManifest', () => {
     await expect(readOrgManifest('@your-org', '9.9.9')).rejects.toThrow(
       /version "9\.9\.9" not found/,
     );
+  });
+
+  it.each([
+    ['latest', '../../outside-write'],
+    ['latest', '..'],
+    ['latest', '.'],
+    ['latest', 'not-a-version'],
+    // A tag named like a pinned version can also substitute an invalid target.
+    ['1.2.3', '../../outside-write'],
+  ])('rejects a non-semver dist-tags.%s target: %s', async (tag, version) => {
+    const body = packument([
+      { name: 'web', description: 'v1', template: '@your-org/template-web' },
+    ]);
+    // Keep matching metadata so only the version validation rejects it.
+    mockFetchJson({
+      ...body,
+      'dist-tags': { ...body['dist-tags'], [tag]: version },
+      versions: {
+        ...body.versions,
+        [version]: { ...body.versions['1.0.0'], version },
+      },
+    });
+    const requestedVersion = tag === 'latest' ? undefined : tag;
+    const manifest = readOrgManifest('@your-org', requestedVersion);
+    await expect(manifest).rejects.toThrow(OrgManifestSchemaError);
+    await expect(manifest).rejects.toThrow(/invalid version/);
   });
 });

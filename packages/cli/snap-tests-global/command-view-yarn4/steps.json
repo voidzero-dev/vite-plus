@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp pm view testnpm2 # should view testnpm2 package information (uses npm view)",
-    "vp pm view testnpm2 version # should view testnpm2 version field (uses npm view)"
-  ]
-}

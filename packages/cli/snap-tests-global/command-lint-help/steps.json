@@ -1,3 +1,0 @@
-{
-  "commands": ["vp lint -h", "vp lint --help", "vp help lint"]
-}

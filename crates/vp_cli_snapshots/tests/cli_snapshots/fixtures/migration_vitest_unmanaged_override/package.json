@@ -1,0 +1,11 @@
+{
+  "name": "migration-vitest-unmanaged-override",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@vitest/ui": "4.0.13",
+    "vite": "^7.0.0",
+    "vitest": "4.0.13"
+  }
+}

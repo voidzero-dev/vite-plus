@@ -1,0 +1,9 @@
+{
+  "vite-plus/latest": {
+    "version": "999.0.0",
+    "dist": {
+      "tarball": "unused",
+      "integrity": "sha512-unused"
+    }
+  }
+}

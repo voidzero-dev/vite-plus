@@ -6,6 +6,10 @@
 
 `vp dev` runs the standard Vite development server through Vite+, so you keep the normal Vite dev experience while using the same CLI entry point as the rest of the toolchain. For more information about using and configuring the dev server, see the [Vite guide](https://vite.dev/guide/).
 
+::: info
+`vp dev` always runs the built-in Vite dev server. If your project also has a `dev` script in `package.json`, run `vp run dev` when you want to run that script instead. See [Built-in Commands vs Scripts](/guide/run#built-in-commands-vs-scripts).
+:::
+
 ## Usage
 
 ```bash

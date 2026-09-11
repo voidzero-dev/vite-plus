@@ -1,0 +1,12 @@
+{
+  "name": "@nuxt/test-utils",
+  "version": "4.0.3",
+  "peerDependencies": {
+    "vitest": "^4.0.2"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  }
+}

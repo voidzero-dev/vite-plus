@@ -158,7 +158,7 @@ export const spinner = ({
     let frameIndex = 0;
     let indicatorTimer = 0;
     registerHooks();
-    loop = setInterval(() => {
+    const renderFrame = (): void => {
       if (isCI && _message === _prevMessage) {
         return;
       }
@@ -185,7 +185,14 @@ export const spinner = ({
       frameIndex = frameIndex + 1 < frames.length ? frameIndex + 1 : 0;
       // indicator increase by 1 every 8 frames
       indicatorTimer = indicatorTimer < 4 ? indicatorTimer + 0.125 : 0;
-    }, delay);
+    };
+    // Paint the first frame synchronously so the message shows the instant
+    // start() is called, rather than only after the first interval tick. This
+    // also means the message is visible before a synchronous, event-loop-blocking
+    // operation that would otherwise starve the interval. The interval then
+    // drives the ongoing animation.
+    renderFrame();
+    loop = setInterval(renderFrame, delay);
   };
 
   const start = (msg = ''): void => {

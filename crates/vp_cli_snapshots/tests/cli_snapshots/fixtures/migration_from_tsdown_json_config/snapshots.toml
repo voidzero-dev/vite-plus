@@ -1,0 +1,13 @@
+[[case]]
+name = "migration_from_tsdown_json_config"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should rewrite imports to vite-plus", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "tsdown.config.json", "--assert-not", "file"], comment = "check tsdown.config.json should be removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "run migration again to check if it is idempotent", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+]

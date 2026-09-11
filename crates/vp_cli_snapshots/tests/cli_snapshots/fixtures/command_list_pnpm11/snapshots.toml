@@ -1,0 +1,22 @@
+[[case]]
+name = "command_list_pnpm11"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "list"], comment = "should list installed packages", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "testnpm2"], comment = "should list specific package", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--depth", "0"], comment = "should list packages with depth limit", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--json"], comment = "should list packages in JSON format", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--long"], comment = "should list packages with extended info", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--parseable"], comment = "should list packages in parseable format", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--prod"], comment = "should list production dependencies only", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--dev"], comment = "should list development dependencies only", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--no-optional"], comment = "should exclude optional dependencies", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--exclude-peers"], comment = "should exclude peer dependencies", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--only-projects"], comment = "should list only workspace projects (pnpm-specific)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--find-by", "customFinder"], comment = "should use custom finder (pnpm-specific)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive"], comment = "should list packages recursively in workspace", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--", "--loglevel=warn"], comment = "should support pass through arguments", continue-on-failure = true },
+]

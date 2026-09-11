@@ -1,0 +1,10 @@
+[[case]]
+name = "command_add_bun_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "add", "testnpm2", "--filter", "app", "--", "--silent"], comment = "should add package to packages/app" },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "test-vite-plus-package", "--save-catalog", "--", "--silent"], comment = "should add package to the default catalog" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

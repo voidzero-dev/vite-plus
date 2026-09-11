@@ -1,3 +1,0 @@
-> vp migrate --no-interactive # should detect existing vite-plus and exit
-This project is already using Vite+! Happy coding!
-

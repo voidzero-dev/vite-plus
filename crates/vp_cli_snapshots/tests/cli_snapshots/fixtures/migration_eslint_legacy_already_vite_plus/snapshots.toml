@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_eslint_legacy_already_vite_plus"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should show legacy config warning and already using Vite+", continue-on-failure = true },
+]

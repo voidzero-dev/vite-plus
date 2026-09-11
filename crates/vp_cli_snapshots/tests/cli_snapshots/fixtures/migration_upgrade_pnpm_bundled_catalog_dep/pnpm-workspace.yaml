@@ -1,0 +1,10 @@
+packages:
+  - .
+
+catalog:
+  oxfmt: ^0.56.0
+  oxlint: ^1.0.0
+  oxlint-tsgolint: ^0.23.0
+  tsdown: ^0.22.2
+  vite: npm:@voidzero-dev/vite-plus-core@^0.1.20
+  vite-plus: ^0.1.20

@@ -7,7 +7,6 @@ export interface WorkspacePackage {
   path: string;
   description?: string;
   version?: string;
-  isTemplatePackage: boolean;
 }
 
 export interface WorkspaceInfo {

@@ -9,6 +9,7 @@ import {
   S_POINTER_INACTIVE,
   symbol,
 } from './common.js';
+import { promptMilestone } from './milestone.js';
 
 export interface ConfirmOptions extends CommonOptions {
   message: string;
@@ -36,13 +37,13 @@ export const confirm = (opts: ConfirmOptions) => {
       switch (this.state) {
         case 'submit': {
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
-          return `${title}${submitPrefix}${color.dim(value)}\n`;
+          return `${title}${submitPrefix}${color.dim(value)}\n${promptMilestone('confirm', opts.testId, 'submit')}`;
         }
         case 'cancel': {
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           return `${title}${cancelPrefix}${color.strikethrough(
             color.dim(value),
-          )}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}\n`;
+          )}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}\n${promptMilestone('confirm', opts.testId, 'cancel')}`;
         }
         default: {
           const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
@@ -61,7 +62,7 @@ export const confirm = (opts: ConfirmOptions) => {
             !this.value
               ? `${color.blue(S_POINTER_ACTIVE)} ${color.bold(inactive)}`
               : `${color.dim(S_POINTER_INACTIVE)} ${color.dim(inactive)}`
-          }\n${defaultPrefixEnd}\n`;
+          }\n${defaultPrefixEnd}\n${promptMilestone('confirm', opts.testId, this.value ? 'yes' : 'no')}`;
         }
       }
     },

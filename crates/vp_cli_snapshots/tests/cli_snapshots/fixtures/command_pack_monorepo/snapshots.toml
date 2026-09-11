@@ -1,0 +1,20 @@
+[[case]]
+name = "command_pack_monorepo"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "hello#build"], comment = "should build the library from root", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "packages/hello/dist"], comment = "should have the library", continue-on-failure = true },
+  { argv = ["vp", "run", "hello#build"], comment = "should hit cache from root", continue-on-failure = true },
+  { argv = ["vp", "run", "build"], cwd = "packages/hello", comment = "should hit cache from sub dir", continue-on-failure = true },
+  { argv = ["vp", "pack"], cwd = "packages/hello", comment = "direct vp pack should not be cached", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pack"], cwd = "packages/hello", comment = "direct vp pack has no cache" },
+  { argv = ["vpt", "write-file", "packages/hello/src/hello.ts", "export function hello() { console.log(\"changed\"); }\n"], continue-on-failure = true },
+  { argv = ["vp", "run", "hello#build"], comment = "should miss cache after source change", continue-on-failure = true },
+  { argv = ["vp", "run", "build"], cwd = "packages/array-config", comment = "should build the library from sub dir", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "packages/array-config/dist"], comment = "should have the library", continue-on-failure = true },
+  { argv = ["vp", "run", "build"], cwd = "packages/array-config", comment = "should hit cache from sub dir", continue-on-failure = true },
+  { argv = ["vp", "run", "array-config#build"], comment = "should hit cache from root after sub dir build", continue-on-failure = true },
+  { argv = ["vp", "run", "default-config#build"], comment = "should build the library from root", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "list-dir", "packages/default-config/dist"], comment = "should have the library", continue-on-failure = true },
+  { argv = ["vp", "run", "build"], cwd = "packages/default-config", comment = "should hit cache from sub dir", continue-on-failure = true },
+]

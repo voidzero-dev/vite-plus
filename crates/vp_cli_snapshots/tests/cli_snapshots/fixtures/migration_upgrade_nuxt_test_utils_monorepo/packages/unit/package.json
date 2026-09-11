@@ -1,0 +1,7 @@
+{
+  "name": "unit-tests",
+  "private": true,
+  "devDependencies": {
+    "vitest": "catalog:"
+  }
+}

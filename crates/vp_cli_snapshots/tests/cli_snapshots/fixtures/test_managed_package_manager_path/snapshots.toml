@@ -1,0 +1,18 @@
+[[case]]
+name = "test_managed_package_manager_path"
+vp = "global"
+skip-platforms = ["windows"]
+comment = """
+The legacy case built a sanitized PATH (a mktemp dir holding only `node`, plus
+/bin:/usr/bin) via `sh -c` to prove `vp test` exposes the managed package
+manager to the test process even when no host pnpm is reachable
+(src/managed-pm-path.test.ts runs `pnpm --version` and asserts the pinned
+version). The runner's case environment is already hermetic: its PATH holds
+only the case-owned Vite+ bins plus the system tail, so no host pnpm can
+satisfy the lookup and the assertion exercises the managed path end to end. A
+step-level PATH override would break `vp` resolution itself, which follows the
+step PATH.
+"""
+steps = [
+  { argv = ["vp", "test", "--slowTestThreshold", "10000"], comment = "no host pnpm reachable; vp test still exposes the managed pnpm", continue-on-failure = true },
+]

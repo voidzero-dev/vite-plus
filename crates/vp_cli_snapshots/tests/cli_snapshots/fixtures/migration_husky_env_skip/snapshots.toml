@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_husky_env_skip"
+vp = "global"
+env = { HUSKY = "0" }
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "with HUSKY=0, vp config should skip and warn instead of reporting success", continue-on-failure = true },
+]

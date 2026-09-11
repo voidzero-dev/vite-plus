@@ -81,4 +81,11 @@ export interface CommonOptions {
   output?: Writable;
   signal?: AbortSignal;
   withGuide?: boolean;
+  /**
+   * Stable identifier used in snapshot-test milestones
+   * (`<kind>:<testId>:<state>`). Only read when `VP_EMIT_MILESTONES=1`;
+   * defaults to the prompt kind. Set it when a flow shows several prompts of
+   * the same kind, so tests can target each one unambiguously.
+   */
+  testId?: string;
 }

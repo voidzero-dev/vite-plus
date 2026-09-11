@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_setup_vp_version"
+vp = "global"
+env = { VP_OVERRIDE_PACKAGES = "{\"vite\":\"npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617\",\"vitest\":\"4.1.11\"}", VP_VERSION = "0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", ".github/workflows"], snapshot = false },
+  { argv = ["vpt", "cp", "workflow.txt", ".github/workflows/ci.yml"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "an existing Vite+ project upgrades the frozen setup-vp tag", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".github/workflows/ci.yml"], comment = "the workflow uses the exact setup-vp release", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "the setup-vp migration is idempotent", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".github/workflows/ci.yml"], comment = "the exact setup-vp release remains unchanged", continue-on-failure = true },
+]

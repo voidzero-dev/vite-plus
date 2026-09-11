@@ -2,7 +2,7 @@
 
 ## Summary
 
-Document how Vite+ determines which package manager (pnpm/yarn/npm/bun) a project uses. This detection runs automatically before any package management command (`vp install`, `vp add`, `vp remove`, etc.) and drives all PM-specific behavior including command translation, lockfile handling, and workspace configuration.
+Document how Vite+ determines which package manager (pnpm/yarn/npm/bun) a project uses. This detection runs automatically before package management commands (`vp install`, `vp add`, `vp remove`, etc.) and drives PM-specific behavior including command translation, lockfile handling, workspace configuration, and matching package-manager shims.
 
 ## Detection Algorithm
 
@@ -22,7 +22,7 @@ The highest-priority signal. If the root `package.json` contains a `packageManag
 
 - `name` must be one of: `pnpm`, `yarn`, `npm`, `bun`
 - `semver` must be valid (e.g., `10.19.0`, `4.0.0`)
-- Optional hash suffix: `pnpm@10.0.0+sha512.abc123...`
+- Optional integrity hash suffix: `pnpm@10.0.0+sha512.abc123...` (see [Integrity Hashes](#integrity-hashes))
 
 **Errors**:
 
@@ -31,9 +31,37 @@ The highest-priority signal. If the root `package.json` contains a `packageManag
 
 **Reference**: [Node.js Corepack packageManager field](https://nodejs.org/api/packages.html#packagemanager)
 
-### Priority 2: Lockfiles
+The explicit field also controls matching package-manager shims, including aliases generated for that manager. If a project declares `packageManager: "npm@11.14.0"`, the `npm` and `npx` shims run npm 11.14.0. Other aliases follow the same rule: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. If the project declares `pnpm`, `yarn`, or `bun`, invoking `npm` still runs npm; Vite+ never translates one package-manager shim command into another.
 
-If no `packageManager` field is found, Vite+ checks for lockfiles in the workspace root. Checked in this order:
+When `devEngines.packageManager` is also declared, the `packageManager` field still drives selection, but Vite+ warns when the field's name or version does not satisfy the devEngines constraint (this warning becomes a hard error in a future release; npm already errors in this situation). See [RFC: devEngines Support](./dev-engines.md).
+
+### Priority 2: `devEngines.packageManager` field in `package.json`
+
+If there is no `packageManager` field, Vite+ checks `devEngines.packageManager`, following the [devEngines spec](https://github.com/openjs-foundation/package-metadata-interoperability-working-group/blob/main/devengines-field-proposal.md):
+
+```json
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.0.0",
+      "onFail": "download"
+    }
+  }
+}
+```
+
+- Accepts a single object or an array of objects; entries are evaluated in order and the first entry with a supported `name` wins.
+- `name` must be one of `pnpm`, `yarn`, `npm`, `bun`. Unsupported names are skipped in array form. When no entry names a supported package manager, the effective `onFail` of the last entry decides: `ignore`/`warn` continue down the detection chain, `error`/`download` fail with a clear message.
+- `version` may be exact, a semver range, or absent (any version satisfies). Ranges resolve to an already-downloaded satisfying version when possible, otherwise to the latest satisfying version from the npm registry (fetched as the abbreviated metadata document). Prereleases are excluded unless the range itself contains a prerelease marker and no stable version satisfies it.
+- A range source is never frozen into an exact `packageManager` field; the range stays the source of truth.
+- `onFail` is otherwise parsed and preserved but not yet acted on: a selected (supported) entry whose version cannot be resolved or downloaded surfaces an error rather than falling back. See the RFC's [Deferred / Future Work](./dev-engines.md#deferred--future-work).
+
+See [RFC: devEngines Support](./dev-engines.md) for the full semantics (conflict handling, doctor checks, and the deferred `onFail` matrix).
+
+### Priority 3: Lockfiles
+
+If neither `packageManager` nor `devEngines.packageManager` is found, Vite+ checks for lockfiles in the workspace root. Checked in this order:
 
 | File                  | Detected PM | Notes                            |
 | --------------------- | ----------- | -------------------------------- |
@@ -47,7 +75,7 @@ If no `packageManager` field is found, Vite+ checks for lockfiles in the workspa
 
 When detected from lockfiles, version is set to `"latest"` (resolved during download).
 
-### Priority 3: Configuration files
+### Priority 4: Configuration files
 
 Lower-priority config files that indicate a package manager:
 
@@ -58,11 +86,11 @@ Lower-priority config files that indicate a package manager:
 | `bunfig.toml`     | bun         | [Bun configuration](https://bun.sh/docs/pm) |
 | `yarn.config.cjs` | yarn        | Yarn Berry (v2+) configuration              |
 
-### Priority 4: Explicit default
+### Priority 5: Explicit default
 
 If a caller provides a default package manager type (used internally by some code paths), that default is used with version `"latest"`.
 
-### Priority 5: Interactive selection
+### Priority 6: Interactive selection
 
 If no signals are detected and no default is provided, the behavior depends on the environment:
 
@@ -117,32 +145,64 @@ vp create vite:monorepo --no-interactive --package-manager bun
 
 **Resolution priority for `vp create`**:
 
-1. Detected workspace `packageManager` field (existing monorepo takes precedence)
+1. Any package manager detected for an existing monorepo (from manifest fields, workspace files, lockfiles, or package-manager configuration)
 2. `--package-manager` CLI flag
-3. Interactive prompt / auto-default (pnpm)
+3. Package manager detected from a non-monorepo ancestor
+4. Interactive prompt / auto-default (pnpm)
 
-This ensures monorepo consistency: if you run `vp create` inside an existing workspace that already has a `packageManager` field, the workspace setting wins over the CLI flag.
+This ensures monorepo consistency while allowing standalone projects to override ambient detection explicitly.
 
-## Auto-Update Behavior
+## Non-Mutating Resolution
 
-After detection and download, Vite+ automatically writes the resolved package manager version to the `packageManager` field in `package.json`. This ensures:
+Detection and download never rewrite `package.json`. A `devEngines.packageManager` range remains the source of truth, while lockfile, config, and interactive detection resolve a managed package manager for the current command without adding a manifest field.
 
-- Future runs use the exact version (Priority 1 match)
-- Team members get consistent versions
-- CI environments use deterministic versions
+Projects that require a deterministic declaration can pin it explicitly with `vp env pin <package-manager>@<version>`. Commands that modify dependencies, including `vp install` and `vp add`, require an existing `package.json` instead of creating one automatically.
 
 ## Version Resolution
 
-| Detection method          | Version used                                                     |
-| ------------------------- | ---------------------------------------------------------------- |
-| `packageManager` field    | Exact version from field (e.g., `10.19.0`)                       |
-| Lockfile/config detection | `"latest"` — resolved to latest stable version from npm registry |
-| Interactive selection     | `"latest"` — resolved to latest stable version from npm registry |
+| Detection method                              | Version used                                                                                             |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `packageManager` field                        | Exact version from field (e.g., `10.19.0`)                                                               |
+| `devEngines.packageManager` (exact version)   | Exact version from field                                                                                 |
+| `devEngines.packageManager` (range or absent) | Highest already-downloaded satisfying version, otherwise latest satisfying version from the npm registry |
+| Lockfile/config detection                     | `"latest"`: resolved to latest stable version from npm registry                                          |
+| Interactive selection                         | `"latest"`: resolved to latest stable version from npm registry                                          |
 
 **Special cases**:
 
-- **yarn ≥ 2.0.0**: Downloads from `@yarnpkg/cli-dist` instead of `yarn` npm package
+- **yarn ≥ 2.0.0**: Downloads from `@yarnpkg/cli-dist` instead of the `yarn` npm package, and extracts only `bin/yarn.js`. Every 2.x prerelease counts as Yarn 2 or later; see [the Yarn 2 boundary](#the-yarn-2-boundary).
 - **bun**: Downloads platform-specific native binary from `@oven/bun-{os}-{arch}` (including musl variants for Alpine Linux)
+
+## Integrity Hashes
+
+A `packageManager` field can carry an integrity hash: `yarn@4.17.1+sha512.ccbf…`. `corepack use` writes that suffix. Vite+ hashes the same artifact as Corepack, so one pin works under both tools.
+
+| Package manager              | What the declared hash covers                       | What Vite+ also verifies                                   |
+| ---------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| Yarn 2 and later             | the extracted CLI, `bin/yarn.js`                    | —                                                          |
+| npm, pnpm ≤ 11, Yarn Classic | the npm package tarball                             | —                                                          |
+| pnpm ≥ 12                    | the main `pnpm` tarball                             | the platform package against the registry `dist.integrity` |
+| bun                          | the main `bun` tarball, which Vite+ never downloads | the platform package against the registry `dist.integrity` |
+
+Yarn 2 and later is the exception because Corepack installs Berry from a single file, `repo.yarnpkg.com/<version>/packages/yarnpkg-cli/bin/yarn.js`, and hashes that file. Vite+ downloads the `@yarnpkg/cli-dist` tarball instead, so it extracts `bin/yarn.js` and hashes that entry. The bytes are the same; only the basis differs. Vite+ hashed the tarball before, which made a pin written by `corepack use` fail (issue #2209).
+
+That pin covers one file inside an otherwise unauthenticated archive, so Vite+ writes only that entry to disk. No other archive entry reaches the install directory, and an archive-controlled path or symlink cannot escape it.
+
+### When Vite+ verifies a pin
+
+Vite+ hashes the artifact when it downloads it, and records the verified pin beside the install in `<version>/.verified-pin`. A later command compares its own pin against that record:
+
+- The pins match. The command uses the cache and reads no further.
+- The pins differ, or the record is missing. Vite+ hashes the cached CLI once, then rewrites the record.
+- The hash disagrees with the pin. The command stops with `Hash mismatch for <name>@<version>`, and the message names the artifact the hash covers.
+
+Vite+ does not read the CLI again on every command. Corepack gives the same guarantee: it reads its own `.corepack` record and returns. The trust boundary is write access to `$VP_HOME`, which also holds the `vp` binary, the generated shims, and the managed Node.js runtime.
+
+An integrity failure stops the command that needs the package manager, including `vp run` and `vp exec`. Those commands otherwise continue when the managed package manager is missing, for example with no network or an unknown version. A swallowed integrity failure would surface later as "command not found".
+
+### The Yarn 2 boundary
+
+Corepack splits Yarn at 2.0.0 and matches that range with `satisfiesWithPrereleases`, which drops the prerelease tag before it compares. Every 2.x prerelease is therefore a Berry version to Corepack. Vite+ compares the major number alone and agrees: `yarn@4.0.0-rc.53` resolves from `@yarnpkg/cli-dist`. A `>=2.0.0` semver range would exclude that version and send it to the Yarn Classic package, which never published it.
 
 ## Workspace and Monorepo Detection
 
@@ -161,12 +221,12 @@ The package manager type and monorepo status together drive:
 
 ### Per package manager
 
-| Package Manager | Lockfiles               | Config Files                                           | Field            |
-| --------------- | ----------------------- | ------------------------------------------------------ | ---------------- |
-| pnpm            | `pnpm-lock.yaml`        | `pnpm-workspace.yaml`, `.pnpmfile.cjs`, `pnpmfile.cjs` | `packageManager` |
-| yarn            | `yarn.lock`             | `.yarnrc.yml`, `.yarnrc`, `yarn.config.cjs`            | `packageManager` |
-| npm             | `package-lock.json`     | —                                                      | `packageManager` |
-| bun             | `bun.lock`, `bun.lockb` | `bunfig.toml`                                          | `packageManager` |
+| Package Manager | Lockfiles               | Config Files                                           | Fields                                        |
+| --------------- | ----------------------- | ------------------------------------------------------ | --------------------------------------------- |
+| pnpm            | `pnpm-lock.yaml`        | `pnpm-workspace.yaml`, `.pnpmfile.cjs`, `pnpmfile.cjs` | `packageManager`, `devEngines.packageManager` |
+| yarn            | `yarn.lock`             | `.yarnrc.yml`, `.yarnrc`, `yarn.config.cjs`            | `packageManager`, `devEngines.packageManager` |
+| npm             | `package-lock.json`     | —                                                      | `packageManager`, `devEngines.packageManager` |
+| bun             | `bun.lock`, `bun.lockb` | `bunfig.toml`                                          | `packageManager`, `devEngines.packageManager` |
 
 ### Cache invalidation (fingerprint ignores)
 
@@ -184,9 +244,12 @@ Each package manager has specific files that trigger cache invalidation when cha
 
 ### Rust (core detection)
 
-- **File**: `crates/vite_install/src/package_manager.rs`
+- **File**: `crates/vp_pm_cli/src/package_manager.rs`
 - **Function**: `get_package_manager_type_and_version()` — priority-ordered detection
 - **Function**: `prompt_package_manager_selection()` — CI/TTY/interactive fallback
+- **Function**: `download_package_manager()` — download, hash, and record the verified pin
+- **Function**: `ensure_package_manager_bin()` — resolve the executable, shared with the global shim
+- **Function**: `verify_cached_cli_hash()` — compare a pin against the recorded pin
 - **Enum**: `PackageManagerType` — `Pnpm`, `Yarn`, `Npm`, `Bun`
 
 ### TypeScript (CLI integration)
@@ -200,23 +263,6 @@ Each package manager has specific files that trigger cache invalidation when cha
 - **File**: `packages/cli/binding/src/package_manager.rs` — `detectWorkspace()` exports to JS
 
 ## Future Enhancements
-
-### `devEngines.packageManager` field
-
-Support the [Node.js `devEngines` field](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines) for package manager constraints:
-
-```json
-{
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": ">=10.0.0"
-    }
-  }
-}
-```
-
-This would be checked between Priority 1 (`packageManager` field) and Priority 2 (lockfiles). It specifies a constraint rather than an exact version, so it would be combined with other signals.
 
 ### Multiple lockfile conflict resolution
 

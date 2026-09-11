@@ -1,0 +1,22 @@
+# cache_scripts_enabled
+
+## `vp run hello`
+
+first run should be cache miss
+
+```
+$ node hello.mjs
+hello from script
+```
+
+## `vp run hello`
+
+second run should be cache hit
+
+```
+$ node hello.mjs ◉ cache hit, replaying
+hello from script
+
+---
+vp run: cache hit, <duration> saved.
+```

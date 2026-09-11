@@ -42,9 +42,9 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: namespace-profile-windows-4c-8g
           - target: aarch64-pc-windows-msvc
-            os: windows-latest
+            os: namespace-profile-windows-4c-8g
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -56,29 +56,55 @@ jobs:
       - name: Rustup Adds Target
         run: rustup target add ${{ matrix.settings.target }}
 
-      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
-      - name: Set binding version
+      - name: Set build version
         shell: bash
         run: |
-          pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' "version = \"${VERSION}\""
-          pnpm exec tool replace-file-content crates/vite_global_cli/Cargo.toml 'version = "0.0.0"' "version = \"${VERSION}\""
-          cat crates/vite_global_cli/Cargo.toml
+          set -euo pipefail
+          # Stamp ${VERSION} as the [package] version so CARGO_PKG_VERSION matches
+          # the version that gets published/installed (the release version, or
+          # 0.0.0-commit.<sha> for preview builds). Anchored to the line-start
+          # `version = "..."` so crate dependency versions are never touched.
+          for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+            node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"
+          done
+          # Keep the workspace package entries in Cargo.lock consistent with
+          # the stamped versions before later commands use --locked.
+          cargo update --workspace
+          # Stamp the package.json files too:
+          # - packages/cli: the bundled JS dist inlines ${VERSION} as
+          #   cliPkg.version (VITE_PLUS_VERSION). Without this a preview
+          #   `vp migrate` pins the build-time release placeholder instead of
+          #   the test build, and skips the registry-bridge .npmrc.
+          # - packages/core: the release build bakes ${VERSION} into bundled
+          #   Rolldown's binding version guards, matching the
+          #   @voidzero-dev/vite-plus-<platform> packages published as
+          #   ${VERSION}. A release checkout already carries ${VERSION}; this
+          #   only changes preview builds.
+          # The list feeds the verify step below, so a stamped file cannot
+          # silently drop out of verification.
+          PKG_JSON_STAMP_FILES="packages/cli/package.json packages/core/package.json"
+          for f in $PKG_JSON_STAMP_FILES; do
+            pnpm exec json-edit "$f" '_.version = process.env.VERSION'
+          done
+          echo "PKG_JSON_STAMP_FILES=$PKG_JSON_STAMP_FILES" >> "$GITHUB_ENV"
 
       - name: Verify version replacement
         shell: bash
         run: |
-          if grep -q 'version = "0.0.0"' crates/vite_global_cli/Cargo.toml; then
-            echo "ERROR: Version replacement failed for crates/vite_global_cli/Cargo.toml"
-            head -5 crates/vite_global_cli/Cargo.toml
-            exit 1
-          fi
-          if grep -q 'version = "0.0.0"' packages/cli/binding/Cargo.toml; then
-            echo "ERROR: Version replacement failed for packages/cli/binding/Cargo.toml"
-            head -5 packages/cli/binding/Cargo.toml
-            exit 1
-          fi
-          echo "Version replacement verified successfully"
+          set -euo pipefail
+          for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+            if ! grep -qF "version = \"${VERSION}\"" "$f"; then
+              echo "ERROR: version stamp failed for $f"; head -5 "$f"; exit 1
+            fi
+          done
+          for f in ${PKG_JSON_STAMP_FILES}; do
+            if [ "$(node -p "require('./$f').version")" != "${VERSION}" ]; then
+              echo "ERROR: version stamp failed for $f"; exit 1
+            fi
+          done
+          echo "Version stamp verified: ${VERSION}"
 
       - name: Build
         uses: ./.github/actions/build-upstream
@@ -95,11 +121,74 @@ jobs:
       - name: Upload Rust CLI binary artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vite-global-cli-${{ matrix.settings.target }}
+          name: vp-global-cli-${{ matrix.settings.target }}
           path: |
             ./target/${{ matrix.settings.target }}/release/vp
             ./target/${{ matrix.settings.target }}/release/vp.exe
             ./target/${{ matrix.settings.target }}/release/vp-shim.exe
+          if-no-files-found: error
+
+      - name: Package release archive
+        shell: bash
+        working-directory: ./target/${{ matrix.settings.target }}/release
+        run: |
+          mkdir -p sync-versions
+          cp ../../../packages/cli/dist/sync-versions/bin.mjs sync-versions/bin.mjs
+          cp ../../../packages/cli/dist/toolchain.json toolchain.json
+          if [ -f vp.exe ]; then
+            7z a "vp-${{ matrix.settings.target }}.zip" vp.exe vp-shim.exe sync-versions/bin.mjs toolchain.json
+          else
+            tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp sync-versions/bin.mjs toolchain.json
+          fi
+
+      - name: Verify packaged sync-versions planner
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        shell: bash
+        working-directory: ./target/${{ matrix.settings.target }}/release
+        run: |
+          set -euo pipefail
+          archive_dir="$(mktemp -d)"
+          cleanup() {
+            rm -rf "${archive_dir}"
+          }
+          trap cleanup EXIT
+          tar -xzf "vp-${{ matrix.settings.target }}.tar.gz" -C "${archive_dir}"
+          # Skip first-start setup because this build's preview packages are not published yet.
+          touch "${archive_dir}/.vp-setup-complete"
+
+          node --input-type=module -e '
+            const before = JSON.stringify({ devDependencies: { "vite-plus": "0.0.0" } }) + "\n";
+            process.stdout.write(JSON.stringify({
+              schemaVersion: 1,
+              workspace: ".",
+              manifests: [{ path: "package.json", kind: "packageJson", contents: before }],
+            }));
+          ' | "${archive_dir}/vp" sync-versions --json > "${archive_dir}/plan.json"
+
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const [planPath, expectedVersion] = process.argv.slice(1);
+            const plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
+            const before = JSON.stringify({ devDependencies: { "vite-plus": "0.0.0" } }) + "\n";
+            const after = JSON.stringify({ devDependencies: { "vite-plus": expectedVersion } }) + "\n";
+            if (
+              plan.tool?.name !== "vite-plus" ||
+              plan.tool.version !== expectedVersion ||
+              plan.replacements?.length !== 1 ||
+              plan.replacements[0].before !== before ||
+              plan.replacements[0].after !== after
+            ) {
+              throw new Error("Unexpected packaged sync plan: " + JSON.stringify(plan));
+            }
+          ' "${archive_dir}/plan.json" "${VERSION}"
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vp-release-archive-${{ matrix.settings.target }}
+          path: |
+            ./target/${{ matrix.settings.target }}/release/vp-*.tar.gz
+            ./target/${{ matrix.settings.target }}/release/vp-*.zip
           if-no-files-found: error
 
       - name: Upload installer binary artifact (Windows only)

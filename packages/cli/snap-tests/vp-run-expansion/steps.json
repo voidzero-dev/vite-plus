@@ -1,3 +1,0 @@
-{
-  "commands": ["vp run hello", "vp run hello # should hit cache"]
-}

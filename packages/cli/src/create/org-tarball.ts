@@ -1,16 +1,15 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { parseTarGzip } from 'nanotar';
 
+import { getVpDirs } from '../../binding/index.js';
 import { fetchNpmResource } from '../utils/npm-config.ts';
 import type { OrgManifest } from './org-manifest.ts';
 
 function getCacheRoot(): string {
-  const home = process.env.VP_HOME || path.join(os.homedir(), '.vite-plus');
-  return path.join(home, 'tmp', 'create-org');
+  return path.join(getVpDirs().cache, 'create-org');
 }
 
 /**
@@ -29,16 +28,24 @@ export function sanitizeHostForPath(host: string): string {
  * (via `.npmrc` scope mappings) don't share a cache slot. The registry
  * guarantees `manifest.tarballUrl` is a valid URL, so any parse failure
  * here is a real bug worth surfacing.
+ *
+ * Require a strict descendant of `cacheRoot` so sibling staging directories
+ * stay inside the cache, even if a caller skips `readOrgManifest` validation.
  */
-function getExtractionDir(manifest: OrgManifest): string {
+export function resolveExtractionDir(cacheRoot: string, manifest: OrgManifest): string {
   const { host } = new URL(manifest.tarballUrl);
-  return path.join(
-    getCacheRoot(),
+  const resolvedRoot = path.resolve(cacheRoot);
+  const resolvedDir = path.resolve(
+    resolvedRoot,
     sanitizeHostForPath(host),
     manifest.scope,
     'create',
     manifest.version,
   );
+  if (!resolvedDir.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new Error(`org template extraction path escapes the cache root: ${manifest.version}`);
+  }
+  return resolvedDir;
 }
 
 function parseIntegrity(integrity: string): { algorithm: string; expected: string } | null {
@@ -114,6 +121,38 @@ async function downloadTarball(url: string): Promise<Uint8Array> {
     offset += chunk.byteLength;
   }
   return bytes;
+}
+
+/**
+ * Download a package tarball and parse its `package/package.json`.
+ *
+ * Some registries (GitHub Packages among them) strip fields they don't
+ * recognize — including `createConfig` — from packument *version metadata*
+ * while preserving the published tarball byte-for-byte. This gives
+ * `readOrgManifest` a fallback source of truth for those registries.
+ *
+ * Returns `null` when the archive contains no `package/package.json`.
+ * Throws on download/integrity failures or unparsable JSON.
+ */
+export async function readPackageJsonFromTarball(
+  tarballUrl: string,
+  integrity?: string,
+): Promise<unknown> {
+  const bytes = await downloadTarball(tarballUrl);
+  verifyIntegrity(bytes, integrity);
+  const entries = await parseTarGzip(bytes);
+  for (const entry of entries) {
+    if (normalizeEntryName(entry.name) !== 'package.json' || !entry.data) {
+      continue;
+    }
+    const text = new TextDecoder().decode(entry.data);
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      throw new Error(`invalid package.json in tarball: ${tarballUrl}`);
+    }
+  }
+  return null;
 }
 
 const STAGING_SUFFIX_PREFIX = '.tmp-';
@@ -264,7 +303,7 @@ export async function cleanupStaleStagingDirs(destDir: string): Promise<void> {
  * cleans up and returns the existing directory.
  */
 export async function ensureOrgPackageExtracted(manifest: OrgManifest): Promise<string> {
-  const extractedRoot = getExtractionDir(manifest);
+  const extractedRoot = resolveExtractionDir(getCacheRoot(), manifest);
   if (fs.existsSync(path.join(extractedRoot, 'package.json'))) {
     return extractedRoot;
   }

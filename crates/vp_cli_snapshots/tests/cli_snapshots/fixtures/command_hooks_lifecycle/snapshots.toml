@@ -1,0 +1,20 @@
+[[case]]
+name = "command_hooks_lifecycle"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "hooks", "status"], comment = "preference not set before enable", continue-on-failure = true },
+  { argv = ["vp", "hooks", "enable"], comment = "install dispatcher", continue-on-failure = true },
+  { argv = ["vp", "hooks", "status"], comment = "preference enabled after enable", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should be .vite-hooks/_", continue-on-failure = true },
+  { argv = ["vp", "hooks", "disable"], comment = "tear down and persist preference", continue-on-failure = true },
+  { argv = ["vp", "hooks", "status"], comment = "preference disabled (local)", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/_/pre-commit", "--assert", "missing"], comment = "dispatcher removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "project-owned hook left unchanged", continue-on-failure = true },
+  { argv = ["vp", "config", "--no-agent"], comment = "prepare-like config should skip reinstall", envs = [["npm_lifecycle_event", "prepare"]], continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/_/pre-commit", "--assert", "missing"], comment = "still missing after vp config", continue-on-failure = true },
+  { argv = ["vp", "hooks", "enable"], comment = "re-enable after disable", continue-on-failure = true },
+  { argv = ["vp", "hooks", "status"], comment = "preference enabled again", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "dispatcher restored", continue-on-failure = true },
+]

@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_upgrade_vitest_exact_peer_yarn4"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "Yarn PnP converts to node-modules before exact-peer migration", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "direct deps and resolutions should use the managed catalog/version", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".yarnrc.yml"], comment = "linker conversion and aligned Vitest catalog are persisted", continue-on-failure = true },
+]

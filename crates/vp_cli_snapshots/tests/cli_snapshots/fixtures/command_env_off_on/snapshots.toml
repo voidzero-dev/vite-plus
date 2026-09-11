@@ -1,0 +1,14 @@
+[[case]]
+name = "command_env_off_on"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "run", "assert-managed"], comment = "Managed mode: should use project's engines.node 22.18.0", continue-on-failure = true },
+  { argv = ["vp", "env", "off"], comment = "Switch to system-first mode", continue-on-failure = true },
+  { argv = ["vp", "run", "assert-not-managed"], comment = "System-first mode: must NOT use 22.18.0", continue-on-failure = true },
+  { argv = ["vp", "env", "on"], comment = "Switch back to managed mode", continue-on-failure = true },
+  { argv = ["vp", "run", "assert-managed"], comment = "Managed mode restored: should use 22.18.0 again", continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "env", "on"], continue-on-failure = true },
+]

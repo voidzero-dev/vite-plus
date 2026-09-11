@@ -1,0 +1,71 @@
+[[case]]
+name = "prefers_existing_family_and_records_choice"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/yarn"], snapshot = false },
+  { argv = ["pnpm", "--version"], snapshot = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], interactions = [
+    { "expect-milestone" = "pm-shim-choice:pnpm" },
+    { "write-key" = "down" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "the explicit system choice records only pnpm" },
+  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "later pnpm invocations use the recorded choice without prompting" },
+  { argv = ["yarn", "--version"], snapshot = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], interactions = [
+    { "expect-milestone" = "pm-shim-choice:yarn" },
+    { "write-key" = "down" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "Yarn records its own decision without changing pnpm" },
+]
+
+[[case]]
+name = "system_package_manager_uses_system_first_node"
+vp = "global"
+comment = "Node and package-manager modes are independent: a system package manager must receive the Node.js selected by Node mode without forcing registry resolution."
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"system-package-manager\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-dispatch-bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-dispatch-bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "a system-first package manager resolves offline and receives the Node.js selected by system-first Node mode" },
+  { argv = ["vp", "env", "exec", "--node", "20.18.0", "pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "explicit Node execution inspects the system manager before resolving its declared range" },
+]
+
+[[case]]
+name = "managed_package_manager_uses_system_first_node"
+vp = "global"
+comment = "A managed package manager must still receive the system Node.js selected by Node mode."
+seed-runtime = false
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"managed-package-manager\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\"}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\nnode --version\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx", "#!/bin/sh\nnode --version\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-dispatch-bin/node"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:9"]], comment = "a managed package manager receives system-first Node.js without resolving a managed runtime" },
+  { argv = ["vp", "env", "print", "node"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:9"]], comment = "Node environment printing uses the system runtime without resolving a managed runtime" },
+]
+
+[[case]]
+name = "non_interactive_use_defaults_to_managed_without_deciding"
+vp = "global"
+comment = "Upgraded installations may have no recorded family mode; non-interactive use must stay deterministic without persisting consent on the user's behalf."
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["pnpm", "--version"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "an undecided non-interactive shim uses managed pnpm without prompting" },
+  { argv = ["vp", "env", "current", "pnpm", "--json"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "environment inspection uses the same stable managed default" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/config.json", "--assert", "missing"], comment = "non-interactive use does not record a choice" },
+]

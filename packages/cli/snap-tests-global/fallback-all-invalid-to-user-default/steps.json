@@ -1,9 +1,0 @@
-{
-  "serial": true,
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp env default 22.12.0 # Set user default",
-    "vp exec node -e \"console.log(process.version)\" # Should use default 22.12.0, not LTS"
-  ],
-  "after": ["vp env default lts # Restore default"]
-}

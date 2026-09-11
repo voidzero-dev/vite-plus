@@ -1,0 +1,7 @@
+[[case]]
+name = "command_prune_yarn4"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "prune", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune"], comment = "should show warning that yarn does not support prune command", continue-on-failure = true },
+]

@@ -1,6 +1,0 @@
-{
-  "name": "synthetic-dev-cache-disabled-test",
-  "scripts": {
-    "dev": "vp dev --help"
-  }
-}

@@ -1,0 +1,11 @@
+[[case]]
+name = "command_pm_approve_builds_npm12"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "approve-builds"], comment = "no args -> npm approve-scripts --allow-scripts-pending (lists pending)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild"], comment = "-> npm approve-scripts esbuild (npm 12 enforces allowScripts, so vp points at vp pm rebuild)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "!core-js"], comment = "deny-only -> npm deny-scripts core-js (denial keeps the enforced default, no note)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild", "!core-js"], comment = "mixed approve+deny -> rejected, exit non-zero", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "--all"], comment = "-> npm approve-scripts --all (rebuild note)", continue-on-failure = true },
+]

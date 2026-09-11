@@ -528,8 +528,8 @@ pub struct InstallCommandResult {
 **File**: `crates/vite_global/src/install.rs` (new file)
 
 ```rust
-use vite_error::Error;
-use vite_path::AbsolutePathBuf;
+use vp_error::Error;
+use vt_path::AbsolutePathBuf;
 use vite_package_manager::{PackageManager, InstallOptions};
 
 pub struct InstallCommand {

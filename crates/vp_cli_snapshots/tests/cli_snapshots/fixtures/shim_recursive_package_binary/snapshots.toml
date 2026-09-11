@@ -1,0 +1,8 @@
+[[case]]
+name = "shim_recursive_package_binary"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "./recursive-cli-pkg"], comment = "Install test package" },
+  { argv = ["recursive-cli"], comment = "Outer call triggers recursive inner call through shim" },
+  { argv = ["vp", "remove", "-g", "recursive-cli-pkg"], comment = "Cleanup" },
+]

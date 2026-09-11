@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_already_vite_plus"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "common existing project removes the stale wrapper override, no hooks/agent setup defaults", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--hooks", "--agent", "agents"], comment = "explicit setup should still update existing vite-plus project", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "prepare script should be configured for vp config", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "AGENTS.md", "--assert", "file"], comment = "explicit agent instructions should be written", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks/pre-commit", "--assert", "file"], comment = "explicit pre-commit hook should be written", continue-on-failure = true },
+]

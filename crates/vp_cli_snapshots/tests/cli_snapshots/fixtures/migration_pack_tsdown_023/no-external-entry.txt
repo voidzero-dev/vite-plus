@@ -1,0 +1,1 @@
+export { bundledValue } from '@fixture/pack-bundled';

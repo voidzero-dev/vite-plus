@@ -1,0 +1,7 @@
+[[case]]
+name = "fmt_ignore_patterns"
+vp = "local"
+steps = [
+  { argv = ["vp", "fmt", "src/"], comment = "Test that fmt ignorePatterns works - ignored files should not be formatted", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/ignored/badly-formatted.js"], comment = "Verify that ignored file still has bad formatting (was not formatted)", continue-on-failure = true },
+]

@@ -6,14 +6,18 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  COPILOT_SETUP_WORKFLOW_PATH,
   detectExistingAgentTargetPaths,
-  detectExistingAgentTargetPath,
   hasExistingAgentInstructions,
   replaceMarkedAgentInstructionsSection,
+  resolveAgentOptions,
   resolveAgentTargetPaths,
   selectAgentTargetPaths,
+  selectAgentTargets,
   writeAgentInstructions,
+  writeCopilotSetupWorkflow,
 } from '../agent.js';
+import { SETUP_VP_VERSION } from '../constants.js';
 import { pkgRoot } from '../path.js';
 
 type MockNode =
@@ -279,6 +283,65 @@ describe('resolveAgentTargetPaths', () => {
   });
 });
 
+describe('resolveAgentOptions', () => {
+  it('resolves explicit selections to supported agent options', () => {
+    expect(resolveAgentOptions(['agents', 'copilot']).map((agent) => agent.id)).toEqual([
+      'agents',
+      'copilot',
+    ]);
+    expect(resolveAgentOptions('github-copilot').map((agent) => agent.id)).toEqual(['copilot']);
+    expect(resolveAgentOptions('.github/copilot-instructions.md').map((agent) => agent.id)).toEqual(
+      ['copilot'],
+    );
+  });
+
+  it('falls back to AGENTS.md for default or unknown selections', () => {
+    expect(resolveAgentOptions().map((agent) => agent.id)).toEqual(['agents']);
+    expect(resolveAgentOptions('unknown-agent').map((agent) => agent.id)).toEqual(['agents']);
+  });
+});
+
+describe('selectAgentTargets', () => {
+  it('returns selected agent options from CLI input', async () => {
+    await expect(
+      selectAgentTargets({
+        interactive: false,
+        agent: ['agents', 'copilot'],
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toMatchObject({
+      targetPaths: ['AGENTS.md', '.github/copilot-instructions.md'],
+      selectedAgents: [{ id: 'agents' }, { id: 'copilot' }],
+    });
+  });
+
+  it('does not treat defaults as explicit Copilot selection', async () => {
+    await expect(
+      selectAgentTargets({
+        interactive: false,
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toMatchObject({
+      targetPaths: ['AGENTS.md'],
+      selectedAgents: [{ id: 'agents' }],
+    });
+  });
+
+  it('returns selected agent options from interactive selections', async () => {
+    vi.spyOn(prompts, 'multiselect').mockResolvedValue(['agents', 'copilot']);
+
+    await expect(
+      selectAgentTargets({
+        interactive: true,
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toMatchObject({
+      targetPaths: ['AGENTS.md', '.github/copilot-instructions.md'],
+      selectedAgents: [{ id: 'agents' }, { id: 'copilot' }],
+    });
+  });
+});
+
 describe('selectAgentTargetPaths', () => {
   it('prompts with file-based targets and agent hints', async () => {
     const multiselectSpy = vi.spyOn(prompts, 'multiselect').mockResolvedValue(['agents', 'claude']);
@@ -313,7 +376,7 @@ describe('selectAgentTargetPaths', () => {
   });
 });
 
-describe('detectExistingAgentTargetPath', () => {
+describe('detectExistingAgentTargetPaths', () => {
   it('detects all existing regular agent files', async () => {
     const dir = await createProjectDir();
     await mockFs.writeFile(path.join(dir, 'AGENTS.md'), '# Agents');
@@ -326,14 +389,14 @@ describe('detectExistingAgentTargetPath', () => {
     const dir = await createProjectDir();
     await mockFs.writeFile(path.join(dir, 'CLAUDE.md'), '# Claude');
 
-    expect(detectExistingAgentTargetPath(dir)).toBe('CLAUDE.md');
+    expect(detectExistingAgentTargetPaths(dir)).toEqual(['CLAUDE.md']);
   });
 
   it('ignores symlinked agent files', async () => {
     const dir = await createProjectDir();
     await mockFs.symlink('AGENTS.md', path.join(dir, 'CLAUDE.md'));
 
-    expect(detectExistingAgentTargetPath(dir)).toBeUndefined();
+    expect(detectExistingAgentTargetPaths(dir)).toBeUndefined();
   });
 });
 
@@ -459,6 +522,38 @@ describe('writeAgentInstructions symlink behavior', () => {
     expect(selectSpy).not.toHaveBeenCalled();
     expect(await mockFs.readText(targetPath)).toContain('template block');
     expect(successSpy).not.toHaveBeenCalledWith('Updated agent instructions in AGENTS.md');
+  });
+});
+
+describe('writeCopilotSetupWorkflow', () => {
+  it('writes the Copilot setup workflow without overwriting existing files', async () => {
+    const dir = await createProjectDir();
+
+    await writeCopilotSetupWorkflow({ projectRoot: dir });
+
+    const workflowPath = path.join(dir, COPILOT_SETUP_WORKFLOW_PATH);
+    const content = await mockFs.readText(workflowPath);
+    expect(content).toContain('copilot-setup-steps:');
+    expect(content).toContain('runs-on: ubuntu-latest');
+    expect(content).toContain('persist-credentials: false');
+    expect(content).toContain('uses: actions/checkout@v6');
+    expect(content).toContain(`uses: voidzero-dev/setup-vp@${SETUP_VP_VERSION}`);
+    expect(content).toContain('run-install: true');
+    expect(content).toContain('- .github/workflows/copilot-setup-steps.yml');
+
+    await mockFs.writeFile(workflowPath, 'custom workflow');
+    await writeCopilotSetupWorkflow({ projectRoot: dir });
+
+    expect(await mockFs.readText(workflowPath)).toBe('custom workflow');
+  });
+
+  it('suppresses logs in silent mode', async () => {
+    const dir = await createProjectDir();
+    const successSpy = vi.spyOn(prompts.log, 'success');
+
+    await writeCopilotSetupWorkflow({ projectRoot: dir, silent: true });
+
+    expect(successSpy).not.toHaveBeenCalled();
   });
 });
 

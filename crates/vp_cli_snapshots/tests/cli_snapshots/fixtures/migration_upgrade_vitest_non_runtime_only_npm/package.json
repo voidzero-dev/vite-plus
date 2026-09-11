@@ -1,0 +1,21 @@
+{
+  "name": "migration-upgrade-vitest-non-runtime-only-npm",
+  "devDependencies": {
+    "@vitest/eslint-plugin": "^1.6.0",
+    "@vitest/utils": "^4.1.8",
+    "@vitest/ws-client": "^4.1.8",
+    "vite-plus": "latest",
+    "vitest": "4.1.8"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "4.1.8"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.16.0",
+      "onFail": "download"
+    }
+  }
+}

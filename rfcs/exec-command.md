@@ -101,7 +101,7 @@ vp exec -r --parallel -- eslint .
 vp exec -r --resume-from @my/app -- tsc --noEmit
 
 # Run on workspace root only
-vp exec -w -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)"
+vp exec -w -- node -e "console.log(process.env.VP_PACKAGE_NAME)"
 
 # Save execution summary
 vp exec -r --report-summary -- vitest run
@@ -161,7 +161,7 @@ Based on pnpm exec behavior (reference: `exec/plugin-commands-script-runners/src
 2. **Strip leading `--`** from the command for backward compatibility
 3. **Execute command** via process spawn with `stdio: inherit` — the command resolves through the modified PATH (local bins first, then system PATH)
 4. **Shell mode**: When `-c` is specified, pass `shell: true` to the child process
-5. **Set `VITE_PLUS_PACKAGE_NAME`** env var with the current package name (analogous to pnpm's `PNPM_PACKAGE_NAME`)
+5. **Set `VP_PACKAGE_NAME`** env var with the current package name (analogous to pnpm's `PNPM_PACKAGE_NAME`)
 6. **Error if no command**: `'vp exec' requires a command to run`
 
 ## Relationship Between Commands
@@ -179,13 +179,13 @@ Based on pnpm exec behavior (reference: `exec/plugin-commands-script-runners/src
 ### Key Differences from vpx
 
 - `vp exec` prepends only `./node_modules/.bin` from the current directory — it does **not** walk up parent directories. Use `vpx` if you want monorepo root binaries.
-- `vp exec` never falls back to global vp packages or remote download — commands resolve through `node_modules/.bin` + system PATH only.
+- After the Vite+ CLI is selected, `vp exec` never falls back to globally installed executable packages or remote downloads — commands resolve through `node_modules/.bin` + system PATH only.
 
 ## Implementation Architecture
 
 ### Global CLI
 
-**File**: `crates/vite_global_cli/src/cli.rs`
+**File**: `crates/vp_global_cli/src/cli.rs`
 
 The `Exec` variant in `Commands` enum (Category C) unconditionally delegates to the local CLI:
 
@@ -206,7 +206,7 @@ Route in `execute_command()`:
 Commands::Exec { args } => commands::delegate::execute(cwd, "exec", &args).await,
 ```
 
-The global CLI always delegates `exec` to the local CLI — there is no fallback path or direct execution in the global CLI. This follows the same unconditional delegation pattern as other Category C commands.
+The global CLI always delegates `exec` to the JavaScript CLI. Delegation resolves the project's local `vite-plus` first, then falls back to the globally installed `vite-plus` when no local CLI is available. When this fallback occurs inside a project, `vp` recommends migration if `vite-plus` is not declared as a dependency, or recommends installing dependencies if it is declared but unavailable. The Rust global CLI has no direct `exec` implementation.
 
 ### Local CLI
 
@@ -223,7 +223,7 @@ packages/cli/binding/src/exec/
 
 There is a single code path for both single-package and multi-package execution. `mod.rs` validates the command is non-empty and delegates to `execute_exec_workspace()`. When no workspace flags (`--recursive`, `--filter`, etc.) are given, `PackageQueryArgs::into_package_query()` returns a `ContainingPackage(cwd)` selector that resolves to just the current package — so the workspace path naturally handles the single-package case.
 
-Package filtering is delegated to `vite_workspace`'s reusable API: `PackageQueryArgs` (CLI args struct, embedded via `#[clap(flatten)]`) → `PackageQuery` (via `into_package_query()`) → `IndexedPackageGraph::resolve_query()` → `FilterResolution` (with `package_subgraph` and `unmatched_selectors`). This follows the same pattern used by `vp run` via `RunFlags`.
+Package filtering is delegated to `vt_workspace`'s reusable API: `PackageQueryArgs` (CLI args struct, embedded via `#[clap(flatten)]`) → `PackageQuery` (via `into_package_query()`) → `IndexedPackageGraph::resolve_query()` → `FilterResolution` (with `package_subgraph` and `unmatched_selectors`). This follows the same pattern used by `vp run` via `RunFlags`.
 
 The local CLI has full workspace awareness and can handle:
 
@@ -242,30 +242,30 @@ When only a single package is selected (whether by default or via `--filter`), t
 
 The following existing code is reused:
 
-| Module           | Function                           | Purpose                                           |
-| ---------------- | ---------------------------------- | ------------------------------------------------- |
-| `vite_command`   | `resolve_bin()`                    | Resolve binary path via PATH lookup               |
-| `vite_command`   | `build_command()`                  | Build a `tokio::process::Command` for a binary    |
-| `vite_command`   | `build_shell_command()`            | Build a shell command for `-c` mode               |
-| `vite_install`   | `PackageManager::get_bin_prefix()` | Get package manager bin directory for PATH        |
-| `vite_workspace` | `find_workspace_root()`            | Locate workspace root from cwd                    |
-| `vite_workspace` | `load_package_graph()`             | Load workspace packages and dependency graph      |
-| `vite_workspace` | `PackageQueryArgs`                 | CLI args struct for package selection             |
-| `vite_workspace` | `IndexedPackageGraph`              | Indexed graph with `resolve_query()`              |
-| `vite_workspace` | `FilterResolution`                 | Resolution result: subgraph + unmatched selectors |
+| Module         | Function                           | Purpose                                           |
+| -------------- | ---------------------------------- | ------------------------------------------------- |
+| `vp_command`   | `resolve_bin()`                    | Resolve binary path via PATH lookup               |
+| `vp_command`   | `build_command()`                  | Build a `tokio::process::Command` for a binary    |
+| `vp_command`   | `build_shell_command()`            | Build a shell command for `-c` mode               |
+| `vp_pm_cli`    | `PackageManager::get_bin_prefix()` | Get package manager bin directory for PATH        |
+| `vt_workspace` | `find_workspace_root()`            | Locate workspace root from cwd                    |
+| `vt_workspace` | `load_package_graph()`             | Load workspace packages and dependency graph      |
+| `vt_workspace` | `PackageQueryArgs`                 | CLI args struct for package selection             |
+| `vt_workspace` | `IndexedPackageGraph`              | Indexed graph with `resolve_query()`              |
+| `vt_workspace` | `FilterResolution`                 | Resolution result: subgraph + unmatched selectors |
 
 ## Design Decisions
 
-### 1. Unconditional Delegation (No Global CLI Fallback)
+### 1. Local-First Delegation with Global CLI Fallback
 
-**Decision**: The global CLI always delegates `exec` to the local CLI. There is no fallback path for projects without vite-plus as a dependency.
+**Decision**: The global CLI delegates `exec` to the project-local `vite-plus` when available. Otherwise, it provides migration or installation guidance inside projects and continues with the globally installed `vite-plus` CLI.
 
 **Rationale**:
 
 - Simplifies the global CLI — no need for a direct-execution codepath
 - Consistent with how all Category C commands are dispatched
-- The local CLI has all the workspace awareness needed for `--recursive`, `--filter`, etc.
-- Projects using `vp exec` are expected to have vite-plus installed
+- The delegated CLI has all the workspace awareness needed for `--recursive`, `--filter`, etc.
+- The warning directs projects to migrate or install their declared dependencies without making the global fallback unusable
 
 ### 2. No Directory Walk-Up (Unlike vpx)
 
@@ -278,19 +278,19 @@ The following existing code is reused:
 - Walking up would blur the boundary between package-level and workspace-level binaries
 - Use `vpx` if you want walk-up behavior
 
-### 3. Workspace Features Only via Local CLI
+### 3. Workspace Features Use the Delegated CLI
 
-**Decision**: `--recursive`, `--workspace-root`, `--filter`, `--parallel`, `--reverse`, `--resume-from`, and `--report-summary` only work when vite-plus is a local dependency (local CLI handles them).
+**Decision**: `--recursive`, `--workspace-root`, `--filter`, `--parallel`, `--reverse`, `--resume-from`, and `--report-summary` are handled by the resolved `vite-plus` CLI, whether project-local or the global fallback.
 
 **Rationale**:
 
 - These features require workspace awareness from vite-task infrastructure
-- The global CLI fallback is for simple, single-directory exec
+- The project-local and globally installed CLIs use the same workspace-aware implementation
 - This is consistent with how `vp run` handles workspace features
 
 ### 4. Same Env Var Convention
 
-**Decision**: Set `VITE_PLUS_PACKAGE_NAME` env var when executing in a workspace package.
+**Decision**: Set `VP_PACKAGE_NAME` env var when executing in a workspace package.
 
 **Rationale**:
 
@@ -454,9 +454,6 @@ command-exec-pnpm10/
 
 ```json
 {
-  "env": {
-    "VITE_DISABLE_AUTO_INSTALL": "1"
-  },
   "commands": [
     "vp exec echo hello # basic exec, no vite-plus dep (global CLI handles directly)",
     "vp exec node -e \"console.log('hi')\" # exec with args passthrough",
@@ -583,7 +580,7 @@ This is a new feature with no breaking changes:
 | Name + path filter    | `--filter 'app-*{./packages}'`           | `--filter 'app-*{./packages}'`           |
 | Parallel              | `--parallel`                             | `--parallel`                             |
 | Report summary        | `--report-summary`                       | `--report-summary`                       |
-| Package name env var  | `PNPM_PACKAGE_NAME`                      | `VITE_PLUS_PACKAGE_NAME`                 |
+| Package name env var  | `PNPM_PACKAGE_NAME`                      | `VP_PACKAGE_NAME`                        |
 | Strip leading `--`    | Yes                                      | Yes                                      |
 
 ## Future Enhancements

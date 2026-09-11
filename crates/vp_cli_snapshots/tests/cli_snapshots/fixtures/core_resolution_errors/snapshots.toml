@@ -1,0 +1,17 @@
+[[case]]
+name = "core_resolution_upstream_vite"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vite/package.json", "{\"name\":\"vite\",\"version\":\"8.2.2\"}\n"], snapshot = false },
+  { argv = ["vp", "dev"], continue-on-failure = true },
+  ["vp", "pack", "index.ts"],
+]
+
+[[case]]
+name = "core_resolution_stale_core"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vite/package.json", "{\"name\":\"@voidzero-dev/vite-plus-core\",\"version\":\"0.0.0-stale\"}\n"], snapshot = false },
+  { argv = ["vp", "dev"], continue-on-failure = true },
+  ["vp", "pack", "index.ts"],
+]

@@ -1,0 +1,17 @@
+[[case]]
+name = "command_link_pnpm11"
+vp = "global"
+skip-platforms = ["windows", "linux"]
+steps = [
+  { argv = ["vp", "link", "-h"], comment = "should show help message", continue-on-failure = true },
+  { argv = ["vp", "install"], comment = "install initial dependencies", continue-on-failure = true },
+  { argv = ["vpt", "mkdir", "-p", "../test-lib-pnpm"], comment = "create test library" },
+  { argv = ["vpt", "write-file", "../test-lib-pnpm/package.json", "{\"name\": \"testnpm2\", \"version\": \"1.0.0\"}\n"], continue-on-failure = true },
+  { argv = ["vp", "link", "../test-lib-pnpm"], comment = "should link local directory" },
+  { argv = ["vpt", "print-file", "package.json", "pnpm-lock.yaml"], continue-on-failure = true },
+  { argv = ["vp", "ln", "../test-lib-pnpm"], comment = "should work with ln alias" },
+  { argv = ["vpt", "print-file", "package.json", "pnpm-lock.yaml"], continue-on-failure = true },
+  { argv = ["vp", "unlink", "../test-lib-pnpm", "--", "--no-frozen-lockfile"], comment = "should unlink the package (pnpm v11 requires --no-frozen-lockfile under CI=true to avoid ERR_PNPM_LOCKFILE_CONFIG_MISMATCH)" },
+  ["vp", "unlink", "testnpm2", "--", "--no-frozen-lockfile"],
+  { argv = ["vpt", "print-file", "package.json", "pnpm-lock.yaml"], continue-on-failure = true },
+]

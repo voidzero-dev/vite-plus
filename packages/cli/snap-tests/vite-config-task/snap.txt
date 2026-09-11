@@ -1,5 +1,0 @@
-> # Test that task config is picked up from vite.config.ts
-> vp run build
-$ echo 'build from vite.config.ts' ⊘ cache disabled
-build from vite.config.ts
-

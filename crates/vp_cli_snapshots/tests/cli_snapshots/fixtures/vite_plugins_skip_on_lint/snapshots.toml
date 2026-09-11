@@ -1,0 +1,6 @@
+[[case]]
+name = "vite_plugins_skip_on_lint"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint", "src/"], comment = "vp lint should not load plugins (heavy-plugin.ts throws if imported)", continue-on-failure = true },
+]

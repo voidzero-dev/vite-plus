@@ -1,0 +1,6 @@
+[[case]]
+name = "command_install_globally_no_args"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g"], comment = "Should error when no packages provided", continue-on-failure = true },
+]

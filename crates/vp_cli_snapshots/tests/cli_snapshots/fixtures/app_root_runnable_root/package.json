@@ -1,0 +1,1 @@
+{ "name": "runnable-root", "private": true, "workspaces": ["packages/*"] }

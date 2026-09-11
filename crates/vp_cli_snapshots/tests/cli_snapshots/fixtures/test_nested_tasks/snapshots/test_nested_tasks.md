@@ -1,0 +1,19 @@
+# test_nested_tasks
+
+## `vp run script1`
+
+simple task
+
+```
+$ echo 'hello vite' ⊘ cache disabled
+hello vite
+```
+
+## `vp run script2`
+
+nested task should work
+
+```
+$ echo 'hello vite' ⊘ cache disabled
+hello vite
+```

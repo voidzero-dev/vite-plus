@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_lintstagedrc_json"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "-h"], comment = "migration help message", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration work with lintstagedrc.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".lintstagedrc.json"], comment = "check lintstagedrc.json (should be deleted after inlining)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check staged config migrated to vite.config.ts", continue-on-failure = true },
+]

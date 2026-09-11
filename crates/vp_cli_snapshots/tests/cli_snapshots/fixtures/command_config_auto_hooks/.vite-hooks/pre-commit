@@ -1,0 +1,2 @@
+vp run lint
+vp exec tsc --noEmit

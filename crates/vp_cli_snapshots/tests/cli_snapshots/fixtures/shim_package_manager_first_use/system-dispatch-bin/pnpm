@@ -1,0 +1,6 @@
+#!/bin/sh
+if [ "${1-}" = "--version" ]; then
+  printf '10.18.0\n'
+else
+  node --version
+fi

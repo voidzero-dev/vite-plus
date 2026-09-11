@@ -1,0 +1,13 @@
+[[case]]
+name = "command_pack_yarn4_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "--", "--mode=update-lockfile"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack"], comment = "should pack current workspace root", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--recursive"], comment = "should pack all packages in workspace (uses workspaces foreach --all pack)", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--filter", "app"], comment = "should pack specific package (uses workspaces foreach --all --include app pack)", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--filter", "app", "--filter", "@vite-plus-test/utils"], comment = "should pack multiple packages", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--out", "./dist/package.tgz"], comment = "should pack with output file", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--json"], comment = "should pack with json output", continue-on-failure = true },
+]

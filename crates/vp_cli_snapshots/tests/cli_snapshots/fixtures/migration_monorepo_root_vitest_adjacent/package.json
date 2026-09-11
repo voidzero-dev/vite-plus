@@ -1,0 +1,9 @@
+{
+  "name": "migration-monorepo-root-vitest-adjacent",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vitest-browser-svelte": "^2.1.0"
+  }
+}

@@ -65,18 +65,22 @@ jobs:
       id-token: write # Required for OIDC
     env:
       VERSION: ${{ needs.check.outputs.version }}
+      # npm publish-time scanning makes a successful upload temporarily
+      # unavailable to installs. After each dependency tier becomes visible on
+      # this runner's registry edge, allow time for other CDN edges to settle.
+      PUBLISH_PROPAGATION_MIN_SECONDS: '60'
+      PUBLISH_PROPAGATION_TIMEOUT_SECONDS: '600'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: .node-version
+          node-version: '24.18.0'
           package-manager-cache: false
           registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install
@@ -125,7 +129,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: rust-cli-artifacts
-          pattern: vite-global-cli-*
+          pattern: vp-global-cli-*
 
       - name: Download installer binaries (Windows)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -146,17 +150,44 @@ jobs:
           echo "Installer binaries:"
           ls -la installer-release/ || echo "No installer binaries found"
 
-      - name: 'Setup npm'
-        run: npm install -g npm@latest
+      - name: Download release archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: binary-release
+          pattern: vp-release-archive-*
+          merge-multiple: true
+
+      - name: Create release archive checksums
+        working-directory: binary-release
+        run: sha256sum vp-* > vp-checksums.txt
 
       - name: Prepare and publish native addons
         run: node ./packages/cli/publish-native-addons.ts --mode npm
 
-      - name: Publish
-        run: |
+      - name: Publish core dependency tier
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "@voidzero-dev/vite-plus-core@${VERSION}"
+          --
           pnpm publish --filter=./packages/core --tag latest --access public --no-git-checks
-          pnpm publish --filter=./packages/test --tag latest --access public --no-git-checks
+
+      # The CLI pins core via workspace:* (rewritten to this exact version).
+      # Wait for both its install metadata and tarball before publishing the CLI.
+      - name: Wait for core to propagate
+        run: >-
+          node ./.github/scripts/wait-for-npm-packages.ts
+          "@voidzero-dev/vite-plus-core@${VERSION}"
+
+      - name: Publish Vite+
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "vite-plus@${VERSION}"
+          --
           pnpm publish --filter=./packages/cli --tag latest --access public --no-git-checks
+
+      # Downstream jobs build Docker images by installing this release from npm.
+      - name: Wait for Vite+ to propagate
+        run: node ./.github/scripts/wait-for-npm-packages.ts "vite-plus@${VERSION}"
 
       - name: Create release body
         env:
@@ -171,7 +202,6 @@ jobs:
           ### Published Packages
 
           - \`@voidzero-dev/vite-plus-core@${VERSION}\`
-          - \`@voidzero-dev/vite-plus-test@${VERSION}\`
           - \`vite-plus@${VERSION}\`
 
           ### Installation
@@ -192,7 +222,7 @@ jobs:
           EOF
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         id: release
         with:
           body_path: ./RELEASE_BODY.md
@@ -204,13 +234,120 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: |
             installer-release/vp-setup-*.exe
+            binary-release/vp-*.tar.gz
+            binary-release/vp-*.zip
+            binary-release/vp-checksums.txt
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
 
+  # Deploy viteplus.dev from the release commit after the npm packages and the
+  # GitHub release are published, so the site and the install scripts always
+  # match the released vp. Skipped for prereleases: production docs must keep
+  # describing the latest stable release. See rfcs/deploy-docs-on-release.md.
+  deploy-docs:
+    name: Deploy docs
+    runs-on: ubuntu-latest
+    needs: [check, Release]
+    if: >-
+      needs.check.outputs.version_changed == 'true' &&
+      !contains(needs.check.outputs.version, '-')
+    # Shared with deploy-docs.yml so production deploys serialize across both
+    # entry paths. Only the newest pending run survives in the group; if this
+    # job's pending run is replaced by a manual dispatch, the canceled job
+    # holds back discord-notify and the deploy must be re-run.
+    concurrency:
+      group: deploy-docs
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: ./.github/actions/deploy-docs
+        with:
+          void-project: viteplus
+          void-token: ${{ secrets.VOID_TOKEN }}
+
+  # Build and push the official toolchain Docker image to GHCR after the npm
+  # release is published (the image installs vp from npm, so the version must
+  # exist first). See docker/Dockerfile and docs/guide/docker.md.
+  publish-docker:
+    name: Publish Docker image
+    runs-on: ubuntu-latest
+    needs: [check, Release]
+    if: needs.check.outputs.version_changed == 'true'
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      IMAGE: ghcr.io/voidzero-dev/vite-plus
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }}
+            type=semver,pattern={{major}},value=${{ env.VERSION }}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: docker
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VP_VERSION=${{ env.VERSION }}
+          provenance: false
+
+  # Announce the release on Discord last, after the Docker images and the docs
+  # are published, so the message never points at a missing image or a site
+  # that still shows the previous release.
+  discord-notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    # publish-docker already needs Release, so depending on it orders this last.
+    # deploy-docs is skipped for prereleases; gate on its result explicitly so
+    # prerelease announcements still go out, while a failed docs deploy on a
+    # stable release holds the announcement back.
+    needs: [check, publish-docker, deploy-docs]
+    if: >-
+      !cancelled() &&
+      needs.check.outputs.version_changed == 'true' &&
+      needs.publish-docker.result == 'success' &&
+      (needs.deploy-docs.result == 'success' || needs.deploy-docs.result == 'skipped')
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      IMAGE: ghcr.io/voidzero-dev/vite-plus
+    steps:
+      # Non-blocking: a webhook failure must not mark the release run as failed
+      # (npm, GitHub release, and Docker images are already published).
       - name: Send Discord notification
+        continue-on-error: true
         uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
@@ -220,8 +357,10 @@ jobs:
 
             **Published Packages:**
             • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
-            • @voidzero-dev/vite-plus-test@${{ env.VERSION }}
             • vite-plus@${{ env.VERSION }}
+
+            **Docker (GHCR):**
+            • `docker pull ${{ env.IMAGE }}:${{ env.VERSION }}`
 
             **Install:**
             • macOS/Linux: `curl -fsSL https://vite.plus | bash`

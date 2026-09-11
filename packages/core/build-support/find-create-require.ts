@@ -54,14 +54,11 @@ export async function replaceThirdPartyCjsRequires(
   const thirdPartyModules = new Set<string>();
 
   // Find all createRequire patterns and their require calls
-  const results = [
-    findCreateRequireInStaticImports(ast),
-    findCreateRequireInGlobalModule(ast),
-  ].filter((result): result is { requireVarName: string; calls: RequireCall[] } => Boolean(result));
+  const results = [findCreateRequireInStaticImports(ast), findCreateRequireInGlobalModule(ast)];
 
   // Collect all third-party require calls
   const replacements: RequireCall[] = [];
-  for (const { calls } of results) {
+  for (const calls of results) {
     for (const call of calls) {
       if (isThirdPartyModule(call.module)) {
         const parts = call.module.split('/');
@@ -106,21 +103,51 @@ function findRequireCalls(ast: ParseResult, requireVarName: string): RequireCall
         return;
       }
 
-      // Extract the first argument (module specifier)
-      if (node.arguments.length === 0) {
+      const call = getLiteralRequireArgument(node);
+      if (call) {
+        calls.push(call);
+      }
+    },
+  });
+
+  visitor.visit(ast.program);
+  return calls;
+}
+
+function getLiteralRequireArgument(node: CallExpression): RequireCall | undefined {
+  if (node.arguments.length === 0) {
+    return undefined;
+  }
+  const arg = node.arguments[0];
+  if (arg.type !== 'Literal') {
+    return undefined;
+  }
+  const value = (arg as { value: unknown; start: number; end: number }).value;
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  return {
+    module: value,
+    start: arg.start,
+    end: arg.end,
+  };
+}
+
+function findDirectCreateRequireCalls(
+  ast: ParseResult,
+  isCreateRequireCall: (node: CallExpression) => boolean,
+): RequireCall[] {
+  const calls: RequireCall[] = [];
+
+  const visitor = new Visitor({
+    CallExpression(node: CallExpression) {
+      if (node.callee.type !== 'CallExpression' || !isCreateRequireCall(node.callee)) {
         return;
       }
-      const arg = node.arguments[0];
-      if (arg.type !== 'Literal') {
-        return;
-      }
-      const value = (arg as { value: unknown; start: number; end: number }).value;
-      if (typeof value === 'string') {
-        calls.push({
-          module: value,
-          start: arg.start,
-          end: arg.end,
-        });
+
+      const call = getLiteralRequireArgument(node);
+      if (call) {
+        calls.push(call);
       }
     },
   });
@@ -133,16 +160,14 @@ function findRequireCalls(ast: ParseResult, requireVarName: string): RequireCall
  * Find createRequire from static imports and return the require variable name + all require calls
  * Handles: `import { createRequire } from "node:module"` then `const require = createRequire(...)`
  */
-function findCreateRequireInStaticImports(
-  ast: ParseResult,
-): { requireVarName: string; calls: RequireCall[] } | undefined {
+function findCreateRequireInStaticImports(ast: ParseResult): RequireCall[] {
   // Find import from 'module' or 'node:module'
   const importFromModule = ast.module.staticImports.find((imt) => {
     const { value } = imt.moduleRequest;
     return value === 'node:module' || value === 'module';
   });
   if (!importFromModule) {
-    return undefined;
+    return [];
   }
 
   // Find the createRequire import entry
@@ -150,7 +175,7 @@ function findCreateRequireInStaticImports(
     return entry.importName.name === 'createRequire';
   });
   if (!createRequireEntry) {
-    return undefined;
+    return [];
   }
 
   const createRequireLocalName = createRequireEntry.localName.value;
@@ -174,14 +199,14 @@ function findCreateRequireInStaticImports(
   });
   varVisitor.visit(ast.program);
 
-  if (!requireVarName) {
-    return undefined;
-  }
+  const calls = requireVarName ? findRequireCalls(ast, requireVarName) : [];
+  calls.push(
+    ...findDirectCreateRequireCalls(ast, (node) => {
+      return node.callee.type === 'Identifier' && node.callee.name === createRequireLocalName;
+    }),
+  );
 
-  // Find all calls to the require variable
-  const calls = findRequireCalls(ast, requireVarName);
-
-  return { requireVarName, calls };
+  return calls;
 }
 
 // Helper to check if an expression is `process` or `globalThis.process`
@@ -240,9 +265,7 @@ function isGetBuiltinModuleCall(expr: Expression): boolean {
  * Handles: `const require = globalThis.process.getBuiltinModule("module").createRequire(import.meta.url)`
  * Or: `const require = process.getBuiltinModule("module").createRequire(import.meta.url)`
  */
-function findCreateRequireInGlobalModule(
-  ast: ParseResult,
-): { requireVarName: string; calls: RequireCall[] } | undefined {
+function findCreateRequireInGlobalModule(ast: ParseResult): RequireCall[] {
   let requireVarName: string | undefined;
 
   const visitor = new Visitor({
@@ -276,12 +299,16 @@ function findCreateRequireInGlobalModule(
 
   visitor.visit(ast.program);
 
-  if (!requireVarName) {
-    return undefined;
-  }
+  const calls = requireVarName ? findRequireCalls(ast, requireVarName) : [];
+  calls.push(
+    ...findDirectCreateRequireCalls(ast, (node) => {
+      if (node.callee.type !== 'MemberExpression' || node.callee.computed) {
+        return false;
+      }
+      const callee = node.callee as StaticMemberExpression;
+      return callee.property.name === 'createRequire' && isGetBuiltinModuleCall(callee.object);
+    }),
+  );
 
-  // Find all calls to the require variable
-  const calls = findRequireCalls(ast, requireVarName);
-
-  return { requireVarName, calls };
+  return calls;
 }

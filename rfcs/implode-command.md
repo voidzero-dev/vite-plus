@@ -138,7 +138,7 @@ Options:
 
 #### Step 1: Resolve Home Directory
 
-Use `vite_shared::get_vite_plus_home()` to determine the install directory. If it doesn't exist, print "not installed" and exit 0.
+Use `vp_shared::get_vite_plus_home()` to determine the install directory. If it doesn't exist, print "not installed" and exit 0.
 
 #### Step 2: Scan Shell Profiles
 
@@ -194,7 +194,7 @@ On Windows, run PowerShell to remove `.vite-plus\bin` from the User PATH environ
 ### File Structure
 
 ```
-crates/vite_global_cli/
+crates/vp_global_cli/
 ├── src/
 │   ├── commands/
 │   │   ├── implode.rs        # Full implementation
@@ -225,7 +225,7 @@ crates/vite_global_cli/
 - `test_remove_vite_plus_lines_absolute_path` — handles `/home/user/.vite-plus/env` variant
 - `test_remove_vite_plus_lines_preserves_surrounding` — other content untouched
 - `test_clean_shell_profile_integration` — tempdir-based integration test
-- `test_execute_not_installed` — points `VITE_PLUS_HOME` at non-existent path, verifies success
+- `test_execute_not_installed` — points `VP_HOME` at non-existent path, verifies success
 
 ### CI Tests
 

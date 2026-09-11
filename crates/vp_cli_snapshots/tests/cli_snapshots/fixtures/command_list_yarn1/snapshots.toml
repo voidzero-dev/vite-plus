@@ -1,0 +1,20 @@
+[[case]]
+name = "command_list_yarn1"
+vp = "global"
+env = { NODE_OPTIONS = "--no-deprecation" }
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "list"], comment = "should list installed packages", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "testnpm2"], comment = "should list specific package", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--depth", "0"], comment = "should list packages with depth limit", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--json"], comment = "should list packages in JSON format", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--prod"], comment = "should show warning that --prod not supported by yarn@1", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--dev"], comment = "should show warning that --dev not supported by yarn@1", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--no-optional"], comment = "should show warning that --no-optional not supported by yarn@1", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--exclude-peers"], comment = "should show warning that --exclude-peers not supported by yarn@1", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--only-projects"], comment = "should show warning that --only-projects not supported by yarn@1", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--find-by", "customFinder"], comment = "should show warning that --find-by not supported by yarn@1", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--recursive"], comment = "should show warning that --recursive not supported by yarn@1", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--filter", "app"], comment = "should show warning that --filter not supported by yarn@1", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--", "--loglevel=warn"], comment = "should support pass through arguments", continue-on-failure = true },
+]

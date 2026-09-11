@@ -1,0 +1,9 @@
+[[case]]
+name = "shim_npm_ignores_mismatched_package_manager"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "env", "exec", "node", "--version"], comment = "Ensure Node.js is installed first", continue-on-failure = true },
+  { argv = ["npm", "--version"], comment = "npm shim ignores the mismatched pnpm@10.19.0 packageManager and uses the project Node's npm (not 10.19.0)", continue-on-failure = true },
+  { argv = ["npx", "--version"], comment = "npx shim likewise ignores the mismatched packageManager (not 10.19.0)", continue-on-failure = true },
+]

@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_upgrade_pnpm9_overrides"
+vp = "global"
+env = { VP_OVERRIDE_PACKAGES = "{\"vite\":\"npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617\",\"vitest\":\"4.1.10\"}", VP_VERSION = "0.0.0-commit.0c515e3fbf5c140db35280d700df0bd600838617" }
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "pnpm 9.5-10.6.1: settings stay in package.json, catalog is still rewritten off the wrappers", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "pnpm.overrides stay catalog: (not inlined to a version)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "catalog rewritten off the vite-plus-test wrapper; overrides remain in package.json (< 10.6.2)", continue-on-failure = true },
+]

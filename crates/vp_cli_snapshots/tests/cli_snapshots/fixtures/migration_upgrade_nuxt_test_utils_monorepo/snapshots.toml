@@ -1,0 +1,14 @@
+[[case]]
+name = "migration_upgrade_nuxt_test_utils_monorepo"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "preserve upstream Vitest package-wide and localize it to the affected workspace", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/nuxt/package.json"], comment = "affected workspace keeps direct Vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/unit/package.json"], comment = "unrelated workspace drops direct Vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "shared Vitest pin remains because one workspace needs it", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/nuxt/nuxt.spec.ts"], comment = "upstream Vitest and its subpath stay", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/nuxt/unit.spec.ts"], comment = "files without Nuxt imports still preserve Vitest in the affected package", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/unit/unit.spec.ts"], comment = "an unrelated workspace still migrates Vitest", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "workspace result is idempotent", continue-on-failure = true },
+]

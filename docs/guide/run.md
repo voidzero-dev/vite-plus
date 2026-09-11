@@ -38,6 +38,21 @@ Select a task (↑/↓, Enter to run, Esc to clear):
     test: jest
 ```
 
+## Built-in Commands vs Scripts
+
+`vp dev` is a built-in command. `vp run dev` is your `dev` script. Built-in commands cannot be overwritten, so adding a `dev` script does not change what `vp dev` does:
+
+| Command                    | What it runs                                                              |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `vp dev`                   | The built-in Vite dev server                                              |
+| `vp run dev` / `vpr dev`   | The `dev` script in `package.json`, or a `dev` task in `vite.config.ts`   |
+| `vp test`                  | The built-in Vitest command                                               |
+| `vp run test` / `vpr test` | The `test` script in `package.json`, or a `test` task in `vite.config.ts` |
+
+`build`, `preview`, `lint`, `fmt`, `check`, and `pack` work the same way.
+
+If the project defines that script or task, run it with `vp run <name>`. For example, with a `"dev": "astro dev"` script, `vp run dev` starts Astro, while `vp dev` ignores the script and starts Vite.
+
 ## Caching
 
 `package.json` scripts are not cached by default. Use `--cache` to enable caching:
@@ -69,7 +84,7 @@ $ node compile-legacy-app.js ✗ cache miss: 'legacy/index.js' modified, executi
 
 ## Task Definitions
 
-Vite Task automatically tracks which files your command uses. You can define tasks directly in `vite.config.ts` to enable caching by default or control which files and environment variables affect cache behavior.
+Vite Task [automatically tracks](/guide/automatic-data-tracking) what each task needs for caching. You can define tasks directly in `vite.config.ts` to enable caching by default or control which files and environment variables affect cache behavior.
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
@@ -102,10 +117,40 @@ See [Run Config](/config/run) for the full `run` block reference.
 
 ## Task Dependencies
 
-Use [`dependsOn`](#depends-on) to run tasks in the right order. Running `vp run deploy` with the config above runs `build` and `test` first. Dependencies can also target other packages in the same project with the `package#task` notation:
+Use [`dependsOn`](/config/run#dependson) to run tasks in the right order. Running `vp run deploy` with the config above runs `build` and `test` first.
+
+String task names in `dependsOn` reference tasks in the current or another package:
 
 ```ts [vite.config.ts]
-dependsOn: ['@my/core#build', '@my/utils#lint'];
+dependsOn: [
+  'build', // same package
+  '@my/core#build', // another package
+];
+```
+
+Use the object form when you need to reference all tasks with a given name from the current package's dependencies:
+
+```ts [vite.config.ts]
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  run: {
+    tasks: {
+      test: {
+        command: 'vp test',
+        dependsOn: [{ task: 'build', from: 'dependencies' }],
+      },
+    },
+  },
+});
+```
+
+In this example, `vp run test` checks the current package's `dependencies`. For each direct workspace dependency that defines `build`, Vite Task runs that dependency's `build` task before `test`.
+
+Use an array when you need more than one dependency field:
+
+```ts [vite.config.ts]
+dependsOn: [{ task: 'build', from: ['dependencies', 'devDependencies'] }];
 ```
 
 ## Running in a Workspace
@@ -170,6 +215,8 @@ vp run --filter "@my/*" --filter "!@my/utils" build
 ```
 
 Multiple `--filter` flags are combined as a union. Exclusion filters are applied after all inclusions.
+
+When a `--filter` matches no packages, Vite+ prints a warning and exits successfully. Pass `--fail-if-no-match` to abort the run when any filter matches nothing instead.
 
 ### Workspace Root (`-w`)
 

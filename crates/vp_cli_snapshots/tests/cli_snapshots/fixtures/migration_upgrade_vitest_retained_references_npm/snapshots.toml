@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_upgrade_vitest_retained_references_npm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "retained upstream references require package-local Vitest", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "Vitest dependency and override stay aligned", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tsconfig.json"], comment = "compilerOptions.types remains an upstream Vitest reference", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "config/tsconfig.test.json"], comment = "nested compilerOptions.types is also retained", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "resolve.cjs"], comment = "require.resolve remains an upstream Vitest reference", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "version.ts"], comment = "vitest/package.json remains intentionally unre-written", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "retained references remain stable on rerun", continue-on-failure = true },
+]

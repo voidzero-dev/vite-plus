@@ -1,0 +1,6 @@
+[[case]]
+name = "migration_eslint_legacy"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "should show legacy eslint config warning", continue-on-failure = true },
+]

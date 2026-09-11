@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_upgrade_stale_local_pnpm"
+vp = "global"
+steps = [
+  { argv = ["node", "setup-local.mjs"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "newer global CLI must bypass the installed stale local CLI", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "stale wrapper deps and plain vite-plus range should be repaired; empty pnpm field should be removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "pnpm settings should be consolidated here", continue-on-failure = true },
+]

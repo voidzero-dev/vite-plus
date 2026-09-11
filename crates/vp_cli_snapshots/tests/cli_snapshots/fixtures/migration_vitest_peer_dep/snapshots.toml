@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_vitest_peer_dep"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "vitest should be added to devDeps when vitest-browser-svelte is present", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "vitest should be in devDependencies", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], continue-on-failure = true },
+]

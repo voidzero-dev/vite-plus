@@ -1,0 +1,14 @@
+[[case]]
+name = "env_install_stale_bin"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "./env-install-stale-bin-pkg-v1"], comment = "Install package with two binaries", continue-on-failure = true },
+  { argv = ["env-install-stale-keep"], comment = "Both binaries should be callable" },
+  { argv = ["env-install-stale-drop"], continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "./env-install-stale-bin-pkg-v2"], comment = "Reinstall package version that removed one binary", continue-on-failure = true },
+  { argv = ["env-install-stale-keep"], comment = "Remaining binary should still be callable", continue-on-failure = true },
+  { argv = ["node", "check-stale-binary.js"], continue-on-failure = true },
+]
+after = [
+  { argv = ["vp", "remove", "-g", "env-install-stale-bin-pkg"], continue-on-failure = true },
+]

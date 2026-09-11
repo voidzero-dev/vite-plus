@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "versionExportIds": [
+    "vite",
+    "rolldown",
+    "vitest",
+    "oxfmt",
+    "oxlint",
+    "oxlint-tsgolint",
+    "tsdown"
+  ],
+  "nodes": [
+    {
+      "id": "vite-plus",
+      "name": "vite-plus",
+      "kind": "package",
+      "delivery": ["dependency"],
+      "aliases": [],
+      "versionSource": {
+        "type": "cli-package"
+      }
+    },
+    {
+      "id": "vite-plus-core",
+      "name": "@voidzero-dev/vite-plus-core",
+      "kind": "package",
+      "delivery": ["dependency"],
+      "aliases": ["vite-plus-core"],
+      "versionSource": {
+        "type": "core-package"
+      }
+    },
+    {
+      "id": "vite",
+      "name": "vite",
+      "kind": "tool",
+      "delivery": ["bundled"],
+      "aliases": [],
+      "versionSource": {
+        "type": "core-bundled",
+        "key": "vite"
+      }
+    },
+    {
+      "id": "rolldown",
+      "name": "rolldown",
+      "kind": "tool",
+      "delivery": ["bundled", "compiled"],
+      "aliases": [],
+      "versionSource": {
+        "type": "core-bundled",
+        "key": "rolldown"
+      }
+    },
+    {
+      "id": "vitest",
+      "name": "vitest",
+      "kind": "tool",
+      "delivery": ["dependency"],
+      "aliases": [],
+      "versionSource": {
+        "type": "npm-dependency",
+        "package": "vitest"
+      }
+    },
+    {
+      "id": "oxlint",
+      "name": "oxlint",
+      "kind": "tool",
+      "delivery": ["dependency"],
+      "aliases": [],
+      "versionSource": {
+        "type": "npm-dependency",
+        "package": "oxlint"
+      }
+    },
+    {
+      "id": "oxfmt",
+      "name": "oxfmt",
+      "kind": "tool",
+      "delivery": ["dependency"],
+      "aliases": [],
+      "versionSource": {
+        "type": "npm-dependency",
+        "package": "oxfmt"
+      }
+    },
+    {
+      "id": "oxlint-tsgolint",
+      "name": "oxlint-tsgolint",
+      "kind": "tool",
+      "delivery": ["dependency"],
+      "aliases": ["tsgolint"],
+      "versionSource": {
+        "type": "npm-dependency",
+        "package": "oxlint-tsgolint"
+      }
+    },
+    {
+      "id": "tsdown",
+      "name": "tsdown",
+      "kind": "tool",
+      "delivery": ["bundled"],
+      "aliases": [],
+      "versionSource": {
+        "type": "core-bundled",
+        "key": "tsdown"
+      }
+    },
+    {
+      "id": "vite-task",
+      "name": "vite-task",
+      "kind": "tool",
+      "delivery": ["compiled"],
+      "aliases": [],
+      "versionSource": {
+        "type": "cargo",
+        "package": "vt",
+        "revision": true,
+        "builtAt": true
+      }
+    },
+    {
+      "id": "oxc",
+      "name": "oxc",
+      "kind": "engine",
+      "delivery": ["compiled"],
+      "aliases": [],
+      "versionSource": {
+        "type": "cargo",
+        "package": "oxc"
+      }
+    },
+    {
+      "id": "oxc-resolver",
+      "name": "oxc-resolver",
+      "kind": "engine",
+      "delivery": ["compiled"],
+      "aliases": [],
+      "versionSource": {
+        "type": "cargo",
+        "package": "oxc_resolver"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "vite-plus",
+      "to": "vite-plus-core",
+      "relationship": "depends-on"
+    },
+    {
+      "from": "vite-plus-core",
+      "to": "vite",
+      "relationship": "bundles"
+    },
+    {
+      "from": "vite",
+      "to": "rolldown",
+      "relationship": "uses"
+    },
+    {
+      "from": "vite-plus-core",
+      "to": "rolldown",
+      "relationship": "bundles"
+    },
+    {
+      "from": "rolldown",
+      "to": "oxc",
+      "relationship": "compiles"
+    },
+    {
+      "from": "rolldown",
+      "to": "oxc-resolver",
+      "relationship": "compiles"
+    },
+    {
+      "from": "vite-plus-core",
+      "to": "tsdown",
+      "relationship": "bundles"
+    },
+    {
+      "from": "vite-plus",
+      "to": "vitest",
+      "relationship": "depends-on"
+    },
+    {
+      "from": "vite-plus",
+      "to": "oxlint",
+      "relationship": "depends-on"
+    },
+    {
+      "from": "vite-plus",
+      "to": "oxlint-tsgolint",
+      "relationship": "depends-on"
+    },
+    {
+      "from": "vite-plus",
+      "to": "oxfmt",
+      "relationship": "depends-on"
+    },
+    {
+      "from": "vite-plus",
+      "to": "vite-task",
+      "relationship": "compiles"
+    }
+  ]
+}

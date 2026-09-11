@@ -1,0 +1,6 @@
+[[case]]
+name = "create_next_command_monorepo_application"
+vp = "global"
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive"], comment = "monorepo: next command should suggest vp run", continue-on-failure = true },
+]

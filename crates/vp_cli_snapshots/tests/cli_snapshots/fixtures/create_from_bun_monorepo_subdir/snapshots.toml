@@ -1,0 +1,14 @@
+[[case]]
+name = "create_from_bun_monorepo_subdir"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "create", "--no-interactive", "vite:generator"], cwd = "apps/website", comment = "from workspace subdir with object-form workspaces", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "tools/vite-plus-generator/package.json", "--assert", "file"], comment = "created at tools/vite-plus-generator", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "apps/website/tools/vite-plus-generator/package.json", "--assert-not", "file"], comment = "not created inside apps/website/", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "vite:application"], cwd = "apps", comment = "from workspace parent dir", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "apps/vite-plus-application/package.json", "--assert", "file"], comment = "created at apps/vite-plus-application", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "vite:library"], cwd = "scripts/helper", comment = "from non-workspace dir", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/vite-plus-library/package.json", "--assert", "file"], comment = "created at packages/vite-plus-library", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify workspaces object form preserved after workspace update", continue-on-failure = true },
+]

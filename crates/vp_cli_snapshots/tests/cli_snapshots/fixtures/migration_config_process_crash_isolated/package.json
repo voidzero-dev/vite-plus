@@ -1,0 +1,8 @@
+{
+  "name": "migration-config-process-crash-isolated",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "vite": "^8.0.0"
+  }
+}

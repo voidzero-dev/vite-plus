@@ -4,45 +4,40 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "pnpm -F @rolldown/pluginutils build && pnpm -F rolldown build-binding:release && pnpm -F rolldown build-node && pnpm -F vite build-types && pnpm -F @voidzero-dev/* -F vite-plus build",
-    "bootstrap-cli": "pnpm build && cargo build -p vite_global_cli -p vite_trampoline --release && pnpm install-global-cli",
+    "build": "pnpm -F rolldown build-binding:release && pnpm -F rolldown build-node && pnpm -F vite build-types && pnpm -F @voidzero-dev/* -F vite-plus build",
+    "bootstrap-cli": "pnpm build && cargo build -p vp_global_cli --release && node packages/tools/src/build-trampoline.ts --release && pnpm install-global-cli",
     "bootstrap-cli:ci": "pnpm install-global-cli",
     "install-global-cli": "tool install-global-cli",
+    "local-registry": "node packages/tools/src/local-npm-registry.ts",
+    "local-registry:ps": "node packages/tools/src/local-npm-registry.ts --ps",
+    "local-registry:kill": "node packages/tools/src/local-npm-registry.ts --kill",
     "tsgo": "tsgo -b tsconfig.json",
     "lint": "vp lint --type-aware --type-check --threads 4",
-    "test": "vp test run && pnpm -r snap-test",
+    "test": "vp test && just snapshot-test",
+    "snapshot-test": "just snapshot-test",
+    "test:unit": "vp test",
     "fmt": "vp fmt",
-    "test:unit": "vp test run",
     "docs:dev": "pnpm -C docs dev",
     "docs:build": "pnpm -C docs build",
     "docs:update-trusted-stack-stats": "pnpm -C docs update-trusted-stack-stats",
-    "prepare": "husky"
+    "prepare": "vp config"
   },
   "devDependencies": {
+    "@emnapi/core": "catalog:",
+    "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",
     "@oxc-node/cli": "catalog:",
-    "@oxc-node/core": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
-    "bingo": "catalog:",
-    "husky": "catalog:",
-    "lint-staged": "catalog:",
-    "oxfmt": "catalog:",
-    "oxlint": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "workspace:*",
-    "vitest": "catalog:",
-    "zod": "catalog:"
-  },
-  "lint-staged": {
-    "*.@(js|ts|tsx|md|yaml|yml)": "vp check --fix",
-    "*.rs": "cargo fmt --"
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=22.18.0"
   },
-  "packageManager": "pnpm@10.33.2"
+  "packageManager": "pnpm@11.24.0"
 }

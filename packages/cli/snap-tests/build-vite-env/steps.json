@@ -1,8 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "VITE_MY_VAR=1 vp run build",
-    "VITE_MY_VAR=1 vp run build # should hit cache",
-    "VITE_MY_VAR=2 vp run build # env changed, should miss cache"
-  ]
-}

@@ -1,0 +1,72 @@
+[[case]]
+name = "migration_from_tsup_success"
+vp = "local"
+env = { VP_CLI_BIN = "./tsdown-migrate-stub.mjs" }
+steps = [
+  { argv = ["vpt", "chmod", "+x", "tsdown-migrate-stub.mjs"], comment = "stub tsdown-migrate so the migration stays offline", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "tsup config should migrate automatically", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "tsup.config.ts", "--assert-not", "file"], comment = "the original tsup config is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tsdown.config.ts"], comment = "the converted config uses vite-plus pack", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "the converted config is connected to vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "tsup is removed and its script uses vp pack", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_from_tsup_failure"
+vp = "local"
+env = { VP_CLI_BIN = "./tsdown-migrate-stub.mjs", TSDOWN_MIGRATE_STUB_FAIL = "1" }
+steps = [
+  { argv = ["vpt", "chmod", "+x", "tsdown-migrate-stub.mjs"], comment = "stub a tsdown-migrate failure", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a failed automatic migration should show manual options", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "tsup.config.ts", "--assert", "file"], comment = "the original tsup config is preserved", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "tsdown.config.ts", "--assert-not", "file"], comment = "no converted config is left behind", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the tsup dependency and script are preserved", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_from_tsup_config_collision"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { existing: true };\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "an existing tsdown config should stop automatic migration before it overwrites files", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tsup.config.ts"], comment = "the original tsup config is unchanged" },
+  { argv = ["vpt", "print-file", "tsdown.config.ts"], comment = "the existing tsdown config is unchanged" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the tsup dependency and script are unchanged" },
+]
+
+[[case]]
+name = "migration_from_tsup_inline_config_collision"
+vp = "local"
+steps = [
+  { argv = ["vpt", "rm", "tsup.config.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.build", "tsup"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "tsup", '{"entry":["src/index.ts"]}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "tsdown", '{"entry":["src/existing.ts"]}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "an existing inline tsdown config should stop automatic migration", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "both inline configs are unchanged" },
+]
+
+[[case]]
+name = "migration_from_tsup_inline_config"
+vp = "local"
+steps = [
+  { argv = ["vpt", "rm", "tsup.config.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.build", "tsup"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "tsup", '{"entry":["src/index.ts"]}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "an inline tsup config should stop automatic migration", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the inline tsup config is unchanged" },
+]
+
+[[case]]
+name = "migration_from_tsup_custom_config"
+vp = "local"
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "configs"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/legacy.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.build", "tsup --config configs/legacy.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.irregular", "tsup --config ././tsup.config.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "unsupported config paths should stop automatic migration before any files change", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "tsup.config.ts"], comment = "the standard config is unchanged" },
+  { argv = ["vpt", "print-file", "configs/legacy.ts"], comment = "the custom config is unchanged" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the unsupported scripts and tsup dependency are unchanged" },
+]

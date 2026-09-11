@@ -1,0 +1,7 @@
+[[case]]
+name = "create_org_config_default"
+vp = "local"
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "--no-interactive"], comment = "bare vp create picks up create.defaultTemplate from vite.config.ts", continue-on-failure = true },
+]

@@ -1,0 +1,6 @@
+[[case]]
+name = "check_fail_fast"
+vp = "local"
+steps = [
+  { argv = ["vp", "check"], continue-on-failure = true },
+]

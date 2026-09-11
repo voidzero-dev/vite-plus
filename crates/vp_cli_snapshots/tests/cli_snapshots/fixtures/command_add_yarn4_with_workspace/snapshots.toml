@@ -1,0 +1,18 @@
+[[case]]
+name = "command_add_yarn4_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "add", "testnpm2", "-D", "-w"], comment = "should add package to workspace root" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "@vite-plus-test/utils", "--workspace", "-w"], comment = "should add @vite-plus-test/utils to workspace root" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2", "test-vite-plus-install@1.0.0", "--filter", "app"], comment = "should add packages to packages/app" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "@vite-plus-test/utils", "--workspace", "--filter", "app"], comment = "should add @vite-plus-test/utils to packages/app" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2", "test-vite-plus-install@1.0.0", "--filter", "*", "--filter", "@vite-plus-test/utils"], comment = "should add testnpm2 test-vite-plus-install to all packages and workspace root" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/admin/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "install", "-O", "test-vite-plus-package-optional", "--filter", "*"], comment = "should install packages alias for add command" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/admin/package.json", "packages/utils/package.json"], continue-on-failure = true },
+]

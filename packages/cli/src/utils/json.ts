@@ -2,7 +2,20 @@ import fs from 'node:fs';
 
 import detectIndent from 'detect-indent';
 import { detectNewline } from 'detect-newline';
-import { parse as parseJsonc } from 'jsonc-parser';
+import { type FormattingOptions, parse as parseJsonc } from 'jsonc-parser';
+
+/**
+ * Derive `jsonc-parser` formatting options from existing file text so inserted
+ * fragments match the file's indentation and newline style.
+ */
+export function detectFormattingOptions(text: string): FormattingOptions {
+  const detected = detectIndent(text);
+  return {
+    insertSpaces: detected.type !== 'tab',
+    tabSize: detected.amount || 2,
+    eol: detectNewline(text) ?? '\n',
+  };
+}
 
 export function readJsonFile(file: string, allowComments?: boolean): Record<string, unknown> {
   const content = fs.readFileSync(file, 'utf-8');

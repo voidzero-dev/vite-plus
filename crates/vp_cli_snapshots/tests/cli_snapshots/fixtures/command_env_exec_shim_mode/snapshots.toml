@@ -1,0 +1,9 @@
+[[case]]
+name = "command_env_exec_shim_mode"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "exec", "node", "-v"], comment = "Shim mode: version resolved from package.json engines.node", continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "npm", "-v"], comment = "Shim mode: npm uses same version", continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "node", "-e", "console.log('Hello from shim mode')"], comment = "Shim mode: run inline script", continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "nonexistent-tool", "--version"], comment = "expected error: non-shim command requires --node", continue-on-failure = true },
+]

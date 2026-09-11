@@ -1,0 +1,14 @@
+{
+  "name": "@test/app",
+  "scripts": {
+    "dev": "vite",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@typescript-eslint/parser": "^8.0.0",
+    "@typescript-eslint/utils": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-vue": "^10.0.0",
+    "vite": "^7.0.0"
+  }
+}

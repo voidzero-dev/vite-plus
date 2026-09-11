@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_upgrade_pnpm_catalogs_default"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "reuse the managed named catalog beside catalogs.default", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "existing catalog:build dependency references are preserved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "catalogs.default remains the only default catalog definition", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "catalogs.default migration is idempotent", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "rerun leaves package.json unchanged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "rerun leaves catalog placement unchanged", continue-on-failure = true },
+]

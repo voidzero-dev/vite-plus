@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    // JSONC comments should not prevent baseUrl detection.
+    "target": "ES2023",
+    "module": "NodeNext",
+    "baseUrl": "."
+  }
+}

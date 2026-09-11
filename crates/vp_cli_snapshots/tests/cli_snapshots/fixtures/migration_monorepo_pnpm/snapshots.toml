@@ -1,0 +1,16 @@
+[[case]]
+name = "migration_monorepo_pnpm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should merge vite.config.ts and remove oxlintrc and oxfmtrc", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"], comment = "check .oxlintrc.json is removed", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"], comment = "check .oxfmtrc.json is removed", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], comment = "check app package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/utils/package.json"], comment = "check utils package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/only-oxlint/package.json"], comment = "check only-oxlint package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/only-oxlint/vite.config.ts"], comment = "check only-oxlint vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/only-oxlint/.oxlintrc.json", "--assert-not", "file"], comment = "check only-oxlint .oxlintrc.json is removed", continue-on-failure = true },
+]

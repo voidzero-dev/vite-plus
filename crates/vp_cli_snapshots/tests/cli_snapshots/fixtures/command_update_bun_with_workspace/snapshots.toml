@@ -1,0 +1,9 @@
+[[case]]
+name = "command_update_bun_with_workspace"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "--", "--silent"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "update", "testnpm2", "--filter", "app", "--", "--silent"], comment = "should update package in packages/app" },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
+]

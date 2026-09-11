@@ -2,8 +2,8 @@
   "dify": {
     "repository": "https://github.com/langgenius/dify.git",
     "branch": "main",
-    "hash": "356a156f365a3c762f29303176defb28cbed3710",
-    "directory": "web"
+    "hash": "baf2191ee360c5f058a9e25c2c2c26cafea2bbe6",
+    "forceFreshMigration": true
   },
   "skeleton": {
     "repository": "https://github.com/skeletonlabs/skeleton.git",
@@ -13,8 +13,9 @@
   "vibe-dashboard": {
     "repository": "https://github.com/voidzero-dev/vibe-dashboard.git",
     "branch": "main",
-    "hash": "158e4a0c3d8a1801e330300a5deba4506fd5dfb9",
-    "forceFreshMigration": true
+    "hash": "92a143a57478723987e778439a355291835135ec",
+    "forceFreshMigration": true,
+    "playwright": true
   },
   "rollipop": {
     "repository": "https://github.com/leegeunhyeok/rollipop.git",
@@ -37,24 +38,32 @@
     "hash": "0d3912b73d3aa1dc8f64619c82b3dacb0769e49e"
   },
   "vitepress": {
-    "repository": "https://github.com/vuejs/vitepress.git",
-    "branch": "feat/vite-8",
-    "hash": "9330f228861623c71f2598271d4e79c9c53f2c08"
+    "repository": "https://github.com/fengmk2/vitepress.git",
+    "branch": "feat/vite-8-and-fix-playwright-chromium",
+    "hash": "ff11029b8853b2f2dd8e32f7ed4581b28c020ccb",
+    "playwright": true
   },
   "tanstack-start-helloworld": {
     "repository": "https://github.com/fengmk2/tanstack-start-helloworld.git",
     "branch": "main",
-    "hash": "09bafe177bbcd1e3108c441a67601ae6380ad352"
+    "hash": "ae2cfafa384da35c57912b7e776414c1837487c2",
+    "playwright": true
   },
   "oxlint-plugin-complexity": {
     "repository": "https://github.com/itaymendel/oxlint-plugin-complexity.git",
     "branch": "main",
     "hash": "439d7df1a5d594458e95071612c5edd93ff736a5"
   },
+  "decoders": {
+    "repository": "https://github.com/nvie/decoders.git",
+    "branch": "main",
+    "hash": "ba339327758fcfda9d2f361e2786513aca901717"
+  },
   "vite-vue-vercel": {
     "repository": "https://github.com/fengmk2/vite-vue-vercel.git",
     "branch": "main",
-    "hash": "f2bf9fc40880c6a80f5d89bff70641c2eeaf77ef"
+    "hash": "f2bf9fc40880c6a80f5d89bff70641c2eeaf77ef",
+    "playwright": true
   },
   "viteplus-ws-repro": {
     "repository": "https://github.com/Charles5277/viteplus-ws-repro.git",
@@ -71,7 +80,13 @@
   "vinext": {
     "repository": "https://github.com/cloudflare/vinext.git",
     "branch": "main",
-    "hash": "a1d2b6103469cb181e3d097cb16c272004f2d6b1",
+    "hash": "2a2ce31ecc286ae38ab1f0bce13d94418da8a513",
+    "forceFreshMigration": true
+  },
+  "videojs-v10": {
+    "repository": "https://github.com/videojs/v10.git",
+    "branch": "main",
+    "hash": "a86f3d735973e47669d529f3edba178585c9cfa9",
     "forceFreshMigration": true
   },
   "reactive-resume": {
@@ -89,8 +104,9 @@
   "npmx.dev": {
     "repository": "https://github.com/npmx-dev/npmx.dev.git",
     "branch": "main",
-    "hash": "230b7c7ddb6bb8551ce797144f0ce0f047ff8d7d",
-    "forceFreshMigration": true
+    "hash": "035776c96cf8f089c44e6011264b534b0bcde53c",
+    "forceFreshMigration": true,
+    "playwright": true
   },
   "vite-plus-jest-dom-repro": {
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-jest-dom-repro.git",
@@ -101,7 +117,7 @@
   "bun-vite-template": {
     "repository": "https://github.com/why-reproductions-are-required/bun-vite-template.git",
     "branch": "master",
-    "hash": "d84099b4a153c7e0f35e510725b2ceb24c6e09ad"
+    "hash": "c507faecc4338a2d4f51c7a0b7046ed25089d232"
   },
   "vite-plus-vitest-global-type-minimal-repro": {
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-vitest-global-type-minimal-repro.git",
@@ -112,7 +128,8 @@
   "vitest-playwright-repro": {
     "repository": "https://github.com/why-reproductions-are-required/vitest-playwright-repro.git",
     "branch": "main",
-    "hash": "f7252170025c01ec482fa9ad43e09b965f46928f"
+    "hash": "15cb1ac9154f9d67a987a80c08963701b99efd7c",
+    "playwright": true
   },
   "vite-plus-vitest-type-aug": {
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-vitest-type-aug.git",
@@ -130,6 +147,17 @@
     "repository": "https://github.com/varletjs/varlet.git",
     "branch": "dev",
     "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
+    "forceFreshMigration": true
+  },
+  "nuxt-devtools": {
+    "repository": "https://github.com/nuxt/devtools.git",
+    "branch": "main",
+    "hash": "a24195182241ddcce07f9d9e7972608eafbc93fb"
+  },
+  "tiptap": {
+    "repository": "https://github.com/ueberdosis/tiptap.git",
+    "branch": "main",
+    "hash": "f434577e6bb2010b321653cb132a57bda18764fa",
     "forceFreshMigration": true
   }
 }

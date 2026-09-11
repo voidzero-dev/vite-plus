@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_existing_lint_staged_config"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should add prepare script, remove lint-staged from devDeps", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check prepare script added, lint-staged removed from devDeps", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".lintstagedrc.json", "--assert-not", "file"], comment = "check lintstagedrc.json (should be deleted after inlining to vite.config.ts)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check staged config migrated to vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".vite-hooks/pre-commit"], comment = "check pre-commit hook created", continue-on-failure = true },
+]

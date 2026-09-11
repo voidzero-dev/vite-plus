@@ -1,0 +1,19 @@
+[[case]]
+name = "command_pack_pnpm10"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "pack", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "pack"], comment = "should pack current package" },
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--out", "./dist/package.tgz"], comment = "should pack with output file" },
+  { argv = ["vpt", "rm", "-rf", "./dist"], continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--pack-destination", "./dist"], comment = "should pack with destination" },
+  { argv = ["vpt", "rm", "-rf", "./dist"], continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--json", "--pack-gzip-level", "9"], comment = "should pack with gzip compression level" },
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--json"], comment = "should pack with json output" },
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "pack", "--", "--loglevel=warn"], comment = "should support pass through arguments" },
+  { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+]

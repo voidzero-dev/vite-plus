@@ -22,6 +22,8 @@ export type RenderCliDocOptions = {
   color?: boolean;
 };
 
+const HELP_RIGHT_MARGIN = 4;
+
 function toLines(value?: readonly string[] | string): string[] {
   if (!value) {
     return [];
@@ -39,16 +41,54 @@ function padVisible(value: string, width: number): string {
   return `${value}${' '.repeat(padding)}`;
 }
 
+function contentWidth(): number {
+  const terminalWidth = process.stdout.columns;
+  return Number.isFinite(terminalWidth) ? Math.max(0, terminalWidth - HELP_RIGHT_MARGIN) : Infinity;
+}
+
+function wrapLine(line: string, width: number): string[] {
+  if (!Number.isFinite(width) || width <= 0 || visibleLength(line) <= width) {
+    return [line];
+  }
+
+  const content = line.trim();
+  if (!content) {
+    return [line];
+  }
+
+  const indent = line.slice(0, line.length - line.trimStart().length);
+  const output: string[] = [];
+  let current = indent;
+
+  for (const [, whitespace, word] of content.matchAll(/(\s*)(\S+)/gu)) {
+    const separator = current === indent ? '' : whitespace;
+    const candidate = `${current}${separator}${word}`;
+
+    if (current === indent || visibleLength(candidate) <= width) {
+      current = candidate;
+    } else {
+      output.push(current);
+      current = `${indent}${word}`;
+    }
+  }
+
+  output.push(current);
+  return output;
+}
+
 function renderRows(rows: readonly CliRow[]): string[] {
   if (rows.length === 0) {
     return [];
   }
 
   const labelWidth = Math.max(...rows.map((row) => visibleLength(row.label)));
+  const descriptionWidth = contentWidth() - labelWidth - 4;
   const output: string[] = [];
 
   for (const row of rows) {
-    const descriptionLines = toLines(row.description);
+    const descriptionLines = toLines(row.description).flatMap((line) =>
+      wrapLine(line, descriptionWidth),
+    );
 
     if (descriptionLines.length === 0) {
       output.push(`  ${row.label}`);
@@ -76,6 +116,19 @@ function heading(label: string, color: boolean): string {
     : styleText(['blue', 'bold'], `${label}:`);
 }
 
+function renderMutedCommentSuffix(line: string, color: boolean): string {
+  if (!color) {
+    return line;
+  }
+
+  const commentIndex = line.indexOf(' #');
+  if (commentIndex === -1) {
+    return line;
+  }
+
+  return `${line.slice(0, commentIndex)}${styleText('gray', line.slice(commentIndex))}`;
+}
+
 export function renderCliDoc(doc: CliDoc, options: RenderCliDocOptions = {}): string {
   const color = options.color ?? true;
   const output: string[] = [];
@@ -101,7 +154,9 @@ export function renderCliDoc(doc: CliDoc, options: RenderCliDocOptions = {}): st
 
     const lines = toLines(section.lines);
     if (lines.length > 0) {
-      output.push(...lines);
+      output.push(
+        ...lines.flatMap((line) => wrapLine(renderMutedCommentSuffix(line, color), contentWidth())),
+      );
     }
 
     if (section.rows && section.rows.length > 0) {

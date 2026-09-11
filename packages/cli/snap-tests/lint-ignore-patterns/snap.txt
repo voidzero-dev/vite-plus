@@ -1,3 +1,0 @@
-> vp lint src/ # Test that lint ignorePatterns works - ignored files should not be linted
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.

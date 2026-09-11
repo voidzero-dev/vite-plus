@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_npmx_dev"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "npmx.dev shape: existing Vite+ upgrade, concrete @vitest/* should move into the catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "@vitest/browser-playwright and @vitest/coverage-v8 should become catalog:", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the default catalog should own the aligned @vitest/* packages", continue-on-failure = true },
+]

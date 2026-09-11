@@ -1,0 +1,6 @@
+[[case]]
+name = "command_staged_no_config"
+vp = "global"
+steps = [
+  { argv = ["vp", "staged"], comment = "should warn about missing staged config and exit with code 1", continue-on-failure = true },
+]

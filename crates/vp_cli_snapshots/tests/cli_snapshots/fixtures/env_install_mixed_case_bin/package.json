@@ -1,0 +1,7 @@
+{
+  "name": "env-install-mixed-case-bin",
+  "version": "1.0.0",
+  "bin": {
+    "MixedCaseBin": "./cli.js"
+  }
+}

@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_subpath"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "foo", "--no-interactive"], comment = "migration work with subpath", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "foo/package.json"], comment = "check package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "foo/vite.config.ts"], comment = "check vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".vite-hooks", "--assert-not", "dir"], comment = "root git hooks are NOT set up for a subdirectory migration", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "foo/pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

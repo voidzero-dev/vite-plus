@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_eslint_monorepo_package_only"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should warn about package-only eslint", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check root package.json", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], comment = "check app eslint preserved (not migrated)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/app/eslint.config.mjs"], comment = "check package eslint config preserved", continue-on-failure = true },
+]

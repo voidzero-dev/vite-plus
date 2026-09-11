@@ -15,6 +15,7 @@ We recommend turning `typeCheck` on so `vp check` becomes the single command for
 ```bash
 vp check
 vp check --fix             # Format and run autofixers.
+vp check --quiet           # Hide lint warnings; still report and fail on errors.
 vp check --no-fmt          # Skip format; run lint (and type-check if enabled).
 vp check --no-lint         # Skip lint rules; keep type-check when enabled.
 vp check --no-fmt --no-lint # Type-check only (requires `typeCheck` enabled).
@@ -42,3 +43,19 @@ export default defineConfig({
   },
 });
 ```
+
+### Disabling a step by default
+
+To make `vp check` skip formatting or linting without passing a flag every time, set the [`check`](/config/check) block in `vite.config.ts`. This is handy when a project wants the rest of the toolchain but not, say, formatting:
+
+```ts [vite.config.ts]
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  check: {
+    fmt: false, // `vp check` lints (and type-checks) but does not format
+  },
+});
+```
+
+These options only affect `vp check`; standalone `vp fmt` and `vp lint` still run normally. A step is skipped if it is disabled in config or the matching `--no-fmt` / `--no-lint` flag is passed. Because the defaults apply to every `vp check` run, a pre-commit hook that calls `vp check` will skip the disabled step too. See [Check config](/config/check) for the full reference.

@@ -1,5 +1,0 @@
-> vp upgrade --check # check for updates without installing
-info: checking for updates...
-info: found vite-plus@<semver> (current: <semver>)
-Update available: <semver> → <semver>
-Run `vp upgrade` to update.

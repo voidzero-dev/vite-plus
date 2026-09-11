@@ -1,0 +1,6 @@
+{
+  "name": "exec-relative-path-cwd",
+  "workspaces": [
+    "packages/*"
+  ]
+}

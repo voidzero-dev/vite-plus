@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_rewrite_reference_types"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "vitest/tsdown reference types are rewritten; vite references are preserved (issue #2004)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "src/env.d.ts"], comment = "vite references stay on vite (non-config); vitest/tsdown references become vite-plus", continue-on-failure = true },
+]

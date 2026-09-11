@@ -1,0 +1,9 @@
+[[case]]
+name = "command_pm_approve_builds_yarn4"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "pm", "approve-builds"], comment = "yarn Berry warn — points at dependenciesMeta[\"<pkg>\"].built", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild"], comment = "same warn (no native command on yarn)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild", "--", "--silent"], comment = "extras trigger the dropped-pass-through warn", continue-on-failure = true },
+]

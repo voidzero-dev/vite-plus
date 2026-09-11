@@ -1,0 +1,7 @@
+[[case]]
+name = "create_org_monorepo_direct_in_monorepo"
+vp = "local"
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "@your-org:monorepo", "--no-interactive"], comment = "direct-selecting a monorepo entry inside a monorepo -> refuse", continue-on-failure = true },
+]

@@ -12,16 +12,17 @@
         </p>
         <p class="text-sm text-grey">Free and open source under the MIT license.</p>
       </div>
-      <div class="flex items-center gap-5">
+      <div class="flex flex-wrap items-center justify-center gap-5">
         <a href="/guide" target="_self" class="button button--primary"> Get started </a>
         <a
-          href="https://voidzero.dev/posts/announcing-vite-plus-alpha"
+          href="https://voidzero.dev/posts/announcing-vite-plus-beta"
           target="_blank"
           rel="noopener noreferrer"
           class="button"
         >
-          Read the Announcement
+          Read the Beta Announcement
         </a>
+        <CopyPrompt />
       </div>
     </div>
   </div>

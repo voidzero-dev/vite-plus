@@ -1,0 +1,8 @@
+[[case]]
+name = "command_run_with_vp_config"
+vp = "local"
+local-registry = true
+steps = [
+  { argv = ["vp", "run", "foo"], tty = false, comment = "should run vp config command", continue-on-failure = true },
+  { argv = ["vp", "run", "bar"], tty = false, comment = "should throw error", continue-on-failure = true },
+]

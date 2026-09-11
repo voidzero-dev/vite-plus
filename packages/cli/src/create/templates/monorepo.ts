@@ -7,7 +7,9 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { rewriteMonorepoProject } from '../../migration/migrator.ts';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
+import { getScopeFromPackageName } from '../../utils/package.ts';
 import { templatesDir } from '../../utils/path.ts';
+import { editYamlFile, readYamlFile } from '../../utils/yaml.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
 import { copyDir, formatDisplayTargetDir, renameFiles, setPackageName } from '../utils.ts';
@@ -123,6 +125,9 @@ export async function executeMonorepoTemplate(
     undefined,
     options?.silent ?? false,
   );
+  // Drop the migrator's aliased vite/vitest devDeps for npm/yarn/bun (pnpm
+  // keeps them so its workspace override stays effective; see the helper).
+  dropAliasedRuntimeDevDeps(appProjectPath, workspaceInfo.packageManager);
 
   // Automatically create a default library in packages/utils
   if (!options?.silent) {
@@ -155,12 +160,106 @@ export async function executeMonorepoTemplate(
     options?.silent ?? false,
   );
 
+  alignMonorepoTypeScriptVersion(fullPath, appProjectPath, libraryProjectPath);
+
   return { exitCode: 0, projectDir: templateInfo.targetDir };
 }
 
-function getScopeFromPackageName(packageName: string) {
-  if (packageName.startsWith('@')) {
-    return packageName.split('/')[0];
+/**
+ * Keep every scaffolded workspace member on the same TypeScript version.
+ *
+ * The app and library come from independently updated remote templates. If
+ * their TypeScript ranges resolve to different versions, `typescript` — an
+ * optional peer of vite-plus — resolves differently per member, so package
+ * managers either create separate vite-plus peer instances (pnpm) or hoist a
+ * compiler the other workspace member did not ask for (npm/Yarn). The library
+ * template is the compatibility baseline because its declaration build may
+ * require a newer compiler, so the app adopts its TypeScript range instead of
+ * silently downgrading the library. The workspace catalog entry follows the
+ * same baseline so members that reference `typescript: "catalog:"` (e.g. a
+ * later `vite:generator` scaffold) stay on the workspace's compiler.
+ */
+export function alignMonorepoTypeScriptVersion(
+  workspaceRootPath: string,
+  appProjectPath: string,
+  libraryProjectPath: string,
+): void {
+  const libraryPackage = JSON.parse(
+    fs.readFileSync(path.join(libraryProjectPath, 'package.json'), 'utf8'),
+  ) as {
+    devDependencies?: Record<string, string>;
+  };
+  const typescriptVersion = libraryPackage.devDependencies?.typescript;
+  if (!typescriptVersion) {
+    return;
   }
-  return '';
+
+  editJsonFile<{ devDependencies?: Record<string, string> }>(
+    path.join(appProjectPath, 'package.json'),
+    (pkg) => {
+      if (
+        !pkg.devDependencies?.typescript ||
+        pkg.devDependencies.typescript === typescriptVersion
+      ) {
+        return undefined;
+      }
+      pkg.devDependencies.typescript = typescriptVersion;
+      return pkg;
+    },
+  );
+
+  for (const catalogFile of ['pnpm-workspace.yaml', '.yarnrc.yml']) {
+    const catalogPath = path.join(workspaceRootPath, catalogFile);
+    if (!fs.existsSync(catalogPath)) {
+      continue;
+    }
+    const workspaceConfig = readYamlFile(catalogPath) as {
+      catalog?: Record<string, unknown>;
+    } | null;
+    const catalogEntry = workspaceConfig?.catalog?.typescript;
+    if (catalogEntry === undefined || catalogEntry === typescriptVersion) {
+      continue;
+    }
+    editYamlFile(catalogPath, (doc) => {
+      doc.setIn(['catalog', 'typescript'], typescriptVersion);
+    });
+  }
+}
+
+/**
+ * Drop the aliased `vite` / `vitest` devDeps that `create-vite` leaves on a
+ * scaffolded sub-package. After migration its scripts already use `vp ...` and
+ * nothing imports `'vite'` directly, so `vite-plus` provides them transitively.
+ *
+ * pnpm is the exception and keeps them: a package needs a DIRECT `vite` edge for
+ * `vite` to resolve to @voidzero-dev/vite-plus-core there (and for `vp why vite`
+ * to show it) rather than pnpm auto-installing an upstream Vite to satisfy
+ * Vitest's peer. Migration points that edge at the workspace catalog, which owns
+ * the alias; the `vite@*` workspace override covers the transitive and peer
+ * declarations instead (see `pnpmOverrideKey`). npm, yarn, and bun redirect the
+ * transitive/peer vite via their root overrides/resolutions regardless of a
+ * direct dep, so the aliased keys are dead weight and are dropped.
+ */
+export function dropAliasedRuntimeDevDeps(
+  appProjectPath: string,
+  packageManager: PackageManager,
+): void {
+  // pnpm keeps the aliased vite/vitest so the package has a direct `vite` edge
+  // to point at the workspace catalog; see the doc comment above.
+  if (packageManager === PackageManager.pnpm) {
+    return;
+  }
+  editJsonFile<{ devDependencies?: Record<string, string> }>(
+    path.join(appProjectPath, 'package.json'),
+    (pkg) => {
+      let changed = false;
+      for (const name of ['vite', 'vitest']) {
+        if (pkg.devDependencies?.[name]) {
+          delete pkg.devDependencies[name];
+          changed = true;
+        }
+      }
+      return changed ? pkg : undefined;
+    },
+  );
 }

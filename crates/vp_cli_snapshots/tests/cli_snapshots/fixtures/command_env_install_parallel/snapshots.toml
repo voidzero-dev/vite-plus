@@ -1,0 +1,9 @@
+[[case]]
+name = "command_env_install_parallel"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "--concurrency", "1", "./parallel-pkg-a", "./parallel-pkg-b"], comment = "Install multiple global packages", continue-on-failure = true },
+  { argv = ["parallel-a"], comment = "Both binaries should be callable" },
+  { argv = ["parallel-b"], continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "parallel-pkg-a", "parallel-pkg-b"], comment = "Cleanup", continue-on-failure = true },
+]

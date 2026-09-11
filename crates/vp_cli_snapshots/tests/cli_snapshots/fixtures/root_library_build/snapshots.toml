@@ -1,0 +1,24 @@
+[[case]]
+name = "config_only_root_build"
+vp = ["local", "global"]
+comment = """
+A declared `build` field is a root intent signal. Bare `vp build` runs at the
+root instead of eliciting members.
+"""
+# PTY-rendered (not tty = false): a piped vite build's raw byte stream
+# differs invisibly on Windows (see unanalyzable_config_ignored); the grid
+# rendering normalizes it and the assertion (root builds, not elicits) holds.
+steps = [{ argv = ["vp", "build"] }]
+
+[[case]]
+name = "dev_uses_build_signal"
+vp = ["local", "global"]
+comment = """
+The same root intent signal applies to `vp dev`.
+"""
+steps = [
+  { argv = ["vp", "dev"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]

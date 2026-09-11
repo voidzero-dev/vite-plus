@@ -1,4 +1,4 @@
-# RFC: JavaScript Runtime Management (`vite_js_runtime`)
+# RFC: JavaScript Runtime Management (`vp_js_runtime`)
 
 ## Background
 
@@ -9,7 +9,7 @@ Currently, vite-plus relies on the user's system-installed Node.js runtime. This
 3. **No runtime pinning**: Projects cannot specify and enforce a specific Node.js version
 4. **Future extensibility**: As alternatives like Bun and Deno mature, projects may want to use different runtimes
 
-The PackageManager implementation in `vite_install` successfully handles automatic downloading and caching of package managers (pnpm, yarn, npm). We can apply the same pattern to JavaScript runtimes.
+The PackageManager implementation in `vp_pm_cli` successfully handles automatic downloading and caching of package managers (pnpm, yarn, npm). We can apply the same pattern to JavaScript runtimes.
 
 ## Goals
 
@@ -20,7 +20,7 @@ The PackageManager implementation in `vite_install` successfully handles automat
 
 ## Non-Goals (Initial Version)
 
-- ~~Configuration auto-detection (no reading from package.json, .nvmrc, etc.)~~ **Now supported via `.node-version`, `engines.node`, and `devEngines.runtime`**
+- ~~Configuration auto-detection (no reading from package.json, .nvmrc, etc.)~~ **Now supported via `.node-version`, `devEngines.runtime`, and `engines.node`**
 - Managing multiple runtime versions simultaneously
 - Providing a version manager CLI (like nvm/fnm)
 - Supporting custom/unofficial Node.js builds
@@ -53,7 +53,7 @@ Both exact versions and semver ranges are supported:
 ### Crate Structure
 
 ```
-crates/vite_js_runtime/
+crates/vp_js_runtime/
 ├── Cargo.toml
 └── src/
     ├── lib.rs              # Public API exports
@@ -95,8 +95,17 @@ pub enum ArchiveFormat {
 
 /// How to verify the integrity of a downloaded archive
 pub enum HashVerification {
-    ShasumsFile { url: Str },  // Download and parse SHASUMS file
-    None,                       // No verification
+    ShasumsFile {
+        url: Str,                          // plain SHASUMS file
+        signature: Option<ShasumsSignature>, // PGP-verify the clearsigned SHASUMS when set
+    },
+    None,                                  // No verification
+}
+
+/// PGP signature verification details for a SHASUMS file.
+pub struct ShasumsSignature {
+    pub url: Str,       // clearsigned SHASUMS256.txt.asc
+    pub required: bool, // mandatory for the official source; best-effort for mirrors
 }
 
 /// Information needed to download a runtime
@@ -155,7 +164,7 @@ pub async fn download_runtime(
 ) -> Result<JsRuntime, Error>;
 
 /// Download runtime based on project's version configuration
-/// Reads from .node-version, engines.node, or devEngines.runtime (in priority order)
+/// Reads from .node-version, devEngines.runtime, or engines.node (in priority order)
 /// Resolves semver ranges, downloads the matching version
 pub async fn download_runtime_for_project(
     project_path: &AbsolutePath,
@@ -195,22 +204,22 @@ impl NodeProvider {
 **Direct version download:**
 
 ```rust
-use vite_js_runtime::{JsRuntimeType, download_runtime};
+use vp_js_runtime::{JsRuntimeType, download_runtime};
 
 let runtime = download_runtime(JsRuntimeType::Node, "22.13.1").await?;
 println!("Node.js installed at: {}", runtime.get_binary_path());
 println!("Version: {}", runtime.version()); // "22.13.1"
 ```
 
-**Project-based download (reads from .node-version, engines.node, or devEngines.runtime):**
+**Project-based download (reads from .node-version, devEngines.runtime, or engines.node):**
 
 ```rust
-use vite_js_runtime::download_runtime_for_project;
-use vite_path::AbsolutePathBuf;
+use vp_js_runtime::download_runtime_for_project;
+use vt_path::AbsolutePathBuf;
 
 let project_path = AbsolutePathBuf::new("/path/to/project".into()).unwrap();
 let runtime = download_runtime_for_project(&project_path).await?;
-// Version is resolved from .node-version > engines.node > devEngines.runtime
+// Version is resolved from .node-version > devEngines.runtime > engines.node
 ```
 
 ## Cache Directory Structure
@@ -218,7 +227,7 @@ let runtime = download_runtime_for_project(&project_path).await?;
 Following the PackageManager pattern:
 
 ```
-$VITE_PLUS_HOME/js_runtime/{runtime}/{version}/
+$VP_HOME/js_runtime/{runtime}/{version}/
 ```
 
 Examples:
@@ -232,7 +241,7 @@ Examples:
 The Node.js version index is cached locally to avoid repeated network requests:
 
 ```
-$VITE_PLUS_HOME/js_runtime/node/index_cache.json
+$VP_HOME/js_runtime/node/index_cache.json
 ```
 
 Cache structure:
@@ -271,8 +280,10 @@ The `download_runtime_for_project` function reads Node.js version from multiple 
 | Priority    | Source               | File            | Example                               | Used By                       |
 | ----------- | -------------------- | --------------- | ------------------------------------- | ----------------------------- |
 | 1 (highest) | `.node-version`      | `.node-version` | `22.13.1`                             | fnm, nvm, Netlify, Cloudflare |
-| 2           | `engines.node`       | `package.json`  | `">=20.0.0"`                          | Vercel, npm                   |
-| 3 (lowest)  | `devEngines.runtime` | `package.json`  | `{"name":"node","version":"^24.4.0"}` | npm RFC                       |
+| 2           | `devEngines.runtime` | `package.json`  | `{"name":"node","version":"^24.4.0"}` | npm, pnpm                     |
+| 3 (lowest)  | `engines.node`       | `package.json`  | `">=20.0.0"`                          | Vercel, npm                   |
+
+`devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. See [RFC: devEngines Support](./dev-engines.md).
 
 ### `.node-version` File Format
 
@@ -442,20 +453,29 @@ VP_NODE_DIST_MIRROR=https://example.com/mirrors/node vp build
 
 The mirror URL should have the same directory structure as the official distribution. Trailing slashes are automatically trimmed.
 
-### Integrity Verification
+### Integrity and Authenticity Verification
 
-Node.js provides SHASUMS256.txt for each release:
+Node.js publishes `SHASUMS256.txt` and a PGP-clearsigned `SHASUMS256.txt.asc`
+(signed by a Node.js releaser) for each release:
 
 ```
 https://nodejs.org/dist/v{version}/SHASUMS256.txt
+https://nodejs.org/dist/v{version}/SHASUMS256.txt.asc
 ```
 
-The implementation verifies download integrity automatically:
+The implementation verifies both authenticity and integrity automatically:
 
-1. Download SHASUMS256.txt for the target version
-2. Parse and extract the SHA256 hash for the target archive filename
+1. Download the clearsigned `SHASUMS256.txt.asc` and verify its PGP signature
+   against an embedded copy of the Node.js release keys, then parse the
+   verified plaintext (see [verify-node-shasums-signature.md](./verify-node-shasums-signature.md))
+2. Extract the SHA256 hash for the target archive filename
 3. After downloading the archive, verify it against the expected hash
-4. Fail with error if hash doesn't match (corrupted download)
+4. Fail with error if the signature is invalid or the hash doesn't match
+
+Signature verification is mandatory for the official `nodejs.org` source. The
+unofficial musl builds and custom mirrors that publish only `SHASUMS256.txt`
+fall back to hash-only verification (`signature: None`, or best-effort when the
+`.asc` is absent).
 
 Example SHASUMS256.txt content:
 
@@ -488,7 +508,7 @@ i9j0k1l2...  node-v22.13.1-linux-arm64.tar.gz
 
 5. Download with atomic operations
    ├── Create temp directory
-   ├── Download SHASUMS file and parse expected hash (via provider)
+   ├── Download SHASUMS (PGP-verify the signed .asc when available) and parse expected hash
    ├── Download archive with retry logic
    ├── Verify archive hash
    ├── Extract archive (tar.gz or zip based on format)
@@ -506,16 +526,16 @@ Same pattern as PackageManager:
 - File-based locking to prevent race conditions
 - Check cache after acquiring lock (another process may have completed)
 
-## Integration with vite_install
+## Integration with vp_pm_cli
 
-The `vite_install` crate can use `vite_js_runtime` to:
+The `vp_pm_cli` crate can use `vp_js_runtime` to:
 
 1. Ensure the correct Node.js version before running package manager commands
 2. Use the managed Node.js to execute package manager binaries
 
 ```rust
-// Example integration in vite_install
-use vite_js_runtime::{JsRuntimeType, download_runtime};
+// Example integration in vp_pm_cli
+use vp_js_runtime::{JsRuntimeType, download_runtime};
 
 async fn run_with_managed_node(
     node_version: &str,
@@ -539,7 +559,7 @@ async fn run_with_managed_node(
 
 ## Error Handling
 
-Error variants in `vite_js_runtime::Error`:
+Error variants in `vp_js_runtime::Error`:
 
 ```rust
 pub enum Error {
@@ -618,9 +638,9 @@ pub enum Error {
 - Easier to test in isolation
 - Clear single responsibility: download and cache runtimes
 
-### 2. Separate Crate vs. Extending vite_install
+### 2. Separate Crate vs. Extending vp_pm_cli
 
-**Decision**: Create a new `vite_js_runtime` crate.
+**Decision**: Create a new `vp_js_runtime` crate.
 
 **Rationale**:
 
@@ -676,7 +696,7 @@ pub enum Error {
 
 1. ✅ Can download and cache Node.js by exact version specification
 2. ✅ Works on Linux, macOS, and Windows (x64 and ARM64)
-3. ✅ Verifies download integrity using SHASUMS256.txt
+3. ✅ Verifies download authenticity and integrity (PGP-signed SHASUMS256.txt)
 4. ✅ Handles concurrent downloads safely
 5. ✅ Returns version and binary path
 6. ✅ Comprehensive test coverage

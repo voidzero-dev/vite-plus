@@ -1,0 +1,10 @@
+[[case]]
+name = "migration_preserve_plugin_vite_import"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks"], comment = "`vite` is rewritten to vite-plus only in config entry files; every other file keeps its `vite` imports (issue #2004)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "REWRITTEN: the config entry's `defineConfig` import becomes vite-plus", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/app/src/main.ts"], comment = "PRESERVED: a normal app's non-config `vite` import (createServer, typeof import) stays on vite", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/vite-plugin-demo/index.ts"], comment = "PRESERVED: a vite-plugin-* package keeps `from 'vite'` so it stays usable by plain-vite projects", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/unplugin-demo/src/index.ts"], comment = "PRESERVED: an unplugin-* package keeps `from 'vite'` too", continue-on-failure = true },
+]

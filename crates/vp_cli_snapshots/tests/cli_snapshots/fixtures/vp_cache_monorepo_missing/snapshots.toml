@@ -1,0 +1,7 @@
+[[case]]
+name = "vp_cache_monorepo_missing"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "--cache", "ready"], comment = "first run", snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "run", "--cache", "ready"], comment = "second run should all hit cache", continue-on-failure = true },
+]

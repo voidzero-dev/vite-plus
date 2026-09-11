@@ -1,0 +1,7 @@
+[[case]]
+name = "vp_lint_cache"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "lint"], comment = "first run populates the cache", continue-on-failure = true },
+  { argv = ["vp", "run", "lint"], comment = "second run should be a cache hit", continue-on-failure = true },
+]

@@ -1,0 +1,21 @@
+[[case]]
+name = "shim_npm_downloads_uncached_package_manager_version"
+vp = "global"
+serial = true
+# seed-runtime = false: the case deletes and re-downloads pinned runtime
+# versions, which must never reach the shared seed through the symlink.
+seed-runtime = false
+skip-platforms = ["windows"]
+steps = [
+  # The legacy case inherited node 22.11.0 as the environment's default; the
+  # hermetic case pins it explicitly so the shim's node choice cannot drift.
+  { argv = ["vpt", "write-file", ".node-version", "22.11.0\n"], comment = "Pin the project Node.js version", snapshot = false },
+  { argv = ["vpt", "rm", "-rf", "$VP_HOME/js_runtime/node/22.11.0"], comment = "Ensure pinned Node.js is not cached", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/npm/10.5.0", "$VP_HOME/package_manager/npm/10.5.0.lock"], comment = "Ensure pinned npm is not cached", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.11.0", "--assert", "missing"], comment = "pinned Node.js@22.11.0 is uncached" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/npm/10.5.0", "--assert", "missing"], comment = "pinned npm@10.5.0 is uncached" },
+  { argv = ["node", "check-npm-version.mjs", "10.5.0", "npm shim auto-downloaded Node.js and packageManager on first invocation"], timeout = 120000 },
+  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.11.0/bin/node", "--assert", "file"], comment = "pinned Node.js@22.11.0 is now cached" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/npm/10.5.0/npm/bin/npm", "--assert", "file"], comment = "pinned npm@10.5.0 is now cached" },
+  { argv = ["node", "check-npm-version.mjs", "10.5.0", "subsequent invocations reuse the cached version"] },
+]

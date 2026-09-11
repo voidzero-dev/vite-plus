@@ -10,7 +10,6 @@ rule:
     regex: 'vite\s+(-v|--version)'
 fix: vp
 
-
 # vite => vp dev (handles all cases: with/without env var prefix and flag args)
 # Match command_name to preserve env var prefix and arguments
 # Excludes subcommands like "vite build", "vite test", etc.
@@ -27,7 +26,6 @@ rule:
       regex: 'vite\s+[^-]'
 fix: vp dev
 
-
 # vite <subcommand> => vp <subcommand> (handles vite build, vite test, vite dev, etc.)
 # Match command_name when followed by a subcommand, replace only the command name
 ---
@@ -41,7 +39,6 @@ rule:
     regex: 'vite\s+[^-]'
 fix: vp
 
-
 # oxlint => vp lint (handles all cases: with/without env var prefix and args)
 # Match command_name to preserve env var prefix and arguments
 ---
@@ -52,7 +49,6 @@ rule:
   regex: '^oxlint$'
 fix: vp lint
 
-
 # oxfmt => vp fmt
 ---
 id: replace-oxfmt
@@ -61,7 +57,6 @@ rule:
   kind: command_name
   regex: '^oxfmt$'
 fix: vp fmt
-
 
 # vitest => vp test
 ---
@@ -72,7 +67,6 @@ rule:
   regex: '^vitest$'
 fix: vp test
 
-
 # lint-staged => vp staged
 ---
 id: replace-lint-staged
@@ -81,7 +75,6 @@ rule:
   kind: command_name
   regex: '^lint-staged$'
 fix: vp staged
-
 
 # tsdown => vp pack
 ---

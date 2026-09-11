@@ -59,6 +59,7 @@ watch *args='':
 fmt:
   cargo shear --fix
   cargo fmt --all
+  cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml
   pnpm fmt
 
 check:
@@ -67,16 +68,71 @@ check:
 watch-check:
   just watch "'cargo check; cargo clippy'"
 
+# Test all crates/* packages (new crates are automatically included) plus
+# vite-plus-cli (lives outside crates/) to catch type sync issues.
+# vp_cli_snapshots is excluded: its suite needs a built global binary and
+# node, and runs via `just snapshot-test` instead.
+# vp_trampoline is not a workspace member.
+# On Unix, run its portable parser and layout tests separately.
+# The Windows CLI snapshot suite tests Windows shim behavior.
+# Single source of truth for cargo test, used by CI too.
 [unix]
 test:
-  cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
+  RUST_MIN_STACK=8388608 cargo test $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || [ "$n" = "vp_trampoline" ] || echo -n "-p $n "; done) -p vite-plus-cli
+  cd crates/vp_trampoline && cargo test
 
 [windows]
 test:
-  $packages = Get-ChildItem -Path crates -Directory | ForEach-Object { '-p'; $_.Name }; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
+  $packages = Get-ChildItem -Path crates -Directory | Where-Object { $_.Name -ne 'vp_cli_snapshots' -and $_.Name -ne 'vp_trampoline' } | ForEach-Object { '-p'; $_.Name }; $Env:RUST_MIN_STACK='8388608'; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
 
+# PTY-based CLI snapshot tests (crates/vp_cli_snapshots). Builds the global
+# binary and shim template first so the runner never tests a stale build, and
+# installs Playwright Chromium for the browser-mode cases (idempotent).
+# Filter by trial name substring: `just snapshot-test create`. Accept snapshot changes with
+# `UPDATE_SNAPSHOTS=1 just snapshot-test`. Local-flavor cases additionally
+# need a built packages/cli (`pnpm build`); the runner fails fast when dist
+# is missing or stale. Use snapshot-test-global on checkouts without one.
+snapshot-test *args='': _install_chromium _build-trampoline
+  cargo build -p vp_global_cli
+  cargo test -p vp_cli_snapshots -- {{args}}
+
+# The trampoline is not a workspace member.
+# The helper runs Cargo from the crate directory so the build-std config applies.
+# It resolves relative CARGO_TARGET_DIR values from the repository root.
+_build-trampoline *args='':
+  node packages/tools/src/build-trampoline.ts {{args}}
+
+# Browser-mode snapshot cases run with PLAYWRIGHT_BROWSERS_PATH=0, so the
+# browser must be installed into node_modules with the same setting.
+[unix]
+_install_chromium:
+  PLAYWRIGHT_BROWSERS_PATH=0 pnpm exec playwright install chromium
+
+[windows]
+_install_chromium:
+  $Env:PLAYWRIGHT_BROWSERS_PATH='0'; pnpm exec playwright install chromium
+
+# Global flavor + vpt cases only: needs no JS build, for Rust-side work on
+# a checkout that never ran `pnpm build`.
+[unix]
+snapshot-test-global *args='':
+  VP_SNAP_SKIP_FLAVORS=local just snapshot-test {{args}}
+
+[windows]
+snapshot-test-global *args='':
+  $Env:VP_SNAP_SKIP_FLAVORS='local'; just snapshot-test {{args}}
+
+# Single source of truth for clippy, used by CI too. The `-A` flags allow
+# new toolchain lints that fire in upstream rolldown crates without a `[lints]` table.
 lint:
-  cargo clippy --workspace --all-targets --all-features -- --deny warnings
+  cargo clippy --workspace --all-targets --all-features -- --deny warnings \
+    -A clippy::byte_char_slices \
+    -A clippy::manual_assert_eq \
+    -A clippy::needless_return_with_question_mark \
+    -A clippy::redundant_else \
+    -A clippy::unused_async_trait_impl \
+    -A clippy::useless_borrows_in_formatting
+  cargo clippy --manifest-path crates/vp_trampoline/Cargo.toml --all-targets -- --deny warnings
 
 [unix]
 doc:

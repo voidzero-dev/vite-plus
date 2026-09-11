@@ -1,4 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": ["vp --version"]
-}

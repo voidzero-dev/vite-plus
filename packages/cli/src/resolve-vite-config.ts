@@ -1,14 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const VITE_CONFIG_FILES = [
-  'vite.config.ts',
-  'vite.config.js',
-  'vite.config.mjs',
-  'vite.config.mts',
-  'vite.config.cjs',
-  'vite.config.cts',
-];
+import { withConfigMetadataResolution } from './define-config.ts';
+import { VITE_CONFIG_FILES } from './utils/constants.ts';
 
 /**
  * Find a vite config file by walking up from `startDir` to `stopDir`.
@@ -34,8 +28,18 @@ export function findViteConfigUp(startDir: string, stopDir: string): string | un
   return undefined;
 }
 
+/**
+ * Find a vite config file directly in `dir` (no walking up). Returns the
+ * absolute path of the first config file found, or undefined. Covers every
+ * supported extension (`.ts/.js/.mjs/.mts/.cjs/.cts`).
+ */
+export function findViteConfig(dir: string): string | undefined {
+  const filename = VITE_CONFIG_FILES.find((f) => fs.existsSync(path.join(dir, f)));
+  return filename ? path.join(dir, filename) : undefined;
+}
+
 export function hasViteConfig(dir: string): boolean {
-  return VITE_CONFIG_FILES.some((f) => fs.existsSync(path.join(dir, f)));
+  return findViteConfig(dir) !== undefined;
 }
 
 /**
@@ -81,17 +85,21 @@ export interface ResolveViteConfigOptions {
 export async function resolveViteConfig(cwd: string, options?: ResolveViteConfigOptions) {
   const { resolveConfig } = await import('./index.js');
 
-  if (options?.traverseUp && !hasViteConfig(cwd)) {
-    const workspaceRoot = findWorkspaceRoot(cwd);
-    if (workspaceRoot) {
-      const configFile = findViteConfigUp(path.dirname(cwd), workspaceRoot);
-      if (configFile) {
-        return resolveConfig({ root: cwd, configFile }, 'build');
+  // This loads the config purely to read a non-plugin block (lint/fmt/pack/run/
+  // staged/create…), so skip the user's plugin factory while it evaluates.
+  return withConfigMetadataResolution(async () => {
+    if (options?.traverseUp && !hasViteConfig(cwd)) {
+      const workspaceRoot = findWorkspaceRoot(cwd);
+      if (workspaceRoot) {
+        const configFile = findViteConfigUp(path.dirname(cwd), workspaceRoot);
+        if (configFile) {
+          return resolveConfig({ root: cwd, configFile }, 'build');
+        }
       }
     }
-  }
 
-  return resolveConfig({ root: cwd }, 'build');
+    return resolveConfig({ root: cwd }, 'build');
+  });
 }
 
 export async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: string) {
@@ -105,6 +113,7 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
       configFile: config.configFile,
       lint: config.lint,
       fmt: config.fmt,
+      check: config.check,
       run: config.run,
       staged: config.staged,
     });

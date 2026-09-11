@@ -1,0 +1,18 @@
+[[case]]
+name = "command_why_yarn4"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "--", "--mode=update-lockfile"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2"], comment = "should show why package is installed", continue-on-failure = true },
+  { argv = ["vp", "explain", "testnpm2"], comment = "should work with explain alias", continue-on-failure = true },
+  { argv = ["vp", "why", "test-vite-plus-package"], comment = "should show why dev package is installed", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "-r"], comment = "should support recursive in yarn@2+", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "test-vite-plus-package"], comment = "should warn about multiple packages and use first", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--json"], comment = "should warn that --json not supported by yarn", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--long"], comment = "should warn that --long not supported by yarn", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--parseable"], comment = "should warn that --parseable not supported by yarn", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "-P"], comment = "should warn that --prod not supported by yarn", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--find-by", "customFinder"], comment = "should warn that --find-by not supported by yarn", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--exclude-peers"], comment = "should exclude peers by removing --peers flag", continue-on-failure = true },
+]

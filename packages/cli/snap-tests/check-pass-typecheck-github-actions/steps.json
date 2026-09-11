@@ -1,7 +1,0 @@
-{
-  "env": {
-    "GITHUB_ACTIONS": "true",
-    "VITE_DISABLE_AUTO_INSTALL": "1"
-  },
-  "commands": ["vp check"]
-}

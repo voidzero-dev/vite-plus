@@ -1,10 +1,17 @@
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use owo_colors::OwoColorize;
-use vite_error::Error;
-use vite_shared::output;
-use vite_task::ExitStatus;
+use vp_error::Error;
+use vp_shared::output;
+use vt::ExitStatus;
 
 use super::types::SynthesizableSubcommand;
+
+/// Subcommands that exist only in the global `vp` binary.
+///
+/// Keep in sync with the self-management variants of `Commands` in
+/// `crates/vp_global_cli/src/cli.rs`; the local CLI cannot run them and only
+/// needs the names to point users at the global installation.
+const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
 
 pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Error> {
     if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
@@ -99,7 +106,7 @@ fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Op
     let suggestion = match error.get(ContextKind::SuggestedSubcommand) {
         Some(ContextValue::String(value)) => Some(value.to_owned()),
         Some(ContextValue::Strings(values)) => {
-            vite_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
+            vp_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
         }
         _ => None,
     };
@@ -111,6 +118,14 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
     let Some((invalid_subcommand, suggestion)) = extract_invalid_subcommand_details(error) else {
         return false;
     };
+
+    if GLOBAL_ONLY_SUBCOMMANDS.contains(&invalid_subcommand.as_str()) {
+        let command = format!("`{invalid_subcommand}`").bright_blue().to_string();
+        output::error(&format!(
+            "The {command} command is only available in the global `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary."
+        ));
+        return true;
+    }
 
     let highlighted_subcommand = invalid_subcommand.bright_blue().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
@@ -169,8 +184,8 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
 }
 
 pub(super) fn print_help() {
-    let header = if vite_shared::header::should_print_header() {
-        format!("{}\n\n", vite_shared::header::vite_plus_header())
+    let header = if vp_shared::header::should_print_header() {
+        format!("{}\n\n", vp_shared::header::vite_plus_header())
     } else {
         String::new()
     };
@@ -187,7 +202,7 @@ pub(super) fn print_help() {
   {bold}build{reset}          Build for production
   {bold}test{reset}           Run tests
   {bold}lint{reset}           Lint code
-  {bold}fmt{reset}            Format code
+  {bold}fmt, format{reset}    Format code
   {bold}check{reset}          Run format, lint, and type checks
   {bold}pack{reset}           Build library
   {bold}run{reset}            Run tasks
@@ -195,12 +210,15 @@ pub(super) fn print_help() {
   {bold}preview{reset}        Preview production build
   {bold}cache{reset}          Manage the task cache
   {bold}config{reset}         Configure hooks and agent integration
+  {bold}hooks{reset}          Manage the Git hook dispatcher
   {bold}staged{reset}         Run linters on staged files
+  {bold}toolchain{reset}      Show Vite+ tool versions and relationships
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided
 
 Options:
+  -C <DIR>    Run as if vp was started in <DIR> instead of the current working directory
   -h, --help  Print help"
     );
 }
@@ -208,7 +226,7 @@ Options:
 #[cfg(test)]
 mod tests {
     use clap::Parser;
-    use vite_task::Command;
+    use vt::Command;
 
     use super::{super::types::CLIArgs, *};
 
@@ -224,8 +242,8 @@ mod tests {
         // After trailing_var_arg change, unknown flags like --yolo are
         // accepted as task arguments instead of producing a parse error.
         let args = CLIArgs::try_parse_from(["vp", "run", "--yolo"]).unwrap();
-        let debug = vite_str::format!("{args:?}");
-        assert!(debug.contains("\"--yolo\""), "Expected --yolo in task args, got: {debug}",);
+        let debug = vt_str::format!("{args:?}");
+        assert!(debug.contains("\"--yolo\""), "Expected --yolo in task args, got: {debug}");
         assert!(matches!(args, CLIArgs::ViteTask(Command::Run(_))));
     }
 
@@ -303,7 +321,7 @@ mod tests {
     fn global_subcommands_produce_invalid_subcommand_error() {
         use clap::error::ErrorKind;
 
-        for subcommand in ["config", "create", "env", "migrate"] {
+        for subcommand in ["config", "create", "env", "hooks", "implode", "migrate", "upgrade"] {
             let error = CLIArgs::try_parse_from(["vp", subcommand])
                 .expect_err(&format!("expected error for global subcommand '{subcommand}'"));
             assert_eq!(

@@ -1,4 +1,4 @@
-import { expect, test } from '@voidzero-dev/vite-plus-test';
+import { expect, test } from 'vitest';
 
 import {
   build,

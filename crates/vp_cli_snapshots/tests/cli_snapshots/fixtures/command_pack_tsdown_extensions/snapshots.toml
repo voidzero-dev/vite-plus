@@ -1,0 +1,7 @@
+[[case]]
+name = "command_pack_tsdown_extensions"
+vp = "local"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["node", "verify-extensions.mjs"], comment = "bundled @tsdown/exe and @tsdown/css load without a top-level tsdown (issue #1586)", continue-on-failure = true },
+]

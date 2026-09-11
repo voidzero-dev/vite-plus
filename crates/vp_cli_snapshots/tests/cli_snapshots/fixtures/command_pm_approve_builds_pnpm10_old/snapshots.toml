@@ -1,0 +1,8 @@
+[[case]]
+name = "command_pm_approve_builds_pnpm10_old"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "approve-builds", "--all"], comment = "pnpm 10.31.0 < 10.32.0 → rejected with friendly UserMessage (no `error:` prefix)", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild", "!core-js"], comment = "pnpm 10.31.0 < 11.0.0 → !pkg deny syntax rejected", continue-on-failure = true },
+  { argv = ["vp", "pm", "approve-builds", "esbuild"], comment = "plain positional still works on old pnpm", continue-on-failure = true },
+]

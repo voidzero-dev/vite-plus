@@ -1,9 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp pack -h # should print the help message",
-    "vp run pack # should build the library",
-    "ls dist # should have the library",
-    "vp run pack # should hit cache"
-  ]
-}

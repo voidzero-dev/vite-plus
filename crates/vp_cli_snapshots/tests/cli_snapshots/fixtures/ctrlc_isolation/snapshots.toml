@@ -1,0 +1,29 @@
+[[case]]
+name = "ctrlc_interrupt"
+vp = "global"
+comment = """
+Scripts a ctrl-c: `vpt exit-on-ctrlc` emits a `ready` milestone, waits for the
+interrupt, then prints and exits. This is the one scenario the runner isolates:
+ctrl-c cases are auto-detected as signal-sensitive (see `case_needs_isolation`)
+and take the exclusive execution lease, so parallel-PTY signal routing can't
+perturb them while every other case still runs concurrently.
+"""
+steps = [
+  { argv = ["vpt", "exit-on-ctrlc"], interactions = [
+    { "expect-milestone" = "ready" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]
+
+[[case]]
+name = "explicit_serial"
+vp = "global"
+serial = true
+comment = """
+Exercises the explicit `serial = true` isolation opt-in (the non-ctrl-c path):
+the case takes the exclusive execution lease and runs to completion, proving
+the flag parses and the isolated path works.
+"""
+steps = [
+  { argv = ["vpt", "print", "runs in isolation"] },
+]

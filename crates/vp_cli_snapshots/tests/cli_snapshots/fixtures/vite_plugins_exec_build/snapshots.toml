@@ -1,0 +1,7 @@
+[[case]]
+name = "vite_plugins_exec_build"
+vp = "local"
+steps = [
+  { argv = ["vp", "exec", "node", "build.mjs"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "dist/index.html", "exec-build-plugin-injected"], comment = "vp exec should still load vite plugins from factory" },
+]

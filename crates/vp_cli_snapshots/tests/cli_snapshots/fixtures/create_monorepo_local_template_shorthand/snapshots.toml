@@ -1,0 +1,9 @@
+[[case]]
+name = "create_monorepo_local_template_shorthand"
+vp = "local"
+steps = [
+  { argv = ["vp", "create", "starter", "--no-interactive", "--no-agent", "--", "--directory", "my-app"], comment = "run the local create.templates entry; generated pkg declares fmt/lint via shorthand", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "packages/my-app/vite.config.ts"], comment = "fmt/lint stay shorthand only, no injected duplicate inline fmt:/lint: blocks (#1836)", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/my-app/.oxlintrc.json", "--assert-not", "file"], comment = "standalone lint config merge-skipped and removed", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/my-app/.oxfmtrc.json", "--assert-not", "file"], comment = "standalone fmt config merge-skipped and removed", continue-on-failure = true },
+]

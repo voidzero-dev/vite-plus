@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_eslint_jsplugins_orphan_strip"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "orphan jsPlugin / unknown plugin / dangling rule should be stripped, with warnings", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "lint block should NOT contain `fictional` in plugins / jsPlugins / rules", continue-on-failure = true },
+]

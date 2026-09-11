@@ -185,30 +185,11 @@ describe('discoverWorkspacePackages', () => {
     const names = packages.map((p) => p.name).toSorted();
     expect(names).toEqual(['bar', 'foo']);
     const foo = packages.find((p) => p.name === 'foo')!;
-    expect(foo.path).toBe(path.join('packages', 'foo'));
+    // pkg.path uses forward slashes on every platform (normalized from glob's
+    // native separators), so it compares cleanly against workspace patterns.
+    expect(foo.path).toBe('packages/foo');
     expect(foo.description).toBe('a foo');
     expect(foo.version).toBe('1.0.0');
-    expect(foo.isTemplatePackage).toBe(false);
-  });
-
-  it('flags packages keyworded as vite-plus-template / bingo-template', () => {
-    writeJson(path.join(tmpDir, 'pkgs/vp/package.json'), {
-      name: 'vp',
-      keywords: ['vite-plus-template'],
-    });
-    writeJson(path.join(tmpDir, 'pkgs/bg/package.json'), {
-      name: 'bg',
-      keywords: ['bingo-template'],
-    });
-    writeJson(path.join(tmpDir, 'pkgs/bd/package.json'), {
-      name: 'bd',
-      dependencies: { bingo: '*' },
-    });
-    writeJson(path.join(tmpDir, 'pkgs/plain/package.json'), { name: 'plain' });
-
-    const packages = discoverWorkspacePackages(['pkgs/*'], tmpDir);
-    const map = Object.fromEntries(packages.map((p) => [p.name, p.isTemplatePackage]));
-    expect(map).toEqual({ vp: true, bg: true, bd: true, plain: false });
   });
 
   it('ignores node_modules during discovery', () => {

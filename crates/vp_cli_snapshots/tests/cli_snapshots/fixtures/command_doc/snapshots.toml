@@ -1,0 +1,8 @@
+[[case]]
+name = "command_doc"
+vp = "local"
+skip-platforms = ["windows", "macos", "linux"]
+steps = [
+  { argv = ["vp", "run", "doc"], comment = "build documentation", continue-on-failure = true },
+  { argv = ["vp", "run", "doc"], comment = "build documentation again should hit the cache", continue-on-failure = true },
+]

@@ -1,0 +1,13 @@
+[[case]]
+name = "command_helper"
+vp = "local"
+steps = [
+  { argv = ["vp", "-h"], comment = "help message", continue-on-failure = true },
+  { argv = ["vp", "pack", "-h"], comment = "pack help message", continue-on-failure = true },
+  { argv = ["vp", "fmt", "-h"], comment = "fmt help message", continue-on-failure = true },
+  { argv = ["vp", "lint", "-h"], comment = "lint help message", continue-on-failure = true },
+  { argv = ["vp", "build", "-h"], comment = "build help message", continue-on-failure = true },
+  { argv = ["vp", "test", "-h"], comment = "test help message", continue-on-failure = true },
+  { argv = ["vp", "preview", "-h"], comment = "preview help message", continue-on-failure = true },
+  { argv = ["vp", "dev", "-h"], comment = "dev help message", continue-on-failure = true },
+]

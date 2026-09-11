@@ -1,0 +1,7 @@
+[[case]]
+name = "vite_plugins_run_build"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "build-task"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "dist/index.html", "run-build-plugin-injected"], comment = "vp run build should load plugins from factory" },
+]

@@ -1,3 +1,0 @@
-{
-  "commands": ["vp pm list # should show warning that yarn@2+ does not support list command"]
-}

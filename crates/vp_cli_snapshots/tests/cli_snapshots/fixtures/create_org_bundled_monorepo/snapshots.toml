@@ -1,0 +1,12 @@
+[[case]]
+name = "create_org_bundled_monorepo"
+vp = "local"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+local-registry = true
+steps = [
+  { argv = ["vp", "create", "@your-org:workspace", "--no-interactive", "--directory", "my-mono", "--git"], comment = "bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-mono/vite.config.ts"], comment = "create.defaultTemplate auto-set to @your-org", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-mono/pnpm-workspace.yaml"], comment = "workspace markers preserved", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "my-mono/.git", "--assert", "dir"], comment = "git-init prompt covers bundled monorepo path", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-mono/.gitignore"], comment = "node_modules excluded even though tarball shipped no .gitignore", continue-on-failure = true },
+]

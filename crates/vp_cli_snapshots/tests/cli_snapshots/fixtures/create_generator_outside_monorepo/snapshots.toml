@@ -1,0 +1,6 @@
+[[case]]
+name = "create_generator_outside_monorepo"
+vp = "global"
+steps = [
+  { argv = ["vp", "create", "vite:generator", "--no-interactive"], continue-on-failure = true },
+]

@@ -6,16 +6,38 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   deriveDefaultPackageName,
-  ensureGitignoreNodeModules,
+  ensureDefaultGitignoreEntries,
+  ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
   getProjectDirFromPackageName,
   renameFiles,
+  shouldConfigureEditorsForCreate,
 } from '../utils.js';
 
 describe('getProjectDirFromPackageName', () => {
   it('should get project dir from package name', () => {
     expect(getProjectDirFromPackageName('@my/package')).toBe('package');
     expect(getProjectDirFromPackageName('my-package')).toBe('my-package');
+  });
+});
+
+describe('editor configuration policy', () => {
+  it('allows automatic editor configuration outside existing monorepos', () => {
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: false, editor: undefined })).toBe(true);
+  });
+
+  it('skips automatic editor configuration inside existing monorepos', () => {
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: true, editor: undefined })).toBe(false);
+  });
+
+  it('allows explicit editor opt-in inside existing monorepos', () => {
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: true, editor: 'vscode' })).toBe(true);
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: true, editor: '   ' })).toBe(false);
+  });
+
+  it('keeps --no-editor as an explicit opt-out in every workspace mode', () => {
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: false, editor: false })).toBe(false);
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: true, editor: false })).toBe(false);
   });
 });
 
@@ -67,6 +89,17 @@ describe('formatTargetDir', () => {
     expect(formatTargetDir('my-package@').error).matchSnapshot();
     expect(formatTargetDir('my-package@1.0.0').error).matchSnapshot();
   });
+
+  it('keeps valid package names under parent directories that need shell quoting', () => {
+    expect(formatTargetDir('examples with spaces/my-app')).toEqual({
+      directory: 'examples with spaces/my-app',
+      packageName: 'my-app',
+    });
+    expect(formatTargetDir('examples;tools/my-app')).toEqual({
+      directory: 'examples;tools/my-app',
+      packageName: 'my-app',
+    });
+  });
 });
 
 describe('deriveDefaultPackageName', () => {
@@ -94,7 +127,7 @@ describe('deriveDefaultPackageName', () => {
   });
 });
 
-describe('ensureGitignoreNodeModules', () => {
+describe('ensureDefaultGitignoreEntries', () => {
   let projectDir: string;
 
   beforeEach(() => {
@@ -109,54 +142,197 @@ describe('ensureGitignoreNodeModules', () => {
     return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf-8');
   }
 
-  it('creates a fresh `.gitignore` with `node_modules` when none exists', () => {
-    ensureGitignoreNodeModules(projectDir);
-    expect(gitignore()).toBe('node_modules\n');
+  const dotenvBlock = '# dotenv environment variable files\n.env\n.env.*\n!.env.example\n';
+
+  it('creates a fresh `.gitignore` with default entries when none exists', () => {
+    ensureDefaultGitignoreEntries(projectDir);
+    expect(gitignore()).toBe(`node_modules\n\n${dotenvBlock}`);
   });
 
-  it('appends `node_modules` to an existing `.gitignore` that omits it', () => {
+  it('appends default entries to an existing `.gitignore` that omits them', () => {
     fs.writeFileSync(path.join(projectDir, '.gitignore'), 'dist\n*.log\n');
-    ensureGitignoreNodeModules(projectDir);
-    expect(gitignore()).toBe('dist\n*.log\nnode_modules\n');
+    ensureDefaultGitignoreEntries(projectDir);
+    expect(gitignore()).toBe(`dist\n*.log\nnode_modules\n\n${dotenvBlock}`);
   });
 
   it('terminates the last line first when the existing file lacks a trailing newline', () => {
     fs.writeFileSync(path.join(projectDir, '.gitignore'), 'dist');
-    ensureGitignoreNodeModules(projectDir);
-    expect(gitignore()).toBe('dist\nnode_modules\n');
+    ensureDefaultGitignoreEntries(projectDir);
+    expect(gitignore()).toBe(`dist\nnode_modules\n\n${dotenvBlock}`);
   });
 
-  it('is a no-op when `node_modules` already appears as a standalone line', () => {
+  it('appends dotenv entries when `node_modules` already appears as a standalone line', () => {
     const existing = '# Logs\n*.log\nnode_modules\ndist\n';
     fs.writeFileSync(path.join(projectDir, '.gitignore'), existing);
-    ensureGitignoreNodeModules(projectDir);
-    expect(gitignore()).toBe(existing);
+    ensureDefaultGitignoreEntries(projectDir);
+    expect(gitignore()).toBe(`${existing}\n${dotenvBlock}`);
   });
 
   it('treats `node_modules/` (with trailing slash) as a match', () => {
     const existing = 'node_modules/\ndist\n';
     fs.writeFileSync(path.join(projectDir, '.gitignore'), existing);
-    ensureGitignoreNodeModules(projectDir);
-    expect(gitignore()).toBe(existing);
+    ensureDefaultGitignoreEntries(projectDir);
+    expect(gitignore()).toBe(`${existing}\n${dotenvBlock}`);
   });
 
-  it('handles CRLF line endings without re-appending', () => {
-    const existing = 'node_modules\r\ndist\r\n';
+  it('handles CRLF line endings without re-appending existing defaults', () => {
+    const existing = `node_modules\r\ndist\r\n${dotenvBlock.replaceAll('\n', '\r\n')}`;
     fs.writeFileSync(path.join(projectDir, '.gitignore'), existing);
-    ensureGitignoreNodeModules(projectDir);
+    ensureDefaultGitignoreEntries(projectDir);
     expect(gitignore()).toBe(existing);
   });
 
   it('does not consider a `node_modules/sub` subpath as already excluded', () => {
     fs.writeFileSync(path.join(projectDir, '.gitignore'), 'node_modules/sub\n');
-    ensureGitignoreNodeModules(projectDir);
-    expect(gitignore()).toBe('node_modules/sub\nnode_modules\n');
+    ensureDefaultGitignoreEntries(projectDir);
+    expect(gitignore()).toBe(`node_modules/sub\nnode_modules\n\n${dotenvBlock}`);
   });
 
   it('does not match `!node_modules` (an explicit un-ignore override)', () => {
     fs.writeFileSync(path.join(projectDir, '.gitignore'), '!node_modules\n');
-    ensureGitignoreNodeModules(projectDir);
-    expect(gitignore()).toBe('!node_modules\nnode_modules\n');
+    ensureDefaultGitignoreEntries(projectDir);
+    expect(gitignore()).toBe(`!node_modules\nnode_modules\n\n${dotenvBlock}`);
+  });
+
+  it('adds only missing dotenv entries', () => {
+    fs.writeFileSync(
+      path.join(projectDir, '.gitignore'),
+      '# dotenv environment variable files\n.env\nnode_modules\n',
+    );
+    ensureDefaultGitignoreEntries(projectDir);
+    expect(gitignore()).toBe(
+      '# dotenv environment variable files\n.env\nnode_modules\n.env.*\n!.env.example\n',
+    );
+  });
+});
+
+describe('ensureGitignoreVsCodeEditorConfigs', () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-vscode-gitignore-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  function gitignore(): string {
+    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf-8');
+  }
+
+  function writeGitignore(content: string): void {
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), content);
+  }
+
+  function writeVsCodeSettings(): void {
+    fs.mkdirSync(path.join(projectDir, '.vscode'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, '.vscode', 'settings.json'), '{}\n');
+  }
+
+  const vscodeUnignoreBlock = '!.vscode/\n!.vscode/settings.json\n!.vscode/extensions.json\n';
+
+  it('unignores VS Code settings when `.vscode/*` is ignored', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n!.vscode/extensions.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(`.vscode/*\n!.vscode/extensions.json\n${vscodeUnignoreBlock}`);
+  });
+
+  it('unignores generated VS Code config files for root-anchored contents ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('/.vscode/*\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(`/.vscode/*\n${vscodeUnignoreBlock}`);
+  });
+
+  it('appends VS Code directory and config unignores for directory-level VS Code ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(`.vscode/\n${vscodeUnignoreBlock}`);
+  });
+
+  it('appends VS Code directory and config unignores for root-anchored directory-level VS Code ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('/.vscode\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(`/.vscode\n${vscodeUnignoreBlock}`);
+  });
+
+  it('appends VS Code config unignores after explicit VS Code settings ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n.vscode/settings.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(`.vscode/*\n.vscode/settings.json\n${vscodeUnignoreBlock}`);
+  });
+
+  it('appends VS Code config unignores after explicit VS Code extensions ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n/.vscode/extensions.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(`.vscode/*\n/.vscode/extensions.json\n${vscodeUnignoreBlock}`);
+  });
+
+  it('appends VS Code config unignores when all generated config files are explicitly ignored', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n.vscode/settings.json\n.vscode/extensions.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(
+      `.vscode/*\n.vscode/settings.json\n.vscode/extensions.json\n${vscodeUnignoreBlock}`,
+    );
+  });
+
+  it('appends the full block when settings are already unignored without the EOF block', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n!.vscode/settings.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(`.vscode/*\n!.vscode/settings.json\n${vscodeUnignoreBlock}`);
+  });
+
+  it('re-appends the full block when later ignore rules override generated config unignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('!.vscode/settings.json\n!.vscode/extensions.json\n.vscode/*\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(
+      `!.vscode/settings.json\n!.vscode/extensions.json\n.vscode/*\n${vscodeUnignoreBlock}`,
+    );
+  });
+
+  it('appends VS Code config unignores even without a broad VS Code ignore', () => {
+    writeVsCodeSettings();
+    writeGitignore('dist\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(`dist\n${vscodeUnignoreBlock}`);
+  });
+
+  it('does not create `.gitignore` when none exists', () => {
+    writeVsCodeSettings();
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(fs.existsSync(path.join(projectDir, '.gitignore'))).toBe(false);
+  });
+
+  it('does not change `.gitignore` when VS Code settings do not exist', () => {
+    const existing = '.vscode/*\n';
+    writeGitignore(existing);
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(existing);
+  });
+
+  it('terminates the last line before appending VS Code config unignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(`.vscode/*\n${vscodeUnignoreBlock}`);
+  });
+
+  it('is idempotent', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    const afterFirstRun = gitignore();
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(afterFirstRun);
   });
 });
 

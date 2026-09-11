@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_other_hook_tool"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "hooks should be skipped due to simple-git-hooks", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "lint-staged config, scripts, and simple-git-hooks config should all be preserved", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
+]

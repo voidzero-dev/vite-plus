@@ -1,0 +1,19 @@
+{
+  "name": "migration-upgrade-nested-vitest-override-npm",
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": {
+      "@vitest/runner": "4.0.0"
+    }
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.16.0",
+      "onFail": "download"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+[[case]]
+name = "command_dedupe_yarn4"
+vp = "global"
+steps = [
+  { argv = ["vp", "dedupe"], comment = "should dedupe dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "dedupe", "--check"], comment = "should check if deduplication would make changes" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "dedupe", "--", "--json"], comment = "support pass through arguments" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

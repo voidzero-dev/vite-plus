@@ -148,7 +148,7 @@ vp dedupe --check
 
 #### 1. Command Structure
 
-**File**: `crates/vite_task/src/lib.rs`
+**File**: `crates/vt/src/lib.rs`
 
 Add new command variant:
 
@@ -178,8 +178,8 @@ pub enum Commands {
 ```rust
 use std::{collections::HashMap, process::ExitStatus};
 
-use vite_error::Error;
-use vite_path::AbsolutePath;
+use vp_error::Error;
+use vt_path::AbsolutePath;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env, run_command,
@@ -266,16 +266,16 @@ pub mod dedupe;  // Add this line
 
 #### 3. Dedupe Command Implementation
 
-**File**: `crates/vite_task/src/dedupe.rs` (new file)
+**File**: `crates/vt/src/dedupe.rs` (new file)
 
 ```rust
-use vite_error::Error;
-use vite_path::AbsolutePathBuf;
+use vp_error::Error;
+use vt_path::AbsolutePathBuf;
 use vite_package_manager::{
     PackageManager,
     commands::dedupe::DedupeCommandOptions,
 };
-use vite_workspace::Workspace;
+use vt_workspace::Workspace;
 
 pub struct DedupeCommand {
     workspace_root: AbsolutePathBuf,

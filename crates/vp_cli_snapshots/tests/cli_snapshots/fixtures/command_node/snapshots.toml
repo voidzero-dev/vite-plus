@@ -1,0 +1,10 @@
+[[case]]
+name = "command_node"
+vp = "global"
+steps = [
+  { argv = ["vp", "node", "-v"], comment = "Shorthand: version resolved from package.json engines.node", continue-on-failure = true },
+  { argv = ["vp", "node", "script.js"], comment = "Execute a local JS file (primary use case)", continue-on-failure = true },
+  { argv = ["vp", "node", "script.js", "foo", "bar", "--flag"], comment = "Forward script args to the local file", continue-on-failure = true },
+  { argv = ["vp", "node", "-e", "console.log('Hello from vp node')"], comment = "Inline script via -e", continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "node", "-v"], comment = "Equivalence check: same output as shorthand", continue-on-failure = true },
+]

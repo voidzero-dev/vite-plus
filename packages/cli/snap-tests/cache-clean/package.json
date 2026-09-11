@@ -1,6 +1,0 @@
-{
-  "type": "module",
-  "scripts": {
-    "hello": "vp fmt"
-  }
-}

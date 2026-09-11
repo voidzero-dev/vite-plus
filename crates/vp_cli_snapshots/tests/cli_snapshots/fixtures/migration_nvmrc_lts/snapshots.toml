@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_nvmrc_lts"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should detect .nvmrc with lts alias and auto-migrate", continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".node-version"], comment = "check lts alias is preserved as-is", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".nvmrc", "--assert-not", "file"], comment = "check .nvmrc is removed", continue-on-failure = true },
+]

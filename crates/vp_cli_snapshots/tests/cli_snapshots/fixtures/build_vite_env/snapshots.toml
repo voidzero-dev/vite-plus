@@ -1,0 +1,11 @@
+# No skip-platforms here on purpose: the legacy case skipped win32, but the
+# reasons (shell env prefixes, eol-dependent content hashes) do not apply in
+# this runner, and the Windows CI job has validated the case since.
+[[case]]
+name = "build_vite_env"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "build"], envs = [["VITE_MY_VAR", "1"]] },
+  { argv = ["vp", "run", "build"], comment = "should hit cache", envs = [["VITE_MY_VAR", "1"]] },
+  { argv = ["vp", "run", "build"], comment = "env changed, should miss cache", envs = [["VITE_MY_VAR", "2"]] },
+]

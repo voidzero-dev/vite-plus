@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_inline_config_shorthand"
+vp = "local"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks"], comment = "must NOT duplicate fmt/lint already declared as shorthand properties (#1836)", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "fmt/lint stay as shorthand only, no injected inline fmt:/lint: blocks", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"], comment = "no standalone lint config generated", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"], comment = "no standalone fmt config generated", continue-on-failure = true },
+]

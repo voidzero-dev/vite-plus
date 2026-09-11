@@ -4,6 +4,10 @@ Vite+ is the unified toolchain and entry point for web development. It manages y
 
 Vite+ ships in two parts: `vp`, the global command-line tool, and `vite-plus`, the local package installed in each project. If you already have a Vite project, use [`vp migrate`](/guide/migrate) to migrate it to Vite+, or paste our [migration prompt](/guide/migrate#migration-prompt) into your coding agent.
 
+Building with an AI assistant? View and copy a ready-made setup prompt:
+
+<CopyPrompt />
+
 ## Install `vp`
 
 ### macOS / Linux
@@ -23,6 +27,8 @@ Alternatively, download and run [`vp-setup.exe`](https://setup.viteplus.dev).
 ::: tip SmartScreen warning
 The `vp-setup.exe` is not yet code-signed. Your browser may show a warning when downloading. Click **"..."** → **"Keep"** → **"Keep anyway"** to proceed. If Windows Defender SmartScreen blocks the file when you run it, click **"More info"** → **"Run anyway"**.
 :::
+
+The installer scripts and `vp-setup.exe` read [environment variables](/guide/installer-env-vars) such as `VP_VERSION` and `VP_HOME`.
 
 After installation, open a new shell and run:
 
@@ -86,10 +92,11 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 
 - [`vp create`](/guide/create) creates new apps, packages, and monorepos.
 - [`vp migrate`](/guide/migrate) moves existing projects onto Vite+.
-- [`vp config`](/guide/commit-hooks) configures commit hooks and agent integration.
+- [`vp config`](/guide/commit-hooks) installs the Git hook dispatcher and configures agent integration.
+- [`vp hooks`](/guide/commit-hooks) manages the Git hook dispatcher (`enable`, `disable`, `status`).
 - [`vp staged`](/guide/commit-hooks) runs checks on staged files.
 - [`vp install`](/guide/install) installs dependencies with the right package manager.
-- [`vp env`](/guide/env) manages Node.js versions.
+- [`vp env`](/guide/env) manages Node.js and package-manager environments.
 
 ### Develop
 
@@ -100,10 +107,11 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 ### Execute
 
 - [`vp run`](/guide/run) runs tasks across workspaces with caching.
+- [`vp exec`](/guide/vpx) runs local project binaries.
+- [`vp node`](/guide/env) runs Node.js scripts with the resolved Vite+ environment.
+- [`vp dlx`](/guide/vpx) downloads and runs package binaries without adding them as dependencies.
 - [`vp cache clean`](/guide/cache) clears task cache entries.
 - [`vpx`](/guide/vpx) downloads and runs binaries globally.
-- [`vp exec`](/guide/vpx) runs local project binaries.
-- [`vp dlx`](/guide/vpx) downloads and runs package binaries without adding them as dependencies.
 
 ### Build
 
@@ -113,11 +121,13 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 
 ### Manage Dependencies
 
-- [`vp add`](/guide/install), [`vp remove`](/guide/install), [`vp update`](/guide/install), [`vp dedupe`](/guide/install), [`vp outdated`](/guide/install), [`vp why`](/guide/install), and [`vp info`](/guide/install) wrap package-manager workflows.
+- [`vp add`](/guide/install), [`vp remove`](/guide/install), [`vp update`](/guide/install), [`vp dedupe`](/guide/install), [`vp outdated`](/guide/install), [`vp list`](/guide/install), [`vp why`](/guide/install), and [`vp info`](/guide/install) wrap package-manager workflows.
+- [`vp link`](/guide/install), [`vp unlink`](/guide/install), and [`vp rebuild`](/guide/install) cover local package links and native module rebuilds.
 - [`vp pm <command>`](/guide/install) calls other package manager commands directly.
 
 ### Maintain
 
+- [`vp toolchain`](/guide/upgrade#show-the-toolchain) shows the versions and relationships in the active Vite+ toolchain.
 - [`vp upgrade`](/guide/upgrade) updates the `vp` installation itself.
 - [`vp implode`](/guide/implode) removes `vp` and related Vite+ data from your machine.
 

@@ -1,0 +1,11 @@
+[[case]]
+name = "oxlint_typeaware"
+vp = "local"
+steps = [
+  { argv = ["vp", "run", "lint"], continue-on-failure = true },
+  { argv = ["vpt", "write-file", "types.ts", "export type Foo = number;\n//comment\n"], comment = "append //comment to types.ts", continue-on-failure = true },
+  { argv = ["vp", "run", "lint"], comment = "non-type-aware linting doesn't read types.ts", continue-on-failure = true },
+  { argv = ["vp", "run", "lint-typeaware"], continue-on-failure = true },
+  { argv = ["vpt", "write-file", "types.ts", "export type Foo = number;\n//comment\n//comment\n"], comment = "append another //comment to types.ts", continue-on-failure = true },
+  { argv = ["vp", "run", "lint-typeaware"], comment = "type-aware linting reads types.ts", continue-on-failure = true },
+]

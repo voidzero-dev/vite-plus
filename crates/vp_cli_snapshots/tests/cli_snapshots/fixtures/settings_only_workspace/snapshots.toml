@@ -1,0 +1,23 @@
+[[case]]
+name = "pack_in_place"
+vp = ["local", "global"]
+comment = """
+Regression guard for the vp-config e2e shape: a single package whose
+pnpm-workspace.yaml only carries settings (catalogs, minimumReleaseAge) is
+a workspace root whose only runnable candidate is itself. Bare vp pack must
+run in place, TTY or not, never print the target listing.
+"""
+steps = [{ argv = ["vp", "pack"], tty = false }]
+
+[[case]]
+name = "build_in_place"
+vp = ["local", "global"]
+comment = """
+A root-only workspace has no target ambiguity. Static extraction cannot see
+the build input that the plugin supplies. Bare vp build must run in place in
+a non-interactive terminal.
+"""
+steps = [
+  { argv = ["vp", "build"], tty = false, snapshot = false },
+  { argv = ["vpt", "list-dir", "dist/assets"], comment = "build output stays in the root workspace" },
+]

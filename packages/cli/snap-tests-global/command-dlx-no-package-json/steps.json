@@ -1,4 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": ["vp dlx -s cowsay hello # should work without package.json"]
-}

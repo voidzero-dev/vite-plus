@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  staged: {
+    '*.@(js|ts|tsx|md|yaml|yml)': 'vp check --fix',
+    '*.rs': 'cargo fmt --',
+  },
   lint: {
     options: {
       typeAware: true,
@@ -42,9 +46,8 @@ export default defineConfig({
       },
     ],
     ignorePatterns: [
-      '**/snap-tests/**',
-      '**/snap-tests-global/**',
-      '**/snap-tests-todo/**',
+      // PTY snapshot fixtures; also excluded in test/fmt below and tsconfig.json
+      'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       'packages/*/binding/**',
     ],
   },
@@ -54,7 +57,8 @@ export default defineConfig({
       './vite/**',
       './rolldown/**',
       '**/node_modules/**',
-      '**/snap-tests/**',
+      // PTY snapshot fixtures; also excluded in lint/fmt here and tsconfig.json
+      'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       // FIXME: Error: failed to prepare the command for injection: Invalid argument (os error 22)
       'packages/*/binding/__tests__/',
     ],
@@ -62,16 +66,9 @@ export default defineConfig({
   fmt: {
     ignorePatterns: [
       '**/tmp/**',
-      'packages/cli/snap-tests/check-*/**',
-      'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
-      'packages/cli/snap-tests-global/migration-lint-staged-ts-config',
+      // PTY snapshot fixtures; also excluded in lint/test above and tsconfig.json
+      'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       'ecosystem-ci/*/**',
-      'packages/test/**.cjs',
-      'packages/test/**.cts',
-      'packages/test/**.d.mjs',
-      'packages/test/**.d.ts',
-      'packages/test/**.mjs',
-      'packages/test/browser/',
       'packages/cli/src/run-config.ts',
       'vite',
       'rolldown',
@@ -96,21 +93,6 @@ export default defineConfig({
       ],
       newlinesBetween: true,
       order: 'asc',
-    },
-  },
-  run: {
-    tasks: {
-      'build:src': {
-        command: [
-          'vp run @rolldown/pluginutils#build',
-          'vp run rolldown#build-binding:release',
-          'vp run rolldown#build-node',
-          'vp run vite#build-types',
-          'vp run @voidzero-dev/vite-plus-core#build',
-          'vp run @voidzero-dev/vite-plus-test#build',
-          'vp run vite-plus#build',
-        ].join(' && '),
-      },
     },
   },
 });

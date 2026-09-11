@@ -1,14 +1,25 @@
 import path from 'node:path';
 
+import semver from 'semver';
+
 import { fetchNpmResource, getNpmRegistry } from '../utils/npm-config.ts';
+import { readPackageJsonFromTarball } from './org-tarball.ts';
 
 /**
- * A single entry in an org's template manifest.
+ * A single template entry shared by org manifests (`createConfig.templates`)
+ * and local monorepo config (`create.templates` in `vite.config.ts`).
  */
-export interface OrgTemplateEntry {
+export interface CreateTemplateEntry {
   name: string;
   description: string;
   template: string;
+}
+
+/**
+ * A single entry in an org's template manifest. Extends the shared
+ * {@link CreateTemplateEntry} with the org-only `monorepo` flag.
+ */
+export interface OrgTemplateEntry extends CreateTemplateEntry {
   monorepo?: boolean;
 }
 
@@ -90,48 +101,39 @@ export function isRelativePath(spec: string): boolean {
   return spec.startsWith('./') || spec.startsWith('../');
 }
 
-function validateEntry(entry: unknown, index: number, packageName: string): OrgTemplateEntry {
+/**
+ * Validate the `{ name, description, template }` fields shared by org manifest
+ * entries and local `create.templates` entries. `label` is the config path
+ * used in error messages (e.g. `createConfig.templates` or `create.templates`)
+ * and `makeError` builds the thrown error so each source uses its own type.
+ */
+export function validateTemplateEntry(
+  entry: unknown,
+  index: number,
+  label: string,
+  makeError: (message: string) => Error,
+): CreateTemplateEntry {
   if (!entry || typeof entry !== 'object') {
-    throw new OrgManifestSchemaError(
-      `createConfig.templates[${index}] must be an object`,
-      packageName,
-    );
+    throw makeError(`${label}[${index}] must be an object`);
   }
   const raw = entry as Record<string, unknown>;
   const requireString = (field: string): string => {
     const value = raw[field];
     if (typeof value !== 'string' || value.length === 0) {
-      throw new OrgManifestSchemaError(
-        `createConfig.templates[${index}].${field} must be a non-empty string`,
-        packageName,
-      );
+      throw makeError(`${label}[${index}].${field} must be a non-empty string`);
     }
     return value;
   };
   const name = requireString('name');
   // `__vp_` is reserved for internal sentinel values (e.g. the
   // org-picker's escape-hatch nonce in `org-picker.ts`). Reject the
-  // prefix at schema time so a manifest entry can never collide with
-  // those sentinels regardless of what the picker does internally.
+  // prefix at schema time so an entry can never collide with those
+  // sentinels regardless of what the picker does internally.
   if (name.startsWith('__vp_')) {
-    throw new OrgManifestSchemaError(
-      `createConfig.templates[${index}].name uses the reserved \`__vp_\` prefix`,
-      packageName,
-    );
+    throw makeError(`${label}[${index}].name uses the reserved \`__vp_\` prefix`);
   }
   const description = requireString('description');
   const template = requireString('template');
-
-  let monorepo: boolean | undefined;
-  if (raw.monorepo !== undefined) {
-    if (typeof raw.monorepo !== 'boolean') {
-      throw new OrgManifestSchemaError(
-        `createConfig.templates[${index}].monorepo must be a boolean`,
-        packageName,
-      );
-    }
-    monorepo = raw.monorepo;
-  }
 
   if (isRelativePath(template)) {
     // Defense-in-depth only: `resolveBundledPath` enforces the authoritative
@@ -139,19 +141,50 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
     // errors surface before any tarball download happens.
     const resolved = path.posix.resolve('/root', template.replaceAll('\\', '/'));
     if (resolved !== '/root' && !resolved.startsWith('/root/')) {
-      throw new OrgManifestSchemaError(
-        `createConfig.templates[${index}].template escapes the package root: ${template}`,
-        packageName,
-      );
+      throw makeError(`${label}[${index}].template escapes the package root: ${template}`);
     }
   }
 
-  return {
-    name,
-    description,
-    template,
-    ...(monorepo !== undefined ? { monorepo } : {}),
-  };
+  return { name, description, template };
+}
+
+/**
+ * Validate a list of entries, rejecting duplicate `name`s. Shared by org
+ * manifests and local `create.templates`.
+ */
+export function validateTemplateEntries<T extends CreateTemplateEntry>(
+  templates: readonly unknown[],
+  label: string,
+  makeError: (message: string) => Error,
+  validateOne: (entry: unknown, index: number) => T,
+): T[] {
+  const entries: T[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < templates.length; index += 1) {
+    const entry = validateOne(templates[index], index);
+    if (seen.has(entry.name)) {
+      throw makeError(`${label}[${index}].name duplicates an earlier entry: "${entry.name}"`);
+    }
+    seen.add(entry.name);
+    entries.push(entry);
+  }
+  return entries;
+}
+
+function validateEntry(entry: unknown, index: number, packageName: string): OrgTemplateEntry {
+  const makeError = (message: string) => new OrgManifestSchemaError(message, packageName);
+  const base = validateTemplateEntry(entry, index, 'createConfig.templates', makeError);
+
+  let monorepo: boolean | undefined;
+  const raw = entry as Record<string, unknown>;
+  if (raw.monorepo !== undefined) {
+    if (typeof raw.monorepo !== 'boolean') {
+      throw makeError(`createConfig.templates[${index}].monorepo must be a boolean`);
+    }
+    monorepo = raw.monorepo;
+  }
+
+  return { ...base, ...(monorepo !== undefined ? { monorepo } : {}) };
 }
 
 function validateManifest(raw: unknown, packageName: string): OrgTemplateEntry[] | null {
@@ -173,20 +206,48 @@ function validateManifest(raw: unknown, packageName: string): OrgTemplateEntry[]
     // Treat empty array as "no manifest" — fall through to normal @org/create behavior.
     return null;
   }
-  const entries: OrgTemplateEntry[] = [];
-  const seen = new Set<string>();
-  for (let index = 0; index < templates.length; index += 1) {
-    const entry = validateEntry(templates[index], index, packageName);
-    if (seen.has(entry.name)) {
-      throw new OrgManifestSchemaError(
-        `createConfig.templates[${index}].name duplicates an earlier entry: "${entry.name}"`,
-        packageName,
-      );
-    }
-    seen.add(entry.name);
-    entries.push(entry);
+  return validateTemplateEntries(
+    templates,
+    'createConfig.templates',
+    (message) => new OrgManifestSchemaError(message, packageName),
+    (entry, index) => validateEntry(entry, index, packageName),
+  );
+}
+
+/**
+ * Schema-level failure for `create.templates` in `vite.config.ts`. A misconfigured
+ * local template should surface clearly rather than silently disappear.
+ */
+export class CreateConfigSchemaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CreateConfigSchemaError';
   }
-  return entries;
+}
+
+/**
+ * Validate `create.templates` from `vite.config.ts`. Returns `[]` when the field
+ * is absent or an empty array; throws {@link CreateConfigSchemaError} when present
+ * but malformed.
+ */
+export function validateCreateTemplates(templates: unknown): CreateTemplateEntry[] {
+  if (templates === undefined) {
+    return [];
+  }
+  if (!Array.isArray(templates)) {
+    throw new CreateConfigSchemaError('create.templates must be an array');
+  }
+  const makeError = (message: string) => new CreateConfigSchemaError(message);
+  return validateTemplateEntries(templates, 'create.templates', makeError, (entry, index) => {
+    const validated = validateTemplateEntry(entry, index, 'create.templates', makeError);
+    // `vite:*` names are builtin templates; a local entry resolves before the
+    // builtin in `vp create <name>`, so allowing the prefix would let config
+    // silently shadow e.g. `vite:application`.
+    if (validated.name.startsWith('vite:')) {
+      throw makeError(`create.templates[${index}].name uses the reserved \`vite:\` prefix`);
+    }
+    return validated;
+  });
 }
 
 interface RegistryPackument {
@@ -233,6 +294,11 @@ async function fetchPackument(
  * - the package does not exist on the registry (404), or
  * - the package exists but has no `createConfig.templates` field
  *
+ * When the packument version metadata lacks `createConfig` entirely, the
+ * published tarball's package.json is consulted before giving up — some
+ * registries (GitHub Packages among them) strip custom fields from version
+ * metadata while preserving the tarball byte-for-byte.
+ *
  * Throws when:
  * - the `createConfig.templates` field is present but malformed (`OrgManifestSchemaError`), or
  * - the registry request fails for any non-404 reason
@@ -269,11 +335,34 @@ export async function readOrgManifest(
       return null;
     }
   }
+  // Registry versions become cache-path components, so reject malformed
+  // values even when the registry has matching version metadata.
+  if (semver.valid(resolvedVersion) === null) {
+    throw new OrgManifestSchemaError(
+      `invalid version "${resolvedVersion}" (expected a semantic version)`,
+      packageName,
+    );
+  }
   const meta = packument.versions?.[resolvedVersion];
   if (!meta) {
     return null;
   }
-  const templates = validateManifest(meta, packageName);
+  let templates = validateManifest(meta, packageName);
+  if (!templates && meta.createConfig === undefined && meta.dist?.tarball) {
+    // `createConfig` absent (not merely empty) means the registry either
+    // stripped it from the version metadata or the package has no manifest;
+    // probe the published tarball to tell the two apart (see
+    // `readPackageJsonFromTarball`). The probe is best-effort: any
+    // download/integrity/parse failure degrades to "no manifest" so a normal
+    // `@scope/create` package still reaches the passthrough path. A manifest
+    // that IS present but malformed still throws, because `validateManifest`
+    // runs outside the catch.
+    const packageJson = await readPackageJsonFromTarball(
+      meta.dist.tarball,
+      meta.dist.integrity,
+    ).catch(() => null);
+    templates = validateManifest(packageJson, packageName);
+  }
   if (!templates) {
     return null;
   }

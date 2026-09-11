@@ -1,0 +1,8 @@
+const externalOptions = ['foo'];
+
+export default {
+  pack: [
+    { external: externalOptions, skipNodeModulesBundle: true, bundle: false, dts: { tsgo: true } },
+    { external: externalOptions, deps: { skipNodeModulesBundle: true }, bundle: false },
+  ],
+};

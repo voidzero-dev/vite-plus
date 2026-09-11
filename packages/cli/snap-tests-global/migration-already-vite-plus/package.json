@@ -1,6 +1,0 @@
-{
-  "name": "migration-already-vite-plus",
-  "devDependencies": {
-    "vite-plus": "latest"
-  }
-}

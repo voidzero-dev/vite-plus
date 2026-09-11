@@ -1,0 +1,13 @@
+[[case]]
+name = "npm_global_uninstall_preexisting_binary"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "$VP_HOME/bin/npm-global-preexist-cli", "#!/bin/sh\necho preexisting-binary-works"], comment = "Create user-owned binary", continue-on-failure = true },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/bin/npm-global-preexist-cli"], continue-on-failure = true },
+  { argv = ["npm-global-preexist-cli"], comment = "Verify it works before", continue-on-failure = true },
+  { tty = false, argv = ["npm", "install", "-g", "./npm-global-preexist-pkg"], comment = "Install pkg that declares same bin name", continue-on-failure = true },
+  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-preexist-pkg"], comment = "Should NOT remove the pre-existing binary", continue-on-failure = true },
+  { argv = ["npm-global-preexist-cli"], comment = "Should still work", continue-on-failure = true },
+  { argv = ["vpt", "rm", "$VP_HOME/bin/npm-global-preexist-cli"], comment = "Cleanup", continue-on-failure = true },
+]

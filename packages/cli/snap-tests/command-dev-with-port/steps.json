@@ -1,6 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    "vp dev --port 12312312312 2>&1 | grep -E '(RangeError|No available ports)' # intentionally use an invalid port (exceeds 0-65535) to trigger port error"
-  ]
-}

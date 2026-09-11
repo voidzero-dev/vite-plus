@@ -1,0 +1,6 @@
+{
+  "name": "command-pm-approve-builds-npm12",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@12.0.2"
+}

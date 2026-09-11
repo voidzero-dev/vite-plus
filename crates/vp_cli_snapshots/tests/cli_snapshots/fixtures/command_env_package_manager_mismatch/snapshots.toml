@@ -1,0 +1,104 @@
+[[case]]
+name = "env_pin_warns_when_package_manager_differs"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vp", "env", "pin", "yarn@4.12.0", "--no-install", "--force"], comment = "an explicit project manager warns before a different manager is pinned" },
+]
+
+[[case]]
+name = "env_use_warns_when_package_manager_differs"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+env = { VP_ENV_USE_EVAL_ENABLE = "1" }
+steps = [
+  { argv = ["vp", "env", "use", "yarn@4.12.0", "--no-install"], comment = "an explicit project manager warns before a different session manager is used" },
+]
+
+[[case]]
+name = "env_use_does_not_warn_for_different_default"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+env = { VP_ENV_USE_EVAL_ENABLE = "1" }
+steps = [
+  { argv = ["vp", "env", "default", "pnpm@10.18.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-package-manager-mismatch\",\"private\":true}\n"], snapshot = false },
+  { argv = ["vp", "env", "use", "yarn@4.12.0", "--no-install"], comment = "a different fallback manager does not warn" },
+]
+
+[[case]]
+name = "env_pin_warns_for_lockfile_selection_offline"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-package-manager-mismatch\",\"private\":true}\n"], snapshot = false },
+  { argv = ["vpt", "touch-file", "pnpm-lock.yaml"], snapshot = false },
+  { argv = ["vp", "env", "pin", "yarn@4.12.0", "--no-install"], comment = "lockfile mismatch warning does not depend on registry resolution", envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]] },
+]
+
+[[case]]
+name = "env_node_list_ignores_package_manager_resolution"
+vp = "global"
+comment = "A component selector must not resolve excluded components or turn an unrelated local listing into network work."
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-package-manager-mismatch\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
+  { argv = ["vp", "env", "list", "node", "--json"], comment = "the node selector does not resolve an excluded package manager", envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]] },
+  { argv = ["vp", "env", "list-remote", "20.18.0", "--lts", "--json"], comment = "the implicit node selector does not resolve an excluded package manager", envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]] },
+]
+
+[[case]]
+name = "env_package_manager_list_ignores_other_family_resolution"
+vp = "global"
+comment = "A concrete family selector must not resolve the project-selected manager from another family."
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-package-manager-mismatch\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
+  { argv = ["vp", "env", "list", "yarn", "--json"], comment = "a package-manager selector does not resolve an excluded package-manager family", envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]] },
+]
+
+[[case]]
+name = "env_package_manager_list_stays_offline_for_selected_range"
+vp = "global"
+comment = "Local inventory must remain available offline even when marking the selected package-manager range requires best-effort resolution."
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"command-env-package-manager-mismatch\",\"private\":true,\"devEngines\":{\"packageManager\":{\"name\":\"pnpm\",\"version\":\"^10.0.0\"}}}\n"], snapshot = false },
+  { argv = ["vp", "env", "list", "pm", "--json"], comment = "local listing remains available when the selected range cannot reach the registry", envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]] },
+]
+
+[[case]]
+name = "env_package_manager_list_stays_offline_for_floating_default"
+vp = "global"
+comment = "Local inventory reuses the cached concrete result of a floating default instead of requiring registry access."
+local-registry = true
+seed-runtime = false
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vp", "env", "default", "pnpm@latest"], snapshot = false },
+  { argv = ["vp", "env", "list", "pnpm", "--json"], comment = "local listing remains available when a floating default cannot reach the registry", envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]] },
+]
+
+[[case]]
+name = "env_node_list_stays_offline_for_floating_default"
+vp = "global"
+comment = "Local Node.js inventory must not require mirror access merely to mark a floating default."
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "$VP_HOME/js_runtime/node/20.18.0/bin/node", "#!/bin/sh\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/config.json", "{\"defaultNodeVersion\":\"latest\"}\n"], snapshot = false },
+  { argv = ["vp", "env", "list", "node", "--json"], comment = "local Node.js listing remains available when a floating default cannot reach its mirror", envs = [["VP_NODE_DIST_MIRROR", "http://127.0.0.1:9"]] },
+]
+
+[[case]]
+name = "env_pin_package_manager_requires_confirmation"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "pipe-stdin", "n\n", "--", "vp", "env", "pin", "yarn@4.12.0", "--no-install"], comment = "declining the overwrite prompt preserves the existing package-manager pin" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "package.json was not rewritten" },
+]

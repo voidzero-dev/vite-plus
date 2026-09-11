@@ -19,6 +19,7 @@ export interface SelectKeyOptions<Value extends string> extends CommonOptions {
 }
 
 export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) => {
+  // eslint-disable-next-line unicorn/consistent-function-scoping -- kept inline for readability
   const withMarker = (marker: string, value: string) => {
     const lines = value.split('\n');
     if (lines.length === 1) {

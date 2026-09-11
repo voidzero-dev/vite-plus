@@ -1,0 +1,8 @@
+packages:
+  - .
+
+catalog:
+  vite-plus: 0.1.21
+  vite: npm:@voidzero-dev/vite-plus-core@0.1.21
+  vitest: 3.2.4
+  '@vitest/coverage-v8': 3.2.4
