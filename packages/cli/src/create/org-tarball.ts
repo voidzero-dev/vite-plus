@@ -29,12 +29,8 @@ export function sanitizeHostForPath(host: string): string {
  * guarantees `manifest.tarballUrl` is a valid URL, so any parse failure
  * here is a real bug worth surfacing.
  *
- * The result must stay beneath `cacheRoot`. `readOrgManifest` already
- * validates `manifest.version` as a semantic version; this containment
- * check keeps the same invariant at the sink, so a malformed
- * registry-controlled value (e.g. `..` segments) cannot place the
- * extraction outside the cache, even through a future caller that
- * skips validation.
+ * Check containment here as well, in case a caller skips the version
+ * validation in `readOrgManifest`.
  */
 export function resolveExtractionDir(cacheRoot: string, manifest: OrgManifest): string {
   const { host } = new URL(manifest.tarballUrl);
@@ -50,10 +46,6 @@ export function resolveExtractionDir(cacheRoot: string, manifest: OrgManifest): 
     throw new Error(`org template extraction path escapes the cache root: ${manifest.version}`);
   }
   return resolvedDir;
-}
-
-function getExtractionDir(manifest: OrgManifest): string {
-  return resolveExtractionDir(getCacheRoot(), manifest);
 }
 
 function parseIntegrity(integrity: string): { algorithm: string; expected: string } | null {
@@ -311,7 +303,7 @@ export async function cleanupStaleStagingDirs(destDir: string): Promise<void> {
  * cleans up and returns the existing directory.
  */
 export async function ensureOrgPackageExtracted(manifest: OrgManifest): Promise<string> {
-  const extractedRoot = getExtractionDir(manifest);
+  const extractedRoot = resolveExtractionDir(getCacheRoot(), manifest);
   if (fs.existsSync(path.join(extractedRoot, 'package.json'))) {
     return extractedRoot;
   }

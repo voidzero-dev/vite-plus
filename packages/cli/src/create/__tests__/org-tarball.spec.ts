@@ -103,17 +103,17 @@ function manifestFor(version: string): OrgManifest {
 describe('resolveExtractionDir', () => {
   const cacheRoot = path.resolve(os.tmpdir(), 'vp-cache-root');
 
-  it('places a valid version beneath the cache root', () => {
-    expect(resolveExtractionDir(cacheRoot, manifestFor('1.0.0'))).toBe(
-      path.join(cacheRoot, 'registry.npmjs.org', '@your-org', 'create', '1.0.0'),
-    );
-  });
+  it.each(['1.0.0', '0.0.0', '1.2.3', '2.0.0-beta.1', '10.20.30+build.5'])(
+    'places version %s beneath the cache root',
+    (version) => {
+      expect(resolveExtractionDir(cacheRoot, manifestFor(version))).toBe(
+        path.join(cacheRoot, 'registry.npmjs.org', '@your-org', 'create', version),
+      );
+    },
+  );
 
-  // The version sits four levels below the cache root
-  // (`<root>/<host>/<scope>/create/<version>`), so leaving the root takes
-  // at least four `..` segments; shallower values stay inside the root
-  // and are rejected by the semver check in `readOrgManifest` instead.
-  it.each([['../../../../outside'], ['../../../../../../outside-write'], ['/absolute']])(
+  // Escaping `<root>/<host>/<scope>/create` takes at least four `..` segments.
+  it.each(['../../../../outside', '../../../../../../outside-write', '/absolute'])(
     'rejects a version that escapes the cache root: %s',
     (version) => {
       expect(() => resolveExtractionDir(cacheRoot, manifestFor(version))).toThrow(
@@ -121,13 +121,6 @@ describe('resolveExtractionDir', () => {
       );
     },
   );
-
-  it('keeps strict-semver versions inside the cache root', () => {
-    for (const version of ['0.0.0', '1.2.3', '2.0.0-beta.1', '10.20.30+build.5']) {
-      const dir = resolveExtractionDir(cacheRoot, manifestFor(version));
-      expect(dir.startsWith(`${cacheRoot}${path.sep}`)).toBe(true);
-    }
-  });
 });
 
 describe('sanitizeHostForPath', () => {

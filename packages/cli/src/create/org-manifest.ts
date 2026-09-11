@@ -335,11 +335,8 @@ export async function readOrgManifest(
       return null;
     }
   }
-  // The registry controls both `dist-tags` and the `versions` map, so the
-  // resolved value is only as well-formed as the registry's metadata. The
-  // version later becomes a cache-path component (`resolveExtractionDir`),
-  // where `..` segments in a malformed value would place the extraction
-  // outside the cache root. Reject anything that is not a semantic version.
+  // Registry versions become cache-path components, so reject malformed
+  // values even when the registry has matching version metadata.
   if (semver.valid(resolvedVersion) === null) {
     throw new OrgManifestSchemaError(
       `invalid version "${resolvedVersion}" (expected a semantic version)`,

@@ -510,45 +510,29 @@ describe('readOrgManifest', () => {
     );
   });
 
-  it.each([['../../outside-write'], ['..'], ['.'], ['not-a-version']])(
-    'rejects a non-semver dist-tags.latest target: %s',
-    async (version) => {
-      // A registry can point `latest` at a non-semver string; the resolved
-      // version becomes a cache path component, so such a value must be
-      // rejected even when the packument is otherwise self-consistent.
-      const body = packument([
-        { name: 'web', description: 'v1', template: '@your-org/template-web' },
-      ]);
-      (body as { 'dist-tags': Record<string, string> })['dist-tags'].latest = version;
-      (body as { versions: Record<string, unknown> }).versions[version] = {
-        version,
-        dist: { tarball: TARBALL_URL, integrity: 'sha512-fake' },
-        createConfig: {
-          templates: [{ name: 'web', description: 'v1', template: '@your-org/template-web' }],
-        },
-      };
-      mockFetchJson(body);
-      await expect(readOrgManifest('@your-org')).rejects.toThrow(OrgManifestSchemaError);
-      await expect(readOrgManifest('@your-org')).rejects.toThrow(/invalid version/);
-    },
-  );
-
-  it('rejects a pinned version whose dist-tag target is not a semantic version', async () => {
-    // `vp create @scope@1.2.3` consults `dist-tags['1.2.3']` before the
-    // literal `versions['1.2.3']` entry, so a registry that defines a tag
-    // with that name can substitute a different target string.
+  it.each([
+    ['latest', '../../outside-write'],
+    ['latest', '..'],
+    ['latest', '.'],
+    ['latest', 'not-a-version'],
+    // A tag named like a pinned version can also substitute an invalid target.
+    ['1.2.3', '../../outside-write'],
+  ])('rejects a non-semver dist-tags.%s target: %s', async (tag, version) => {
     const body = packument([
       { name: 'web', description: 'v1', template: '@your-org/template-web' },
     ]);
-    (body as { 'dist-tags': Record<string, string> })['dist-tags']['1.2.3'] = '../../outside-write';
-    (body as { versions: Record<string, unknown> }).versions['../../outside-write'] = {
-      version: '../../outside-write',
-      dist: { tarball: TARBALL_URL, integrity: 'sha512-fake' },
-      createConfig: {
-        templates: [{ name: 'web', description: 'v1', template: '@your-org/template-web' }],
+    // Keep matching metadata so only the version validation rejects it.
+    mockFetchJson({
+      ...body,
+      'dist-tags': { ...body['dist-tags'], [tag]: version },
+      versions: {
+        ...body.versions,
+        [version]: { ...body.versions['1.0.0'], version },
       },
-    };
-    mockFetchJson(body);
-    await expect(readOrgManifest('@your-org', '1.2.3')).rejects.toThrow(/invalid version/);
+    });
+    const requestedVersion = tag === 'latest' ? undefined : tag;
+    const manifest = readOrgManifest('@your-org', requestedVersion);
+    await expect(manifest).rejects.toThrow(OrgManifestSchemaError);
+    await expect(manifest).rejects.toThrow(/invalid version/);
   });
 });
