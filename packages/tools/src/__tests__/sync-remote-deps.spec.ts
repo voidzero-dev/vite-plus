@@ -15,7 +15,7 @@ import {
 } from '../sync-remote-deps.ts';
 import { alignVendoredVitestDependencies } from '../vendored-vitest.mjs';
 
-describe('vendored Vitest v5 bridge', () => {
+describe('vendored Vitest dependency alignment', () => {
   test('can be imported from stdin without running the bootstrap', () => {
     const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-import-'));
     try {

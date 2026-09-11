@@ -28,8 +28,8 @@ export const REMOVED_VITEST_PACKAGES = new Set(['@vitest/runner', '@vitest/expec
  * @param {string} version
  */
 export function alignVendoredVitestDependencies(rootDir, version) {
-  // Vite's direct dependencies must match the root catalog for our build and
-  // integration tests. Leave Rolldown's test dependencies to its upstream repo.
+  // Keep Vite's direct dependencies aligned with the root catalog so sync-remote
+  // and CI use the same lockfile. Leave Rolldown's test dependencies to upstream.
   const packagesDir = join(rootDir, 'vite', 'packages');
   const dirs = [
     join(rootDir, 'vite'),

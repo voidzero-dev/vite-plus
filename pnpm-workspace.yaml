@@ -6,10 +6,6 @@ packages:
   - '!rolldown/packages/rollup-tests'
   - vite
   - vite/packages/*
-  - vite/packages/**/__tests__/**
-# Preserve upstream file: fixture copies instead of replacing them with links.
-# License and SSR externalization tests depend on the node_modules boundary.
-dedupeInjectedDeps: false
 catalog:
   '@babel/core': ^7.29.7
   '@babel/parser': ^7.29.8
