@@ -85,7 +85,11 @@ impl SubcommandResolver {
                     &owned_resolved_vite_config
                 };
 
-                if let (Some(_), Some(config_file)) =
+                if !args.iter().take_while(|arg| arg.as_str() != "--").any(|arg| {
+                    matches!(arg.as_str(), "-c" | "--config")
+                        || arg.starts_with("-c=")
+                        || arg.starts_with("--config=")
+                }) && let (Some(_), Some(config_file)) =
                     (&resolved_vite_config.lint, &resolved_vite_config.config_file)
                 {
                     args.insert(0, "-c".to_string());

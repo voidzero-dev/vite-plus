@@ -3805,6 +3805,9 @@ export declare function rewriteImportsInDirectory(
   oxlintOwnerDirs?: Array<string> | undefined | null,
 ): BatchRewriteResult;
 
+/** Rewrite Oxlint commands and strip config arguments referencing a config that will be merged. */
+export declare function rewriteOxlint(scriptsJson: string, oxlintConfigPath: string): string | null;
+
 /**
  * Rewrite Prettier scripts: rename `prettier` → `vp fmt` and strip Prettier-only flags.
  *
@@ -3828,7 +3831,6 @@ export declare function rewritePrettier(scriptsJson: string): string | null;
  *
  * * `scripts_json` - The scripts section of the package.json file as a JSON string
  * * `rules_yaml` - The ast-grep rules.yaml as a YAML string
- *
  * # Returns
  *
  * * `updated` - The updated scripts section of the package.json file as a JSON string, or `null` if no updates were made

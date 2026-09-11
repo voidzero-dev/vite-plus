@@ -32,9 +32,27 @@ const SHELL_CONTINUATION_KEYWORDS: &[&str] = &["then", "do", "else", "elif", "in
 /// Rewrite a shell script: find `source_command`, rename to `vp <subcommand>`,
 /// strip tool-specific flags, and normalize the output.
 pub fn rewrite_script(script: &str, config: &ScriptRewriteConfig) -> String {
+    rewrite_script_inner(script, config, None)
+}
+
+/// Rewrite a shell script, but only strip value flags whose value matches
+/// `matching_value`.
+pub fn rewrite_script_stripping_flags_with_matching_value(
+    script: &str,
+    config: &ScriptRewriteConfig,
+    matching_value: &str,
+) -> String {
+    rewrite_script_inner(script, config, Some(matching_value))
+}
+
+fn rewrite_script_inner(
+    script: &str,
+    config: &ScriptRewriteConfig,
+    value_to_strip: Option<&str>,
+) -> String {
     let rewritten_bunx =
-        rewrite_bunx_commands(script, |inner| rewrite_direct_script(inner, config));
-    rewrite_direct_script(&rewritten_bunx, config)
+        rewrite_bunx_commands(script, |inner| rewrite_direct_script(inner, config, value_to_strip));
+    rewrite_direct_script(&rewritten_bunx, config, value_to_strip)
 }
 
 /// Rename the removed tsdown copy flag only in `vp pack` invocations. The
@@ -98,7 +116,11 @@ fn rewrite_direct_pack_flags(script: &str) -> String {
     }
 }
 
-fn rewrite_direct_script(script: &str, config: &ScriptRewriteConfig) -> String {
+fn rewrite_direct_script(
+    script: &str,
+    config: &ScriptRewriteConfig,
+    value_to_strip: Option<&str>,
+) -> String {
     let mut parser = brush_parser::Parser::new(
         script.as_bytes(),
         &brush_parser::ParserOptions::default(),
@@ -108,15 +130,21 @@ fn rewrite_direct_script(script: &str, config: &ScriptRewriteConfig) -> String {
         return script.to_owned();
     };
 
-    if !rewrite_in_program(&mut program, config) {
+    if !rewrite_in_program(&mut program, config, value_to_strip) {
         return script.to_owned();
     }
     let output = normalize_pipe_spacing(&program.to_string());
     collapse_newlines(&output)
 }
 
-fn rewrite_in_program(program: &mut ast::Program, config: &ScriptRewriteConfig) -> bool {
-    visit_simple_commands(program, &mut |cmd| rewrite_in_simple_command(cmd, config))
+fn rewrite_in_program(
+    program: &mut ast::Program,
+    config: &ScriptRewriteConfig,
+    value_to_strip: Option<&str>,
+) -> bool {
+    visit_simple_commands(program, &mut |cmd| {
+        rewrite_in_simple_command(cmd, config, value_to_strip)
+    })
 }
 
 fn visit_simple_commands(
@@ -449,7 +477,11 @@ fn make_suffix_word(value: &str) -> ast::CommandPrefixOrSuffixItem {
     ast::CommandPrefixOrSuffixItem::Word(ast::Word { value: value.to_owned(), loc: None })
 }
 
-fn rewrite_in_simple_command(cmd: &mut ast::SimpleCommand, config: &ScriptRewriteConfig) -> bool {
+fn rewrite_in_simple_command(
+    cmd: &mut ast::SimpleCommand,
+    config: &ScriptRewriteConfig,
+    value_to_strip: Option<&str>,
+) -> bool {
     let cmd_name = cmd.word_or_name.as_ref().map(|w| w.value.as_str());
 
     if cmd_name == Some(config.source_command) {
@@ -463,18 +495,22 @@ fn rewrite_in_simple_command(cmd: &mut ast::SimpleCommand, config: &ScriptRewrit
                     Some(ast::CommandSuffix(vec![make_suffix_word(config.target_subcommand)]));
             }
         }
-        strip_flags_from_suffix(cmd, 1, config);
+        strip_flags_from_suffix(cmd, 1, config, value_to_strip);
         return true;
     }
 
     if cmd_name == Some("cross-env") || cmd_name == Some("cross-env-shell") {
-        return rewrite_in_cross_env(cmd, config);
+        return rewrite_in_cross_env(cmd, config, value_to_strip);
     }
 
     false
 }
 
-fn rewrite_in_cross_env(cmd: &mut ast::SimpleCommand, config: &ScriptRewriteConfig) -> bool {
+fn rewrite_in_cross_env(
+    cmd: &mut ast::SimpleCommand,
+    config: &ScriptRewriteConfig,
+    value_to_strip: Option<&str>,
+) -> bool {
     let suffix = match &mut cmd.suffix {
         Some(s) => s,
         None => return false,
@@ -492,7 +528,7 @@ fn rewrite_in_cross_env(cmd: &mut ast::SimpleCommand, config: &ScriptRewriteConf
     }
     suffix.0.insert(idx + 1, make_suffix_word(config.target_subcommand));
 
-    strip_flags_from_suffix(cmd, idx + 2, config);
+    strip_flags_from_suffix(cmd, idx + 2, config, value_to_strip);
     true
 }
 
@@ -503,10 +539,11 @@ fn strip_flags_from_suffix(
     cmd: &mut ast::SimpleCommand,
     start_idx: usize,
     config: &ScriptRewriteConfig,
+    value_to_strip: Option<&str>,
 ) {
     let suffix = cmd.suffix.as_mut().expect("suffix was just set");
     let items = std::mem::take(&mut suffix.0);
-    let mut iter = items.into_iter().enumerate();
+    let mut iter = items.into_iter().enumerate().peekable();
 
     // Keep items before start_idx unconditionally
     for (i, item) in iter.by_ref() {
@@ -516,15 +553,16 @@ fn strip_flags_from_suffix(
         }
     }
 
-    let mut skip_next = false;
     // One dedup tracker per flag conversion rule (no allocation when empty)
     let mut conversion_emitted = vec![false; config.flag_conversions.len()];
+    let value_matches = |value: &str, expected: &str| {
+        let value = value.trim_matches(['\'', '"']);
+        value == expected
+            || value.strip_prefix("./") == Some(expected)
+            || value.strip_prefix(".\\") == Some(expected)
+    };
 
-    for (_, item) in iter {
-        if skip_next {
-            skip_next = false;
-            continue;
-        }
+    while let Some((_, item)) = iter.next() {
         if let ast::CommandPrefixOrSuffixItem::Word(ref w) = item {
             let val = w.value.as_str();
 
@@ -536,14 +574,23 @@ fn strip_flags_from_suffix(
             // Value flags: --flag=value form
             if let Some(eq_pos) = val.find('=')
                 && config.value_flags.contains(&&val[..eq_pos])
+                && value_to_strip.is_none_or(|expected| value_matches(&val[eq_pos + 1..], expected))
             {
                 continue;
             }
 
             // Value flags: --flag value form (strip flag + next token)
             if config.value_flags.contains(&val) {
-                skip_next = true;
-                continue;
+                let should_strip = value_to_strip.is_none_or(|expected| {
+                    iter.peek().is_some_and(|(_, item)| {
+                        matches!(item, ast::CommandPrefixOrSuffixItem::Word(word)
+                            if value_matches(&word.value, expected))
+                    })
+                });
+                if should_strip {
+                    iter.next();
+                    continue;
+                }
             }
 
             // Flag conversions + dedup tracking in a single pass

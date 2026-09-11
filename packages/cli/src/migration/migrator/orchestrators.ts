@@ -4,6 +4,7 @@ import path from 'node:path';
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME, VITE_PLUS_VERSION, isForceOverrideMode } from '../../utils/constants.ts';
 import { editJsonFile } from '../../utils/json.ts';
+import { detectConfigs } from '../detector.ts';
 import {
   applyBuildAllowanceToPackageJsonPnpm,
   applyYarnWorkspaceHoistingFix,
@@ -76,6 +77,7 @@ export function rewriteStandaloneProject(
   }
 
   const packageManager = workspaceInfo.packageManager;
+  const oxlintConfigPath = detectConfigs(projectPath).oxlintConfig;
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
@@ -254,6 +256,7 @@ export function rewriteStandaloneProject(
       retainedVitestModule,
       requiredVitestPeer,
       providerCatalogAdditions,
+      oxlintConfigPath,
     );
 
     // ensure vite-plus is in devDependencies — but only when it isn't already a
@@ -509,6 +512,7 @@ export function rewriteMonorepoProject(
   // catalog entry rather than pin a concrete version. See #2005.
   providerCatalogAdditions: ReadonlySet<string> = new Set(),
 ): void {
+  const oxlintConfigPath = detectConfigs(projectPath).oxlintConfig;
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   rewriteTsconfigTypes(projectPath, silent, report);
   mergeViteConfigFiles(
@@ -567,6 +571,7 @@ export function rewriteMonorepoProject(
       retainedVitestModule,
       requiredVitestPeer,
       providerCatalogAdditions,
+      oxlintConfigPath,
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own

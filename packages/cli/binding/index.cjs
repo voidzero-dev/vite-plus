@@ -976,6 +976,7 @@ module.exports.parseMigrateArgs = nativeBinding.parseMigrateArgs;
 module.exports.parseStagedArgs = nativeBinding.parseStagedArgs;
 module.exports.rewriteEslint = nativeBinding.rewriteEslint;
 module.exports.rewriteImportsInDirectory = nativeBinding.rewriteImportsInDirectory;
+module.exports.rewriteOxlint = nativeBinding.rewriteOxlint;
 module.exports.rewritePrettier = nativeBinding.rewritePrettier;
 module.exports.rewriteScripts = nativeBinding.rewriteScripts;
 module.exports.run = nativeBinding.run;

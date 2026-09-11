@@ -7,13 +7,34 @@ use crate::{
     ast_grep,
     eslint::rewrite_eslint_script,
     prettier::rewrite_prettier_script,
-    script_rewrite::{rewrite_bunx_commands, rewrite_pack_flags},
+    script_rewrite::{
+        ScriptRewriteConfig, rewrite_bunx_commands, rewrite_pack_flags,
+        rewrite_script_stripping_flags_with_matching_value,
+    },
 };
 
 // Marker to replace "cross-env " before ast-grep processing
 // Using a fake env var assignment that won't match our rules
 const CROSS_ENV_MARKER: &str = "__CROSS_ENV__=1 ";
 const CROSS_ENV_REPLACEMENT: &str = "cross-env ";
+
+/// Rewrite Oxlint commands and strip config arguments referencing the migrated config.
+fn rewrite_oxlint_script(script: &str, oxlint_config_path: &str) -> String {
+    if !script.contains("oxlint") {
+        return script.to_owned();
+    }
+    rewrite_script_stripping_flags_with_matching_value(
+        script,
+        &ScriptRewriteConfig {
+            source_command: "oxlint",
+            target_subcommand: "lint",
+            boolean_flags: &[],
+            value_flags: &["-c", "--config"],
+            flag_conversions: &[],
+        },
+        oxlint_config_path,
+    )
+}
 
 /// rewrite a single script command string using rules
 fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
@@ -100,10 +121,18 @@ pub fn rewrite_prettier(scripts_json: &str) -> Result<Option<String>, Error> {
     transform_scripts_json(scripts_json, rewrite_prettier_script)
 }
 
-/// rewrite scripts json content using rules from `rules_yaml`
+/// Rewrite Oxlint commands and strip config arguments referencing a config that will be merged.
+pub fn rewrite_oxlint(
+    scripts_json: &str,
+    oxlint_config_path: &str,
+) -> Result<Option<String>, Error> {
+    transform_scripts_json(scripts_json, |script| rewrite_oxlint_script(script, oxlint_config_path))
+}
+
+/// Rewrite scripts json content using rules from `rules_yaml`.
 pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<String>, Error> {
     let rules = ast_grep::load_rules(rules_yaml)?;
-    transform_scripts_json(scripts_json, |raw_script| rewrite_script(raw_script, &rules))
+    transform_scripts_json(scripts_json, |script| rewrite_script(script, &rules))
 }
 
 #[cfg(test)]
@@ -390,6 +419,50 @@ fix: vp pack
         assert_eq!(rewrite_script("husky", &rules), "husky");
         assert_eq!(rewrite_script("husky install", &rules), "husky install");
         assert_eq!(rewrite_script("husky || true", &rules), "husky || true");
+    }
+
+    #[test]
+    fn test_rewrite_script_with_oxlint_config() {
+        let rules = ast_grep::load_rules(RULES_YAML).unwrap();
+        for (input, expected) in [
+            // Basic cases
+            ("oxlint -c .oxlintrc.json", "vp lint"),
+            ("oxlint -c=.oxlintrc.json", "vp lint"),
+            ("oxlint --config .oxlintrc.json", "vp lint"),
+            ("oxlint --config=.oxlintrc.json", "vp lint"),
+            // With quotes
+            ("oxlint -c \"./.oxlintrc.json\"", "vp lint"),
+            ("oxlint -c=\"./.oxlintrc.json\"", "vp lint"),
+            ("oxlint --config \"./.oxlintrc.json\"", "vp lint"),
+            ("oxlint --config=\"./.oxlintrc.json\"", "vp lint"),
+            ("oxlint -c './.oxlintrc.json'", "vp lint"),
+            ("oxlint -c='./.oxlintrc.json'", "vp lint"),
+            ("oxlint --config './.oxlintrc.json'", "vp lint"),
+            ("oxlint --config='./.oxlintrc.json'", "vp lint"),
+            // With custom file
+            ("oxlint -c custom.json", "vp lint -c custom.json"),
+            ("oxlint -c=custom.json", "vp lint -c=custom.json"),
+            ("oxlint --config custom.json", "vp lint --config custom.json"),
+            ("oxlint --config=custom.json", "vp lint --config=custom.json"),
+            // With combined flags
+            ("oxlint -c .oxlintrc.json --fix", "vp lint --fix"),
+            ("oxlint -c .oxlintrc.json --type-aware", "vp lint --type-aware"),
+            ("oxlint -c .oxlintrc.json --fix --type-aware", "vp lint --fix --type-aware"),
+            ("oxlint --config .oxlintrc.json --fix", "vp lint --fix"),
+            ("oxlint --config .oxlintrc.json --type-aware", "vp lint --type-aware"),
+            ("oxlint --config .oxlintrc.json --fix --type-aware", "vp lint --fix --type-aware"),
+            // With combined commands
+            ("oxlint -c .oxlintrc.json --fix && pnpm run test", "vp lint --fix && pnpm run test"),
+            ("cross-env MODE=test oxlint -c .oxlintrc.json", "cross-env MODE=test vp lint"),
+            ("bunx --bun oxlint --config=./.oxlintrc.json", "bunx --bun vp lint"),
+            // With a Windows path separator
+            ("oxlint -c .\\.oxlintrc.json", "vp lint"),
+        ] {
+            assert_eq!(
+                rewrite_script(&rewrite_oxlint_script(input, ".oxlintrc.json"), &rules),
+                expected
+            );
+        }
     }
 
     #[test]

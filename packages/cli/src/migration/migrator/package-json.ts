@@ -1,4 +1,4 @@
-import { rewriteScripts } from '../../../binding/index.js';
+import { rewriteOxlint, rewriteScripts } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.ts';
 import {
   VITEST_VERSION,
@@ -72,12 +72,16 @@ export function rewritePackageJson(
   // one only through source/a shim). An already-installed copy of such a provider
   // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
   providerCatalogAdditions: ReadonlySet<string> = new Set(),
+  // Strip -c/--config when it points to the Oxlint config being merged into
+  // vite.config.ts. Custom config paths remain in package scripts.
+  oxlintConfigPath?: string,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
-    const updated = rewriteScripts(
-      JSON.stringify(pkg.scripts),
-      getScriptRulesYaml(skipStagedMigration),
-    );
+    const scriptsJson = JSON.stringify(pkg.scripts);
+    const oxlintUpdated = oxlintConfigPath ? rewriteOxlint(scriptsJson, oxlintConfigPath) : null;
+    const updated =
+      rewriteScripts(oxlintUpdated ?? scriptsJson, getScriptRulesYaml(skipStagedMigration)) ??
+      oxlintUpdated;
     if (updated) {
       pkg.scripts = JSON.parse(updated);
     }
