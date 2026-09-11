@@ -344,7 +344,7 @@ jobs:
           - name: yaak
             node-version: 24
             command: |
-              vp fmt --ignore-path .oxfmtignore
+              vp fmt
               # FIXME: type-aware lint fails with "Invalid tsconfig" without full Rust/wasm bootstrap
               vp lint || true
               vp test
