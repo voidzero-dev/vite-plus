@@ -38,7 +38,7 @@ Keep lint and format settings in the root `vite.config.ts`. Use [`lint.overrides
 
 For IDE integration, we have `disableNestedConfig` and `fmt.disableNestedConfig` config to disable nested lint and format configs and keep editor behavior aligned with the root Vite+ config. See [IDE Integration](/guide/ide-integration) for setup instructions for your editor.
 
-Do you need nested configs? [Share your use case and opinion on GitHub](#asking-for-help), including your project structure, the reason why you want them and whether root-level overrides meet your needs.
+Do you need nested configs? [Share your use case and opinion on GitHub](https://github.com/voidzero-dev/vite-plus/discussions/2669), including your project structure, the reason why you want them and whether root-level overrides meet your needs.
 
 We sincerely hope to hear your feedback. This will help us decide whether to improve the current situation in the future.
 
