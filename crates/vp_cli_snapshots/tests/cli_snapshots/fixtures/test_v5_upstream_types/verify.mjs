@@ -27,7 +27,7 @@ for (const browserFirst of [true, false]) {
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile.bind(host);
   host.getSourceFile = (name, language, ...rest) =>
-    name === file
+    name.replaceAll('\\', '/') === file.replaceAll('\\', '/')
       ? ts.createSourceFile(name, source, language, true)
       : getSourceFile(name, language, ...rest);
   const program = ts.createProgram([file], options, host);

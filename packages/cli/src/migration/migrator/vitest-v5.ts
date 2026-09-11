@@ -155,6 +155,7 @@ function lockedSourceVersion(
   root: string,
   pkg: Record<string, unknown>,
   manager?: PackageManager,
+  expectedRunnerPackage?: string,
 ): string | undefined {
   if (manager !== undefined && manager !== PackageManager.pnpm) {
     return undefined;
@@ -190,6 +191,13 @@ function lockedSourceVersion(
     const follow = (name: string, value: unknown, depth = 0): string | undefined => {
       const reference = typeof value === 'string' ? value : record(value)?.version;
       if (typeof reference !== 'string' || depth > 3) {
+        return undefined;
+      }
+      if (
+        name === 'vitest' &&
+        expectedRunnerPackage &&
+        !reference.startsWith(`${expectedRunnerPackage}@`)
+      ) {
         return undefined;
       }
       if (reference.startsWith(`${LEGACY_RUNNER}@`)) {
@@ -238,9 +246,13 @@ function unambiguousRunnerVersion(range: string): string | undefined {
   return semver.minVersion(range)?.version;
 }
 
-function installedSourceVersion(directory: string, name: string): string | undefined {
+function installedSourceVersion(
+  directory: string,
+  name: string,
+  expectedPackage?: string,
+): string | undefined {
   const installed = detectPackageMetadata(directory, name);
-  if (!installed) {
+  if (!installed || (expectedPackage && installed.name !== expectedPackage)) {
     return undefined;
   }
   if (installed.name === 'vitest') {
@@ -287,7 +299,10 @@ function sourceVersion(
       return bundled;
     }
   }
-  const locked = lockedSourceVersion(directory, root, pkg, manager);
+  // A stale install or catalog lock entry can still resolve upstream Vitest
+  // under this name. Its version is not evidence for the declared wrapper.
+  const expectedRunnerPackage = legacyAlias ? LEGACY_RUNNER : undefined;
+  const locked = lockedSourceVersion(directory, root, pkg, manager, expectedRunnerPackage);
   if (
     locked &&
     (!spec ||
@@ -297,7 +312,7 @@ function sourceVersion(
   ) {
     return locked;
   }
-  const installed = installedSourceVersion(directory, 'vitest');
+  const installed = installedSourceVersion(directory, 'vitest', expectedRunnerPackage);
   if (
     installed &&
     (!spec || legacyAlias || semver.satisfies(installed, spec, { includePrerelease: true }))

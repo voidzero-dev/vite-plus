@@ -40,7 +40,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import {
   createServer,
@@ -546,6 +546,8 @@ function buildRegistryEnv(registry: string): Record<string, string> {
   const bunCacheRoot =
     process.platform === 'win32' && process.env.CI != null ? homedir() : tmpdir();
   const bunCacheDir = mkdtempSync(path.join(bunCacheRoot, 'vp-local-registry-bun-'));
+  const bunTempDir = path.join(bunCacheDir, '.tmp');
+  mkdirSync(bunTempDir);
   return {
     NPM_CONFIG_REGISTRY: registry,
     npm_config_registry: registry,
@@ -559,7 +561,10 @@ function buildRegistryEnv(registry: string): Record<string, string> {
     npm_config_noproxy: noProxy,
     YARN_GLOBAL_FOLDER: mkdtempSync(path.join(tmpdir(), 'vp-local-registry-yarn-')),
     BUN_INSTALL_CACHE_DIR: bunCacheDir,
-    BUN_TMPDIR: path.join(bunCacheDir, '.tmp'),
+    BUN_TMPDIR: bunTempDir,
+    // bunx uses the platform temp directory, not BUN_TMPDIR. Its lockfiles
+    // must not retain tarball URLs for a previous run's closed registry.
+    TMPDIR: bunTempDir,
   };
 }
 

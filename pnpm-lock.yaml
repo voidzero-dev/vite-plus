@@ -118,8 +118,8 @@ catalogs:
       specifier: 5.0.0
       version: 5.0.0
     '@vitest/browser-webdriverio':
-      specifier: 5.0.0-rc.1
-      version: 5.0.0-rc.1
+      specifier: 5.0.0
+      version: 5.0.0
     '@vitest/mocker':
       specifier: 5.0.0
       version: 5.0.0
@@ -334,7 +334,7 @@ importers:
         version: link:packages/cli
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
 
   packages/cli:
     dependencies:
@@ -379,7 +379,7 @@ importers:
         version: link:../core
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
     devDependencies:
       '@babel/parser':
         specifier: 'catalog:'
@@ -419,7 +419,7 @@ importers:
         version: 5.0.0(playwright@1.62.1)(vite@packages+core)(vitest@5.0.0)
       '@vitest/browser-webdriverio':
         specifier: 'catalog:'
-        version: 5.0.0-rc.1(vite@packages+core)(vitest@5.0.0)(webdriverio@9.20.1(supports-color@8.1.1))
+        version: 5.0.0(vite@packages+core)(vitest@5.0.0)(webdriverio@9.20.1(supports-color@8.1.1))
       '@voidzero-dev/vite-plus-prompts':
         specifier: workspace:*
         version: link:../prompts
@@ -659,7 +659,7 @@ importers:
         version: 7.8.5
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
       yaml:
         specifier: 'catalog:'
         version: 2.9.0
@@ -859,7 +859,7 @@ importers:
         version: link:../../../../packages/core
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
     devDependencies:
       '@jridgewell/trace-mapping':
         specifier: 'catalog:'
@@ -954,7 +954,7 @@ importers:
         version: 6.1.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
       ws:
         specifier: 'catalog:'
         version: 8.21.1
@@ -1069,7 +1069,7 @@ importers:
         version: link:../packages/core
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+        version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
 
   vite/packages/create-vite:
     devDependencies:
@@ -5010,11 +5010,11 @@ packages:
     peerDependencies:
       vitest: 5.0.0
 
-  '@vitest/browser-webdriverio@5.0.0-rc.1':
-    resolution: {integrity: sha512-drDDPcIu4pMJgp4EwaAmEgcxMVF6SvFvspL+1UAS7nIvfwPyBdb3ERU1C6eufDZtxN7Yeh9Dsq5Flad9hlAJxQ==}
-    engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
+  '@vitest/browser-webdriverio@5.0.0':
+    resolution: {integrity: sha512-faotr4XiQrpK7yK+GTSWTA2pYSPFMZZA+fXx0rtKh9mvAjCMBM0Q2UJ5NIv6o5Oqkn2CASIrKnePaC/37judJA==}
+    engines: {node: ^22.12.0 || ^24.0.0 || >=26.0.0}
     peerDependencies:
-      vitest: ^5.0.0-beta.5
+      vitest: ^5.0.0
       webdriverio: '*'
 
   '@vitest/browser@5.0.0':
@@ -12174,7 +12174,7 @@ snapshots:
       '@vitest/mocker': 5.0.0(vite@packages+core)
       playwright: 1.62.1
       tinyrainbow: 3.1.1
-      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
     transitivePeerDependencies:
       - bufferutil
       - msw
@@ -12186,17 +12186,17 @@ snapshots:
       '@testing-library/dom': 10.4.1
       '@testing-library/user-event': 14.6.7(@testing-library/dom@10.4.1)
       '@vitest/browser': 5.0.0(vite@packages+core)(vitest@5.0.0)
-      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
     transitivePeerDependencies:
       - bufferutil
       - msw
       - utf-8-validate
       - vite
 
-  '@vitest/browser-webdriverio@5.0.0-rc.1(vite@packages+core)(vitest@5.0.0)(webdriverio@9.20.1(supports-color@8.1.1))':
+  '@vitest/browser-webdriverio@5.0.0(vite@packages+core)(vitest@5.0.0)(webdriverio@9.20.1(supports-color@8.1.1))':
     dependencies:
       '@vitest/browser': 5.0.0(vite@packages+core)(vitest@5.0.0)
-      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
       webdriverio: 9.20.1(supports-color@8.1.1)
     transitivePeerDependencies:
       - bufferutil
@@ -12214,7 +12214,7 @@ snapshots:
       pngjs: 7.0.0
       sirv: 3.0.2(patch_hash=c07c56eb72faea34341d465cde2314e89db472106ed378181e3447893af6bf95)
       tinyrainbow: 3.1.1
-      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
       ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
@@ -12252,7 +12252,7 @@ snapshots:
       pathe: 2.0.3
       sirv: 3.0.2(patch_hash=c07c56eb72faea34341d465cde2314e89db472106ed378181e3447893af6bf95)
       tinyrainbow: 3.1.1
-      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
+      vitest: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
 
   '@vitest/utils@5.0.0':
     dependencies:
@@ -15893,7 +15893,7 @@ snapshots:
 
   verkit@0.4.0: {}
 
-  vitest@5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core):
+  vitest@5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.0.0(vite@packages+core)
@@ -15915,14 +15915,14 @@ snapshots:
       '@types/node': 24.10.3
       '@vitest/browser-playwright': 5.0.0(playwright@1.62.1)(vite@packages+core)(vitest@5.0.0)
       '@vitest/browser-preview': 5.0.0(vite@packages+core)(vitest@5.0.0)
-      '@vitest/browser-webdriverio': 5.0.0-rc.1(vite@packages+core)(vitest@5.0.0)(webdriverio@9.20.1(supports-color@8.1.1))
+      '@vitest/browser-webdriverio': 5.0.0(vite@packages+core)(vitest@5.0.0)(webdriverio@9.20.1(supports-color@8.1.1))
       '@vitest/ui': 5.0.0(vitest@5.0.0)
       happy-dom: 20.0.10
       jsdom: 27.2.0(supports-color@8.1.1)
     transitivePeerDependencies:
       - msw
 
-  vitest@5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0-rc.1)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core):
+  vitest@5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.0.0(vite@packages+core)
@@ -15944,7 +15944,7 @@ snapshots:
       '@types/node': 24.13.3
       '@vitest/browser-playwright': 5.0.0(playwright@1.62.1)(vite@packages+core)(vitest@5.0.0)
       '@vitest/browser-preview': 5.0.0(vite@packages+core)(vitest@5.0.0)
-      '@vitest/browser-webdriverio': 5.0.0-rc.1(vite@packages+core)(vitest@5.0.0)(webdriverio@9.20.1(supports-color@8.1.1))
+      '@vitest/browser-webdriverio': 5.0.0(vite@packages+core)(vitest@5.0.0)(webdriverio@9.20.1(supports-color@8.1.1))
       '@vitest/ui': 5.0.0(vitest@5.0.0)
       happy-dom: 20.0.10
       jsdom: 27.2.0(supports-color@8.1.1)
