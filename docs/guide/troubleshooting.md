@@ -36,7 +36,7 @@ We're holding off on nested config support for now. Some of the factors we're co
 
 Keep lint and format settings in the root `vite.config.ts`. Use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) and [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific settings. You can also [import configuration objects](/guide/monorepo#composing-configuration-files) into the root config to keep settings in separate files.
 
-For format-on-save, [disable nested formatter configs](/guide/fmt#configuration) in the editor so it uses the root Vite+ `fmt` block.
+For IDE integration, we have `disableNestedConfig` and `fmt.disableNestedConfig` config to disable nested lint and format configs and keep editor behavior aligned with the root Vite+ config. See [IDE Integration](/guide/ide-integration) for setup instructions for your editor.
 
 Do you need nested configs? [Share your use case and opinion on GitHub](#asking-for-help), including your project structure, the reason why you want them and whether root-level overrides meet your needs.
 
