@@ -13,6 +13,7 @@ steps = [
 [[case]]
 name = "migration_pack_tsdown_023_build"
 vp = "global"
+link-local-vite-plus = true
 comment = "Build a migrated library and check that static assets and declarations are emitted."
 steps = [
   { argv = ["vpt", "write-file", "vite.config.ts", "export default { pack: { entry: 'src/index.ts', bundle: false, publicDir: 'public', removeNodeProtocol: true, dts: { oxc: true, cjsReexport: false } } };"], snapshot = false },
@@ -26,6 +27,7 @@ steps = [
 [[case]]
 name = "migration_pack_tsdown_023_external"
 vp = "global"
+link-local-vite-plus = true
 comment = "Preserve external matchers when either skipNodeModulesBundle form becomes deps.neverBundle."
 steps = [
   { argv = ["vpt", "cp", "external.config.txt", "vite.config.ts"], snapshot = false },
@@ -43,6 +45,7 @@ steps = [
 [[case]]
 name = "migration_pack_tsdown_023_concise_methods"
 vp = "global"
+link-local-vite-plus = true
 comment = "Migrate a standalone concise arrow and method options, then check unbundled files and copied assets."
 steps = [
   { argv = ["vpt", "cp", "concise.config.txt", "tsdown.config.ts"], snapshot = false },

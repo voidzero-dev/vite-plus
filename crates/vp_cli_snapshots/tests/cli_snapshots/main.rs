@@ -391,6 +391,10 @@ struct Case {
     /// through Node's upward walk.
     #[serde(default, rename = "link-node-modules")]
     link_node_modules: bool,
+    /// Link the checkout CLI into the workspace's node_modules so commands
+    /// can resolve a project-local installation within the workspace boundary.
+    #[serde(default, rename = "link-local-vite-plus")]
+    link_local_vite_plus: bool,
     /// Case-wide environment additions on top of the runner baseline.
     #[serde(default)]
     env: BTreeMap<String, String>,
@@ -1205,6 +1209,20 @@ fn run_case(
         .filter(|path, _| Ok(path != Path::new("snapshots") && path != Path::new("snapshots.toml")))
         .copy_tree(fixture_path, &stage)
         .unwrap();
+
+    if case.link_local_vite_plus {
+        let node_modules = stage.join("node_modules");
+        std::fs::create_dir_all(&node_modules)
+            .map_err(|e| format!("failed to create workspace node_modules: {e}"))?;
+        let local_vite_plus = node_modules.join("vite-plus");
+        if std::fs::symlink_metadata(&local_vite_plus).is_ok() {
+            return Err("link-local-vite-plus requires no fixture node_modules/vite-plus".into());
+        }
+        flavor::link_dir(&runtime.cli_package_dir, &local_vite_plus);
+        if !local_vite_plus.is_dir() {
+            return Err("failed to link workspace node_modules/vite-plus".into());
+        }
+    }
 
     let case_home = CaseHome::provision(&case_root, case.seed_runtime);
     let case_install = case_home.provision_vite_plus(flavor, runtime)?;
