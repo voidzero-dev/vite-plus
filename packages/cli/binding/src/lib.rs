@@ -67,6 +67,8 @@ pub fn ensure_blocking_stdio() {
 /// Configuration options passed from JavaScript to Rust.
 #[napi(object, object_to_js = false)]
 pub struct CliOptions {
+    /// The current JavaScript runtime (`process.execPath`).
+    pub node_exec_path: String,
     pub lint: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     pub fmt: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     pub vite: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
@@ -199,6 +201,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let explicit_chdir = options.explicit_chdir.unwrap_or(false);
     let toolchain_manifest_path = options.toolchain_manifest_path;
     let vite_plus_package_path = options.vite_plus_package_path;
+    let node_exec_path = Arc::from(OsStr::new(&options.node_exec_path));
 
     // Create a channel to receive the result from the worker thread
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -209,6 +212,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     std::thread::spawn(move || {
         // Create the resolvers inside the thread (BoxedResolverFn is not Send)
         let cli_options = ViteTaskCliOptions {
+            node_exec_path,
             lint: create_resolver(lint_tsf, "Failed to resolve lint command"),
             fmt: create_resolver(fmt_tsf, "Failed to resolve fmt command"),
             vite: create_resolver(vite_tsf, "Failed to resolve vite command"),

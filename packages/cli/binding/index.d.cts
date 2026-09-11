@@ -3456,6 +3456,8 @@ export interface BatchRewriteResult {
 
 /** Configuration options passed from JavaScript to Rust. */
 export interface CliOptions {
+  /** The current JavaScript runtime (`process.execPath`). */
+  nodeExecPath: string;
   lint: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
   fmt: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
   vite: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;

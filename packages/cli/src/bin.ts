@@ -146,6 +146,7 @@ if (maybePrintCommandHelp(args)) {
     }
 
     const exitCode = await run({
+      nodeExecPath: process.execPath,
       lint,
       pack,
       fmt,
