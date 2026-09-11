@@ -16,7 +16,6 @@
     "test": "vp test && just snapshot-test",
     "snapshot-test": "just snapshot-test",
     "test:unit": "vp test",
-    "test:vendored": "node packages/tools/src/test-vendored-vitest.ts",
     "fmt": "vp fmt",
     "docs:dev": "pnpm -C docs dev",
     "docs:build": "pnpm -C docs build",
