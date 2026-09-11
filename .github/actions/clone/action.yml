@@ -47,6 +47,12 @@ runs:
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_VITE_HASH }}
         persist-credentials: false
 
+    # Match the manifests used by sync-remote when it generated the root lockfile.
+    # setup-node installs with --frozen-lockfile, so this must run before it.
+    - name: Align vendored Vitest dependencies
+      shell: bash
+      run: node packages/tools/src/vendored-vitest.mjs
+
     # Disable autocrlf to preserve LF line endings on Windows
     # This prevents prettier/eslint from failing with "Delete ␍" errors
     - name: Configure git for LF line endings
