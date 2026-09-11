@@ -10,12 +10,20 @@ use super::{find_nearest_package_json, read_dependency_manifest, strip_bom};
 /// workspace root only for actual members. Unknown manifests keep the
 /// nearest known package boundary instead of permitting an ancestor install.
 pub(crate) fn local_vite_plus_boundary(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let package_json = find_nearest_package_json(cwd)?;
-    let package_root = package_json.parent()?;
-    let Some(package) = read_dependency_manifest(&package_json) else {
-        return Some(package_root.to_absolute_path_buf());
-    };
+    let package_json = find_nearest_package_json(cwd);
     let Ok((workspace, _)) = find_workspace_root(cwd) else {
+        return Some(package_json?.parent()?.to_absolute_path_buf());
+    };
+    let Some(package_json) = package_json else {
+        return Some(workspace.path.to_absolute_path_buf());
+    };
+    let package_root = package_json.parent()?;
+    // A pnpm workspace can have no root package.json. Its nearest manifest
+    // may belong to an outer project, which must not supply its boundary.
+    if !package_root.as_path().starts_with(workspace.path.as_path()) {
+        return Some(workspace.path.to_absolute_path_buf());
+    }
+    let Some(package) = read_dependency_manifest(&package_json) else {
         return Some(package_root.to_absolute_path_buf());
     };
     let boundary = match workspace_contains_package(&workspace, package_root) {

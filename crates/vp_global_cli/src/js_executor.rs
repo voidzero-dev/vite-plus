@@ -623,6 +623,50 @@ mod tests {
     }
 
     #[test]
+    fn workspace_without_root_manifest_keeps_its_boundary() {
+        for ancestor in
+            [None, Some("{}"), Some(r#"{"devDependencies":{"vite-plus":"0.3.0"}}"#), Some("{")]
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let outer = temp.path();
+            if let Some(ancestor) = ancestor {
+                std::fs::write(outer.join("package.json"), ancestor).unwrap();
+            }
+            std::fs::create_dir_all(outer.join("node_modules/vite-plus/dist")).unwrap();
+            std::fs::write(
+                outer.join("node_modules/vite-plus/package.json"),
+                r#"{"version":"0.2.1"}"#,
+            )
+            .unwrap();
+            std::fs::write(outer.join("node_modules/vite-plus/dist/bin.js"), "").unwrap();
+
+            let workspace = outer.join("inner");
+            std::fs::create_dir_all(workspace.join("src")).unwrap();
+            std::fs::write(workspace.join("pnpm-workspace.yaml"), "packages: []\n").unwrap();
+            for cwd in [&workspace, &workspace.join("src")] {
+                let cwd = AbsolutePath::new(cwd).unwrap();
+                assert_eq!(
+                    JsExecutor::local_vite_plus_install_host(cwd),
+                    None,
+                    "ancestor: {ancestor:?}"
+                );
+                assert_eq!(JsExecutor::resolve_local_vite_plus(cwd), None);
+            }
+
+            // A missing root manifest must not prevent a workspace-local install.
+            std::fs::create_dir_all(workspace.join("node_modules/vite-plus/dist")).unwrap();
+            std::fs::write(
+                workspace.join("node_modules/vite-plus/package.json"),
+                r#"{"version":"0.3.0"}"#,
+            )
+            .unwrap();
+            std::fs::write(workspace.join("node_modules/vite-plus/dist/bin.js"), "").unwrap();
+            let cwd = AbsolutePath::new(&workspace).unwrap();
+            assert_eq!(JsExecutor::local_vite_plus_install_host(cwd).as_deref(), Some(cwd));
+        }
+    }
+
+    #[test]
     fn local_resolution_checks_workspace_membership() {
         for (workspace_file, content, package, is_member) in [
             ("package.json", r#"{"workspaces":["packages/*"]}"#, "external/inner", false),
