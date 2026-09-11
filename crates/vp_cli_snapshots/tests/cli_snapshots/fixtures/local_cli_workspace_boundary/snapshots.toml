@@ -5,7 +5,8 @@ comment = "An independent project outside the workspace patterns cannot borrow i
 steps = [
   { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
   { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
-  ["node", "assert-boundary.mjs", "outer/external/inner", "global"],
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
 ]
 
 [[case]]
@@ -15,7 +16,8 @@ comment = "A member can use the workspace root's declared CLI dependency."
 steps = [
   { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
   { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
-  ["node", "assert-boundary.mjs", "outer/packages/member", "local"],
+  { argv = ["vp", "--version"], cwd = "outer/packages/member" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/packages/member" },
 ]
 
 [[case]]
@@ -26,7 +28,8 @@ steps = [
   { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
   { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
   { argv = ["vpt", "write-file", "outer/package.json", "{"], snapshot = false },
-  ["node", "assert-boundary.mjs", "outer/external/inner", "global"],
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner", comment = "the global CLI reports the malformed manifest instead of running the ancestor CLI" },
 ]
 
 [[case]]
@@ -38,5 +41,6 @@ steps = [
   { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
   { argv = ["vpt", "write-file", "outer/external/inner/package.json", "\uFEFF{\"name\":\"inner\",\"devDependencies\":{\"vite-plus\":\"0.3.1\"}}"], snapshot = false },
   { argv = ["vpt", "write-file", "outer/external/inner/pnpm-workspace.yaml", "packages: []\n"], snapshot = false },
-  ["node", "assert-boundary.mjs", "outer/external/inner", "global"],
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
 ]
