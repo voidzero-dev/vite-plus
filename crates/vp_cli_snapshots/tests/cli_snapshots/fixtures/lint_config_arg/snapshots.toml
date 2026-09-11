@@ -1,0 +1,9 @@
+[[case]]
+name = "lint_config_arg"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint", "-c", "custom.json"], comment = "Should apply lint from custom.json", continue-on-failure = true },
+  { argv = ["vp", "lint", "-c=custom.json"], comment = "Should apply lint from custom.json", continue-on-failure = true },
+  { argv = ["vp", "lint", "--config", "custom.json"], comment = "Should apply lint from custom.json", continue-on-failure = true },
+  { argv = ["vp", "lint", "--config=custom.json"], comment = "Should apply lint from custom.json", continue-on-failure = true },
+]
