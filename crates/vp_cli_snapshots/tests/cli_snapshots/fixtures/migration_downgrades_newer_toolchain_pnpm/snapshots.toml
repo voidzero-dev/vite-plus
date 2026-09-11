@@ -1,0 +1,14 @@
+[[case]]
+name = "migration_downgrades_newer_toolchain_pnpm"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Reproduce #2662: an existing Vite+ project has Vite and Vitest versions newer than the running CLI's bundled versions."
+steps = [
+  { argv = ["vpt", "cp", "package.json", "package.before.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite/package.json", "{\"name\":\"vite\",\"version\":\"8.2.3\"}"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "migration reports success without warning that the toolchain was downgraded" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "managed dependencies now resolve through the rewritten catalog" },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the catalog records the running CLI's toolchain pins" },
+  { argv = ["node", "check-downgrade.mjs"], comment = "assert the installed versions are lower even though snapshots redact the bundled versions" },
+]
