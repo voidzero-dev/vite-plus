@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+import semver from 'semver';
+
 import { fetchNpmResource, getNpmRegistry } from '../utils/npm-config.ts';
 import { readPackageJsonFromTarball } from './org-tarball.ts';
 
@@ -332,6 +334,14 @@ export async function readOrgManifest(
     if (!resolvedVersion) {
       return null;
     }
+  }
+  // Registry versions become cache-path components, so reject malformed
+  // values even when the registry has matching version metadata.
+  if (semver.valid(resolvedVersion) === null) {
+    throw new OrgManifestSchemaError(
+      `invalid version "${resolvedVersion}" (expected a semantic version)`,
+      packageName,
+    );
   }
   const meta = packument.versions?.[resolvedVersion];
   if (!meta) {

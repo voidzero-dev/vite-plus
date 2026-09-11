@@ -161,9 +161,12 @@ async fn resolve_package_manager_info(
     scope: EnvScope,
     config: &config::Config,
 ) -> Result<Option<PackageManagerInfo>, Error> {
-    let selected = package_manager::resolve_current_spec(cwd).await?.filter(|resolution| {
-        scope.package_manager().is_none_or(|expected| expected == resolution.package_manager_type)
-    });
+    // A concrete family resolves through its shim overrides before project metadata.
+    let selected = if scope.package_manager().is_some() {
+        None
+    } else {
+        package_manager::resolve_current_spec(cwd).await?
+    };
     let selected_type = selected
         .as_ref()
         .map(|resolution| resolution.package_manager_type)
@@ -184,6 +187,15 @@ async fn resolve_package_manager_info(
         if let Some(primary) = bin_paths.get(selected_type.to_string().as_str())
             && let Some(primary) = AbsolutePathBuf::new(primary.into())
         {
+            let selected = if scope.package_manager().is_some() {
+                // Project provenance is optional when the executable comes from PATH.
+                vp_pm_cli::resolve_environment_package_manager_spec(cwd, None, None)
+                    .ok()
+                    .flatten()
+                    .filter(|resolution| resolution.package_manager_type == selected_type)
+            } else {
+                selected
+            };
             return Ok(Some(PackageManagerInfo {
                 name: selected_type.to_string(),
                 version: read_tool_version(&primary).await.unwrap_or_else(|| "unknown".into()),

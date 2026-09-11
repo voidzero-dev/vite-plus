@@ -661,7 +661,7 @@ async fn resolve_package_manager_tool(
         return Ok(None);
     };
 
-    let resolution = package_manager::resolve_current_for(cwd, Some(expected_type)).await?;
+    let resolution = package_manager::resolve_shim_for(cwd, expected_type).await?;
     let (version, hash) = match resolution {
         Some(resolution) => (resolution.version, resolution.hash),
         None if expected_type == PackageManagerType::Npm => return Ok(None),

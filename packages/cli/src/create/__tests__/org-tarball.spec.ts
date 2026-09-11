@@ -2,15 +2,22 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { OrgManifest } from '../org-manifest.js';
 import {
   cleanupStaleStagingDirs,
+  ensureOrgPackageExtracted,
   normalizeEntryName,
   parseEntryMode,
   resolveBundledPath,
+  resolveExtractionDir,
   sanitizeHostForPath,
 } from '../org-tarball.js';
+
+const { mockGetVpDirs } = vi.hoisted(() => ({ mockGetVpDirs: vi.fn() }));
+
+vi.mock('../../../binding/index.js', () => ({ getVpDirs: mockGetVpDirs }));
 
 describe('resolveBundledPath', () => {
   const scratchDirs: string[] = [];
@@ -85,6 +92,62 @@ describe('normalizeEntryName', () => {
   it('returns null for entries outside the `package/` root', () => {
     expect(normalizeEntryName('not-package/foo.ts')).toBeNull();
     expect(normalizeEntryName('node_modules/foo/package.json')).toBeNull();
+  });
+});
+
+function manifestFor(version: string): OrgManifest {
+  return {
+    scope: '@your-org',
+    packageName: '@your-org/create',
+    version,
+    tarballUrl: 'https://registry.npmjs.org/@your-org/create/-/create-1.0.0.tgz',
+    templates: [],
+  };
+}
+
+describe('resolveExtractionDir', () => {
+  const cacheRoot = path.resolve(os.tmpdir(), 'vp-cache-root');
+
+  it.each(['1.0.0', '0.0.0', '1.2.3', '2.0.0-beta.1', '10.20.30+build.5'])(
+    'places version %s beneath the cache root',
+    (version) => {
+      expect(resolveExtractionDir(cacheRoot, manifestFor(version))).toBe(
+        path.join(cacheRoot, 'registry.npmjs.org', '@your-org', 'create', version),
+      );
+    },
+  );
+
+  // Three `..` segments reach the cache root; four escape it.
+  it.each(['../../..', '../../../../outside', '../../../../../../outside-write', '/absolute'])(
+    'rejects a version that resolves to or outside the cache root: %s',
+    (version) => {
+      expect(() => resolveExtractionDir(cacheRoot, manifestFor(version))).toThrow(
+        /escapes the cache root/,
+      );
+    },
+  );
+});
+
+describe('ensureOrgPackageExtracted', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('rejects the cache root before filesystem or network activity', async () => {
+    mockGetVpDirs.mockReturnValue({ cache: path.join(os.tmpdir(), 'vp-org-extraction-cache') });
+    const exists = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const mkdir = vi.spyOn(fs.promises, 'mkdir').mockResolvedValue(undefined);
+    const readdir = vi.spyOn(fs.promises, 'readdir').mockResolvedValue([]);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected download'));
+
+    await expect(ensureOrgPackageExtracted(manifestFor('../../..'))).rejects.toThrow(
+      /escapes the cache root/,
+    );
+
+    expect(exists).not.toHaveBeenCalled();
+    expect(mkdir).not.toHaveBeenCalled();
+    expect(readdir).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 

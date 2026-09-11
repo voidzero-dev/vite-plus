@@ -226,6 +226,11 @@ async fn execute_with_version(
     let mut child = tokio::process::Command::new(cmd);
     child.args(args).envs(child_env.into_envs()).env(env_vars::VP_NODE_VERSION, &resolved_node);
     if let Some(package_manager) = resolved_package_manager {
+        if explicit_package_manager {
+            // Preserve explicit versions when a child removes the injected tool directory from PATH.
+            let (kind, version, _) = parse_package_manager_spec_with_hash(&package_manager)?;
+            child.env(package_manager_resolution::version_env_var(kind), version);
+        }
         child.env(env_vars::VP_PACKAGE_MANAGER, package_manager);
     }
     // The child runs in the inherited cwd, which a leading `-C <dir>` changes
