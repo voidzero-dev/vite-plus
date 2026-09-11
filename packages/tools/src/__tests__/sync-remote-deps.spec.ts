@@ -75,34 +75,29 @@ describe('vendored Vitest v5 bridge', () => {
         // Copy the entry point outside the repo so it cannot resolve node_modules.
         const script = join(root, 'vendored-vitest.mjs');
         copyFileSync(new URL('../vendored-vitest.mjs', import.meta.url), script);
-        for (const vendor of ['vite', 'rolldown']) {
-          mkdirSync(join(root, vendor, 'packages', vendor), { recursive: true });
-          writeFileSync(
-            join(root, vendor, 'packages', vendor, 'package.json'),
-            JSON.stringify({
-              dependencies: { '@vitest/utils': '4.1.10' },
-              devDependencies: { vitest: 'catalog:' },
-              optionalDependencies: { '@vitest/spy': '^4.1.10' },
-            }),
-          );
-        }
+        const directory = join(root, 'vite/packages/vite');
+        mkdirSync(directory, { recursive: true });
+        const manifest = join(directory, 'package.json');
+        writeFileSync(
+          manifest,
+          JSON.stringify({
+            dependencies: { '@vitest/utils': '4.1.10' },
+            devDependencies: { vitest: 'catalog:' },
+            optionalDependencies: { '@vitest/spy': '^4.1.10' },
+          }),
+        );
         const run = () => spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
         const first = run();
         expect(first.stderr).toBe('');
         expect(first.status).toBe(0);
-        const manifests = ['vite', 'rolldown'].map((vendor) =>
-          join(root, vendor, 'packages', vendor, 'package.json'),
-        );
-        const sources = manifests.map((file) => readFileSync(file, 'utf8'));
-        for (const source of sources) {
-          expect(JSON.parse(source)).toEqual({
-            dependencies: { '@vitest/utils': version },
-            devDependencies: { vitest: 'catalog:' },
-            optionalDependencies: { '@vitest/spy': version },
-          });
-        }
+        const source = readFileSync(manifest, 'utf8');
+        expect(JSON.parse(source)).toEqual({
+          dependencies: { '@vitest/utils': version },
+          devDependencies: { vitest: 'catalog:' },
+          optionalDependencies: { '@vitest/spy': version },
+        });
         expect(run().status).toBe(0);
-        expect(manifests.map((file) => readFileSync(file, 'utf8'))).toEqual(sources);
+        expect(readFileSync(manifest, 'utf8')).toBe(source);
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
@@ -219,48 +214,64 @@ describe('vendored Vitest v5 bridge', () => {
     },
   );
 
-  test('aligns direct workspace dependencies and leaves fixture manifests alone', () => {
+  test('aligns direct Vite workspace dependencies and leaves fixture manifests alone', () => {
     const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-'));
     try {
-      for (const vendor of ['vite', 'rolldown']) {
-        mkdirSync(join(root, vendor, 'packages', 'test', 'fixtures'), { recursive: true });
-        writeFileSync(
-          join(root, vendor, 'package.json'),
-          JSON.stringify({
-            devDependencies: { vitest: '^4.0.0', '@vitest/eslint-plugin': '^1.0.0' },
-          }),
-        );
-        writeFileSync(
-          join(root, vendor, 'packages', 'test', 'package.json'),
-          JSON.stringify({
-            devDependencies: {
-              vitest: 'catalog:',
-              '@vitest/utils': '4.1.10',
-              '@vitest/web-worker': 'catalog:legacy',
-              '@vitest/browser-webdriverio': '^5.0.0-beta.5',
-            },
-          }),
-        );
-        writeFileSync(
-          join(root, vendor, 'packages', 'test', 'fixtures', 'package.json'),
-          '\ufeff{}',
-        );
-      }
+      const directory = join(root, 'vite');
+      mkdirSync(join(directory, 'packages/test/fixtures'), { recursive: true });
+      writeFileSync(
+        join(directory, 'package.json'),
+        JSON.stringify({
+          devDependencies: { vitest: '^4.0.0', '@vitest/eslint-plugin': '^1.0.0' },
+        }),
+      );
+      writeFileSync(
+        join(directory, 'packages/test/package.json'),
+        JSON.stringify({
+          devDependencies: {
+            vitest: 'catalog:',
+            '@vitest/utils': '4.1.10',
+            '@vitest/web-worker': 'catalog:legacy',
+            '@vitest/browser-webdriverio': '^5.0.0-beta.5',
+          },
+        }),
+      );
+      writeFileSync(join(directory, 'packages/test/fixtures/package.json'), '\ufeff{}');
       alignVendoredVitestDependencies(root, '5.0.0');
-      for (const vendor of ['vite', 'rolldown']) {
-        expect(
-          JSON.parse(readFileSync(join(root, vendor, 'package.json'), 'utf8')).devDependencies,
-        ).toEqual({ vitest: '5.0.0', '@vitest/eslint-plugin': '^1.0.0' });
-        expect(
-          JSON.parse(readFileSync(join(root, vendor, 'packages', 'test', 'package.json'), 'utf8'))
-            .devDependencies,
-        ).toEqual({
+      expect(
+        JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')).devDependencies,
+      ).toEqual({ vitest: '5.0.0', '@vitest/eslint-plugin': '^1.0.0' });
+      expect(
+        JSON.parse(readFileSync(join(directory, 'packages/test/package.json'), 'utf8'))
+          .devDependencies,
+      ).toEqual({
+        vitest: 'catalog:',
+        '@vitest/utils': '5.0.0',
+        '@vitest/web-worker': '5.0.0',
+        '@vitest/browser-webdriverio': '^5.0.0-beta.5',
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('leaves Rolldown Vitest dependencies unchanged', () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-'));
+    try {
+      mkdirSync(join(root, 'vite/packages'), { recursive: true });
+      const directory = join(root, 'rolldown/packages/browser-tests');
+      mkdirSync(directory, { recursive: true });
+      const source = JSON.stringify({
+        devDependencies: {
           vitest: 'catalog:',
-          '@vitest/utils': '5.0.0',
-          '@vitest/web-worker': '5.0.0',
-          '@vitest/browser-webdriverio': '^5.0.0-beta.5',
-        });
-      }
+          '@vitest/browser-playwright': '4.1.10',
+          '@vitest/runner': '4.1.10',
+        },
+      });
+      const manifest = join(directory, 'package.json');
+      writeFileSync(manifest, source);
+      alignVendoredVitestDependencies(root, '5.0.0');
+      expect(readFileSync(manifest, 'utf8')).toBe(source);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
