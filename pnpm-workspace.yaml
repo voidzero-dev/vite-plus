@@ -15,13 +15,13 @@ catalog:
   '@emnapi/runtime': 2.0.0-alpha.4
   '@iconify/vue': ^5.0.0
   '@jridgewell/trace-mapping': ^0.3.31
-  '@napi-rs/cli': ^3.8.2
+  '@napi-rs/cli': ^3.9.0
   '@napi-rs/wasm-runtime': ^1.2.2
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.148.0
-  '@oxc-project/types': =0.148.0
+  '@oxc-project/runtime': =0.149.0
+  '@oxc-project/types': =0.149.0
   '@oxlint/plugins': =1.79.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
@@ -96,11 +96,11 @@ catalog:
   mocha: ^11.7.5
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.148.0
-  oxc-parser: =0.148.0
-  oxc-transform: =0.148.0
-  oxfmt: =0.66.0
-  oxlint: =1.81.0
+  oxc-minify: =0.149.0
+  oxc-parser: =0.149.0
+  oxc-transform: =0.149.0
+  oxfmt: =0.67.0
+  oxlint: =1.82.0
   oxlint-tsgolint: =7.0.2001
   pathe: ^2.0.3
   picocolors: ^1.1.1
@@ -134,7 +134,7 @@ catalog:
   vitepress-plugin-og: ^0.0.5
   vitest: 4.1.11
   vue: ^3.5.35
-  web-tree-sitter: ^0.26.0
+  web-tree-sitter: ^0.27.0
   ws: ^8.20.1
   yaml: ^2.8.1
   # bingo introspects template option schemas via zod 3 internals;
@@ -201,6 +201,8 @@ minimumReleaseAgeExclude:
   - '@napi-rs/wasm-runtime'
   - '@emnapi/*'
   - emnapi
+  - '@vitejs/devtools'
+  - '@vitejs/devtools-*'
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*

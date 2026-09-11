@@ -23,7 +23,7 @@ Options:
 Documentation: https://viteplus.dev/guide/vpx
 ```
 
-## `vp dlx -s cowsay hello`
+## `TMPDIR=${workspace} vp dlx -s cowsay hello`
 
 should run cowsay with bun x
 
@@ -38,7 +38,7 @@ should run cowsay with bun x
                 ||     ||
 ```
 
-## `vp dlx -s cowsay@1.6.0 hello`
+## `TMPDIR=${workspace} vp dlx -s cowsay@1.6.0 hello`
 
 should run specific version
 
