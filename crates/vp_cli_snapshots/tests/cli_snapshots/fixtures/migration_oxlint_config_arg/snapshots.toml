@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_oxlint_config_arg"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Migrate a project with an Oxlint config argument", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "oxlint -c .oxlintrc.json should be rewritten to vp lint", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = ".oxlintrc.json should be merged into vite.config.ts", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"], comment = "The merged .oxlintrc.json should be removed", continue-on-failure = true },
+]
