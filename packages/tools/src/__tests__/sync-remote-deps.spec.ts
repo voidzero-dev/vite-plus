@@ -1,18 +1,114 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import * as semver from 'semver';
 import { describe, expect, test } from 'vitest';
+import * as yaml from 'yaml';
 
+import { VITEST_VERSION } from '../../../cli/src/utils/constants.ts';
 import {
-  alignVendoredVitestDependencies,
   mergePnpmWorkspaces,
   syncCargoOxcVersions,
   syncViteDevtoolsDependencies,
 } from '../sync-remote-deps.ts';
+import { alignVendoredVitestDependencies } from '../vendored-vitest.mjs';
 
 describe('vendored Vitest v5 bridge', () => {
+  test('can be imported from stdin without running the bootstrap', () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-import-'));
+    try {
+      const url = new URL('../vendored-vitest.mjs', import.meta.url).href;
+      const result = spawnSync(process.execPath, ['--input-type=module', '-'], {
+        cwd: root,
+        encoding: 'utf8',
+        input: `import ${JSON.stringify(url)};`,
+      });
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('keeps the bootstrap runtime pin in sync with the root catalog', () => {
+    const workspace = yaml.parse(
+      readFileSync(new URL('../../../../pnpm-workspace.yaml', import.meta.url), 'utf8'),
+    );
+    expect(workspace.catalog.vitest).toBe(VITEST_VERSION);
+  });
+
+  test.each(['4.1.10', '^5.0.0', '5.1.0-beta.1'])(
+    'rejects an unsupported bootstrap runtime pin %s before changing manifests',
+    (version) => {
+      const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-bootstrap-'));
+      try {
+        const constantsDir = join(root, 'packages/cli/src/utils');
+        mkdirSync(constantsDir, { recursive: true });
+        writeFileSync(
+          join(constantsDir, 'constants.ts'),
+          `export const VITEST_VERSION = '${version}';\n`,
+        );
+        const script = join(root, 'vendored-vitest.mjs');
+        copyFileSync(new URL('../vendored-vitest.mjs', import.meta.url), script);
+        const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain('VITEST_VERSION must declare an exact stable v5 version');
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test.each(['5.0.0', '5.1.2'])(
+    'runs before dependency installation with the selected %s runtime pin',
+    (version) => {
+      const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-bootstrap-'));
+      try {
+        const constantsDir = join(root, 'packages/cli/src/utils');
+        mkdirSync(constantsDir, { recursive: true });
+        writeFileSync(
+          join(constantsDir, 'constants.ts'),
+          `export const VITEST_VERSION = '${version}';\n`,
+        );
+        // Copy the entry point outside the repo so it cannot resolve node_modules.
+        const script = join(root, 'vendored-vitest.mjs');
+        copyFileSync(new URL('../vendored-vitest.mjs', import.meta.url), script);
+        for (const vendor of ['vite', 'rolldown']) {
+          mkdirSync(join(root, vendor, 'packages', vendor), { recursive: true });
+          writeFileSync(
+            join(root, vendor, 'packages', vendor, 'package.json'),
+            JSON.stringify({
+              dependencies: { '@vitest/utils': '4.1.10' },
+              devDependencies: { vitest: 'catalog:' },
+              optionalDependencies: { '@vitest/spy': '^4.1.10' },
+            }),
+          );
+        }
+        const run = () => spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
+        const first = run();
+        expect(first.stderr).toBe('');
+        expect(first.status).toBe(0);
+        const manifests = ['vite', 'rolldown'].map((vendor) =>
+          join(root, vendor, 'packages', vendor, 'package.json'),
+        );
+        const sources = manifests.map((file) => readFileSync(file, 'utf8'));
+        for (const source of sources) {
+          expect(JSON.parse(source)).toEqual({
+            dependencies: { '@vitest/utils': version },
+            devDependencies: { vitest: 'catalog:' },
+            optionalDependencies: { '@vitest/spy': version },
+          });
+        }
+        expect(run().status).toBe(0);
+        expect(manifests.map((file) => readFileSync(file, 'utf8'))).toEqual(sources);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   test('resolves the reviewed Vitest major catalog conflict', () => {
     const merged = mergePnpmWorkspaces(
       { catalog: { vitest: '5.0.0' } },
