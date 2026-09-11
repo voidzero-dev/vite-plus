@@ -28,16 +28,32 @@ export function sanitizeHostForPath(host: string): string {
  * (via `.npmrc` scope mappings) don't share a cache slot. The registry
  * guarantees `manifest.tarballUrl` is a valid URL, so any parse failure
  * here is a real bug worth surfacing.
+ *
+ * The result must stay beneath `cacheRoot`. `readOrgManifest` already
+ * validates `manifest.version` as a semantic version; this containment
+ * check keeps the same invariant at the sink, so a malformed
+ * registry-controlled value (e.g. `..` segments) cannot place the
+ * extraction outside the cache, even through a future caller that
+ * skips validation.
  */
-function getExtractionDir(manifest: OrgManifest): string {
+export function resolveExtractionDir(cacheRoot: string, manifest: OrgManifest): string {
   const { host } = new URL(manifest.tarballUrl);
-  return path.join(
-    getCacheRoot(),
+  const resolvedRoot = path.resolve(cacheRoot);
+  const resolvedDir = path.resolve(
+    resolvedRoot,
     sanitizeHostForPath(host),
     manifest.scope,
     'create',
     manifest.version,
   );
+  if (resolvedDir !== resolvedRoot && !resolvedDir.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new Error(`org template extraction path escapes the cache root: ${manifest.version}`);
+  }
+  return resolvedDir;
+}
+
+function getExtractionDir(manifest: OrgManifest): string {
+  return resolveExtractionDir(getCacheRoot(), manifest);
 }
 
 function parseIntegrity(integrity: string): { algorithm: string; expected: string } | null {

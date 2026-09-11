@@ -4,11 +4,13 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import type { OrgManifest } from '../org-manifest.js';
 import {
   cleanupStaleStagingDirs,
   normalizeEntryName,
   parseEntryMode,
   resolveBundledPath,
+  resolveExtractionDir,
   sanitizeHostForPath,
 } from '../org-tarball.js';
 
@@ -85,6 +87,46 @@ describe('normalizeEntryName', () => {
   it('returns null for entries outside the `package/` root', () => {
     expect(normalizeEntryName('not-package/foo.ts')).toBeNull();
     expect(normalizeEntryName('node_modules/foo/package.json')).toBeNull();
+  });
+});
+
+function manifestFor(version: string): OrgManifest {
+  return {
+    scope: '@your-org',
+    packageName: '@your-org/create',
+    version,
+    tarballUrl: 'https://registry.npmjs.org/@your-org/create/-/create-1.0.0.tgz',
+    templates: [],
+  };
+}
+
+describe('resolveExtractionDir', () => {
+  const cacheRoot = path.resolve(os.tmpdir(), 'vp-cache-root');
+
+  it('places a valid version beneath the cache root', () => {
+    expect(resolveExtractionDir(cacheRoot, manifestFor('1.0.0'))).toBe(
+      path.join(cacheRoot, 'registry.npmjs.org', '@your-org', 'create', '1.0.0'),
+    );
+  });
+
+  // The version sits four levels below the cache root
+  // (`<root>/<host>/<scope>/create/<version>`), so leaving the root takes
+  // at least four `..` segments; shallower values stay inside the root
+  // and are rejected by the semver check in `readOrgManifest` instead.
+  it.each([['../../../../outside'], ['../../../../../../outside-write'], ['/absolute']])(
+    'rejects a version that escapes the cache root: %s',
+    (version) => {
+      expect(() => resolveExtractionDir(cacheRoot, manifestFor(version))).toThrow(
+        /escapes the cache root/,
+      );
+    },
+  );
+
+  it('keeps strict-semver versions inside the cache root', () => {
+    for (const version of ['0.0.0', '1.2.3', '2.0.0-beta.1', '10.20.30+build.5']) {
+      const dir = resolveExtractionDir(cacheRoot, manifestFor(version));
+      expect(dir.startsWith(`${cacheRoot}${path.sep}`)).toBe(true);
+    }
   });
 });
 
