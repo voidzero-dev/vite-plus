@@ -49,7 +49,7 @@ runs:
 
     # Match the manifests used by sync-remote when it generated the root lockfile.
     # setup-node installs with --frozen-lockfile, so this must run before it.
-    - name: Align vendored Vitest dependencies
+    - name: Align vendored Vite's Vitest dependencies
       shell: bash
       run: node packages/tools/src/vendored-vitest.mjs
 

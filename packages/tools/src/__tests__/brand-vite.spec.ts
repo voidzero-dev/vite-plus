@@ -79,7 +79,6 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       'upstream fixture',
     );
 
-    mkdirSync(join(root, 'rolldown/packages'), { recursive: true });
     alignVendoredVitestDependencies(root, '5.0.0');
     const alignedManifest = readFileSync(manifest, 'utf8');
     expect(JSON.parse(alignedManifest).devDependencies['@vitest/utils']).toBe('5.0.0');

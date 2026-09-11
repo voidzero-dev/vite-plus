@@ -475,16 +475,12 @@ jobs:
           RUST_BACKTRACE: '1'
           RUST_MIN_STACK: 8388608
 
-      - name: Test vendored workspaces with Vitest v5
+      - name: Test vendored Vite with Vitest v5
         if: runner.os == 'Linux'
         run: |
           pnpm --filter vite build-bundle
           pnpm --filter create-vite build
-          pnpm --filter @rolldown/test-dev-server build
-          pnpm exec playwright install --with-deps chromium
           pnpm test:vendored
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: '0'
 
       - name: Test global package install (powershell)
         if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
