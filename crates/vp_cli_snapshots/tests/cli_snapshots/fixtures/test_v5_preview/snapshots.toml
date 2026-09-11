@@ -15,5 +15,5 @@ steps = [{ argv = ["node", "verify.mjs", "--real-timers"], timeout = 120000 }]
 name = "upstream_browser_defines"
 vp = "local"
 env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
-comment = "Known upstream Vitest 5.0.0 release blocker, also reproduced without Vite+: browser globals receive JSON-encoded define values. Remove this expected-failure assertion when upstream is fixed."
+comment = "Regression for upstream #11198: Preview must preserve string and boolean define values. Keep this test after removing the temporary Vitest 5.0.0 backport."
 steps = [{ argv = ["node", "verify.mjs", "--browser-defines"], timeout = 120000 }]

@@ -40,13 +40,9 @@ try {
     const tasks = runner.state.getFiles().flatMap((file) => file.tasks);
     assert.equal(tasks.length, 2);
     for (const task of tasks) {
-      assert.equal(task.result.state, 'fail');
-      assert.match(task.result.errors[0].message, /Object.is equality/);
+      assert.equal(task.result.state, 'pass', JSON.stringify(task.result));
     }
-    assert.match(tasks[0].result.errors[0].message, /messages/);
-    assert.match(tasks[1].result.errors[0].message, /false/);
-    console.log('Release blocker reproduced: upstream Vitest 5.0.0 browser globals retain JSON-encoded define values');
-    process.exitCode = 0;
+    console.log('Preview: browser string and boolean define values passed');
   } else if (realTimers) {
     const tasks = runner.state.getFiles().flatMap((file) => file.tasks);
     assert.equal(tasks.length, 1);
