@@ -23,4 +23,6 @@ export default defineConfig({
 
 We recommend enabling both `options.typeAware` and `options.typeCheck` so `vp lint` and `vp check` can use the full type-aware path.
 
-Vite+ does not currently support nested lint configuration. For now, use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) from the root `vite.config.ts` for file- or package-specific lint rules. See [troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details and how to give feedback on future support.
+For file- or package-specific lint rules, use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) from the root `vite.config.ts`.
+
+Vite+ does not currently support nested lint configuration. See [troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details and how to give feedback on future support.

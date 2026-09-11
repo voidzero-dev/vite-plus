@@ -17,4 +17,6 @@ export default defineConfig({
 });
 ```
 
-Vite+ does not currently support nested format configuration. For now, use [`fmt.overrides`](/guide/monorepo#format-overrides) from the root `vite.config.ts` for file- or package-specific formatting settings. See [troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details and how to give feedback on future support.
+For file- or package-specific formatting settings, use [`fmt.overrides`](/guide/monorepo#format-overrides) from the root `vite.config.ts`.
+
+Vite+ does not currently support nested format configuration. See [troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details and how to give feedback on future support.
