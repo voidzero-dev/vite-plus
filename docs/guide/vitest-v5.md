@@ -80,7 +80,7 @@ The community maintains `@vitest/browser-webdriverio` on its own release schedul
 
 Vitest `5.0.0` Preview fails locator clicks with real timers because its user-event adapter advances fake timers without checking whether they are enabled. This upstream issue blocks the stable rollout. Use Playwright or retain a v4-based Vite+ release while the issue remains open. Enabling fake timers changes test behavior and does not resolve the release blocker.
 
-Vitest `5.0.0` also assigns JSON-encoded Vite `define` values to browser globals without decoding them. For example, a string can contain extra quotes, and a boolean can remain a string. The Vitest maintainers merged [#11198](https://github.com/vitest-dev/vitest/pull/11198) to fix this, but `5.0.0` does not include it. Keep affected projects on the v4-based release until the browser assertions pass with a release that includes the fix or an approved compatibility patch.
+Vitest `5.0.0` also assigns JSON-encoded Vite `define` values to browser globals. A string can contain extra quotes, and a boolean can become a string. Vite+ includes a temporary backport of [#11198](https://github.com/vitest-dev/vitest/pull/11198) for `5.0.0`: Vite initializes browser globals, and Vitest leaves those values unchanged. Node tests keep their upstream behavior. The backport covers raw configs, referenced projects, and programmatic project creation. It does not run with other Vitest versions. Remove the backport after upgrading to a release that includes the upstream fix.
 
 ## Reports and screenshots
 
