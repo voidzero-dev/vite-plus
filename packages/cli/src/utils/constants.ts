@@ -116,6 +116,6 @@ export const DEFAULT_ENVS = {
 // Env var set while `vite.config.ts` is loaded only to read a config block, not
 // to run the Vite pipeline. `lazyPlugins` skips the user's plugin factory while
 // it is `'1'`. Single source of truth shared by `withConfigMetadataResolution`
-// (in-process) and the oxlint/oxfmt resolvers + bins (which load the config in
-// a subprocess). Keep the `bin/oxlint`/`bin/oxfmt` literals in sync with this.
+// (in-process) and the oxlint/oxfmt resolvers (which load the config in
+// a subprocess).
 export const CONFIG_METADATA_ENV = 'VP_RESOLVING_CONFIG_METADATA';
