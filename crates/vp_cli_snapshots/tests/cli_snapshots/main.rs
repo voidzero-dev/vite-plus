@@ -387,7 +387,7 @@ struct Case {
     seed_runtime: bool,
     /// Expose the run-root node_modules as the workspace's parent-dir
     /// node_modules for fixtures that address the linked checkout packages by path (`node
-    /// ../node_modules/vite-plus/bin/oxlint`) rather than by specifier
+    /// ../node_modules/vite-plus/bin/vp`) rather than by specifier
     /// through Node's upward walk.
     #[serde(default, rename = "link-node-modules")]
     link_node_modules: bool,
