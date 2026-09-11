@@ -3476,6 +3476,8 @@ export declare function startAsyncRuntime(): void;
 export interface ViteImportGlobMeta {
   isSubImportsPattern?: boolean;
 }
+/** Parse source and resolve lexical bindings for the TypeScript migration rules. */
+export declare function analyzeMigrationSource(filename: string, source: string): string;
 
 /** Error from batch import rewriting */
 export interface BatchRewriteError {
