@@ -56,6 +56,10 @@ async fn protected_package_manager(
 ) -> Result<Vec<String>, Error> {
     let current = package_manager::resolve_current_or_fallback_for(cwd, kind).await?;
     let mut protected = vec![current.version.to_string()];
+    // vp commands can select a different version from the family's direct shims.
+    if let Some(selected) = package_manager::resolve_current_for(cwd, Some(kind)).await? {
+        push_unique_version(&mut protected, selected.version.to_string());
+    }
     let config = config::load_config().await?;
     if let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)? {
         let version = resolve_package_manager_version(kind, &selector).await?.to_string();
