@@ -32,11 +32,11 @@ skips `typeAware` and `typeCheck`.
 
 Vite+ does not currently support nested lint or format configuration. When running `vp lint`, `vp fmt`, or `vp check` from the workspace root, do not rely on configs in subdirectories or on `lint` and `fmt` blocks in package-level `vite.config.ts` files to override the root settings.
 
-We're holding off on nested config support for now. Some of the factors we're considering are how implicit config discovery affects the predictability of linting and formatting, what context AI agents need to understand the settings that apply, and the potential performance cost of finding and loading multiple configs. At the same time, we recognize that keeping package-specific context close to the code may have benefits. The use cases we've heard so far haven't given us a strong enough reason to commit to those semantics. Waiting leaves room to add support later, and we'd like to hear why your project needs nested configs, especially where root-level overrides fall short.
-
 Keep lint and format settings in the root `vite.config.ts`. Use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) and [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific settings. You can also [import configuration objects](/guide/monorepo#composing-configuration-files) into the root config to keep settings in separate files.
 
 For IDE integration, we have `disableNestedConfig` and `fmt.disableNestedConfig` config to disable nested lint and format configs and keep editor behavior aligned with the root Vite+ config. See [IDE Integration](/guide/ide-integration) for setup instructions for your editor.
+
+We're holding off on nested config support for now. Some of the factors we're considering are how implicit config discovery affects the predictability of linting and formatting, what context AI agents need to understand the settings that apply, and the potential performance cost of finding and loading multiple configs. At the same time, we recognize that keeping package-specific context close to the code may have benefits. The use cases we've heard so far haven't given us a strong enough reason to commit to those semantics. Waiting leaves room to add support later, and we'd like to hear why your project needs nested configs, especially where root-level overrides fall short.
 
 Do you need nested configs? [Share your use case and opinion on GitHub](https://github.com/voidzero-dev/vite-plus/discussions/2669), including your project structure, the reason why you want them and whether root-level overrides meet your needs.
 
