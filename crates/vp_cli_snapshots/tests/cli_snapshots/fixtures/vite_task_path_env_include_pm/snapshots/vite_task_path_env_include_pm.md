@@ -11,7 +11,7 @@
 ➤ YN0000: ┌ Link step
 ➤ YN0000: │ ESM support for PnP uses the experimental loader API and is therefore experimental
 ➤ YN0000: └ Completed
-➤ YN0000: · Done with warnings in <duration> <duration>
+➤ YN0000: · Done with warnings in <duration>
 ```
 
 ## `vp run check-yarn-version`

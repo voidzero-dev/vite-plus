@@ -4,13 +4,16 @@
 '`
 
 
+## `node pin-core-alias.mjs`
+
+
 ## `vp install --ignore-scripts`
 
 
 ## `node check-npm-layout.mjs`
 
 ```
-npm installed separate CLI core and upstream Vitest peer without overrides
+npm shares the exact core alias between the project, CLI, and Vitest without overrides
 ```
 
 ## `node check-api.mjs`
@@ -42,6 +45,9 @@ dist/assets/index-<hash>.js  <size> kB │ gzip: <size> kB
 
 ✓ built in <duration>
 ```
+
+## `vp test run`
+
 
 ## `vp pack entry.js`
 

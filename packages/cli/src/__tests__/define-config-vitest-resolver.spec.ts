@@ -99,7 +99,8 @@ describe('vitePlusVitestResolverPlugin', () => {
     const aliases = config.resolve!.alias as Alias[];
     expect(aliases).toHaveLength(9);
     for (const id of ['@testing-library/user-event', '@testing-library/dom']) {
-      expect(aliases.find(({ find }) => (find as RegExp).test(id))?.replacement).toContain(id);
+      const replacement = aliases.find(({ find }) => (find as RegExp).test(id))?.replacement;
+      expect(replacement?.replaceAll('\\', '/')).toContain(id);
     }
     hook(config);
     expect(config.resolve!.alias).toHaveLength(9);

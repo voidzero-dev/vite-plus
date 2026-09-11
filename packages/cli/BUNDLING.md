@@ -27,6 +27,13 @@ target project. An incidental hoisted peer does not trigger project validation.
 These checks run before Vite or packaging commands start. Keep the canonical
 name in release metadata and alias targets to identify the published package.
 
+For npm projects without overrides, pin a declared `vite` alias to the exact
+installed `vite-plus` version. npm can replace a tagged alias such as
+`npm:@voidzero-dev/vite-plus-core@latest` with upstream Vite to satisfy Vitest's
+peer range. The CLI rejects that mismatch and directs users to `vp migrate`,
+which writes an exact alias and the package-manager overrides. The npm fixtures
+check shared core identity with an exact alias and rejection of the tagged layout.
+
 ## Build Steps
 
 ### Step 1: tsdown Build (`buildWithTsdown`)

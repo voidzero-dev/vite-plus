@@ -76,11 +76,11 @@ Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage pro
 
 Vite+ retains `vite-plus/test/coverage`, `/reporters`, `/environments`, `/snapshot`, and `/mocker` aliases through the Vite+ 1.x line. It does not provide partial runner or expect plugin shims.
 
-The community maintains `@vitest/browser-webdriverio` on its own release schedule. Install a compatible peer and check browser behavior; do not force its version to match the official package patch version. The selected compatibility baseline is `5.0.0-rc.1`.
+The community maintains `@vitest/browser-webdriverio` on its own release schedule. Install a compatible peer and check browser behavior; do not force its version to match the official package patch version. Use `5.0.0` as the compatibility test baseline.
 
 Vitest `5.0.0` Preview fails locator clicks with real timers because its user-event adapter advances fake timers without checking whether they are enabled. This upstream issue blocks the stable rollout. Use Playwright or retain a v4-based Vite+ release while the issue remains open. Enabling fake timers changes test behavior and does not resolve the release blocker.
 
-Vitest `5.0.0` also assigns JSON-encoded Vite `define` values to browser globals without decoding them. For example, a string can contain extra quotes, and a boolean can remain a string. This issue also blocks the rollout. Keep affected projects on the v4-based release until the browser assertions pass with an upstream fix or an approved compatibility patch.
+Vitest `5.0.0` also assigns JSON-encoded Vite `define` values to browser globals without decoding them. For example, a string can contain extra quotes, and a boolean can remain a string. The Vitest maintainers merged [#11198](https://github.com/vitest-dev/vitest/pull/11198) to fix this, but `5.0.0` does not include it. Keep affected projects on the v4-based release until the browser assertions pass with a release that includes the fix or an approved compatibility patch.
 
 ## Reports and screenshots
 
