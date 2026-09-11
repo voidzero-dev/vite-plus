@@ -30,7 +30,7 @@
   "vue-mini": {
     "repository": "https://github.com/vue-mini/vue-mini.git",
     "branch": "master",
-    "hash": "333c5957bf99a68991c9f91019670c56b65bd896"
+    "hash": "d8ba920b64922c959314226ffcf70af52b27e344"
   },
   "vite-plugin-react": {
     "repository": "https://github.com/vitejs/vite-plugin-react.git",
@@ -98,7 +98,7 @@
   "yaak": {
     "repository": "https://github.com/mountain-loop/yaak.git",
     "branch": "main",
-    "hash": "b4a1c418bb3f923858dd55729f585e189327a038",
+    "hash": "c6e09a5af3b20fc43cb6000af7b420af24ff510a",
     "forceFreshMigration": true
   },
   "npmx.dev": {

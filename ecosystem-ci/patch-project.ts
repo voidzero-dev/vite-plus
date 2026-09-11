@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
 import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
+import { patchDecodersNodeRuntime } from './patch-node-runtime.ts';
 import { ecosystemCiDir, tgzDir, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 
@@ -82,6 +83,12 @@ if (process.env.GITHUB_ENV) {
   await appendFile(process.env.GITHUB_ENV, lines);
 } else {
   process.on('exit', () => registryServer.kill());
+}
+
+if (project === 'decoders') {
+  const workflowPath = join(repoRoot, '.github/workflows/test.yml');
+  const workflow = await readFile(workflowPath, 'utf-8');
+  await writeFile(workflowPath, patchDecodersNodeRuntime(workflow), 'utf-8');
 }
 
 if (project === 'rollipop') {
