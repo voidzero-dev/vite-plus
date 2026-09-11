@@ -29,8 +29,8 @@ export function sanitizeHostForPath(host: string): string {
  * guarantees `manifest.tarballUrl` is a valid URL, so any parse failure
  * here is a real bug worth surfacing.
  *
- * Check containment here as well, in case a caller skips the version
- * validation in `readOrgManifest`.
+ * Require a strict descendant of `cacheRoot` so sibling staging directories
+ * stay inside the cache, even if a caller skips `readOrgManifest` validation.
  */
 export function resolveExtractionDir(cacheRoot: string, manifest: OrgManifest): string {
   const { host } = new URL(manifest.tarballUrl);
@@ -42,7 +42,7 @@ export function resolveExtractionDir(cacheRoot: string, manifest: OrgManifest): 
     'create',
     manifest.version,
   );
-  if (resolvedDir !== resolvedRoot && !resolvedDir.startsWith(`${resolvedRoot}${path.sep}`)) {
+  if (!resolvedDir.startsWith(`${resolvedRoot}${path.sep}`)) {
     throw new Error(`org template extraction path escapes the cache root: ${manifest.version}`);
   }
   return resolvedDir;

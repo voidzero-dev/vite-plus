@@ -2,17 +2,22 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OrgManifest } from '../org-manifest.js';
 import {
   cleanupStaleStagingDirs,
+  ensureOrgPackageExtracted,
   normalizeEntryName,
   parseEntryMode,
   resolveBundledPath,
   resolveExtractionDir,
   sanitizeHostForPath,
 } from '../org-tarball.js';
+
+const { mockGetVpDirs } = vi.hoisted(() => ({ mockGetVpDirs: vi.fn() }));
+
+vi.mock('../../../binding/index.js', () => ({ getVpDirs: mockGetVpDirs }));
 
 describe('resolveBundledPath', () => {
   const scratchDirs: string[] = [];
@@ -112,15 +117,38 @@ describe('resolveExtractionDir', () => {
     },
   );
 
-  // Escaping `<root>/<host>/<scope>/create` takes at least four `..` segments.
-  it.each(['../../../../outside', '../../../../../../outside-write', '/absolute'])(
-    'rejects a version that escapes the cache root: %s',
+  // Three `..` segments reach the cache root; four escape it.
+  it.each(['../../..', '../../../../outside', '../../../../../../outside-write', '/absolute'])(
+    'rejects a version that resolves to or outside the cache root: %s',
     (version) => {
       expect(() => resolveExtractionDir(cacheRoot, manifestFor(version))).toThrow(
         /escapes the cache root/,
       );
     },
   );
+});
+
+describe('ensureOrgPackageExtracted', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('rejects the cache root before filesystem or network activity', async () => {
+    mockGetVpDirs.mockReturnValue({ cache: path.join(os.tmpdir(), 'vp-org-extraction-cache') });
+    const exists = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const mkdir = vi.spyOn(fs.promises, 'mkdir').mockResolvedValue(undefined);
+    const readdir = vi.spyOn(fs.promises, 'readdir').mockResolvedValue([]);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected download'));
+
+    await expect(ensureOrgPackageExtracted(manifestFor('../../..'))).rejects.toThrow(
+      /escapes the cache root/,
+    );
+
+    expect(exists).not.toHaveBeenCalled();
+    expect(mkdir).not.toHaveBeenCalled();
+    expect(readdir).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('sanitizeHostForPath', () => {
