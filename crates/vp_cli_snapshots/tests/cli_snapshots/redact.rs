@@ -14,6 +14,18 @@ static UUID_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 static DURATION_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)?(ns|µs|ms|s)\b").unwrap());
+// Yarn prints elapsed times as one or several units (999ms vs 1s 0ms).
+// Match the entire elapsed field, not adjacent values in timing tables.
+static YARN_ELAPSED_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(\b(?:Done(?: with (?:warnings|errors))?|[Cc]ompleted) in )\d+(?:\.\d+)?(?:ms|s|m|h)\b(?:[ \t]+\d+(?:\.\d+)?(?:ms|s|m|h)\b)*",
+    )
+    .unwrap()
+});
+// Yarn omits the step timer entirely for fast steps. Keep the completion
+// marker while removing its optional, already normalized elapsed field.
+static YARN_STEP_TIMING_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(➤ YN0000: └ Completed) in <duration>").unwrap());
 // Vitest v5 prints the timing breakdown as percentages. Its order and omitted
 // zero-cost phases vary between runs, so redact the complete timing detail.
 static VITEST_TIMING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
@@ -452,6 +464,7 @@ pub fn redact_output(
 
     // Redact durations like "0ns", "123ms" or "1.23s" to "<duration>".
     // Runs before version redaction so "1.23s" never half-matches as a version.
+    output = YARN_ELAPSED_RE.replace_all(&output, "${1}<duration>").into_owned();
     output = DURATION_RE.replace_all(&output, "<duration>").into_owned();
     output = VITEST_TIMING_RE.replace_all(&output, "$1 (<timing>)").into_owned();
 
@@ -554,17 +567,7 @@ pub fn redact_output(
         })
         .into_owned();
 
-    // Normalize yarn's timing-dependent completion text: yarn appends
-    // "in Xs Ys" only when the step was slow enough to time, a race;
-    // DURATION_RE has already masked the numbers.
-    {
-        use cow_utils::CowUtils as _;
-        if let Cow::Owned(replaced) =
-            output.as_str().cow_replace("Completed in <duration> <duration>", "Completed")
-        {
-            output = replaced;
-        }
-    }
+    output = YARN_STEP_TIMING_RE.replace_all(&output, "${1}").into_owned();
 
     // Mask the racy completed-count in the global-install spinner row
     output = INSTALL_PROGRESS_COUNT_RE.replace_all(&output, "${1}<n>/${2}").into_owned();

@@ -62,7 +62,7 @@ describe('package.json exports map', () => {
     }
   });
 
-  it('compiles all typed test exports with NodeNext resolution', () => {
+  it.each(['/', '\\'])('compiles all typed test exports with %s path separators', (separator) => {
     const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
     const entries = Object.entries(pkg.exports as Record<string, ExportConditions>).filter(
       ([key, entry]) =>
@@ -87,7 +87,7 @@ expect(42).toMatchReceived('42');
 // @ts-expect-error An asynchronous matcher does not return void.
 const invalidReturn: void = expect(Promise.resolve(42)).resolves.toMatchReceived(42);
 `;
-    const filename = path.join(cliPkgDir, '__test_exports__.mts');
+    const filename = path.join(cliPkgDir, '__test_exports__.mts').replaceAll(/[\\/]/g, separator);
     const options: ts.CompilerOptions = {
       noEmit: true,
       strict: true,
@@ -99,7 +99,7 @@ const invalidReturn: void = expect(Promise.resolve(42)).resolves.toMatchReceived
     const host = ts.createCompilerHost(options);
     const getSourceFile = host.getSourceFile.bind(host);
     host.getSourceFile = (file, ...args) =>
-      file === filename
+      file.replaceAll('\\', '/') === filename.replaceAll('\\', '/')
         ? ts.createSourceFile(file, source, ts.ScriptTarget.ESNext, true)
         : getSourceFile(file, ...args);
     const program = ts.createProgram([filename], options, host);

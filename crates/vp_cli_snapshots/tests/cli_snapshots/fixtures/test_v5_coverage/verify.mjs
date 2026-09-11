@@ -25,7 +25,10 @@ for (const provider of ['v8', 'istanbul']) {
     const result = await runner.start();
     assert.equal(result.unhandledErrors.length, 0, JSON.stringify(result.unhandledErrors));
     assert.equal(runner.state.getCountOfFailedTests(), 0);
-    const map = readJson(`output/${provider}/coverage-final.json`);
+    // Istanbul may emit slash-normalized keys on Windows; resolve both
+    // providers' keys before looking up native absolute paths below.
+    const map = Object.fromEntries(Object.entries(readJson(`output/${provider}/coverage-final.json`))
+      .map(([file, coverage]) => [resolve(file), coverage]));
     assert.deepEqual(files(map), expectedFiles);
     assert.ok(Object.values(map[resolve('src/covered.js')].s).some((hits) => hits > 0));
     assert.ok(Object.values(map[resolve('src/untested.js')].s).every((hits) => hits === 0));

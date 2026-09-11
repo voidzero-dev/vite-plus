@@ -63,10 +63,10 @@ describe('Vitest v5 config compatibility', () => {
       'browser.test.ts': nodeTest,
     });
     const plan = planProject(root);
-    expect(plan.changes.some(({ file }) => file.endsWith('/node.test.ts'))).toBe(false);
-    expect(plan.changes.find(({ file }) => file.endsWith('/browser.test.ts'))?.after).toContain(
-      "expect(element).toMatchTextContent('partial')",
-    );
+    expect(plan.changes.some(({ file }) => file === path.join(root, 'node.test.ts'))).toBe(false);
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'browser.test.ts'))?.after,
+    ).toContain("expect(element).toMatchTextContent('partial')");
     expect(plan.findings.some(({ code }) => code === 'text-content-project')).toBe(false);
   });
 
@@ -97,7 +97,9 @@ module.exports = wrapper(defineConfig({ test: { browser: { enabled: true } } }))
         'shared.test.ts': `import { expect } from 'vitest';\nexpect(element).toHaveTextContent('partial');`,
       });
       const plan = planProject(root);
-      expect(plan.changes.some(({ file }) => file.endsWith('/shared.test.ts'))).toBe(false);
+      expect(plan.changes.some(({ file }) => file === path.join(root, 'shared.test.ts'))).toBe(
+        false,
+      );
       expect(plan.findings).toContainEqual(
         expect.objectContaining({ code: 'text-content-project', severity: 'review' }),
       );
@@ -110,9 +112,9 @@ module.exports = wrapper(defineConfig({ test: { browser: { enabled: true } } }))
       'browser.test.ts': `import { expect } from 'vitest';\nawait expect.element(element).toHaveTextContent('partial');`,
     });
     const plan = planProject(root);
-    expect(plan.changes.find(({ file }) => file.endsWith('/browser.test.ts'))?.after).toContain(
-      "expect.element(element).toMatchTextContent('partial')",
-    );
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'browser.test.ts'))?.after,
+    ).toContain("expect.element(element).toMatchTextContent('partial')");
   });
 
   it('resolves a named config helper and referenced raw project configs', () => {
@@ -127,10 +129,10 @@ export default config;`,
       'browser.test.ts': input,
     });
     const plan = planProject(root);
-    expect(plan.changes.some(({ file }) => file.endsWith('/node.test.ts'))).toBe(false);
-    expect(plan.changes.find(({ file }) => file.endsWith('/browser.test.ts'))?.after).toContain(
-      'toMatchTextContent',
-    );
+    expect(plan.changes.some(({ file }) => file === path.join(root, 'node.test.ts'))).toBe(false);
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'browser.test.ts'))?.after,
+    ).toContain('toMatchTextContent');
   });
 
   it('does not infer helper-module ownership from default test globs', () => {
@@ -139,7 +141,7 @@ export default config;`,
       'assertions.ts': `import { expect } from 'vitest';\nexport function check(element) { expect(element).toHaveTextContent('partial'); }`,
     });
     const plan = planProject(root);
-    expect(plan.changes.some(({ file }) => file.endsWith('/assertions.ts'))).toBe(false);
+    expect(plan.changes.some(({ file }) => file === path.join(root, 'assertions.ts'))).toBe(false);
     expect(plan.findings).toContainEqual(
       expect.objectContaining({ code: 'text-content-project', severity: 'review' }),
     );
@@ -162,7 +164,7 @@ export default config;`,
       'shared.test.ts': `import { expect } from 'vitest';\nexpect(element).toHaveTextContent('partial');`,
     });
     const plan = planProject(root);
-    expect(plan.changes.some(({ file }) => file.endsWith('/shared.test.ts'))).toBe(false);
+    expect(plan.changes.some(({ file }) => file === path.join(root, 'shared.test.ts'))).toBe(false);
     expect(plan.findings).toContainEqual(
       expect.objectContaining({ code: 'text-content-project', severity: 'review' }),
     );
@@ -691,7 +693,7 @@ export default defineConfig(CONFIG);`,
     expect(plan.findings).toContainEqual(
       expect.objectContaining({ code: 'jest-dom-types', severity: 'review' }),
     );
-    expect(plan.changes.some(({ file }) => file.endsWith('/tsconfig.json'))).toBe(false);
+    expect(plan.changes.some(({ file }) => file === path.join(root, 'tsconfig.json'))).toBe(false);
     fs.writeFileSync(
       path.join(root, 'tsconfig.json'),
       JSON.stringify({
@@ -945,6 +947,55 @@ export default defineConfig(CONFIG);`,
     expect(plan.projects[0].sourceVersion).toBe('5.0.0');
     expect(plan.projects[0].options.preserveV4).toBe(false);
     expect(plan.findings.some(({ severity }) => severity === 'block')).toBe(false);
+  });
+
+  it.each(
+    ['installed', 'locked'].flatMap((evidence) =>
+      ['0.1.24', '3.2.4', '5.0.0'].map((version) => [evidence, version]),
+    ),
+  )(
+    'ignores %s metadata for a legacy runner alias with an unrelated %s version',
+    (evidence, version) => {
+      const root = project({
+        'package.json': JSON.stringify({ devDependencies: { vitest: 'catalog:' } }),
+        'pnpm-workspace.yaml': JSON.stringify({
+          catalog: { vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.24' },
+        }),
+        'vite.config.ts': 'export default { test: {} };',
+        ...(evidence === 'installed'
+          ? {
+              'node_modules/vitest/package.json': JSON.stringify({ name: 'vitest', version }),
+            }
+          : {
+              'pnpm-lock.yaml': JSON.stringify({
+                importers: {
+                  '.': { devDependencies: { vitest: { specifier: 'catalog:', version } } },
+                },
+              }),
+            }),
+      });
+      const plan = planProject(root);
+      expect(plan.projects[0].sourceVersion).toBe('4.0.0');
+      expect(plan.projects[0].options.preserveV4).toBe(true);
+      expect(plan.findings.some(({ severity }) => severity === 'block')).toBe(false);
+      expect(plan.changes.find(({ file }) => file.endsWith('vite.config.ts'))?.after).toContain(
+        'clearMocks: false',
+      );
+    },
+  );
+
+  it('reads the upstream version from an installed legacy alias UI peer', () => {
+    const root = project({
+      'package.json': JSON.stringify({
+        devDependencies: { vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.24' },
+      }),
+      'node_modules/vitest/package.json': JSON.stringify({
+        name: '@voidzero-dev/vite-plus-test',
+        version: '0.1.24',
+        peerDependencies: { '@vitest/ui': '4.1.11' },
+      }),
+    });
+    expect(planProject(root).projects[0].sourceVersion).toBe('4.1.11');
   });
 
   it('reads the upstream version from an installed legacy wrapper UI peer', () => {
