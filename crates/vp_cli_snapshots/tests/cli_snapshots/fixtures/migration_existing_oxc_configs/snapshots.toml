@@ -1,6 +1,7 @@
 [[case]]
 name = "migration_existing_oxc_configs"
 vp = "global"
+link-local-vite-plus = true
 steps = [
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "finish a leftover Oxfmt config even when Vite+ is already installed" },
   ["vpt", "print-file", "vite.config.ts"],
@@ -17,6 +18,7 @@ steps = [
 [[case]]
 name = "migration_existing_oxc_configs_inline_fmt"
 vp = "global"
+link-local-vite-plus = true
 steps = [
   { argv = ["vpt", "write-file", "vite.config.ts", "export default { fmt: { singleQuote: false, semi: false } };\n"], snapshot = false },
   { argv = ["vp", "fmt", "src/index.ts"], comment = "the existing inline fmt config takes precedence over the standalone config" },
