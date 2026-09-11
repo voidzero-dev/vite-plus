@@ -117,7 +117,7 @@ After the migration:
 
 - Confirm `vite` imports were rewritten to `vite-plus` where needed
 - Confirm `vitest` imports were rewritten to `vite-plus/test` (and `@vitest/browser*` to `vite-plus/test/browser*`) where needed
-- Remove old `vite`, `vitest`, and `@vitest/browser*` dependencies only after those rewrites are confirmed — `vite-plus` ships them as direct deps
+- On pnpm, keep the `vite`, `vitest` dependency entries configured by `vp migrate` so the workspace aliases and overrides stay effective; with other package managers, you can remove them once those rewrites are confirmed
 - Move remaining tool-specific config into the appropriate blocks in `vite.config.ts`
 
 Command mapping to keep in mind:
