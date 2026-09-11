@@ -1264,143 +1264,6 @@ importers:
         specifier: ~2.3.3
         version: 2.3.3
 
-  vite/packages/vite/src/node/__tests__:
-    dependencies:
-      '@vitejs/cjs-ssr-dep':
-        specifier: link:./fixtures/cjs-ssr-dep
-        version: link:fixtures/cjs-ssr-dep
-      '@vitejs/parent':
-        specifier: link:./packages/parent
-        version: link:packages/parent
-      '@vitejs/test-dep-conditions':
-        specifier: file:./fixtures/test-dep-conditions
-        version: file:vite/packages/vite/src/node/__tests__/fixtures/test-dep-conditions
-      vue:
-        specifier: ^3.5.18
-        version: 3.5.40(typescript@6.0.3)
-
-  vite/packages/vite/src/node/__tests__/fixtures/cjs-ssr-dep: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/cjs-module-vars-in-esm: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/entry:
-    dependencies:
-      '@vite/test-config-plugin-module-condition':
-        specifier: link:../plugin-module-condition
-        version: link:../plugin-module-condition
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/import-meta: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/native-compat: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/native-compat/esm-in-commonjs-pkg: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/native-compat/mts-config: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/native-import: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/plugin-module-condition: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/shebang: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/shebang-crlf: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/config/siblings:
-    devDependencies:
-      '@types/lodash':
-        specifier: ^4.17.16
-        version: 4.17.21
-      lodash:
-        specifier: ^4.17.21
-        version: 4.17.21
-
-  vite/packages/vite/src/node/__tests__/fixtures/file-url: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/scan-subpath-import-glob: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/test-dep-conditions: {}
-
-  vite/packages/vite/src/node/__tests__/fixtures/watch-rebuild-manifest: {}
-
-  vite/packages/vite/src/node/__tests__/packages: {}
-
-  vite/packages/vite/src/node/__tests__/packages/child: {}
-
-  vite/packages/vite/src/node/__tests__/packages/module: {}
-
-  vite/packages/vite/src/node/__tests__/packages/name: {}
-
-  vite/packages/vite/src/node/__tests__/packages/noname: {}
-
-  vite/packages/vite/src/node/__tests__/packages/parent:
-    dependencies:
-      '@vitejs/child':
-        specifier: link:../child
-        version: link:../child
-
-  vite/packages/vite/src/node/__tests__/plugins/fixtures/license:
-    dependencies:
-      '@vitejs/test-dep-licence-cc0':
-        specifier: file:./dep-licence-cc0
-        version: file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-licence-cc0
-      '@vitejs/test-dep-license-mit':
-        specifier: file:./dep-license-mit
-        version: file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-license-mit
-
-  vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-licence-cc0: {}
-
-  vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-license-mit:
-    dependencies:
-      '@vitejs/test-dep-nested-license-isc':
-        specifier: file:../dep-nested-license-isc
-        version: file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-nested-license-isc
-
-  vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-nested-license-isc: {}
-
-  vite/packages/vite/src/node/server/__tests__/fixtures/deno/nested: {}
-
-  vite/packages/vite/src/node/server/__tests__/fixtures/lerna/nested: {}
-
-  vite/packages/vite/src/node/server/__tests__/fixtures/none/nested: {}
-
-  vite/packages/vite/src/node/server/__tests__/fixtures/pnpm: {}
-
-  vite/packages/vite/src/node/server/__tests__/fixtures/pnpm/nested: {}
-
-  vite/packages/vite/src/node/server/__tests__/fixtures/watcher: {}
-
-  vite/packages/vite/src/node/server/__tests__/fixtures/yarn: {}
-
-  vite/packages/vite/src/node/server/__tests__/fixtures/yarn/nested: {}
-
-  vite/packages/vite/src/node/ssr/runtime/__tests__:
-    dependencies:
-      '@vitejs/cjs-external':
-        specifier: link:./fixtures/cjs-external
-        version: link:fixtures/cjs-external
-      '@vitejs/esm-external':
-        specifier: link:./fixtures/esm-external
-        version: link:fixtures/esm-external
-      birpc:
-        specifier: ^0.2.19
-        version: 0.2.19
-      test-dep-invalid-exports:
-        specifier: file:./fixtures/invalid-package/deps/test-dep-invalid-exports
-        version: file:vite/packages/vite/src/node/ssr/runtime/__tests__/fixtures/invalid-package/deps/test-dep-invalid-exports
-      tinyspy:
-        specifier: 2.2.0
-        version: 2.2.0
-
-  vite/packages/vite/src/node/ssr/runtime/__tests__/fixtures/cjs-external: {}
-
-  vite/packages/vite/src/node/ssr/runtime/__tests__/fixtures/cyclic2: {}
-
-  vite/packages/vite/src/node/ssr/runtime/__tests__/fixtures/esm-external: {}
-
-  vite/packages/vite/src/node/ssr/runtime/__tests__/fixtures/invalid-package/deps/test-dep-invalid-exports: {}
-
-  vite/packages/vite/src/node/ssr/runtime/__tests__/fixtures/live-binding: {}
-
 packages:
 
   '@acemir/cssom@0.9.24':
@@ -4874,18 +4737,6 @@ packages:
   '@vitejs/release-scripts@1.10.0':
     resolution: {integrity: sha512-1vPdK4Jm2vxCFpaf4D7Nwam677OUoXqUU0WqhLjYec38qiK/XXkzuWK6QnFkn9ty63F+slN13pNUCwEHPOLRuQ==}
 
-  '@vitejs/test-dep-conditions@file:vite/packages/vite/src/node/__tests__/fixtures/test-dep-conditions':
-    resolution: {directory: vite/packages/vite/src/node/__tests__/fixtures/test-dep-conditions, type: directory}
-
-  '@vitejs/test-dep-licence-cc0@file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-licence-cc0':
-    resolution: {directory: vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-licence-cc0, type: directory}
-
-  '@vitejs/test-dep-license-mit@file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-license-mit':
-    resolution: {directory: vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-license-mit, type: directory}
-
-  '@vitejs/test-dep-nested-license-isc@file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-nested-license-isc':
-    resolution: {directory: vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-nested-license-isc, type: directory}
-
   '@vitest/browser-playwright@5.0.0':
     resolution: {integrity: sha512-N+gED9y4/8pypaHjz/x0ah3CjoBr+N0hWWT+Gq4VXtMzyB+rUIdHni0ulzpD1j4H77iWy5Jg8PRMlVn6kjxo6g==}
     peerDependencies:
@@ -5624,9 +5475,6 @@ packages:
     resolution: {integrity: sha512-bIo91Ac1RAyFnUotI3+iIbl35Wk5yZrJIE6JQQOt33NneQj/A34j64bkyYxeVGLxAfNSfKE9cfIyDDy7JLyNiw==}
     engines: {node: '>=18'}
     hasBin: true
-
-  birpc@0.2.19:
-    resolution: {integrity: sha512-5WeXXAvTmitV1RqJFppT5QtUiz2p1mRSYU000Jkft5ZUCLJIk4uQriYNO50HknxKwM6jd8utNc66K1qGIwwWBQ==}
 
   birpc@2.9.0:
     resolution: {integrity: sha512-KrayHS5pBi69Xi9JmvoqrIgYGDkD6mcSe/i6YKi3w5kekCLzrX4+nawcXqrj2tIp50Kw/mT/s3p+GVK0A0sKxw==}
@@ -8238,9 +8086,6 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  test-dep-invalid-exports@file:vite/packages/vite/src/node/ssr/runtime/__tests__/fixtures/invalid-package/deps/test-dep-invalid-exports:
-    resolution: {directory: vite/packages/vite/src/node/ssr/runtime/__tests__/fixtures/invalid-package/deps/test-dep-invalid-exports, type: directory}
-
   text-decoder@1.2.3:
     resolution: {integrity: sha512-3/o9z3X0X0fTupwsYvR03pJ/DjWuqqrfwBgTQzdWDiQSm9KitAyz/9WqsT2JQW7KV2m+bC2ol/zqpW37NHxLaA==}
 
@@ -8282,10 +8127,6 @@ packages:
 
   tinyrainbow@3.1.1:
     resolution: {integrity: sha512-yau8yJdTt989Mm0Bd/236QnzEiPf2xLLTqUZRUJOo/3CB078LSwzei343DgtJVmfJKJE3TMINY1u42SQsP6mXw==}
-    engines: {node: '>=14.0.0'}
-
-  tinyspy@2.2.0:
-    resolution: {integrity: sha512-d2eda04AN/cPOR89F7Xv5bK/jrQEhmcLFe6HFldoeO9AJtps+fqEnh486vnT/8y4bw38pSyxDcTCAq+Ks2aJTg==}
     engines: {node: '>=14.0.0'}
 
   tldts-core@7.0.19:
@@ -11991,16 +11832,6 @@ snapshots:
       semver: 7.8.5
       tinyexec: 1.3.1
 
-  '@vitejs/test-dep-conditions@file:vite/packages/vite/src/node/__tests__/fixtures/test-dep-conditions': {}
-
-  '@vitejs/test-dep-licence-cc0@file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-licence-cc0': {}
-
-  '@vitejs/test-dep-license-mit@file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-license-mit':
-    dependencies:
-      '@vitejs/test-dep-nested-license-isc': file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-nested-license-isc
-
-  '@vitejs/test-dep-nested-license-isc@file:vite/packages/vite/src/node/__tests__/plugins/fixtures/license/dep-nested-license-isc': {}
-
   '@vitest/browser-playwright@5.0.0(playwright@1.62.1)(vite@packages+core)(vitest@5.0.0)':
     dependencies:
       '@vitest/browser': 5.0.0(vite@packages+core)(vitest@5.0.0)
@@ -12663,8 +12494,6 @@ snapshots:
       slugify: 1.6.6
       without-undefined-properties: 0.1.2
       zod: 3.25.76
-
-  birpc@0.2.19: {}
 
   birpc@2.9.0: {}
 
@@ -15375,8 +15204,6 @@ snapshots:
       commander: 2.20.3
       source-map-support: 0.5.21
 
-  test-dep-invalid-exports@file:vite/packages/vite/src/node/ssr/runtime/__tests__/fixtures/invalid-package/deps/test-dep-invalid-exports: {}
-
   text-decoder@1.2.3:
     dependencies:
       b4a: 1.7.3
@@ -15405,8 +15232,6 @@ snapshots:
   tinyrainbow@3.1.0: {}
 
   tinyrainbow@3.1.1: {}
-
-  tinyspy@2.2.0: {}
 
   tldts-core@7.0.19:
     optional: true

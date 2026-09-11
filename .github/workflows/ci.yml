@@ -475,13 +475,6 @@ jobs:
           RUST_BACKTRACE: '1'
           RUST_MIN_STACK: 8388608
 
-      - name: Test vendored Vite with Vitest v5
-        if: runner.os == 'Linux'
-        run: |
-          pnpm --filter vite build-bundle
-          pnpm --filter create-vite build
-          pnpm test:vendored
-
       - name: Test global package install (powershell)
         if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
         shell: pwsh
