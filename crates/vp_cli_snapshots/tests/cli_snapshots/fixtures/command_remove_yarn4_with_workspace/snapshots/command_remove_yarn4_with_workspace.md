@@ -174,7 +174,7 @@ should remove package from all workspaces and root
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
@@ -237,7 +237,7 @@ should remove optional package from all workspaces
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
@@ -288,10 +288,10 @@ recursive remove affects only app
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
@@ -339,10 +339,10 @@ should remove package by filter=*
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vp remove test-vite-plus-install --filter=*`
@@ -356,8 +356,8 @@ Done in <duration> <duration>
 [command-remove-yarn4-with-workspace]: ➤ YN0000: └ Completed
 [command-remove-yarn4-with-workspace]: ➤ YN0000: ┌ Link step
 [command-remove-yarn4-with-workspace]: ➤ YN0000: └ Completed
-[command-remove-yarn4-with-workspace]: ➤ YN0000: · Done in <duration> <duration>
-[command-remove-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration> <duration>
+[command-remove-yarn4-with-workspace]: ➤ YN0000: · Done in <duration>
+[command-remove-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration>
 
 [admin]: Process started
 [admin]: ➤ YN0000: · Yarn <version>
@@ -367,8 +367,8 @@ Done in <duration> <duration>
 [admin]: ➤ YN0000: └ Completed
 [admin]: ➤ YN0000: ┌ Link step
 [admin]: ➤ YN0000: └ Completed
-[admin]: ➤ YN0000: · Done in <duration> <duration>
-[admin]: Process exited (exit code 0), completed in <duration> <duration>
+[admin]: ➤ YN0000: · Done in <duration>
+[admin]: Process exited (exit code 0), completed in <duration>
 
 [app]: Process started
 [app]: ➤ YN0000: · Yarn <version>
@@ -378,10 +378,10 @@ Done in <duration> <duration>
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`

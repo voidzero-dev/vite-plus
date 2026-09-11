@@ -73,8 +73,6 @@ peerDependencyRules:
 the guidance's `vp pm approve-builds` command approves the gated build
 
 ```
-✓ Lockfile passes supply-chain policies (verified <duration> ago)
-Already up to date
 node_modules/.pnpm/core-js@3.39.0/node_modules/core-js: Running postinstall script, done in <duration>
 ```
 
