@@ -9618,3 +9618,67 @@ describe('collectMigrationSetupPlan non-interactive editor conflicts', () => {
     expect(plan.editorConflictDecisions.get('workspace.xml')).toBe('skip');
   });
 });
+
+describe('Oxlint config arg', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-oxlint-config-arg-'));
+    fs.writeFileSync(path.join(tmpDir, '.oxlintrc.json'), '{}');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: {
+          short: 'oxlint -c .oxlintrc.json',
+          shortQuoted: 'oxlint -c "./.oxlintrc.json"',
+          shortEquals: 'oxlint -c=.oxlintrc.json',
+          long: 'oxlint --config .oxlintrc.json',
+          longQuoted: 'oxlint --config "./.oxlintrc.json"',
+          longEquals: 'oxlint --config=.oxlintrc.json',
+          windows: 'oxlint -c .\\.oxlintrc.json',
+        },
+        devDependencies: { oxlint: '^1.0.0' },
+      }),
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('removes the config argument - standalone project', () => {
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts).toEqual({
+      short: 'vp lint',
+      shortQuoted: 'vp lint',
+      shortEquals: 'vp lint',
+      long: 'vp lint',
+      longQuoted: 'vp lint',
+      longEquals: 'vp lint',
+      windows: 'vp lint',
+    });
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(false);
+  });
+
+  it('removes the config argument - monorepo project', () => {
+    rewriteMonorepoProject(tmpDir, PackageManager.npm, true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts).toEqual({
+      short: 'vp lint',
+      shortQuoted: 'vp lint',
+      shortEquals: 'vp lint',
+      long: 'vp lint',
+      longQuoted: 'vp lint',
+      longEquals: 'vp lint',
+      windows: 'vp lint',
+    });
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(false);
+  });
+});
