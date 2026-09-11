@@ -28,40 +28,40 @@ export const REMOVED_VITEST_PACKAGES = new Set(['@vitest/runner', '@vitest/expec
  * @param {string} version
  */
 export function alignVendoredVitestDependencies(rootDir, version) {
-  for (const vendor of ['vite', 'rolldown']) {
-    const packagesDir = join(rootDir, vendor, 'packages');
-    const dirs = [
-      join(rootDir, vendor),
-      ...readdirSync(packagesDir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => join(packagesDir, entry.name)),
-    ];
-    for (const dir of dirs) {
-      const file = join(dir, 'package.json');
-      if (!existsSync(file)) {
-        continue;
-      }
-      const source = readFileSync(file, 'utf8');
-      const pkg = JSON.parse(source);
-      let changed = false;
-      for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
-        for (const name of Object.keys(pkg[field] ?? {})) {
-          if (REMOVED_VITEST_PACKAGES.has(name)) {
-            throw new Error(`Migrate removed ${name} use in ${file} before synchronizing Vitest`);
-          }
-          if (!VITEST_EXACT_VERSION_PACKAGES.has(name)) {
-            continue;
-          }
-          // Only the default catalog is aligned during sync; named catalogs can still use v4.
-          if (pkg[field][name] !== version && pkg[field][name] !== 'catalog:') {
-            pkg[field][name] = version;
-            changed = true;
-          }
+  // Vite's direct dependencies must match the root catalog for our build and
+  // integration tests. Leave Rolldown's test dependencies to its upstream repo.
+  const packagesDir = join(rootDir, 'vite', 'packages');
+  const dirs = [
+    join(rootDir, 'vite'),
+    ...readdirSync(packagesDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(packagesDir, entry.name)),
+  ];
+  for (const dir of dirs) {
+    const file = join(dir, 'package.json');
+    if (!existsSync(file)) {
+      continue;
+    }
+    const source = readFileSync(file, 'utf8');
+    const pkg = JSON.parse(source);
+    let changed = false;
+    for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+      for (const name of Object.keys(pkg[field] ?? {})) {
+        if (REMOVED_VITEST_PACKAGES.has(name)) {
+          throw new Error(`Migrate removed ${name} use in ${file} before synchronizing Vitest`);
+        }
+        if (!VITEST_EXACT_VERSION_PACKAGES.has(name)) {
+          continue;
+        }
+        // Only the default catalog is aligned during sync; named catalogs can still use v4.
+        if (pkg[field][name] !== version && pkg[field][name] !== 'catalog:') {
+          pkg[field][name] = version;
+          changed = true;
         }
       }
-      if (changed) {
-        writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
-      }
+    }
+    if (changed) {
+      writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
     }
   }
 }

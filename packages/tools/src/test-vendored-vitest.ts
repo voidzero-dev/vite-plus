@@ -1,8 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { configDefaults } from 'vitest/config';
-import { createVitest, type TestUserConfig } from 'vitest/node';
+import { createVitest } from 'vitest/node';
 
 /** The branded checkout deliberately suppresses this notice and aliases Vite's
  * package name. Check those contracts without changing the upstream checkout
@@ -26,46 +25,24 @@ export function adaptBrandedViteAssertions(source: string): string {
   return result.replace('"jsonValue": "vite"', '"jsonValue": "@voidzero-dev/vite-plus-core"');
 }
 
-const suites: Record<string, { directory: string; config: string; options?: TestUserConfig }> = {
-  vite: { directory: 'vite', config: 'vitest.config.ts' },
-  rolldown: {
-    directory: 'rolldown/packages/rolldown/tests',
-    config: 'vitest.config.mts',
-    options: { exclude: [...configDefaults.exclude, '**/watch.test.ts', '**/dev-watch.test.ts'] },
-  },
-  'rolldown-watch': {
-    directory: 'rolldown/packages/rolldown/tests',
-    config: 'vitest.config.mts',
-    options: { include: ['**/watch.test.ts', '**/dev-watch.test.ts'] },
-  },
-  'rolldown-dev-server': {
-    directory: 'rolldown/packages/test-dev-server/tests',
-    config: 'vitest.config.fixtures.mts',
-  },
-};
-
 async function main() {
   const root = fileURLToPath(new URL('../../../', import.meta.url));
-  const selected = process.argv.slice(2);
-  for (const name of selected.length ? selected : Object.keys(suites)) {
-    const suite = suites[name];
-    if (!suite) {
-      throw new Error(`Unknown vendored suite: ${name}. Use ${Object.keys(suites).join(', ')}.`);
-    }
-    const directory = path.join(root, suite.directory);
-    process.chdir(directory);
-    console.log(`\nRunning vendored ${name} with the synchronized Vitest v5 graph`);
+  if (process.argv.slice(2).some((name) => name !== 'vite')) {
+    throw new Error('Only the vendored Vite suite is supported. Use pnpm test:vendored.');
+  }
+  const directory = path.join(root, 'vite');
+  process.chdir(directory);
+  console.log('\nRunning vendored Vite with the synchronized Vitest v5 graph');
+  try {
     const runner = await createVitest(
       {
-        config: suite.config,
+        config: 'vitest.config.ts',
         watch: false,
         maxWorkers: 4,
         // The upstream configs predate v5. Keep their explicit v4 mock history
         // contract in this test-only bridge until upstream adopts the default.
         clearMocks: false,
         env: {
-          ROLLDOWN_TEST: '1',
-          RUST_BACKTRACE: '1',
           // The root install already supplies the v5 bridge. A nested pnpm
           // command must not reinstall the vendored workspace's v4 catalog.
           PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false',
@@ -83,29 +60,25 @@ async function main() {
             .filter(Boolean)
             .join(path.delimiter),
         },
-        ...suite.options,
       },
       {
-        plugins:
-          name === 'vite'
-            ? [
-                {
-                  name: 'vite-plus:vendored-branding-assertions',
-                  enforce: 'pre',
-                  transform(source, id) {
-                    if (
-                      id.split('?')[0] ===
-                      path
-                        .join(directory, 'packages/vite/src/node/__tests__/config.spec.ts')
-                        .replaceAll('\\', '/')
-                    ) {
-                      return { code: adaptBrandedViteAssertions(source), map: null };
-                    }
-                    return null;
-                  },
-                },
-              ]
-            : [],
+        plugins: [
+          {
+            name: 'vite-plus:vendored-branding-assertions',
+            enforce: 'pre',
+            transform(source, id) {
+              if (
+                id.split('?')[0] ===
+                path
+                  .join(directory, 'packages/vite/src/node/__tests__/config.spec.ts')
+                  .replaceAll('\\', '/')
+              ) {
+                return { code: adaptBrandedViteAssertions(source), map: null };
+              }
+              return null;
+            },
+          },
+        ],
       },
     );
     try {
@@ -115,8 +88,9 @@ async function main() {
       }
     } finally {
       await runner.close();
-      process.chdir(root);
     }
+  } finally {
+    process.chdir(root);
   }
 }
 
