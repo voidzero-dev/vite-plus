@@ -410,29 +410,14 @@ impl JsExecutor {
     /// Find the directory whose `node_modules/vite-plus` an upward walk from
     /// `project_path` is allowed to use.
     ///
-    /// Walking every ancestor's `node_modules` is ordinary Node resolution
-    /// semantics, and layouts legitimately rely on it (hoisted installs; the
-    /// snapshot harness stages workspaces with no `node_modules` of their own
-    /// that resolve a run-root install). So the walk stays unbounded by
-    /// default. The exception is a project that *declares* a `vite-plus`
-    /// dependency (directly, or at its workspace root — the same test
-    /// `warn_missing_local_cli_if_project` applies): for it, escaping the
-    /// workspace root would silently borrow an unrelated ancestor's copy in
-    /// exactly the situation where "run `vp install`" is the right answer.
-    /// Only then is the walk bounded at the workspace root: within it,
-    /// nearest wins (a workspace member still resolves the workspace root's
-    /// install); beyond it, resolution fails so callers fall back to the
-    /// global installation and the install hint.
+    /// Declared Vite+ projects stay within their package or workspace boundary;
+    /// an ancestor workspace must include the package to supply its install.
+    /// Unreadable manifests preserve the nearest known package boundary.
+    /// Undeclared projects and markerless directories keep Node's upward walk.
     pub(crate) fn local_vite_plus_install_host(
         project_path: &AbsolutePath,
     ) -> Option<AbsolutePathBuf> {
-        let boundary = vt_workspace::find_workspace_root(project_path)
-            .ok()
-            .filter(|(root, _)| {
-                crate::commands::has_vite_plus_dependency(project_path)
-                    || crate::commands::has_vite_plus_dependency(root.path.as_ref())
-            })
-            .map(|(root, _)| root.path);
+        let boundary = commands::local_vite_plus_boundary(project_path);
 
         let mut current = project_path;
         loop {
@@ -635,6 +620,107 @@ mod tests {
         let pkg_dir = JsExecutor::resolve_local_vite_plus_package_dir(member)
             .expect("workspace root install must stay resolvable");
         assert!(pkg_dir.as_path().ends_with("node_modules/vite-plus"));
+    }
+
+    #[test]
+    fn local_resolution_checks_workspace_membership() {
+        for (workspace_file, content, package, is_member) in [
+            ("package.json", r#"{"workspaces":["packages/*"]}"#, "external/inner", false),
+            ("package.json", r#"{"workspaces":["packages/*"]}"#, "packages/app", true),
+            ("package.json", r#"{"workspaces":["**"]}"#, "node_modules/inner", false),
+            (
+                "package.json",
+                r#"{"workspaces":{"packages":["./packages/*","!./packages/excluded"]}}"#,
+                "packages/excluded",
+                false,
+            ),
+            (
+                "package.json",
+                r#"{"workspaces":{"packages":["./packages/*","!./packages/excluded"]}}"#,
+                "packages/app",
+                true,
+            ),
+            ("pnpm-workspace.yaml", "packages:\n  - packages/*\n", "external/inner", false),
+            (
+                "pnpm-workspace.yaml",
+                "packages:\n  - packages/*\n  - '!packages/excluded'\n",
+                "packages/excluded",
+                false,
+            ),
+            (
+                "pnpm-workspace.yaml",
+                "packages:\n  - './packages/{app,other}/'\n",
+                "packages/app",
+                true,
+            ),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path();
+            std::fs::write(root.join("package.json"), r#"{"name":"outer"}"#).unwrap();
+            std::fs::write(root.join(workspace_file), content).unwrap();
+            std::fs::create_dir_all(root.join("node_modules/vite-plus/dist")).unwrap();
+            std::fs::write(
+                root.join("node_modules/vite-plus/package.json"),
+                r#"{"version":"0.3.0"}"#,
+            )
+            .unwrap();
+            std::fs::write(root.join("node_modules/vite-plus/dist/bin.js"), "").unwrap();
+            // Membership must not require reading unrelated members' manifests.
+            std::fs::create_dir_all(root.join("packages/broken")).unwrap();
+            std::fs::write(root.join("packages/broken/package.json"), "{").unwrap();
+
+            let project = root.join(package);
+            std::fs::create_dir_all(project.join("src")).unwrap();
+            std::fs::write(
+                project.join("package.json"),
+                r#"{"name":"inner","devDependencies":{"vite-plus":"0.3.0"}}"#,
+            )
+            .unwrap();
+            let cwd = project.join("src");
+            let cwd = AbsolutePath::new(&cwd).unwrap();
+            assert_eq!(
+                JsExecutor::resolve_local_vite_plus(cwd).is_some(),
+                is_member,
+                "{workspace_file}: {content}, package: {package}",
+            );
+        }
+    }
+
+    #[test]
+    fn local_resolution_preserves_boundary_on_manifest_errors() {
+        for (ancestor, project, workspace) in [
+            ("{", r#"{"devDependencies":{"vite-plus":"0.3.0"}}"#, None),
+            (r#"{"workspaces":["["]}"#, r#"{"devDependencies":{"vite-plus":"0.3.0"}}"#, None),
+            ("{}", r#"{"devDependencies":{"vite-plus":"0.3.0"}}"#, Some("packages: [")),
+            ("{}", "{", None),
+            ("{}", "{", Some("packages:\n  - inner\n")),
+            ("{", "{}", Some("packages:\n  - inner\n")),
+            ("{}", "\u{feff}{\"devDependencies\":{\"vite-plus\":\"0.3.0\"}}", None),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path();
+            std::fs::write(root.join("package.json"), ancestor).unwrap();
+            if let Some(workspace) = workspace {
+                std::fs::write(root.join("pnpm-workspace.yaml"), workspace).unwrap();
+            }
+            std::fs::create_dir_all(root.join("node_modules/vite-plus/dist")).unwrap();
+            std::fs::write(
+                root.join("node_modules/vite-plus/package.json"),
+                r#"{"version":"0.2.1"}"#,
+            )
+            .unwrap();
+            std::fs::write(root.join("node_modules/vite-plus/dist/bin.js"), "").unwrap();
+            let inner = root.join("inner");
+            std::fs::create_dir_all(&inner).unwrap();
+            std::fs::write(inner.join("package.json"), project).unwrap();
+            let inner = AbsolutePath::new(&inner).unwrap();
+            assert_eq!(
+                JsExecutor::local_vite_plus_install_host(inner),
+                None,
+                "{ancestor}: {project}"
+            );
+            assert_eq!(JsExecutor::resolve_local_vite_plus(inner), None);
+        }
     }
 
     /// A project that does *not* declare a vite-plus dependency keeps Node's

@@ -1,0 +1,42 @@
+[[case]]
+name = "excluded_project"
+vp = "global"
+comment = "An independent project outside the workspace patterns cannot borrow its ancestor's CLI."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  ["node", "assert-boundary.mjs", "outer/external/inner", "global"],
+]
+
+[[case]]
+name = "workspace_member"
+vp = "global"
+comment = "A member can use the workspace root's declared CLI dependency."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  ["node", "assert-boundary.mjs", "outer/packages/member", "local"],
+]
+
+[[case]]
+name = "malformed_ancestor"
+vp = "global"
+comment = "A malformed ancestor manifest cannot remove the independent project's boundary."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/package.json", "{"], snapshot = false },
+  ["node", "assert-boundary.mjs", "outer/external/inner", "global"],
+]
+
+[[case]]
+name = "bom_manifest"
+vp = "global"
+comment = "A UTF-8 BOM does not hide the project's vite-plus dependency."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/package.json", "\uFEFF{\"name\":\"inner\",\"devDependencies\":{\"vite-plus\":\"0.3.1\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/pnpm-workspace.yaml", "packages: []\n"], snapshot = false },
+  ["node", "assert-boundary.mjs", "outer/external/inner", "global"],
+]

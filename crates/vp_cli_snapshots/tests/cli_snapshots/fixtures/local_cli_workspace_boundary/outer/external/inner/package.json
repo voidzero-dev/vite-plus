@@ -1,0 +1,6 @@
+{
+  "name": "inner",
+  "devDependencies": {
+    "vite-plus": "0.3.1"
+  }
+}
