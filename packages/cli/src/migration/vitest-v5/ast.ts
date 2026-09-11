@@ -1,10 +1,38 @@
-import { parse } from '@babel/parser';
-import traverseModule, { type NodePath } from '@babel/traverse';
-import type * as t from '@babel/types';
+import type * as t from '@oxc-project/types';
 
-// Babel 7's CommonJS default has one extra level under native Node ESM.
-export const traverse: typeof traverseModule.default =
-  typeof traverseModule === 'function' ? traverseModule : traverseModule.default;
+import { analyzeMigrationSource } from '../../../binding/index.js';
+
+interface ParsedSource {
+  program: t.Program;
+  comments: t.Span[];
+  bindings: Array<{ start: number; references: number[]; constant: boolean }>;
+}
+
+interface Binding {
+  declaration: t.Node;
+  references: t.Node[];
+  constant: boolean;
+}
+
+type Visitors = {
+  [Type in t.Node['type']]?: (node: Extract<t.Node, { type: Type }>) => void;
+};
+
+function isNode(value: unknown): value is t.Node {
+  return typeof value === 'object' && value !== null && 'type' in value && 'start' in value;
+}
+
+export function isString(node: t.Node | null | undefined): node is t.StringLiteral {
+  return node?.type === 'Literal' && typeof node.value === 'string';
+}
+
+export function isBoolean(node: t.Node | null | undefined): node is t.BooleanLiteral {
+  return node?.type === 'Literal' && typeof node.value === 'boolean';
+}
+
+export function isRegExp(node: t.Node | null | undefined): node is t.RegExpLiteral {
+  return node?.type === 'Literal' && 'regex' in node;
+}
 
 export interface VitestV5Finding {
   file: string;
@@ -28,17 +56,17 @@ export function propertyName(node: t.Node | null | undefined): string | undefine
   if (node?.type === 'Identifier') {
     return node.name;
   }
-  if (node?.type === 'StringLiteral') {
+  if (isString(node)) {
     return node.value;
   }
   return undefined;
 }
 
 export function memberName(node: t.Node | null | undefined): string | undefined {
-  if (node?.type !== 'MemberExpression' && node?.type !== 'OptionalMemberExpression') {
+  if (node?.type !== 'MemberExpression') {
     return undefined;
   }
-  if (node.computed && node.property.type !== 'StringLiteral') {
+  if (node.computed && !isString(node.property)) {
     return undefined;
   }
   return propertyName(node.property);
@@ -50,7 +78,11 @@ export function objectProperty(
 ): t.ObjectProperty | undefined {
   return object.properties.find(
     (prop): prop is t.ObjectProperty =>
-      prop.type === 'ObjectProperty' && !prop.computed && propertyName(prop.key) === key,
+      prop.type === 'Property' &&
+      !prop.method &&
+      prop.kind === 'init' &&
+      !prop.computed &&
+      propertyName(prop.key) === key,
   );
 }
 
@@ -60,7 +92,7 @@ export function staticObject(node: t.Node | null | undefined): node is t.ObjectE
   }
   const names = new Set<string>();
   return node.properties.every((prop) => {
-    if (prop.type !== 'ObjectProperty' || prop.computed) {
+    if (prop.type !== 'Property' || prop.method || prop.kind !== 'init' || prop.computed) {
       return false;
     }
     const name = propertyName(prop.key);
@@ -73,16 +105,23 @@ export function staticObject(node: t.Node | null | undefined): node is t.ObjectE
 }
 
 export function importedName(
-  path: NodePath,
+  editor: SourceEditor,
   node: t.Node | null | undefined,
   sources: ReadonlySet<string>,
 ): string | undefined {
-  if (node?.type === 'MemberExpression' && !node.computed && node.object.type === 'Identifier') {
-    const binding = path.scope.getBinding(node.object.name);
+  if (
+    node?.type === 'MemberExpression' &&
+    !node.optional &&
+    !node.computed &&
+    node.object.type === 'Identifier'
+  ) {
+    const declaration = editor.binding(node.object)?.declaration;
+    const parent = declaration && editor.parent(declaration);
     if (
-      binding?.path.isImportNamespaceSpecifier() &&
-      binding.path.parentPath.isImportDeclaration() &&
-      sources.has(binding.path.parentPath.node.source.value)
+      declaration?.type === 'ImportNamespaceSpecifier' &&
+      parent?.type === 'ImportDeclaration' &&
+      parent.importKind !== 'type' &&
+      sources.has(parent.source.value)
     ) {
       return propertyName(node.property);
     }
@@ -90,18 +129,16 @@ export function importedName(
   if (node?.type !== 'Identifier') {
     return undefined;
   }
-  const binding = path.scope.getBinding(node.name);
-  if (!binding?.path.isImportSpecifier() || !binding.path.parentPath.isImportDeclaration()) {
+  const declaration = editor.binding(node)?.declaration;
+  const parent = declaration && editor.parent(declaration);
+  if (declaration?.type !== 'ImportSpecifier' || parent?.type !== 'ImportDeclaration') {
     return undefined;
   }
-  if (
-    binding.path.node.importKind === 'type' ||
-    binding.path.parentPath.node.importKind === 'type'
-  ) {
+  if (declaration.importKind === 'type' || parent.importKind === 'type') {
     return undefined;
   }
-  if (sources.has(binding.path.parentPath.node.source.value)) {
-    return propertyName(binding.path.node.imported);
+  if (sources.has(parent.source.value)) {
+    return propertyName(declaration.imported);
   }
   return undefined;
 }
@@ -115,24 +152,22 @@ export const CONFIG_SOURCES = new Set([
 ]);
 export const NODE_SOURCES = new Set(['vitest/node', 'vite-plus/test/node']);
 
-function parseSource(file: string, source: string) {
-  return parse(source, {
-    sourceType: 'unambiguous',
-    plugins: [/\.[cm]?tsx?$/.test(file) ? 'typescript' : 'flow', 'jsx', 'decorators-legacy'],
-    tokens: true,
-  });
+export function parseSource(file: string, source: string): ParsedSource {
+  // Native errors (including unsupported Flow) reach the existing preflight
+  // diagnostic path, which preserves the original file for manual review.
+  return JSON.parse(analyzeMigrationSource(file, source)) as ParsedSource;
 }
 
 export function testApiName(
-  path: NodePath,
+  editor: SourceEditor,
   node: t.Node | null | undefined,
   globals = false,
 ): string | undefined {
-  const imported = importedName(path, node, ROOT_TEST_SOURCES);
+  const imported = importedName(editor, node, ROOT_TEST_SOURCES);
   if (imported) {
     return imported;
   }
-  if (globals && node?.type === 'Identifier' && !path.scope.getBinding(node.name)) {
+  if (globals && node?.type === 'Identifier' && !editor.binding(node)) {
     return node.name;
   }
   return undefined;
@@ -140,8 +175,13 @@ export function testApiName(
 
 /** Offset edits retain comments and formatting outside the precise changed span. */
 export class SourceEditor {
-  readonly ast: ReturnType<typeof parse>;
+  readonly ast: t.Program;
   readonly findings: VitestV5Finding[] = [];
+  private readonly nodes: t.Node[] = [];
+  private readonly parents = new Map<t.Node, t.Node>();
+  private readonly bindings = new Map<number, Binding>();
+  private readonly names = new Set<string>();
+  private readonly comments: t.Span[];
   private readonly edits: Array<{ start: number; end: number; text: string }> = [];
   private readonly additions = new Map<t.ObjectExpression, Map<string, string>>();
 
@@ -149,15 +189,89 @@ export class SourceEditor {
     readonly file: string,
     readonly source: string,
   ) {
-    this.ast = parseSource(file, source);
+    const parsed = parseSource(file, source);
+    this.ast = parsed.program;
+    this.comments = parsed.comments;
+    const identifiers = new Map<number, t.Node>();
+    const index = (node: t.Node, parent?: t.Node) => {
+      this.nodes.push(node);
+      if (parent) {
+        this.parents.set(node, parent);
+      }
+      if (node.type === 'Identifier') {
+        identifiers.set(node.start, node);
+        this.names.add(node.name);
+      }
+      for (const value of Object.values(node)) {
+        for (const child of Array.isArray(value) ? value : [value]) {
+          if (isNode(child)) {
+            index(child, node);
+          }
+        }
+      }
+    };
+    index(this.ast);
+    for (const binding of parsed.bindings) {
+      const identifier = identifiers.get(binding.start);
+      const declaration = identifier && this.parent(identifier);
+      if (!declaration) {
+        continue;
+      }
+      const references = binding.references.map((start) => identifiers.get(start)).filter(isNode);
+      const resolved = { declaration, references, constant: binding.constant };
+      for (const start of [binding.start, ...binding.references]) {
+        this.bindings.set(start, resolved);
+      }
+    }
+  }
+
+  visit(visitors: Visitors): void {
+    for (const node of this.nodes) {
+      // Dispatch by the same discriminant that selects the visitor's node type.
+      const visitor = visitors[node.type] as ((node: t.Node) => void) | undefined;
+      visitor?.(node);
+    }
+  }
+
+  parent(node: t.Node): t.Node | undefined {
+    return this.parents.get(node);
+  }
+
+  functionParent(node: t.Node): t.Function | t.ArrowFunctionExpression | undefined {
+    let parent = this.parent(node);
+    while (parent) {
+      if (
+        parent.type === 'FunctionDeclaration' ||
+        parent.type === 'FunctionExpression' ||
+        parent.type === 'ArrowFunctionExpression'
+      ) {
+        return parent;
+      }
+      parent = this.parent(parent);
+    }
+    return undefined;
+  }
+
+  binding(node: t.Node): Binding | undefined {
+    return node.type === 'Identifier' ? this.bindings.get(node.start) : undefined;
+  }
+
+  uniqueName(base: string): string {
+    let name = `_${base}`;
+    let suffix = 2;
+    while (this.names.has(name)) {
+      name = `_${base}${suffix++}`;
+    }
+    this.names.add(name);
+    return name;
   }
 
   text(node: t.Node) {
-    return this.source.slice(node.start!, node.end!);
+    return this.source.slice(node.start, node.end);
   }
 
   replace(node: t.Node, text: string) {
-    this.edit(node.start!, node.end!, text);
+    this.edit(node.start, node.end, text);
   }
 
   edit(start: number, end: number, text: string) {
@@ -185,26 +299,27 @@ export class SourceEditor {
 
   remove(object: t.ObjectExpression, prop: t.ObjectProperty) {
     const index = object.properties.indexOf(prop);
-    const nextStart = object.properties[index + 1]?.start ?? object.end! - 1;
-    const previousEnd = object.properties[index - 1]?.end ?? object.start! + 1;
-    // Use punctuation tokens, not a text search that could consume a comment.
-    const tokens = this.ast.tokens ?? [];
-    const followingComma = tokens.find(
-      (token) =>
-        token.start >= prop.end! &&
-        token.end <= nextStart &&
-        this.source.slice(token.start, token.end) === ',',
-    );
-    const precedingComma = tokens.find(
-      (token) =>
-        token.start >= previousEnd &&
-        token.end <= prop.start! &&
-        this.source.slice(token.start, token.end) === ',',
-    );
+    const nextStart = object.properties[index + 1]?.start ?? object.end - 1;
+    const previousEnd = object.properties[index - 1]?.end ?? object.start + 1;
+    // Between complete property spans only trivia and punctuation can occur.
+    // Skip Oxc's comment spans so a comma inside a comment is never removed.
+    const commaBetween = (start: number, end: number) => {
+      for (let index = start; index < end; index++) {
+        const comment = this.comments.find((span) => span.start <= index && index < span.end);
+        if (comment) {
+          index = comment.end - 1;
+        } else if (this.source[index] === ',') {
+          return index;
+        }
+      }
+      return undefined;
+    };
+    const followingComma = commaBetween(prop.end, nextStart);
+    const precedingComma = commaBetween(previousEnd, prop.start);
     this.replace(prop, '');
     const comma = followingComma ?? precedingComma;
-    if (comma) {
-      this.edit(comma.start, comma.end, '');
+    if (comma !== undefined) {
+      this.edit(comma, comma + 1, '');
     }
   }
 
@@ -214,8 +329,10 @@ export class SourceEditor {
     message: string,
     severity: VitestV5Finding['severity'] = 'review',
   ) {
-    const line = node?.loc?.start.line ?? 1;
-    const column = (node?.loc?.start.column ?? 0) + 1;
+    const prefix = this.source.slice(0, node?.start ?? 0);
+    const lines = prefix.split(/\r\n|[\r\n\u2028\u2029]/);
+    const line = lines.length;
+    const column = lines.at(-1)!.length + 1;
     if (
       !this.findings.some(
         (item) =>
@@ -231,8 +348,8 @@ export class SourceEditor {
 
   finish() {
     for (const [object, additions] of this.additions) {
-      const start = object.start! + 1;
-      const first = object.properties[0]?.start ?? object.end! - 1;
+      const start = object.start + 1;
+      const first = object.properties[0]?.start ?? object.end - 1;
       const prefix = this.source.slice(start, first);
       const newline = prefix.includes('\r\n') ? '\r\n' : '\n';
       const multiline = prefix.indexOf('\n') !== -1;

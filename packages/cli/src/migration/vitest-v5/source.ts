@@ -1,5 +1,4 @@
-import type { NodePath } from '@babel/traverse';
-import type * as t from '@babel/types';
+import type * as t from '@oxc-project/types';
 
 import entryPoints from '../../vitest-v5-entry-points.json' with { type: 'json' };
 import {
@@ -12,7 +11,9 @@ import {
   propertyName,
   staticObject,
   testApiName,
-  traverse,
+  isString,
+  isBoolean,
+  isRegExp,
   type SourceOptions,
 } from './ast.ts';
 
@@ -95,27 +96,28 @@ const DOM_GLOBALS = new Set([
   'getComputedStyle',
 ]);
 
-function looksLikeConstructorMock(p: NodePath<t.CallExpression>): boolean {
+function looksLikeConstructorMock(editor: SourceEditor, node: t.CallExpression): boolean {
   if (
-    p.node.arguments.some(
+    node.arguments.some(
       (argument) => argument.type === 'ClassExpression' || argument.type === 'FunctionExpression',
     )
   ) {
     return true;
   }
   if (
-    memberName(p.node.callee) === 'spyOn' &&
-    p.node.arguments[1]?.type === 'StringLiteral' &&
-    /^[A-Z]/.test(p.node.arguments[1].value)
+    memberName(node.callee) === 'spyOn' &&
+    isString(node.arguments[1]) &&
+    /^[A-Z]/.test(node.arguments[1].value)
   ) {
     return true;
   }
-  if (p.parentPath.isVariableDeclarator() && p.parentPath.node.id.type === 'Identifier') {
-    const name = p.parentPath.node.id.name;
-    const binding = p.scope.getBinding(name);
+  const parent = editor.parent(node);
+  if (parent?.type === 'VariableDeclarator' && parent.id.type === 'Identifier') {
+    const name = parent.id.name;
+    const binding = editor.binding(parent.id);
     return (
       /^[A-Z]/.test(name) ||
-      !!binding?.referencePaths.some((ref) => ref.parentPath?.isNewExpression())
+      !!binding?.references.some((ref) => editor.parent(ref)?.type === 'NewExpression')
     );
   }
   return false;
@@ -128,6 +130,9 @@ function chain(
   const members: string[] = [];
   const calls: t.CallExpression[] = [];
   while (node.type === 'MemberExpression' || node.type === 'CallExpression') {
+    if (node.optional) {
+      break;
+    }
     if (isApi(node)) {
       break;
     }
@@ -151,35 +156,35 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
   const asyncFunctions = new Set<t.Node>();
   // Import edits are offset-based, so bindings still refer to the old module
   // while this traversal visits the assertions that must migrate with them.
-  const apiName = (p: NodePath, node: t.Node) =>
-    testApiName(p, node, options.globals) ??
-    (importedName(p, node, EXPECT_SOURCES) === 'expect' ? 'expect' : undefined);
-  const canAwait = (p: NodePath) => {
-    const fn = p.getFunctionParent();
+  const apiName = (node: t.Node) =>
+    testApiName(editor, node, options.globals) ??
+    (importedName(editor, node, EXPECT_SOURCES) === 'expect' ? 'expect' : undefined);
+  const canAwait = (node: t.Node) => {
+    const fn = editor.functionParent(node);
     if (!fn) {
       return false;
     }
-    if (fn.node.async) {
+    if (fn.async) {
       return true;
     }
     if (
-      (!fn.isArrowFunctionExpression() && !fn.isFunctionExpression()) ||
-      fn.node.generator ||
-      fn.node.returnType
+      (fn.type !== 'ArrowFunctionExpression' && fn.type !== 'FunctionExpression') ||
+      fn.generator ||
+      fn.returnType
     ) {
       return false;
     }
-    const parent = fn.parentPath;
-    if (!parent.isCallExpression() || !parent.node.arguments.includes(fn.node)) {
+    const parent = editor.parent(fn);
+    if (parent?.type !== 'CallExpression' || !parent.arguments.includes(fn)) {
       return false;
     }
-    const { root, members } = chain(parent.node.callee, (node) => !!apiName(parent, node));
-    if (!ASYNC_CALLBACKS.has(apiName(parent, root) ?? '') || members.includes('extend')) {
+    const { root, members } = chain(parent.callee, (node) => !!apiName(node));
+    if (!ASYNC_CALLBACKS.has(apiName(root) ?? '') || members.includes('extend')) {
       return false;
     }
-    if (!asyncFunctions.has(fn.node)) {
-      editor.edit(fn.node.start!, fn.node.start!, 'async ');
-      asyncFunctions.add(fn.node);
+    if (!asyncFunctions.has(fn)) {
+      editor.edit(fn.start, fn.start, 'async ');
+      asyncFunctions.add(fn);
     }
     return true;
   };
@@ -193,15 +198,33 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
     );
   }
 
-  traverse(editor.ast, {
-    ImportDeclaration(p) {
-      const source = p.node.source.value;
+  function dynamicImport(node: t.Node, source: string): void {
+    if (
+      REMOVED_SOURCES.has(source) ||
+      RUNNER_SOURCES.has(source) ||
+      EXPECT_SOURCES.has(source) ||
+      RUNNERS_SOURCES.has(source)
+    ) {
+      unsupported(node, source, 'dynamic/CommonJS import', false);
+    }
+    if (source === '@vitest/ws-client') {
+      editor.report(
+        node,
+        'ws-client',
+        'Replace direct @vitest/ws-client use; it does not receive Vitest v5 features.',
+      );
+    }
+  }
+
+  editor.visit({
+    ImportDeclaration(node) {
+      const source = node.source.value;
       if (ROOT_TEST_SOURCES.has(source)) {
-        for (const specifier of p.node.specifiers) {
+        for (const specifier of node.specifiers) {
           if (
             specifier.type === 'ImportSpecifier' &&
             propertyName(specifier.imported) === 'bench' &&
-            p.node.importKind !== 'type' &&
+            node.importKind !== 'type' &&
             specifier.importKind !== 'type'
           ) {
             editor.report(
@@ -215,7 +238,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       }
       if (source === '@vitest/ws-client') {
         editor.report(
-          p.node,
+          node,
           'ws-client',
           'Replace direct @vitest/ws-client use; it does not receive Vitest v5 features.',
         );
@@ -223,7 +246,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       }
       if (source in entryPoints) {
         editor.replace(
-          p.node.source,
+          node.source,
           JSON.stringify(entryPoints[source as keyof typeof entryPoints]),
         );
         return;
@@ -238,9 +261,9 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       const constants: string[] = [];
       const remaining: string[] = [];
       let runnerName: string | undefined;
-      for (const specifier of p.node.specifiers) {
+      for (const specifier of node.specifiers) {
         const typeOnly =
-          p.node.importKind === 'type' ||
+          node.importKind === 'type' ||
           (specifier.type === 'ImportSpecifier' && specifier.importKind === 'type');
         const name = specifier.type === 'ImportSpecifier' ? propertyName(specifier.imported)! : '*';
         const target = runner
@@ -256,7 +279,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
           );
         } else if (runner && RUNNER_METHODS[name] && !typeOnly) {
           if (!runnerName) {
-            runnerName = p.scope.generateUidIdentifier('VitestTestRunner').name;
+            runnerName = editor.uniqueName('VitestTestRunner');
             imports.push(`TestRunner as ${runnerName}`);
           }
           // Static fields are the original functions, so aliases retain function
@@ -267,27 +290,27 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
           remaining.push(editor.text(specifier));
         }
       }
-      if (!p.node.specifiers.length) {
-        unsupported(p.node, source, 'side-effect import', false);
+      if (!node.specifiers.length) {
+        unsupported(node, source, 'side-effect import', false);
       }
       if (imports.length) {
         const kept = remaining.length
-          ? `import ${p.node.importKind === 'type' ? 'type ' : ''}{ ${remaining.join(', ')} } from ${JSON.stringify(source)};\n`
+          ? `import ${node.importKind === 'type' ? 'type ' : ''}{ ${remaining.join(', ')} } from ${JSON.stringify(source)};\n`
           : '';
         editor.replace(
-          p.node,
+          node,
           `${kept}import { ${imports.join(', ')} } from 'vite-plus/test';${constants.length ? `\n${constants.join('\n')}` : ''}`,
         );
       }
     },
-    ExportNamedDeclaration(p) {
-      const source = p.node.source?.value;
+    ExportNamedDeclaration(node) {
+      const source = node.source?.value;
       if (!source) {
         return;
       }
       if (source in entryPoints) {
         editor.replace(
-          p.node.source!,
+          node.source!,
           JSON.stringify(entryPoints[source as keyof typeof entryPoints]),
         );
       } else if (
@@ -297,34 +320,40 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
         RUNNERS_SOURCES.has(source)
       ) {
         // Re-exports can expose a library contract. Do not silently replace it.
-        for (const specifier of p.node.specifiers) {
+        for (const specifier of node.specifiers) {
           unsupported(
             specifier,
             source,
             're-export',
-            p.node.exportKind === 'type' ||
+            node.exportKind === 'type' ||
               (specifier.type === 'ExportSpecifier' && specifier.exportKind === 'type'),
           );
         }
       }
     },
-    ExportAllDeclaration(p) {
-      const source = p.node.source.value;
+    ExportAllDeclaration(node) {
+      const source = node.source.value;
       if (
         RUNNER_SOURCES.has(source) ||
         EXPECT_SOURCES.has(source) ||
         REMOVED_SOURCES.has(source) ||
         RUNNERS_SOURCES.has(source)
       ) {
-        unsupported(p.node, source, 'export *', p.node.exportKind === 'type');
+        unsupported(node, source, 'export *', node.exportKind === 'type');
       }
     },
-    CallExpression(p) {
-      const { root, members } = chain(p.node.callee, (node) => !!apiName(p, node));
-      const name = apiName(p, root);
-      if (name === 'bench' && (root.type !== 'Identifier' || !p.scope.getBinding(root.name))) {
+    CallExpression(node) {
+      // Babel represented these as OptionalCallExpression, outside this pass.
+      // Retain that conservative behavior for Oxc's optional CallExpression.
+      if (node.optional) {
+        return;
+      }
+      const parent = editor.parent(node);
+      const { root, members } = chain(node.callee, (node) => !!apiName(node));
+      const name = apiName(root);
+      if (name === 'bench' && (root.type !== 'Identifier' || !editor.binding(root))) {
         editor.report(
-          p.node,
+          node,
           'benchmark-api',
           'Replace the removed top-level bench API with the bench test-context fixture.',
           'block',
@@ -333,39 +362,39 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
 
       if (REGISTRATIONS.has(name ?? '')) {
         const seqMember =
-          p.node.callee.type === 'MemberExpression' && memberName(p.node.callee) === 'sequential'
-            ? p.node.callee
+          node.callee.type === 'MemberExpression' && memberName(node.callee) === 'sequential'
+            ? node.callee
             : undefined;
-        const opts = p.node.arguments[1];
-        if (seqMember && p.node.arguments.length >= 2) {
+        const opts = node.arguments[1];
+        if (seqMember && node.arguments.length >= 2) {
           if (
             staticObject(opts) &&
             !objectProperty(opts, 'concurrent') &&
             !objectProperty(opts, 'sequential')
           ) {
-            editor.edit(seqMember.object.end!, seqMember.end!, '');
+            editor.edit(seqMember.object.end, seqMember.end, '');
             editor.add(opts, 'concurrent', 'false');
           } else if (
             opts?.type === 'ArrowFunctionExpression' ||
             opts?.type === 'FunctionExpression'
           ) {
-            editor.edit(seqMember.object.end!, seqMember.end!, '');
-            editor.edit(opts.start!, opts.start!, '{ concurrent: false }, ');
+            editor.edit(seqMember.object.end, seqMember.end, '');
+            editor.edit(opts.start, opts.start, '{ concurrent: false }, ');
           } else {
             editor.report(
-              p.node,
+              node,
               'sequential-api',
               'Replace sequential with concurrent: false after resolving the options and callback.',
             );
           }
         } else if (members.includes('sequential')) {
           editor.report(
-            p.node,
+            node,
             'sequential-api',
             'Review the sequential modifier chain and replace it with concurrent: false.',
           );
         }
-        for (const argument of p.node.arguments.slice(1)) {
+        for (const argument of node.arguments.slice(1)) {
           if (!staticObject(argument)) {
             continue;
           }
@@ -374,7 +403,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
             continue;
           }
           if (
-            sequential.value.type === 'BooleanLiteral' &&
+            isBoolean(sequential.value) &&
             sequential.value.value &&
             !objectProperty(argument, 'concurrent')
           ) {
@@ -390,7 +419,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
         }
         if (members.includes('each') || members.includes('for')) {
           editor.report(
-            p.node,
+            node,
             'formatted-titles',
             'Review generated test-title snapshots; v5 uses pretty-format and different string placeholders.',
           );
@@ -398,93 +427,96 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       }
 
       if (name === 'vi' || name === 'vitest') {
-        const method = memberName(p.node.callee);
-        if (
-          ['mock', 'unmock', 'hoisted'].includes(method ?? '') &&
-          !p.parentPath.isExpressionStatement()
-        ) {
+        const method = memberName(node.callee);
+        if (['mock', 'unmock', 'hoisted'].includes(method ?? '')) {
+          let statement = parent;
+          while (
+            statement &&
+            !statement.type.endsWith('Statement') &&
+            statement.type !== 'VariableDeclaration' &&
+            statement.type !== 'Program'
+          ) {
+            statement = editor.parent(statement);
+          }
           // A top-level variable initializer for vi.hoisted is valid too.
-          const statement = p.getStatementParent();
-          if (p.getFunctionParent() || !statement?.parentPath.isProgram()) {
+          if (
+            editor.functionParent(node) ||
+            !statement ||
+            editor.parent(statement)?.type !== 'Program'
+          ) {
             editor.report(
-              p.node,
+              node,
               'nested-hoisted-mock',
               'Move this hoisted mock to the top level after reviewing captured scope.',
             );
           }
-        } else if (
-          ['mock', 'unmock', 'hoisted'].includes(method ?? '') &&
-          !p.parentPath.parentPath?.isProgram()
-        ) {
-          editor.report(
-            p.node,
-            'nested-hoisted-mock',
-            'Move this hoisted mock to the top level after reviewing captured scope.',
-          );
         }
         if (
           (options.browser || (options.browser === undefined && options.browserPossible)) &&
           method === 'mock' &&
-          p.node.arguments.length === 1
+          node.arguments.length === 1
         ) {
           editor.report(
-            p.node,
+            node,
             'browser-automock',
             'Browser automocks now keep mock defaults; choose { spy: true } if real implementations are required.',
           );
         }
-        if ((method === 'fn' || method === 'spyOn') && looksLikeConstructorMock(p)) {
+        if ((method === 'fn' || method === 'spyOn') && looksLikeConstructorMock(editor, node)) {
           editor.report(
-            p.node,
+            node,
             'class-mock',
             'If this mock replaces a constructor, review its prototype, methods, and instanceof behavior.',
           );
         }
         if (method === 'setSystemTime' && /\bTemporal\b/.test(source)) {
           editor.report(
-            p.node,
+            node,
             'temporal-system-time',
             'vi.setSystemTime now changes Temporal even without fake timers; toNotFake does not preserve this behavior.',
           );
         }
       }
-      if (memberName(p.node.callee) === 'mockImplementation' && looksLikeConstructorMock(p)) {
+      if (
+        memberName(node.callee) === 'mockImplementation' &&
+        looksLikeConstructorMock(editor, node)
+      ) {
         editor.report(
-          p.node,
+          node,
           'class-mock',
           'Review constructor mock implementations and their inherited prototypes.',
         );
       }
 
       if (name === 'expect') {
-        const matcher = memberName(p.node.callee);
-        const first = p.node.arguments[0];
+        const matcher = memberName(node.callee);
+        const first = node.arguments[0];
         if (
           options.preserveV4 &&
           ['toThrow', 'toThrowError'].includes(matcher ?? '') &&
-          first?.type === 'StringLiteral' &&
+          isString(first) &&
           first.value === ''
         ) {
           editor.replace(first, '/^$/');
         }
         if ((options.preserveV4 || options.reviewV4) && matcher === 'toHaveTextContent') {
           const browserAssertion = members.includes('element') || options.browser === true;
-          const literal = first?.type === 'StringLiteral' || first?.type === 'RegExpLiteral';
+          const literal = isString(first) || isRegExp(first);
           if (options.preserveV4 && browserAssertion && literal) {
-            const callee = p.node.callee as t.MemberExpression;
+            const callee = node.callee as t.MemberExpression;
             editor.replace(
               callee.property,
               callee.computed ? JSON.stringify('toMatchTextContent') : 'toMatchTextContent',
             );
           } else if (browserAssertion && !literal) {
             editor.report(
-              p.node,
+              node,
               'text-content',
               'Choose toMatchTextContent for v4 partial/regex matching after resolving the expected value.',
             );
           } else if (options.browser === undefined && options.browserPossible) {
             editor.report(
-              p.node,
+              node,
               'text-content-project',
               "Resolve this assertion's test project: browser assertions need toMatchTextContent for v4 partial matching; keep Node jest-dom assertions unchanged.",
             );
@@ -492,7 +524,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
         }
         if (members.includes('poll') && matcher !== 'poll') {
           editor.report(
-            p.node,
+            node,
             'poll-timeout',
             'Review the configured expect.poll timeout; v5 rejects assertions that finish after it.',
           );
@@ -507,24 +539,24 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
             'toMatchScreenshot',
           ].includes(member),
         );
-        if (asynchronous && p.parentPath.isExpressionStatement()) {
-          if (canAwait(p)) {
-            editor.edit(p.node.start!, p.node.start!, 'await ');
+        if (asynchronous && parent?.type === 'ExpressionStatement') {
+          if (canAwait(node)) {
+            editor.edit(node.start, node.start, 'await ');
           } else {
             editor.report(
-              p.node,
+              node,
               'unawaited-assertion',
               'Await or return this asynchronous assertion in an async-compatible function.',
             );
           }
         } else if (
           asynchronous &&
-          !p.parentPath.isMemberExpression() &&
-          !p.parentPath.isAwaitExpression() &&
-          !p.parentPath.isReturnStatement()
+          parent?.type !== 'MemberExpression' &&
+          parent?.type !== 'AwaitExpression' &&
+          parent?.type !== 'ReturnStatement'
         ) {
           editor.report(
-            p.node,
+            node,
             'unawaited-assertion',
             'Check that the result of this asynchronous assertion is awaited or returned.',
           );
@@ -532,79 +564,79 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       }
 
       if (
-        importedName(p, p.node.callee, RENDER_SOURCES) === 'render' &&
-        !p.parentPath.isAwaitExpression() &&
-        !p.parentPath.isReturnStatement()
+        importedName(editor, node.callee, RENDER_SOURCES) === 'render' &&
+        parent?.type !== 'AwaitExpression' &&
+        parent?.type !== 'ReturnStatement'
       ) {
-        if (canAwait(p)) {
-          editor.edit(p.node.start!, p.node.start!, '(await ');
-          editor.edit(p.node.end!, p.node.end!, ')');
+        if (canAwait(node)) {
+          editor.edit(node.start, node.start, '(await ');
+          editor.edit(node.end, node.end, ')');
         } else {
           editor.report(
-            p.node,
+            node,
             'async-render',
             'Await render from vitest-browser-vue/svelte after making the enclosing contract async-compatible.',
           );
         }
       }
 
-      if (importedName(p, p.node.callee, NODE_SOURCES) === 'resolveConfig' && options.preserveV4) {
-        const awaitPath = p.parentPath;
-        const declaration = awaitPath.parentPath;
+      if (
+        importedName(editor, node.callee, NODE_SOURCES) === 'resolveConfig' &&
+        options.preserveV4
+      ) {
+        const declaration = parent && editor.parent(parent);
         if (
-          awaitPath.isAwaitExpression() &&
-          declaration?.isVariableDeclarator() &&
-          declaration.node.id.type === 'ObjectPattern'
+          parent?.type === 'AwaitExpression' &&
+          declaration?.type === 'VariableDeclarator' &&
+          declaration.id.type === 'ObjectPattern'
         ) {
-          const props = declaration.node.id.properties;
+          const props = declaration.id.properties;
           if (
             props.every(
               (prop) =>
-                prop.type === 'ObjectProperty' &&
+                prop.type === 'Property' &&
                 !prop.computed &&
                 prop.value.type === 'Identifier' &&
                 ['viteConfig', 'vitestConfig'].includes(propertyName(prop.key) ?? ''),
             )
           ) {
             const vite = props.find(
-              (prop) => prop.type === 'ObjectProperty' && propertyName(prop.key) === 'viteConfig',
-            ) as t.ObjectProperty | undefined;
+              (prop) => prop.type === 'Property' && propertyName(prop.key) === 'viteConfig',
+            ) as t.BindingProperty | undefined;
             const vitest = props.find(
-              (prop) => prop.type === 'ObjectProperty' && propertyName(prop.key) === 'vitestConfig',
-            ) as t.ObjectProperty | undefined;
-            const local = vite
-              ? editor.text(vite.value)
-              : declaration.scope.generateUidIdentifier('viteConfig').name;
-            editor.replace(declaration.node.id, local);
+              (prop) => prop.type === 'Property' && propertyName(prop.key) === 'vitestConfig',
+            ) as t.BindingProperty | undefined;
+            const local = vite ? editor.text(vite.value) : editor.uniqueName('viteConfig');
+            editor.replace(declaration.id, local);
             if (vitest) {
               editor.edit(
-                declaration.node.end!,
-                declaration.node.end!,
+                declaration.end,
+                declaration.end,
                 `, ${editor.text(vitest.value)} = ${local}.test`,
               );
             }
           } else {
             editor.report(
-              declaration.node,
+              declaration,
               'resolve-config',
               'Replace resolveConfig pair destructuring with the Vite config return value and its .test property.',
             );
           }
         } else {
           editor.report(
-            p.node,
+            node,
             'resolve-config',
             'Review resolveConfig consumers; the v5 return value is the Vite config with Vitest options under .test.',
           );
         }
       }
 
-      if (memberName(p.node.callee) === 'collect') {
-        const object = (p.node.callee as t.MemberExpression).object;
-        const binding = object.type === 'Identifier' ? p.scope.getBinding(object.name) : undefined;
+      if (memberName(node.callee) === 'collect') {
+        const object = (node.callee as t.MemberExpression).object;
+        const binding = editor.binding(object);
         let initializer =
-          binding?.constant && binding.path.isVariableDeclarator()
-            ? binding.path.node.init
+          binding?.constant && binding.declaration.type === 'VariableDeclarator'
+            ? binding.declaration.init
             : undefined;
         if (initializer?.type === 'AwaitExpression') {
           initializer = initializer.argument;
@@ -612,77 +644,66 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
         const known =
           initializer?.type === 'CallExpression' &&
           ['createVitest', 'startVitest'].includes(
-            importedName(binding!.path, initializer.callee, NODE_SOURCES) ?? '',
+            importedName(editor, initializer.callee, NODE_SOURCES) ?? '',
           );
         // collect(filters?, options?) places staticParse in the second argument.
-        const opts = p.node.arguments[1];
+        const opts = node.arguments[1];
         if (
           known &&
           options.preserveV4 &&
-          p.node.arguments.length <= 2 &&
-          !p.node.arguments.some((argument) => argument.type === 'SpreadElement') &&
+          node.arguments.length <= 2 &&
+          !node.arguments.some((argument) => argument.type === 'SpreadElement') &&
           (!opts || staticObject(opts))
         ) {
           if (staticObject(opts)) {
             editor.add(opts, 'staticParse', 'false');
           } else {
             editor.edit(
-              p.node.end! - 1,
-              p.node.end! - 1,
-              `${p.node.arguments.length ? ', ' : 'undefined, '}{ staticParse: false }`,
+              node.end - 1,
+              node.end - 1,
+              `${node.arguments.length ? ', ' : 'undefined, '}{ staticParse: false }`,
             );
           }
         } else if (
           !known ||
-          p.node.arguments.some((argument) => argument.type === 'SpreadElement') ||
+          node.arguments.some((argument) => argument.type === 'SpreadElement') ||
           (opts && !staticObject(opts))
         ) {
           editor.report(
-            p.node,
+            node,
             'static-collect',
             'If this is Vitest.collect(), review staticParse and set it to false to retain runtime collection.',
           );
         }
       }
       if (
-        (p.node.callee.type === 'Import' ||
-          (p.node.callee.type === 'Identifier' &&
-            p.node.callee.name === 'require' &&
-            !p.scope.getBinding('require'))) &&
-        p.node.arguments[0]?.type === 'StringLiteral'
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'require' &&
+        !editor.binding(node.callee) &&
+        isString(node.arguments[0])
       ) {
-        const source = p.node.arguments[0].value;
-        if (
-          REMOVED_SOURCES.has(source) ||
-          RUNNER_SOURCES.has(source) ||
-          EXPECT_SOURCES.has(source) ||
-          RUNNERS_SOURCES.has(source)
-        ) {
-          unsupported(p.node, source, 'dynamic/CommonJS import', false);
-        }
-        if (source === '@vitest/ws-client') {
-          editor.report(
-            p.node,
-            'ws-client',
-            'Replace direct @vitest/ws-client use; it does not receive Vitest v5 features.',
-          );
-        }
+        dynamicImport(node, node.arguments[0].value);
       }
     },
-    MemberExpression(p) {
-      if (['VITEST_POOL_ID', 'VITEST_WORKER_ID'].includes(memberName(p.node) ?? '')) {
+    ImportExpression(node) {
+      if (isString(node.source)) {
+        dynamicImport(node, node.source.value);
+      }
+    },
+    MemberExpression(node) {
+      if (['VITEST_POOL_ID', 'VITEST_WORKER_ID'].includes(memberName(node) ?? '')) {
         editor.report(
-          p.node,
+          node,
           'worker-id',
           'Review worker/pool ID arithmetic and indexing: IDs now start at 1, not 0.',
         );
       }
     },
-    VariableDeclarator(p) {
-      if (p.node.id.type === 'ObjectPattern') {
-        for (const prop of p.node.id.properties) {
+    VariableDeclarator(node) {
+      if (node.id.type === 'ObjectPattern') {
+        for (const prop of node.id.properties) {
           if (
-            prop.type === 'ObjectProperty' &&
+            prop.type === 'Property' &&
             ['VITEST_POOL_ID', 'VITEST_WORKER_ID'].includes(propertyName(prop.key) ?? '')
           ) {
             editor.report(
@@ -694,15 +715,15 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
         }
       }
     },
-    AssignmentExpression(p) {
-      if (/\boriginals\b/.test(editor.text(p.node.right))) {
+    AssignmentExpression(node) {
+      if (/\boriginals\b/.test(editor.text(node.right))) {
         editor.report(
-          p.node,
+          node,
           'global-descriptors',
           'populateGlobal().originals stores descriptors; restore them with Object.defineProperty, not assignment.',
         );
       }
-      const left = p.node.left;
+      const left = node.left;
       if (
         (left.type === 'MemberExpression' &&
           ['window', 'globalThis', 'global'].includes(editor.text(left.object)) &&
@@ -710,67 +731,70 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
         (left.type === 'Identifier' && DOM_GLOBALS.has(left.name))
       ) {
         editor.report(
-          p.node,
+          node,
           'dom-global',
           'In jsdom/happy-dom, global assignment also updates the window; review this DOM override.',
         );
       }
     },
-    TSInterfaceDeclaration(p) {
+    TSInterfaceDeclaration(node) {
       if (
-        ['Assertion', 'Matchers'].includes(p.node.id.name) &&
-        (p.node.typeParameters?.params.length ?? 0) < 2
+        ['Assertion', 'Matchers'].includes(node.id.name) &&
+        (node.typeParameters?.params.length ?? 0) < 2
       ) {
         editor.report(
-          p.node,
+          node,
           'assertion-types',
           'Update custom matcher declarations for the v5 return and received type parameters; review jest.Matchers augmentations.',
         );
       }
     },
-    TSTypeReference(p) {
-      const name = editor.text(p.node.typeName);
+    TSTypeReference(node) {
+      const name = editor.text(node.typeName);
       if (
         ['Assertion', 'Matchers', 'jest.Matchers'].includes(name) &&
-        (p.node.typeParameters?.params.length ?? 0) < 2
+        (node.typeArguments?.params.length ?? 0) < 2
       ) {
         editor.report(
-          p.node,
+          node,
           'assertion-types',
           'Review old assertion generics; v5 includes return and received types.',
         );
       }
     },
-    TSImportType(p) {
-      const source = p.node.argument.value;
+    TSImportType(node) {
+      const source = node.source.value;
       if (
         RUNNER_SOURCES.has(source) ||
         EXPECT_SOURCES.has(source) ||
         REMOVED_SOURCES.has(source) ||
         RUNNERS_SOURCES.has(source)
       ) {
-        unsupported(p.node, source, 'type import', true);
+        unsupported(node, source, 'type import', true);
       }
     },
-    StringLiteral(p) {
-      const value = p.node.value;
+    Literal(node) {
+      if (!isString(node)) {
+        return;
+      }
+      const value = node.value;
       if (/\/__vitest__\//.test(value) && !/[?&]token=/.test(value)) {
         editor.report(
-          p.node,
+          node,
           'ui-token',
           'Use the authenticated UI URL printed by Vitest, including its token.',
         );
       }
       if (/\/__vitest_test__\//.test(value) && !/[?&]sessionId=/.test(value)) {
         editor.report(
-          p.node,
+          node,
           'browser-session',
           'Use the browser orchestrator URL opened by Vitest, including its sessionId.',
         );
       }
       if (/\.vitest-attachements|\.vitest-reports|__screenshots__|html\/index\.html/.test(value)) {
         editor.report(
-          p.node,
+          node,
           'artifact-paths',
           'Review this old artifact/report path. Generated output moved under .vitest; reference screenshots remain separate.',
         );

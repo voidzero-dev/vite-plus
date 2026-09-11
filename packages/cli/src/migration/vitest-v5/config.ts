@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type * as t from '@babel/types';
+import type * as t from '@oxc-project/types';
 import { minimatch } from 'minimatch';
 
 import {
@@ -10,11 +10,12 @@ import {
   objectProperty,
   propertyName,
   staticObject,
-  traverse,
+  isString,
+  isBoolean,
   type SourceOptions,
 } from './ast.ts';
 
-const isTrue = (node: t.Node | undefined) => node?.type === 'BooleanLiteral' && node.value;
+const isTrue = (node: t.Node | undefined) => isBoolean(node) && node.value;
 
 const CONFIG_FILENAME = /(?:^|[/\\])(?:vite|vitest)(?:\.[\w-]+)?\.config\.[cm]?[jt]s$/;
 const CONFIG_HELPER_IMPORT = /['"](?:vitest\/config|vite-plus(?:\/test\/config)?)['"]/;
@@ -25,7 +26,7 @@ function importsConfigHelper(file: string, source: string): boolean {
   }
   try {
     const editor = new SourceEditor(file, source);
-    return editor.ast.program.body.some(
+    return editor.ast.body.some(
       (node) =>
         node.type === 'ImportDeclaration' &&
         node.importKind !== 'type' &&
@@ -88,7 +89,7 @@ export function findVitestV5ConfigFiles(sources: ReadonlyMap<string, string>): S
           return;
         }
         const base = objectProperty(config, 'extends')?.value;
-        if (base?.type === 'StringLiteral') {
+        if (isString(base)) {
           addReference(base.value);
         }
         const test = objectProperty(config, 'test')?.value;
@@ -98,46 +99,46 @@ export function findVitestV5ConfigFiles(sources: ReadonlyMap<string, string>): S
           return;
         }
         for (const project of projects.elements) {
-          if (project?.type === 'StringLiteral') {
+          if (isString(project)) {
             addReference(project.value);
           } else {
             collectReferences(project ?? undefined);
           }
         }
       };
-      traverse(editor.ast, {
-        ExportDefaultDeclaration(p) {
-          const declaration = p.node.declaration;
+      editor.visit({
+        ExportDefaultDeclaration(node) {
+          const declaration = node.declaration;
           if (declaration.type === 'Identifier') {
-            const binding = p.scope.getBinding(declaration.name);
-            if (binding?.constant && binding.path.isVariableDeclarator()) {
-              collectReferences(binding.path.node.init ?? undefined);
+            const binding = editor.binding(declaration);
+            if (binding?.constant && binding.declaration.type === 'VariableDeclarator') {
+              collectReferences(binding.declaration.init ?? undefined);
             }
           } else {
             collectReferences(declaration);
           }
         },
-        CallExpression(p) {
+        CallExpression(node) {
           if (
             ['defineConfig', 'defineProject', 'mergeConfig'].includes(
-              importedName(p, p.node.callee, CONFIG_SOURCES) ?? '',
+              importedName(editor, node.callee, CONFIG_SOURCES) ?? '',
             )
           ) {
-            for (const argument of p.node.arguments) {
+            for (const argument of node.arguments) {
               collectReferences(argument);
             }
           }
         },
-        AssignmentExpression(p) {
+        AssignmentExpression(node) {
           if (
-            p.node.left.type === 'MemberExpression' &&
-            !p.node.left.computed &&
-            p.node.left.object.type === 'Identifier' &&
-            p.node.left.object.name === 'module' &&
-            propertyName(p.node.left.property) === 'exports' &&
-            !p.scope.getBinding('module')
+            node.left.type === 'MemberExpression' &&
+            !node.left.computed &&
+            node.left.object.type === 'Identifier' &&
+            node.left.object.name === 'module' &&
+            propertyName(node.left.property) === 'exports' &&
+            !editor.binding(node.left.object)
           ) {
-            collectReferences(p.node.right);
+            collectReferences(node.right);
           }
         },
       });
@@ -150,9 +151,9 @@ export function findVitestV5ConfigFiles(sources: ReadonlyMap<string, string>): S
 
 function hasConfigMerge(editor: SourceEditor): boolean {
   let found = false;
-  traverse(editor.ast, {
-    CallExpression(p) {
-      if (importedName(p, p.node.callee, CONFIG_SOURCES) === 'mergeConfig') {
+  editor.visit({
+    CallExpression(node) {
+      if (importedName(editor, node.callee, CONFIG_SOURCES) === 'mergeConfig') {
         found = true;
       }
     },
@@ -176,7 +177,7 @@ export function findVitestV5MergedConfigFiles(
         merged.add(file);
       }
       const dependencies: string[] = [];
-      for (const node of editor.ast.program.body) {
+      for (const node of editor.ast.body) {
         if (
           node.type !== 'ImportDeclaration' &&
           node.type !== 'ExportNamedDeclaration' &&
@@ -223,7 +224,7 @@ const DEFAULT_TEST_INCLUDE = ['**/*.{test,spec}.?(c|m)[jt]s?(x)'];
 
 function staticPatterns(node: t.Node | undefined): string[] | undefined {
   return node?.type === 'ArrayExpression' &&
-    node.elements.every((entry) => entry?.type === 'StringLiteral' && !entry.value.startsWith('!'))
+    node.elements.every((entry) => isString(entry) && !entry.value.startsWith('!'))
     ? node.elements.map((entry) => (entry as t.StringLiteral).value)
     : undefined;
 }
@@ -261,17 +262,14 @@ export function resolveVitestV5BrowserModes(
       }
       const root = objectProperty(object, 'root')?.value;
       const testRoot = test && objectProperty(test, 'root')?.value;
-      if (
-        (root && root.type !== 'StringLiteral') ||
-        (testRoot && testRoot.type !== 'StringLiteral')
-      ) {
+      if ((root && !isString(root)) || (testRoot && !isString(testRoot))) {
         unknown();
         return;
       }
       const directory = path.resolve(
         path.dirname(file),
-        root?.type === 'StringLiteral' ? root.value : (base?.root ?? '.'),
-        testRoot?.type === 'StringLiteral' ? testRoot.value : '.',
+        isString(root) ? root.value : (base?.root ?? '.'),
+        isString(testRoot) ? testRoot.value : '.',
       );
       const include = test && objectProperty(test, 'include')?.value;
       const exclude = test && objectProperty(test, 'exclude')?.value;
@@ -283,9 +281,9 @@ export function resolveVitestV5BrowserModes(
       const enabled = staticObject(browser) ? objectProperty(browser, 'enabled')?.value : undefined;
       let browserMode = base ? base.browser : false;
       if (browser) {
-        if (!staticObject(browser) || (enabled && enabled.type !== 'BooleanLiteral')) {
+        if (!staticObject(browser) || (enabled && !isBoolean(enabled))) {
           browserMode = undefined;
-        } else if (enabled?.type === 'BooleanLiteral') {
+        } else if (isBoolean(enabled)) {
           browserMode = enabled.value;
         }
       }
@@ -311,7 +309,7 @@ export function resolveVitestV5BrowserModes(
         return;
       }
       for (const project of projects.elements) {
-        if (project?.type === 'StringLiteral') {
+        if (isString(project)) {
           // Referenced config files have their own scope in configFiles.
           if (!project.value.startsWith('!')) {
             const pattern = project.value.replaceAll('\\', '/').replace(/^\.\//, '');
@@ -333,23 +331,23 @@ export function resolveVitestV5BrowserModes(
           continue;
         }
         const extendsValue = objectProperty(project, 'extends')?.value;
-        if (extendsValue && extendsValue.type !== 'BooleanLiteral') {
+        if (extendsValue && !isBoolean(extendsValue)) {
           unknown();
           continue;
         }
-        const inherits = extendsValue?.type === 'BooleanLiteral' ? extendsValue.value : !preserveV4;
+        const inherits = isBoolean(extendsValue) ? extendsValue.value : !preserveV4;
         walk(project, inherits ? scope : undefined);
       }
     };
     try {
       const editor = new SourceEditor(file, sources.get(file)!);
-      traverse(editor.ast, {
-        ExportDefaultDeclaration(p) {
-          const declaration = p.node.declaration;
+      editor.visit({
+        ExportDefaultDeclaration(node) {
+          const declaration = node.declaration;
           if (declaration.type === 'CallExpression') {
             if (
               !['defineConfig', 'defineProject'].includes(
-                importedName(p, declaration.callee, CONFIG_SOURCES) ?? '',
+                importedName(editor, declaration.callee, CONFIG_SOURCES) ?? '',
               )
             ) {
               unknown();
@@ -357,15 +355,15 @@ export function resolveVitestV5BrowserModes(
             return;
           }
           if (declaration.type === 'Identifier') {
-            const binding = p.scope.getBinding(declaration.name);
+            const binding = editor.binding(declaration);
             const initializer =
-              binding?.constant && binding.path.isVariableDeclarator()
-                ? binding.path.node.init
+              binding?.constant && binding.declaration.type === 'VariableDeclarator'
+                ? binding.declaration.init
                 : undefined;
             if (
               initializer?.type === 'CallExpression' &&
               ['defineConfig', 'defineProject'].includes(
-                importedName(binding!.path, initializer.callee, CONFIG_SOURCES) ?? '',
+                importedName(editor, initializer.callee, CONFIG_SOURCES) ?? '',
               )
             ) {
               walk(initializer.arguments[0]);
@@ -376,34 +374,34 @@ export function resolveVitestV5BrowserModes(
             walk(declaration);
           }
         },
-        CallExpression(p) {
+        CallExpression(node) {
           if (
             ['defineConfig', 'defineProject'].includes(
-              importedName(p, p.node.callee, CONFIG_SOURCES) ?? '',
+              importedName(editor, node.callee, CONFIG_SOURCES) ?? '',
             )
           ) {
-            walk(p.node.arguments[0]);
+            walk(node.arguments[0]);
           }
         },
-        AssignmentExpression(p) {
+        AssignmentExpression(node) {
           if (
-            p.node.left.type === 'MemberExpression' &&
-            !p.node.left.computed &&
-            p.node.left.object.type === 'Identifier' &&
-            p.node.left.object.name === 'module' &&
-            propertyName(p.node.left.property) === 'exports' &&
-            !p.scope.getBinding('module')
+            node.left.type === 'MemberExpression' &&
+            !node.left.computed &&
+            node.left.object.type === 'Identifier' &&
+            node.left.object.name === 'module' &&
+            propertyName(node.left.property) === 'exports' &&
+            !editor.binding(node.left.object)
           ) {
-            if (p.node.right.type === 'CallExpression') {
+            if (node.right.type === 'CallExpression') {
               if (
                 !['defineConfig', 'defineProject'].includes(
-                  importedName(p, p.node.right.callee, CONFIG_SOURCES) ?? '',
+                  importedName(editor, node.right.callee, CONFIG_SOURCES) ?? '',
                 )
               ) {
                 unknown();
               }
             } else {
-              walk(p.node.right);
+              walk(node.right);
             }
           }
         },
@@ -484,7 +482,7 @@ export function migrateVitestV5Config(
     const entries = prop.value.type === 'ArrayExpression' ? prop.value.elements : [prop.value];
     for (const entry of entries) {
       const name = entry?.type === 'ArrayExpression' ? entry.elements[0] : entry;
-      if (name?.type !== 'StringLiteral') {
+      if (!isString(name)) {
         editor.report(
           entry ?? prop,
           'reporter-options',
@@ -502,10 +500,7 @@ export function migrateVitestV5Config(
               'html-output',
               'Review HTML outputFile and outputDir; both are configured.',
             );
-          } else if (
-            old.value.type === 'StringLiteral' &&
-            /(^|[/\\])index\.html$/.test(old.value.value)
-          ) {
+          } else if (isString(old.value) && /(^|[/\\])index\.html$/.test(old.value.value)) {
             editor.replace(old.key, 'outputDir');
             editor.replace(
               old.value,
@@ -541,10 +536,7 @@ export function migrateVitestV5Config(
         editor.replace(entry!, prop.value.type === 'ArrayExpression' ? tuple : `[${tuple}]`);
       }
     }
-    if (
-      output &&
-      entries.some((entry) => entry?.type === 'StringLiteral' && entry.value === 'html')
-    ) {
+    if (output && entries.some((entry) => isString(entry) && entry.value === 'html')) {
       editor.report(
         output,
         'html-output',
@@ -637,7 +629,7 @@ export function migrateVitestV5Config(
       ) {
         for (const threshold of thresholds.value.properties) {
           if (
-            threshold.type !== 'ObjectProperty' ||
+            threshold.type !== 'Property' ||
             [
               'perFile',
               'lines',
@@ -698,12 +690,12 @@ export function migrateVitestV5Config(
       );
       return;
     }
-    const hasInline = projects.value.elements.some((item) => item && item.type !== 'StringLiteral');
+    const hasInline = projects.value.elements.some((item) => item && !isString(item));
     if (hasInline && preserveDefaults) {
       editor.add(test, 'sharedViteServer', 'false');
     }
     for (const project of projects.value.elements) {
-      if (!project || project.type === 'StringLiteral') {
+      if (!project || isString(project)) {
         continue;
       }
       if (!staticObject(project)) {
@@ -747,58 +739,58 @@ export function migrateVitestV5Config(
     }
   }
 
-  traverse(editor.ast, {
-    AssignmentExpression(p) {
-      const left = p.node.left;
+  editor.visit({
+    AssignmentExpression(node) {
+      const left = node.left;
       if (
         left.type === 'MemberExpression' &&
         !left.computed &&
         left.object.type === 'Identifier' &&
         left.object.name === 'module' &&
         propertyName(left.property) === 'exports' &&
-        !p.scope.getBinding('module')
+        !editor.binding(left.object)
       ) {
-        if (staticObject(p.node.right)) {
-          config(p.node.right);
-        } else if (p.node.right.type !== 'CallExpression') {
+        if (staticObject(node.right)) {
+          config(node.right);
+        } else if (node.right.type !== 'CallExpression') {
           editor.report(
-            p.node,
+            node,
             'dynamic-config',
             'Review the effective CommonJS test config and its v4 defaults.',
           );
         }
       }
     },
-    ExportDefaultDeclaration(p) {
-      if (staticObject(p.node.declaration)) {
-        config(p.node.declaration);
-      } else if (p.node.declaration.type === 'Identifier') {
-        const binding = p.scope.getBinding(p.node.declaration.name);
+    ExportDefaultDeclaration(node) {
+      if (staticObject(node.declaration)) {
+        config(node.declaration);
+      } else if (node.declaration.type === 'Identifier') {
+        const binding = editor.binding(node.declaration);
         if (
           binding?.constant &&
-          binding.path.isVariableDeclarator() &&
-          staticObject(binding.path.node.init)
+          binding.declaration.type === 'VariableDeclarator' &&
+          staticObject(binding.declaration.init)
         ) {
-          config(binding.path.node.init);
+          config(binding.declaration.init);
         } else {
           editor.report(
-            p.node,
+            node,
             'dynamic-config',
             'Review the effective exported test config and its v4 defaults.',
           );
         }
-      } else if (p.node.declaration.type !== 'CallExpression') {
+      } else if (node.declaration.type !== 'CallExpression') {
         editor.report(
-          p.node,
+          node,
           'dynamic-config',
           'Review the effective function or promise config and its v4 defaults.',
         );
       }
     },
-    CallExpression(p) {
-      const name = importedName(p, p.node.callee, CONFIG_SOURCES);
+    CallExpression(node) {
+      const name = importedName(editor, node.callee, CONFIG_SOURCES);
       if (name === 'defineConfig' || name === 'defineProject') {
-        const object = p.node.arguments[0];
+        const object = node.arguments[0];
         if (staticObject(object)) {
           config(object);
         } else {
@@ -811,33 +803,20 @@ export function migrateVitestV5Config(
       }
       if (name === 'mergeConfig') {
         editor.report(
-          p.node,
+          node,
           'nested-project-merge',
           'Check merged root configs for test.projects; v5 permits nested projects and can recurse or duplicate them.',
         );
       }
     },
-    ObjectMethod(p) {
+    Property(node) {
       if (
         ['config', 'configResolved', 'configureServer', 'configureVitest'].includes(
-          propertyName(p.node.key) ?? '',
+          propertyName(node.key) ?? '',
         )
       ) {
         editor.report(
-          p.node,
-          'project-server-lifecycle',
-          'Review this plugin hook for per-project config execution or Vite server state.',
-        );
-      }
-    },
-    ObjectProperty(p) {
-      if (
-        ['config', 'configResolved', 'configureServer', 'configureVitest'].includes(
-          propertyName(p.node.key) ?? '',
-        )
-      ) {
-        editor.report(
-          p.node,
+          node,
           'project-server-lifecycle',
           'Review this plugin hook for per-project config execution or Vite server state.',
         );

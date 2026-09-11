@@ -9,21 +9,12 @@ catalogs:
     '@babel/core':
       specifier: ^7.29.7
       version: 7.29.7
-    '@babel/parser':
-      specifier: ^7.29.8
-      version: 7.29.8
     '@babel/preset-env':
       specifier: ^7.29.7
       version: 7.29.7
     '@babel/preset-typescript':
       specifier: ^7.29.7
       version: 7.29.7
-    '@babel/traverse':
-      specifier: ^7.29.8
-      version: 7.29.8
-    '@babel/types':
-      specifier: ^7.29.8
-      version: 7.29.8
     '@clack/core':
       specifier: ^1.0.0
       version: 1.4.3
@@ -75,9 +66,6 @@ catalogs:
     '@types/babel__core':
       specifier: 7.20.5
       version: 7.20.5
-    '@types/babel__traverse':
-      specifier: ^7.28.0
-      version: 7.28.0
     '@types/connect':
       specifier: ^3.4.38
       version: 3.4.38
@@ -372,15 +360,6 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.10.3)(@vitest/browser-playwright@5.0.0)(@vitest/browser-preview@5.0.0)(@vitest/browser-webdriverio@5.0.0)(@vitest/ui@5.0.0)(happy-dom@20.0.10)(jsdom@27.2.0(supports-color@8.1.1))(vite@packages+core)
     devDependencies:
-      '@babel/parser':
-        specifier: 'catalog:'
-        version: 7.29.8
-      '@babel/traverse':
-        specifier: 'catalog:'
-        version: 7.29.8(supports-color@8.1.1)
-      '@babel/types':
-        specifier: 'catalog:'
-        version: 7.29.8
       '@emnapi/core':
         specifier: 'catalog:'
         version: 2.0.0-alpha.4
@@ -393,9 +372,6 @@ importers:
       '@nkzw/safe-word-list':
         specifier: 'catalog:'
         version: 3.1.0
-      '@types/babel__traverse':
-        specifier: 'catalog:'
-        version: 7.28.0
       '@types/cross-spawn':
         specifier: 'catalog:'
         version: 6.0.6
