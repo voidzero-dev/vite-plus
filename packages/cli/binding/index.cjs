@@ -1042,6 +1042,7 @@ module.exports.resetNativeMemoryStats = nativeBinding.resetNativeMemoryStats;
 module.exports.resolveTsconfig = nativeBinding.resolveTsconfig;
 module.exports.shutdownAsyncRuntime = nativeBinding.shutdownAsyncRuntime;
 module.exports.startAsyncRuntime = nativeBinding.startAsyncRuntime;
+module.exports.analyzeMigrationSource = nativeBinding.analyzeMigrationSource;
 module.exports.detectWorkspace = nativeBinding.detectWorkspace;
 module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
 module.exports.ensureBlockingStdio = nativeBinding.ensureBlockingStdio;

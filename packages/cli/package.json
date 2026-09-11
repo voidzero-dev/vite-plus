@@ -399,14 +399,10 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
-    "@babel/parser": "catalog:",
-    "@babel/traverse": "catalog:",
-    "@babel/types": "catalog:",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",
     "@nkzw/safe-word-list": "catalog:",
-    "@types/babel__traverse": "catalog:",
     "@types/cross-spawn": "catalog:",
     "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",

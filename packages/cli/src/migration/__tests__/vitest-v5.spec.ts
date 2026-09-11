@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { parse } from '@babel/parser';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
@@ -13,6 +12,7 @@ import {
   formatVitestV5Findings,
   planVitestV5Migration,
 } from '../migrator.ts';
+import { parseSource } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
 import { migrateVitestV5Config } from '../vitest-v5/config.ts';
 import { migrateVitestV5Source } from '../vitest-v5/source.ts';
@@ -42,12 +42,12 @@ const planProject = (rootDir: string) =>
   planVitestV5Migration({ rootDir, packageManager: PackageManager.pnpm });
 function config(source: string, preserveV4 = true) {
   const result = migrateVitestV5Config('vite.config.ts', source, { preserveV4 });
-  parse(result.content, { sourceType: 'module', plugins: ['typescript'] });
+  parseSource('vite.config.ts', result.content);
   return result;
 }
 function source(input: string, options = v4) {
   const result = migrateVitestV5Source('example.test.ts', input, options);
-  parse(result.content, { sourceType: 'module', plugins: ['typescript'] });
+  parseSource('example.test.ts', result.content);
   return result;
 }
 
@@ -655,6 +655,22 @@ describe('Vitest v5 command migration', () => {
 });
 
 describe('Vitest v5 versioned preflight', () => {
+  it('keeps Flow files unchanged and reports unsupported syntax before migration', () => {
+    const input = `// @flow\nimport { expect } from 'vitest';\nconst value: string = '';\nexpect(() => {}).toThrow('');`;
+    const root = project({ 'flow.test.js': input });
+    const file = path.join(root, 'flow.test.js');
+    const plan = planProject(root);
+    expect(plan.changes.some((change) => change.file === file)).toBe(false);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({
+        file,
+        code: 'source-parse',
+        message: expect.stringContaining('Flow is not supported'),
+      }),
+    );
+    expect(fs.readFileSync(file, 'utf8')).toBe(input);
+  });
+
   it.each([
     `import { defineConfig } from 'vitest/config';
 export default defineConfig(CONFIG);`,
