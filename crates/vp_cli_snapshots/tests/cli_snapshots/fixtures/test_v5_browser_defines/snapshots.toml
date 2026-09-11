@@ -1,0 +1,23 @@
+[[case]]
+name = "browser_defines"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+comment = "Regression for Vitest #11198. Keep after removing the temporary 5.0.0 backport. Raw configs, project inheritance, programmatic APIs, and the CLI must preserve define values."
+steps = [
+  { argv = ["node", "prepare-local.mjs"], snapshot = false },
+  { argv = ["node", "verify.mjs"], timeout = 180000 },
+  { argv = ["vp", "test", "--config", "vite.config.mjs"], timeout = 120000 },
+]
+
+[[case]]
+name = "packed_browser_defines"
+vp = "global"
+local-registry = true
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+comment = "The define regression must also pass with published-package layouts and install scripts disabled."
+steps = [
+  { argv = ["node", "prepare-packed.mjs"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 180000, snapshot = false },
+  { argv = ["node", "verify.mjs", "--packed"], timeout = 180000 },
+  { argv = ["vp", "test", "--config", "vite.config.mjs"], timeout = 120000 },
+]
