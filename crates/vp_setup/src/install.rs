@@ -835,11 +835,12 @@ mod tests {
         tokio::fs::create_dir_all(&node_bin).await.unwrap();
         tokio::fs::create_dir_all(&pnpm_bin).await.unwrap();
 
-        let node_binary = node_bin.join("node");
         // Execute an existing shell, with the generated script as input.
         // Parallel process creation can briefly inherit a newly written
         // executable's open descriptor and cause ETXTBSY on Linux.
-        std::os::unix::fs::symlink("/bin/sh", &node_binary).unwrap();
+        // Keep the sh basename: BusyBox selects its applet from argv[0].
+        let runtime_binary = node_bin.join("sh");
+        std::os::unix::fs::symlink("/bin/sh", &runtime_binary).unwrap();
         let pnpm_entry = pnpm_bin.join("pnpm.cjs");
         tokio::fs::write(
             &pnpm_entry,
@@ -847,7 +848,8 @@ mod tests {
         )
         .await
         .unwrap();
-        let node_runtime = vp_js_runtime::JsRuntime::from_system(JsRuntimeType::Node, node_binary);
+        let node_runtime =
+            vp_js_runtime::JsRuntime::from_system(JsRuntimeType::Node, runtime_binary);
 
         (node_bin, pnpm_bin, node_runtime, pnpm_entry)
     }
