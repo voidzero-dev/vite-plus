@@ -24,6 +24,8 @@ mod exec;
 #[allow(dead_code)]
 mod js_command_args;
 #[allow(dead_code)]
+mod local_cli;
+#[allow(dead_code)]
 mod migration;
 #[allow(dead_code)]
 mod package_manager;

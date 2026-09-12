@@ -1,4 +1,36 @@
 [[case]]
+name = "version_project_boundary"
+vp = ["local", "global"]
+comment = "Both CLI entry points reject an excluded project's ancestor install, allow workspace members to share it, and find an optional local dependency."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules", "outer/external/inner/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "--version"], cwd = "outer/packages/member" },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/external/inner/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/package.json", '{"name":"inner","optionalDependencies":{"vite-plus":"9.8.7"}}'], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+]
+
+[[case]]
+name = "version_manifest_resolution"
+vp = ["local", "global"]
+comment = "Both CLI entry points handle package exports, BOMs, and malformed ancestors through the same resolver."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/external/inner/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/external/inner/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"9.8.7","exports":{".":"./dist/bin.js"}}'], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vpt", "write-file", "outer/external/inner/node_modules/vite-plus/package.json", "\uFEFF{\"name\":\"vite-plus\",\"version\":\"9.8.7\"}"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vpt", "rm", "outer/external/inner/package.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/pnpm-workspace.yaml", "packages: []\n"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vpt", "write-file", "outer/package.json", "{"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+]
+
+[[case]]
 name = "excluded_project"
 vp = "global"
 comment = "An independent project outside the workspace patterns cannot borrow its ancestor's CLI."

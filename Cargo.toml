@@ -298,6 +298,7 @@ vp_command = { path = "crates/vp_command" }
 vp_cli_help = { path = "crates/vp_cli_help" }
 vp_error = { path = "crates/vp_error" }
 vp_js_runtime = { path = "crates/vp_js_runtime" }
+vp_local_cli = { path = "crates/vp_local_cli" }
 vp_migration = { path = "crates/vp_migration" }
 vp_pm_cli = { path = "crates/vp_pm_cli" }
 vp_pm_cli_macros = { path = "crates/vp_pm_cli_macros" }

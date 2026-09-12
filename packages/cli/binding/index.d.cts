@@ -3635,6 +3635,12 @@ export interface JsCommandResolvedResult {
   envs: Record<string, string>;
 }
 
+/** Metadata for the project-local vite-plus installation. */
+export interface LocalVitePlusMetadata {
+  version: string;
+  path: string;
+}
+
 /**
  * Merge JSON configuration file into vite config file
  *
@@ -3764,6 +3770,9 @@ export interface PathAccess {
   /** Whether the path was read as a directory */
   readDir: boolean;
 }
+
+/** Resolve local vite-plus with the same workspace boundary as the global CLI. */
+export declare function resolveLocalVitePlus(cwd: string): LocalVitePlusMetadata | null;
 
 /**
  * Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.

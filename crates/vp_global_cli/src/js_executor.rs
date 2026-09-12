@@ -407,31 +407,11 @@ impl JsExecutor {
         Ok(output)
     }
 
-    /// Resolve the local package while restricting lookup to the project boundary.
-    pub(crate) fn resolve_local_vite_plus_package(
-        project_path: &AbsolutePath,
-    ) -> Option<oxc_resolver::Resolution> {
-        use oxc_resolver::{ResolveOptions, Resolver, Restriction};
-
-        let mut options = ResolveOptions {
-            condition_names: vec!["import".into(), "node".into()],
-            ..ResolveOptions::default()
-        };
-        if let Some(boundary) = commands::local_vite_plus_boundary(project_path) {
-            // Restrictions inspect the lookup path before symlinks are resolved.
-            // A project-local link may point to a package stored outside the project.
-            options.restrictions.push(Restriction::Fn(std::sync::Arc::new(move |path| {
-                path.starts_with(boundary.as_path())
-            })));
-        }
-        Resolver::new(options).resolve(project_path, "vite-plus/package.json").ok()
-    }
-
     /// Resolve the local vite-plus package root from the project directory.
     pub(crate) fn resolve_local_vite_plus_package_dir(
         project_path: &AbsolutePath,
     ) -> Option<AbsolutePathBuf> {
-        let resolved = Self::resolve_local_vite_plus_package(project_path)?;
+        let resolved = vp_local_cli::resolve_local_vite_plus_package(project_path)?;
         let pkg_dir = resolved.path().parent()?;
         AbsolutePathBuf::new(pkg_dir.to_path_buf())
     }
@@ -453,16 +433,8 @@ impl JsExecutor {
 
 /// Resolve the version of the project-local `vite-plus`, if one is installed.
 fn resolve_local_vite_plus_version(project_path: &AbsolutePath) -> Option<String> {
-    let package_dir = JsExecutor::resolve_local_vite_plus_package_dir(project_path)?;
-    read_package_json_version(package_dir.join("package.json"))
-}
-
-/// Read the top-level `version` string from a package.json. Returns `None` when
-/// the file is missing, unreadable, or has no string `version`.
-fn read_package_json_version(pkg_json: impl AsRef<std::path::Path>) -> Option<String> {
-    let content = std::fs::read_to_string(pkg_json).ok()?;
-    let value: serde_json::Value = serde_json::from_str(&content).ok()?;
-    value.get("version")?.as_str().map(str::to_string)
+    let resolved = vp_local_cli::resolve_local_vite_plus_package(project_path)?;
+    Some(resolved.package_json()?.version()?.to_owned())
 }
 
 /// True when a version is a pkg.pr.new / registry-bridge preview build.
@@ -629,7 +601,7 @@ mod tests {
             write_local_cli(&workspace, "0.3.0");
             if ancestor == Some("{") {
                 // Oxc still reads package scope above a rootless workspace.
-                assert!(JsExecutor::resolve_local_vite_plus_package(&workspace).is_none());
+                assert!(vp_local_cli::resolve_local_vite_plus_package(&workspace).is_none());
             } else {
                 let package = JsExecutor::resolve_local_vite_plus_package_dir(&workspace)
                     .expect("a missing root manifest must not prevent a local installation");
@@ -822,6 +794,19 @@ mod tests {
             std::fs::canonicalize(&resolved).unwrap(),
             std::fs::canonicalize(project.join("dist/bin.js")).unwrap()
         );
+    }
+
+    #[test]
+    fn local_version_uses_resolver_metadata() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = AbsolutePath::new(temp.path()).unwrap();
+        std::fs::write(project.join("package.json"), "{}").unwrap();
+        write_local_cli(project, "0.3.0");
+        let manifest = project.join("node_modules/vite-plus/package.json");
+        let content = std::fs::read_to_string(&manifest).unwrap();
+        std::fs::write(manifest, vt_str::format!("\u{feff}{content}").as_bytes()).unwrap();
+
+        assert_eq!(resolve_local_vite_plus_version(project).as_deref(), Some("0.3.0"));
     }
 
     #[test]

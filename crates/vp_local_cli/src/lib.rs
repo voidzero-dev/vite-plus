@@ -1,15 +1,85 @@
+//! Project-local vite-plus resolution shared by the global CLI and NAPI binding.
+
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 use vt_glob::path::PathGlobSet;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
 use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
-use super::{find_nearest_package_json, read_dependency_manifest, strip_bom};
+/// Resolve the local package while restricting lookup to the project boundary.
+pub fn resolve_local_vite_plus_package(
+    project_path: &AbsolutePath,
+) -> Option<oxc_resolver::Resolution> {
+    use oxc_resolver::{ResolveOptions, Resolver, Restriction};
+
+    let mut options = ResolveOptions {
+        condition_names: vec!["import".into(), "node".into()],
+        ..ResolveOptions::default()
+    };
+    if let Some(boundary) = local_vite_plus_boundary(project_path) {
+        // Restrictions inspect the lookup path before symlinks are resolved.
+        // A project-local link may point to a package stored outside the project.
+        options.restrictions.push(Restriction::Fn(std::sync::Arc::new(move |path| {
+            path.starts_with(boundary.as_path())
+        })));
+    }
+    Resolver::new(options).resolve(project_path, "vite-plus/package.json").ok()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DepCheckPackageJson {
+    #[serde(default)]
+    dependencies: BTreeMap<Str, serde_json::Value>,
+    #[serde(default)]
+    dev_dependencies: BTreeMap<Str, serde_json::Value>,
+    #[serde(default)]
+    optional_dependencies: BTreeMap<Str, serde_json::Value>,
+}
+
+impl DepCheckPackageJson {
+    fn has_vite_plus(&self) -> bool {
+        self.dependencies.contains_key("vite-plus")
+            || self.dev_dependencies.contains_key("vite-plus")
+            || self.optional_dependencies.contains_key("vite-plus")
+    }
+}
+
+/// Find the nearest package manifest, including unreadable or malformed files.
+pub fn find_nearest_package_json(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let mut current = cwd;
+    loop {
+        let package_json_path = current.join("package.json");
+        if package_json_path.as_path().exists() {
+            return Some(package_json_path);
+        }
+        match current.parent() {
+            Some(parent) if parent != current => current = parent,
+            _ => return None,
+        }
+    }
+}
+
+/// Check the manifest for a vite-plus dependency in any install dependency group.
+pub fn package_json_has_vite_plus_dependency(package_json_path: &AbsolutePath) -> bool {
+    read_dependency_manifest(package_json_path).is_some_and(|pkg| pkg.has_vite_plus())
+}
+
+fn read_dependency_manifest(package_json_path: &AbsolutePath) -> Option<DepCheckPackageJson> {
+    let content = std::fs::read(package_json_path).ok()?;
+    serde_json::from_slice(strip_bom(&content)).ok()
+}
+
+fn strip_bom(content: &[u8]) -> &[u8] {
+    content.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(content)
+}
 
 /// Bound declared Vite+ projects at their package root, extending to a
 /// workspace root only for actual members. Unknown manifests keep the
 /// nearest known package boundary instead of permitting an ancestor install.
-pub(crate) fn local_vite_plus_boundary(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+fn local_vite_plus_boundary(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     let package_json = find_nearest_package_json(cwd);
     let Ok((workspace, _)) = find_workspace_root(cwd) else {
         return Some(package_json?.parent()?.to_absolute_path_buf());

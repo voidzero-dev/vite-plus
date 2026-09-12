@@ -12,7 +12,7 @@ use vp_pm_cli::get_package_manager_type_and_version;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_workspace::find_workspace_root;
 
-use crate::{commands::env::config::resolve_version, error::Error, help, js_executor::JsExecutor};
+use crate::{commands::env::config::resolve_version, error::Error, help};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,7 +65,7 @@ fn read_package_json(package_json_path: &Path) -> Option<PackageJson> {
 }
 
 fn find_local_vite_plus(cwd: &AbsolutePath) -> Option<LocalVitePlus> {
-    let resolved = JsExecutor::resolve_local_vite_plus_package(cwd)?;
+    let resolved = vp_local_cli::resolve_local_vite_plus_package(cwd)?;
     Some(LocalVitePlus {
         version: resolved.package_json()?.version()?.to_owned(),
         package_dir: resolved.path().parent()?.to_path_buf(),

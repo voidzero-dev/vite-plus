@@ -8651,6 +8651,7 @@ dependencies = [
  "vp_cli_help",
  "vp_command",
  "vp_error",
+ "vp_local_cli",
  "vp_migration",
  "vp_pm_cli",
  "vp_shared",
@@ -8752,12 +8753,10 @@ dependencies = [
  "indoc",
  "node-semver",
  "owo-colors",
- "oxc_resolver",
  "rustc-hash",
  "same-file",
  "serde",
  "serde_json",
- "serde_yaml",
  "serial_test",
  "tar",
  "temp-env",
@@ -8770,11 +8769,11 @@ dependencies = [
  "vp_command",
  "vp_error",
  "vp_js_runtime",
+ "vp_local_cli",
  "vp_pm_cli",
  "vp_setup",
  "vp_shared",
  "vp_toolchain",
- "vt_glob",
  "vt_path",
  "vt_str",
  "vt_workspace",
@@ -8822,6 +8821,20 @@ dependencies = [
  "vt_path",
  "vt_str",
  "zip",
+]
+
+[[package]]
+name = "vp_local_cli"
+version = "0.0.0"
+dependencies = [
+ "oxc_resolver",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "vt_glob",
+ "vt_path",
+ "vt_str",
+ "vt_workspace",
 ]
 
 [[package]]
