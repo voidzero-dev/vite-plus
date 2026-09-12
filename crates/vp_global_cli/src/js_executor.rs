@@ -407,49 +407,31 @@ impl JsExecutor {
         Ok(output)
     }
 
-    /// Find the directory whose `node_modules/vite-plus` an upward walk from
-    /// `project_path` is allowed to use.
-    ///
-    /// Declared Vite+ projects stay within their package or workspace boundary;
-    /// an ancestor workspace must include the package to supply its install.
-    /// Unreadable manifests preserve the nearest known package boundary.
-    /// Undeclared projects and markerless directories keep Node's upward walk.
-    pub(crate) fn local_vite_plus_install_host(
+    /// Resolve the local package while restricting lookup to the project boundary.
+    pub(crate) fn resolve_local_vite_plus_package(
         project_path: &AbsolutePath,
-    ) -> Option<AbsolutePathBuf> {
-        let boundary = commands::local_vite_plus_boundary(project_path);
+    ) -> Option<oxc_resolver::Resolution> {
+        use oxc_resolver::{ResolveOptions, Resolver, Restriction};
 
-        let mut current = project_path;
-        loop {
-            if current.join("node_modules/vite-plus/package.json").as_path().exists() {
-                return Some(current.to_absolute_path_buf());
-            }
-            if boundary.as_deref().is_some_and(|boundary| current == boundary) {
-                return None;
-            }
-            match current.parent() {
-                Some(parent) if parent != current => current = parent,
-                _ => return None,
-            }
+        let mut options = ResolveOptions {
+            condition_names: vec!["import".into(), "node".into()],
+            ..ResolveOptions::default()
+        };
+        if let Some(boundary) = commands::local_vite_plus_boundary(project_path) {
+            // Restrictions inspect the lookup path before symlinks are resolved.
+            // A project-local link may point to a package stored outside the project.
+            options.restrictions.push(Restriction::Fn(std::sync::Arc::new(move |path| {
+                path.starts_with(boundary.as_path())
+            })));
         }
+        Resolver::new(options).resolve(project_path, "vite-plus/package.json").ok()
     }
 
     /// Resolve the local vite-plus package root from the project directory.
     pub(crate) fn resolve_local_vite_plus_package_dir(
         project_path: &AbsolutePath,
     ) -> Option<AbsolutePathBuf> {
-        use oxc_resolver::{ResolveOptions, Resolver};
-
-        // Enforce the workspace boundary before using Node's unbounded resolver.
-        Self::local_vite_plus_install_host(project_path)?;
-
-        let resolver = Resolver::new(ResolveOptions {
-            condition_names: vec!["import".into(), "node".into()],
-            ..ResolveOptions::default()
-        });
-
-        // Resolve vite-plus/package.json from the project directory to find the package root
-        let resolved = resolver.resolve(project_path, "vite-plus/package.json").ok()?;
+        let resolved = Self::resolve_local_vite_plus_package(project_path)?;
         let pkg_dir = resolved.path().parent()?;
         AbsolutePathBuf::new(pkg_dir.to_path_buf())
     }
@@ -563,7 +545,10 @@ mod tests {
         std::fs::create_dir_all(package_dir.join("dist")).unwrap();
         std::fs::write(
             package_dir.join("package.json"),
-            vt_str::format!(r#"{{"version":"{version}"}}"#).as_bytes(),
+            vt_str::format!(
+                r#"{{"name":"vite-plus","version":"{version}","exports":{{"./package.json":"./package.json"}}}}"#
+            )
+            .as_bytes(),
         )
         .unwrap();
         std::fs::write(package_dir.join("dist/bin.js"), "").unwrap();
@@ -587,7 +572,6 @@ mod tests {
         .unwrap();
         std::fs::write(inner.join("pnpm-workspace.yaml"), "packages: []\n").unwrap();
 
-        assert_eq!(JsExecutor::local_vite_plus_install_host(&inner), None);
         assert_eq!(JsExecutor::resolve_local_vite_plus_package_dir(&inner), None);
         assert_eq!(JsExecutor::resolve_local_vite_plus(&inner), None);
     }
@@ -610,12 +594,12 @@ mod tests {
         std::fs::create_dir_all(&member).unwrap();
         std::fs::write(member.join("package.json"), r#"{"name":"app"}"#).unwrap();
 
-        let host = JsExecutor::local_vite_plus_install_host(&member)
-            .expect("workspace root install must stay resolvable");
-        assert_eq!(&host, ws);
         let pkg_dir = JsExecutor::resolve_local_vite_plus_package_dir(&member)
             .expect("workspace root install must stay resolvable");
-        assert!(pkg_dir.as_path().ends_with("node_modules/vite-plus"));
+        assert_eq!(
+            pkg_dir.as_path(),
+            std::fs::canonicalize(ws.join("node_modules/vite-plus")).unwrap()
+        );
     }
 
     #[test]
@@ -635,19 +619,25 @@ mod tests {
             std::fs::write(workspace.join("pnpm-workspace.yaml"), "packages: []\n").unwrap();
             for cwd in [&workspace, &workspace.join("src")] {
                 assert_eq!(
-                    JsExecutor::local_vite_plus_install_host(cwd),
+                    JsExecutor::resolve_local_vite_plus_package_dir(cwd),
                     None,
                     "ancestor: {ancestor:?}"
                 );
                 assert_eq!(JsExecutor::resolve_local_vite_plus(cwd), None);
             }
 
-            // A missing root manifest must not prevent a workspace-local install.
             write_local_cli(&workspace, "0.3.0");
-            assert_eq!(
-                JsExecutor::local_vite_plus_install_host(&workspace).as_deref(),
-                Some(workspace.as_ref())
-            );
+            if ancestor == Some("{") {
+                // Oxc still reads package scope above a rootless workspace.
+                assert!(JsExecutor::resolve_local_vite_plus_package(&workspace).is_none());
+            } else {
+                let package = JsExecutor::resolve_local_vite_plus_package_dir(&workspace)
+                    .expect("a missing root manifest must not prevent a local installation");
+                assert_eq!(
+                    package.as_path(),
+                    std::fs::canonicalize(workspace.join("node_modules/vite-plus")).unwrap()
+                );
+            }
         }
     }
 
@@ -730,7 +720,7 @@ mod tests {
             std::fs::create_dir_all(&inner).unwrap();
             std::fs::write(inner.join("package.json"), project).unwrap();
             assert_eq!(
-                JsExecutor::local_vite_plus_install_host(&inner),
+                JsExecutor::resolve_local_vite_plus_package_dir(&inner),
                 None,
                 "{ancestor}: {project}"
             );
@@ -750,12 +740,12 @@ mod tests {
         std::fs::write(inner.join("package.json"), r#"{"name":"inner"}"#).unwrap();
         std::fs::write(inner.join("pnpm-workspace.yaml"), "packages: []\n").unwrap();
 
-        let host = JsExecutor::local_vite_plus_install_host(&inner)
-            .expect("undeclared projects keep the unbounded walk");
-        assert_eq!(&host, outer);
         let pkg_dir = JsExecutor::resolve_local_vite_plus_package_dir(&inner)
             .expect("undeclared projects keep the unbounded walk");
-        assert!(pkg_dir.as_path().ends_with("node_modules/vite-plus"));
+        assert_eq!(
+            pkg_dir.as_path(),
+            std::fs::canonicalize(outer.join("node_modules/vite-plus")).unwrap()
+        );
     }
 
     /// Unix-only: Windows tempdirs can have a package.json in an ancestor profile
@@ -771,9 +761,64 @@ mod tests {
         let nested = root.join("a/b");
         std::fs::create_dir_all(&nested).unwrap();
 
-        let host = JsExecutor::local_vite_plus_install_host(&nested)
+        let package = JsExecutor::resolve_local_vite_plus_package_dir(&nested)
             .expect("markerless directories keep the unbounded walk");
-        assert_eq!(&host, root);
+        assert_eq!(
+            package.as_path(),
+            std::fs::canonicalize(root.join("node_modules/vite-plus")).unwrap()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_resolution_checks_symlink_location_before_its_target() {
+        for local_link in [false, true] {
+            for local_target in [false, true] {
+                let temp = tempfile::tempdir().unwrap();
+                let outer = AbsolutePath::new(temp.path()).unwrap();
+                let project = outer.join("inner");
+                std::fs::create_dir_all(&project).unwrap();
+                std::fs::write(outer.join("package.json"), "{}").unwrap();
+                std::fs::write(
+                    project.join("package.json"),
+                    r#"{"devDependencies":{"vite-plus":"0.3.0"}}"#,
+                )
+                .unwrap();
+
+                let store = if local_target { project.join("store") } else { outer.join("store") };
+                write_local_cli(&store, "0.3.0");
+                let target = store.join("node_modules/vite-plus");
+                let host = if local_link { project.as_ref() } else { outer };
+                std::fs::create_dir_all(host.join("node_modules")).unwrap();
+                std::os::unix::fs::symlink(&target, host.join("node_modules/vite-plus")).unwrap();
+
+                let resolved = JsExecutor::resolve_local_vite_plus_package_dir(&project);
+                let expected = local_link.then(|| {
+                    AbsolutePathBuf::new(std::fs::canonicalize(&target).unwrap()).unwrap()
+                });
+                assert_eq!(
+                    resolved, expected,
+                    "local link: {local_link}, local target: {local_target}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn local_resolution_supports_package_self_reference() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = AbsolutePath::new(temp.path()).unwrap();
+        std::fs::write(
+            project.join("package.json"),
+            r#"{"name":"vite-plus","version":"0.3.0","exports":{"./package.json":"./package.json"}}"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(project.join("dist")).unwrap();
+        std::fs::write(project.join("dist/bin.js"), "").unwrap();
+
+        let resolved = JsExecutor::resolve_local_vite_plus(project)
+            .expect("a package can resolve its own exported CLI without node_modules");
+        assert_eq!(resolved.as_path(), std::fs::canonicalize(project.join("dist/bin.js")).unwrap());
     }
 
     #[test]

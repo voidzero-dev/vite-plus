@@ -65,15 +65,11 @@ fn read_package_json(package_json_path: &Path) -> Option<PackageJson> {
 }
 
 fn find_local_vite_plus(cwd: &AbsolutePath) -> Option<LocalVitePlus> {
-    // The workspace-bounded walk keeps this display consistent with what
-    // delegation would actually execute (see `local_vite_plus_install_host`).
-    let host = JsExecutor::local_vite_plus_install_host(cwd)?;
-    let package_dir = host.as_path().join("node_modules").join("vite-plus");
-    let pkg = read_package_json(&package_dir.join("package.json"))?;
-    // Follow symlinks (pnpm links node_modules/vite-plus -> node_modules/.pnpm/.../vite-plus)
-    // so parent traversal can discover colocated dependency links.
-    let package_dir = fs::canonicalize(&package_dir).unwrap_or(package_dir);
-    Some(LocalVitePlus { version: pkg.version, package_dir })
+    let resolved = JsExecutor::resolve_local_vite_plus_package(cwd)?;
+    Some(LocalVitePlus {
+        version: resolved.package_json()?.version()?.to_owned(),
+        package_dir: resolved.path().parent()?.to_path_buf(),
+    })
 }
 
 fn read_toolchain_manifest(local: &LocalVitePlus) -> Option<vp_toolchain::Manifest> {

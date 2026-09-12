@@ -64,3 +64,29 @@ steps = [
   { argv = ["vp", "--version"], cwd = "outer/external/inner" },
   { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
 ]
+
+[[case]]
+name = "package_json_not_exported"
+vp = "global"
+comment = "Version reporting and delegation both require the local package.json export."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/external/inner/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/external/inner/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"9.8.7","exports":{".":"./dist/bin.js"}}'], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
+]
+
+[[case]]
+name = "rootless_malformed_ancestor"
+vp = "global"
+comment = "Oxc rejects a malformed ancestor manifest even when a rootless workspace has a local installation."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/external/inner/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/external/inner/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "rm", "outer/external/inner/package.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/pnpm-workspace.yaml", "packages: []\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/package.json", "{"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
+]
