@@ -81,8 +81,7 @@ These variables control the installer scripts and the standalone Windows install
 
 ### `VP_NODE_MANAGER`
 
-- **Purpose**: Control Node.js version manager setup during installation. This
-  does not change package-manager preferences.
+- **Purpose**: Control Node.js version manager setup during installation.
 - **Values**: `yes` or `no`
 - **Default**: Auto-detected
 - **CLI equivalent**: `--no-node-manager` (inverted)
