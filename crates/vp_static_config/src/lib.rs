@@ -148,7 +148,7 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
     let parser = Parser::new(&allocator, source, source_type);
     let result = parser.parse();
 
-    if result.panicked || !result.diagnostics.is_empty() {
+    if result.fatal_error || !result.diagnostics.is_empty() {
         return FieldMap::unanalyzable();
     }
 
@@ -1319,6 +1319,19 @@ mod tests {
     }
 
     // ── Not analyzable cases ─────────────────────────────────────────────
+
+    #[test]
+    fn syntax_errors_require_runtime_evaluation() {
+        for source in [
+            "export default { run: { cache: true }",
+            "export default { run: { cache: true } }; const missing;",
+        ] {
+            let result = parse(source);
+            assert_non_static(&result, "run");
+            assert_non_static(&result, "defaultPackage");
+            assert_eq!(result.get_declared("run"), None);
+        }
+    }
 
     #[test]
     fn returns_none_for_no_default_export() {

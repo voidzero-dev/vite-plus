@@ -306,6 +306,7 @@ export interface TreeShakeOptions {
    */
   invalidImportSideEffects?: boolean;
 }
+
 export interface Comment {
   type: 'Line' | 'Block';
   value: string;
@@ -332,6 +333,7 @@ export declare const enum Severity {
   Warning = 'Warning',
   Advice = 'Advice',
 }
+
 export declare class ParseResult {
   get program(): import('@oxc-project/types').Program;
   get module(): EcmaScriptModule;
@@ -610,6 +612,7 @@ export interface ValueSpan {
   start: number;
   end: number;
 }
+
 export declare class ResolverFactory {
   constructor(options?: NapiResolveOptions | undefined | null);
   static default(): ResolverFactory;
@@ -919,6 +922,7 @@ export interface TsconfigOptions {
    */
   references?: 'auto';
 }
+
 export interface SourceMap {
   file?: string;
   mappings: string;
@@ -929,6 +933,7 @@ export interface SourceMap {
   version: number;
   x_google_ignoreList?: Array<number>;
 }
+
 export interface ArrowFunctionsOptions {
   /**
    * This option enables the following:
@@ -1604,6 +1609,7 @@ export interface TypeScriptOptions {
    */
   rewriteImportExtensions?: 'rewrite' | 'remove' | boolean;
 }
+
 export declare class BindingBundleEndEventData {
   output: string;
   duration: number;
@@ -2180,6 +2186,7 @@ export interface BindingDevOptions {
   onAdditionalAssets?: undefined | ((output: BindingOutputs) => void | Promise<void>);
   rebuildStrategy?: BindingRebuildStrategy;
   watch?: BindingDevWatchOptions;
+  hotUpdate?: boolean;
 }
 
 export interface BindingDevtoolsOptions {
@@ -2705,6 +2712,7 @@ export interface BindingManualCodeSplittingOptions {
   maxSize?: number;
   minModuleSize?: number;
   maxModuleSize?: number;
+  internalInvalidateModuleInfoCache?: () => void;
 }
 
 export interface BindingMatchGroup {
@@ -3434,6 +3442,7 @@ export declare function startAsyncRuntime(): void;
 export interface ViteImportGlobMeta {
   isSubImportsPattern?: boolean;
 }
+
 /** Error from batch import rewriting */
 export interface BatchRewriteError {
   /** The file path that had an error */
@@ -3456,6 +3465,8 @@ export interface BatchRewriteResult {
 
 /** Configuration options passed from JavaScript to Rust. */
 export interface CliOptions {
+  /** The current JavaScript runtime (`process.execPath`). */
+  nodeExecPath: string;
   lint: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
   fmt: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
   vite: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;

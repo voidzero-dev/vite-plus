@@ -156,6 +156,7 @@ pub type ViteConfigResolverFn = Arc<
 
 /// CLI options containing JavaScript resolver functions (using boxed futures for simplicity)
 pub struct CliOptions {
+    pub node_exec_path: Arc<OsStr>,
     pub lint: BoxedResolverFn,
     pub fmt: BoxedResolverFn,
     pub vite: BoxedResolverFn,
