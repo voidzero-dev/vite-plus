@@ -54,6 +54,17 @@ describe('discoverTemplate', () => {
     expect(templateInfo.command).toBe('node');
     expect(templateInfo.type).toBe('bingo');
     expect(templateInfo.args).toContain('--skip-requests');
+    expect(templateInfo.envs.VP_CREATE_INTERACTIVE).toBe('1');
+    const nonInteractive = discoverTemplate(
+      'my-template',
+      [],
+      workspaceInfo,
+      false,
+      undefined,
+      undefined,
+      true,
+    );
+    expect(nonInteractive.envs.VP_CREATE_INTERACTIVE).toBe('0');
   });
 
   it('runs a local template referenced by a relative path', () => {

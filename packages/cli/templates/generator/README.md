@@ -11,6 +11,20 @@ From monorepo root:
 vp create
 ```
 
+For automation, provide the directory and every required template option:
+
+```bash
+vp create <generator-name> --no-interactive -- --directory new-package --name new-package
+```
+
+Vite+ sets `VP_CREATE_INTERACTIVE=0` for non-interactive local Bingo generators.
+This starter then validates the arguments and runs Bingo's programmatic API.
+Missing options and existing directories fail before any files are generated.
+Existing generators are copied project files and are not updated by upgrading Vite+.
+To adopt this behavior, update their entrypoint to match this starter.
+Direct invocation uses the interactive CLI unless this variable is set to `0`.
+When adding template options, also add their CLI types in `bin/index.ts`.
+
 ## Development
 
 ```bash

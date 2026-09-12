@@ -75,6 +75,55 @@ generator package (bingo dependency is the run hint; no marker keyword)
 install workspace deps so the generator's bin can import bingo
 
 
+## `vp exec node assert_noninteractive.mjs`
+
+assert missing arguments fail without prompts, existing files survive, and both modes generate files
+
+
+## `vp create my-generator --no-interactive -- --name demo-pkg`
+
+missing directory fails without entering Bingo prompts
+
+**Exit code:** 1
+
+```
+
+Generating project…
+
+Running: node <workspace>/tools/my-generator/bin/index.ts --name demo-pkg --skip-requests
+Missing --directory. Pass generator options after -- in vp create.
+```
+
+## `vp create my-generator --no-interactive -- --directory missing-name`
+
+missing required template option fails before creating its directory
+
+**Exit code:** 1
+
+```
+
+Generating project…
+
+Running: node <workspace>/tools/my-generator/bin/index.ts --directory missing-name --skip-requests
+[
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "name"
+    ],
+    "message": "Required"
+  }
+]
+```
+
+## `vpt stat-file tools/missing-name --assert missing`
+
+```
+tools/missing-name: missing
+```
+
 ## `vp create my-generator --no-interactive -- --name demo-pkg --directory demo-pkg --offline`
 
 resolve via the registered create.templates entry
@@ -84,21 +133,6 @@ resolve via the registered create.templates entry
 Generating project…
 
 Running: node <workspace>/tools/my-generator/bin/index.ts --name demo-pkg --directory demo-pkg --offline --skip-requests
-┌  my-generator@0.0.0 │
-◇  Running with mode --setup
-│
-│  --offline enabled. You'll need to git push any changes manually.
-│
-◇  Inferred default options from system
-│
-◇  Ran the my-generator template
-│
-◇  Prepared local Git repository
-│
-●  Run npx index.ts --remote in ./demo-pkg
-│  to create and sync a remote repository on GitHub.
-│
-└  Thanks for using my-generator! 💝
 
 Monorepo integration...
 
