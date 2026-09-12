@@ -418,6 +418,15 @@ jobs:
               vp run build && vp run build:demos
               vp run lint
               vp run test:unit
+          - name: solid-vite-plugin
+            node-version: 24
+            # The next branch's Vite 8 example uses Solid 2 and @solidjs/vite-plugin.
+            directory: examples/vite-8
+            command: |
+              # Build the workspace plugin before vp run loads the example configs.
+              (cd ../.. && vp exec rollup -c)
+              vp run build
+              vp run test
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: namespace-profile-windows-4c-8g
