@@ -15,11 +15,14 @@ use tar::Archive;
 use tokio::{fs, io::AsyncWriteExt};
 use vp_error::Error;
 
+use crate::config::NpmConfig;
+
 /// HTTP client with built-in retry support
 #[derive(Clone)]
 pub struct HttpClient {
     max_times: usize,
     min_delay: u64,
+    npm_config: NpmConfig,
 }
 
 impl Default for HttpClient {
@@ -31,7 +34,7 @@ impl Default for HttpClient {
 impl HttpClient {
     /// Create a new HTTP client with default settings (3 retries, 500ms min delay)
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self::with_config(3, 500)
     }
 
@@ -42,8 +45,12 @@ impl HttpClient {
     /// * `max_times` - Maximum number of retry attempts
     /// * `min_delay` - Minimum delay in milliseconds for exponential backoff
     #[must_use]
-    pub(crate) const fn with_config(max_times: usize, min_delay: u64) -> Self {
-        Self { max_times, min_delay }
+    pub(crate) fn with_config(max_times: usize, min_delay: u64) -> Self {
+        Self { max_times, min_delay, npm_config: NpmConfig::load() }
+    }
+
+    pub(crate) fn with_npm_config(max_times: usize, min_delay: u64, npm_config: NpmConfig) -> Self {
+        Self { max_times, min_delay, npm_config }
     }
 
     /// Get raw bytes from a URL
@@ -64,7 +71,12 @@ impl HttpClient {
         // Read the body inside the retry so a mid-body connection drop gets
         // retried instead of failing outright, like `download_file`.
         let bytes = (|| async {
-            let response = client.get(url).send().await?.error_for_status()?;
+            let response = self
+                .npm_config
+                .apply_auth(client.get(url), url)
+                .send()
+                .await?
+                .error_for_status()?;
             Ok::<_, Error>(response.bytes().await?)
         })
         .retry(
@@ -126,6 +138,7 @@ impl HttpClient {
             if let Some(accept) = accept {
                 request = request.header(reqwest::header::ACCEPT, accept);
             }
+            request = self.npm_config.apply_auth(request, url);
             let response = request.send().await?.error_for_status()?;
             Ok::<T, Error>(response.json::<T>().await?)
         })
@@ -199,7 +212,12 @@ impl HttpClient {
         // a slow-but-steady transfer must be allowed to finish.
         let timeout = vp_shared::download_timeout();
         let result = (|| async {
-            let response = client.get(url).timeout(timeout).send().await?.error_for_status()?;
+            let response = self
+                .npm_config
+                .apply_auth(client.get(url).timeout(timeout), url)
+                .send()
+                .await?
+                .error_for_status()?;
             if let Some(ref pb) = progress {
                 pb.set_position(0);
                 if let Some(size) = response.content_length() {
@@ -360,12 +378,32 @@ fn extract_tgz_file(
 /// # Returns
 /// * `Ok(())` - If the tgz file is downloaded, verified (if hash provided) and extracted successfully.
 /// * `Err(e)` - If the tgz file is not downloaded, verified or extracted successfully.
+#[cfg(test)]
 pub(crate) async fn download_and_extract_tgz_with_hash(
     url: &str,
     target_dir: impl AsRef<Path>,
     archive_file: Option<&Path>,
     expected_hash: Option<&str>,
     message: Option<&str>,
+) -> Result<(), Error> {
+    download_and_extract_tgz_with_hash_and_config(
+        url,
+        target_dir,
+        archive_file,
+        expected_hash,
+        message,
+        &NpmConfig::load(),
+    )
+    .await
+}
+
+pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
+    url: &str,
+    target_dir: impl AsRef<Path>,
+    archive_file: Option<&Path>,
+    expected_hash: Option<&str>,
+    message: Option<&str>,
+    npm_config: &NpmConfig,
 ) -> Result<(), Error> {
     if let Some(archive_file) = archive_file
         && (archive_file.as_os_str().is_empty()
@@ -389,7 +427,15 @@ pub(crate) async fn download_and_extract_tgz_with_hash(
     // and propagate unchanged so the caller in `package_manager.rs` can map a
     // 404 to `PackageManagerVersionNotFound`.
     (|| async {
-        download_and_extract_tgz_once(url, &target_dir, archive_file, expected_hash, message).await
+        download_and_extract_tgz_once(
+            url,
+            &target_dir,
+            archive_file,
+            expected_hash,
+            message,
+            npm_config,
+        )
+        .await
     })
     .retry(
         ExponentialBuilder::default()
@@ -411,6 +457,7 @@ async fn download_and_extract_tgz_once(
     archive_file: Option<&Path>,
     expected_hash: Option<&str>,
     message: Option<&str>,
+    npm_config: &NpmConfig,
 ) -> Result<(), Error> {
     // Reset target directory so a partial prior attempt can't interfere.
     if fs::try_exists(target_dir).await.unwrap_or(false) {
@@ -423,7 +470,7 @@ async fn download_and_extract_tgz_once(
     // letting `download_file` retry here too would nest two retry layers and
     // multiply attempts (up to N×M downloads) for a persistent failure.
     let tgz_file = target_dir.join("package.tgz");
-    let client = HttpClient::with_config(0, 0);
+    let client = HttpClient::with_npm_config(0, 0, npm_config.clone());
     client.download_file(url, &tgz_file, message).await?;
 
     if let Some(archive_file) = archive_file {
@@ -770,6 +817,50 @@ mod tests {
         assert_eq!(package_info.name, "test-package");
         assert_eq!(package_info.version, "1.0.0");
         assert_eq!(package_info.description, "A test package");
+    }
+
+    #[tokio::test]
+    async fn npm_auth_is_sent_on_the_first_registry_requests() {
+        let server = MockServer::start();
+        let registry_url = server.base_url();
+        let registry_key = registry_url.trim_start_matches("http:");
+        let client = HttpClient {
+            max_times: 0,
+            min_delay: 0,
+            npm_config: NpmConfig {
+                values: std::collections::HashMap::from([(
+                    vt_str::format!("{registry_key}/:_authtoken").to_string(),
+                    "SECRET".to_string(),
+                )]),
+            },
+        };
+
+        let authenticated = server.mock(|when, then| {
+            when.method(GET).path("/package").header("authorization", "Bearer SECRET");
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(serde_json::json!({ "value": true }));
+        });
+        let authenticated_download = server.mock(|when, then| {
+            when.method(GET).path("/package.tgz").header("authorization", "Bearer SECRET");
+            then.status(200).body("archive");
+        });
+        let result: serde_json::Value =
+            client.get_json(&vt_str::format!("{}/package", server.base_url())).await.unwrap();
+        let target = TempDir::new().unwrap();
+        client
+            .download_file(
+                &vt_str::format!("{}/package.tgz", server.base_url()),
+                target.path().join("package.tgz"),
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, serde_json::json!({ "value": true }));
+        authenticated.assert_hits(1);
+        authenticated_download.assert_hits(1);
+        assert_eq!(fs::read(target.path().join("package.tgz")).unwrap(), b"archive");
     }
 
     #[tokio::test]
