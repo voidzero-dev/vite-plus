@@ -172,13 +172,14 @@ Notes:
 | State of cwd                                                             | Write target                                                          |
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------- |
 | `.node-version` exists                                                   | Update `.node-version` (unchanged behavior)                           |
+| `.nvmrc` is the effective Node source in cwd                             | Update its version token, preserving comments and other content       |
 | No `.node-version`; `package.json` has a `devEngines.runtime` node entry | Update that entry's `version` (preserve `onFail`, sibling entries)    |
 | No `.node-version`; `package.json` exists without a node runtime entry   | Add `devEngines.runtime` node entry with `onFail: "download"`         |
 | No `package.json` in cwd                                                 | Create `.node-version` (unchanged behavior; nothing else to write to) |
 
 - `engines.node` is **never** a pin target: it is a consumer-facing constraint, and rewriting it would change the published package contract. More broadly, no Vite+ write path (pin, unpin, create, migrate) ever deletes or modifies an existing `engines.node`; it is always kept unchanged.
 - When updating an existing node entry in array form, only that entry's `version` changes; other runtimes and `onFail` values are preserved.
-- An explicit `--target` flag overrides the selection: `vp env pin 24 --target node-version` or `--target dev-engines`. The flag always wins: `--target dev-engines` writes `devEngines.runtime` even when `.node-version` exists, with a note that `.node-version` still takes resolution precedence until removed.
+- An explicit `--target` flag overrides the selection: `vp env pin 24 --target node-version`, `--target nvmrc`, or `--target dev-engines`. The flag always wins: `--target dev-engines` writes `devEngines.runtime` even when `.node-version` exists, with a note that `.node-version` still takes resolution precedence until removed. Likewise, an explicit `.nvmrc` target warns when a higher-priority source shadows it. The default `.nvmrc` selection uses local resolution only and does not change the priority of `.node-version`, `devEngines.runtime`, or `engines.node`.
 
 Value semantics (matching the implemented `vp env pin` behavior, which resolves
 every input to an exact version at pin time; identical for both targets):
@@ -206,8 +207,8 @@ When `.node-version` is the write target and a `devEngines.runtime` node entry a
 
 #### 2.5 `vp env pin` (show) and `vp env unpin`
 
-- `vp env pin` with no argument reports the active pin and its source, now including `devEngines.runtime` as a possible source (the `VersionSource::DevEnginesRuntime` display string already exists). Inherited pins from parent directories are reported for both sources, checking `.node-version` first and then the `devEngines.runtime` node entry per directory (matching the resolution order).
-- `vp env unpin` / `vp env pin --unpin` removes the pin from the same target that `vp env pin` would write: delete `.node-version` if present, otherwise remove the node entry from `devEngines.runtime` (removing the `devEngines.runtime` key entirely if it becomes empty, and `devEngines` if it becomes empty).
+- `vp env pin` with no argument reports the active pin and its source, including an effective `.nvmrc`. Inherited pins from parent directories are reported in the same order: `.node-version`, the `devEngines.runtime` node entry, then an effective `.nvmrc`. A nearer `engines.node` stops the search and is displayed as a runtime constraint rather than inheriting a more distant pin.
+- `vp env unpin` / `vp env pin --unpin` removes the pin from the same target that `vp env pin` would write: delete `.node-version` if present, delete an effective `.nvmrc` in cwd, or remove the node entry from `devEngines.runtime` (removing the `devEngines.runtime` key entirely if it becomes empty, and `devEngines` if it becomes empty). An explicit `--target nvmrc` removes that file even if another source shadows it. Parent-directory files are never removed.
 
 ### 3. Package manager
 

@@ -377,8 +377,9 @@ Examples:
   vp env pin 24 --target node-version   # Force the .node-version file
 
 The write target follows the compatibility-first rule: an existing .node-version
-keeps being updated; otherwise the pin is written to package.json#devEngines.runtime;
-.node-version is only created when the directory has no package.json.")]
+keeps being updated, as does an effective .nvmrc in the current directory.
+Otherwise the pin is written to package.json#devEngines.runtime, or .node-version
+when the directory has no package.json.")]
     Pin {
         /// Versions to pin. Bare versions select Node.js; package managers use name@version.
         specs: Vec<String>,
@@ -534,6 +535,8 @@ impl EnvSubcommands {
 pub enum PinTarget {
     /// Pin via the .node-version file
     NodeVersion,
+    /// Pin via the .nvmrc file
+    Nvmrc,
     /// Pin via package.json#devEngines.runtime
     DevEngines,
     /// Pin via the top-level packageManager field

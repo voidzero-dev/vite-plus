@@ -159,7 +159,7 @@ shim calls in the same job use these files to resolve the same environment.
 ### Manage
 
 - `vp env default` shows the global Node.js default and each configured package-manager version. Bare versions set Node.js; qualified specs such as `pnpm@10.18.0` set that package manager's shim default without replacing the defaults for Bun, Yarn, or npm. `--unset` clears all defaults unless scoped.
-- `vp env pin` shows or writes project pins. Existing `.node-version` and top-level `packageManager` fields keep being updated for compatibility; otherwise Vite+ writes the matching `devEngines` entry. Use `--target node-version`, `--target dev-engines`, or `--target package-manager` to choose explicitly.
+- `vp env pin` shows or writes project pins. Existing `.node-version` and top-level `packageManager` fields keep being updated for compatibility. An existing `.nvmrc` is updated when it is the effective Node source in the current directory; its comments and other non-version content are preserved. Otherwise Vite+ writes the matching `devEngines` entry. Use `--target node-version`, `--target nvmrc`, `--target dev-engines`, or `--target package-manager` to choose explicitly. Pinning in a child directory does not modify an inherited `.nvmrc`.
 - `vp env unpin` removes both effective pins by default; append a selector to remove one. Lower-priority declarations are not deleted.
 - `vp env use` activates the complete project environment. Explicit specs override selected components; `--unset` clears both unless scoped.
 - `vp env install` installs the complete resolved environment, a selected component, or explicit specs.

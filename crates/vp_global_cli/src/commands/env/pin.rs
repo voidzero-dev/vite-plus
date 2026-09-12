@@ -2,14 +2,14 @@
 //!
 //! Handles `vp env pin [VERSION]` to pin a Node.js version in the current directory.
 //! The write target follows the compatibility-first rule from rfcs/dev-engines.md:
-//! an existing `.node-version` keeps being updated; otherwise the pin is written to
-//! `package.json#devEngines.runtime`; `.node-version` is only created when the
-//! directory has no package.json. An explicit `--target` flag overrides the selection.
+//! an existing `.node-version` or effective `.nvmrc` keeps being updated; otherwise
+//! the pin is written to `package.json#devEngines.runtime`, or `.node-version` when
+//! the directory has no package.json. An explicit `--target` overrides the selection.
 //! An existing `engines.node` is never deleted or modified.
 
 use std::{io::Write, process::ExitStatus};
 
-use vp_js_runtime::NodeProvider;
+use vp_js_runtime::{NodeProvider, VersionSource, resolve_node_version};
 use vp_pm_cli::{
     PackageManagerType, download_package_manager, resolve_package_manager_from_package_json,
     resolve_package_manager_version,
@@ -26,6 +26,8 @@ use crate::{cli::PinTarget, error::Error};
 
 /// Node version file name
 const NODE_VERSION_FILE: &str = ".node-version";
+
+const NVMRC_FILE: &str = ".nvmrc";
 
 /// Package manifest file name
 const PACKAGE_JSON_FILE: &str = "package.json";
@@ -65,7 +67,10 @@ pub async fn execute(
     };
     if specs.node.is_some()
         && specs.package_manager.is_some()
-        && matches!(target, Some(PinTarget::NodeVersion | PinTarget::PackageManager))
+        && matches!(
+            target,
+            Some(PinTarget::NodeVersion | PinTarget::Nvmrc | PinTarget::PackageManager)
+        )
     {
         return Err(Error::Other(
             "mixed Node.js and package-manager pins require the default targets or --target dev-engines"
@@ -132,6 +137,26 @@ async fn show_pinned(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
         return Ok(ExitStatus::default());
     }
 
+    if let Some(resolution) = resolve_node_version(cwd, true).await? {
+        if resolution.source == VersionSource::NvmrcFile
+            && resolution.project_root.as_ref() == Some(cwd)
+        {
+            println!("Pinned version: {}", resolution.version);
+            println!("  Source: {}", cwd.join(NVMRC_FILE).as_path().display());
+            return Ok(ExitStatus::default());
+        }
+        if resolution.source == VersionSource::EnginesNode {
+            let path = resolution.source_path.unwrap_or_else(|| cwd.join(PACKAGE_JSON_FILE));
+            println!("No version pinned.");
+            println!(
+                "  Node.js constraint: {} from {} (engines.node)",
+                resolution.version,
+                path.as_path().display()
+            );
+            return Ok(ExitStatus::default());
+        }
+    }
+
     // Check for inherited version from parent directories
     if let Some((version, source)) = find_inherited_version(cwd).await? {
         println!("No version pinned in current directory.");
@@ -156,11 +181,12 @@ async fn show_pinned(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
     Ok(ExitStatus::default())
 }
 
-/// Find an inherited pin (`.node-version` or `package.json#devEngines.runtime`)
+/// Find an inherited pin (`.node-version`, `devEngines.runtime`, or `.nvmrc`)
 /// in parent directories.
 ///
 /// Mirrors the resolution order within each directory: `.node-version` first,
-/// then the devEngines.runtime node entry. Returns the version and a display
+/// then the devEngines.runtime node entry, then an effective `.nvmrc`.
+/// Returns the version and a display
 /// string describing the source.
 async fn find_inherited_version(cwd: &AbsolutePathBuf) -> Result<Option<(String, String)>, Error> {
     let mut current: Option<AbsolutePathBuf> = cwd.parent().map(|p| p.to_absolute_path_buf());
@@ -180,9 +206,34 @@ async fn find_inherited_version(cwd: &AbsolutePathBuf) -> Result<Option<(String,
                 format!("{} (devEngines.runtime)", dir.join(PACKAGE_JSON_FILE).as_path().display()),
             )));
         }
+        if let Some(resolution) = resolve_node_version(&dir, false).await? {
+            if resolution.source == VersionSource::NvmrcFile {
+                return Ok(Some((
+                    resolution.version.to_string(),
+                    dir.join(NVMRC_FILE).as_path().display().to_string(),
+                )));
+            }
+            // A nearer runtime constraint blocks more distant pins, even if
+            // this command does not treat that source as a writable pin.
+            return Ok(None);
+        }
         current = dir.parent().map(|p| p.to_absolute_path_buf());
     }
 
+    Ok(None)
+}
+
+/// Preserve an existing local pin without selecting a source that a manifest
+/// declaration would shadow. Do not follow parent pins: pin writes to cwd.
+async fn existing_node_file_target(cwd: &AbsolutePathBuf) -> Result<Option<PinTarget>, Error> {
+    if tokio::fs::try_exists(cwd.join(NODE_VERSION_FILE)).await.unwrap_or(false) {
+        return Ok(Some(PinTarget::NodeVersion));
+    }
+    if let Some(resolution) = resolve_node_version(cwd, false).await?
+        && resolution.source == VersionSource::NvmrcFile
+    {
+        return Ok(Some(PinTarget::Nvmrc));
+    }
     Ok(None)
 }
 
@@ -204,18 +255,31 @@ async fn do_pin(
     let package_json_exists =
         tokio::fs::try_exists(cwd.join(PACKAGE_JSON_FILE)).await.unwrap_or(false);
 
-    // Compatibility-first target selection (rfcs/dev-engines.md): an existing
-    // .node-version keeps winning; otherwise pin into package.json#devEngines.runtime;
-    // .node-version is only created when the directory has no package.json.
-    let target = target.unwrap_or(if node_version_exists || !package_json_exists {
-        PinTarget::NodeVersion
-    } else {
-        PinTarget::DevEngines
-    });
+    let target = match target {
+        Some(target) => target,
+        None => existing_node_file_target(cwd).await?.unwrap_or(if package_json_exists {
+            PinTarget::DevEngines
+        } else {
+            PinTarget::NodeVersion
+        }),
+    };
 
     let pinned = match target {
         PinTarget::NodeVersion => {
             pin_node_version_file(cwd, version, &resolved_version, was_alias, force).await?
+        }
+        PinTarget::Nvmrc => {
+            let pinned = pin_nvmrc_file(cwd, version, &resolved_version, was_alias, force).await?;
+            if pinned
+                && let Some(resolution) = resolve_node_version(cwd, false).await?
+                && resolution.source != VersionSource::NvmrcFile
+            {
+                output::warn(&format!(
+                    "{} still takes precedence over {NVMRC_FILE}. Run 'vp env doctor' for details.",
+                    resolution.source
+                ));
+            }
+            pinned
         }
         PinTarget::DevEngines => {
             if !package_json_exists {
@@ -358,6 +422,66 @@ async fn pin_node_version_file(
     // sync it in interactive terminals and warn otherwise (rfcs/dev-engines.md)
     check_dev_engines_sync(cwd, resolved_version, force, vp_shared::is_stdin_terminal()).await?;
 
+    Ok(true)
+}
+
+/// Locate the version token using the same line rules as read_nvmrc_file.
+/// Keep comments, reserved key/value lines, whitespace, and line endings intact.
+fn nvmrc_version_span(content: &str) -> Result<Option<std::ops::Range<usize>>, Error> {
+    let mut span = None;
+    let mut offset = 0;
+    for line in content.split_inclusive('\n') {
+        let value = line.split_once('#').map_or(line, |(value, _)| value);
+        let trimmed = value.trim();
+        if !trimmed.is_empty() && !trimmed.contains('=') {
+            if span.is_some() {
+                return Err(Error::Other(
+                    "cannot pin .nvmrc with multiple version declarations".into(),
+                ));
+            }
+            let start = offset + value.len() - value.trim_start().len();
+            span = Some(start..start + trimmed.len());
+        }
+        offset += line.len();
+    }
+    Ok(span)
+}
+
+async fn pin_nvmrc_file(
+    cwd: &AbsolutePathBuf,
+    input_version: &str,
+    resolved_version: &str,
+    was_alias: bool,
+    force: bool,
+) -> Result<bool, Error> {
+    let path = cwd.join(NVMRC_FILE);
+    let mut content = match tokio::fs::read_to_string(&path).await {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error.into()),
+    };
+    if let Some(span) = nvmrc_version_span(&content)? {
+        let existing = &content[span.clone()];
+        if !confirm_overwrite_pin(
+            ".nvmrc already exists with version",
+            existing.strip_prefix('v').unwrap_or(existing),
+            resolved_version,
+            force,
+        )? {
+            return Ok(false);
+        }
+        content.replace_range(span, resolved_version);
+    } else {
+        let newline = if content.contains("\r\n") { "\r\n" } else { "\n" };
+        if !content.is_empty() && !content.ends_with('\n') {
+            content.push_str(newline);
+        }
+        content.push_str(resolved_version);
+        content.push_str(newline);
+    }
+    tokio::fs::write(&path, content).await?;
+    print_pin_success(input_version, resolved_version, was_alias);
+    println!("  Updated {NVMRC_FILE} in {}", cwd.as_path().display());
     Ok(true)
 }
 
@@ -601,39 +725,33 @@ async fn resolve_version_for_pin(
 
 /// Remove the Node.js pin from the current directory.
 ///
-/// Removes the same source that `vp env pin` would write: `.node-version` when
-/// present, otherwise the node entry from `package.json#devEngines.runtime`.
+/// Removes the same source that `vp env pin` would write, including an effective
+/// `.nvmrc` in the current directory.
 /// An explicit `target` overrides the selection.
 pub async fn do_unpin(
     cwd: &AbsolutePathBuf,
     target: Option<PinTarget>,
 ) -> Result<ExitStatus, Error> {
-    let node_version_path = cwd.join(NODE_VERSION_FILE);
-    let node_version_exists = tokio::fs::try_exists(&node_version_path).await.unwrap_or(false);
-
-    let target = target.unwrap_or(if node_version_exists {
-        PinTarget::NodeVersion
-    } else {
-        PinTarget::DevEngines
-    });
+    let target = match target {
+        Some(target) => target,
+        None => existing_node_file_target(cwd).await?.unwrap_or(PinTarget::DevEngines),
+    };
 
     match target {
-        PinTarget::NodeVersion => {
-            if !node_version_exists {
-                println!("No {NODE_VERSION_FILE} file in current directory.");
+        PinTarget::NodeVersion | PinTarget::Nvmrc => {
+            let file = if target == PinTarget::Nvmrc { NVMRC_FILE } else { NODE_VERSION_FILE };
+            let path = cwd.join(file);
+            if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+                println!("No {file} file in current directory.");
                 return Ok(ExitStatus::default());
             }
 
-            tokio::fs::remove_file(&node_version_path).await?;
+            tokio::fs::remove_file(&path).await?;
 
             // Invalidate resolve cache so the unpinned version falls back correctly
             crate::shim::invalidate_cache();
 
-            output::success(&format!(
-                "Removed {} from {}",
-                NODE_VERSION_FILE,
-                cwd.as_path().display()
-            ));
+            output::success(&format!("Removed {} from {}", file, cwd.as_path().display()));
         }
         PinTarget::DevEngines => {
             if remove_dev_engines_runtime_node(cwd).await? {
@@ -670,10 +788,10 @@ pub async fn do_unpin_scope(
     }
     if scope.includes_package_managers()
         && !scope.includes_node()
-        && matches!(target, Some(PinTarget::NodeVersion))
+        && matches!(target, Some(PinTarget::NodeVersion | PinTarget::Nvmrc))
     {
         return Err(Error::Other(
-            "--target node-version is incompatible with package-manager scope".into(),
+            "Node.js file targets are incompatible with package-manager scope".into(),
         ));
     }
     if scope.includes_node() && !matches!(target, Some(PinTarget::PackageManager)) {
@@ -694,8 +812,8 @@ async fn pin_package_manager(
     force: bool,
     target: Option<PinTarget>,
 ) -> Result<ExitStatus, Error> {
-    if matches!(target, Some(PinTarget::NodeVersion)) {
-        return Err(Error::Other("--target node-version cannot pin a package manager".into()));
+    if matches!(target, Some(PinTarget::NodeVersion | PinTarget::Nvmrc)) {
+        return Err(Error::Other("Node.js file targets cannot pin a package manager".into()));
     }
     let resolved = resolve_package_manager_version(package_manager, version).await?;
     package_manager::warn_if_target_differs(cwd, package_manager).await;
@@ -838,7 +956,7 @@ async fn unpin_package_manager(
     scope: EnvScope,
     target: Option<PinTarget>,
 ) -> Result<(), Error> {
-    if matches!(target, Some(PinTarget::NodeVersion)) {
+    if matches!(target, Some(PinTarget::NodeVersion | PinTarget::Nvmrc)) {
         return Ok(());
     }
     let root = workspace_root(cwd)?.unwrap_or_else(|| cwd.clone());
@@ -953,6 +1071,40 @@ mod tests {
         let dir = std::env::temp_dir().join("vp-global-cli-tests-vp-home");
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[tokio::test]
+    async fn nvmrc_pin_preserves_non_version_content() {
+        for (before, after) in [
+            (
+                "# Node for CI\n  v20.18.0  # keep\nkey=value\n",
+                "# Node for CI\n  22.13.0  # keep\nkey=value\n",
+            ),
+            ("# Node\r\n20.18.0\r\n", "# Node\r\n22.13.0\r\n"),
+            ("20.18.0", "22.13.0"),
+            ("# Node\nkey=value", "# Node\nkey=value\n22.13.0\n"),
+            ("", "22.13.0\n"),
+        ] {
+            let temp = TempDir::new().unwrap();
+            let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            let path = cwd.join(NVMRC_FILE);
+            tokio::fs::write(&path, before).await.unwrap();
+            assert!(pin_nvmrc_file(&cwd, "22.13.0", "22.13.0", false, true).await.unwrap());
+            assert_eq!(tokio::fs::read_to_string(&path).await.unwrap(), after);
+            assert!(!pin_nvmrc_file(&cwd, "22.13.0", "22.13.0", false, true).await.unwrap());
+            assert_eq!(tokio::fs::read_to_string(&path).await.unwrap(), after);
+        }
+    }
+
+    #[tokio::test]
+    async fn nvmrc_pin_does_not_overwrite_ambiguous_declarations() {
+        let temp = TempDir::new().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let path = cwd.join(NVMRC_FILE);
+        let content = "20.18.0\n22.13.0\n";
+        tokio::fs::write(&path, content).await.unwrap();
+        assert!(pin_nvmrc_file(&cwd, "24.11.0", "24.11.0", false, true).await.is_err());
+        assert_eq!(tokio::fs::read_to_string(&path).await.unwrap(), content);
     }
 
     #[tokio::test]
@@ -1115,6 +1267,28 @@ mod tests {
         let (version, source) = find_inherited_version(&subdir).await.unwrap().unwrap();
         assert_eq!(version, "^24.0.0");
         assert!(source.ends_with("package.json (devEngines.runtime)"), "got: {source}");
+    }
+
+    #[tokio::test]
+    async fn test_find_inherited_version_stops_at_nearer_engines_node() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let middle = root.join("middle");
+        let leaf = middle.join("leaf");
+        tokio::fs::create_dir_all(&leaf).await.unwrap();
+        tokio::fs::write(root.join(".nvmrc"), "20.18.0\n").await.unwrap();
+        tokio::fs::write(middle.join("package.json"), r#"{"engines":{"node":"22.13.0"}}"#)
+            .await
+            .unwrap();
+
+        let runtime = resolve_node_version(&leaf, true).await.unwrap().unwrap();
+        assert_eq!(runtime.source, VersionSource::EnginesNode);
+        assert!(find_inherited_version(&leaf).await.unwrap().is_none());
+
+        tokio::fs::remove_file(middle.join("package.json")).await.unwrap();
+        let (version, source) = find_inherited_version(&leaf).await.unwrap().unwrap();
+        assert_eq!(version, "20.18.0");
+        assert!(source.ends_with(".nvmrc"));
     }
 
     #[tokio::test]
