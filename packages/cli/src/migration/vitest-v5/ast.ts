@@ -2,8 +2,8 @@ import type * as t from '@oxc-project/types';
 
 import { analyzeMigrationSource } from '../../../binding/index.js';
 
-interface ParsedSource {
-  program: t.Program;
+interface SourceAnalysis {
+  ast: { node: t.Program };
   comments: t.Span[];
   bindings: Array<{ start: number; references: number[]; constant: boolean }>;
 }
@@ -152,10 +152,15 @@ export const CONFIG_SOURCES = new Set([
 ]);
 export const NODE_SOURCES = new Set(['vitest/node', 'vite-plus/test/node']);
 
-export function parseSource(file: string, source: string): ParsedSource {
+export function parseSource(file: string, source: string) {
   // Native errors (including unsupported Flow) reach the existing preflight
   // diagnostic path, which preserves the original file for manual review.
-  return JSON.parse(analyzeMigrationSource(file, source)) as ParsedSource;
+  const { ast, bindings, comments } = JSON.parse(
+    analyzeMigrationSource(file, source),
+  ) as SourceAnalysis;
+  // Migration uses source spelling and regex metadata, not the JS-only fixes
+  // that reconstruct RegExp/BigInt values in Oxc's serialized AST.
+  return { program: ast.node, bindings, comments };
 }
 
 export function testApiName(

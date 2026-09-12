@@ -84,17 +84,14 @@ pub fn analyze_migration_source(filename: &str, source: &str) -> Result<String, 
         .map(|comment| json!({ "start": comment.span.start, "end": comment.span.end }))
         .collect();
 
-    // Reuse the serializer already instantiated by oxc_parser_napi. Migration
-    // reads literal spelling from source, so it does not need the JS-only fixes
-    // that reconstruct RegExp/BigInt values from this ESTree JSON representation.
-    let mut result: Value = serde_json::from_str(&program.to_estree_json_with_fixes(true, false))
-        .map_err(|error| error.to_string())?;
-    serde_json::to_string(&json!({
-        "program": result["node"].take(),
-        "bindings": bindings,
-        "comments": comments,
-    }))
-    .map_err(|error| error.to_string())
+    // Reuse the serializer already instantiated by oxc_parser_napi. Pass its
+    // JSON directly to JavaScript: serde_json::Value rejects valid JS strings
+    // with unpaired surrogates and imposes a recursion limit on deep ASTs.
+    // Only serialize our shallow metadata with serde_json, not the AST.
+    let ast = program.to_estree_json_with_fixes(true, false);
+    let bindings = serde_json::to_string(&bindings).map_err(|error| error.to_string())?;
+    let comments = serde_json::to_string(&comments).map_err(|error| error.to_string())?;
+    Ok(format!(r#"{{"ast":{ast},"bindings":{bindings},"comments":{comments}}}"#))
 }
 
 #[cfg(test)]
@@ -108,6 +105,24 @@ mod tests {
         for source in ["// @flow\nconst x: string = 'x';", "const = ;"] {
             assert!(analyze_migration_source("test.js", source).is_err());
         }
+    }
+
+    #[test]
+    fn preserves_unpaired_surrogates_in_strings_and_templates() {
+        for source in [
+            r#"const value = '\ud800';"#,
+            r#"const value = '\udc00';"#,
+            r#"const value = `\ud800`;"#,
+        ] {
+            assert!(analyze_migration_source("test.ts", source).is_ok());
+        }
+    }
+
+    #[test]
+    fn preserves_asts_deeper_than_the_serde_recursion_limit() {
+        let expression = vec!["1"; 160].join(" + ");
+        let source = format!("const value = {expression};");
+        assert!(analyze_migration_source("test.ts", &source).is_ok());
     }
 
     #[test]
@@ -143,7 +158,7 @@ mod tests {
         let alias =
             bindings.iter().find(|binding| binding["start"] == utf16("alias = vi")).unwrap();
         assert_eq!(alias["constant"], false);
-        assert_eq!(result["program"]["body"][0]["start"], utf16("import"));
+        assert_eq!(result["ast"]["node"]["body"][0]["start"], utf16("import"));
         assert_eq!(result["comments"][0]["end"], "// 😀".encode_utf16().count());
     }
 }

@@ -655,6 +655,22 @@ describe('Vitest v5 command migration', () => {
 });
 
 describe('Vitest v5 versioned preflight', () => {
+  it.each([
+    ['an unpaired surrogate', String.raw`'\ud800'`],
+    ['a deep expression', Array(160).fill('1').join(' + ')],
+  ])('migrates removed APIs in a file with %s without blocking preflight', (_name, expression) => {
+    const declaration = `const value = ${expression};`;
+    const root = project({
+      'example.test.ts': `import { getFn } from '@vitest/runner';\n${declaration}`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings.some(({ code }) => code === 'source-parse')).toBe(false);
+    expect(plan.findings.some(({ severity }) => severity === 'block')).toBe(false);
+    const change = plan.changes.find(({ file }) => file === path.join(root, 'example.test.ts'));
+    expect(change?.after).toContain('const getFn = _VitestTestRunner.getTestFn;');
+    expect(change?.after).toContain(declaration);
+  });
+
   it('keeps Flow files unchanged and reports unsupported syntax before migration', () => {
     const input = `// @flow\nimport { expect } from 'vitest';\nconst value: string = '';\nexpect(() => {}).toThrow('');`;
     const root = project({ 'flow.test.js': input });

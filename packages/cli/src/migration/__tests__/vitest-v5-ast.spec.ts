@@ -27,6 +27,45 @@ describe('Oxc migration analysis', () => {
     expect(() => parseSource('test.ts', 'const = ;')).toThrow();
   });
 
+  it.each([
+    [String.raw`'\ud800'`, '\ud800'],
+    [String.raw`'\udc00'`, '\udc00'],
+    [String.raw`'\ud800x'`, '\ud800x'],
+    [String.raw`'\u{d800}'`, '\ud800'],
+    [String.raw`'\ud800\udc00'`, '\ud800\udc00'],
+  ])('preserves the value and source spelling of %s', (literal, value) => {
+    const declaration = `const value = ${literal};`;
+    expect(parseSource('test.ts', declaration).program.body[0]).toMatchObject({
+      declarations: [{ init: { type: 'Literal', value } }],
+    });
+    const input = `${declaration}\nexpect(() => {}).toThrow('');`;
+    expect(migrateVitestV5Source('test.ts', input, options)).toEqual({
+      content: `${declaration}\nexpect(() => {}).toThrow(/^$/);`,
+      findings: [],
+    });
+  });
+
+  it('preserves unpaired surrogates in template values', () => {
+    const declaration = 'const value = `\\ud800`;';
+    expect(parseSource('test.ts', declaration).program.body[0]).toMatchObject({
+      declarations: [{ init: { quasis: [{ value: { cooked: '\ud800' } }] } }],
+    });
+    const input = `${declaration}\nexpect(() => {}).toThrow('');`;
+    expect(migrateVitestV5Source('test.ts', input, options)).toEqual({
+      content: `${declaration}\nexpect(() => {}).toThrow(/^$/);`,
+      findings: [],
+    });
+  });
+
+  it('migrates ASTs deeper than the Rust JSON recursion limit', () => {
+    const declaration = `const value = ${Array(160).fill('1').join(' + ')};`;
+    const input = `${declaration}\nexpect(() => {}).toThrow('');`;
+    expect(migrateVitestV5Source('test.ts', input, options)).toEqual({
+      content: `${declaration}\nexpect(() => {}).toThrow(/^$/);`,
+      findings: [],
+    });
+  });
+
   it('preserves shadowed globals in destructuring, catch clauses, and hoisted declarations', () => {
     const shadowed = `function parameter({ expect }) { expect(() => {}).toThrow(''); }
 try {} catch (expect) { expect(() => {}).toThrow(''); }
