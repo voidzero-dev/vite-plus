@@ -3,6 +3,12 @@ use std::path::Path;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 
+/// Parse source and resolve lexical bindings for the TypeScript migration rules.
+#[napi]
+pub fn analyze_migration_source(filename: String, source: String) -> Result<String> {
+    vp_migration::analyze_migration_source(&filename, &source).map_err(Error::from_reason)
+}
+
 /// Rewrite scripts json content using rules from rules_yaml
 ///
 /// # Arguments

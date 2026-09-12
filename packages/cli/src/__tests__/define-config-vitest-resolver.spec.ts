@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
-import type { Plugin } from 'vite';
+import { preview } from '@vitest/browser-preview';
+import type { Alias, Plugin, UserConfig } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import { defineConfig, defineProject, isVitestFamilySpecifier } from '../define-config.ts';
@@ -42,8 +43,15 @@ describe('isVitestFamilySpecifier', () => {
     expect(isVitestFamilySpecifier('@vitest/browser/context')).toBe(true);
   });
 
-  it('matches `@vitest/expect`', () => {
-    expect(isVitestFamilySpecifier('@vitest/expect')).toBe(true);
+  it.each([
+    '@vitest/expect',
+    '@vitest/runner',
+    '@vitest/ws-client',
+    '@vitest/istanbul-lib-coverage',
+    '@vitest/istanbul-lib-instrument',
+    '@vitest/future-package',
+  ])('leaves %s on the project dependency edge', (name) => {
+    expect(isVitestFamilySpecifier(name)).toBe(false);
   });
 
   it('matches a queried subpath (query stripped before matching)', () => {
@@ -76,6 +84,62 @@ describe('isVitestFamilySpecifier', () => {
 });
 
 describe('vitePlusVitestResolverPlugin', () => {
+  it('anchors Preview optimizer dependencies without changing other providers', () => {
+    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
+    const hook = (plugin.config as { handler: (config: UserConfig) => void }).handler;
+    const config: UserConfig = {
+      test: {
+        browser: {
+          enabled: true,
+          provider: preview(),
+        },
+      },
+    };
+    hook(config);
+    const aliases = config.resolve!.alias as Alias[];
+    expect(aliases).toHaveLength(9);
+    for (const id of ['@testing-library/user-event', '@testing-library/dom']) {
+      const replacement = aliases.find(({ find }) => (find as RegExp).test(id))?.replacement;
+      expect(replacement?.replaceAll('\\', '/')).toContain(id);
+    }
+    hook(config);
+    expect(config.resolve!.alias).toHaveLength(9);
+  });
+
+  it('anchors browser optimizer entries to the bundled ESM runtime', () => {
+    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
+    const hook = (plugin.config as { handler: (config: UserConfig) => void }).handler;
+    const config: UserConfig = { test: { browser: { enabled: true } } };
+    hook(config);
+    const aliases = config.resolve!.alias as Alias[];
+    expect(aliases).toHaveLength(7);
+    for (const id of ['vitest', 'vitest/internal/browser', 'vitest/internal/traces']) {
+      expect(aliases.find(({ find }) => (find as RegExp).test(id))?.replacement).toBe(
+        fileURLToPath(import.meta.resolve(id)),
+      );
+    }
+    hook(config);
+    expect(config.resolve!.alias).toHaveLength(7);
+  });
+
+  it('preserves explicit browser aliases and leaves Node-only configs unchanged', () => {
+    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
+    const hook = (plugin.config as { handler: (config: UserConfig) => void }).handler;
+    const config: UserConfig = {
+      resolve: { alias: { vitest: '/custom/vitest' } },
+      test: { browser: { enabled: true } },
+    };
+    hook(config);
+    expect((config.resolve!.alias as Alias[])[0]).toEqual({
+      find: 'vitest',
+      replacement: '/custom/vitest',
+    });
+    expect(config.resolve!.alias).toHaveLength(5);
+    const nodeOnly: UserConfig = { test: {} };
+    hook(nodeOnly);
+    expect(nodeOnly).toEqual({ test: {} });
+  });
+
   it('is injected into the root plugins array as an enforce:pre plugin with resolveId', () => {
     const result = defineConfig({}) as { plugins: unknown[] };
     const plugin = findPlugin(result.plugins, RESOLVER_PLUGIN_NAME);
@@ -86,13 +150,17 @@ describe('vitePlusVitestResolverPlugin', () => {
     expect(typeof plugin?.resolveId).toBe('function');
   });
 
-  it('is injected into each `test.projects` entry (before user plugins)', () => {
+  it('is injected into independent `test.projects` entries', () => {
     const existing: Plugin = { name: 'user-project-plugin' };
     const result = defineConfig({
       test: {
         projects: [
-          { test: { name: 'unit', environment: 'node' } },
-          { plugins: [existing], test: { name: 'browser', environment: 'jsdom' } },
+          { extends: false, test: { name: 'unit', environment: 'node' } },
+          {
+            extends: './base.config.ts',
+            plugins: [existing],
+            test: { name: 'browser', environment: 'jsdom' },
+          },
         ],
       },
     }) as { test: { projects: unknown[] } };
@@ -189,19 +257,19 @@ describe('vitePlusVitestResolverPlugin resolveId (bundle-first)', () => {
 
   it('tries the vite-plus anchor then the vitest anchor for the nested @vitest/* family', async () => {
     const resolveId = getResolveId();
-    const VITEST_ANCHORED = '/bundled/.pnpm/vitest/node_modules/@vitest/expect/dist/index.js';
+    const VITEST_ANCHORED = '/bundled/.pnpm/vitest/node_modules/@vitest/mocker/dist/index.js';
     let anchorProbes = 0;
     const { ctx, calls } = makeCtx(({ fromProject }) => {
       if (fromProject) {
-        return { id: '/fake/project/node_modules/@vitest/expect/dist/index.js' };
+        return { id: '/fake/project/node_modules/@vitest/mocker/dist/index.js' };
       }
       anchorProbes += 1;
-      // vite-plus anchor misses (@vitest/expect is a dep of vitest, not vite-plus);
+      // Simulate a layout in which only the second bundled anchor resolves it;
       // the second (vitest) anchor resolves it.
       return anchorProbes >= 2 ? { id: VITEST_ANCHORED } : null;
     });
 
-    const id = idOf(await resolveId.call(ctx, '@vitest/expect', PROJECT_IMPORTER, {}));
+    const id = idOf(await resolveId.call(ctx, '@vitest/mocker', PROJECT_IMPORTER, {}));
 
     expect(id).toBe(VITEST_ANCHORED);
     expect(anchorProbes).toBe(2);

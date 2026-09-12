@@ -12,6 +12,61 @@ mod redact;
 use redact::{redact_output, redact_version_probe_output};
 
 #[test]
+fn masks_yarn_compound_elapsed_times_as_one_duration() {
+    for elapsed in ["999ms", "1s", "1s 0ms", "1m 2s", "1h 2m 3s 4ms"] {
+        let input = format!(
+            "➤ YN0000: Done in {elapsed}\n\
+             ➤ YN0000: · Done with warnings in {elapsed}\n\
+             ➤ YN0000: · Done with errors in {elapsed}\n\
+             [app]: Process exited (exit code 0), completed in {elapsed}\n"
+        );
+        assert_eq!(
+            redact_output(input, &[], true),
+            "➤ YN0000: Done in <duration>\n\
+             ➤ YN0000: · Done with warnings in <duration>\n\
+             ➤ YN0000: · Done with errors in <duration>\n\
+             [app]: Process exited (exit code 0), completed in <duration>\n"
+        );
+    }
+    assert_eq!(
+        redact_output("timings: 1s 200ms\ntransform 1s, tests 200ms\n".to_owned(), &[], true),
+        "timings: <duration> <duration>\ntransform <duration>, tests <duration>\n"
+    );
+}
+
+#[test]
+fn omits_optional_yarn_step_timing_without_hiding_completion_text() {
+    for suffix in ["", " in 999ms", " in 1s", " in 1s 0ms", " in 1m 2s"] {
+        assert_eq!(
+            redact_output(format!("➤ YN0000: └ Completed{suffix}\n"), &[], true),
+            "➤ YN0000: └ Completed\n"
+        );
+    }
+    assert_eq!(
+        redact_output("Completed in 1s 2ms\n".to_owned(), &[], true),
+        "Completed in <duration>\n"
+    );
+}
+
+#[test]
+fn masks_vitest_v5_timing_but_preserves_coverage_percentages() {
+    let input = " Duration  112ms (transform 57%, import 28%, worker 8%, tests 6%)\nCoverage 90%\n";
+    assert_eq!(
+        redact_output(input.to_owned(), &[], true),
+        " Duration  <duration> (<timing>)\nCoverage 90%\n"
+    );
+}
+
+#[test]
+fn masks_vitest_api_port_but_preserves_other_localhost_urls() {
+    let input = "API started at http://localhost:63316/\nBrowser runner started at http://localhost:63317/__vitest_test__/?sessionId=keep-session\nhttp://localhost:9229/\n";
+    assert_eq!(
+        redact_output(input.to_owned(), &[], true),
+        "API started at http://localhost:<port>/\nBrowser runner started at http://localhost:<port>/__vitest_test__/?sessionId=keep-session\nhttp://localhost:9229/\n"
+    );
+}
+
+#[test]
 fn masks_bare_version_block_only_for_version_probe_steps() {
     // `npm --version` / `npx --version` print a bare semver alone in the
     // step's code fence; the runner masks it via the probe-scoped helper.

@@ -14,7 +14,7 @@ should update all testnpm2 versions
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/utils/package.json`
@@ -54,10 +54,10 @@ should update in specific package
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file packages/app/package.json`
@@ -89,10 +89,10 @@ should update dev dependencies in app
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file packages/app/package.json`
@@ -124,8 +124,8 @@ should update in all packages
 [command-update-yarn4-with-workspace]: ➤ YN0000: └ Completed
 [command-update-yarn4-with-workspace]: ➤ YN0000: ┌ Link step
 [command-update-yarn4-with-workspace]: ➤ YN0000: └ Completed
-[command-update-yarn4-with-workspace]: ➤ YN0000: · Done in <duration> <duration>
-[command-update-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration> <duration>
+[command-update-yarn4-with-workspace]: ➤ YN0000: · Done in <duration>
+[command-update-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration>
 
 [app]: Process started
 [app]: ➤ YN0000: · Yarn <version>
@@ -135,10 +135,10 @@ should update in all packages
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file packages/app/package.json packages/utils/package.json`
@@ -176,7 +176,7 @@ should update recursively without saving
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json`
@@ -219,10 +219,10 @@ should update workspace dependency
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file packages/app/package.json`

@@ -20,9 +20,9 @@ import { doc } from './resolve-doc.ts';
 import { fmt } from './resolve-fmt.ts';
 import { lint } from './resolve-lint.ts';
 import { pack } from './resolve-pack.ts';
-import { test } from './resolve-test.ts';
+import { parentTestConfigDiagnostic, test } from './resolve-test.ts';
 import { vite } from './resolve-vite.ts';
-import { accent, errorMsg, log } from './utils/terminal.ts';
+import { accent, errorMsg, log, warnMsg } from './utils/terminal.ts';
 
 // Node.js sets O_NONBLOCK when pipe-backed stdio is first accessed. Materialize
 // the output streams before restoring the blocking semantics expected by Rust.
@@ -132,6 +132,12 @@ if (maybePrintCommandHelp(args)) {
     // This module imports `vitest/config` through define-config. Load it here
     // so `migrate` and `config` can handle stale aliases before Vitest loads.
     const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
+    if (command === 'test') {
+      const diagnostic = parentTestConfigDiagnostic(process.cwd(), args.slice(1));
+      if (diagnostic) {
+        warnMsg(diagnostic);
+      }
+    }
     const initInspection = inspectInitCommand(command, args.slice(1));
     if (
       initInspection.handled &&

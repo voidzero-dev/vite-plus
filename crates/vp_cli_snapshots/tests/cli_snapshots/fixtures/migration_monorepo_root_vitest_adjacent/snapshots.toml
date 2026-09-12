@@ -2,6 +2,7 @@
 name = "migration_monorepo_root_vitest_adjacent"
 vp = "global"
 steps = [
+  { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"4.1.11\"}"], comment = "record the original runner version without adding a direct dependency", snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"], comment = "root with a vitest-adjacent dep but no direct vitest still gets a direct vitest pin", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "vitest pinned at the root even though vite-plus is injected first", continue-on-failure = true },
 ]

@@ -7,6 +7,11 @@ Yarn < 4.10.0 cannot resolve `catalog:`, so managed specs stay concrete
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 1 review item
+
+package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+
 ⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
 
 ✔ Switched Yarn to node-modules mode

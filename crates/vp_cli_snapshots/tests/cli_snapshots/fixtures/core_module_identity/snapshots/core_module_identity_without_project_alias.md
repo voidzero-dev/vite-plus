@@ -60,7 +60,7 @@ VITE+ - The Unified Toolchain for the Web
  Test Files  1 passed (1)
       Tests  1 passed (1)
    Start at  <time>
-   Duration  <duration> (transform <duration>, setup <duration>, import <duration>, tests <duration>, environment <duration>)
+   Duration  <duration> (<timing>)
 ```
 
 ## `vp pack entry.js`

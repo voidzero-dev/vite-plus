@@ -5,7 +5,7 @@ Help requests with additional arguments delegate to the underlying tool.
 ## `vp test --help --coverage`
 
 ```
-vitest/4.1.11
+vitest/5.0.0
 
 Usage:
   $ vitest [...filters]
@@ -17,6 +17,7 @@ Commands:
   dev [...filters]
   bench [...filters]
   init <project>
+  doctor [...filters]
   list [...filters]
   [...filters]
   complete [shell]
@@ -28,6 +29,7 @@ For more info, run any command with the `--help` flag:
   $ vitest dev --help
   $ vitest bench --help
   $ vitest init --help
+  $ vitest doctor --help
   $ vitest list --help
   $ vitest --help
   $ vitest complete --help
@@ -47,7 +49,7 @@ Options:
   --coverage.allowExternal                                   Collect coverage of files outside the project root (default: false)
   --coverage.skipFull                                        Do not show files with 100% statement, branch, and function coverage (default: false)
   --coverage.thresholds.100                                  Shortcut to set all coverage thresholds to 100 (default: false)
-  --coverage.thresholds.perFile                              Check thresholds per file. See --coverage.thresholds.lines, --coverage.thresholds.functions, --coverage.thresholds.branches and --coverage.thresholds.statements for the actual thresholds (default: false)
+  --coverage.thresholds.perFile <boolean>                    Check thresholds per file. See --coverage.thresholds.lines, --coverage.thresholds.functions, --coverage.thresholds.branches and --coverage.thresholds.statements for the actual thresholds (default: false). Object form is available in config files only.
   --coverage.thresholds.autoUpdate <boolean|function>        Update threshold values: "lines", "functions", "branches" and "statements" to configuration file when current coverage is above the configured thresholds (default: false)
   --coverage.thresholds.lines <number>                       Threshold for lines. Visit https://github.com/istanbuljs/nyc#coverage-thresholds for more information. This option is not available for custom providers
   --coverage.thresholds.functions <number>                   Threshold for functions. Visit https://github.com/istanbuljs/nyc#coverage-thresholds for more information. This option is not available for custom providers
@@ -63,4 +65,5 @@ Options:
   --coverage.changed <commit/branch>                         Collect coverage only for files changed since a specified commit or branch (e.g., origin/main or HEAD~1). Inherits value from --changed by default.
   --coverage.excludeAfterRemap                               Apply exclusions again after coverage has been remapped to original sources. (default: false)
   --coverage.htmlDir <path>                                  Directory of HTML coverage output to be served in UI mode and HTML reporter.
+  --coverage.autoAttachSubprocess                            Track coverage of the node:child_process and node:worker_threads spawned during test run. Supported only by v8 provider. (default: false)
 ```

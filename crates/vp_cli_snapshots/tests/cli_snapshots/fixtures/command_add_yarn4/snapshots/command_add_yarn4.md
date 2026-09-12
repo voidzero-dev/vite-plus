@@ -49,7 +49,7 @@ should add package as dev dependencies
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -80,7 +80,7 @@ warn: yarn does not support --allow-build.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -113,7 +113,7 @@ VITE+ - The Unified Toolchain for the Web
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -149,7 +149,7 @@ should add package as optional dependencies
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -186,7 +186,7 @@ support pass through arguments
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`

@@ -2,6 +2,7 @@
 name = "migration_skip_vite_peer_dependency"
 vp = "global"
 steps = [
+  { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"4.1.11\"}"], comment = "record the original runner version without adding a direct dependency", snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve vite peer contracts", continue-on-failure = true },
   { argv = ["vpt", "print-file", "src/index.ts"], comment = "vite imports stay public, vitest imports rewrite", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "vite peer range is preserved", continue-on-failure = true },

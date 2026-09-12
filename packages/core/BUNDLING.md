@@ -61,6 +61,22 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 **Input**: `vite/packages/vite/`
 **Output**: `dist/vite/`
 
+#### Temporary Vitest browser define backport
+
+The build includes `src/vitest-browser-defines-backport.ts` through
+`build-support/vitest-browser-defines-backport.ts` while `VITEST_VERSION` is
+`5.0.0`. The plugin clears browser projects' runtime define maps before Vitest
+sends them to the browser, preserving Vite's own define initialization. It also
+covers projects added through `injectTestProject`. It checks the running Vitest
+version and leaves Node projects unchanged.
+
+Registration in bundled Vite covers raw configs and independent projects that
+do not use Vite+ config helpers. Consumer installs need no dependency patch or
+install script. A newer pinned Vitest version excludes the plugin from the
+build. Remove both backport modules and the build registration after upgrading
+to a release containing [Vitest #11198](https://github.com/vitest-dev/vitest/pull/11198).
+Keep the browser regression fixtures.
+
 ### Step 4: Bundle Tsdown (`bundleTsdown`)
 
 **Action**: Re-bundles tsdown with CJS dependency handling.

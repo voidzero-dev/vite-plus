@@ -1,0 +1,17 @@
+[[case]]
+name = "community_provider_and_browser_protocol"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+steps = [{ argv = ["node", "verify.mjs"], timeout = 180000 }]
+
+[[case]]
+name = "packed_community_provider_and_browser_protocol"
+vp = "global"
+local-registry = true
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+steps = [
+  { argv = ["node", "prepare-packed.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"test-v5-webdriverio\",\"private\":true,\"type\":\"module\",\"packageManager\":\"pnpm@11.24.0\",\"devDependencies\":{\"vite-plus\":\"latest\",\"@vitest/browser-webdriverio\":\"5.0.0\",\"webdriverio\":\"9.20.1\"}}\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 180000, snapshot = false },
+  { argv = ["node", "verify.mjs", "--packed"], timeout = 180000 },
+]

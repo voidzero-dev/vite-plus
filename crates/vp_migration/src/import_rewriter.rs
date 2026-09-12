@@ -1764,8 +1764,65 @@ static PARSED_VITE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new
 });
 
 static PARSED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
-    ast_grep::load_rules(REWRITE_VITEST_RULES).expect("failed to parse vitest rewrite rules")
+    ast_grep::load_rules(&vitest_rewrite_rules()).expect("failed to parse vitest rewrite rules")
 });
+
+static VITEST_V5_ENTRY_POINTS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../packages/cli/src/vitest-v5-entry-points.json"))
+        .expect("invalid Vitest entry-point map")
+});
+
+static VITE_PLUS_TEST_SUBPATHS: LazyLock<Vec<String>> = LazyLock::new(|| {
+    let pkg: serde_json::Value =
+        serde_json::from_str(include_str!("../../../packages/cli/package.json"))
+            .expect("invalid vite-plus manifest");
+    pkg["exports"]
+        .as_object()
+        .expect("missing vite-plus exports")
+        .keys()
+        .filter_map(|key| key.strip_prefix("./test/").map(str::to_owned))
+        .collect()
+});
+
+fn vitest_rewrite_rules() -> String {
+    let allowed = VITE_PLUS_TEST_SUBPATHS
+        .iter()
+        .map(|name| regex::escape(name))
+        .collect::<Vec<_>>()
+        .join("|");
+    let generic = REWRITE_VITEST_RULES.replace(
+        r#"regex: ^['"]vitest/.+['"]$"#,
+        &format!(r#"regex: ^['"]vitest/({allowed})['"]$"#),
+    );
+    // Exact public replacements run before the generic subpath rules. Each
+    // generated rule retains the same AST context and Nuxt skip classification.
+    let template = REWRITE_VITEST_RULES
+        .split("---\nid: rewrite-vitest-subpath-import")
+        .nth(1)
+        .expect("missing subpath rule template");
+    let template = format!("---\nid: rewrite-vitest-subpath-import{template}");
+    let mut rules = String::new();
+    let mut entries = VITEST_V5_ENTRY_POINTS.iter().collect::<Vec<_>>();
+    entries.sort_by_key(|(source, _)| *source);
+    for (source, target) in entries {
+        rules.push_str(
+            &template
+                .replace(
+                    "rewrite-vitest-subpath-",
+                    &format!("rewrite-vitest-subpath-{}-", source.replace('/', "-")),
+                )
+                .replace(
+                    r#"regex: ^['"]vitest/.+['"]$"#,
+                    &format!(r#"regex: ^['"]{}['"]$"#, regex::escape(source)),
+                )
+                .replace("replace: vitest/", &format!("replace: {source}"))
+                .replace("by: \"vite-plus/test/\"", &format!("by: \"{target}\"")),
+        );
+        rules.push('\n');
+    }
+    rules.push_str(&generic);
+    rules
+}
 
 const BARE_VITEST_RULE_IDS: [&str; 4] = [
     "rewrite-vitest-import",
@@ -1785,7 +1842,7 @@ fn is_unscoped_vitest_rule(rule: &RuleConfig<SupportLang>) -> bool {
 }
 
 static PARSED_UNSCOPED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
-    ast_grep::load_rules(REWRITE_VITEST_RULES)
+    ast_grep::load_rules(&vitest_rewrite_rules())
         .expect("failed to parse vitest rewrite rules")
         .into_iter()
         .filter(is_unscoped_vitest_rule)
@@ -1794,7 +1851,7 @@ static PARSED_UNSCOPED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = La
 
 static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang>>> =
     LazyLock::new(|| {
-        ast_grep::load_rules(REWRITE_VITEST_RULES)
+        ast_grep::load_rules(&vitest_rewrite_rules())
             .expect("failed to parse vitest rewrite rules")
             .into_iter()
             .filter(|rule| !is_unscoped_vitest_rule(rule))
@@ -2098,8 +2155,25 @@ fn rewrite_reference_types(
                 changed = true;
                 continue;
             }
-            if apply_regex_replace(line, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}") {
-                changed = true;
+            if let Some(captures) = RE_REF_VITEST_SUBPATH.captures(line) {
+                let subpath = &captures[2];
+                let original = format!("vitest/{subpath}");
+                let target = VITEST_V5_ENTRY_POINTS.get(&original).cloned().or_else(|| {
+                    VITE_PLUS_TEST_SUBPATHS
+                        .iter()
+                        .any(|name| name == subpath)
+                        .then(|| format!("vite-plus/test/{subpath}"))
+                });
+                if let Some(target) = target {
+                    *line = format!(
+                        "{}{}{}{}",
+                        &captures[1],
+                        target,
+                        &captures[3],
+                        &line[captures[0].len()..]
+                    );
+                    changed = true;
+                }
                 continue;
             }
             if apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}") {
@@ -3180,19 +3254,14 @@ export default startVitest;"#;
 export default startVitest;"#
         );
 
-        // Test vitest/plugins/runner subpath
+        // Removed and unknown subpaths must not produce unpublished Vite+ paths.
         let vite_config = r#"import { somePlugin } from 'vitest/plugins/runner';
 
 export default somePlugin;"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { somePlugin } from 'vite-plus/test/plugins/runner';
-
-export default somePlugin;"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
@@ -6342,21 +6411,17 @@ console.log(pkg.version);"#;
     }
 
     #[test]
-    fn test_rewrite_import_content_vitest_package_json_like_suffix_still_rewritten() {
-        // Sanity check: only the exact `vitest/package.json` subpath is
-        // skipped. A subpath that merely starts with `package.json` (e.g.,
-        // `package.json.js`) MUST still be rewritten by the catch-all rule.
+    fn test_rewrite_import_content_vitest_unknown_package_json_suffix_is_preserved() {
         let content = r#"import 'vitest/package.json.js';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"import 'vite-plus/test/package.json.js';"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     // The `rewrite-vitest-subpath-*` rules now explicitly exclude `vitest/config`
     // via `not: regex: ^['"]vitest/(package\.json|config)['"]$` to make the intent
     // robust against rule-reordering or ast-grep conflict-resolution changes.
-    // These tests verify the exclusion holds for all 4 import shapes and that
-    // a similar-but-distinct path like `vitest/config-extra` is NOT excluded.
+    // Unknown paths such as `vitest/config-extra` must remain untouched too.
 
     #[test]
     fn test_rewrite_import_content_vitest_config_export_not_subpath_rewritten() {
@@ -6391,13 +6456,10 @@ console.log(pkg.version);"#;
 
     #[test]
     fn test_rewrite_import_content_vitest_config_extra_subpath_static_import() {
-        // `vitest/config-extra` is NOT `vitest/config` — the subpath exclusion
-        // must not be too broad. It should still be rewritten by the catch-all
-        // subpath rule to `vite-plus/test/config-extra`.
         let content = r#"import { something } from 'vitest/config-extra';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"import { something } from 'vite-plus/test/config-extra';"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -6405,8 +6467,8 @@ console.log(pkg.version);"#;
         // Same sanity check for export_statement shape.
         let content = r#"export { something } from 'vitest/config-extra';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"export { something } from 'vite-plus/test/config-extra';"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -6414,8 +6476,8 @@ console.log(pkg.version);"#;
         // Same sanity check for require() shape.
         let content = r#"const m = require('vitest/config-extra');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"const m = require('vite-plus/test/config-extra');"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -6423,7 +6485,41 @@ console.log(pkg.version);"#;
         // Same sanity check for dynamic import() shape.
         let content = r#"const m = await import('vitest/config-extra');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"const m = await import('vite-plus/test/config-extra');"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_vitest_v5_canonical_entry_points() {
+        for (source, target) in VITEST_V5_ENTRY_POINTS.iter() {
+            for template in [
+                "import { value } from 'SOURCE';",
+                "export { value } from 'SOURCE';",
+                "const value = require('SOURCE');",
+                "const value = import('SOURCE');",
+                "type Value = typeof import('SOURCE');",
+                "/// <reference types=\"SOURCE\" /> // retain comment",
+            ] {
+                let content = template.replace("SOURCE", source);
+                let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+                assert_eq!(result.content, template.replace("SOURCE", target), "{content}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_vitest_v5_removed_entry_points_are_preserved() {
+        for source in [
+            "vitest/runners",
+            "vitest/suite",
+            "vitest/internal/module-runner",
+            "vitest/plugins/expect",
+            "vitest/unknown",
+        ] {
+            let content = format!("import {{ value }} from '{source}';");
+            let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+            assert!(!result.updated, "{source}");
+            assert_eq!(result.content, content);
+        }
     }
 }

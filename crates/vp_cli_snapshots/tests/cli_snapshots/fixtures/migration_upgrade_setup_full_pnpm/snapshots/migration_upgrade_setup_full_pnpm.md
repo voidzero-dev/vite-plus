@@ -14,6 +14,10 @@ existing Vite+ project: upgrade plus the full setup
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 1 review item
+
+package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
@@ -53,7 +57,7 @@ vite-plus version upgrade is applied
 .nvmrc is migrated to .node-version by the full setup
 
 ```
-20.19.0
+24.11.0
 ```
 
 ## `vpt stat-file .nvmrc --assert-not file`

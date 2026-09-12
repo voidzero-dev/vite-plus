@@ -1,0 +1,19 @@
+[[case]]
+name = "preview_runtime"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+steps = [{ argv = ["node", "verify.mjs"], timeout = 120000 }]
+
+[[case]]
+name = "upstream_real_timers"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+comment = "Known upstream Vitest 5.0.0 release blocker, also reproduced without Vite+: Preview locator clicks call advanceTimers with real timers. Remove this expected-failure assertion when upstream is fixed."
+steps = [{ argv = ["node", "verify.mjs", "--real-timers"], timeout = 120000 }]
+
+[[case]]
+name = "upstream_browser_defines"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+comment = "Regression for upstream #11198: Preview must preserve string and boolean define values. Keep this test after removing the temporary Vitest 5.0.0 backport."
+steps = [{ argv = ["node", "verify.mjs", "--browser-defines"], timeout = 120000 }]

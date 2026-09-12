@@ -58,6 +58,8 @@ rewrite, and package-manager behavior.
 
 Most projects will require further manual adjustments after running `vp migrate`.
 
+For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
+
 ## Recommended Workflow
 
 Before running the migration:
@@ -85,7 +87,7 @@ You need to add overrides to your package manager so that other packages resolve
 ```json
 "overrides": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.11"
+  "vitest": "5.0.0"
 }
 ```
 
@@ -94,7 +96,7 @@ If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 ```yaml
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: 4.1.11
+  vitest: 5.0.0
 ```
 
 Or, if you are using Yarn:
@@ -102,7 +104,7 @@ Or, if you are using Yarn:
 ```json
 "resolutions": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.11"
+  "vitest": "5.0.0"
 }
 ```
 

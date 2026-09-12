@@ -20,7 +20,7 @@ VITE+ - The Unified Toolchain for the Web
 check .node-version is created from volta.node
 
 ```
-20.19.0
+24.11.0
 ```
 
 ## `vpt print-file package.json`
@@ -35,7 +35,7 @@ volta field is preserved in package.json (not removed)
     "vite-plus": "catalog:"
   },
   "volta": {
-    "node": "20.19.0",
+    "node": "24.11.0",
     "npm": "10.2.5"
   },
   "devEngines": {
