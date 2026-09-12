@@ -169,7 +169,10 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
         .env("VP_NODE_MANAGER", manager)
         .env(
             "VP_PM_MANAGER",
-            std::env::var("VP_PM_MANAGER").unwrap_or_else(|_| manager.to_string()),
+            std::env::var("VP_PM_MANAGER")
+                .ok()
+                .filter(|value| matches!(value.as_str(), "yes" | "no"))
+                .unwrap_or_else(|| manager.to_string()),
         )
         .env(
             vp_shared::env_vars::VP_SELF_SETUP_NO_MODIFY_PATH,

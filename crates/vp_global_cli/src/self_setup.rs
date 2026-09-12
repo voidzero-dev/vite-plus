@@ -250,9 +250,17 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
     // Declining management preserves regular files, but create_shim can still replace foreign Unix symlinks.
     // The default bin directory is private to Vite+, so we accept this limitation for custom shared directories
     // rather than add the complexity of reliably identifying which symlinks belong to Vite+.
-    let refresh = node_mode != Some(config::ShimMode::SystemFirst);
+    let settings = config::load_config().await?;
+    // Each managed tool replaces its own shim, independently of the Node preference.
+    let refresh = |tool: &str| {
+        let mode = PackageManagerType::from_tool(tool)
+            .map(|family| settings.package_manager_shim_mode_for(family))
+            .unwrap_or(settings.node_shim_mode);
+        mode != config::ShimMode::SystemFirst
+    };
     // Windows entrypoints must point at this installation even when Node management is declined.
-    setup::execute_for_binary(binary.as_path(), refresh, cfg!(windows) || refresh, false).await?;
+    setup::execute_for_binary(binary.as_path(), refresh, cfg!(windows) || refresh("node"), false)
+        .await?;
     if !in_place {
         let name = version_dir
             .as_path()

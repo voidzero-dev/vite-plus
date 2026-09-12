@@ -97,3 +97,28 @@ steps = [
   ["vpt", "stat-file", "user/.bashrc", "--assert", "dir"],
   { argv = ["./home/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"]], comment = "The installed CLI accepts commands after the warning", snapshot = false },
 ]
+
+[[case]]
+name = "command_self_setup_mixed_shim_refresh"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_SKIP_DEPS_INSTALL = "1", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external", "home/bin", "other/bin"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["vpt", "write-file", "home/bin/node", "existing-node"], snapshot = false },
+  { argv = ["vpt", "write-file", "home/bin/npm", "existing-npm"], snapshot = false },
+  { argv = ["vpt", "write-file", "home/bin/pnpm", "existing-pnpm"], snapshot = false },
+  { argv = ["vpt", "write-file", "home/bin/pnpx", "existing-pnpx"], snapshot = false },
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_VERSION", "mixed-shims"], ["VP_NODE_MANAGER", "no"], ["VP_PM_MANAGER", "no"], ["VP_PNPM_MANAGER", "yes"]], comment = "Managing pnpm replaces its existing commands while preserving system-first Node and npm", snapshot = false },
+  ["vpt", "print-file", "home/bin/node"],
+  ["vpt", "print-file", "home/bin/npm"],
+  ["vpt", "stat-file", "home/bin/pnpm", "--assert", "symlink"],
+  ["vpt", "stat-file", "home/bin/pnpx", "--assert", "symlink"],
+  { argv = ["vpt", "write-file", "other/bin/node", "existing-node"], snapshot = false },
+  { argv = ["vpt", "write-file", "other/bin/npm", "existing-npm"], snapshot = false },
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/other"], ["VP_VERSION", "mixed-shims"], ["VP_NODE_MANAGER", "yes"], ["VP_PM_MANAGER", "no"]], comment = "Managing Node preserves an existing system-first npm command", snapshot = false },
+  ["vpt", "stat-file", "other/bin/node", "--assert", "symlink"],
+  ["vpt", "print-file", "other/bin/npm"],
+]
