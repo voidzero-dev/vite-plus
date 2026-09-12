@@ -173,6 +173,13 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    // Forward the combined choice separately; explicit PM and family variables are inherited.
+    let explicit_node = std::env::var("VP_NODE_MANAGER")
+        .is_ok_and(|value| value.eq_ignore_ascii_case("yes") || value.eq_ignore_ascii_case("no"));
+    let explicit_pm = matches!(std::env::var("VP_PM_MANAGER").as_deref(), Ok("yes" | "no"));
+    if !explicit_pm && (opts.management_choice || !explicit_node) {
+        command.env("VP_PM_MANAGER", if opts.no_node_manager { "no" } else { "yes" });
+    }
     if let Some(registry) = opts.registry.as_deref() {
         command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY_UPPER, registry);
     }
@@ -420,7 +427,10 @@ fn show_customize_menu(opts: &mut cli::Options) {
                 let r = read_input("    npm registry URL (or empty for default): ");
                 opts.registry = if r.is_empty() { None } else { Some(r) };
             }
-            "3" => opts.no_node_manager = !opts.no_node_manager,
+            "3" => {
+                opts.no_node_manager = !opts.no_node_manager;
+                opts.management_choice = true;
+            }
             "4" => opts.no_modify_path = !opts.no_modify_path,
             _ => println!("  Invalid option."),
         }

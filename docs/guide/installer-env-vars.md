@@ -98,15 +98,17 @@ These variables control the installer scripts and the standalone Windows install
   families: npm, pnpm, Yarn, and Bun.
 - **Values**: `yes` uses Vite+ management; `no` prefers system tools, with
   managed tools as a fallback when a system tool is unavailable.
-- **Default**: Unset. Existing preferences are preserved; on a fresh install,
-  each family follows the normal first-use selection.
+- **Default**: Unset. The installer's combined Node.js and package-manager
+  choice remains the default. When `VP_NODE_MANAGER` is explicitly set, it
+  only changes Node.js; existing package-manager preferences are preserved.
 
 ### `VP_NPM_MANAGER` / `VP_PNPM_MANAGER` / `VP_YARN_MANAGER` / `VP_BUN_MANAGER`
 
 - **Purpose**: Set the management preference for an individual package-manager
   family. Each variable overrides `VP_PM_MANAGER` for that family.
 - **Values**: `yes` or `no`, with the same meaning as `VP_PM_MANAGER`.
-- **Default**: Unset (use `VP_PM_MANAGER`, or preserve the existing preference).
+- **Default**: Unset (use `VP_PM_MANAGER`, then the combined installer choice,
+  or preserve the existing preference).
 - **Example**:
 
   ```bash
@@ -115,6 +117,9 @@ These variables control the installer scripts and the standalone Windows install
   ```
 
 These management variables are installation choices, saved in Vite+'s config.
+The interactive prompt still controls both Node.js and package managers;
+explicit package-manager variables override that combined choice. The Windows
+installer forwards the same choices to the downloaded binary.
 In-place upgrades preserve the saved choices. Unrecognized values are ignored.
 They select management behavior, not package-manager versions, and do not
 prevent the installer from creating shims. Older releases installed through

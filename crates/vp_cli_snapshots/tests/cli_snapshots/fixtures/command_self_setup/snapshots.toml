@@ -54,6 +54,18 @@ steps = [
 ]
 
 [[case]]
+name = "command_self_setup_combined_default"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external", "home"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_SKIP_DEPS_INSTALL", "1"], ["VP_VERSION", "combined-default"], ["VP_SELF_SETUP_NO_MODIFY_PATH", "1"], ["CI", "true"], ["VP_PNPM_MANAGER", "no"]], comment = "Without an explicit Node override, automatic setup still enables both; a family override takes precedence", snapshot = false },
+  ["vpt", "print-file", "home/config.json"],
+]
+
+[[case]]
 name = "command_self_setup_package_manager_choices"
 vp = "global"
 skip-platforms = ["windows"]

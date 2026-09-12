@@ -221,8 +221,9 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
         if let Some(mode) = mode {
             settings.node_shim_mode = mode;
         }
-        // Family-specific choices override the group default; unset choices preserve saved preferences.
-        let default = manager_mode("VP_PM_MANAGER");
+        // The combined prompt still controls both; an explicit Node variable only controls Node.
+        let default = manager_mode("VP_PM_MANAGER")
+            .or_else(|| if manager_mode("VP_NODE_MANAGER").is_none() { mode } else { None });
         for (family, variable) in [
             (PackageManagerType::Npm, "VP_NPM_MANAGER"),
             (PackageManagerType::Pnpm, "VP_PNPM_MANAGER"),
@@ -339,7 +340,8 @@ fn node_manager() -> Result<NodeManager, Error> {
     if !exists && automatic {
         return Ok(NodeManager::Enable);
     }
-    let enable = confirm("Would you like Vite+ to manage your Node.js versions?", true)?;
+    let enable =
+        confirm("Would you like Vite+ to manage your Node.js and package-manager versions?", true)?;
     Ok(if enable { NodeManager::Enable } else { NodeManager::SystemFirst })
 }
 

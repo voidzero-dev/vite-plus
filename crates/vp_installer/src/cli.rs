@@ -30,6 +30,10 @@ pub struct Options {
     #[arg(long = "no-node-manager")]
     pub no_node_manager: bool,
 
+    // A choice in the combined menu applies to both, independently of VP_NODE_MANAGER.
+    #[arg(skip)]
+    pub management_choice: bool,
+
     /// Do not modify the User PATH
     #[arg(long = "no-modify-path")]
     pub no_modify_path: bool,
