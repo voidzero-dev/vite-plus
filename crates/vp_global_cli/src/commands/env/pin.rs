@@ -137,12 +137,24 @@ async fn show_pinned(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
         return Ok(ExitStatus::default());
     }
 
-    if let Some(resolution) = resolve_node_version(cwd, false).await?
-        && resolution.source == VersionSource::NvmrcFile
-    {
-        println!("Pinned version: {}", resolution.version);
-        println!("  Source: {}", cwd.join(NVMRC_FILE).as_path().display());
-        return Ok(ExitStatus::default());
+    if let Some(resolution) = resolve_node_version(cwd, true).await? {
+        if resolution.source == VersionSource::NvmrcFile
+            && resolution.project_root.as_ref() == Some(cwd)
+        {
+            println!("Pinned version: {}", resolution.version);
+            println!("  Source: {}", cwd.join(NVMRC_FILE).as_path().display());
+            return Ok(ExitStatus::default());
+        }
+        if resolution.source == VersionSource::EnginesNode {
+            let path = resolution.source_path.unwrap_or_else(|| cwd.join(PACKAGE_JSON_FILE));
+            println!("No version pinned.");
+            println!(
+                "  Node.js constraint: {} from {} (engines.node)",
+                resolution.version,
+                path.as_path().display()
+            );
+            return Ok(ExitStatus::default());
+        }
     }
 
     // Check for inherited version from parent directories
@@ -194,13 +206,16 @@ async fn find_inherited_version(cwd: &AbsolutePathBuf) -> Result<Option<(String,
                 format!("{} (devEngines.runtime)", dir.join(PACKAGE_JSON_FILE).as_path().display()),
             )));
         }
-        if let Some(resolution) = resolve_node_version(&dir, false).await?
-            && resolution.source == VersionSource::NvmrcFile
-        {
-            return Ok(Some((
-                resolution.version.to_string(),
-                dir.join(NVMRC_FILE).as_path().display().to_string(),
-            )));
+        if let Some(resolution) = resolve_node_version(&dir, false).await? {
+            if resolution.source == VersionSource::NvmrcFile {
+                return Ok(Some((
+                    resolution.version.to_string(),
+                    dir.join(NVMRC_FILE).as_path().display().to_string(),
+                )));
+            }
+            // A nearer runtime constraint blocks more distant pins, even if
+            // this command does not treat that source as a writable pin.
+            return Ok(None);
         }
         current = dir.parent().map(|p| p.to_absolute_path_buf());
     }
@@ -1252,6 +1267,28 @@ mod tests {
         let (version, source) = find_inherited_version(&subdir).await.unwrap().unwrap();
         assert_eq!(version, "^24.0.0");
         assert!(source.ends_with("package.json (devEngines.runtime)"), "got: {source}");
+    }
+
+    #[tokio::test]
+    async fn test_find_inherited_version_stops_at_nearer_engines_node() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let middle = root.join("middle");
+        let leaf = middle.join("leaf");
+        tokio::fs::create_dir_all(&leaf).await.unwrap();
+        tokio::fs::write(root.join(".nvmrc"), "20.18.0\n").await.unwrap();
+        tokio::fs::write(middle.join("package.json"), r#"{"engines":{"node":"22.13.0"}}"#)
+            .await
+            .unwrap();
+
+        let runtime = resolve_node_version(&leaf, true).await.unwrap().unwrap();
+        assert_eq!(runtime.source, VersionSource::EnginesNode);
+        assert!(find_inherited_version(&leaf).await.unwrap().is_none());
+
+        tokio::fs::remove_file(middle.join("package.json")).await.unwrap();
+        let (version, source) = find_inherited_version(&leaf).await.unwrap().unwrap();
+        assert_eq!(version, "20.18.0");
+        assert!(source.ends_with(".nvmrc"));
     }
 
     #[tokio::test]

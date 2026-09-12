@@ -207,7 +207,7 @@ When `.node-version` is the write target and a `devEngines.runtime` node entry a
 
 #### 2.5 `vp env pin` (show) and `vp env unpin`
 
-- `vp env pin` with no argument reports the active pin and its source, including an effective `.nvmrc`. Inherited pins from parent directories are reported in the same order: `.node-version`, the `devEngines.runtime` node entry, then an effective `.nvmrc`.
+- `vp env pin` with no argument reports the active pin and its source, including an effective `.nvmrc`. Inherited pins from parent directories are reported in the same order: `.node-version`, the `devEngines.runtime` node entry, then an effective `.nvmrc`. A nearer `engines.node` stops the search and is displayed as a runtime constraint rather than inheriting a more distant pin.
 - `vp env unpin` / `vp env pin --unpin` removes the pin from the same target that `vp env pin` would write: delete `.node-version` if present, delete an effective `.nvmrc` in cwd, or remove the node entry from `devEngines.runtime` (removing the `devEngines.runtime` key entirely if it becomes empty, and `devEngines` if it becomes empty). An explicit `--target nvmrc` removes that file even if another source shadows it. Parent-directory files are never removed.
 
 ### 3. Package manager

@@ -113,6 +113,20 @@ steps = [
 ]
 
 [[case]]
+name = "engines_node_stops_inherited_pin_lookup"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "middle/leaf"], snapshot = false },
+  { argv = ["vpt", "write-file", "middle/package.json", "{\"engines\":{\"node\":\"22.13.0\"}}\n"], snapshot = false },
+  { argv = ["vp", "env", "pin"], cwd = "middle/leaf", comment = "the nearer engines.node prevents inheriting the root .nvmrc" },
+  { argv = ["vp", "env", "current", "node", "--json"], cwd = "middle/leaf" },
+  { argv = ["vp", "env", "pin"], cwd = "middle", comment = "a constraint in cwd also prevents reporting an ancestor pin" },
+  { argv = ["vp", "env", "current", "node", "--json"], cwd = "middle" },
+  ["vpt", "print-file", ".nvmrc", "middle/package.json"],
+]
+
+[[case]]
 name = "nvmrc_target_rejects_package_manager_operations"
 vp = "global"
 seed-runtime = false
