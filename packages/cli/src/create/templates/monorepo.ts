@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
+import { removeConfigKey } from '../../../binding/index.js';
 import { rewriteMonorepoProject } from '../../migration/migrator.ts';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
@@ -152,6 +153,7 @@ export async function executeMonorepoTemplate(
     : 'utils';
   const libraryProjectPath = path.join(fullPath, libraryDir);
   setPackageName(libraryProjectPath, libraryPackageName);
+  removeNestedLibraryLintConfig(libraryProjectPath);
   // Perform auto-migration on the created library
   rewriteMonorepoProject(
     libraryProjectPath,
@@ -163,6 +165,25 @@ export async function executeMonorepoTemplate(
   alignMonorepoTypeScriptVersion(fullPath, appProjectPath, libraryProjectPath);
 
   return { exitCode: 0, projectDir: templateInfo.targetDir };
+}
+
+/**
+ * Remove the root-only lint options shipped by the standalone library template.
+ *
+ * The same remote template is also used by `vite:library`, where this config is
+ * valid. A library created as a workspace member, however, gets its lint config
+ * from the monorepo root, so retaining it here creates an invalid nested config.
+ */
+export function removeNestedLibraryLintConfig(projectPath: string): void {
+  const configPath = path.join(projectPath, 'vite.config.ts');
+  if (!fs.existsSync(configPath)) {
+    return;
+  }
+
+  const result = removeConfigKey(configPath, 'lint');
+  if (result.updated) {
+    fs.writeFileSync(configPath, result.content);
+  }
 }
 
 /**

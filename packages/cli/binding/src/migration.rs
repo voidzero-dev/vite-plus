@@ -183,6 +183,23 @@ pub fn has_config_key(vite_config_path: String, config_key: String) -> Result<bo
     Ok(vp_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
 }
 
+/// Remove a top-level key from a recognized Vite config object.
+#[napi]
+pub fn remove_config_key(
+    vite_config_path: String,
+    config_key: String,
+) -> Result<MergeJsonConfigResult> {
+    let content = std::fs::read_to_string(&vite_config_path).map_err(anyhow::Error::from)?;
+    let result =
+        vp_migration::remove_config_key(&content, &config_key).map_err(anyhow::Error::from)?;
+
+    Ok(MergeJsonConfigResult {
+        content: result.content,
+        updated: result.updated,
+        uses_function_callback: result.uses_function_callback,
+    })
+}
+
 /// Error from batch import rewriting
 #[napi(object)]
 pub struct BatchRewriteError {

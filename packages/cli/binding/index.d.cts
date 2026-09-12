@@ -3765,6 +3765,12 @@ export interface PathAccess {
   readDir: boolean;
 }
 
+/** Remove a top-level key from a recognized Vite config object. */
+export declare function removeConfigKey(
+  viteConfigPath: string,
+  configKey: string,
+): MergeJsonConfigResult;
+
 /**
  * Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.
  *

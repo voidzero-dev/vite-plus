@@ -8,4 +8,5 @@ steps = [
   { argv = ["vp", "create", "vite:monorepo", "--no-interactive"], comment = "create monorepo", snapshot = false, continue-on-failure = true },
   { argv = ["vpt", "print-file", "vite-plus-monorepo/vite.config.ts"], comment = "check monorepo root vite.config.ts has typeAware and typeCheck", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "vite-plus-monorepo/apps/website/vite.config.ts", "--assert-not", "file"], comment = "sub-app should NOT have typeAware/typeCheck", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-monorepo/packages/utils/vite.config.ts"], comment = "sub-library should NOT have nested lint config", continue-on-failure = true },
 ]

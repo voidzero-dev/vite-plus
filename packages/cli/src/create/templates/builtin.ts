@@ -9,6 +9,7 @@ import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
 import { setPackageName } from '../utils.ts';
 import { executeGeneratorScaffold } from './generator.ts';
+import { removeNestedLibraryLintConfig } from './monorepo.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
 import { BuiltinTemplate, type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
 
@@ -49,6 +50,9 @@ export async function executeBuiltinTemplate(
     }
     const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
     setPackageName(fullPath, templateInfo.packageName);
+    if (workspaceInfo.isMonorepo) {
+      removeNestedLibraryLintConfig(fullPath);
+    }
     return { ...result, projectDir: templateInfo.targetDir };
   }
 

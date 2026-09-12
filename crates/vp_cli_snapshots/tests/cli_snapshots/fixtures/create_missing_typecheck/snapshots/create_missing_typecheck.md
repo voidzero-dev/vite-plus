@@ -60,3 +60,23 @@ sub-app should NOT have typeAware/typeCheck
 ```
 vite-plus-monorepo/apps/website/vite.config.ts: missing
 ```
+
+## `vpt print-file vite-plus-monorepo/packages/utils/vite.config.ts`
+
+sub-library should NOT have nested lint config
+
+```
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  pack: {
+    deps: { resolveDepSubpath: true },
+    dts: {
+      generator: "tsgo",
+    },
+    exports: true,
+  },
+
+  fmt: {},
+});
+```
