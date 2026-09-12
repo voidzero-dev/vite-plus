@@ -1478,13 +1478,14 @@ fn run_case(
         let succeeded = matches!(termination_state, TerminationState::Exited(0));
         if step.snapshot || !succeeded {
             let mut redacted = redact_output(raw_output, &redactions, !step.formatted_snapshot);
-            // A version-probe step's output is a bare semver that varies by
-            // environment (the managed Node's bundled npm or a package
-            // manager pin); mask it. Scoped by argv so
-            // fixture-controlled bare versions elsewhere (a printed
-            // `.node-version` file) stay assertable.
-            let version_probe = matches!(argv.first().map(String::as_str), Some("npm" | "npx"))
-                && argv[1..] == ["--version"];
+            // Version probes report tool versions that vary by environment.
+            // Scope redaction by argv so fixture-controlled versions in other
+            // steps (such as a printed `.node-version` file) stay assertable.
+            let version_probe = match argv.first().map(String::as_str) {
+                Some("npm" | "npx") => argv[1..] == ["--version"],
+                Some("vp") => argv[1..] == ["lint", "--version"],
+                _ => false,
+            };
             if version_probe {
                 redacted = redact::redact_version_probe_output(redacted);
             }

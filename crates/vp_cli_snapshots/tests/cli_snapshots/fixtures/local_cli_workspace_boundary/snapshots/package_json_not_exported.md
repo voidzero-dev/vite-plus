@@ -41,5 +41,5 @@ Environment:
 VITE+ - The Unified Toolchain for the Web
 
 warn: No project-local vite-plus installation was found. Run `vp install` in `<workspace>/outer/external/inner` to install dependencies.
-Version: 1.81.0
+Version: <version>
 ```

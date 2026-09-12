@@ -48,5 +48,5 @@ Environment:
 VITE+ - The Unified Toolchain for the Web
 
 warn: This project does not use vite-plus. Learn how to migrate: https://viteplus.dev/guide/migrate
-Version: 1.81.0
+Version: <version>
 ```

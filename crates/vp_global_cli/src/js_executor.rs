@@ -597,7 +597,7 @@ mod tests {
         let pkg_dir = JsExecutor::resolve_local_vite_plus_package_dir(&member)
             .expect("workspace root install must stay resolvable");
         assert_eq!(
-            pkg_dir.as_path(),
+            std::fs::canonicalize(&pkg_dir).unwrap(),
             std::fs::canonicalize(ws.join("node_modules/vite-plus")).unwrap()
         );
     }
@@ -634,7 +634,7 @@ mod tests {
                 let package = JsExecutor::resolve_local_vite_plus_package_dir(&workspace)
                     .expect("a missing root manifest must not prevent a local installation");
                 assert_eq!(
-                    package.as_path(),
+                    std::fs::canonicalize(&package).unwrap(),
                     std::fs::canonicalize(workspace.join("node_modules/vite-plus")).unwrap()
                 );
             }
@@ -743,7 +743,7 @@ mod tests {
         let pkg_dir = JsExecutor::resolve_local_vite_plus_package_dir(&inner)
             .expect("undeclared projects keep the unbounded walk");
         assert_eq!(
-            pkg_dir.as_path(),
+            std::fs::canonicalize(&pkg_dir).unwrap(),
             std::fs::canonicalize(outer.join("node_modules/vite-plus")).unwrap()
         );
     }
@@ -764,7 +764,7 @@ mod tests {
         let package = JsExecutor::resolve_local_vite_plus_package_dir(&nested)
             .expect("markerless directories keep the unbounded walk");
         assert_eq!(
-            package.as_path(),
+            std::fs::canonicalize(&package).unwrap(),
             std::fs::canonicalize(root.join("node_modules/vite-plus")).unwrap()
         );
     }
@@ -818,7 +818,10 @@ mod tests {
 
         let resolved = JsExecutor::resolve_local_vite_plus(project)
             .expect("a package can resolve its own exported CLI without node_modules");
-        assert_eq!(resolved.as_path(), std::fs::canonicalize(project.join("dist/bin.js")).unwrap());
+        assert_eq!(
+            std::fs::canonicalize(&resolved).unwrap(),
+            std::fs::canonicalize(project.join("dist/bin.js")).unwrap()
+        );
     }
 
     #[test]
