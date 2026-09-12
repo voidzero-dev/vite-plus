@@ -110,6 +110,8 @@ fn merge_json_config_content(
 
     // Apply the transformation
     let (content, updated) = ast_grep::apply_rules(vite_config_content, &rule_yaml)?;
+    let content =
+        if updated && config_key == "pack" { enable_pack_config_types(content) } else { content };
 
     Ok(MergeResult { content, updated, uses_function_callback })
 }
@@ -555,7 +557,7 @@ fn has_conflicting_lazy_plugins_binding(content: &str) -> bool {
             continue;
         }
         let text = node.text();
-        if imports_from_vite_plus(&text) {
+        if vite_plus_import_source(&node).is_some() {
             continue;
         }
         if import_binds_lazy_plugins(&text) {
@@ -679,6 +681,7 @@ fn ensure_lazy_plugins_import(content: &str) -> String {
     let root = grep.root();
     let mut import_insert_at = None;
     let mut value_import_replacement = None;
+    let mut import_source = "vite-plus";
 
     for node in root.dfs() {
         if node.kind() != "import_statement" {
@@ -688,7 +691,11 @@ fn ensure_lazy_plugins_import(content: &str) -> String {
             Some(import_insert_at.map_or(node.range().end, |end: usize| end.max(node.range().end)));
 
         let text = node.text();
-        if !imports_from_vite_plus(&text) || text.trim_start().starts_with("import type") {
+        let Some(source) = vite_plus_import_source(&node) else { continue };
+        if source == "vite-plus/config" {
+            import_source = "vite-plus/config";
+        }
+        if text.trim_start().starts_with("import type") {
             continue;
         }
         let Some(open_brace) = text.find('{') else { continue };
@@ -725,7 +732,7 @@ fn ensure_lazy_plugins_import(content: &str) -> String {
         return updated;
     }
 
-    let import_stmt = "import { lazyPlugins } from 'vite-plus';";
+    let import_stmt = format!("import {{ lazyPlugins }} from '{import_source}';");
     if let Some(insert_at) = import_insert_at {
         let mut updated = content.to_owned();
         updated.insert_str(insert_at, &format!("\n{import_stmt}"));
@@ -735,8 +742,34 @@ fn ensure_lazy_plugins_import(content: &str) -> String {
     }
 }
 
-fn imports_from_vite_plus(import_statement: &str) -> bool {
-    import_statement.contains("from 'vite-plus'") || import_statement.contains("from \"vite-plus\"")
+fn vite_plus_import_source<D: Doc>(node: &Node<'_, D>) -> Option<&'static str> {
+    match node.field("source")?.text().as_ref() {
+        "'vite-plus'" | "\"vite-plus\"" => Some("vite-plus"),
+        "'vite-plus/config'" | "\"vite-plus/config\"" => Some("vite-plus/config"),
+        _ => None,
+    }
+}
+
+fn enable_pack_config_types(mut content: String) -> String {
+    let grep = SupportLang::TypeScript.ast_grep(&content);
+    let mut edits = grep
+        .root()
+        .dfs()
+        .filter_map(|node| {
+            if node.kind() != "import_statement"
+                || vite_plus_import_source(&node) != Some("vite-plus/config")
+            {
+                return None;
+            }
+            let source = node.field("source")?;
+            Some((source.range(), source.text().replace("vite-plus/config", "vite-plus")))
+        })
+        .collect::<Vec<_>>();
+    edits.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+    for (range, replacement) in edits {
+        content.replace_range(range, &replacement);
+    }
+    content
 }
 
 fn has_lazy_plugins_specifier(specifiers: &str) -> bool {
@@ -988,7 +1021,9 @@ fn merge_tsdown_config_content(
 
     // Step 2: Add pack: tsdownConfig to defineConfig
     let pack_rule = generate_merge_rule("tsdownConfig", "pack");
-    let (final_content, _) = ast_grep::apply_rules(&content_with_import, &pack_rule)?;
+    let (final_content, pack_added) = ast_grep::apply_rules(&content_with_import, &pack_rule)?;
+    let final_content =
+        if pack_added { enable_pack_config_types(final_content) } else { final_content };
 
     Ok(MergeResult { content: final_content, updated: true, uses_function_callback })
 }
@@ -2213,6 +2248,26 @@ export default {
     }
 
     #[test]
+    fn test_wrap_lazy_plugins_preserves_config_entry() {
+        for import in [
+            "import { defineConfig } from 'vite-plus/config';",
+            "import { defineConfig } from\n'vite-plus/config';",
+            "import { defineConfig, lazyPlugins } from 'vite-plus/config';",
+            "import type { UserConfig } from 'vite-plus/config';",
+            "import { defineConfig /* keep */ } from 'vite-plus/config';",
+        ] {
+            let content =
+                format!("{import}\nexport default defineConfig({{ plugins: [react()] }});");
+            let result = wrap_lazy_plugins_content(&content, None).unwrap();
+            assert!(result.updated);
+            assert!(result.content.contains("plugins: lazyPlugins(() => [react()])"));
+            assert!(!result.content.contains("from 'vite-plus'"));
+            let second = wrap_lazy_plugins_content(&result.content, None).unwrap();
+            assert!(!second.updated);
+        }
+    }
+
+    #[test]
     fn test_wrap_lazy_plugins_handles_multiline_imports() {
         let vite_config = r#"import {
   defineConfig
@@ -2373,6 +2428,25 @@ export default defineConfig({
         let second = wrap_lazy_plugins_content(&first.content, None).unwrap();
         assert!(!second.updated);
         assert_eq!(second.content, first.content);
+    }
+
+    #[test]
+    fn test_merging_pack_enables_pack_configuration_types() {
+        let config = r#"import { defineConfig } from 'vite-plus/config';
+import type { UserConfig } from 'vite-plus/config';
+export type Config = UserConfig;
+const label = 'vite-plus/config';
+export default defineConfig({});"#;
+        for result in [
+            merge_json_config_content(config, "{ entry: 'src/index.ts' }", "pack").unwrap(),
+            merge_tsdown_config_content(config, "./tsdown.config.ts").unwrap(),
+        ] {
+            assert!(result.updated);
+            assert!(result.content.contains("pack:"));
+            assert!(result.content.contains("import { defineConfig } from 'vite-plus';"));
+            assert!(result.content.contains("import type { UserConfig } from 'vite-plus';"));
+            assert!(result.content.contains("const label = 'vite-plus/config';"));
+        }
     }
 
     #[test]

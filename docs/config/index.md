@@ -21,6 +21,26 @@ export default defineConfig({
 });
 ```
 
+## Application configuration without pack
+
+If your project does not use `vp pack`, import from `vite-plus/config` to type-check its configuration without loading declarations for optional pack integrations:
+
+```ts [vite.config.ts]
+import { defineConfig } from 'vite-plus/config';
+
+export default defineConfig({
+  build: {},
+  run: {},
+  fmt: {},
+  lint: {},
+  test: {},
+});
+```
+
+This entry exports the same runtime helpers and Vite APIs as `vite-plus`. It includes all Vite+ configuration fields except `pack`, which TypeScript rejects unless you also import types from `vite-plus/pack`. The original `vite-plus` entry continues to include pack configuration.
+
+TypeScript module augmentation applies to the entire program: importing `vite-plus` or `vite-plus/pack` anywhere in the same TypeScript project enables pack configuration and loads its integration declarations.
+
 ## Vite+ Specific Configuration
 
 Vite+ extends the basic Vite configuration with these additions:

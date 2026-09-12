@@ -2,6 +2,12 @@ import type { UserConfig as TsdownUserConfig } from 'vite/pack';
 
 export * from 'vite/pack';
 
+declare module 'vite' {
+  interface UserConfig {
+    pack?: PackUserConfig | PackUserConfig[];
+  }
+}
+
 export interface PackUserConfig extends TsdownUserConfig {
   /**
    * When loading env variables from `envFile`, only include variables with these prefixes.

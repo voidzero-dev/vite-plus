@@ -1,0 +1,23 @@
+[[case]]
+name = "config_entry_without_pack"
+vp = "global"
+local-registry = true
+comment = "The published app config entry keeps native task loading and strict TypeScript 7 configuration without optional pack integrations."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  ["vp", "run", "verify"],
+]
+
+[[case]]
+name = "config_entry_with_pack"
+vp = "global"
+local-registry = true
+comment = "Both the original entry and explicit pack type activation preserve real injected module types and references."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "6.0.3"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.@arethetypeswrong/core", "0.18.5"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.@volar/typescript", "2.4.28"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.@volar/language-service", "2.4.28"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  ["node", "verify.mjs", "pack"],
+]

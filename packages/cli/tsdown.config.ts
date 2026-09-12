@@ -46,6 +46,7 @@ export default defineConfig([
     entry: {
       bin: './src/bin.ts',
       index: './src/index.ts',
+      config: './src/config.ts',
       'define-config': './src/define-config.ts',
       fmt: './src/fmt.ts',
       lint: './src/lint.ts',

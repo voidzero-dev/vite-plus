@@ -15,7 +15,7 @@ use rustc_hash::FxHashMap;
 use vt_path::AbsolutePath;
 
 /// Packages whose `defineConfig` helpers preserve top-level config fields.
-const TRUSTED_DEFINE_CONFIG_PACKAGES: &[&str] = &["vite-plus", "vite"];
+const TRUSTED_DEFINE_CONFIG_PACKAGES: &[&str] = &["vite-plus", "vite-plus/config", "vite"];
 /// The name of the config helper static extraction trusts.
 const DEFINE_CONFIG: &str = "defineConfig";
 
@@ -744,6 +744,18 @@ mod tests {
         );
         assert_json(&result, "build", serde_json::json!({ "outDir": "dist" }));
         assert!(result.get("run").is_none());
+    }
+
+    #[test]
+    fn define_config_from_config_entry_is_static() {
+        for source in [
+            "import { defineConfig } from 'vite-plus/config'; export default defineConfig({ run: { cacheScripts: true } });",
+            "const { defineConfig } = require('vite-plus/config'); module.exports = defineConfig({ run: { cacheScripts: true } });",
+            "const defineConfig = require('vite-plus/config').defineConfig; module.exports = defineConfig({ run: { cacheScripts: true } });",
+        ] {
+            let result = parse_js_ts_config(source, "js");
+            assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        }
     }
 
     #[test]

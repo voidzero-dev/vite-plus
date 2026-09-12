@@ -1,0 +1,15 @@
+{
+  "name": "config-entry",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "24.10.3",
+    "typescript": "7.0.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+  },
+  "packageManager": "npm@11.11.0"
+}

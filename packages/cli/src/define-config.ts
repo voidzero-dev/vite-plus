@@ -17,7 +17,6 @@ import {
 import type { InlineConfig as VitestInlineConfig } from 'vitest/node';
 
 import type { CreateTemplateEntry } from './create/org-manifest.ts';
-import type { PackUserConfig } from './pack.ts';
 import type { RunConfig } from './run-config.ts';
 import type { StagedConfig } from './staged-config.ts';
 import { CONFIG_METADATA_ENV, VITEST_VERSION } from './utils/constants.ts';
@@ -50,8 +49,6 @@ declare module 'vite' {
        */
       lint?: boolean;
     };
-
-    pack?: PackUserConfig | PackUserConfig[];
 
     /**
      * Default target directory for `vp dev` / `build` / `preview` / `pack`
