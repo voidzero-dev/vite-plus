@@ -1,0 +1,124 @@
+[[case]]
+name = "pin_and_unpin_existing_nvmrc"
+vp = "global"
+seed-runtime = false
+steps = [
+  ["vp", "env", "pin"],
+  ["vp", "env", "pin", "22.13.0", "--no-install", "--force"],
+  { argv = ["vpt", "print-file", ".nvmrc", "package.json"], comment = "update the existing version token and preserve the manifest and comment" },
+  ["vpt", "stat-file", ".node-version", "--assert", "missing"],
+  ["vp", "env", "pin"],
+  ["vp", "env", "current", "node", "--json"],
+  ["vp", "env", "unpin", "node"],
+  ["vpt", "stat-file", ".nvmrc", "--assert", "missing"],
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "pin_nvmrc_without_manifest"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "rm", "package.json"], snapshot = false },
+  ["vp", "env", "pin", "22.13.0", "--no-install", "--force"],
+  ["vpt", "print-file", ".nvmrc"],
+  ["vpt", "stat-file", ".node-version", "--assert", "missing"],
+  ["vpt", "stat-file", "package.json", "--assert", "missing"],
+]
+
+[[case]]
+name = "node_version_keeps_priority_over_nvmrc"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "20.18.0\n"], snapshot = false },
+  ["vp", "env", "pin", "22.13.0", "--no-install", "--force"],
+  ["vpt", "print-file", ".node-version", ".nvmrc", "package.json"],
+  ["vp", "env", "unpin", "node"],
+  ["vpt", "stat-file", ".node-version", "--assert", "missing"],
+  ["vpt", "stat-file", ".nvmrc", "--assert", "file"],
+]
+
+[[case]]
+name = "dev_engines_keeps_priority_over_nvmrc"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"devEngines\":{\"runtime\":{\"name\":\"node\",\"version\":\"20.18.0\",\"onFail\":\"warn\"}}}\n"], snapshot = false },
+  ["vp", "env", "pin", "22.13.0", "--no-install", "--force"],
+  ["vp", "env", "pin"],
+  ["vpt", "print-file", ".nvmrc", "package.json"],
+  ["vp", "env", "unpin", "node"],
+  ["vpt", "stat-file", ".nvmrc", "--assert", "file"],
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "engines_node_does_not_make_pin_write_a_shadowed_nvmrc"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"engines\":{\"node\":\">=20.18.0\"}}\n"], snapshot = false },
+  ["vp", "env", "pin", "22.13.0", "--no-install", "--force"],
+  ["vpt", "print-file", ".nvmrc", "package.json"],
+  ["vp", "env", "current", "node", "--json"],
+]
+
+[[case]]
+name = "explicit_targets_override_existing_nvmrc"
+vp = "global"
+seed-runtime = false
+steps = [
+  ["vp", "env", "pin", "22.13.0", "--target", "dev-engines", "--no-install", "--force"],
+  ["vpt", "print-file", ".nvmrc", "package.json"],
+  { argv = ["vp", "env", "pin", "24.11.0", "--target", "nvmrc", "--no-install", "--force"], comment = "an explicit .nvmrc target warns about the higher-priority manifest pin" },
+  ["vpt", "print-file", ".nvmrc", "package.json"],
+  ["vp", "env", "unpin", "--target", "nvmrc"],
+  ["vpt", "stat-file", ".nvmrc", "--assert", "missing"],
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "explicit_nvmrc_target_can_create_a_pin"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "rm", ".nvmrc"], snapshot = false },
+  ["vp", "env", "pin", "22.13.0", "--target", "nvmrc", "--no-install"],
+  ["vpt", "print-file", ".nvmrc", "package.json"],
+  ["vp", "env", "pin", "--unpin", "node", "--target", "nvmrc"],
+  ["vpt", "stat-file", ".nvmrc", "--assert", "missing"],
+]
+
+[[case]]
+name = "pin_in_child_does_not_overwrite_inherited_nvmrc"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "mkdir", "child"], snapshot = false },
+  { argv = ["vpt", "write-file", "child/package.json", "{\"name\":\"child\"}\n"], snapshot = false },
+  { argv = ["vp", "env", "pin"], cwd = "child" },
+  { argv = ["vp", "env", "pin", "22.13.0", "--no-install", "--force"], cwd = "child" },
+  ["vpt", "print-file", ".nvmrc", "package.json", "child/package.json"],
+  ["vpt", "stat-file", "child/.nvmrc", "--assert", "missing"],
+]
+
+[[case]]
+name = "declining_nvmrc_overwrite_keeps_the_existing_setup"
+vp = "global"
+seed-runtime = false
+steps = [
+  ["vpt", "pipe-stdin", "n\n", "--", "vp", "env", "pin", "22.13.0", "--no-install"],
+  ["vpt", "print-file", ".nvmrc", "package.json"],
+]
+
+[[case]]
+name = "nvmrc_target_rejects_package_manager_operations"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vp", "env", "pin", "pnpm@10.18.0", "--target", "nvmrc", "--no-install"], continue-on-failure = true },
+  { argv = ["vp", "env", "pin", "22.13.0", "pnpm@10.18.0", "--target", "nvmrc", "--no-install"], continue-on-failure = true },
+  { argv = ["vp", "env", "unpin", "pm", "--target", "nvmrc"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", ".nvmrc", "package.json"], continue-on-failure = true },
+]
