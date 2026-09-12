@@ -28,13 +28,7 @@ home/current/bin/.vp-setup-complete: file
 
 ```
 {
-  "nodeShimMode": "system_first",
-  "packageManagerShimModes": {
-    "bun": "system_first",
-    "npm": "system_first",
-    "pnpm": "system_first",
-    "yarn": "system_first"
-  }
+  "nodeShimMode": "system_first"
 }
 ```
 

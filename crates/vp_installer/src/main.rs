@@ -161,11 +161,19 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
     }
 
     // 3. The menu supplies setup choices; interactive runs may still need release-age consent.
+    let manager = if opts.no_node_manager { "no" } else { "yes" };
     let mut command = tokio::process::Command::new(binary.as_path());
     command
         .env_remove(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK)
         .env(vp_shared::env_vars::VP_SELF_SETUP_REPLACE_EXISTING, if opts.yes { "1" } else { "0" })
-        .env("VP_NODE_MANAGER", if opts.no_node_manager { "no" } else { "yes" })
+        .env("VP_NODE_MANAGER", manager)
+        .env(
+            "VP_PM_MANAGER",
+            std::env::var("VP_PM_MANAGER")
+                .ok()
+                .filter(|value| matches!(value.as_str(), "yes" | "no"))
+                .unwrap_or_else(|| manager.to_string()),
+        )
         .env(
             vp_shared::env_vars::VP_SELF_SETUP_NO_MODIFY_PATH,
             if opts.no_modify_path { "1" } else { "0" },

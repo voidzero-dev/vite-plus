@@ -5,6 +5,7 @@ mod shell;
 use std::{path::Path, process::ExitCode};
 
 use dialoguer::{Confirm, theme::ColorfulTheme};
+use vp_pm_cli::PackageManagerType;
 use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install};
 use vp_shared::{EnvConfig, env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
@@ -119,7 +120,11 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
         ));
     }
     let previous_install = previous_install()?;
-    let node_manager = if in_place { NodeManager::Refresh } else { node_manager()? };
+    let node_override = manager_mode("VP_NODE_MANAGER");
+    // A supplied Node choice skips the combined prompt; upgrades preserve all saved choices.
+    let default_mode =
+        if in_place || node_override.is_some() { None } else { management_default()? };
+    let node_mode = if in_place { None } else { node_override.or(default_mode) };
     let version = env!("CARGO_PKG_VERSION");
     let registry = std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER)
         .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY))
@@ -210,14 +215,22 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
             }
         }
     }
-    let mode = match node_manager {
-        NodeManager::Enable => Some(config::ShimMode::Managed),
-        NodeManager::SystemFirst => Some(config::ShimMode::SystemFirst),
-        NodeManager::Refresh => None,
-    };
-    if let Some(mode) = mode {
+    if !in_place {
         let mut settings = config::load_config().await?;
-        settings.set_shim_modes(true, true, mode);
+        if let Some(mode) = node_mode {
+            settings.node_shim_mode = mode;
+        }
+        let pm_mode = manager_mode("VP_PM_MANAGER").or(default_mode);
+        for (family, variable) in [
+            (PackageManagerType::Npm, "VP_NPM_MANAGER"),
+            (PackageManagerType::Pnpm, "VP_PNPM_MANAGER"),
+            (PackageManagerType::Yarn, "VP_YARN_MANAGER"),
+            (PackageManagerType::Bun, "VP_BUN_MANAGER"),
+        ] {
+            if let Some(mode) = manager_mode(variable).or(pm_mode) {
+                settings.set_package_manager_shim_mode(family, mode);
+            }
+        }
         config::save_config(&settings).await?;
     }
 
@@ -237,9 +250,17 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
     // Declining management preserves regular files, but create_shim can still replace foreign Unix symlinks.
     // The default bin directory is private to Vite+, so we accept this limitation for custom shared directories
     // rather than add the complexity of reliably identifying which symlinks belong to Vite+.
-    let refresh = node_manager != NodeManager::SystemFirst;
+    let settings = config::load_config().await?;
+    // Each managed tool replaces its own shim, independently of the Node preference.
+    let refresh = |tool: &str| {
+        let mode = PackageManagerType::from_tool(tool)
+            .map(|family| settings.package_manager_shim_mode_for(family))
+            .unwrap_or(settings.node_shim_mode);
+        mode != config::ShimMode::SystemFirst
+    };
     // Windows entrypoints must point at this installation even when Node management is declined.
-    setup::execute_for_binary(binary.as_path(), refresh, cfg!(windows) || refresh, false).await?;
+    setup::execute_for_binary(binary.as_path(), refresh, cfg!(windows) || refresh("node"), false)
+        .await?;
     if !in_place {
         let name = version_dir
             .as_path()
@@ -283,19 +304,15 @@ fn confirm(prompt: &str, default: bool) -> Result<bool, Error> {
         .map_err(|error| Error::Other(error.to_string().into()))
 }
 
-#[derive(PartialEq, Eq)]
-enum NodeManager {
-    SystemFirst,
-    Refresh,
-    Enable,
+fn manager_mode(variable: &str) -> Option<config::ShimMode> {
+    match std::env::var(variable).as_deref() {
+        Ok("yes") => Some(config::ShimMode::Managed),
+        Ok("no") => Some(config::ShimMode::SystemFirst),
+        _ => None,
+    }
 }
 
-fn node_manager() -> Result<NodeManager, Error> {
-    match std::env::var("VP_NODE_MANAGER").as_deref() {
-        Ok("yes") => return Ok(NodeManager::Enable),
-        Ok("no") => return Ok(NodeManager::SystemFirst),
-        _ => {}
-    }
+fn management_default() -> Result<Option<config::ShimMode>, Error> {
     let dirs = &EnvConfig::get().dirs;
     let node = dirs.bin.join(setup::shim_filename("node"));
     let exists = std::fs::symlink_metadata(&node).is_ok();
@@ -307,18 +324,18 @@ fn node_manager() -> Result<NodeManager, Error> {
     let owned = exists && dirs.owns_windows_trampoline(node.as_path());
     if owned {
         // Refresh existing shims without undoing a user's `vp env off` preference.
-        return Ok(NodeManager::Refresh);
+        return Ok(None);
     }
     let automatic = ["CI", "CODESPACES", "REMOTE_CONTAINERS", "DEVPOD"]
         .iter()
         .any(|name| std::env::var_os(name).is_some())
         || find_on_path("node").is_none();
     if !exists && automatic {
-        return Ok(NodeManager::Enable);
+        return Ok(Some(config::ShimMode::Managed));
     }
     let enable =
         confirm("Would you like Vite+ to manage your Node.js and package-manager versions?", true)?;
-    Ok(if enable { NodeManager::Enable } else { NodeManager::SystemFirst })
+    Ok(Some(if enable { config::ShimMode::Managed } else { config::ShimMode::SystemFirst }))
 }
 
 // PATH discovery only offers cleanup after an explicit move; VpDirs remains the authority for the target.
