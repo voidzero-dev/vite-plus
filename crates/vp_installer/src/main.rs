@@ -161,11 +161,16 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
     }
 
     // 3. The menu supplies setup choices; interactive runs may still need release-age consent.
+    let manager = if opts.no_node_manager { "no" } else { "yes" };
     let mut command = tokio::process::Command::new(binary.as_path());
     command
         .env_remove(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK)
         .env(vp_shared::env_vars::VP_SELF_SETUP_REPLACE_EXISTING, if opts.yes { "1" } else { "0" })
-        .env("VP_NODE_MANAGER", if opts.no_node_manager { "no" } else { "yes" })
+        .env("VP_NODE_MANAGER", manager)
+        .env(
+            "VP_PM_MANAGER",
+            std::env::var("VP_PM_MANAGER").unwrap_or_else(|_| manager.to_string()),
+        )
         .env(
             vp_shared::env_vars::VP_SELF_SETUP_NO_MODIFY_PATH,
             if opts.no_modify_path { "1" } else { "0" },
@@ -173,13 +178,6 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    // The existing menu selects both; forward its PM default separately from a Node-only env override.
-    let explicit_node = std::env::var("VP_NODE_MANAGER")
-        .is_ok_and(|value| value.eq_ignore_ascii_case("yes") || value.eq_ignore_ascii_case("no"));
-    let explicit_pm = matches!(std::env::var("VP_PM_MANAGER").as_deref(), Ok("yes" | "no"));
-    if !explicit_pm && (!opts.yes || !explicit_node) {
-        command.env("VP_PM_MANAGER", if opts.no_node_manager { "no" } else { "yes" });
-    }
     if let Some(registry) = opts.registry.as_deref() {
         command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY_UPPER, registry);
     }

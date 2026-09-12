@@ -99,8 +99,8 @@ These variables control the installer scripts and the standalone Windows install
 - **Values**: `yes` uses Vite+ management; `no` prefers system tools, with
   managed tools as a fallback when a system tool is unavailable.
 - **Default**: Unset. The installer's combined Node.js and package-manager
-  choice remains the default. When `VP_NODE_MANAGER` is explicitly set, it
-  only changes Node.js; existing package-manager preferences are preserved.
+  choice remains the default. With the script installers, setting only
+  `VP_NODE_MANAGER` preserves existing package-manager preferences.
 
 ### `VP_NPM_MANAGER` / `VP_PNPM_MANAGER` / `VP_YARN_MANAGER` / `VP_BUN_MANAGER`
 
@@ -118,8 +118,9 @@ These variables control the installer scripts and the standalone Windows install
 
 These management variables are installation choices, saved in Vite+'s config.
 The interactive prompt still controls both Node.js and package managers;
-explicit package-manager variables override that combined choice. The Windows
-installer forwards the same choices to the downloaded binary.
+explicit package-manager variables override that combined choice. The standalone
+`vp-setup` installer uses its existing combined option as the default for both
+variables, in interactive and silent installations alike.
 In-place upgrades preserve the saved choices. Unrecognized values are ignored.
 They select management behavior, not package-manager versions, and do not
 prevent the installer from creating shims. Older releases installed through
