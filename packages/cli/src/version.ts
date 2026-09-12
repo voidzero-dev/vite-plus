@@ -1,10 +1,6 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
+import { resolveLocalVitePlus } from '../binding/index.js';
 import cliPkg from '../package.json' with { type: 'json' };
-import { VITE_PLUS_NAME } from './utils/constants.ts';
 import { renderCliDoc } from './utils/help.ts';
-import { detectPackageMetadata, hasVitePlusDependency } from './utils/package.ts';
 import { accent, log, printHeader } from './utils/terminal.ts';
 
 /** Tool display names in the order shown by `vp --version`. */
@@ -18,46 +14,12 @@ const TOOL_DISPLAY_ORDER = [
   'tsdown',
 ] as const;
 
-interface LocalPackageMetadata {
-  name: string;
-  version: string;
-  path: string;
-}
-
 function getGlobalVersion(): string | null {
   return process.env.VP_GLOBAL_VERSION ?? null;
 }
 
 function getCliVersion(): string | null {
   return cliPkg.version ?? null;
-}
-
-function getLocalMetadata(cwd: string): LocalPackageMetadata | null {
-  if (!isVitePlusDeclaredInAncestors(cwd)) {
-    return null;
-  }
-  return detectPackageMetadata(cwd, VITE_PLUS_NAME) ?? null;
-}
-
-function isVitePlusDeclaredInAncestors(cwd: string): boolean {
-  let currentDir = path.resolve(cwd);
-  while (true) {
-    const packageJsonPath = path.join(currentDir, 'package.json');
-    try {
-      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      if (hasVitePlusDependency(pkg)) {
-        return true;
-      }
-    } catch {
-      // no package.json at this level
-    }
-    const parentDir = path.dirname(currentDir);
-    if (parentDir === currentDir) {
-      break;
-    }
-    currentDir = parentDir;
-  }
-  return false;
 }
 
 /**
@@ -82,7 +44,7 @@ async function resolveToolVersions(localPackagePath: string): Promise<Record<str
 export async function printVersion(cwd: string) {
   const globalVersion = getGlobalVersion();
   const cliVersion = getCliVersion();
-  const localMetadata = getLocalMetadata(cwd);
+  const localMetadata = resolveLocalVitePlus(cwd);
   const localVersion = localMetadata?.version ?? null;
   const vpVersion = globalVersion ?? cliVersion ?? localVersion ?? 'unknown';
 

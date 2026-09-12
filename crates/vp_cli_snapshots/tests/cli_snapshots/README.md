@@ -94,6 +94,8 @@ seed-runtime = true           # false: start from an empty VP_HOME
 link-node-modules = false     # true: expose the run-root node_modules as
                               #   the workspace's parent-dir node_modules,
                               #   for `../node_modules/vite-plus/...` paths
+link-local-vite-plus = false   # true: link the checkout CLI into the workspace's
+                              #   node_modules/vite-plus for local delegation
 env = { MY_VAR = "1" }        # case-wide env additions
 unset-env = ["SOME_VAR"]      # remove baseline env entries
 steps = [ ... ]
@@ -213,6 +215,12 @@ Fixture configs may import bare `vite-plus` and
 into the run root's `node_modules`, where Node's upward walk finds them
 from any staged workspace. Anything else a fixture imports must be
 vendored inside the fixture itself.
+
+Cases that declare a `vite-plus` dependency and run built-in commands without
+installing dependencies can set `link-local-vite-plus = true`. This links the
+checkout CLI at `node_modules/vite-plus` inside the staged workspace, where
+workspace-bounded CLI resolution can find it. The path must not already exist
+in the fixture. Leave this disabled for tests of missing local installations.
 
 Snapshots are plain-text screen grids: styling is flattened, and redaction
 masks paths, durations, versions, UUIDs, thread counts, byte-size numbers

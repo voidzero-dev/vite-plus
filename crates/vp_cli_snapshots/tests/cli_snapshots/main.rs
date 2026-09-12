@@ -391,6 +391,10 @@ struct Case {
     /// through Node's upward walk.
     #[serde(default, rename = "link-node-modules")]
     link_node_modules: bool,
+    /// Link the checkout CLI into the workspace's node_modules so commands
+    /// can resolve a project-local installation within the workspace boundary.
+    #[serde(default, rename = "link-local-vite-plus")]
+    link_local_vite_plus: bool,
     /// Case-wide environment additions on top of the runner baseline.
     #[serde(default)]
     env: BTreeMap<String, String>,
@@ -1206,6 +1210,20 @@ fn run_case(
         .copy_tree(fixture_path, &stage)
         .unwrap();
 
+    if case.link_local_vite_plus {
+        let node_modules = stage.join("node_modules");
+        std::fs::create_dir_all(&node_modules)
+            .map_err(|e| format!("failed to create workspace node_modules: {e}"))?;
+        let local_vite_plus = node_modules.join("vite-plus");
+        if std::fs::symlink_metadata(&local_vite_plus).is_ok() {
+            return Err("link-local-vite-plus requires no fixture node_modules/vite-plus".into());
+        }
+        flavor::link_dir(&runtime.cli_package_dir, &local_vite_plus);
+        if !local_vite_plus.is_dir() {
+            return Err("failed to link workspace node_modules/vite-plus".into());
+        }
+    }
+
     let case_home = CaseHome::provision(&case_root, case.seed_runtime);
     let case_install = case_home.provision_vite_plus(flavor, runtime)?;
 
@@ -1460,13 +1478,14 @@ fn run_case(
         let succeeded = matches!(termination_state, TerminationState::Exited(0));
         if step.snapshot || !succeeded {
             let mut redacted = redact_output(raw_output, &redactions, !step.formatted_snapshot);
-            // A version-probe step's output is a bare semver that varies by
-            // environment (the managed Node's bundled npm or a package
-            // manager pin); mask it. Scoped by argv so
-            // fixture-controlled bare versions elsewhere (a printed
-            // `.node-version` file) stay assertable.
-            let version_probe = matches!(argv.first().map(String::as_str), Some("npm" | "npx"))
-                && argv[1..] == ["--version"];
+            // Version probes report tool versions that vary by environment.
+            // Scope redaction by argv so fixture-controlled versions in other
+            // steps (such as a printed `.node-version` file) stay assertable.
+            let version_probe = match argv.first().map(String::as_str) {
+                Some("npm" | "npx") => argv[1..] == ["--version"],
+                Some("vp") => argv[1..] == ["lint", "--version"],
+                _ => false,
+            };
             if version_probe {
                 redacted = redact::redact_version_probe_output(redacted);
             }

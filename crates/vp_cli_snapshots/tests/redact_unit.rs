@@ -24,6 +24,18 @@ fn masks_bare_version_block_only_for_version_probe_steps() {
 }
 
 #[test]
+fn masks_lint_version_only_for_version_probe_steps() {
+    for version in ["1.81.0", "1.82.0", "1.83.0-beta.1+build.2"] {
+        let output = format!("```\nwarn: No project-local installation\nVersion: {version}\n```\n");
+        assert_eq!(redact_output(output.clone(), &[], true), output);
+        assert_eq!(
+            redact_version_probe_output(output),
+            "```\nwarn: No project-local installation\nVersion: <version>\n```\n"
+        );
+    }
+}
+
+#[test]
 fn trims_trailing_row_padding_on_every_platform() {
     // ConPTY repaints rows padded to the grid width with explicit spaces.
     let input = "Tip: run this directly\u{20}\u{20}\u{20}\u{20}\n$ vp build\n".to_owned();

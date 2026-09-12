@@ -298,6 +298,7 @@ vp_command = { path = "crates/vp_command" }
 vp_cli_help = { path = "crates/vp_cli_help" }
 vp_error = { path = "crates/vp_error" }
 vp_js_runtime = { path = "crates/vp_js_runtime" }
+vp_local_cli = { path = "crates/vp_local_cli" }
 vp_migration = { path = "crates/vp_migration" }
 vp_pm_cli = { path = "crates/vp_pm_cli" }
 vp_pm_cli_macros = { path = "crates/vp_pm_cli_macros" }
@@ -306,6 +307,7 @@ vp_shared = { path = "crates/vp_shared" }
 vp_static_config = { path = "crates/vp_static_config" }
 vp_toolchain = { path = "crates/vp_toolchain" }
 vt = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }
+vt_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }
 vt_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }
 vt_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }
 vt_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }

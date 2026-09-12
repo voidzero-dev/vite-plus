@@ -1,6 +1,7 @@
 [[case]]
 name = "migration_eslint_svelte_runes"
 vp = "global"
+link-local-vite-plus = true
 steps = [
   { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should add Svelte rune globals to the lint override", continue-on-failure = true },
   { argv = ["vpt", "print-file", "vite.config.ts"], comment = "Svelte override includes every built-in rune as a readonly global", continue-on-failure = true },
