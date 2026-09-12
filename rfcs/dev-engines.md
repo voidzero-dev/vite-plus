@@ -38,7 +38,7 @@ interface DevEngines {
 interface DevEngineDependency {
   name: string; // required
   version?: string; // semver range, same syntax as engines.node; absent = any
-  onFail?: "ignore" | "warn" | "error" | "download"; // default: error
+  onFail?: 'ignore' | 'warn' | 'error' | 'download'; // default: error
 }
 ```
 
