@@ -81,7 +81,8 @@ These variables control the installer scripts and the standalone Windows install
 
 ### `VP_NODE_MANAGER`
 
-- **Purpose**: Control Node.js version manager setup during installation
+- **Purpose**: Control Node.js version manager setup during installation. This
+  does not change package-manager preferences.
 - **Values**: `yes` or `no`
 - **Default**: Auto-detected
 - **CLI equivalent**: `--no-node-manager` (inverted)
@@ -90,6 +91,34 @@ These variables control the installer scripts and the standalone Windows install
   # Skip Node.js manager setup in CI
   curl -fsSL https://vite.plus | VP_NODE_MANAGER=no bash
   ```
+
+### `VP_PM_MANAGER`
+
+- **Purpose**: Set the management preference for all four package-manager
+  families: npm, pnpm, Yarn, and Bun.
+- **Values**: `yes` uses Vite+ management; `no` prefers system tools, with
+  managed tools as a fallback when a system tool is unavailable.
+- **Default**: Unset. Existing preferences are preserved; on a fresh install,
+  each family follows the normal first-use selection.
+
+### `VP_NPM_MANAGER` / `VP_PNPM_MANAGER` / `VP_YARN_MANAGER` / `VP_BUN_MANAGER`
+
+- **Purpose**: Set the management preference for an individual package-manager
+  family. Each variable overrides `VP_PM_MANAGER` for that family.
+- **Values**: `yes` or `no`, with the same meaning as `VP_PM_MANAGER`.
+- **Default**: Unset (use `VP_PM_MANAGER`, or preserve the existing preference).
+- **Example**:
+
+  ```bash
+  # Keep system Node.js and package managers, but let Vite+ manage pnpm.
+  curl -fsSL https://vite.plus | VP_NODE_MANAGER=no VP_PM_MANAGER=no VP_PNPM_MANAGER=yes bash
+  ```
+
+These management variables are installation choices, saved in Vite+'s config.
+In-place upgrades preserve the saved choices. Unrecognized values are ignored.
+They select management behavior, not package-manager versions, and do not
+prevent the installer from creating shims. Older releases installed through
+the legacy installer retain their original behavior.
 
 ### `VP_PR_VERSION`
 

@@ -5,6 +5,7 @@ mod shell;
 use std::{path::Path, process::ExitCode};
 
 use dialoguer::{Confirm, theme::ColorfulTheme};
+use vp_pm_cli::PackageManagerType;
 use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install};
 use vp_shared::{EnvConfig, env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
@@ -215,9 +216,23 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
         NodeManager::SystemFirst => Some(config::ShimMode::SystemFirst),
         NodeManager::Refresh => None,
     };
-    if let Some(mode) = mode {
+    if !in_place {
         let mut settings = config::load_config().await?;
-        settings.set_shim_modes(true, true, mode);
+        if let Some(mode) = mode {
+            settings.node_shim_mode = mode;
+        }
+        // Family-specific choices override the group default; unset choices preserve saved preferences.
+        let default = manager_mode("VP_PM_MANAGER");
+        for (family, variable) in [
+            (PackageManagerType::Npm, "VP_NPM_MANAGER"),
+            (PackageManagerType::Pnpm, "VP_PNPM_MANAGER"),
+            (PackageManagerType::Yarn, "VP_YARN_MANAGER"),
+            (PackageManagerType::Bun, "VP_BUN_MANAGER"),
+        ] {
+            if let Some(mode) = manager_mode(variable).or(default) {
+                settings.set_package_manager_shim_mode(family, mode);
+            }
+        }
         config::save_config(&settings).await?;
     }
 
@@ -290,6 +305,14 @@ enum NodeManager {
     Enable,
 }
 
+fn manager_mode(variable: &str) -> Option<config::ShimMode> {
+    match std::env::var(variable).as_deref() {
+        Ok("yes") => Some(config::ShimMode::Managed),
+        Ok("no") => Some(config::ShimMode::SystemFirst),
+        _ => None,
+    }
+}
+
 fn node_manager() -> Result<NodeManager, Error> {
     match std::env::var("VP_NODE_MANAGER").as_deref() {
         Ok("yes") => return Ok(NodeManager::Enable),
@@ -316,8 +339,7 @@ fn node_manager() -> Result<NodeManager, Error> {
     if !exists && automatic {
         return Ok(NodeManager::Enable);
     }
-    let enable =
-        confirm("Would you like Vite+ to manage your Node.js and package-manager versions?", true)?;
+    let enable = confirm("Would you like Vite+ to manage your Node.js versions?", true)?;
     Ok(if enable { NodeManager::Enable } else { NodeManager::SystemFirst })
 }
 
