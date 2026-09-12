@@ -27,13 +27,13 @@ pub(crate) fn local_vite_plus_boundary(cwd: &AbsolutePath) -> Option<AbsolutePat
         return Some(package_root.to_absolute_path_buf());
     };
     let boundary = match workspace_contains_package(&workspace, package_root) {
-        Some(true) => workspace.path.to_absolute_path_buf(),
-        Some(false) => package_root.to_absolute_path_buf(),
+        Some(true) => workspace.path.as_ref(),
+        Some(false) => package_root,
         None => return Some(package_root.to_absolute_path_buf()),
     };
 
     if boundary == package_root {
-        return package.has_vite_plus().then_some(boundary);
+        return package.has_vite_plus().then(|| boundary.to_absolute_path_buf());
     }
 
     let workspace_package_json = boundary.join("package.json");
@@ -44,7 +44,7 @@ pub(crate) fn local_vite_plus_boundary(cwd: &AbsolutePath) -> Option<AbsolutePat
         }
         None => false,
     };
-    (package.has_vite_plus() || workspace_declares).then_some(boundary)
+    (package.has_vite_plus() || workspace_declares).then(|| boundary.to_absolute_path_buf())
 }
 
 #[derive(Deserialize)]
@@ -91,30 +91,24 @@ fn workspace_contains_package(workspace: &WorkspaceRoot, package: &AbsolutePath)
         WorkspaceFile::NonWorkspacePackage(_) => return Some(false),
     };
 
-    // Match vt_workspace's WorkspaceMemberGlobs normalization and ordered
-    // exclusions, without walking the filesystem or loading a package graph.
-    let patterns: Vec<Str> = patterns
-        .iter()
-        .map(|pattern| {
-            let exclusions = pattern.bytes().take_while(|byte| *byte == b'!').count();
-            let path = &pattern[exclusions..];
-            let without_dot = path.strip_prefix('.').unwrap_or(path);
-            let path = if without_dot.starts_with('/') {
-                without_dot.trim_start_matches('/')
-            } else {
-                path
-            };
-            let mut normalized = Str::with_capacity(pattern.len() + "/package.json".len());
-            if exclusions % 2 == 1 {
-                normalized.push('!');
-            }
-            normalized.push_str(path);
-            if !path.is_empty() && !path.ends_with('/') {
-                normalized.push('/');
-            }
-            normalized.push_str("package.json");
-            normalized
-        })
-        .collect();
+    let patterns: Vec<Str> = patterns.into_iter().map(workspace_package_json_pattern).collect();
     Some(PathGlobSet::new(&patterns).ok()?.is_match(relative.as_path()))
+}
+
+/// Match vt_workspace's WorkspaceMemberGlobs normalization, including negation.
+fn workspace_package_json_pattern(pattern: Str) -> Str {
+    let exclusions = pattern.bytes().take_while(|byte| *byte == b'!').count();
+    let path = &pattern[exclusions..];
+    let path = path.strip_prefix("./").unwrap_or(path).trim_start_matches('/');
+
+    let mut normalized = Str::with_capacity(pattern.len() + "/package.json".len());
+    if exclusions % 2 == 1 {
+        normalized.push('!');
+    }
+    normalized.push_str(path);
+    if !path.is_empty() && !path.ends_with('/') {
+        normalized.push('/');
+    }
+    normalized.push_str("package.json");
+    normalized
 }

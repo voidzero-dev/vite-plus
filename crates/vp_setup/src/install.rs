@@ -835,16 +835,17 @@ mod tests {
         tokio::fs::create_dir_all(&node_bin).await.unwrap();
         tokio::fs::create_dir_all(&pnpm_bin).await.unwrap();
 
-        // Execute an existing shell, with the generated script as input.
-        // Parallel process creation can briefly inherit a newly written
-        // executable's open descriptor and cause ETXTBSY on Linux.
-        // Keep the sh basename: BusyBox selects its applet from argv[0].
+        // Use an existing executable to avoid ETXTBSY from inherited writable
+        // descriptors. Keep the sh basename so BusyBox selects the shell applet.
         let runtime_binary = node_bin.join("sh");
         std::os::unix::fs::symlink("/bin/sh", &runtime_binary).unwrap();
         let pnpm_entry = pnpm_bin.join("pnpm.cjs");
         tokio::fs::write(
             &pnpm_entry,
-            "printf '%s\\n' \"$0\" \"$@\" > invocation.txt\nprintf '%s' \"$PATH\" > path.txt\nprintf '%s' \"$npm_config_registry\" > registry.txt\n",
+            r#"printf '%s\n' "$0" "$@" > invocation.txt
+printf '%s' "$PATH" > path.txt
+printf '%s' "$npm_config_registry" > registry.txt
+"#,
         )
         .await
         .unwrap();
