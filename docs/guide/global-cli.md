@@ -4,7 +4,7 @@ The global CLI is a standalone `vp` binary for machine-level runtime and package
 
 Choose the global CLI when you want one command available across projects for any combination of:
 
-- managing Node.js versions
+- managing Node.js and package-manager versions
 - selecting and downloading package managers
 - installing dependencies and running package binaries
 - running `package.json` scripts and cached workspace tasks
@@ -34,19 +34,19 @@ After installation, open a new shell and run:
 vp help
 ```
 
-The installer enables Vite+'s managed Node.js environment by default. Run `vp env off` if you want its shims to prefer an existing system installation.
+When you enable environment management during installation, Vite+ records managed mode for Node.js and the npm, pnpm, Yarn, and Bun shims. Run `vp env off` to prefer system tools, or scope the change with `vp env off node` or `vp env off pm`.
 
 ### Installer Options
 
 The installers accept environment variables for the less common cases where the defaults do not fit:
 
-| Variable | Purpose |
-| --- | --- |
-| `VP_VERSION` | Install a specific Vite+ version instead of `latest` |
-| `VP_HOME` | Put the installation and managed data under one custom directory |
-| `NPM_CONFIG_REGISTRY` | Download Vite+ packages from a custom npm registry |
-| `VP_NODE_MANAGER=no` | Install `vp` without enabling managed Node.js shims |
-| `VP_PR_VERSION` | Install a preview build by pull request number or commit SHA |
+| Variable              | Purpose                                                          |
+| --------------------- | ---------------------------------------------------------------- |
+| `VP_VERSION`          | Install a specific Vite+ version instead of `latest`             |
+| `VP_HOME`             | Put the installation and managed data under one custom directory |
+| `NPM_CONFIG_REGISTRY` | Download Vite+ packages from a custom npm registry               |
+| `VP_NODE_MANAGER=no`  | Skip environment manager setup                                   |
+| `VP_PR_VERSION`       | Install a preview build by pull request number or commit SHA     |
 
 Set a variable for the installer command:
 
@@ -62,7 +62,7 @@ $env:VP_VERSION = "1.2.3"; irm https://vite.plus/ps1 | iex
 
 :::
 
-Command-line options passed to `vp-setup.exe` take precedence over environment variables. Runtime settings such as a custom Node.js mirror are covered in [Node.js Runtime](/guide/env#custom-node-js-mirror).
+Command-line options passed to `vp-setup.exe` take precedence over environment variables. See [Installer Environment Variables](/guide/installer-env-vars) for the full reference, including directory overrides, runtime settings, and download configuration.
 
 ## Use It Without a Local Package
 
@@ -81,10 +81,10 @@ You do not need a local `vite-plus` dependency to run existing `package.json` sc
 
 The global command is also the entry point for projects that install `vite-plus` locally. It resolves the toolchain from the directory where you run it:
 
-| Current project | What `vp` uses for project commands |
-| --- | --- |
-| Has a runnable local `vite-plus` dependency | The project-local CLI and its pinned toolchain |
-| Has no local `vite-plus` dependency | The toolchain bundled with the global installation |
+| Current project                             | What `vp` uses for project commands                |
+| ------------------------------------------- | -------------------------------------------------- |
+| Has a runnable local `vite-plus` dependency | The project-local CLI and its pinned toolchain     |
+| Has no local `vite-plus` dependency         | The toolchain bundled with the global installation |
 
 Global-only commands such as `vp env`, `vp upgrade`, and `vp implode` remain owned by the standalone installation.
 
@@ -92,7 +92,7 @@ This gives you a stable command on `PATH` while each adopted project can pin and
 
 ## Next Steps
 
-- [Node.js Runtime](/guide/env) covers version discovery, pinning, shims, and managed installations.
+- [Environment](/guide/env) covers Node.js and package-manager selection, pinning, shims, and managed installations.
 - [Package Management](/guide/install) covers pnpm, npm, Yarn, and Bun workflows.
 - [Run](/guide/run) covers package scripts and cached workspace tasks.
 - [Upgrading Vite+](/guide/upgrade) explains independent global and project-local upgrades.

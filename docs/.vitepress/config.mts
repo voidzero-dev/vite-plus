@@ -87,7 +87,7 @@ const guideSidebar = [
   {
     text: 'Global CLI',
     items: [
-      { text: 'Node.js Runtime', link: '/guide/env' },
+      { text: 'Environment', link: '/guide/env' },
       { text: 'Upgrading Vite+', link: '/guide/upgrade' },
       { text: 'Removing Vite+', link: '/guide/implode' },
     ],
@@ -102,7 +102,10 @@ const guideSidebar = [
   },
   {
     text: 'Reference',
-    items: [{ text: 'Troubleshooting', link: '/guide/troubleshooting' }],
+    items: [
+      { text: 'Installer Environment Variables', link: '/guide/installer-env-vars' },
+      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
+    ],
   },
 ];
 
