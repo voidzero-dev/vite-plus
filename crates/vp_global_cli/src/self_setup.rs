@@ -247,10 +247,9 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
 
     // 3. Run setup in this process. Spawning the unmarked binary here would reenter self-setup.
     tokio::fs::create_dir_all(&dirs.bin).await?;
-    // Installation runs setup --refresh: management preferences select tools at runtime, not which shims are refreshed.
-    // Refresh only Vite+'s configured bin directory; never replace tools discovered elsewhere on PATH.
-    // This directory is private by default; using a shared directory requires explicit directory overrides.
-    // Keep all shims, legacy cleanup and Windows package trampolines current even in system-first mode.
+    // Always create and refresh shims, even in system-first mode; `vp env off` and per-tool preferences control runtime dispatch.
+    // VpDirs::bin is private by default, so replacing its shims leaves system-first tools elsewhere on PATH intact.
+    // Users explicitly pointing VpDirs::bin at a shared directory accept replacement of conflicting entries there.
     setup::execute_for_binary(binary.as_path(), true, true, false).await?;
     if !in_place {
         let name = version_dir
