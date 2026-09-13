@@ -91,7 +91,11 @@ VP_PNPM_VERSION=10.20.0 pnpm --version
 
 The overrides apply in managed mode. A package manager can also perform its own version switching after Vite+ launches it; for example, pnpm's `managePackageManagerVersions` setting may switch back to the version in `package.json`.
 
-A project selection applies only to its matching shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The resolved version is cached for one hour and an expired cache remains available when the registry cannot be reached. The directly invoked npm shim keeps its Node-bundled fallback, while an explicit `vp env ... npm` family scope uses standalone npm's latest release.
+A project selection applies only to its matching shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The directly invoked npm shim keeps its Node-bundled fallback, while an explicit `vp env ... npm` family scope uses standalone npm's latest release.
+
+::: details Latest-version caching
+When a named shim falls back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached.
+:::
 
 ## Environment Modes
 
