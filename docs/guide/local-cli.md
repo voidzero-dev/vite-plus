@@ -31,8 +31,8 @@ bunx --package vite-plus vp create
 Run its binary through your package manager. For example:
 
 ```bash
-npx vp help
-npx vp check
+./node_modules/.bin/vp migrate help
+./node_modules/.bin/vp check
 ```
 
 Inside `package.json` scripts, `vp` resolves automatically from `node_modules/.bin`:

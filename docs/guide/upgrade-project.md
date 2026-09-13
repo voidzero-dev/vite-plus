@@ -9,7 +9,7 @@ The recommended way to update a project is to use `vp migrate`, which keeps the 
 After updating the project's `vite-plus` dependency, run the local CLI to align the toolchain versions:
 
 ```bash
-npx vp migrate
+./node_modules/.bin/vp migrate
 ```
 
 If your global CLI is newer than the project's version, running `vp migrate` upgrades the project to that global version instead:
@@ -42,7 +42,7 @@ After upgrading `vite-plus`, re-pin `vitest` to the version Vite+ now bundles. C
 vp toolchain vitest
 ```
 
-Then set the `vitest` override to that exact version and reinstall dependencies. You can also rerun `npx vp migrate` to update the pin for you.
+Then set the `vitest` override to that exact version and reinstall dependencies.
 
 ::: details Why pnpm overrides use `@*`
 Under pnpm the managed keys use an explicit `@*` range (`vite@*`, `vitest@*`). pnpm applies an override by replacing the declared spec on every manifest, importer manifests included. A bare key matches any spec, including `catalog:`. The `@*` range keeps the override on the semver ranges that transitive and peer declarations use, and leaves `catalog:` references intact. `vp up` therefore no longer rewrites them to a concrete version.
