@@ -640,8 +640,14 @@ async fn run_package_manager_command(
     command: PackageManagerCommand,
 ) -> Result<ExitStatus, Error> {
     match command.managed_global_command() {
-        Some(ManagedGlobalCommand::Install { packages, node, force, concurrency }) => {
-            return managed_install(packages, node, force, concurrency).await;
+        Some(ManagedGlobalCommand::Install {
+            packages,
+            node,
+            force,
+            ignore_scripts,
+            concurrency,
+        }) => {
+            return managed_install(packages, node, force, ignore_scripts, concurrency).await;
         }
         Some(ManagedGlobalCommand::Remove { packages, dry_run }) => {
             return managed_uninstall(packages, dry_run).await;
@@ -754,6 +760,7 @@ async fn managed_install(
     packages: &[String],
     node: Option<&str>,
     force: bool,
+    ignore_scripts: bool,
     concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
     if let Err((package_name, error)) = global::install::install(
@@ -761,6 +768,7 @@ async fn managed_install(
         global::install::InstallOptions {
             node_version: node,
             force,
+            ignore_scripts,
             concurrency: concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
             update: false,
         },
@@ -958,6 +966,7 @@ async fn managed_update(
         global::install::InstallOptions {
             node_version: Some(&current_node_version),
             force: false,
+            ignore_scripts: false,
             concurrency,
             update: true,
         },

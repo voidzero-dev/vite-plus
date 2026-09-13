@@ -1,0 +1,9 @@
+{
+  "name": "install-ignore-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@10.9.0",
+  "scripts": {
+    "postinstall": "node -e \"require('node:fs').writeFileSync('root-postinstall-ran', '')\""
+  }
+}

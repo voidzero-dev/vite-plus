@@ -162,6 +162,7 @@ impl InstallArgs {
             save_catalog_name: None,
             save_catalog: self.save_catalog,
             allow_build: None,
+            ignore_scripts: self.ignore_scripts,
             filter: self.filter,
             workspace_root: self.workspace_root,
             workspace: false,

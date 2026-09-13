@@ -28,23 +28,8 @@ defaults:
     shell: bash
 
 jobs:
-  optimize-ci:
-    runs-on: ubuntu-latest # or whichever runner you use for your CI
-    outputs:
-      skip: ${{ steps.check_skip.outputs.skip }}
-    steps:
-      - name: Optimize CI
-        id: check_skip
-        # v0.0.9 still declares `using: node20`; emits a Node 20 deprecation warning until upstream ships a node24 release.
-        # https://github.com/withgraphite/graphite-ci-action
-        uses: withgraphite/graphite-ci-action@402a89bc8aa6db18ae1f9c61953d001d5f9d828f # v0.0.11
-        with:
-          graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
-
   detect-changes:
     runs-on: ubuntu-latest
-    needs: optimize-ci
-    if: needs.optimize-ci.outputs.skip == 'false'
     permissions:
       contents: read
       pull-requests: read
