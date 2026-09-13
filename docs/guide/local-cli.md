@@ -52,7 +52,6 @@ The documentation uses bare `vp` commands for readability. Without the global CL
 
 ### Manual Installation
 
-
 If you are manually migrating a project to Vite+, install these dev dependencies first:
 
 ```bash
@@ -113,6 +112,6 @@ The local package cannot manage the machine-level Vite+ installation. The `vp en
 
 ## Add the Global CLI Later
 
-You can install the global CLI at any time without changing the project's dependency. Once installed, bare `vp` commands use the local `vite-plus` version for project commands and reserve machine-level commands such as `vp env` for the global binary.
+You can install the global CLI at any time without changing the project's dependency. Commands such as `vp dev`, `vp build`, and `vp test` will continue to use the project's installed `vite-plus` version.
 
 See [Use Both CLIs Together](/guide/global-cli#use-both-clis-together) for the selection rules.

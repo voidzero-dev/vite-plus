@@ -17,7 +17,6 @@ Managed mode is on by default, so Node.js and configured package-manager shims r
 
 Use `vp env off` to disable managed mode for Node.js and package managers. See [Environment Modes](#environment-modes) below for details and how to switch to system tools.
 
-
 Most commands operate on both components when no selector is given. Add `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the command. `pm` means all four families for listing and cleanup, but the single selected package manager for project operations.
 
 Unqualified versions remain Node.js versions for compatibility:

@@ -103,9 +103,7 @@ const guideSidebar = [
   },
   {
     text: 'Reference',
-    items: [
-      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
-    ],
+    items: [{ text: 'Troubleshooting', link: '/guide/troubleshooting' }],
   },
 ];
 

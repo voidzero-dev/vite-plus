@@ -340,16 +340,22 @@ You do not need a local `vite-plus` dependency to run existing `package.json` sc
 
 ## Use Both CLIs Together
 
-The global command is also the entry point for projects that install `vite-plus` locally. It resolves the toolchain from the directory where you run it:
+The global CLI and the project-local `vite-plus` package work together. You keep using the same `vp` command, while each project can choose its own toolchain version.
 
-| Current project                             | What `vp` uses for project commands                |
-| ------------------------------------------- | -------------------------------------------------- |
-| Has a runnable local `vite-plus` dependency | The project-local CLI and its pinned toolchain     |
-| Has no local `vite-plus` dependency         | The toolchain bundled with the global installation |
+For development commands such as `vp dev`, `vp build`, `vp test`, and `vp run`, the global CLI delegates to the project's installed version when available:
 
-Global-only commands such as `vp env`, `vp upgrade`, and `vp implode` remain owned by the standalone installation.
+| Current project                     | Toolchain used by `vp`            |
+| ----------------------------------- | --------------------------------- |
+| Has `vite-plus` installed locally   | The project's installed toolchain |
+| Does not have `vite-plus` installed | The globally installed toolchain  |
 
-This gives you a stable command on `PATH` while each adopted project can pin and upgrade its development toolchain independently.
+In a monorepo, the local installation can be shared at the workspace root. You do not need to install `vite-plus` separately in every package.
+
+For example, if a project has Vite+ version A installed and your global installation is version B, `vp build` uses version A's toolchain. Upgrading the global installation does not change that project's installed toolchain.
+
+Package-manager commands such as `vp install` and `vp add` use the global CLI. Commands for managing your environment or global installation, such as `vp env`, `vp upgrade`, and `vp implode`, also stay with the global CLI regardless of the project's version.
+
+To see which toolchain is selected for your current project, run `vp toolchain`. Use `vp toolchain --global` to inspect the global installation.
 
 ## Next Steps
 
