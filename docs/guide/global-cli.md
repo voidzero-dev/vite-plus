@@ -322,7 +322,7 @@ This gives you a stable command on `PATH` while each adopted project can pin and
 - [Environment](/guide/env) covers Node.js and package-manager selection, pinning, shims, and managed installations.
 - [Package Management](/guide/install) covers pnpm, npm, Yarn, and Bun workflows.
 - [Run](/guide/run) covers package scripts and cached workspace tasks.
-- [Upgrading Vite+](/guide/upgrade) explains independent global and project-local upgrades.
+- [Upgrading Vite+](/guide/upgrade) explains global CLI upgrades. See [Update Vite+](/guide/upgrade-project) for project-local upgrades.
 - [Removing Vite+](/guide/implode) removes the global binary and its managed data.
 
 ::: details Platform support
