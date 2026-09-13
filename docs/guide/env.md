@@ -40,8 +40,7 @@ To select the project's Node.js version, Vite+ checks the current directory firs
 3. `engines.node` in `package.json`
 4. `.nvmrc` file
 
-If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the
-latest LTS.
+If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the latest LTS.
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
@@ -140,8 +139,7 @@ PowerShell needs to dot-source the generated setup script in the current shell b
 . "$env:APPDATA\vite-plus\env.ps1"
 ```
 
-If an older Vite+ install uses `%USERPROFILE%\.vite-plus`, source the `env.ps1`
-file in that directory instead.
+If an older Vite+ install uses `%USERPROFILE%\.vite-plus`, source the `env.ps1` file in that directory instead.
 
 Add that line to the end of your PowerShell `$PROFILE` to apply it automatically in new shells. It does not require elevated privileges.
 
@@ -167,10 +165,7 @@ vp-use --unset
 
 Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` in the bin directory on Windows.
 
-In CI, `vp env use` can run without shell initialization. It writes a temporary
-session file per runtime or package manager in the resolved state directory,
-such as `.session-node-version` or `.session-pnpm-version`. Later
-shim calls in the same job use these files to resolve the same environment.
+In CI, `vp env use` can run without shell initialization. It writes a temporary session file per runtime or package manager in the resolved state directory, such as `.session-node-version` or `.session-pnpm-version`. Later shim calls in the same job use these files to resolve the same environment.
 
 ### Manage
 

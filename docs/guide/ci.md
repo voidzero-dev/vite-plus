@@ -10,10 +10,7 @@ You can use `voidzero-dev/setup-vp` to use Vite+ in CI environments.
 
 Set `<setup-vp-version>` in each example to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead. Do not use the `v1` tag. The `v1` tag no longer receives updates.
 
-Run `vp migrate` to replace exact `voidzero-dev/setup-vp@v1` references in
-GitHub Actions workflows and composite actions under `.github` with the latest
-exact release known to your Vite+ version. Existing exact versions and commit
-SHAs remain unchanged.
+Run `vp migrate` to replace exact `voidzero-dev/setup-vp@v1` references in GitHub Actions workflows and composite actions under `.github` with the latest exact release known to your Vite+ version. Existing exact versions and commit SHAs remain unchanged.
 
 ## GitHub Actions
 

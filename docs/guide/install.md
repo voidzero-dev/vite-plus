@@ -74,8 +74,7 @@ Updates keep the version spec a package was installed with: a package installed 
 ::: warning
 These commands do **NOT** interact with the underlying package manager's global installation directory.
 
-Instead, Vite+ stores its global packages in `packages/` under the resolved data
-directory. These packages remain available across different Node.js versions.
+Instead, Vite+ stores its global packages in `packages/` under the resolved data directory. These packages remain available across different Node.js versions.
 
 As a result, commands such as `vp link` do not affect Vite+'s global packages and will not appear in `vp list -g`.
 :::
@@ -154,10 +153,7 @@ Use these when you need to understand the current state of dependencies.
 - `vp why react` explains why `react` is installed
 - `vp info react` shows registry metadata such as versions and dist-tags
 
-These commands show the packages that the package manager installed. They do
-not show tools that Vite+ bundles or compiles. Run `vp toolchain [tool]` to show
-these tools, including Vite, Rolldown, and Oxc. For readable output, `vp why`
-shows a hint when Vite+ also provides the package.
+These commands show the packages that the package manager installed. They do not show tools that Vite+ bundles or compiles. Run `vp toolchain [tool]` to show these tools, including Vite, Rolldown, and Oxc. For readable output, `vp why` shows a hint when Vite+ also provides the package.
 
 #### Rebuild
 
