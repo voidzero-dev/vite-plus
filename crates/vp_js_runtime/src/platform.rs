@@ -13,6 +13,7 @@ pub enum Os {
     Linux,
     Darwin,
     Windows,
+    FreeBSD,
 }
 
 /// CPU architecture
@@ -59,10 +60,19 @@ impl Os {
         {
             Self::Windows
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        #[cfg(target_os = "freebsd")]
+        {
+            Self::FreeBSD
+        }
+        #[cfg(not(any(
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "freebsd"
+        )))]
         {
             compile_error!(
-                "Unsupported operating system. vp_js_runtime only supports Linux, macOS, and Windows."
+                "Unsupported operating system. vp_js_runtime only supports Linux, macOS, Windows, and FreeBSD."
             )
         }
     }
@@ -74,6 +84,7 @@ impl fmt::Display for Os {
             Self::Linux => write!(f, "linux"),
             Self::Darwin => write!(f, "darwin"),
             Self::Windows => write!(f, "windows"),
+            Self::FreeBSD => write!(f, "freebsd"),
         }
     }
 }
