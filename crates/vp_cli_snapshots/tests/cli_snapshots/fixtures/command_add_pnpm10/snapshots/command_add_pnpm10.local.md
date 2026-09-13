@@ -30,6 +30,8 @@ Options:
           Save the new dependency to the default catalog
       --allow-build <NAMES>
           A list of package names allowed to run postinstall
+      --ignore-scripts
+          Do not run lifecycle scripts
       --filter <PATTERN>
           Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root

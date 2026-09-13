@@ -162,6 +162,12 @@ pub struct EnvConfig {
     /// Env: `VP_PACKAGE_MANAGER`
     pub package_manager: Option<String>,
 
+    /// Direct shim version overrides, independent of the selected package manager.
+    pub npm_version: Option<String>,
+    pub pnpm_version: Option<String>,
+    pub yarn_version: Option<String>,
+    pub bun_version: Option<String>,
+
     /// User home directory.
     ///
     /// Resolved once from `HOME` or `USERPROFILE` in platform order. See
@@ -208,6 +214,10 @@ impl EnvConfig {
             env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
             package_manager: std::env::var(env_vars::VP_PACKAGE_MANAGER).ok(),
+            npm_version: std::env::var(env_vars::VP_NPM_VERSION).ok(),
+            pnpm_version: std::env::var(env_vars::VP_PNPM_VERSION).ok(),
+            yarn_version: std::env::var(env_vars::VP_YARN_VERSION).ok(),
+            bun_version: std::env::var(env_vars::VP_BUN_VERSION).ok(),
             user_home,
             vp_shell: std::env::var(env_vars::VP_SHELL).ok(),
         })

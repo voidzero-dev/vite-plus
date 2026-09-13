@@ -85,8 +85,21 @@ pub const VP_NODE_SKIP_SIGNATURE_VERIFY: &str = "VP_NODE_SKIP_SIGNATURE_VERIFY";
 /// Override Node.js version (takes highest priority in version resolution).
 pub const VP_NODE_VERSION: &str = "VP_NODE_VERSION";
 
-/// Override package manager and version (for example, `pnpm@10.18.0`).
+/// Override package manager and version for vp commands (for example, `pnpm@10.18.0`).
+/// Direct package-manager shims use their own version overrides instead.
 pub const VP_PACKAGE_MANAGER: &str = "VP_PACKAGE_MANAGER";
+
+/// Override the npm and npx shim version.
+pub const VP_NPM_VERSION: &str = "VP_NPM_VERSION";
+
+/// Override the pnpm and pnpx shim version.
+pub const VP_PNPM_VERSION: &str = "VP_PNPM_VERSION";
+
+/// Override the yarn and yarnpkg shim version.
+pub const VP_YARN_VERSION: &str = "VP_YARN_VERSION";
+
+/// Override the bun and bunx shim version.
+pub const VP_BUN_VERSION: &str = "VP_BUN_VERSION";
 
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";

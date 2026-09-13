@@ -6,7 +6,7 @@ The unchanged guard must return before installation so --silent-if-unchanged rem
 '`
 
 
-## `VP_PACKAGE_MANAGER=pnpm@10.18.0 vp env use pm --silent-if-unchanged`
+## `VP_PNPM_VERSION=10.18.0 vp env use pm --silent-if-unchanged`
 
 
 ## `vpt stat-file $VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm --assert missing`

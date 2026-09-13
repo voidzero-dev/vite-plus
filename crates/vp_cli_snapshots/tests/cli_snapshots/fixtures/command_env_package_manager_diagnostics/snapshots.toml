@@ -17,7 +17,7 @@ steps = [
   { argv = ["vp", "env", "use", "npm@10.9.4", "--no-install"], snapshot = false },
   { argv = ["vpt", "write-file", "$VP_HOME/package_manager/npm/10.9.4/npm/bin/npm", "#!/bin/sh\n"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/npm/10.9.4/npm/bin/npm"], snapshot = false },
-  { argv = ["vp", "env", "current", "pm", "--json"], comment = "current reports the package-manager session file path" },
+  { argv = ["vp", "env", "current", "npm", "--json"], comment = "current reports the package-manager session file path" },
   { argv = ["vp", "env", "which", "npm"], comment = "which reports the package-manager session file as its source" },
 ]
 
@@ -43,5 +43,5 @@ skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "env", "use", "pnpm@10.18.0", "--no-install"], snapshot = false },
   { argv = ["vp", "env", "use", "--unset", "pnpm"], envs = [["VP_PACKAGE_MANAGER", "yarn@4.12.0"]], snapshot = false },
-  { argv = ["vpt", "stat-file", "$VP_HOME/.session-package-manager", "--assert", "missing"], comment = "a different environment override does not hide the matching session file from scoped cleanup" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/.session-pnpm-version", "--assert", "missing"], comment = "a different environment override does not hide the matching session file from scoped cleanup" },
 ]

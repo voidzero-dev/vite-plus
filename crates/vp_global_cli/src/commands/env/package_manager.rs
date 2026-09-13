@@ -2,7 +2,7 @@ use vp_pm_cli::{
     EnvironmentPackageManagerResolution, PackageManagerType, resolve_environment_package_manager,
     resolve_environment_package_manager_spec, resolve_package_manager_version,
 };
-use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_path::AbsolutePath;
 
 use super::{config, spec::parse_package_manager_spec_with_hash};
 use crate::error::Error;
@@ -13,22 +13,63 @@ pub(crate) async fn resolve_current(
     resolve_current_for(cwd, None).await
 }
 
-/// Selecting a manager for vp commands must not change direct shim versions.
+/// Direct shims have independent overrides; selecting a manager for vp commands must not change them.
 pub(crate) async fn resolve_shim_for(
     cwd: &AbsolutePath,
     expected: PackageManagerType,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let session = config::read_session_package_manager().await;
-    let session = session.as_deref().map(parse_package_manager_spec_with_hash).transpose()?;
+    let (version, source, source_path) = if let Some(version) = environment_version(expected) {
+        (Some(version), version_env_var(expected).to_string(), None)
+    } else {
+        (
+            config::read_session_package_manager(expected).await,
+            format!(".session-{expected}-version"),
+            config::get_session_package_manager_path(expected).ok(),
+        )
+    };
+    let override_spec = version
+        .map(|version| parse_package_manager_spec_with_hash(&format!("{expected}@{version}")))
+        .transpose()?;
     let default = configured_default_for(&config::load_config().await?, expected)?;
-    resolve_environment_package_manager(
+    let mut resolution = resolve_environment_package_manager(
         cwd,
-        session.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
+        override_spec
+            .as_ref()
+            .map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
         default.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
         Some(expected),
     )
-    .await
-    .map_err(Error::from)
+    .await?;
+    if override_spec.is_some()
+        && let Some(resolution) = &mut resolution
+    {
+        resolution.source = source.into();
+        resolution.source_path = source_path;
+    }
+    Ok(resolution)
+}
+
+pub(crate) fn version_env_var(kind: PackageManagerType) -> &'static str {
+    use vp_shared::env_vars;
+    match kind {
+        PackageManagerType::Npm => env_vars::VP_NPM_VERSION,
+        PackageManagerType::Pnpm => env_vars::VP_PNPM_VERSION,
+        PackageManagerType::Yarn => env_vars::VP_YARN_VERSION,
+        PackageManagerType::Bun => env_vars::VP_BUN_VERSION,
+    }
+}
+
+pub(crate) fn environment_version(kind: PackageManagerType) -> Option<String> {
+    let env = vp_shared::EnvConfig::get();
+    match kind {
+        PackageManagerType::Npm => env.npm_version.as_deref(),
+        PackageManagerType::Pnpm => env.pnpm_version.as_deref(),
+        PackageManagerType::Yarn => env.yarn_version.as_deref(),
+        PackageManagerType::Bun => env.bun_version.as_deref(),
+    }
+    .map(str::trim)
+    .filter(|version| !version.is_empty())
+    .map(str::to_string)
 }
 
 pub(crate) async fn resolve_current_for(
@@ -38,12 +79,12 @@ pub(crate) async fn resolve_current_for(
     let specs = current_specs(expected).await?;
     let mut resolution = resolve_environment_package_manager(
         cwd,
-        specs.session_spec(),
+        specs.override_spec(),
         specs.default_spec(),
         expected,
     )
     .await?;
-    specs.apply_session_source(&mut resolution);
+    specs.apply_override_source(&mut resolution);
     Ok(resolution)
 }
 
@@ -51,7 +92,7 @@ pub(crate) async fn resolve_current_or_fallback_for(
     cwd: &AbsolutePath,
     package_manager: PackageManagerType,
 ) -> Result<EnvironmentPackageManagerResolution, Error> {
-    if let Some(resolution) = resolve_current_for(cwd, Some(package_manager)).await? {
+    if let Some(resolution) = resolve_shim_for(cwd, package_manager).await? {
         return Ok(resolution);
     }
 
@@ -64,24 +105,22 @@ pub(crate) async fn resolve_current_spec(
     let specs = current_specs(None).await?;
 
     let mut resolution =
-        resolve_environment_package_manager_spec(cwd, specs.session_spec(), specs.default_spec())
+        resolve_environment_package_manager_spec(cwd, specs.override_spec(), specs.default_spec())
             .map_err(Error::from)?;
-    specs.apply_session_source(&mut resolution);
+    specs.apply_override_source(&mut resolution);
     Ok(resolution)
 }
 
 pub(crate) type PackageManagerSpec = (PackageManagerType, String, Option<String>);
 
 struct CurrentSpecs {
-    session: Option<PackageManagerSpec>,
-    session_source: Option<&'static str>,
-    session_source_path: Option<AbsolutePathBuf>,
+    selected: Option<PackageManagerSpec>,
     default: Option<PackageManagerSpec>,
 }
 
 impl CurrentSpecs {
-    fn session_spec(&self) -> Option<(PackageManagerType, &str, Option<&str>)> {
-        self.session
+    fn override_spec(&self) -> Option<(PackageManagerType, &str, Option<&str>)> {
+        self.selected
             .as_ref()
             .map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref()))
     }
@@ -92,39 +131,31 @@ impl CurrentSpecs {
             .map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref()))
     }
 
-    fn apply_session_source(&self, resolution: &mut Option<EnvironmentPackageManagerResolution>) {
-        if let (Some(resolution), Some(source)) = (resolution, self.session_source) {
-            resolution.source = source.into();
-            resolution.source_path.clone_from(&self.session_source_path);
+    fn apply_override_source(&self, resolution: &mut Option<EnvironmentPackageManagerResolution>) {
+        if self.selected.is_some()
+            && let Some(resolution) = resolution
+        {
+            resolution.source = config::PACKAGE_MANAGER_ENV_VAR.into();
+            resolution.source_path = None;
         }
     }
 }
 
 async fn current_specs(expected: Option<PackageManagerType>) -> Result<CurrentSpecs, Error> {
-    let config = vp_shared::EnvConfig::get();
-    let (session, session_source, session_source_path) = if let Some(spec) =
-        config.package_manager.as_deref().map(str::trim).filter(|spec| !spec.is_empty())
-    {
-        (
-            Some(parse_package_manager_spec_with_hash(spec)?),
-            Some(config::PACKAGE_MANAGER_ENV_VAR),
-            None,
-        )
-    } else if let Some(spec) = config::read_session_package_manager().await {
-        (
-            Some(parse_package_manager_spec_with_hash(spec.trim())?),
-            Some(config::SESSION_PACKAGE_MANAGER_FILE),
-            config::get_session_package_manager_path().ok(),
-        )
-    } else {
-        (None, None, None)
-    };
+    let env = vp_shared::EnvConfig::get();
+    let selected = env
+        .package_manager
+        .as_deref()
+        .map(str::trim)
+        .filter(|spec| !spec.is_empty())
+        .map(parse_package_manager_spec_with_hash)
+        .transpose()?;
     let config = config::load_config().await?;
     let default = expected
         .map(|package_manager| configured_default_for(&config, package_manager))
         .transpose()?
         .flatten();
-    Ok(CurrentSpecs { session, session_source, session_source_path, default })
+    Ok(CurrentSpecs { selected, default })
 }
 
 pub(crate) fn configured_default_for(

@@ -18,7 +18,9 @@ vp lint --type-aware
 
 ## Configuration
 
-Put lint configuration directly in the `lint` block in `vite.config.ts` so all your configuration stays in one place. We do not recommend using `oxlint.config.ts` or `.oxlintrc.json` with Vite+.
+Put lint configuration directly in the `lint` block in the root `vite.config.ts` so all your configuration stays in one place. We do not recommend using `oxlint.config.ts` or `.oxlintrc.json` with Vite+.
+
+Vite+ does not currently support nested lint configuration. For now, use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) in the root `vite.config.ts` for file- or package-specific rules. The long-term behavior is open for discussion; [share your use case and expectations](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) to help shape it.
 
 For the upstream rule set, options, and compatibility details, see the [Oxlint docs](https://oxc.rs/docs/guide/usage/linter.html).
 

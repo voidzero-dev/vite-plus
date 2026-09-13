@@ -92,13 +92,6 @@ impl EnvSpecs {
     }
 }
 
-pub(crate) fn parse_package_manager_spec(
-    value: &str,
-) -> Result<(PackageManagerType, String), Error> {
-    let (package_manager, version, _) = parse_package_manager_spec_with_hash(value)?;
-    Ok((package_manager, version))
-}
-
 pub(crate) fn parse_package_manager_spec_with_hash(
     value: &str,
 ) -> Result<(PackageManagerType, String, Option<String>), Error> {

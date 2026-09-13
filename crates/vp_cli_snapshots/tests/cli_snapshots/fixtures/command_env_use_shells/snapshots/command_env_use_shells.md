@@ -6,7 +6,7 @@ should detect bash and output both posix exports
 
 ```
 export VP_NODE_VERSION=20.18.0
-export VP_PACKAGE_MANAGER=pnpm@10.18.0
+export VP_PNPM_VERSION=10.18.0
 Using Node.js <version> (resolved from 20.18.0)
 Using pnpm <version> (resolved from 10.18.0)
 ```
@@ -17,7 +17,7 @@ should detect zsh and output both posix exports
 
 ```
 export VP_NODE_VERSION=20.18.0
-export VP_PACKAGE_MANAGER=pnpm@10.18.0
+export VP_PNPM_VERSION=10.18.0
 Using Node.js <version> (resolved from 20.18.0)
 Using pnpm <version> (resolved from 10.18.0)
 ```
@@ -28,7 +28,7 @@ should detect fish and output both fish exports
 
 ```
 set -gx VP_NODE_VERSION 20.18.0
-set -gx VP_PACKAGE_MANAGER pnpm@10.18.0
+set -gx VP_PNPM_VERSION 10.18.0
 Using Node.js <version> (resolved from 20.18.0)
 Using pnpm <version> (resolved from 10.18.0)
 ```
@@ -39,7 +39,7 @@ should detect nushell and output both nushell exports
 
 ```
 $env.VP_NODE_VERSION = "20.18.0"
-$env.VP_PACKAGE_MANAGER = "pnpm@10.18.0"
+$env.VP_PNPM_VERSION = "10.18.0"
 Using Node.js <version> (resolved from 20.18.0)
 Using pnpm <version> (resolved from 10.18.0)
 ```
@@ -50,7 +50,7 @@ should detect powershell and output both powershell exports
 
 ```
 $env:VP_NODE_VERSION = "20.18.0"
-$env:VP_PACKAGE_MANAGER = "pnpm@10.18.0"
+$env:VP_PNPM_VERSION = "10.18.0"
 Using Node.js <version> (resolved from 20.18.0)
 Using pnpm <version> (resolved from 10.18.0)
 ```
@@ -61,7 +61,7 @@ should detect cmd and output both cmd exports
 
 ```
 set VP_NODE_VERSION=20.18.0
-set VP_PACKAGE_MANAGER=pnpm@10.18.0
+set VP_PNPM_VERSION=10.18.0
 Using Node.js <version> (resolved from 20.18.0)
 Using pnpm <version> (resolved from 10.18.0)
 ```
@@ -72,7 +72,7 @@ should detect case-insensitive bash
 
 ```
 export VP_NODE_VERSION=20.18.0
-export VP_PACKAGE_MANAGER=pnpm@10.18.0
+export VP_PNPM_VERSION=10.18.0
 Using Node.js <version> (resolved from 20.18.0)
 Using pnpm <version> (resolved from 10.18.0)
 ```
@@ -83,7 +83,7 @@ should detect case-insensitive fish
 
 ```
 set -gx VP_NODE_VERSION 20.18.0
-set -gx VP_PACKAGE_MANAGER pnpm@10.18.0
+set -gx VP_PNPM_VERSION 10.18.0
 Using Node.js <version> (resolved from 20.18.0)
 Using pnpm <version> (resolved from 10.18.0)
 ```
@@ -94,7 +94,7 @@ should detect case-insensitive powershell
 
 ```
 $env:VP_NODE_VERSION = "20.18.0"
-$env:VP_PACKAGE_MANAGER = "pnpm@10.18.0"
+$env:VP_PNPM_VERSION = "10.18.0"
 Using Node.js <version> (resolved from 20.18.0)
 Using pnpm <version> (resolved from 10.18.0)
 ```
