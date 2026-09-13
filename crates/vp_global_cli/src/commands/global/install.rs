@@ -120,6 +120,8 @@ pub struct InstallOptions<'a> {
     pub node_version: Option<&'a str>,
     /// Auto-uninstall packages whose binaries conflict.
     pub force: bool,
+    /// Do not run lifecycle scripts.
+    pub ignore_scripts: bool,
     /// Number of packages to install in parallel.
     pub concurrency: usize,
     /// Whether this is a `vp update -g` operation.
@@ -131,7 +133,7 @@ pub async fn install(
     package_specs: &[String],
     options: InstallOptions<'_>,
 ) -> Result<(), InstallError> {
-    let InstallOptions { node_version, force, concurrency, update } = options;
+    let InstallOptions { node_version, force, ignore_scripts, concurrency, update } = options;
     if package_specs.is_empty() {
         return Ok(());
     }
@@ -238,7 +240,14 @@ pub async fn install(
             installs.push(async {
                 (
                     package_name.clone(),
-                    install_one(package_name, package.spec, &npm_path, &node_bin_dir).await,
+                    install_one(
+                        package_name,
+                        package.spec,
+                        &npm_path,
+                        &node_bin_dir,
+                        ignore_scripts,
+                    )
+                    .await,
                 )
             });
         }
@@ -542,6 +551,7 @@ async fn install_one(
     package_spec: &str,
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
+    ignore_scripts: bool,
 ) -> Result<(InstalledPackage, File), Error> {
     // 1. Create an immutable install directory.
     let install_id = new_install_id();
@@ -553,8 +563,12 @@ async fn install_one(
     //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
     let mut env = ToolPathEnv::from_env();
     env.prepend(node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
-    let output = Command::new(npm_path.as_path())
-        .args(["install", "-g", "--no-fund", &package_spec])
+    let mut command = Command::new(npm_path.as_path());
+    command.args(["install", "-g", "--no-fund", &package_spec]);
+    if ignore_scripts {
+        command.arg("--ignore-scripts");
+    }
+    let output = command
         .env("npm_config_prefix", install_dir.as_path())
         .env("npm_config_update_notifier", "false")
         .envs(env.into_envs())
