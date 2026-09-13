@@ -6,22 +6,24 @@ The local package includes Vite, Rolldown, Vitest, Oxlint, Oxfmt, tsdown, the Vi
 
 ## Install
 
+For most of use cases, we recommend to use Vite+ cli to install in a project or create a new project. Learn more in [Creating a Project](/guide/create) and [Migrate to Vite+](/guide/create).
+
 ::: code-group
 
 ```bash [pnpm]
-pnpm add -D vite-plus
+pnpm dlx --package=vite-plus vp create
 ```
 
 ```bash [npm]
-npm install -D vite-plus
+npx --package=vite-plus vp create
 ```
 
 ```bash [Yarn]
-yarn add -D vite-plus
+yarn dlx --package vite-plus vp create
 ```
 
 ```bash [Bun]
-bun add -D vite-plus
+bunx --package vite-plus vp create
 ```
 
 :::
@@ -29,8 +31,8 @@ bun add -D vite-plus
 Run its binary through your package manager. For example:
 
 ```bash
-pnpm exec vp help
-pnpm exec vp check
+npx vp help
+npx vp check
 ```
 
 Inside `package.json` scripts, `vp` resolves automatically from `node_modules/.bin`:
@@ -48,6 +50,52 @@ Inside `package.json` scripts, `vp` resolves automatically from `node_modules/.b
 
 The documentation uses bare `vp` commands for readability. Without the global CLI, prefix interactive commands with your package manager's local-binary executor, such as `pnpm exec`.
 
+### Manual Installation
+
+
+If you are manually migrating a project to Vite+, install these dev dependencies first:
+
+```bash
+vp install -D vite-plus
+```
+
+You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
+
+::: code-group
+
+```yaml [pnpm-workspace.yaml]
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: 4.1.11
+```
+
+```json [npm / Bun package.json]
+"overrides": {
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+  "vitest": "4.1.11"
+}
+```
+
+```json [Yarn package.json]
+"resolutions": {
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+  "vitest": "4.1.11"
+}
+```
+
+:::
+
+::: details Why are these settings needed?
+
+Dependencies and plugins can import `vite` or `vitest` directly, even when your own code imports from `vite-plus`. These overrides align their dependencies with the toolchain Vite+ uses:
+
+- The `vite` alias directs those imports to Vite+'s core package. Separate Vite instances can break runtime identity checks: [issue #1391](https://github.com/voidzero-dev/vite-plus/issues/1391) reported TanStack Start returning 404s because an `instanceof` check crossed two copies. [PR #2617](https://github.com/voidzero-dev/vite-plus/pull/2617) addresses the CLI side by sharing Vite through the same alias.
+- The exact `vitest` pin keeps dependencies and `vp test` on the same Vitest version, avoiding separate mocks, `expect` instances, and runner state. [PR #2365](https://github.com/voidzero-dev/vite-plus/pull/2365) documents this requirement for manual installation.
+
+Keep the core alias aligned with your installed `vite-plus` version and update the Vitest pin to match its bundled version when upgrading. [Issue #2356](https://github.com/voidzero-dev/vite-plus/issues/2356) describes how dependency bots can update these packages independently and leave incompatible versions installed together.
+
+:::
+
 ## What It Includes
 
 The project-local CLI can be used independently for:
@@ -62,26 +110,6 @@ The project-local CLI can be used independently for:
 - [`vp create`](/guide/create), [`vp migrate`](/guide/migrate), and project configuration commands
 
 The local package cannot manage the machine-level Vite+ installation. The `vp env`, `vp upgrade`, and `vp implode` commands require the [global CLI](/guide/global-cli). Upgrade or remove a local-only installation through your package manager.
-
-## Adopt Vite+ in an Existing Project
-
-For an existing Vite project, use [`vp migrate`](/guide/migrate) instead of manually replacing each tool and configuration file. From a local-only installation, run:
-
-```bash
-pnpm exec vp migrate
-```
-
-For a new project, [`vp create`](/guide/create) can scaffold an application, library, or monorepo. If you prefer to assemble the project yourself, import configuration APIs from `vite-plus`:
-
-```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus';
-
-export default defineConfig({
-  test: {
-    include: ['src/**/*.test.ts'],
-  },
-});
-```
 
 ## Add the Global CLI Later
 
