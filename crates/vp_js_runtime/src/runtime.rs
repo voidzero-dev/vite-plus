@@ -667,7 +667,11 @@ pub async fn read_package_json(
     }
 
     let content = tokio::fs::read_to_string(package_json_path).await?;
-    let pkg: PackageJson = serde_json::from_str(&content)?;
+    let pkg: PackageJson =
+        serde_json::from_str(&content).map_err(|e| Error::PackageJsonParseFailed {
+            path: package_json_path.as_absolute_path().into(),
+            reason: vt_str::format!("{e}"),
+        })?;
     Ok(Some(pkg))
 }
 
@@ -986,6 +990,70 @@ mod tests {
                 assert!(
                     !tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap(),
                     ".node-version should not be auto-created"
+                );
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_read_package_json_invalid_json_names_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Write invalid package.json file
+        let package_json_path = temp_path.join("package.json");
+        tokio::fs::write(&package_json_path, "not-json").await.unwrap();
+
+        let error = read_package_json(&package_json_path).await.unwrap_err();
+
+        // Should be the dedicated package.json error variant
+        assert!(
+            matches!(error, Error::PackageJsonParseFailed { .. }),
+            "unexpected error: {error:?}"
+        );
+
+        // Should name the file, line & column that failed to parse
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "Failed to parse {}: expected ident at line 1 column 2",
+                package_json_path.as_absolute_path()
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn test_download_runtime_for_project_invalid_package_json() {
+        let vp_home = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, vp_home.path().as_os_str())],
+            |_| async {
+                let temp_dir = TempDir::new().unwrap();
+                let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+                // Write invalid package.json file
+                tokio::fs::write(temp_path.join("package.json"), "not-json").await.unwrap();
+
+                // Write sibling .node-version to trigger proceeding to package.json re-read
+                tokio::fs::write(temp_path.join(".node-version"), "22.18.0\n").await.unwrap();
+
+                let error = download_runtime_for_project(&temp_path).await.unwrap_err();
+
+                // Should fail on the package.json re-read
+                assert!(
+                    matches!(error, Error::PackageJsonParseFailed { .. }),
+                    "unexpected error: {error:?}"
+                );
+
+                // Should name the file, line & column that failed to parse
+                let package_json_path = temp_path.join("package.json");
+                assert_eq!(
+                    error.to_string(),
+                    format!(
+                        "Failed to parse {}: expected ident at line 1 column 2",
+                        package_json_path.as_absolute_path()
+                    )
                 );
             },
         )
