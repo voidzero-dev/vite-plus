@@ -1,6 +1,6 @@
 # command_self_setup_mixed_shim_refresh
 
-## `vpt mkdir -p external home/bin other/bin`
+## `vpt mkdir -p external home/bin user-bin`
 
 
 ## `vpt cp $VP_HOME/bin/vp external/vp`
@@ -9,33 +9,39 @@
 ## `vpt chmod +x external/vp`
 
 
-## `vpt write-file home/bin/node existing-node`
+## `vpt write-file home/bin/node old-node-shim`
 
 
-## `vpt write-file home/bin/npm existing-npm`
+## `vpt write-file home/bin/npm old-npm-shim`
 
 
-## `vpt write-file home/bin/pnpm existing-pnpm`
+## `vpt write-file home/bin/pnpm old-pnpm-shim`
 
 
-## `vpt write-file home/bin/pnpx existing-pnpx`
+## `vpt write-file home/bin/pnpx old-pnpx-shim`
 
 
-## `VP_HOME=${workspace}/home VP_VERSION=mixed-shims VP_NODE_MANAGER=no VP_PM_MANAGER=no VP_PNPM_MANAGER=yes ./external/vp`
-
-Managing pnpm replaces its existing commands while preserving system-first Node and npm
+## `vpt write-file user-bin/node user-node-shim`
 
 
-## `vpt print-file home/bin/node`
+## `vpt write-file user-bin/pnpm user-pnpm-shim`
+
+
+## `VP_HOME=${workspace}/home VP_VERSION=mixed-shims VP_NODE_MANAGER=no VP_PM_MANAGER=no VP_PNPM_MANAGER=yes PATH=${workspace}/user-bin${PATH_SEPARATOR}${PATH} ./external/vp`
+
+Installation refreshes every Vite+ shim regardless of management preferences, leaving user tools elsewhere on PATH untouched
+
+
+## `vpt stat-file home/bin/node --assert symlink`
 
 ```
-existing-node
+home/bin/node: symlink
 ```
 
-## `vpt print-file home/bin/npm`
+## `vpt stat-file home/bin/npm --assert symlink`
 
 ```
-existing-npm
+home/bin/npm: symlink
 ```
 
 ## `vpt stat-file home/bin/pnpm --assert symlink`
@@ -50,25 +56,28 @@ home/bin/pnpm: symlink
 home/bin/pnpx: symlink
 ```
 
-## `vpt write-file other/bin/node existing-node`
-
-
-## `vpt write-file other/bin/npm existing-npm`
-
-
-## `VP_HOME=${workspace}/other VP_VERSION=mixed-shims VP_NODE_MANAGER=yes VP_PM_MANAGER=no ./external/vp`
-
-Managing Node preserves an existing system-first npm command
-
-
-## `vpt stat-file other/bin/node --assert symlink`
+## `vpt print-file user-bin/node`
 
 ```
-other/bin/node: symlink
+user-node-shim
 ```
 
-## `vpt print-file other/bin/npm`
+## `vpt print-file user-bin/pnpm`
 
 ```
-existing-npm
+user-pnpm-shim
+```
+
+## `vpt print-file home/config.json`
+
+```
+{
+  "nodeShimMode": "system_first",
+  "packageManagerShimModes": {
+    "bun": "system_first",
+    "npm": "system_first",
+    "pnpm": "managed",
+    "yarn": "system_first"
+  }
+}
 ```

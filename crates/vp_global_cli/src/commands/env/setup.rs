@@ -55,13 +55,13 @@ impl EnvShell {
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
-    execute_for_binary(&std::env::current_exe()?, |_| refresh, refresh, env_only).await
+    execute_for_binary(&std::env::current_exe()?, refresh, refresh, env_only).await
 }
 
 // Self-setup must create shims for the deployed binary, not the temporary download.
 pub(crate) async fn execute_for_binary(
     current_exe: &std::path::Path,
-    refresh: impl Fn(&str) -> bool,
+    refresh: bool,
     refresh_entrypoints: bool,
     env_only: bool,
 ) -> Result<ExitStatus, Error> {
@@ -90,7 +90,9 @@ pub(crate) async fn execute_for_binary(
     // Ensure bin directory exists
     tokio::fs::create_dir_all(bin_dir).await?;
 
-    cleanup_legacy_package_manager_installs(&bin_dir, &refresh).await;
+    if refresh {
+        cleanup_legacy_package_manager_installs(&bin_dir).await;
+    }
 
     #[cfg(windows)]
     tokio::fs::write(bin_dir.join("vp-use.cmd"), vp_use_cmd_content(&config)).await?;
@@ -104,7 +106,7 @@ pub(crate) async fn execute_for_binary(
 
     for tool in crate::shim::DEFAULT_SHIM_TOOLS {
         let refresh_tool =
-            if matches!(*tool, "vpx" | "vpr") { refresh_entrypoints } else { refresh(tool) };
+            if matches!(*tool, "vpx" | "vpr") { refresh_entrypoints } else { refresh };
         let result = create_shim(current_exe, bin_dir, tool, refresh_tool).await?;
         if result {
             created.push(*tool);
@@ -129,7 +131,7 @@ pub(crate) async fn execute_for_binary(
     }
 
     #[cfg(windows)]
-    if refresh("node") {
+    if refresh {
         if let Err(e) = refresh_package_shims(current_exe, bin_dir).await {
             tracing::warn!("Failed to refresh package shims: {}", e);
         }
@@ -137,7 +139,7 @@ pub(crate) async fn execute_for_binary(
 
     // Best-effort cleanup of .old files from rename-before-copy on Windows
     #[cfg(windows)]
-    if refresh("node") || refresh_entrypoints {
+    if refresh || refresh_entrypoints {
         cleanup_old_files(bin_dir).await;
     }
 
@@ -150,7 +152,7 @@ pub(crate) async fn execute_for_binary(
         }
     }
 
-    if !skipped.is_empty() {
+    if !skipped.is_empty() && !refresh {
         if !created.is_empty() {
             output::raw("");
         }
@@ -170,14 +172,8 @@ pub(crate) async fn execute_for_binary(
 }
 
 /// Remove legacy managed installs left by versions that did not expose package-manager shims.
-async fn cleanup_legacy_package_manager_installs(
-    bin_dir: &vt_path::AbsolutePath,
-    refresh: &impl Fn(&str) -> bool,
-) {
+async fn cleanup_legacy_package_manager_installs(bin_dir: &vt_path::AbsolutePath) {
     for package_name in LEGACY_PACKAGE_MANAGER_PACKAGES {
-        if !refresh(package_name) {
-            continue;
-        }
         let has_metadata = match PackageMetadata::load(package_name).await {
             Ok(metadata) => metadata.is_some(),
             Err(error) => {
@@ -204,10 +200,6 @@ async fn cleanup_legacy_package_manager_installs(
                 "Failed to remove legacy global package '{package_name}': {error}"
             ));
         }
-    }
-
-    if !refresh("corepack") {
-        return;
     }
 
     // Corepack is no longer exposed, so remove its old default shim even when no package metadata remains.
@@ -1824,7 +1816,7 @@ mod tests {
                         .await
                         .unwrap();
                 }
-                execute_for_binary(&std::env::current_exe().unwrap(), |_| false, true, false)
+                execute_for_binary(&std::env::current_exe().unwrap(), false, true, false)
                     .await
                     .unwrap();
                 let dirs = &vp_shared::EnvConfig::get().dirs;
