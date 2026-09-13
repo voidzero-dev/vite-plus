@@ -27,6 +27,10 @@ pub struct AddArgs {
     #[arg(long, value_name = "NAMES", not_supported(npm, yarn, bun))]
     pub(crate) allow_build: Option<String>,
 
+    /// Do not run lifecycle scripts
+    #[arg(long)]
+    pub(crate) ignore_scripts: bool,
+
     /// Filter packages in monorepo (can be used multiple times)
     #[arg(long, value_name = "PATTERN", not_supported(bun < "1.4"))]
     pub(crate) filter: Vec<String>,
@@ -146,7 +150,9 @@ impl Resolve<AddArgs> for Pnpm {
         if let Some(allow_build) = &args.allow_build {
             cmd.arg(vt_str::format!("--allow-build={allow_build}"));
         }
-        cmd.extend(args.pass_through_args.iter()).extend(args.packages.iter());
+        cmd.arg_if("--ignore-scripts", args.ignore_scripts)
+            .extend(args.pass_through_args.iter())
+            .extend(args.packages.iter());
         cmd.into()
     }
 }
@@ -157,6 +163,7 @@ impl Npm {
         if args.global {
             cmd.arg("install")
                 .arg("--global")
+                .arg_if("--ignore-scripts", args.ignore_scripts)
                 .extend(args.pass_through_args.iter())
                 .extend(args.packages.iter());
             return cmd.into();
@@ -181,6 +188,7 @@ impl Npm {
             None => {}
         }
         cmd.arg_if("--save-exact", args.save_exact)
+            .arg_if("--ignore-scripts", args.ignore_scripts)
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
         cmd.into()
@@ -217,9 +225,15 @@ impl Resolve<AddArgs> for Yarn {
             }
             Some(SaveDependencyTarget::Production) | None => {}
         }
-        cmd.arg_if("--exact", args.save_exact)
-            .extend(args.pass_through_args.iter())
-            .extend(args.packages.iter());
+        cmd.arg_if("--exact", args.save_exact);
+        if args.ignore_scripts {
+            if self.is_berry() {
+                cmd.arg("--mode").arg("skip-build");
+            } else {
+                cmd.arg("--ignore-scripts");
+            }
+        }
+        cmd.extend(args.pass_through_args.iter()).extend(args.packages.iter());
         cmd.into()
     }
 }
@@ -245,6 +259,7 @@ impl Resolve<AddArgs> for Bun {
         }
         cmd.arg_if("--exact", args.save_exact)
             .arg_if("--catalog", args.save_catalog)
+            .arg_if("--ignore-scripts", args.ignore_scripts)
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
         cmd.into()

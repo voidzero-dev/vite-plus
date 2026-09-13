@@ -1,0 +1,8 @@
+[[case]]
+name = "command_install_invalid_package_json"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "22.18.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "package.json", "not-json"], snapshot = false },
+  { argv = ["vp", "install"], comment = "should name the package.json that failed to parse", continue-on-failure = true },
+]

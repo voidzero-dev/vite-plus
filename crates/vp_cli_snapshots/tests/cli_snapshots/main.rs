@@ -740,6 +740,7 @@ impl CaseHome {
                 ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC".into(),
             );
             for name in [
+                "ComSpec",
                 "TMP",
                 "TEMP",
                 "APPDATA",
