@@ -17,12 +17,13 @@ pub(crate) struct ResolvedCommand {
 
 impl ResolvedCommand {
     pub(crate) fn new(program: impl Into<String>) -> Self {
-        Self {
-            program: program.into(),
-            args: Vec::new(),
-            env: BTreeMap::new(),
-            pre_run: Vec::new(),
+        let program = program.into();
+        let mut env = BTreeMap::new();
+        if matches!(program.as_str(), "npm" | "npx") {
+            // Include npm/npx fallbacks: Vite+ manages their versions too.
+            env.insert("npm_config_update_notifier".to_string(), "false".to_string());
         }
+        Self { program, args: Vec::new(), env, pre_run: Vec::new() }
     }
 }
 

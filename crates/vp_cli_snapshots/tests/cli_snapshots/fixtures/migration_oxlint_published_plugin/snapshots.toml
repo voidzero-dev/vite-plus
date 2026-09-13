@@ -1,0 +1,20 @@
+[[case]]
+name = "migration_oxlint_published_plugin"
+vp = "global"
+steps = [
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+  ], comment = "this package declares `oxlint` as a peer dependency, which marks it a published Oxlint plugin", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "lint/index.js",
+  ], comment = "the authoring import stays on 'oxlint'. Consumers of a published plugin may run plain Oxlint, so a rewrite to vite-plus would break them. This also covers the ordering trap: rewritePackageJson strips `oxlint` before the import rewriter reads the manifest, so the skip signal is captured up front", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "the `oxlint` peer entry survives. It is a consumer contract, not a tool this package runs, and stripping it would leave the source importing a package the manifest no longer declares", continue-on-failure = true },
+]

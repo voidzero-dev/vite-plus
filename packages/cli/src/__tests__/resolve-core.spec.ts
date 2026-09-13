@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -113,7 +114,19 @@ describe('resolveCore', () => {
   it('does not fall back to the project when the CLI dependency is missing', () => {
     writeCore(projectCore);
     rmSync(bundled, { recursive: true });
-    expect(() => resolveCore('', project, cliModule)).toThrow('Could not resolve the bundled Vite');
+    // pnpm injects NODE_PATH, which can supply an unrelated Vite package.
+    // Check the missing dependency in a process without global search paths.
+    execFileSync(process.execPath, [
+      '--no-global-search-paths',
+      '--input-type=module',
+      '--eval',
+      `import { strict as assert } from 'node:assert';
+       import { resolveCore } from ${JSON.stringify(new URL('../resolve-core.ts', import.meta.url).href)};
+       assert.throws(
+         () => resolveCore('', ${JSON.stringify(project)}, ${JSON.stringify(cliModule)}),
+         /Could not resolve the bundled Vite/,
+       );`,
+    ]);
   });
 
   it.each(['project', 'bundled'])('rejects upstream Vite in the %s dependency', (location) => {

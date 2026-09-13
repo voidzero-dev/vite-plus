@@ -1,0 +1,5 @@
+packages:
+  - apps-ts/*
+catalog:
+  vite: 8.2.2
+  vite-plus: 0.3.1

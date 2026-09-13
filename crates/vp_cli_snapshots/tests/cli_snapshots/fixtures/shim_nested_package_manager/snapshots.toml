@@ -1,0 +1,58 @@
+[[case]]
+name = "nested_package_manager_resolves_project_version"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "pnpm --version"], comment = "A nested shim resolves and installs the pinned pnpm on first use", snapshot = false },
+  { argv = ["npx", "--offline", "--call", "pnpm --version"], comment = "npx can invoke the project pnpm without a system pnpm" },
+  { argv = ["npm", "run", "--silent", "probe"], comment = "npm lifecycle scripts can invoke the project pnpm" },
+  { argv = ["npx", "--offline", "--call", "pnpm exec node assert-injected-tools.cjs pnpm 10.19.0 20.18.0"], comment = "Injected tools accumulate and an explicit shim invocation reuses them" },
+  { argv = ["pnpm", "exec", "pnpm", "--version"], comment = "Same-family child calls still reach the real binary" },
+  { argv = ["npx", "--offline", "--call", "pnpm exec node -e \"require('node:assert/strict').equal(process.version,'v20.18.0');console.log('project Node version preserved')\""], comment = "The nested package manager keeps the selected Node.js runtime" },
+  { argv = ["npx", "--offline", "--call", "pnpm exec npx --offline --call \"pnpm --version\""], comment = "Repeated cross-family calls complete without a shim loop" },
+]
+
+[[case]]
+name = "nested_yarn_resolves_project_version"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.12.0"], snapshot = false },
+  { argv = ["vp", "env", "on", "yarn"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "yarn --version"], comment = "A nested shim installs the project Yarn on first use", snapshot = false },
+  { argv = ["npx", "--offline", "--call", "yarn --version"], comment = "npx resolves the project Yarn without a system Yarn" },
+  { argv = ["npx", "--offline", "--call", "yarnpkg --version"], comment = "The Yarn alias resolves the same project version" },
+]
+
+[[case]]
+name = "nested_bun_resolves_project_version"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.3.11"], snapshot = false },
+  { argv = ["vp", "env", "on", "bun"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "bun --version"], comment = "A nested shim installs the project Bun on first use", snapshot = false },
+  { argv = ["npx", "--offline", "--call", "bun --version"], comment = "npx resolves the project Bun without a system Bun" },
+]
+
+[[case]]
+name = "nested_package_manager_respects_shim_mode"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "--version"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "pnpm --version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode keeps the project pin even when system pnpm is available" },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "pnpm --version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "System-first mode still selects system pnpm" },
+]
+
+[[case]]
+name = "nested_explicit_versions_replace_injected_tools"
+vp = "global"
+# Keep pnpm's own version switching from overriding the explicit vp selection.
+env = { npm_config_manage_package_manager_versions = "false" }
+steps = [
+  { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
+  { argv = ["npx", "--offline", "--call", "pnpm exec vp env exec --node 22.18.0 --package-manager pnpm@10.18.0 node assert-injected-tools.cjs pnpm 10.18.0 22.18.0"], comment = "Explicit versions replace the inherited runtime and package manager", snapshot = false },
+  { argv = ["npx", "--offline", "--call", "pnpm exec vp env exec --node 22.18.0 --package-manager pnpm@10.18.0 node assert-injected-tools.cjs pnpm 10.18.0 22.18.0"], comment = "Re-entering a shim keeps the explicitly selected versions" },
+]

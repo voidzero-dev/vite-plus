@@ -8,10 +8,10 @@ Scoped unset must inspect and clear the session file independently of any differ
 ## `VP_PACKAGE_MANAGER=yarn@4.12.0 vp env use --unset pnpm`
 
 
-## `vpt stat-file $VP_HOME/.session-package-manager --assert missing`
+## `vpt stat-file $VP_HOME/.session-pnpm-version --assert missing`
 
 a different environment override does not hide the matching session file from scoped cleanup
 
 ```
-<home>/.vite-plus/.session-package-manager: missing
+<home>/.vite-plus/.session-pnpm-version: missing
 ```

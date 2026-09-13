@@ -208,7 +208,7 @@ itertools = "0.15.0"
 itoa = "1.0.15"
 json-escape-simd = "3"
 json-strip-comments = "3"
-jsonschema = { version = "0.46.5", default-features = false }
+jsonschema = { version = "0.55.0", default-features = false }
 junction = "1.4.1"
 libtest-mimic = "0.8.2"
 memchr = "2.7.4"
@@ -270,7 +270,7 @@ sha1 = "0.10.6"
 sha2 = "0.10.9"
 shell-escape = "0.1.5"
 simdutf8 = "0.1.5"
-smallvec = { version = "1.15.1", features = ["union"] }
+smallvec = { version = "1.16.0", features = ["union"] }
 snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d05b1dcdbaabaa69643ee0b89cebe3cd390957e9" }
 string_cache = "0.9.0"
 sugar_path = { version = "3", features = ["cached_current_dir"] }
@@ -319,7 +319,7 @@ xxhash-rust = "0.8.15"
 zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
-oxc = { version = "0.148.0", features = [
+oxc = { version = "0.149.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -331,17 +331,17 @@ oxc = { version = "0.148.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.148.0", features = ["pool"] }
-oxc_ast = "0.148.0"
-oxc_ecmascript = "0.148.0"
-oxc_parser = "0.148.0"
-oxc_span = "0.148.0"
-oxc_napi = "0.148.0"
-oxc_str = "0.148.0"
-oxc_minify_napi = "0.148.0"
-oxc_parser_napi = "0.148.0"
-oxc_transform_napi = "0.148.0"
-oxc_traverse = "0.148.0"
+oxc_allocator = { version = "0.149.0", features = ["pool"] }
+oxc_ast = "0.149.0"
+oxc_ecmascript = "0.149.0"
+oxc_parser = "0.149.0"
+oxc_span = "0.149.0"
+oxc_napi = "0.149.0"
+oxc_str = "0.149.0"
+oxc_minify_napi = "0.149.0"
+oxc_parser_napi = "0.149.0"
+oxc_transform_napi = "0.149.0"
+oxc_traverse = "0.149.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "5", features = ["rayon", "serde"] }

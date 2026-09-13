@@ -509,4 +509,30 @@ describe('readOrgManifest', () => {
       /version "9\.9\.9" not found/,
     );
   });
+
+  it.each([
+    ['latest', '../../outside-write'],
+    ['latest', '..'],
+    ['latest', '.'],
+    ['latest', 'not-a-version'],
+    // A tag named like a pinned version can also substitute an invalid target.
+    ['1.2.3', '../../outside-write'],
+  ])('rejects a non-semver dist-tags.%s target: %s', async (tag, version) => {
+    const body = packument([
+      { name: 'web', description: 'v1', template: '@your-org/template-web' },
+    ]);
+    // Keep matching metadata so only the version validation rejects it.
+    mockFetchJson({
+      ...body,
+      'dist-tags': { ...body['dist-tags'], [tag]: version },
+      versions: {
+        ...body.versions,
+        [version]: { ...body.versions['1.0.0'], version },
+      },
+    });
+    const requestedVersion = tag === 'latest' ? undefined : tag;
+    const manifest = readOrgManifest('@your-org', requestedVersion);
+    await expect(manifest).rejects.toThrow(OrgManifestSchemaError);
+    await expect(manifest).rejects.toThrow(/invalid version/);
+  });
 });

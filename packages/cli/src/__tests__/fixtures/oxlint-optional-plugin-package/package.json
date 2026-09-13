@@ -1,0 +1,7 @@
+{
+  "name": "oxlint-plugin-optional-example",
+  "version": "1.0.0",
+  "optionalDependencies": {
+    "@oxlint/plugins": "^1.79.0"
+  }
+}

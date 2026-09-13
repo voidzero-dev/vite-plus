@@ -2,10 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { type WorkspacePackage } from '../../types/index.ts';
+import { editJsonFile } from '../../utils/json.ts';
 import { hasVitestTypesInTsconfig } from '../../utils/tsconfig.ts';
 import { projectUsesVitestDirectly } from '../migrator.ts';
 import {
   OPT_IN_BROWSER_PROVIDERS,
+  OXLINT_PLUGINS_PACKAGE,
+  packageOwnsOxlintApi,
   PLAYWRIGHT_PROVIDER,
   WEBDRIVERIO_PROVIDER,
   readPackageJsonIfExists,
@@ -188,6 +191,10 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
   '.cache',
 ]);
 
+// Built plugins can still load the original API after migration. Only installed
+// dependencies and version-control metadata are irrelevant to retention.
+const OXLINT_RETENTION_SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn']);
+
 /**
  * Detect whether a package uses vitest's browser mode.
  *
@@ -215,8 +222,16 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
 function sourceTreeMatches(
   projectPath: string,
   matchesContent: (content: string) => boolean,
+  options: {
+    // Nested examples can resolve the root's dependency through source or
+    // package imports/scripts, even when they are not workspace members.
+    crossPackageBoundaries?: boolean;
+    includePackageReferences?: boolean;
+    skipDirs?: ReadonlySet<string>;
+  } = {},
 ): boolean {
-  const scanDir = (dir: string, isRoot: boolean): boolean => {
+  const skipDirs = options.skipDirs ?? VITEST_SCAN_SKIP_DIRS;
+  function scanDir(dir: string, isRoot: boolean): boolean {
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -225,21 +240,36 @@ function sourceTreeMatches(
     }
     // A nested package.json marks a separate workspace package — it is migrated
     // (and scanned) on its own pass, so don't let its files leak into this one.
-    if (!isRoot && entries.some((e) => e.isFile() && e.name === 'package.json')) {
+    if (
+      !options.crossPackageBoundaries &&
+      !isRoot &&
+      entries.some((e) => e.isFile() && e.name === 'package.json')
+    ) {
       return false;
     }
     for (const entry of entries) {
       const entryPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (VITEST_SCAN_SKIP_DIRS.has(entry.name)) {
+        if (skipDirs.has(entry.name)) {
           continue;
         }
         if (scanDir(entryPath, false)) {
           return true;
         }
-      } else if (entry.isFile() && VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name))) {
+      } else if (
+        entry.isFile() &&
+        (VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name)) ||
+          (options.includePackageReferences && entry.name === 'package.json'))
+      ) {
         try {
-          if (matchesContent(fs.readFileSync(entryPath, 'utf8'))) {
+          let content = fs.readFileSync(entryPath, 'utf8');
+          if (entry.name === 'package.json') {
+            // Check alias targets and inline scripts without counting dependency
+            // declarations as uses. Serialization includes conditional targets.
+            const pkg = JSON.parse(content) as { imports?: unknown; scripts?: unknown };
+            content = JSON.stringify({ imports: pkg.imports, scripts: pkg.scripts });
+          }
+          if (matchesContent(content)) {
             return true;
           }
         } catch {
@@ -248,7 +278,7 @@ function sourceTreeMatches(
       }
     }
     return false;
-  };
+  }
 
   return scanDir(projectPath, true);
 }
@@ -335,4 +365,50 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
     );
   }
   return modes;
+}
+
+/**
+ * Check final source, build output, package import aliases, and package scripts.
+ * A substring scan conservatively retains references the rewriter leaves alone,
+ * including require calls, type references, and strings.
+ */
+export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): boolean {
+  return sourceTreeMatches(projectPath, (content) => content.includes(OXLINT_PLUGINS_PACKAGE), {
+    crossPackageBoundaries: true,
+    includePackageReferences: true,
+    skipDirs: OXLINT_RETENTION_SKIP_DIRS,
+  });
+}
+
+/**
+ * Drop `@oxlint/plugins` from devDependencies once nothing names it any more.
+ *
+ * Runs AFTER the import rewrite, so the scan sees final source. Skips a package
+ * that owns the API as a runtime or peer dependency, and skips any package
+ * whose source or build output still names it.
+ */
+export function dropDeadOxlintPluginsDependency(
+  rootDir: string,
+  packages?: readonly { path: string }[],
+): void {
+  const dirs = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+  for (const dir of dirs) {
+    const packageJsonPath = path.join(dir, 'package.json');
+    const pkg = readPackageJsonIfExists(packageJsonPath);
+    if (pkg?.devDependencies?.[OXLINT_PLUGINS_PACKAGE] === undefined) {
+      continue;
+    }
+    if (packageOwnsOxlintApi(pkg) || sourceTreeReferencesOxlintPluginsPackage(dir)) {
+      continue;
+    }
+    editJsonFile<{
+      devDependencies?: Record<string, string>;
+    }>(packageJsonPath, (json) => {
+      if (json.devDependencies?.[OXLINT_PLUGINS_PACKAGE] === undefined) {
+        return undefined;
+      }
+      delete json.devDependencies[OXLINT_PLUGINS_PACKAGE];
+      return json;
+    });
+  }
 }

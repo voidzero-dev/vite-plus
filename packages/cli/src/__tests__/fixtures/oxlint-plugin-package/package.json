@@ -1,0 +1,7 @@
+{
+  "name": "oxlint-plugin-example",
+  "private": true,
+  "peerDependencies": {
+    "@oxlint/plugins": "^1.0.0"
+  }
+}

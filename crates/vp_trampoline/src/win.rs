@@ -480,7 +480,6 @@ pub fn run() -> ! {
 
     if !cmdline::eq_ascii(tool, b"vp") {
         set_env(w!("VP_SHIM_TOOL"), b"VP_SHIM_TOOL", Some(tool));
-        set_env(w!("VP_TOOL_RECURSION"), b"VP_TOOL_RECURSION", None);
     }
 
     // 3. Build the child command line from the active payload.

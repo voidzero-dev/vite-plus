@@ -83,6 +83,12 @@
     "hash": "2a2ce31ecc286ae38ab1f0bce13d94418da8a513",
     "forceFreshMigration": true
   },
+  "videojs-v10": {
+    "repository": "https://github.com/videojs/v10.git",
+    "branch": "main",
+    "hash": "a86f3d735973e47669d529f3edba178585c9cfa9",
+    "forceFreshMigration": true
+  },
   "reactive-resume": {
     "repository": "https://github.com/amruthpillai/reactive-resume.git",
     "branch": "main",

@@ -1,0 +1,17 @@
+{
+  "name": "oxlint-plugin-optional-example",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": "./plugin.js",
+  "files": ["plugin.js"],
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "lint": "oxlint ."
+  },
+  "optionalDependencies": {
+    "@oxlint/plugins": "1.79.0"
+  },
+  "devDependencies": {
+    "oxlint": "1.81.0"
+  }
+}

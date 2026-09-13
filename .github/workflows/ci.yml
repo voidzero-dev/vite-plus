@@ -28,23 +28,8 @@ defaults:
     shell: bash
 
 jobs:
-  optimize-ci:
-    runs-on: ubuntu-latest # or whichever runner you use for your CI
-    outputs:
-      skip: ${{ steps.check_skip.outputs.skip }}
-    steps:
-      - name: Optimize CI
-        id: check_skip
-        # v0.0.9 still declares `using: node20`; emits a Node 20 deprecation warning until upstream ships a node24 release.
-        # https://github.com/withgraphite/graphite-ci-action
-        uses: withgraphite/graphite-ci-action@402a89bc8aa6db18ae1f9c61953d001d5f9d828f # v0.0.11
-        with:
-          graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
-
   detect-changes:
     runs-on: ubuntu-latest
-    needs: optimize-ci
-    if: needs.optimize-ci.outputs.skip == 'false'
     permissions:
       contents: read
       pull-requests: read
@@ -760,6 +745,8 @@ jobs:
           $initialBinDir = Join-Path $initialVersionDir "bin"
           New-Item -ItemType Directory -Path $initialBinDir | Out-Null
           Copy-Item $currentVp (Join-Path $initialBinDir "vp.exe")
+          # Preserve installed state so the first invocation executes upgrade.
+          Copy-Item (Join-Path (Split-Path $currentVp) ".vp-setup-complete") $initialBinDir
           New-Item -ItemType Junction -Path (Join-Path $tempVpHome "current") -Target $initialVersionDir | Out-Null
 
           $env:VP_HOME = $tempVpHome
@@ -815,6 +802,8 @@ jobs:
           initial_bin_dir="$temp_vp_home/$version/bin"
           mkdir -p "$initial_bin_dir"
           cp "$current_vp" "$initial_bin_dir/vp"
+          # Preserve installed state so the first invocation executes upgrade.
+          cp "$(dirname "$current_vp")/.vp-setup-complete" "$initial_bin_dir/"
           chmod +x "$initial_bin_dir/vp"
           # Relative symlink, matching swap_current_link's `current -> <version>`.
           ln -s "$version" "$temp_vp_home/current"
@@ -920,15 +909,17 @@ jobs:
   # flavors on Linux and macOS: the local flavor uses the packages/cli build
   # from this job, the global flavor reuses the installed release binary via
   # VP_SNAP_GLOBAL_VP (no vp_global_cli compile; build-upstream builds or
-  # cache-restores it). One leg per OS: the suite is not sharded. Windows
-  # runs in cli-snapshot-test-windows via the cross-compiled archive.
+  # cache-restores it). Three shards per OS split the trials across runners.
+  # Windows runs in cli-snapshot-test-windows via the cross-compiled archive.
   cli-snapshot-test:
-    name: CLI snapshot test (${{ matrix.target }})
+    name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
     needs:
       - download-previous-rolldown-binaries
     strategy:
       fail-fast: false
       matrix:
+        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
+        shard: [1, 2, 3]
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
@@ -1016,6 +1007,7 @@ jobs:
           cargo test -p vp_cli_snapshots
         env:
           RUST_BACKTRACE: '1'
+          VP_SNAP_SHARD: ${{ matrix.shard }}/3
 
   # Runs the PTY snapshot suite (crates/vp_cli_snapshots) on Windows with
   # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
@@ -1023,11 +1015,15 @@ jobs:
   # build-windows-tests, the global vp comes prebuilt from build-windows-cli,
   # and the JS CLI is built here (skip-native) for the local flavor.
   cli-snapshot-test-windows:
-    name: CLI snapshot test (Windows)
+    name: CLI snapshot test (Windows, shard ${{ matrix.shard }}/3)
     needs:
       - download-previous-rolldown-binaries
       - build-windows-cli
       - build-windows-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     # Runs on the Namespace Windows runner. This is a PTY snapshot suite that
     # opens a pseudo-console (ConPTY) and spawns vp into it. It previously stayed
     # on GitHub-hosted windows-latest because Namespace's Windows runners ran
@@ -1125,7 +1121,7 @@ jobs:
           export VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v pwsh.exe)")"
           # --no-fail-fast: on a snapshot suite every diff is diagnostic
           # signal; cancelling on the first failure hides the rest.
-          cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast
+          cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast --partition hash:${{ matrix.shard }}/3
         env:
           RUST_BACKTRACE: '1'
           # Keep Windows env parity with the `test` recipe in justfile.
@@ -1255,10 +1251,13 @@ jobs:
               # The image must actually lack the CA bundle, or this job stops
               # guarding anything.
               test ! -e /etc/ssl/certs/ca-certificates.crt
+              # Exercise commands on the mounted build without installing a published package.
+              touch /usr/local/bin/.vp-setup-complete
               vp --version
               # HTTPS to nodejs.org through the shared client; exits nonzero
               # without the bundled-roots fallback.
-              vp env list-remote --lts
+              vp env list-remote --lts --json > /tmp/vp-versions.json
+              node -e "const versions = require(\"/tmp/vp-versions.json\"); if (!versions.node?.length) process.exit(1)"
             '
 
   install-e2e-test:

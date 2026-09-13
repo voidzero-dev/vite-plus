@@ -24,6 +24,9 @@ pub mod registry;
 /// Maximum number of old versions to keep.
 pub const MAX_VERSIONS_KEEP: usize = 3;
 
+/// Stored beside a deployed binary after its first-start setup completes.
+pub const SELF_SETUP_MARKER: &str = ".vp-setup-complete";
+
 pub use vp_shared::VP_BINARY_NAME;
 
 /// Return `true` if `version` supports the split directory layout.

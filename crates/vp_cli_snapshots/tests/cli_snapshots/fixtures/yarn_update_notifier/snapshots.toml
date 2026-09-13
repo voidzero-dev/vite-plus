@@ -1,0 +1,41 @@
+[[case]]
+name = "yarn1_update_notifier"
+vp = "global"
+env = { NODE_OPTIONS = "--no-deprecation" }
+comment = "Managed Yarn Classic disables self-update checks even when the project enables them."
+steps = [
+  ["vp", "pm", "config", "get", "disable-self-update-check"],
+  ["vp", "install"],
+]
+
+[[case]]
+name = "yarn2_update_notifier_compatibility"
+vp = "global"
+comment = "Yarn 2 commands work without unsupported update settings."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@2.4.2"], snapshot = false },
+  ["vp", "pm", "config", "get", "enableTelemetry"],
+  ["vp", "install"],
+]
+
+[[case]]
+name = "yarn3_update_notifier_compatibility"
+vp = "global"
+comment = "Yarn 3 commands work without unsupported update settings."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@3.8.7"], snapshot = false },
+  ["vp", "pm", "config", "get", "enableTelemetry"],
+  ["vp", "install"],
+]
+
+[[case]]
+name = "yarn4_update_notifier"
+vp = "global"
+comment = "Managed Yarn 4 disables daily tips, including version notices, without changing telemetry."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.12.0"], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "enableTelemetry: true\nenableTips: true\n"], snapshot = false },
+  ["vp", "pm", "config", "get", "enableTips"],
+  ["vp", "pm", "config", "get", "enableTelemetry"],
+  ["vp", "install"],
+]

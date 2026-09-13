@@ -1,0 +1,8 @@
+{
+  "name": "injected-runtime-probe",
+  "version": "1.0.0",
+  "bin": {
+    "injected-runtime-probe": "index.cjs",
+    "injected-pnpm-probe": "system-pnpm.cjs"
+  }
+}

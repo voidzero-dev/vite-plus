@@ -28,16 +28,24 @@ export function sanitizeHostForPath(host: string): string {
  * (via `.npmrc` scope mappings) don't share a cache slot. The registry
  * guarantees `manifest.tarballUrl` is a valid URL, so any parse failure
  * here is a real bug worth surfacing.
+ *
+ * Require a strict descendant of `cacheRoot` so sibling staging directories
+ * stay inside the cache, even if a caller skips `readOrgManifest` validation.
  */
-function getExtractionDir(manifest: OrgManifest): string {
+export function resolveExtractionDir(cacheRoot: string, manifest: OrgManifest): string {
   const { host } = new URL(manifest.tarballUrl);
-  return path.join(
-    getCacheRoot(),
+  const resolvedRoot = path.resolve(cacheRoot);
+  const resolvedDir = path.resolve(
+    resolvedRoot,
     sanitizeHostForPath(host),
     manifest.scope,
     'create',
     manifest.version,
   );
+  if (!resolvedDir.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new Error(`org template extraction path escapes the cache root: ${manifest.version}`);
+  }
+  return resolvedDir;
 }
 
 function parseIntegrity(integrity: string): { algorithm: string; expected: string } | null {
@@ -295,7 +303,7 @@ export async function cleanupStaleStagingDirs(destDir: string): Promise<void> {
  * cleans up and returns the existing directory.
  */
 export async function ensureOrgPackageExtracted(manifest: OrgManifest): Promise<string> {
-  const extractedRoot = getExtractionDir(manifest);
+  const extractedRoot = resolveExtractionDir(getCacheRoot(), manifest);
   if (fs.existsSync(path.join(extractedRoot, 'package.json'))) {
     return extractedRoot;
   }

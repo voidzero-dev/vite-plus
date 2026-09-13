@@ -43,8 +43,6 @@ Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus
 • tsup config migrated to tsdown (`vp pack`)
 ! Warnings:
   - tsup.config.ts is shared by packages/a, packages/b. It was preserved and must be migrated manually.
-→ Manual follow-up:
-  - Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/guide/migrate#tsdown
 ```
 
 ## `vpt stat-file tsup.config.ts --assert file`

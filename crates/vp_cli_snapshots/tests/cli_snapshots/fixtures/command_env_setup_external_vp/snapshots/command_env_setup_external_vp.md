@@ -13,6 +13,11 @@ Simulate a Homebrew-style vp outside VP_HOME
 ## `vpt chmod +x external/vp`
 
 
+## `vpt touch-file external/.vp-setup-complete`
+
+The external package manager has already set up this binary
+
+
 ## `vpt write-file .node-version '22.18.0
 '`
 

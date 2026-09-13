@@ -1,0 +1,44 @@
+[[case]]
+name = "shim_versions_are_independent"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_PACKAGE_MANAGER = "pnpm@10.19.0", VP_NPM_VERSION = "10.9.4", VP_PNPM_VERSION = "10.20.0", VP_YARN_VERSION = "1.22.22", VP_BUN_VERSION = "1.2.0", npm_config_manage_package_manager_versions = "false" }
+steps = [
+  ["node", "check.cjs", "npm", "10.9.4"],
+  ["node", "check.cjs", "npx", "10.9.4"],
+  ["node", "check.cjs", "pnpm", "10.20.0"],
+  ["node", "check.cjs", "yarn", "1.22.22"],
+  ["node", "check.cjs", "yarnpkg", "1.22.22"],
+  ["node", "check.cjs", "bun", "1.2.0"],
+  { argv = ["node", "check.cjs", "vp", "10.19.0"], comment = "Shim overrides do not override vp install's selected version" },
+]
+
+[[case]]
+name = "env_use_keeps_independent_session_files"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_PACKAGE_MANAGER = "pnpm@10.19.0", npm_config_manage_package_manager_versions = "false" }
+steps = [
+  { argv = ["vp", "env", "use", "pnpm@10.20.0"], snapshot = false },
+  { argv = ["vp", "env", "use", "yarn@1.22.22"], snapshot = false },
+  ["node", "check.cjs", "pnpm", "10.20.0"],
+  ["node", "check.cjs", "yarn", "1.22.22"],
+  ["node", "check.cjs", "vp", "10.19.0"],
+  { argv = ["vp", "env", "current", "pnpm", "--json"], comment = "current identifies the per-family session source" },
+  { argv = ["node", "check.cjs", "pnpm", "10.21.0"], envs = [["VP_PNPM_VERSION", "10.21.0"]], comment = "An environment version takes priority over the session file" },
+  { argv = ["vp", "env", "use", "--unset", "pnpm"], snapshot = false },
+  ["node", "check.cjs", "pnpm", "10.18.0"],
+  ["node", "check.cjs", "yarn", "1.22.22"],
+  { argv = ["vp", "env", "use", "--unset", "pm"], snapshot = false },
+  ["vpt", "stat-file", "$VP_HOME/.session-yarn-version", "--assert", "missing"],
+  ["node", "check.cjs", "vp", "10.19.0"],
+]
+
+[[case]]
+name = "env_use_keeps_independent_shell_versions"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["sh"]
+steps = [
+  ["sh", "check-session.sh"],
+]

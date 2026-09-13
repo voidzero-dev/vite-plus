@@ -327,6 +327,13 @@ jobs:
               vp check --fix
               vp run check
               vp test run --project unit --shard=1/3
+          - name: videojs-v10
+            node-version: 24
+            command: |
+              node $GITHUB_WORKSPACE/ecosystem-ci/verify-videojs-v10.ts
+              # The upstream preset keeps existing diagnostics at warning level.
+              vp lint --quiet
+              vp test run tools/oxlint/anti-slop/rules/tests
           - name: reactive-resume
             node-version: 24
             command: |

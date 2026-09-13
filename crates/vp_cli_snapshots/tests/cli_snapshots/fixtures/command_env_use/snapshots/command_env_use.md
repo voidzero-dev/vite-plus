@@ -43,7 +43,10 @@ should output unset command to stdout
 
 ```
 unset VP_NODE_VERSION
-unset VP_PACKAGE_MANAGER
+unset VP_NPM_VERSION
+unset VP_PNPM_VERSION
+unset VP_YARN_VERSION
+unset VP_BUN_VERSION
 Reverted selected components to project environment resolution
 ```
 
@@ -79,7 +82,7 @@ Valid examples:
   vp env use latest      # Latest version
 ```
 
-## `VP_NODE_VERSION=20.18.0 VP_PACKAGE_MANAGER=npm@10.9.4 vp env use --silent-if-unchanged --no-install`
+## `VP_NODE_VERSION=20.18.0 VP_NPM_VERSION=10.9.4 vp env use --silent-if-unchanged --no-install`
 
 an unchanged project environment emits no shell mutations
 

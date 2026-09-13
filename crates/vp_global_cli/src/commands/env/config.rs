@@ -240,22 +240,21 @@ pub async fn save_config(config: &Config) -> Result<(), Error> {
 /// Set by `vp env use` command.
 pub const VERSION_ENV_VAR: &str = vp_shared::env_vars::VP_NODE_VERSION;
 
-/// Environment variable for the per-shell package-manager override.
+/// Environment variable selecting the package manager for vp commands.
 pub const PACKAGE_MANAGER_ENV_VAR: &str = vp_shared::env_vars::VP_PACKAGE_MANAGER;
 
 /// Session version file name, written by `vp env use` so shims work without the shell eval wrapper.
 pub const SESSION_VERSION_FILE: &str = ".session-node-version";
-
-/// Package-manager session override file name.
-pub const SESSION_PACKAGE_MANAGER_FILE: &str = ".session-package-manager";
 
 /// Get the path to the session version file (`<STATE>/.session-node-version`).
 pub fn get_session_version_path() -> Result<AbsolutePathBuf, Error> {
     Ok(vp_shared::EnvConfig::get().dirs.state.join(SESSION_VERSION_FILE))
 }
 
-pub fn get_session_package_manager_path() -> Result<AbsolutePathBuf, Error> {
-    Ok(vp_shared::EnvConfig::get().dirs.state.join(SESSION_PACKAGE_MANAGER_FILE))
+pub fn get_session_package_manager_path(
+    kind: PackageManagerType,
+) -> Result<AbsolutePathBuf, Error> {
+    Ok(vp_shared::EnvConfig::get().dirs.state.join(format!(".session-{kind}-version")))
 }
 
 /// Read the session version file. Returns `None` if the file is missing or empty.
@@ -266,8 +265,8 @@ pub async fn read_session_version() -> Option<String> {
     if trimmed.is_empty() { None } else { Some(trimmed) }
 }
 
-pub async fn read_session_package_manager() -> Option<String> {
-    let path = get_session_package_manager_path().ok()?;
+pub async fn read_session_package_manager(kind: PackageManagerType) -> Option<String> {
+    let path = get_session_package_manager_path(kind).ok()?;
     let content = tokio::fs::read_to_string(path).await.ok()?;
     let trimmed = content.trim().to_string();
     if trimmed.is_empty() { None } else { Some(trimmed) }
@@ -292,12 +291,15 @@ pub async fn write_session_version(version: &str) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn write_session_package_manager(spec: &str) -> Result<(), Error> {
-    let path = get_session_package_manager_path()?;
+pub async fn write_session_package_manager(
+    kind: PackageManagerType,
+    version: &str,
+) -> Result<(), Error> {
+    let path = get_session_package_manager_path(kind)?;
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    tokio::fs::write(path, spec).await?;
+    tokio::fs::write(path, version).await?;
     Ok(())
 }
 
@@ -311,8 +313,8 @@ pub async fn delete_session_version() -> Result<(), Error> {
     }
 }
 
-pub async fn delete_session_package_manager() -> Result<(), Error> {
-    let path = get_session_package_manager_path()?;
+pub async fn delete_session_package_manager(kind: PackageManagerType) -> Result<(), Error> {
+    let path = get_session_package_manager_path(kind)?;
     match tokio::fs::remove_file(path).await {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -1608,10 +1610,11 @@ mod tests {
         vp_shared::EnvConfig::with_vars_async(
             [(vp_shared::env_vars::VP_HOME, temp_dir.path())],
             |_| async {
-                write_session_package_manager("pnpm@10.18.0").await.unwrap();
-                assert_eq!(read_session_package_manager().await.as_deref(), Some("pnpm@10.18.0"));
-                delete_session_package_manager().await.unwrap();
-                assert!(read_session_package_manager().await.is_none());
+                let kind = PackageManagerType::Pnpm;
+                write_session_package_manager(kind, "10.18.0").await.unwrap();
+                assert_eq!(read_session_package_manager(kind).await.as_deref(), Some("10.18.0"));
+                delete_session_package_manager(kind).await.unwrap();
+                assert!(read_session_package_manager(kind).await.is_none());
             },
         )
         .await;

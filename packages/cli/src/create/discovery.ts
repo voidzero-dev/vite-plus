@@ -187,6 +187,8 @@ export function discoverTemplate(
       type = TemplateType.bingo;
       // add `--skip-requests` by default for bingo templates
       args.push('--skip-requests');
+      // Scaffolded generators use this to bypass Bingo's interactive CLI.
+      envs.VP_CREATE_INTERACTIVE = interactive === false ? '0' : '1';
     }
     return {
       command: 'node',

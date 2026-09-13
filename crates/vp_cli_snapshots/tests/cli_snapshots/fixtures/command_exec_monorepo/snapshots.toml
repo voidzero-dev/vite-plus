@@ -26,3 +26,13 @@ steps = [
   { argv = ["vp", "exec", "-r", "--report-summary", "--", "node", "-e", "console.log(process.env.VP_PACKAGE_NAME)"], comment = "report summary", continue-on-failure = true },
   { argv = ["node", "-e", "const r=JSON.parse(require('fs').readFileSync('vp-exec-summary.json','utf8'));const s=r.executionStatus;for(const[k,v]of Object.entries(s)){console.log(k+': '+v.status+' '+(typeof v.duration==='number'?'has_duration':'no_duration'))}"], comment = "verify summary file", continue-on-failure = true },
 ]
+
+[[case]]
+name = "workspace_exec_propagates_injected_tools"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@10.19.0"], snapshot = false },
+  { argv = ["vp", "exec", "--filter", "app-*", "--", "node", "../../assert-injected-pnpm.cjs"], comment = "Sequential workspace execution carries the package-manager PATH and its tool set" },
+  { argv = ["vp", "exec", "--filter", "app-*", "--parallel", "--", "node", "../../assert-injected-pnpm.cjs"], comment = "Parallel workspace execution carries the same environment" },
+]

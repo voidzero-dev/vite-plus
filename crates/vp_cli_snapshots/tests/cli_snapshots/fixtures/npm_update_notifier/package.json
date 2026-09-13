@@ -1,0 +1,9 @@
+{
+  "name": "npm-update-notifier",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@11.13.0",
+  "scripts": {
+    "postinstall": "node -e \"console.log('npm_config_update_notifier=' + process.env.npm_config_update_notifier)\""
+  }
+}

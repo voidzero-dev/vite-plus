@@ -49,6 +49,8 @@ export default defineConfig([
       'define-config': './src/define-config.ts',
       fmt: './src/fmt.ts',
       lint: './src/lint.ts',
+      'lint-plugins': './src/lint-plugins.ts',
+      'lint-plugins-dev': './src/lint-plugins-dev.ts',
       'oxlint-plugin': './src/oxlint-plugin.ts',
       'tsgolint-path': './src/utils/tsgolint-path.ts',
       pack: './src/pack.ts',
@@ -112,6 +114,9 @@ export default defineConfig([
     entry: {
       'define-config': './src/define-config.ts',
       index: './src/index.cts',
+      // Match @oxlint/plugins' CJS support for compiled plugins. plugins-dev
+      // uses its ESM entry for both import and require, matching upstream.
+      'lint-plugins': './src/lint-plugins.ts',
     },
     outDir: 'dist',
     format: 'cjs',

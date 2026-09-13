@@ -6,6 +6,8 @@ Because `vite.config.ts` is just JavaScript, you can choose to put your entire c
 
 ## Root Config With Overrides
 
+Vite+ does not currently support nested lint or format configuration. Package-level `lint` and `fmt` blocks are not automatically applied. For now, define file- or package-specific settings with overrides in the root `vite.config.ts`. The long-term behavior is open for discussion; [share your use case and expectations](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) to help shape it.
+
 Use `lint.overrides` for Oxlint rules that only apply to some packages:
 
 ```ts [vite.config.ts]

@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_oxlint_inline_script"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vpt", "print-file", "package.json"], comment = "The unchanged inline script still needs a direct @oxlint/plugins dependency." },
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "check-plugin"], comment = "The script resolves its plugin API after a strict pnpm reinstall." },
+]

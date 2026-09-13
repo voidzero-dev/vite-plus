@@ -14,7 +14,7 @@ use vp_pm_cli::{PackageManagerType, download_package_manager, resolve_package_ma
 use vt_path::AbsolutePathBuf;
 
 use super::{
-    config::{self, PACKAGE_MANAGER_ENV_VAR, VERSION_ENV_VAR},
+    config::{self, VERSION_ENV_VAR},
     exit_status, package_manager,
     spec::{EnvScope, EnvSpecs},
 };
@@ -71,12 +71,8 @@ fn print_windows_eval_wrapper_required() {
     eprintln!("Then dot-source it now (or open a new PowerShell session) to load the wrapper.");
 }
 
-fn package_manager_spec(
-    package_manager: PackageManagerType,
-    version: &str,
-    hash: Option<&str>,
-) -> Result<String, Error> {
-    let mut spec = format!("{package_manager}@{version}");
+fn package_manager_spec(version: &str, hash: Option<&str>) -> Result<String, Error> {
+    let mut spec = version.to_string();
     if let Some(hash) = hash {
         if hash.is_empty()
             || !hash.bytes().all(|byte| {
@@ -110,27 +106,18 @@ pub async fn execute(
     // Always delete the session file: on Windows it lives under VP_HOME and can
     // leak across shell windows, so even eval mode must clean it up.
     if unset {
-        let session_package_manager = config::read_session_package_manager().await;
-        let environment_package_manager = vp_shared::EnvConfig::get().package_manager.clone();
-        let (delete_session_package_manager, unset_environment_package_manager) = match scope {
-            EnvScope::PackageManager(expected) => (
-                package_manager_matches(session_package_manager.as_deref(), expected),
-                package_manager_matches(environment_package_manager.as_deref(), expected),
-            ),
-            _ => (scope.includes_package_managers(), scope.includes_package_managers()),
-        };
         if scope.includes_node() {
             config::delete_session_version().await?;
         }
-        if delete_session_package_manager {
-            config::delete_session_package_manager().await?;
+        for kind in package_manager::selected(scope) {
+            config::delete_session_package_manager(kind).await?;
         }
         if has_eval_wrapper() {
             if scope.includes_node() {
                 println!("{}", format_unset(&shell, VERSION_ENV_VAR));
             }
-            if unset_environment_package_manager {
-                println!("{}", format_unset(&shell, PACKAGE_MANAGER_ENV_VAR));
+            for kind in package_manager::selected(scope) {
+                println!("{}", format_unset(&shell, package_manager::version_env_var(kind)));
             }
         } else if !can_use_session_file() {
             print_windows_eval_wrapper_required();
@@ -198,20 +185,24 @@ pub async fn execute(
         };
         let package_manager_unchanged = match &package_manager {
             Some((kind, version, _, hash)) => {
-                let spec = package_manager_spec(*kind, version, hash.as_deref())?;
+                let spec = package_manager_spec(version, hash.as_deref())?;
                 current_override(
-                    config::read_session_package_manager().await,
-                    vp_shared::EnvConfig::get().package_manager.clone(),
+                    config::read_session_package_manager(*kind).await,
+                    package_manager::environment_version(*kind),
                 )
                 .as_deref()
                     == Some(spec.as_str())
             }
             None if uses_project_environment && scope.includes_package_managers() => {
-                current_override(
-                    config::read_session_package_manager().await,
-                    vp_shared::EnvConfig::get().package_manager.clone(),
-                )
-                .is_none()
+                let mut unchanged = true;
+                for kind in package_manager::selected(scope) {
+                    unchanged &= current_override(
+                        config::read_session_package_manager(kind).await,
+                        package_manager::environment_version(kind),
+                    )
+                    .is_none();
+                }
+                unchanged
             }
             None => true,
         };
@@ -227,8 +218,8 @@ pub async fn execute(
         if scope.includes_node() {
             config::delete_session_version().await?;
         }
-        if scope.includes_package_managers() {
-            config::delete_session_package_manager().await?;
+        for kind in package_manager::selected(scope) {
+            config::delete_session_package_manager(kind).await?;
         }
         eprintln!("Reverted selected components to project environment resolution");
         print_windows_eval_wrapper_required();
@@ -245,18 +236,20 @@ pub async fn execute(
             println!("{}", format_export(&shell, VERSION_ENV_VAR, version));
         }
         if let Some((kind, version, _, hash)) = &package_manager {
-            config::delete_session_package_manager().await?;
+            config::delete_session_package_manager(*kind).await?;
             println!(
                 "{}",
                 format_export(
                     &shell,
-                    PACKAGE_MANAGER_ENV_VAR,
-                    &package_manager_spec(*kind, version, hash.as_deref())?
+                    package_manager::version_env_var(*kind),
+                    &package_manager_spec(version, hash.as_deref())?
                 )
             );
         } else if uses_project_environment && scope.includes_package_managers() {
-            config::delete_session_package_manager().await?;
-            println!("{}", format_unset(&shell, PACKAGE_MANAGER_ENV_VAR));
+            for kind in package_manager::selected(scope) {
+                config::delete_session_package_manager(kind).await?;
+                println!("{}", format_unset(&shell, package_manager::version_env_var(kind)));
+            }
         }
     } else if !can_use_session_file() {
         print_windows_eval_wrapper_required();
@@ -267,14 +260,15 @@ pub async fn execute(
             config::write_session_version(version).await?;
         }
         if let Some((kind, version, _, hash)) = &package_manager {
-            config::write_session_package_manager(&package_manager_spec(
+            config::write_session_package_manager(
                 *kind,
-                version,
-                hash.as_deref(),
-            )?)
+                &package_manager_spec(version, hash.as_deref())?,
+            )
             .await?;
         } else if uses_project_environment && scope.includes_package_managers() {
-            config::delete_session_package_manager().await?;
+            for kind in package_manager::selected(scope) {
+                config::delete_session_package_manager(kind).await?;
+            }
         }
     }
 
@@ -286,14 +280,6 @@ pub async fn execute(
     }
 
     Ok(ExitStatus::default())
-}
-
-fn package_manager_matches(value: Option<&str>, expected: PackageManagerType) -> bool {
-    value
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .and_then(|value| super::spec::parse_package_manager_spec(value).ok())
-        .is_some_and(|(kind, _)| kind == expected)
 }
 
 async fn ensure_components_installed(
@@ -457,12 +443,8 @@ mod tests {
 
     #[test]
     fn package_manager_spec_rejects_shell_metacharacters() {
-        let error = package_manager_spec(
-            PackageManagerType::Pnpm,
-            "10.18.0",
-            Some("sha512.valid; touch injected"),
-        )
-        .unwrap_err();
+        let error =
+            package_manager_spec("10.18.0", Some("sha512.valid; touch injected")).unwrap_err();
 
         assert!(error.to_string().contains("invalid package-manager integrity suffix"));
     }

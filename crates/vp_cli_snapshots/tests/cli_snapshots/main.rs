@@ -18,6 +18,7 @@
 mod exit_code;
 mod flavor;
 mod redact;
+mod shard;
 
 use std::{
     collections::{BTreeMap, hash_map::DefaultHasher},
@@ -739,6 +740,7 @@ impl CaseHome {
                 ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC".into(),
             );
             for name in [
+                "ComSpec",
                 "TMP",
                 "TEMP",
                 "APPDATA",
@@ -1812,6 +1814,11 @@ fn main() {
                 );
             }
         }
+    }
+
+    if let Some(shard) = std::env::var_os("VP_SNAP_SHARD") {
+        let shard = shard.to_str().expect("VP_SNAP_SHARD must be valid UTF-8");
+        tests = shard::select(tests, shard).unwrap_or_else(|error| panic!("{error}"));
     }
 
     let conclusion = libtest_mimic::run(&args, tests);

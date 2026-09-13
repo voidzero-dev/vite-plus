@@ -140,6 +140,7 @@ Use `vp add` and `vp remove` for day-to-day dependency edits instead of editing 
 - `vp add -D typescript vitest`
 - `vp add -O fsevents`
 - `vp add --save-peer react`
+- `vp add react --ignore-scripts`
 - `vp remove react`
 - `vp remove --filter web react`
 

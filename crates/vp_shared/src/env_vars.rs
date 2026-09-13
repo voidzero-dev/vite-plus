@@ -85,8 +85,21 @@ pub const VP_NODE_SKIP_SIGNATURE_VERIFY: &str = "VP_NODE_SKIP_SIGNATURE_VERIFY";
 /// Override Node.js version (takes highest priority in version resolution).
 pub const VP_NODE_VERSION: &str = "VP_NODE_VERSION";
 
-/// Override package manager and version (for example, `pnpm@10.18.0`).
+/// Override package manager and version for vp commands (for example, `pnpm@10.18.0`).
+/// Direct package-manager shims use their own version overrides instead.
 pub const VP_PACKAGE_MANAGER: &str = "VP_PACKAGE_MANAGER";
+
+/// Override the npm and npx shim version.
+pub const VP_NPM_VERSION: &str = "VP_NPM_VERSION";
+
+/// Override the pnpm and pnpx shim version.
+pub const VP_PNPM_VERSION: &str = "VP_PNPM_VERSION";
+
+/// Override the yarn and yarnpkg shim version.
+pub const VP_YARN_VERSION: &str = "VP_YARN_VERSION";
+
+/// Override the bun and bunx shim version.
+pub const VP_BUN_VERSION: &str = "VP_BUN_VERSION";
 
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
@@ -110,8 +123,8 @@ pub const VP_GLOBAL_CLI_JS_SCRIPTS_DIR: &str = "VP_GLOBAL_CLI_JS_SCRIPTS_DIR";
 /// Value is a `PATH`-style list of directories to bypass.
 pub const VP_BYPASS: &str = "VP_BYPASS";
 
-/// Recursion guard for `vp env exec` — prevents infinite shim loops.
-pub const VP_TOOL_RECURSION: &str = "VP_TOOL_RECURSION";
+/// Comma-separated tools whose real binary directories have been injected into PATH.
+pub const VP_PATH_INJECTED_TOOLS: &str = "VP_PATH_INJECTED_TOOLS";
 
 /// Set by shim dispatch to record the active Node.js version.
 pub const VP_ACTIVE_NODE: &str = "VP_ACTIVE_NODE";
@@ -197,6 +210,15 @@ pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
 /// do not implement directory resolution again.
 pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
 
+/// Bootstrap capability probe; presence requests only the self-setup contract.
+pub const VP_SELF_SETUP_SUPPORT_CHECK: &str = "VP_SELF_SETUP_SUPPORT_CHECK";
+
+/// Skip persistent shell/PATH changes during first-start installation.
+pub const VP_SELF_SETUP_NO_MODIFY_PATH: &str = "VP_SELF_SETUP_NO_MODIFY_PATH";
+
+/// Bootstrap consent to replace existing Vite+ entrypoints during unattended setup.
+pub const VP_SELF_SETUP_REPLACE_EXISTING: &str = "VP_SELF_SETUP_REPLACE_EXISTING";
+
 /// Keys in [`VP_DUMP_DIRS`] output. Each value uses one `<key>\t<value>` line.
 /// The `vp_global_cli` printer and `vp-setup` parser share these values.
 /// `install.sh` and `install.ps1` use the same keys.
@@ -214,3 +236,6 @@ pub mod dump_dirs {
 /// When set, `get_trampoline_path()` uses this path instead of resolving
 /// relative to `current_exe()`. Only used in test environments.
 pub const VP_TRAMPOLINE_PATH: &str = "VP_TRAMPOLINE_PATH";
+
+/// Emit shell assignments after self-setup (sh or powershell).
+pub const VP_SELF_SETUP_SHELL: &str = "VP_SELF_SETUP_SHELL";

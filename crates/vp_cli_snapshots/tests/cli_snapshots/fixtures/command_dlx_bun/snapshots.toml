@@ -3,8 +3,10 @@ name = "command_dlx_bun"
 vp = "global"
 local-registry = true
 skip-platforms = ["windows"]
+# bun x caches lockfiles under TMPDIR, separately from BUN_INSTALL_CACHE_DIR.
+# Isolate them so tarball URLs cannot refer to a previous test registry.
 steps = [
   { argv = ["vp", "dlx", "--help"], comment = "should show help message", continue-on-failure = true },
-  { argv = ["vp", "dlx", "-s", "cowsay", "hello"], comment = "should run cowsay with bun x", continue-on-failure = true },
-  { argv = ["vp", "dlx", "-s", "cowsay@1.6.0", "hello"], comment = "should run specific version", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "cowsay", "hello"], envs = [["TMPDIR", "${workspace}"]], comment = "should run cowsay with bun x", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "cowsay@1.6.0", "hello"], envs = [["TMPDIR", "${workspace}"]], comment = "should run specific version", continue-on-failure = true },
 ]

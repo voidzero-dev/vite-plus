@@ -1,0 +1,14 @@
+[[case]]
+name = "migration_oxlint_optional_plugin"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "lint", "--fix", "plugin.js"], comment = "Lint autofix must preserve the optional runtime API import." },
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "plugin.js"],
+  { argv = ["vp", "pm", "pack", "--pack-destination", "artifacts"], snapshot = false },
+  { argv = ["pnpm", "install", "--ignore-workspace", "--ignore-scripts"], cwd = "consumer", snapshot = false },
+  { argv = ["node", "check.mjs"], cwd = "consumer", comment = "Install the packed plugin as a consumer dependency, with no vite-plus dependency." },
+]

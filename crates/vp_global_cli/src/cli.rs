@@ -377,8 +377,9 @@ Examples:
   vp env pin 24 --target node-version   # Force the .node-version file
 
 The write target follows the compatibility-first rule: an existing .node-version
-keeps being updated; otherwise the pin is written to package.json#devEngines.runtime;
-.node-version is only created when the directory has no package.json.")]
+keeps being updated, as does an effective .nvmrc in the current directory.
+Otherwise the pin is written to package.json#devEngines.runtime, or .node-version
+when the directory has no package.json.")]
     Pin {
         /// Versions to pin. Bare versions select Node.js; package managers use name@version.
         specs: Vec<String>,
@@ -534,6 +535,8 @@ impl EnvSubcommands {
 pub enum PinTarget {
     /// Pin via the .node-version file
     NodeVersion,
+    /// Pin via the .nvmrc file
+    Nvmrc,
     /// Pin via package.json#devEngines.runtime
     DevEngines,
     /// Pin via the top-level packageManager field
@@ -637,8 +640,14 @@ async fn run_package_manager_command(
     command: PackageManagerCommand,
 ) -> Result<ExitStatus, Error> {
     match command.managed_global_command() {
-        Some(ManagedGlobalCommand::Install { packages, node, force, concurrency }) => {
-            return managed_install(packages, node, force, concurrency).await;
+        Some(ManagedGlobalCommand::Install {
+            packages,
+            node,
+            force,
+            ignore_scripts,
+            concurrency,
+        }) => {
+            return managed_install(packages, node, force, ignore_scripts, concurrency).await;
         }
         Some(ManagedGlobalCommand::Remove { packages, dry_run }) => {
             return managed_uninstall(packages, dry_run).await;
@@ -751,6 +760,7 @@ async fn managed_install(
     packages: &[String],
     node: Option<&str>,
     force: bool,
+    ignore_scripts: bool,
     concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
     if let Err((package_name, error)) = global::install::install(
@@ -758,6 +768,7 @@ async fn managed_install(
         global::install::InstallOptions {
             node_version: node,
             force,
+            ignore_scripts,
             concurrency: concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
             update: false,
         },
@@ -955,6 +966,7 @@ async fn managed_update(
         global::install::InstallOptions {
             node_version: Some(&current_node_version),
             force: false,
+            ignore_scripts: false,
             concurrency,
             update: true,
         },

@@ -391,6 +391,10 @@ mod tests {
         assert_eq!(command.program, "npx");
         assert_eq!(command.args, vec!["--yes", "create-vue", "my-app"]);
         assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::FallbackCommand);
+        assert_eq!(
+            command.env.get("npm_config_update_notifier").map(String::as_str),
+            Some("false")
+        );
     }
 
     #[test]
@@ -401,7 +405,10 @@ mod tests {
         assert_eq!(command.program, "npx");
         assert_eq!(command.args, vec!["--yes", "create-vue", "my-app"]);
         assert!(resolution.diagnostics.is_empty());
-        assert!(command.env.is_empty());
+        assert_eq!(
+            command.env.get("npm_config_update_notifier").map(String::as_str),
+            Some("false")
+        );
     }
 
     #[test]

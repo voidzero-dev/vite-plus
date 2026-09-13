@@ -284,6 +284,29 @@ impl PackageManager {
         Self { client, version: version.into(), bin_prefix }
     }
 
+    /// Executables supplied by this installation, including any available aliases.
+    /// A system installation need not provide every binary in the tool family.
+    #[must_use]
+    pub fn bin_names(&self) -> Vec<&'static str> {
+        let self_real = std::env::current_exe().ok().and_then(|path| path.canonicalize().ok());
+        self.client
+            .bin_names()
+            .iter()
+            .copied()
+            .filter(|tool| {
+                vp_command::resolve_bin(
+                    tool,
+                    Some(self.bin_prefix.as_path().as_os_str()),
+                    &self.bin_prefix,
+                )
+                .is_ok_and(|path| {
+                    path.parent() == Some(&*self.bin_prefix)
+                        && (self_real.is_none() || path.as_path().canonicalize().ok() != self_real)
+                })
+            })
+            .collect()
+    }
+
     #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
         self.bin_prefix.clone()
@@ -2041,6 +2064,33 @@ mod tests {
 
     fn create_temp_dir() -> TempDir {
         tempdir().expect("Failed to create temp directory")
+    }
+
+    #[test]
+    fn bin_names_only_include_executables_in_the_installation() {
+        for kind in [
+            PackageManagerType::Npm,
+            PackageManagerType::Pnpm,
+            PackageManagerType::Yarn,
+            PackageManagerType::Bun,
+        ] {
+            let dir = create_temp_dir();
+            let bin_dir = AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+            let manager = PackageManager::from_bin_prefix(kind, "1.0.0", bin_dir.clone());
+            let names = kind.bin_names();
+            for (index, name) in names.iter().enumerate() {
+                let name = if cfg!(windows) { format!("{name}.exe") } else { (*name).to_owned() };
+                let binary = bin_dir.join(name);
+                fs::write(&binary, "test executable").unwrap();
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    assert_eq!(manager.bin_names(), names[..index]);
+                    fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
+                }
+                assert_eq!(manager.bin_names(), names[..=index]);
+            }
+        }
     }
 
     /// Shared VP_HOME root for download-heavy tests: keeps the package-manager
