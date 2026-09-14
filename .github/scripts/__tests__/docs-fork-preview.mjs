@@ -77,7 +77,7 @@ function fixture() {
   return { github, context, core, pr, state };
 }
 
-test('authorizes a fork with an empty workflow_run PR list and pins its artifact', async () => {
+await test('authorizes a fork with an empty workflow_run PR list and pins its artifact', async () => {
   const f = fixture();
   await authorizePreview(f);
   assert.deepEqual(f.state.requests, [
@@ -105,7 +105,7 @@ for (const [field, value] of [
   ['head_repository', null],
   ['head_branch', ''],
 ]) {
-  test(`rejects a run with invalid ${field}`, async () => {
+  await test(`rejects a run with invalid ${field}`, async () => {
     const f = fixture();
     f.context.payload.workflow_run[field] = value;
     await assert.rejects(authorizePreview(f), /Invalid docs preview workflow run/);
@@ -113,13 +113,13 @@ for (const [field, value] of [
   });
 }
 
-test('rejects a workflow running in another repository', async () => {
+await test('rejects a workflow running in another repository', async () => {
   const f = fixture();
   f.context.repo.owner = 'contributor';
   await assert.rejects(authorizePreview(f), /Invalid docs preview workflow run/);
 });
 
-test('leaves same-repository previews to the existing integration', async () => {
+await test('leaves same-repository previews to the existing integration', async () => {
   const f = fixture();
   f.context.payload.workflow_run.head_repository.full_name = 'voidzero-dev/vite-plus';
   await authorizePreview(f);
@@ -137,7 +137,7 @@ for (const { name, mutate } of [
   { name: 'other base repository', mutate: (pr) => (pr.base.repo.full_name = 'someone/other') },
   { name: 'deleted fork', mutate: (pr) => (pr.head.repo = null) },
 ]) {
-  test(`skips a PR with ${name}, including the check immediately before upload`, async () => {
+  await test(`skips a PR with ${name}, including the check immediately before upload`, async () => {
     const f = fixture();
     mutate(f.pr);
     await authorizePreview(f);
@@ -146,7 +146,7 @@ for (const { name, mutate } of [
   });
 }
 
-test('rejects ambiguous PR matches', async () => {
+await test('rejects ambiguous PR matches', async () => {
   const f = fixture();
   f.state.pulls.push({ ...f.pr, number: 2685 });
   await assert.rejects(authorizePreview(f), /More than one PR/);
@@ -161,7 +161,7 @@ for (const artifacts of [
     { id: 789, name: 'docs-fork-preview', expired: false },
   ],
 ]) {
-  test(`rejects missing, expired, or ambiguous artifacts: ${JSON.stringify(artifacts)}`, async () => {
+  await test(`rejects missing, expired, or ambiguous artifacts: ${JSON.stringify(artifacts)}`, async () => {
     const f = fixture();
     f.state.artifacts = artifacts;
     await assert.rejects(authorizePreview(f), /Expected one active/);
@@ -169,7 +169,7 @@ for (const artifacts of [
   });
 }
 
-test('ignores a contributor comment that copies the bot marker', async () => {
+await test('ignores a contributor comment that copies the bot marker', async () => {
   const f = fixture();
   f.state.comments.push({
     id: 100,
@@ -182,7 +182,7 @@ test('ignores a contributor comment that copies the bot marker', async () => {
   assert.match(f.state.writes[0].body, /Commit: a{40}$/);
 });
 
-test('updates the existing bot comment', async () => {
+await test('updates the existing bot comment', async () => {
   const f = fixture();
   f.state.comments.push({
     id: 101,
@@ -194,21 +194,21 @@ test('updates the existing bot comment', async () => {
   assert.equal(f.state.writes[0].comment_id, 101);
 });
 
-test('does not comment if the PR changes during upload', async () => {
+await test('does not comment if the PR changes during upload', async () => {
   const f = fixture();
   f.pr.head.sha = 'b'.repeat(40);
   await commentPreview(f, 2684);
   assert.deepEqual(f.state.writes, []);
 });
 
-test('rejects invalid PR numbers before using them in URLs or requests', async () => {
+await test('rejects invalid PR numbers before using them in URLs or requests', async () => {
   for (const number of [0, -1, 1.5, NaN, '2684', '2684\nother-output=true']) {
     assert.throws(() => previewUrl(number), /Invalid pull request number/);
     await assert.rejects(isCurrentPreview(fixture(), number), /Invalid pull request number/);
   }
 });
 
-test('accepts a static site and rejects links outside the artifact', async (t) => {
+await test('accepts a static site and rejects links outside the artifact', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'docs-preview-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(join(directory, 'index.html'), '<!doctype html><title>Preview</title>');
@@ -219,7 +219,7 @@ test('accepts a static site and rejects links outside the artifact', async (t) =
   await assert.rejects(validateAssets(directory), /must be regular files/);
 });
 
-test('rejects an artifact without a site index', async (t) => {
+await test('rejects an artifact without a site index', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'docs-preview-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await assert.rejects(validateAssets(directory), /ENOENT/);
