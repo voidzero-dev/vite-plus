@@ -13,7 +13,9 @@ name: Deploy Docs Fork Preview
 # reapply it after updates. The label is rechecked before upload and commenting;
 # removing it cannot undo an upload that already started.
 # The build workflow is PR-controlled, so authorization also requires its
-# original run actor to have write permission in this repository.
+# original run actor to have write permission in this repository. The trusted
+# approve-docs-fork-preview.yml workflow must approve the exact PR commit.
+# Both trusted workflows must be on main before fork previews can deploy.
 on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ['Build Docs Fork Preview']
@@ -33,10 +35,12 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.path == '.github/workflows/build-docs-fork-preview.yml'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       actions: read
       pull-requests: read
+      statuses: read
     outputs:
       pr: ${{ steps.preview.outputs.pr }}
       artifact-id: ${{ steps.preview.outputs.artifact-id }}
@@ -71,6 +75,7 @@ jobs:
       contents: read
       actions: read
       pull-requests: write
+      statuses: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

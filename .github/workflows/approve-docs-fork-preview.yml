@@ -1,0 +1,39 @@
+name: Approve Docs Fork Preview
+
+# This name binds the approval run to the label event's PR and exact head SHA.
+# Keep it aligned with previewApprovalState in docs-fork-preview.mjs.
+run-name: 'Approve docs preview for PR #${{ github.event.pull_request.number }} at ${{ github.event.pull_request.head.sha }} (${{ github.event.label.name }})'
+
+# Metadata only: never check out fork code, install dependencies, or build here.
+# pull_request_target keeps both this workflow and its helper on trusted main.
+# Its only write is a commit status; it receives no deployment credentials.
+on: # zizmor: ignore[dangerous-triggers]
+  pull_request_target:
+    branches: [main]
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  approve:
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      github.event.label.name == 'docs-preview' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { approvePreview } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/docs-fork-preview.mjs`);
+            await approvePreview({ github, context, core });

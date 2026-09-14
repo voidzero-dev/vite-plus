@@ -1,11 +1,14 @@
 import { lstat, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 const repository = 'voidzero-dev/vite-plus';
 const buildWorkflow = '.github/workflows/build-docs-fork-preview.yml';
+const approvalWorkflow = '.github/workflows/approve-docs-fork-preview.yml';
 const marker = '<!-- cloudflare-docs-fork-preview -->';
 const previewLabel = 'docs-preview';
+const approvalRunPrefix = `https://github.com/${repository}/actions/runs/`;
 
 export function previewUrl(number) {
   if (!Number.isSafeInteger(number) || number <= 0) {
@@ -59,7 +62,96 @@ async function requestedByMaintainer({ github, context }, run) {
   return ['admin', 'maintain', 'write'].includes(data.permission);
 }
 
-export async function authorizePreview({ github, context, core }) {
+export async function approvePreview({ github, context, core }) {
+  const snapshot = context.payload.pull_request;
+  if (
+    `${context.repo.owner}/${context.repo.repo}` !== repository ||
+    context.eventName !== 'pull_request_target' ||
+    context.payload.action !== 'labeled' ||
+    context.payload.label?.name !== previewLabel ||
+    !/^[a-f0-9]{40}$/.test(snapshot?.head?.sha) ||
+    !snapshot.head.repo?.id ||
+    !snapshot.head.repo.full_name ||
+    !snapshot.head.ref ||
+    !Number.isSafeInteger(context.runId) ||
+    context.runId <= 0
+  ) {
+    throw new Error('Invalid docs preview approval event');
+  }
+  previewUrl(snapshot.number);
+  const run = {
+    head_sha: snapshot.head.sha,
+    head_branch: snapshot.head.ref,
+    head_repository: snapshot.head.repo,
+    actor: { login: context.actor },
+  };
+  if (!matchesPreview(snapshot, run) || !(await requestedByMaintainer({ github, context }, run))) {
+    throw new Error('A maintainer must apply docs-preview to an open fork PR');
+  }
+  const { data: current } = await github.rest.pulls.get({
+    ...context.repo,
+    pull_number: snapshot.number,
+  });
+  if (!matchesPreview(current, run)) {
+    throw new Error('The PR changed after the label event; review it and reapply docs-preview');
+  }
+  await github.rest.repos.createCommitStatus({
+    ...context.repo,
+    sha: snapshot.head.sha,
+    context: `docs-preview/pr-${snapshot.number}`,
+    state: 'success',
+    description: 'Maintainer approved this commit for a docs preview',
+    target_url: `${approvalRunPrefix}${context.runId}`,
+  });
+  core.info(`Recorded docs preview approval for PR #${snapshot.number} at ${snapshot.head.sha}.`);
+}
+
+async function previewApprovalState({ github, context }, number, sha) {
+  const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+    ...context.repo,
+    ref: sha,
+    per_page: 100,
+  });
+  // GitHub returns statuses newest first. A label on an older commit is not
+  // permission to publish this one, even when a maintainer triggers its run.
+  const status = statuses.find((entry) => entry.context === `docs-preview/pr-${number}`);
+  if (!status) {
+    return 'pending';
+  }
+  const target = status.target_url;
+  if (
+    status.state !== 'success' ||
+    status.creator?.login !== 'github-actions[bot]' ||
+    !target?.startsWith(approvalRunPrefix)
+  ) {
+    return 'denied';
+  }
+  const id = target.slice(approvalRunPrefix.length);
+  if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id))) {
+    return 'denied';
+  }
+  const { data: approval } = await github.rest.actions.getWorkflowRun({
+    ...context.repo,
+    run_id: Number(id),
+  });
+  // The status is only an index. Verify its proof against a trusted workflow
+  // run so copying a status or a run URL cannot approve a different PR/SHA.
+  if (
+    approval.id !== Number(id) ||
+    approval.repository?.full_name !== repository ||
+    approval.path !== approvalWorkflow ||
+    approval.event !== 'pull_request_target' ||
+    approval.display_title !== `Approve docs preview for PR #${number} at ${sha} (${previewLabel})`
+  ) {
+    return 'denied';
+  }
+  if (approval.status !== 'completed') {
+    return 'pending';
+  }
+  return approval.conclusion === 'success' ? 'approved' : 'denied';
+}
+
+export async function authorizePreview({ github, context, core, sleep = setTimeout }) {
   const run = previewRun(context);
   if (run.head_repository.full_name === repository) {
     return;
@@ -99,6 +191,24 @@ export async function authorizePreview({ github, context, core }) {
   if (matches.length !== 1) {
     throw new Error('Expected one active docs-fork-preview artifact from the triggering run');
   }
+  // The build and trusted label handler start independently. Allow the small
+  // metadata-only approval job to finish, but never deploy without its proof.
+  let approval;
+  for (let attempt = 0; attempt < 24; attempt++) {
+    approval = await previewApprovalState({ github, context }, candidates[0].number, run.head_sha);
+    if (approval !== 'pending') {
+      break;
+    }
+    if (attempt < 23) {
+      await sleep(5000);
+    }
+  }
+  if (approval !== 'approved') {
+    core.info(
+      'No successful trusted approval for this PR commit; remove and reapply docs-preview.',
+    );
+    return;
+  }
   core.setOutput('pr', candidates[0].number);
   core.setOutput('artifact-id', matches[0].id);
   core.setOutput('preview-url', previewUrl(candidates[0].number));
@@ -108,7 +218,11 @@ export async function isCurrentPreview({ github, context }, number) {
   previewUrl(number);
   const run = previewRun(context);
   const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
-  return matchesPreview(pr, run) && (await requestedByMaintainer({ github, context }, run));
+  return (
+    matchesPreview(pr, run) &&
+    (await requestedByMaintainer({ github, context }, run)) &&
+    (await previewApprovalState({ github, context }, number, run.head_sha)) === 'approved'
+  );
 }
 
 function uploadedPreviewUrl(output) {

@@ -1,11 +1,12 @@
 // Run with node --test; these workflow helpers need no workspace dependencies.
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
 import {
+  approvePreview,
   authorizePreview,
   commentPreview,
   isCurrentPreview,
@@ -15,6 +16,27 @@ import {
 
 const versionId = '11111111-1111-4111-8111-111111111111';
 const versionUrl = 'https://11111111-viteplus-dev.voidzero-docs.workers.dev';
+
+function grantApproval(state, sha = 'a'.repeat(40), number = 2684, runId = 987) {
+  const status = {
+    context: `docs-preview/pr-${number}`,
+    state: 'success',
+    creator: { login: 'github-actions[bot]' },
+    target_url: `https://github.com/voidzero-dev/vite-plus/actions/runs/${runId}`,
+  };
+  const approval = {
+    id: runId,
+    repository: { full_name: 'voidzero-dev/vite-plus' },
+    path: '.github/workflows/approve-docs-fork-preview.yml',
+    event: 'pull_request_target',
+    display_title: `Approve docs preview for PR #${number} at ${sha} (docs-preview)`,
+    status: 'completed',
+    conclusion: 'success',
+  };
+  state.statuses.set(sha, [status]);
+  state.approvals.set(runId, approval);
+  return { status, approval };
+}
 
 function uploadOutput(overrides = {}) {
   return `${JSON.stringify({
@@ -61,17 +83,32 @@ function fixture() {
     writes: [],
     requests: [],
     permission: 'write',
+    statuses: new Map(),
+    approvals: new Map(),
+    sleeps: [],
   };
   const github = {
     rest: {
       repos: {
+        listCommitStatusesForRef() {},
+        createCommitStatus: async (params) => state.writes.push({ method: 'status', ...params }),
         getCollaboratorPermissionLevel: async (params) => {
           state.requests.push(params);
           return { data: { permission: state.permission } };
         },
       },
       pulls: { list() {}, get: async () => ({ data: pr }) },
-      actions: { listWorkflowRunArtifacts() {} },
+      actions: {
+        listWorkflowRunArtifacts() {},
+        getWorkflowRun: async (params) => {
+          state.requests.push(params);
+          const approval = state.approvals.get(params.run_id);
+          if (!approval) {
+            throw new Error('Approval workflow run not found');
+          }
+          return { data: approval };
+        },
+      },
       issues: {
         listComments() {},
         createComment: async (params) => state.writes.push({ method: 'create', ...params }),
@@ -89,6 +126,9 @@ function fixture() {
       if (method === github.rest.issues.listComments) {
         return state.comments;
       }
+      if (method === github.rest.repos.listCommitStatusesForRef) {
+        return state.statuses.get(params.ref) ?? [];
+      }
       throw new Error('Unexpected GitHub request');
     },
   };
@@ -98,8 +138,164 @@ function fixture() {
       state.outputs[key] = value;
     },
   };
-  return { github, context, core, pr, state };
+  const sleep = async (ms) => state.sleeps.push(ms);
+  return { github, context, core, pr, state, sleep, ...grantApproval(state) };
 }
+
+function approvalFixture() {
+  const f = fixture();
+  f.context.eventName = 'pull_request_target';
+  f.context.actor = 'maintainer';
+  f.context.runId = 987;
+  f.context.payload = {
+    action: 'labeled',
+    label: { name: 'docs-preview' },
+    pull_request: structuredClone(f.pr),
+  };
+  return f;
+}
+
+await test('records approval for the immutable label event commit', async () => {
+  const f = approvalFixture();
+  await approvePreview(f);
+  assert.deepEqual(f.state.writes, [
+    {
+      method: 'status',
+      owner: 'voidzero-dev',
+      repo: 'vite-plus',
+      sha: 'a'.repeat(40),
+      context: 'docs-preview/pr-2684',
+      state: 'success',
+      description: 'Maintainer approved this commit for a docs preview',
+      target_url: 'https://github.com/voidzero-dev/vite-plus/actions/runs/987',
+    },
+  ]);
+});
+
+for (const { name, mutate } of [
+  { name: 'another repository', mutate: (c) => (c.repo.owner = 'contributor') },
+  { name: 'an untrusted trigger', mutate: (c) => (c.eventName = 'pull_request') },
+  { name: 'a push', mutate: (c) => (c.payload.action = 'synchronize') },
+  { name: 'label removal', mutate: (c) => (c.payload.action = 'unlabeled') },
+  { name: 'an unrelated label', mutate: (c) => (c.payload.label.name = 'bug') },
+  { name: 'a missing label', mutate: (c) => (c.payload.label = undefined) },
+  { name: 'a missing PR', mutate: (c) => (c.payload.pull_request = undefined) },
+  { name: 'an invalid SHA', mutate: (c) => (c.payload.pull_request.head.sha = 'invalid') },
+  { name: 'a deleted fork', mutate: (c) => (c.payload.pull_request.head.repo = null) },
+  { name: 'a missing fork ID', mutate: (c) => (c.payload.pull_request.head.repo.id = undefined) },
+  { name: 'a missing fork name', mutate: (c) => (c.payload.pull_request.head.repo.full_name = '') },
+  { name: 'a missing branch', mutate: (c) => (c.payload.pull_request.head.ref = '') },
+  { name: 'an invalid run ID', mutate: (c) => (c.runId = '987') },
+  { name: 'a zero run ID', mutate: (c) => (c.runId = 0) },
+  { name: 'an unsafe run ID', mutate: (c) => (c.runId = Number.MAX_SAFE_INTEGER + 1) },
+  { name: 'an invalid PR number', mutate: (c) => (c.payload.pull_request.number = '2684') },
+]) {
+  await test(`does not record approval for ${name}`, async () => {
+    const f = approvalFixture();
+    mutate(f.context);
+    await assert.rejects(approvePreview(f), /Invalid/);
+    assert.deepEqual(f.state.writes, []);
+  });
+}
+
+for (const { name, mutate } of [
+  { name: 'a closed PR', mutate: (f) => (f.context.payload.pull_request.state = 'closed') },
+  { name: 'a missing preview label', mutate: (f) => (f.context.payload.pull_request.labels = []) },
+  {
+    name: 'a same-repository PR',
+    mutate: (f) => (f.context.payload.pull_request.head.repo.full_name = 'voidzero-dev/vite-plus'),
+  },
+  {
+    name: 'another base branch',
+    mutate: (f) => (f.context.payload.pull_request.base.ref = 'release'),
+  },
+  { name: 'a missing actor', mutate: (f) => (f.context.actor = undefined) },
+  ...['read', 'triage', 'none', undefined].map((permission) => ({
+    name: `${permission} permission`,
+    mutate: (f) => (f.state.permission = permission),
+  })),
+]) {
+  await test(`does not record approval with ${name}`, async () => {
+    const f = approvalFixture();
+    mutate(f);
+    await assert.rejects(approvePreview(f), /A maintainer must apply/);
+    assert.deepEqual(f.state.writes, []);
+  });
+}
+
+for (const { name, mutate } of [
+  { name: 'a new commit', mutate: (pr) => (pr.head.sha = 'b'.repeat(40)) },
+  { name: 'label removal', mutate: (pr) => (pr.labels = []) },
+  { name: 'PR closure', mutate: (pr) => (pr.state = 'closed') },
+  { name: 'a base change', mutate: (pr) => (pr.base.ref = 'release') },
+]) {
+  await test(`does not record approval after ${name} during label handling`, async () => {
+    const f = approvalFixture();
+    mutate(f.pr);
+    await assert.rejects(approvePreview(f), /The PR changed after the label event/);
+    assert.deepEqual(f.state.writes, []);
+  });
+}
+
+await test('never transfers approval to a commit pushed during the status write', async () => {
+  const f = approvalFixture();
+  const create = f.github.rest.repos.createCommitStatus;
+  f.github.rest.repos.createCommitStatus = async (params) => {
+    f.pr.head.sha = 'b'.repeat(40);
+    await create(params);
+  };
+  await approvePreview(f);
+  assert.equal(f.state.writes[0].sha, 'a'.repeat(40));
+});
+
+for (const [area, method] of [
+  ['repos', 'getCollaboratorPermissionLevel'],
+  ['pulls', 'get'],
+  ['repos', 'createCommitStatus'],
+]) {
+  await test(`fails closed when approval ${method} fails`, async () => {
+    const f = approvalFixture();
+    f.github.rest[area][method] = async () => {
+      throw new Error('GitHub API failed');
+    };
+    await assert.rejects(approvePreview(f), /GitHub API failed/);
+    assert.deepEqual(f.state.writes, []);
+  });
+}
+
+await test('keeps the trusted workflow run name aligned with the approval proof', async () => {
+  const yaml = await readFile(
+    new URL('../../workflows/approve-docs-fork-preview.yml', import.meta.url),
+    'utf8',
+  );
+  const template = yaml.match(/^run-name: '(.+)'$/m)?.[1];
+  assert.ok(template);
+  const f = fixture();
+  f.approval.display_title = template
+    .replaceAll('${{ github.event.pull_request.number }}', '2684')
+    .replaceAll('${{ github.event.pull_request.head.sha }}', f.pr.head.sha)
+    .replaceAll('${{ github.event.label.name }}', 'docs-preview');
+  await authorizePreview(f);
+  assert.equal(f.state.outputs.pr, 2684);
+});
+
+await test('isolates build concurrency by PR and SHA, including delayed old runs', async () => {
+  const yaml = await readFile(
+    new URL('../../workflows/build-docs-fork-preview.yml', import.meta.url),
+    'utf8',
+  );
+  const template = yaml.match(/concurrency:\n\s+group: (.+)\n\s+cancel-in-progress: true/)?.[1];
+  assert.ok(template);
+  const group = (number, sha) =>
+    template
+      .replaceAll('${{ github.event.pull_request.number }}', String(number))
+      .replaceAll('${{ github.event.pull_request.head.sha }}', sha);
+  const newer = group(2684, 'b'.repeat(40));
+  const delayed = group(2684, 'a'.repeat(40));
+  assert.notEqual(delayed, newer);
+  assert.notEqual(group(2685, 'b'.repeat(40)), newer);
+  assert.equal(group(2684, 'b'.repeat(40)), newer);
+});
 
 await test('authorizes a fork with an empty workflow_run PR list and pins its artifact', async () => {
   const f = fixture();
@@ -114,12 +310,178 @@ await test('authorizes a fork with an empty workflow_run PR list and pins its ar
     },
     { owner: 'voidzero-dev', repo: 'vite-plus', username: 'maintainer' },
     { owner: 'voidzero-dev', repo: 'vite-plus', run_id: 123 },
+    { owner: 'voidzero-dev', repo: 'vite-plus', ref: 'a'.repeat(40), per_page: 100 },
+    { owner: 'voidzero-dev', repo: 'vite-plus', run_id: 987 },
   ]);
   assert.deepEqual(f.state.outputs, {
     pr: 2684,
     'artifact-id': 456,
     'preview-url': 'https://pr-2684-viteplus-dev.voidzero-docs.workers.dev',
   });
+});
+
+await test('does not approve a new commit when a maintainer applies an unrelated label', async () => {
+  const f = fixture();
+  await authorizePreview(f);
+  assert.equal(f.state.outputs.pr, 2684);
+
+  // The fork changes its workflow to build on any label. A maintainer applies
+  // bug to B while docs-preview remains from A: actor and label checks pass.
+  f.pr.head.sha = 'b'.repeat(40);
+  f.context.payload.workflow_run.head_sha = f.pr.head.sha;
+  f.state.outputs = {};
+  await authorizePreview(f);
+  assert.deepEqual(f.state.outputs, {});
+  assert.equal(await isCurrentPreview(f, 2684), false);
+  await commentPreview(f, 2684, uploadOutput());
+  assert.deepEqual(f.state.writes, []);
+
+  // Only a new trusted approval for B permits deployment.
+  grantApproval(f.state, f.pr.head.sha, f.pr.number, 988);
+  await authorizePreview(f);
+  assert.equal(f.state.outputs.pr, 2684);
+});
+
+for (const { name, mutate } of [
+  { name: 'missing status', mutate: (f) => f.state.statuses.clear() },
+  { name: 'another PR status', mutate: (f) => (f.status.context = 'docs-preview/pr-2685') },
+  { name: 'failed status', mutate: (f) => (f.status.state = 'failure') },
+  { name: 'pending status', mutate: (f) => (f.status.state = 'pending') },
+  { name: 'manual status', mutate: (f) => (f.status.creator.login = 'contributor') },
+  { name: 'missing creator', mutate: (f) => (f.status.creator = null) },
+  { name: 'missing URL', mutate: (f) => (f.status.target_url = null) },
+  { name: 'external URL', mutate: (f) => (f.status.target_url = 'https://example.com/987') },
+  {
+    name: 'fork run URL',
+    mutate: (f) =>
+      (f.status.target_url = 'https://github.com/contributor/vite-plus/actions/runs/987'),
+  },
+  ...['0', '-987', '0987', '987/attempts/1', '987?other=true', '9007199254740992'].map((id) => ({
+    name: `invalid run URL ${id}`,
+    mutate: (f) =>
+      (f.status.target_url = `https://github.com/voidzero-dev/vite-plus/actions/runs/${id}`),
+  })),
+  { name: 'mismatched proof ID', mutate: (f) => (f.approval.id = 988) },
+  {
+    name: 'fork proof',
+    mutate: (f) => (f.approval.repository.full_name = 'contributor/vite-plus'),
+  },
+  { name: 'missing proof repository', mutate: (f) => (f.approval.repository = null) },
+  { name: 'untrusted workflow', mutate: (f) => (f.approval.path = '.github/workflows/spoof.yml') },
+  { name: 'PR-controlled proof', mutate: (f) => (f.approval.event = 'pull_request') },
+  { name: 'manual proof', mutate: (f) => (f.approval.event = 'workflow_dispatch') },
+  {
+    name: 'proof for another PR',
+    mutate: (f) => (f.approval.display_title = f.approval.display_title.replace('#2684', '#2685')),
+  },
+  {
+    name: 'proof for another SHA',
+    mutate: (f) =>
+      (f.approval.display_title = f.approval.display_title.replace('a'.repeat(40), 'b'.repeat(40))),
+  },
+  {
+    name: 'proof for another label',
+    mutate: (f) =>
+      (f.approval.display_title = f.approval.display_title.replace('(docs-preview)', '(bug)')),
+  },
+  { name: 'missing proof title', mutate: (f) => (f.approval.display_title = undefined) },
+  ...['failure', 'cancelled', 'skipped', null].map((conclusion) => ({
+    name: `${conclusion} proof`,
+    mutate: (f) => (f.approval.conclusion = conclusion),
+  })),
+]) {
+  await test(`rejects ${name} during authorization and rechecks`, async () => {
+    const f = fixture();
+    mutate(f);
+    await authorizePreview(f);
+    assert.deepEqual(f.state.outputs, {});
+    assert.equal(await isCurrentPreview(f, 2684), false);
+    await commentPreview(f, 2684, uploadOutput());
+    assert.deepEqual(f.state.writes, []);
+  });
+}
+
+await test('does not accept an old proof URL copied into a new commit status', async () => {
+  const f = fixture();
+  f.pr.head.sha = 'b'.repeat(40);
+  f.context.payload.workflow_run.head_sha = f.pr.head.sha;
+  f.state.statuses.set(f.pr.head.sha, [structuredClone(f.status)]);
+  await authorizePreview(f);
+  assert.deepEqual(f.state.outputs, {});
+  assert.equal(await isCurrentPreview(f, 2684), false);
+});
+
+await test('uses the latest status instead of an older successful approval', async () => {
+  const f = fixture();
+  f.state.statuses.get(f.pr.head.sha).unshift({ ...f.status, state: 'failure' });
+  await authorizePreview(f);
+  assert.deepEqual(f.state.outputs, {});
+  assert.deepEqual(f.state.sleeps, []);
+});
+
+for (const pending of ['missing status', 'running workflow']) {
+  await test(`waits for the trusted approval when there is a ${pending}`, async () => {
+    const f = fixture();
+    if (pending === 'missing status') {
+      f.state.statuses.clear();
+    } else {
+      f.approval.status = 'in_progress';
+      f.approval.conclusion = null;
+    }
+    f.sleep = async (ms) => {
+      f.state.sleeps.push(ms);
+      grantApproval(f.state);
+    };
+    await authorizePreview(f);
+    assert.equal(f.state.outputs.pr, 2684);
+    assert.deepEqual(f.state.sleeps, [5000]);
+  });
+
+  await test(`stops waiting after a bounded interval for a ${pending}`, async () => {
+    const f = fixture();
+    if (pending === 'missing status') {
+      f.state.statuses.clear();
+    } else {
+      f.approval.status = 'in_progress';
+      f.approval.conclusion = null;
+    }
+    await authorizePreview(f);
+    assert.deepEqual(f.state.outputs, {});
+    assert.deepEqual(f.state.sleeps, Array(23).fill(5000));
+    assert.equal(await isCurrentPreview(f, 2684), false);
+  });
+}
+
+for (const api of ['statuses', 'workflow proof']) {
+  await test(`fails closed when the ${api} lookup fails`, async () => {
+    const f = fixture();
+    if (api === 'statuses') {
+      const paginate = f.github.paginate;
+      f.github.paginate = async (method, params) => {
+        if (method === f.github.rest.repos.listCommitStatusesForRef) {
+          throw new Error('GitHub API failed');
+        }
+        return paginate(method, params);
+      };
+    } else {
+      f.github.rest.actions.getWorkflowRun = async () => {
+        throw new Error('GitHub API failed');
+      };
+    }
+    await assert.rejects(authorizePreview(f), /GitHub API failed/);
+    assert.deepEqual(f.state.outputs, {});
+    await assert.rejects(isCurrentPreview(f, 2684), /GitHub API failed/);
+  });
+}
+
+await test('rechecks approval revocation after authorization', async () => {
+  const f = fixture();
+  await authorizePreview(f);
+  assert.equal(f.state.outputs.pr, 2684);
+  f.status.state = 'failure';
+  assert.equal(await isCurrentPreview(f, 2684), false);
+  await commentPreview(f, 2684, uploadOutput());
+  assert.deepEqual(f.state.writes, []);
 });
 
 for (const [field, value] of [
@@ -339,6 +701,7 @@ await test('keeps the previous comment tied to its version when the PR changes d
   // B passes the pre-upload check, then C arrives while B moves the PR alias.
   f.context.payload.workflow_run.head_sha = 'b'.repeat(40);
   f.pr.head.sha = 'b'.repeat(40);
+  grantApproval(f.state, f.pr.head.sha, f.pr.number, 988);
   assert.equal(await isCurrentPreview(f, 2684), true);
   f.pr.head.sha = 'c'.repeat(40);
   await commentPreview(

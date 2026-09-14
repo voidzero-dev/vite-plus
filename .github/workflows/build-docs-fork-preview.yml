@@ -3,7 +3,7 @@ name: Build Docs Fork Preview
 # Maintainers: review the current fork commit, then apply docs-preview.
 # New commits do not rebuild automatically; remove and reapply the label.
 # This PR-controlled gate saves build work. It is not a security boundary:
-# the trusted deploy workflow checks the label and original run actor again.
+# the trusted deploy workflow also requires approval for this exact PR commit.
 permissions: {}
 
 on:
@@ -17,6 +17,7 @@ on:
       - 'packages/cli/install-legacy.sh'
       - 'packages/cli/install-legacy.ps1'
       - '.github/workflows/build-docs-fork-preview.yml'
+      - '.github/workflows/approve-docs-fork-preview.yml'
       - '.github/workflows/deploy-docs-fork-preview.yml'
       - '.github/scripts/docs-fork-preview.mjs'
       - '.github/scripts/__tests__/docs-fork-preview.mjs'
@@ -71,9 +72,9 @@ jobs:
       github.event.label.name == 'docs-preview'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Unrelated label events must not cancel a requested preview build.
+    # A delayed old run must not cancel a build for a newer approved commit.
     concurrency:
-      group: build-docs-fork-preview-${{ github.event.pull_request.number }}
+      group: build-docs-fork-preview-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
       cancel-in-progress: true
     permissions:
       contents: read
