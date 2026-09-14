@@ -171,6 +171,11 @@ export default defineConfig({
 });
 ```
 
+## `cd my-react-ts && vp check`
+
+migrated rule options must be accepted by the bundled Oxlint
+
+
 ## `node check-pkg.cjs`
 
 scripts rewritten, eslint dep removed, vite-plus added
