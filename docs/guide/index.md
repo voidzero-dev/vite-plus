@@ -1,8 +1,12 @@
 # Getting Started
 
-Vite+ is the unified toolchain and entry point for web development. It combines runtime and package management with a frontend toolchain powered by [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task).
+Vite+ is the unified toolchain and entry point for web development.
 
-Vite+ ships in two parts: the standalone [global `vp` CLI](/guide/global-cli) and the [project-local `vite-plus` package](/guide/local-cli). Use either one on its own, or install both so the global command can delegate project work to the version pinned by each project. If you already have a Vite project, use [`vp migrate`](/guide/migrate) to adopt Vite+, or paste our [migration prompt](/guide/migrate#migration-prompt) into your coding agent.
+It brings together [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task) in a single [`vite-plus` package](/guide/local-cli) for a blazing fast frontend toolchain.
+
+Vite+ also ships a [global `vp` CLI](/guide/global-cli) that manages Node.js and package managers and makes Vite+ easier to use across projects. You can use either CLI independently, but we recommend [using them together](/guide/global-cli#use-both-clis-together).
+
+If you already have a Vite project, run [`vp migrate`](/guide/migrate) to migrate it to Vite+, or give your coding agent our [migration prompt](/guide/migrate#migration-prompt).
 
 Building with an AI assistant? View and copy a ready-made setup prompt:
 
@@ -10,7 +14,7 @@ Building with an AI assistant? View and copy a ready-made setup prompt:
 
 ## Install `vp` Globally
 
-Install the global CLI when you want Vite+ to manage Node.js and package managers, or when you want `vp` available across projects. If you only want the project-pinned frontend toolchain, skip this step and install the [project-local CLI](/guide/local-cli#install) instead.
+The commands below install the global `vp` CLI, which manages Node.js and package managers and makes `vp` available across projects. If you only need the frontend toolchain in a single project, you can install the [project-local CLI](/guide/local-cli#install) instead.
 
 ### macOS / Linux
 
