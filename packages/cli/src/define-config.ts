@@ -259,8 +259,15 @@ function vitePlusVitestResolverPlugin(): PluginOption {
     enforce: 'pre',
     config: {
       order: 'post',
-      handler(config) {
-        if (!config.test?.browser?.enabled) {
+      handler(config, { command }) {
+        // Vitest adds this environment before post config hooks, including for
+        // programmatic runners and child projects. A browser test config alone
+        // must not redirect application dependencies during `vp dev` or `vp build`.
+        if (
+          command !== 'serve' ||
+          !config.environments?.['__vitest__'] ||
+          !config.test?.browser?.enabled
+        ) {
           return;
         }
         // The browser optimizer resolves forced includes with an alias-only
