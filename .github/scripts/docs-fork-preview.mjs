@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 const repository = 'voidzero-dev/vite-plus';
 const buildWorkflow = '.github/workflows/build-docs-fork-preview.yml';
 const marker = '<!-- cloudflare-docs-fork-preview -->';
+const previewLabel = 'docs-preview';
 
 export function previewUrl(number) {
   if (!Number.isSafeInteger(number) || number <= 0) {
@@ -34,6 +35,7 @@ function previewRun(context) {
 function matchesPreview(pr, run) {
   return (
     pr.state === 'open' &&
+    pr.labels?.some((label) => label.name === previewLabel) === true &&
     pr.base.repo.full_name === repository &&
     pr.base.ref === 'main' &&
     pr.head.repo?.full_name !== repository &&
@@ -42,6 +44,19 @@ function matchesPreview(pr, run) {
     pr.head.ref === run.head_branch &&
     pr.head.sha === run.head_sha
   );
+}
+
+async function requestedByMaintainer({ github, context }, run) {
+  // Use the original actor, not triggering_actor: a maintainer re-running an
+  // outsider's workflow must not grant that run deployment permission.
+  if (!run.actor?.login) {
+    return false;
+  }
+  const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+    ...context.repo,
+    username: run.actor.login,
+  });
+  return ['admin', 'maintain', 'write'].includes(data.permission);
 }
 
 export async function authorizePreview({ github, context, core }) {
@@ -60,17 +75,26 @@ export async function authorizePreview({ github, context, core }) {
   });
   const candidates = pulls.filter((pr) => matchesPreview(pr, run));
   if (candidates.length === 0) {
-    core.info('No open fork PR has this head commit; skipping the preview.');
+    core.info('No open fork PR with docs-preview has this head commit; skipping the preview.');
     return;
   }
   if (candidates.length !== 1) {
     throw new Error('More than one PR matches the docs preview run');
+  }
+  if (!(await requestedByMaintainer({ github, context }, run))) {
+    core.info('The original run actor does not have write permission; skipping the preview.');
+    return;
   }
 
   const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
     ...context.repo,
     run_id: run.id,
   });
+  // Helper-only and unrelated label runs can succeed without building docs.
+  if (artifacts.length === 0) {
+    core.info('The workflow produced no artifacts; skipping the preview.');
+    return;
+  }
   const matches = artifacts.filter((a) => a.name === 'docs-fork-preview' && !a.expired);
   if (matches.length !== 1) {
     throw new Error('Expected one active docs-fork-preview artifact from the triggering run');
@@ -84,7 +108,7 @@ export async function isCurrentPreview({ github, context }, number) {
   previewUrl(number);
   const run = previewRun(context);
   const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
-  return matchesPreview(pr, run);
+  return matchesPreview(pr, run) && (await requestedByMaintainer({ github, context }, run));
 }
 
 function uploadedPreviewUrl(output) {
@@ -115,7 +139,7 @@ function uploadedPreviewUrl(output) {
 
 export async function commentPreview({ github, context, core }, number, output) {
   if (!(await isCurrentPreview({ github, context }, number))) {
-    core.info('The PR closed or changed during upload; skipping the preview comment.');
+    core.info('The PR changed or preview permission was revoked; skipping the preview comment.');
     return;
   }
   const body = `${marker}\nCloudflare documentation preview: ${uploadedPreviewUrl(output)}\n\nCommit: ${context.payload.workflow_run.head_sha}\n\nLatest uploaded preview (may show another commit): ${previewUrl(number)}`;

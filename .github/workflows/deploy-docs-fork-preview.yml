@@ -9,6 +9,11 @@ name: Deploy Docs Fork Preview
 # CLOUDFLARE_ACCOUNT_ID variable and CLOUDFLARE_API_TOKEN secret there. Scope
 # the token to the Worker account with Workers Scripts: Edit permission.
 # Enable Preview URLs for viteplus-dev on voidzero-docs.workers.dev.
+# Apply docs-preview after reviewing a fork PR's current commit. Remove and
+# reapply it after updates. The label is rechecked before upload and commenting;
+# removing it cannot undo an upload that already started.
+# The build workflow is PR-controlled, so authorization also requires its
+# original run actor to have write permission in this repository.
 on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ['Build Docs Fork Preview']

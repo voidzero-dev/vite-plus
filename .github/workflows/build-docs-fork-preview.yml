@@ -1,10 +1,15 @@
 name: Build Docs Fork Preview
 
+# Maintainers: review the current fork commit, then apply docs-preview.
+# New commits do not rebuild automatically; remove and reapply the label.
+# This PR-controlled gate saves build work. It is not a security boundary:
+# the trusted deploy workflow checks the label and original run actor again.
 permissions: {}
 
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'docs/**'
       - 'packages/cli/install.sh'
@@ -16,10 +21,6 @@ on:
       - '.github/scripts/docs-fork-preview.mjs'
       - '.github/scripts/__tests__/docs-fork-preview.mjs'
 
-concurrency:
-  group: build-docs-fork-preview-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 defaults:
   run:
     shell: bash
@@ -27,10 +28,30 @@ defaults:
 jobs:
   test:
     name: Test docs preview helpers
+    # Keep helper checks automatic for same-repository PRs. Fork code runs
+    # only when a maintainer explicitly requests a docs preview.
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      (
+        github.event.pull_request.head.repo.full_name == github.repository ||
+        (github.event.action == 'labeled' && github.event.label.name == 'docs-preview')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
+      - name: Check fork preview requester
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo,
+              username: context.actor,
+            });
+            if (!['admin', 'maintain', 'write'].includes(data.permission)) {
+              core.setFailed('A maintainer with write permission must request the docs preview.');
+            }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -45,9 +66,15 @@ jobs:
     needs: test
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
-      github.event.pull_request.head.repo.full_name != github.repository
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'docs-preview'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Unrelated label events must not cancel a requested preview build.
+    concurrency:
+      group: build-docs-fork-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       contents: read
     steps:

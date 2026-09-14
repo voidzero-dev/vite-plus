@@ -41,6 +41,7 @@ function fixture() {
         head_sha: 'a'.repeat(40),
         head_branch: 'docs-update',
         head_repository: source,
+        actor: { login: 'maintainer' },
         pull_requests: [],
       },
     },
@@ -48,6 +49,7 @@ function fixture() {
   const pr = {
     number: 2684,
     state: 'open',
+    labels: [{ name: 'docs-preview' }],
     base: { ref: 'main', repo: { full_name: 'voidzero-dev/vite-plus' } },
     head: { sha: 'a'.repeat(40), ref: 'docs-update', repo: structuredClone(source) },
   };
@@ -58,9 +60,16 @@ function fixture() {
     outputs: {},
     writes: [],
     requests: [],
+    permission: 'write',
   };
   const github = {
     rest: {
+      repos: {
+        getCollaboratorPermissionLevel: async (params) => {
+          state.requests.push(params);
+          return { data: { permission: state.permission } };
+        },
+      },
       pulls: { list() {}, get: async () => ({ data: pr }) },
       actions: { listWorkflowRunArtifacts() {} },
       issues: {
@@ -103,6 +112,7 @@ await test('authorizes a fork with an empty workflow_run PR list and pins its ar
       base: 'main',
       head: 'contributor:docs-update',
     },
+    { owner: 'voidzero-dev', repo: 'vite-plus', username: 'maintainer' },
     { owner: 'voidzero-dev', repo: 'vite-plus', run_id: 123 },
   ]);
   assert.deepEqual(f.state.outputs, {
@@ -144,6 +154,9 @@ await test('leaves same-repository previews to the existing integration', async 
 
 for (const { name, mutate } of [
   { name: 'closed', mutate: (pr) => (pr.state = 'closed') },
+  { name: 'no preview label', mutate: (pr) => (pr.labels = []) },
+  { name: 'missing labels', mutate: (pr) => (pr.labels = undefined) },
+  { name: 'unrelated label', mutate: (pr) => (pr.labels = [{ name: 'preview-build' }]) },
   { name: 'stale commit', mutate: (pr) => (pr.head.sha = 'b'.repeat(40)) },
   { name: 'other source repository', mutate: (pr) => (pr.head.repo.id = 99) },
   { name: 'renamed source repository', mutate: (pr) => (pr.head.repo.full_name = 'someone/other') },
@@ -167,8 +180,100 @@ await test('rejects ambiguous PR matches', async () => {
   await assert.rejects(authorizePreview(f), /More than one PR/);
 });
 
+for (const permission of ['admin', 'maintain', 'write']) {
+  await test(`accepts a labeled preview requested with ${permission} permission`, async () => {
+    const f = fixture();
+    f.state.permission = permission;
+    await authorizePreview(f);
+    assert.equal(f.state.outputs.pr, 2684);
+    assert.equal(await isCurrentPreview(f, 2684), true);
+  });
+}
+
+for (const permission of ['read', 'triage', 'none', undefined]) {
+  await test(`rejects an original run actor with ${permission} permission`, async () => {
+    const f = fixture();
+    f.state.permission = permission;
+    await authorizePreview(f);
+    assert.deepEqual(f.state.outputs, {});
+    assert.equal(await isCurrentPreview(f, 2684), false);
+    assert.ok(f.state.requests.every((request) => !('run_id' in request)));
+  });
+}
+
+await test('rejects a missing original run actor', async () => {
+  const f = fixture();
+  delete f.context.payload.workflow_run.actor;
+  await authorizePreview(f);
+  assert.deepEqual(f.state.outputs, {});
+  assert.equal(await isCurrentPreview(f, 2684), false);
+});
+
+await test('does not authorize an outsider run when a maintainer reruns it', async () => {
+  const f = fixture();
+  f.context.payload.workflow_run.actor = { login: 'contributor' };
+  f.context.payload.workflow_run.triggering_actor = { login: 'maintainer' };
+  f.state.permission = 'read';
+  await authorizePreview(f);
+  assert.deepEqual(f.state.outputs, {});
+  assert.ok(f.state.requests.some((request) => request.username === 'contributor'));
+  assert.ok(f.state.requests.every((request) => request.username !== 'maintainer'));
+});
+
+await test('fails closed when the requester permission check fails', async () => {
+  const f = fixture();
+  f.github.rest.repos.getCollaboratorPermissionLevel = async () => {
+    throw new Error('GitHub permission check failed');
+  };
+  await assert.rejects(authorizePreview(f), /GitHub permission check failed/);
+  assert.deepEqual(f.state.outputs, {});
+  await assert.rejects(isCurrentPreview(f, 2684), /GitHub permission check failed/);
+});
+
+await test('rechecks label removal after authorization and before commenting', async () => {
+  const f = fixture();
+  await authorizePreview(f);
+  assert.equal(f.state.outputs.pr, 2684);
+  f.pr.labels = [];
+  assert.equal(await isCurrentPreview(f, 2684), false);
+  await commentPreview(f, 2684, uploadOutput());
+  assert.deepEqual(f.state.writes, []);
+});
+
+await test('rechecks revoked requester permission after authorization', async () => {
+  const f = fixture();
+  await authorizePreview(f);
+  assert.equal(f.state.outputs.pr, 2684);
+  f.state.permission = 'read';
+  assert.equal(await isCurrentPreview(f, 2684), false);
+  await commentPreview(f, 2684, uploadOutput());
+  assert.deepEqual(f.state.writes, []);
+});
+
+await test('does not reuse an approved run for a new commit while the label remains', async () => {
+  const f = fixture();
+  await authorizePreview(f);
+  f.pr.head.sha = 'b'.repeat(40);
+  assert.equal(await isCurrentPreview(f, 2684), false);
+
+  // Even if a fork changes its workflow to run on pushes, the new run does
+  // not inherit permission from the actor of the earlier labeled run.
+  f.context.payload.workflow_run.head_sha = f.pr.head.sha;
+  f.context.payload.workflow_run.actor = { login: 'contributor' };
+  f.state.permission = 'read';
+  f.state.outputs = {};
+  await authorizePreview(f);
+  assert.deepEqual(f.state.outputs, {});
+});
+
+await test('skips successful helper-only or unrelated label runs without artifacts', async () => {
+  const f = fixture();
+  f.state.artifacts = [];
+  await authorizePreview(f);
+  assert.deepEqual(f.state.outputs, {});
+});
+
 for (const artifacts of [
-  [],
   [{ id: 456, name: 'docs-fork-preview', expired: true }],
   [{ id: 456, name: 'other', expired: false }],
   [
