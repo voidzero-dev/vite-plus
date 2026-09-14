@@ -28,23 +28,8 @@ defaults:
     shell: bash
 
 jobs:
-  optimize-ci:
-    runs-on: ubuntu-latest # or whichever runner you use for your CI
-    outputs:
-      skip: ${{ steps.check_skip.outputs.skip }}
-    steps:
-      - name: Optimize CI
-        id: check_skip
-        # v0.0.9 still declares `using: node20`; emits a Node 20 deprecation warning until upstream ships a node24 release.
-        # https://github.com/withgraphite/graphite-ci-action
-        uses: withgraphite/graphite-ci-action@402a89bc8aa6db18ae1f9c61953d001d5f9d828f # v0.0.11
-        with:
-          graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
-
   detect-changes:
     runs-on: ubuntu-latest
-    needs: optimize-ci
-    if: needs.optimize-ci.outputs.skip == 'false'
     permissions:
       contents: read
       pull-requests: read
@@ -253,7 +238,7 @@ jobs:
         with:
           name: windows-test-archive
 
-      - uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2.87.4
+      - uses: taiki-e/install-action@fa23953489c080190314742a9b907f8e97c6767c # v2.87.10
         with:
           tool: cargo-nextest
 
@@ -1113,7 +1098,7 @@ jobs:
         with:
           name: windows-snapshot-test-archive
 
-      - uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2.87.4
+      - uses: taiki-e/install-action@fa23953489c080190314742a9b907f8e97c6767c # v2.87.10
         with:
           tool: cargo-nextest
 

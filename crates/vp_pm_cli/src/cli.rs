@@ -170,6 +170,7 @@ pub enum ManagedGlobalCommand<'a> {
         packages: &'a [String],
         node: Option<&'a str>,
         force: bool,
+        ignore_scripts: bool,
         concurrency: Option<usize>,
     },
     /// Remove packages from the managed global store.
@@ -241,12 +242,14 @@ impl PackageManagerCommand {
                 packages: &args.packages,
                 node: args.node.as_deref(),
                 force: args.force,
+                ignore_scripts: args.ignore_scripts,
                 concurrency: args.concurrency,
             }),
             Self::Add(args) if args.global => Some(ManagedGlobalCommand::Install {
                 packages: &args.packages,
                 node: args.node.as_deref(),
                 force: false,
+                ignore_scripts: args.ignore_scripts,
                 concurrency: args.concurrency,
             }),
             Self::Remove(args) if args.global => Some(ManagedGlobalCommand::Remove {
@@ -511,6 +514,59 @@ mod tests {
     }
 
     #[test]
+    fn install_and_add_preserve_ignore_scripts() {
+        for (client, version, add_command, flags) in [
+            (PackageManagerType::Npm, "11.0.0", "install", vec!["--ignore-scripts"]),
+            (PackageManagerType::Pnpm, "10.0.0", "add", vec!["--ignore-scripts"]),
+            (PackageManagerType::Yarn, "1.22.22", "add", vec!["--ignore-scripts"]),
+            (PackageManagerType::Yarn, "4.0.0", "add", vec!["--mode", "skip-build"]),
+            (PackageManagerType::Bun, "1.3.11", "add", vec!["--ignore-scripts"]),
+        ] {
+            let manager = package_manager(client, version);
+            for input in [
+                vec!["install", "--ignore-scripts"],
+                vec!["install", "--ignore-scripts", "react"],
+                vec!["install", "react", "--ignore-scripts"],
+                vec!["i", "react", "--ignore-scripts"],
+                vec!["add", "--ignore-scripts", "react"],
+                vec!["add", "react", "--ignore-scripts"],
+            ] {
+                let resolution = parse(&input).unwrap().resolve_for_manager(&manager).unwrap();
+                let command = crate::resolution::test_utils::expect_run(resolution.outcome);
+                let has_packages = input.contains(&"react");
+                let mut expected = vec![if has_packages { add_command } else { "install" }];
+                expected.extend(&flags);
+                if has_packages {
+                    expected.push("react");
+                }
+
+                assert_eq!(command.program, client.to_string(), "{client}@{version}: {input:?}");
+                assert_eq!(command.args, expected, "{client}@{version}: {input:?}");
+                assert!(resolution.diagnostics.is_empty(), "{client}@{version}: {input:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn managed_global_install_preserves_ignore_scripts() {
+        for command in ["install", "i", "add"] {
+            for input in [
+                vec![command, "-g", "react"],
+                vec![command, "-g", "--ignore-scripts", "react"],
+                vec![command, "-g", "react", "--ignore-scripts"],
+            ] {
+                let parsed = parse(&input).unwrap();
+                let Some(ManagedGlobalCommand::Install { ignore_scripts, .. }) =
+                    parsed.managed_global_command()
+                else {
+                    panic!("expected managed install command: {input:?}");
+                };
+                assert_eq!(ignore_scripts, input.contains(&"--ignore-scripts"), "{input:?}");
+            }
+        }
+    }
+
+    #[test]
     fn frozen_lockfile_flags_use_last_value() {
         let PackageManagerCommand::Install(first) =
             parse(&["install", "--frozen-lockfile", "--no-frozen-lockfile"]).unwrap()
@@ -547,7 +603,7 @@ mod tests {
         let install =
             parse(&["install", "-g", "--node", "22", "--force", "--concurrency", "2", "tsx"])
                 .unwrap();
-        let Some(ManagedGlobalCommand::Install { packages, node, force, concurrency }) =
+        let Some(ManagedGlobalCommand::Install { packages, node, force, concurrency, .. }) =
             install.managed_global_command()
         else {
             panic!("expected managed install command");

@@ -159,5 +159,11 @@
     "branch": "main",
     "hash": "f434577e6bb2010b321653cb132a57bda18764fa",
     "forceFreshMigration": true
+  },
+  "solid-vite-plugin": {
+    "repository": "https://github.com/solidjs/solid-vite-plugin.git",
+    "branch": "next",
+    "hash": "5b6612bb8d5c51777dce9564f5dc48aabbdf848f",
+    "playwright": true
   }
 }
