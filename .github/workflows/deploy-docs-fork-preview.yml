@@ -1,21 +1,27 @@
 name: Deploy Docs Fork Preview
 
+run-name: 'Deploy docs preview at ${{ github.event.workflow_run.head_sha }} from build #${{ github.event.workflow_run.id }}'
+
 # Fork PRs cannot receive deployment credentials. This workflow runs from
 # the default branch, validates the originating workflow and current PR,
 # and uploads only static assets. It never checks out or executes fork code.
 # This file must be on main before workflow_run can trigger it.
 #
-# Maintainer setup: restrict the docs-preview environment to main. Add the
-# CLOUDFLARE_ACCOUNT_ID variable and CLOUDFLARE_API_TOKEN secret there. Scope
-# the token to the Worker account with Workers Scripts: Edit permission.
+# Like publish-preview.yml and publish-preview-register.yml, a label requests
+# a secret-free build and a required-reviewer environment gates deployment.
+# Maintainer setup: restrict docs-preview to main and configure required
+# reviewers with repository write permission. Add the CLOUDFLARE_ACCOUNT_ID
+# variable and CLOUDFLARE_API_TOKEN secret there. Scope the token to the Worker
+# account with Workers Scripts: Edit permission.
 # Enable Preview URLs for viteplus-dev on voidzero-docs.workers.dev.
 # Apply docs-preview after reviewing a fork PR's current commit. Remove and
-# reapply it after updates. The label is rechecked before upload and commenting;
-# removing it cannot undo an upload that already started.
-# The build workflow is PR-controlled, so authorization also requires its
-# original run actor to have write permission in this repository. The trusted
-# approve-docs-fork-preview.yml workflow must approve the exact PR commit.
-# Both trusted workflows must be on main before fork previews can deploy.
+# reapply it after updates, then approve the deployment for that build's SHA.
+# The label is rechecked before upload and commenting; removing it cannot undo
+# an upload that already started. The PR-controlled build gate is not a security
+# boundary. The trusted workflow checks the original actor's write permission
+# and requires environment approval for this deployment run, not an old commit.
+# An absent or unprotected environment must not silently permit deployment:
+# the deploy job also checks GitHub's review history before using credentials.
 on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ['Build Docs Fork Preview']
@@ -30,6 +36,7 @@ defaults:
 jobs:
   authorize:
     if: >-
+      github.event_name == 'workflow_run' &&
       github.repository == 'voidzero-dev/vite-plus' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
@@ -40,7 +47,6 @@ jobs:
       contents: read
       actions: read
       pull-requests: read
-      statuses: read
     outputs:
       pr: ${{ steps.preview.outputs.pr }}
       artifact-id: ${{ steps.preview.outputs.artifact-id }}
@@ -59,8 +65,9 @@ jobs:
             await authorizePreview({ github, context, core });
 
   deploy:
+    name: 'Deploy PR #${{ needs.authorize.outputs.pr }} at ${{ github.event.workflow_run.head_sha }}'
     needs: authorize
-    if: needs.authorize.outputs.pr != ''
+    if: github.event_name == 'workflow_run' && needs.authorize.outputs.pr != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Serialize uploads without replacing pending jobs when an old run arrives
@@ -76,7 +83,6 @@ jobs:
       contents: read
       actions: read
       pull-requests: write
-      statuses: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -85,6 +91,13 @@ jobs:
           sparse-checkout: |
             .github/scripts
             docs
+
+      - name: Require deployment approval
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { requireDeploymentApproval } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/docs-fork-preview.mjs`);
+            await requireDeploymentApproval({ github, context });
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:

@@ -3,7 +3,8 @@ name: Build Docs Fork Preview
 # Maintainers: review the current fork commit, then apply docs-preview.
 # New commits do not rebuild automatically; remove and reapply the label.
 # This PR-controlled gate saves build work. It is not a security boundary:
-# the trusted deploy workflow also requires approval for this exact PR commit.
+# the trusted deploy workflow requires environment approval for each build.
+# This follows publish-preview.yml; only static artifacts cross to deployment.
 permissions: {}
 
 on:
@@ -17,7 +18,6 @@ on:
       - 'packages/cli/install-legacy.sh'
       - 'packages/cli/install-legacy.ps1'
       - '.github/workflows/build-docs-fork-preview.yml'
-      - '.github/workflows/approve-docs-fork-preview.yml'
       - '.github/workflows/deploy-docs-fork-preview.yml'
       - '.github/scripts/docs-fork-preview.mjs'
       - '.github/scripts/__tests__/docs-fork-preview.mjs'
