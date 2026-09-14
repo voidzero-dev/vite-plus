@@ -30,7 +30,7 @@ if ($args.Count -eq 0) {
     exit 0
 }
 if ($env:VP_SELF_SETUP_SUPPORT_CHECK -ne '1') { exit 99 }
-if ($scenario -in @('legacy', 'legacy-failure', 'pr')) { Write-Output 'Usage: vp [COMMAND]' }
+if ($scenario -in @('legacy', 'legacy-remote', 'legacy-failure', 'pr')) { Write-Output 'Usage: vp [COMMAND]' }
 else { Write-Output 'vite-plus-self-setup-v1' }
 exit 0
 '@ | Set-Content -LiteralPath "$testRoot/package/binary.ps1"
@@ -60,6 +60,10 @@ function Invoke-WebRequest {
     if ($Method -eq 'Head') {
         return @{ Headers = @{ 'x-commit-key' = "voidzero-dev:vite-plus:$fixtureSha" } }
     }
+    if (-not $OutFile) {
+        $content = Get-Content -LiteralPath "$testRoot/scripts/install-legacy.ps1" -Raw
+        return @{ Content = [Text.Encoding]::UTF8.GetBytes($content) }
+    }
     Copy-Item -LiteralPath "$testRoot/payload.tgz" -Destination $OutFile
 }
 
@@ -76,7 +80,7 @@ function Invoke-InstallHandoff {
 }
 
 try {
-    foreach ($scenario in @('supported', 'legacy', 'legacy-failure', 'failure', 'pr', 'supported-pr')) {
+    foreach ($scenario in @('supported', 'legacy', 'legacy-remote', 'legacy-failure', 'failure', 'pr', 'supported-pr')) {
         $env:Path = $originalPath
         $env:NPM_CONFIG_REGISTRY = 'https://custom.example'
         $script:Requests = New-Object 'System.Collections.Generic.List[string]'
@@ -89,7 +93,7 @@ try {
                 $ViteVersion = 'latest'
                 $LocalTgz = $LocalBinary = $PrVersion = $PrCommitVersion = $null
                 $NpmRegistry = 'https://custom.example'
-                $InstallerDirectory = "$testRoot/scripts"
+                $InstallerDirectory = if ($scenario -eq 'legacy-remote') { $null } else { "$testRoot/scripts" }
                 if ($scenario -in @('pr', 'supported-pr')) { $PrVersion = '2406' }
                 Main
                 Assert ($env:NPM_CONFIG_REGISTRY -eq 'https://custom.example') 'Setup changed the caller registry'
