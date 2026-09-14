@@ -103,9 +103,18 @@ impl Resolve<RemoveArgs> for Yarn {
         }
 
         let mut cmd = CommandBuilder::new("yarn");
-        if !args.filter.is_empty() && !args.recursive {
-            cmd.arg("workspaces").arg("foreach").arg("--all");
-            cmd.repeated("--include", args.filter.iter());
+        if !args.filter.is_empty() {
+            if !self.is_berry() {
+                return CommandResolution::InvalidArgument(
+                    "Invalid argument: `--filter` is not supported by Yarn Classic `remove`."
+                        .to_string(),
+                );
+            }
+
+            if !args.recursive {
+                cmd.arg("workspaces").arg("foreach").arg("--all");
+                cmd.repeated("--include", args.filter.iter());
+            }
         }
         cmd.arg("remove")
             .arg_if("--all", args.recursive)
@@ -224,17 +233,25 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_remove_with_workspace() {
-        let mut options = remove_args(&["lodash"]);
-        options.filter = vec!["app".to_string()];
-        let resolution = resolve(&yarn("1.22.0"), options);
-        let command = expect_run(resolution.outcome);
+    fn test_yarn_classic_rejects_filtered_remove() {
+        for filters in
+            [vec!["app".to_string()], vec!["app-*".to_string(), "@scope/web".to_string()]]
+        {
+            for recursive in [false, true] {
+                let mut options = remove_args(&["lodash"]);
+                options.filter = filters.clone();
+                options.recursive = recursive;
+                let resolution = resolve(&yarn("1.22.22"), options);
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(
-            command.args,
-            vec!["workspaces", "foreach", "--all", "--include", "app", "remove", "lodash"]
-        );
+                assert_eq!(
+                    resolution.outcome,
+                    CommandResolution::InvalidArgument(
+                        "Invalid argument: `--filter` is not supported by Yarn Classic `remove`."
+                            .to_string()
+                    )
+                );
+            }
+        }
     }
 
     #[test]
@@ -456,10 +473,10 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_remove_with_multiple_filters() {
+    fn test_yarn_berry_remove_with_multiple_filters() {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
-        let resolution = resolve(&yarn("1.22.0"), options);
+        let resolution = resolve(&yarn("4.0.0"), options);
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
@@ -480,11 +497,11 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_remove_with_recursive_and_multiple_filters() {
+    fn test_yarn_berry_remove_with_recursive_and_multiple_filters() {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
         options.recursive = true;
-        let resolution = resolve(&yarn("1.22.0"), options);
+        let resolution = resolve(&yarn("4.0.0"), options);
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");

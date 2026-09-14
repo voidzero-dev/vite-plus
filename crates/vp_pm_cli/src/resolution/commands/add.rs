@@ -209,6 +209,13 @@ impl Resolve<AddArgs> for Yarn {
 
         let mut cmd = CommandBuilder::new("yarn");
         if !args.filter.is_empty() {
+            if !self.is_berry() {
+                return CommandResolution::InvalidArgument(
+                    "Invalid argument: `--filter` is not supported by Yarn Classic `add`."
+                        .to_string(),
+                );
+            }
+
             cmd.arg("workspaces").arg("foreach").arg("--all");
             cmd.repeated("--include", args.filter.iter());
         }
@@ -433,10 +440,10 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_add_with_workspace() {
+    fn test_yarn_berry_add_with_workspace() {
         let mut options = add_args(&["react"]);
         options.filter = vec!["app".to_string()];
-        let resolution = resolve(&yarn("1.22.22"), options);
+        let resolution = resolve(&yarn("4.0.0"), options);
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
@@ -444,6 +451,25 @@ mod tests {
             command.args,
             vec!["workspaces", "foreach", "--all", "--include", "app", "add", "react"]
         );
+    }
+
+    #[test]
+    fn test_yarn_classic_rejects_filtered_add() {
+        for filters in
+            [vec!["app".to_string()], vec!["app-*".to_string(), "@scope/web".to_string()]]
+        {
+            let mut options = add_args(&["react"]);
+            options.filter = filters;
+            let resolution = resolve(&yarn("1.22.22"), options);
+
+            assert_eq!(
+                resolution.outcome,
+                CommandResolution::InvalidArgument(
+                    "Invalid argument: `--filter` is not supported by Yarn Classic `add`."
+                        .to_string()
+                )
+            );
+        }
     }
 
     #[test]
