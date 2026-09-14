@@ -43,13 +43,9 @@ jobs:
   build:
     name: Build fork docs
     needs: test
-    # TEMP: Exercise this job on PR #2691. Remove the exception before merge.
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
-      (
-        github.event.pull_request.head.repo.full_name != github.repository ||
-        github.event.pull_request.number == 2691
-      )
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
