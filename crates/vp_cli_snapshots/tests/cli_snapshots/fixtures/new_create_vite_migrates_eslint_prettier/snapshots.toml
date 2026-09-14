@@ -1,10 +1,7 @@
 [[case]]
 name = "new_create_vite_migrates_eslint_prettier"
 vp = "global"
-# create-vite pins the template, but its ESLint presets use version ranges.
-# Keep their resolved versions in mock-manifest.json so upstream preset changes
-# do not change the migrated config snapshot.
-# globals also includes v14 for ESLint's transitive dependency.
+# Install the checkout's Vite+ build in the generated project.
 local-registry = true
 unset-env = ["VP_SKIP_INSTALL", "CI"]
 steps = [
@@ -12,5 +9,6 @@ steps = [
   { argv = ["vpt", "stat-file", "my-react-ts/eslint.config.js", "--assert-not", "file"], comment = "eslint config deleted", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "my-react-ts/.oxlintrc.json", "--assert-not", "file"], comment = "migration output merged by rewrite step (matches vp migrate)", continue-on-failure = true },
   { argv = ["vpt", "print-file", "my-react-ts/vite.config.ts"], comment = "merged vite config should contain lint and fmt sections", continue-on-failure = true },
+  { argv = ["vp", "check"], cwd = "my-react-ts", comment = "migrated rule options must be accepted by the bundled Oxlint", snapshot = false },
   { argv = ["node", "check-pkg.cjs"], comment = "scripts rewritten, eslint dep removed, vite-plus added", continue-on-failure = true },
 ]

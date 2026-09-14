@@ -628,6 +628,27 @@ function jsPluginsToNamespaces(entries: NonNullable<OxlintConfig['jsPlugins']>):
   return ns;
 }
 
+function stripUnsupportedReactRefreshOption(rules: OxlintConfig['rules']): boolean {
+  const rule = rules?.['react/only-export-components'];
+  if (!Array.isArray(rule)) {
+    return false;
+  }
+  const options = rule[1];
+  if (
+    !options ||
+    typeof options !== 'object' ||
+    Array.isArray(options) ||
+    !('allowCompoundComponents' in options)
+  ) {
+    return false;
+  }
+  // eslint-plugin-react-refresh 0.5.7 enables this in its Vite preset, but
+  // @oxlint/migrate copies it into a native rule that rejects the option.
+  // Remove this workaround when the bundled Oxlint supports the option.
+  delete options.allowCompoundComponents;
+  return true;
+}
+
 /**
  * Sanitize the `.oxlintrc.json` produced by `@oxlint/migrate` (in-place)
  * before it gets merged into `vite.config.ts`. Drop references that
@@ -654,6 +675,7 @@ export function sanitizeMigratedOxlintConfig(
   // Track everything we strip so we can warn the user.
   const allDroppedJsPlugins = new Set<string>();
   const allDroppedPlugins = new Set<string>();
+  let droppedReactRefreshOption = stripUnsupportedReactRefreshOption(config.rules);
 
   // 1. Sanitize base-level jsPlugins.
   const baseSplit = partitionJsPlugins(config.jsPlugins ?? [], availablePackages);
@@ -705,6 +727,9 @@ export function sanitizeMigratedOxlintConfig(
   // namespace are still valid inside the override).
   if (Array.isArray(config.overrides)) {
     for (const override of config.overrides) {
+      if (stripUnsupportedReactRefreshOption(override.rules)) {
+        droppedReactRefreshOption = true;
+      }
       // Override jsPlugins.
       let overrideSurvivors: NonNullable<OxlintConfig['jsPlugins']> = [];
       if (override.jsPlugins) {
@@ -749,6 +774,13 @@ export function sanitizeMigratedOxlintConfig(
   }
 
   // 6. Warn.
+  if (droppedReactRefreshOption) {
+    warnMigration(
+      'The bundled Oxlint does not support react/only-export-components.allowCompoundComponents. ' +
+        'Removed this option from the migrated config; compound component exports may now report lint errors.',
+      report,
+    );
+  }
   //
   // We deliberately don't try to distinguish "we just removed this
   // package as part of the ESLint-ecosystem cleanup" from "the user
