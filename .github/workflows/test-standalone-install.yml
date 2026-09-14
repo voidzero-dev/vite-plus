@@ -10,6 +10,7 @@ on:
       - 'packages/cli/install.ps1'
       - 'packages/cli/install-legacy.sh'
       - 'packages/cli/install-legacy.ps1'
+      - '.github/scripts/test-install-legacy-remote.ps1'
       - 'packages/tools/src/install-global-cli.ts'
       - 'packages/tools/src/local-npm-registry.ts'
       - 'crates/vp_installer/**'
@@ -283,7 +284,7 @@ jobs:
             exit 1
           fi
           cat "$OUTPUT"
-          grep -F "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together" "$OUTPUT"
+          grep -F "Set all three variables together: VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR." "$OUTPUT"
 
       - name: Existing GitHub setup-vp uses legacy layout
         run: |
@@ -555,11 +556,41 @@ jobs:
           npm --version
           vp env doctor
 
+  test-install-ps1-remote-legacy:
+    name: Test remote legacy install.ps1 (${{ matrix.shell }})
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    env:
+      # Reproduce the setup-vp install that failed in cloudflare/vinext#3251.
+      VP_VERSION: '0.2.6'
+      VP_NODE_MANAGER: 'yes'
+      GITHUB_ACTION_REPOSITORY: voidzero-dev/setup-vp
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Install an old release through an HTTP byte-array response (PowerShell 5.1)
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: ./.github/scripts/test-install-legacy-remote.ps1
+
+      - name: Install an old release through an HTTP byte-array response (PowerShell 7)
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: ./.github/scripts/test-install-legacy-remote.ps1
+
   test-install-sh-readonly-config:
-    name: Test install.sh (readonly shell config)
+    name: Test legacy install.sh (readonly shell config)
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      # These output assertions cover install-legacy.sh. Newer binaries run self-setup.
+      VP_VERSION: '0.2.9'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -1037,10 +1068,13 @@ jobs:
           vp --version
 
   test-install-ps1-release-age:
-    name: Test install.ps1 (minimum-release-age)
+    name: Test legacy install.ps1 (minimum-release-age)
     runs-on: namespace-profile-windows-4c-8g
     permissions:
       contents: read
+    env:
+      # The legacy script enforces release age; native self-setup uses a local override.
+      VP_VERSION: '0.2.9'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -1062,12 +1096,22 @@ jobs:
           try {
             Set-Content -Path $npmrc -Value "minimum-release-age=10000000"
 
-            $output = & powershell -NoProfile -ExecutionPolicy Bypass -File .\packages\cli\install.ps1 2>&1
-            $exitCode = $LASTEXITCODE
-            $text = $output -join "`n"
+            # PowerShell 5.1 treats redirected native stderr as an error under Stop.
+            # Capture each stream in a file so the assertions can inspect the failure.
+            $stdout = Join-Path $env:RUNNER_TEMP "vp-release-age.stdout.txt"
+            $stderr = Join-Path $env:RUNNER_TEMP "vp-release-age.stderr.txt"
+            $installer = (Resolve-Path ./packages/cli/install.ps1).Path
+            $process = Start-Process -FilePath (Get-Command powershell).Source `
+              -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$installer`"") `
+              -RedirectStandardOutput $stdout -RedirectStandardError $stderr `
+              -Wait -PassThru
+            $text = @(
+              Get-Content -LiteralPath $stdout -Raw
+              Get-Content -LiteralPath $stderr -Raw
+            ) -join [Environment]::NewLine
             Write-Host $text
 
-            if ($exitCode -eq 0) {
+            if ($process.ExitCode -eq 0) {
               Write-Error "Expected install.ps1 to fail when pnpm minimum-release-age blocks vite-plus"
               exit 1
             }
@@ -1102,11 +1146,6 @@ jobs:
               Write-Error "Non-interactive install must not write minimum-release-age overrides"
               exit 1
             }
-
-            # The child install.ps1 is expected to fail in this test. Reset the
-            # native command exit code so the GitHub Actions PowerShell wrapper
-            # does not fail the step after our assertions pass.
-            $global:LASTEXITCODE = 0
           } finally {
             Remove-Item -Path $npmrc -Force -ErrorAction SilentlyContinue
             if (Test-Path $backup) {
@@ -1463,7 +1502,7 @@ jobs:
           if ($process.ExitCode -ne 1) {
             throw "install.ps1 exited with $($process.ExitCode), expected 1"
           }
-          if (-not $text.Contains("Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together")) {
+          if (-not $text.Contains("Set all three variables together: VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR.")) {
             throw "install.ps1 did not report the incomplete override group"
           }
 
