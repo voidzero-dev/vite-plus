@@ -1,0 +1,201 @@
+{
+  "@eslint/js": {
+    "name": "@eslint/js",
+    "dist-tags": {
+      "latest": "9.39.5"
+    },
+    "versions": {
+      "9.39.5": {
+        "name": "@eslint/js",
+        "version": "9.39.5",
+        "engines": {
+          "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/@eslint/js/-/js-9.39.5.tgz",
+          "integrity": "sha512-QywQuszQh77pIXCsq998c8hbhSTI/azTty1Z6N53dmAudKHhy573j3yvRLsX2BSp8YpLtoCEG8E9DJe+8zUh4A==",
+          "shasum": "6f2fbcff75500d229d535e0a949ae13472c84787"
+        }
+      }
+    }
+  },
+  "eslint": {
+    "name": "eslint",
+    "dist-tags": {
+      "latest": "9.39.5"
+    },
+    "versions": {
+      "9.39.5": {
+        "name": "eslint",
+        "version": "9.39.5",
+        "dependencies": {
+          "ajv": "^6.14.0",
+          "chalk": "^4.0.0",
+          "debug": "^4.3.2",
+          "espree": "^10.4.0",
+          "ignore": "^5.2.0",
+          "esquery": "^1.5.0",
+          "esutils": "^2.0.2",
+          "find-up": "^5.0.0",
+          "is-glob": "^4.0.0",
+          "minimatch": "^3.1.5",
+          "@eslint/js": "9.39.5",
+          "optionator": "^0.9.3",
+          "cross-spawn": "^7.0.6",
+          "glob-parent": "^6.0.2",
+          "imurmurhash": "^0.1.4",
+          "@eslint/core": "^0.17.0",
+          "eslint-scope": "^8.4.0",
+          "lodash.merge": "^4.6.2",
+          "@humanfs/node": "^0.16.6",
+          "@types/estree": "^1.0.6",
+          "fast-deep-equal": "^3.1.3",
+          "natural-compare": "^1.4.0",
+          "@eslint/eslintrc": "^3.3.6",
+          "file-entry-cache": "^8.0.0",
+          "@eslint/plugin-kit": "^0.4.1",
+          "eslint-visitor-keys": "^4.2.1",
+          "@eslint/config-array": "^0.21.2",
+          "@humanwhocodes/retry": "^0.4.2",
+          "escape-string-regexp": "^4.0.0",
+          "@eslint/config-helpers": "^0.4.2",
+          "@eslint-community/regexpp": "^4.12.1",
+          "@eslint-community/eslint-utils": "^4.8.0",
+          "@humanwhocodes/module-importer": "^1.0.1",
+          "json-stable-stringify-without-jsonify": "^1.0.1"
+        },
+        "peerDependencies": {
+          "jiti": "*"
+        },
+        "peerDependenciesMeta": {
+          "jiti": {
+            "optional": true
+          }
+        },
+        "bin": {
+          "eslint": "bin/eslint.js"
+        },
+        "engines": {
+          "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/eslint/-/eslint-9.39.5.tgz",
+          "integrity": "sha512-DgZS62aPLXKlnxILS/AYCoRvHaZeXceIzlXPkkGGzJWSow1aEk0lbTlxUSlyjC8jcaKxAdOnTDz+o1JFSBsyjw==",
+          "shasum": "2a4e3c8b0f753196efae943c8ffaa8730fc6a3fa"
+        }
+      }
+    }
+  },
+  "eslint-plugin-react-hooks": {
+    "name": "eslint-plugin-react-hooks",
+    "dist-tags": {
+      "latest": "7.1.1"
+    },
+    "versions": {
+      "7.1.1": {
+        "name": "eslint-plugin-react-hooks",
+        "version": "7.1.1",
+        "dependencies": {
+          "zod": "^3.25.0 || ^4.0.0",
+          "@babel/core": "^7.24.4",
+          "@babel/parser": "^7.24.4",
+          "hermes-parser": "^0.25.1",
+          "zod-validation-error": "^3.5.0 || ^4.0.0"
+        },
+        "peerDependencies": {
+          "eslint": "^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0 || ^9.0.0 || ^10.0.0"
+        },
+        "engines": {
+          "node": ">=18"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/eslint-plugin-react-hooks/-/eslint-plugin-react-hooks-7.1.1.tgz",
+          "integrity": "sha512-f2I7Gw6JbvCexzIInuSbZpfdQ44D7iqdWX01FKLvrPgqxoE7oMj8clOfto8U6vYiz4yd5oKu39rRSVOe1zRu0g==",
+          "shasum": "e6742cad75d970c0a3f30d7d3fa80a4784f55927"
+        }
+      }
+    }
+  },
+  "eslint-plugin-react-refresh": {
+    "name": "eslint-plugin-react-refresh",
+    "dist-tags": {
+      "latest": "0.5.6"
+    },
+    "versions": {
+      "0.5.6": {
+        "name": "eslint-plugin-react-refresh",
+        "version": "0.5.6",
+        "peerDependencies": {
+          "eslint": "^9 || ^10"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/eslint-plugin-react-refresh/-/eslint-plugin-react-refresh-0.5.6.tgz",
+          "integrity": "sha512-uZnh24On2bk478AkaDAKcpRiYhS3qFSaSNvpXxV6/Ek/BBDICkWGG7MnBSfjnIlCVBei5vsLlIeQYxbF22+Udg==",
+          "shasum": "9d01abd6815f8ceb5ba255b1b2b93ed5062a0614"
+        }
+      }
+    }
+  },
+  "globals": {
+    "name": "globals",
+    "dist-tags": {
+      "latest": "17.12.0"
+    },
+    "versions": {
+      "14.0.0": {
+        "name": "globals",
+        "version": "14.0.0",
+        "engines": {
+          "node": ">=18"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/globals/-/globals-14.0.0.tgz",
+          "integrity": "sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==",
+          "shasum": "898d7413c29babcf6bafe56fcadded858ada724e"
+        }
+      },
+      "17.12.0": {
+        "name": "globals",
+        "version": "17.12.0",
+        "engines": {
+          "node": ">=18"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/globals/-/globals-17.12.0.tgz",
+          "integrity": "sha512-cezEd/DTyyht9cvSSURyygXPfy04GtWO/5e6ZPvH7fCtjKz9PYOmuawphw1Ctd1f6C+5JypXfGD7ahNMXvevBA==",
+          "shasum": "910a368b8f093d3feb3f77a56dcefa05647d698e"
+        }
+      }
+    }
+  },
+  "typescript-eslint": {
+    "name": "typescript-eslint",
+    "dist-tags": {
+      "latest": "8.70.0"
+    },
+    "versions": {
+      "8.70.0": {
+        "name": "typescript-eslint",
+        "version": "8.70.0",
+        "dependencies": {
+          "@typescript-eslint/utils": "8.70.0",
+          "@typescript-eslint/parser": "8.70.0",
+          "@typescript-eslint/eslint-plugin": "8.70.0",
+          "@typescript-eslint/typescript-estree": "8.70.0"
+        },
+        "peerDependencies": {
+          "eslint": "^8.57.0 || ^9.0.0 || ^10.0.0",
+          "typescript": ">=4.8.4 <6.1.0"
+        },
+        "engines": {
+          "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/typescript-eslint/-/typescript-eslint-8.70.0.tgz",
+          "integrity": "sha512-P/W5cz70/cQAuKfY3xwQMWWTV7BvJ0mAQmi+9mBcsVPaBUpd6Ohpa+fECv9rBFrQcig86jAiNBFNWUqnTjr4pw==",
+          "shasum": "6c90c532079132ba7d4a386bf0882c56d82fe5af"
+        }
+      }
+    }
+  }
+}
