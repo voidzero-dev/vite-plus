@@ -6,7 +6,7 @@ The local package includes Vite, Rolldown, Vitest, Oxlint, Oxfmt, tsdown, the Vi
 
 ## Install
 
-For most of use cases, we recommend to use Vite+ cli to install in a project or create a new project. Learn more in [Creating a Project](/guide/create) and [Migrate to Vite+](/guide/create).
+For most of use cases, we recommend to use Vite+ cli to install in a project or create a new project. Learn more in [Creating a Project](/guide/create) and [Migrate to Vite+](/guide/migrate).
 
 ::: code-group
 
@@ -31,7 +31,7 @@ bunx --package vite-plus vp create
 Run its binary through your package manager. For example:
 
 ```bash
-./node_modules/.bin/vp migrate help
+./node_modules/.bin/vp migrate --help
 ./node_modules/.bin/vp check
 ```
 

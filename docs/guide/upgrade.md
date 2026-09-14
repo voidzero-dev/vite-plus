@@ -107,4 +107,6 @@ Remove-Item Env:\VP_PR_VERSION
 
 The installer uses the registry bridge to resolve the ref to a `0.0.0-commit.<sha>` build. It installs this build like other versions. Run `vp toolchain --global` to show the active build and tool versions. After testing, run `vp upgrade --force` to restore the published release. You can also run the installer without `VP_PR_VERSION`.
 
+### Local `vite-plus` Preview
+
 To use the same preview in a project, follow [Update Vite+](/guide/upgrade-project#preview-builds).
