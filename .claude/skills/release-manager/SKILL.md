@@ -27,6 +27,8 @@ When given a release PR (URL or number), do not start from step 1. First audit t
 
 Report the detected state before making changes, so the previous release manager's work is not redone or overwritten.
 
+Before post-release work, fetch `origin/main` and read its copy of this skill (`git show origin/main:.claude/skills/release-manager/SKILL.md`). A checkout left behind after the merge can contain superseded release or announcement instructions.
+
 ## Pipeline overview
 
 1. `Prepare Release` workflow bumps versions and opens the release PR (`release/vX.Y.Z` -> `main`).
@@ -130,6 +132,7 @@ Merging this PR will trigger the release workflow.
 
 - Every PR from `generate-notes` appears exactly once, with one exception: omit bot-authored PRs that carry nothing for a user to read or act on (a docs stats refresh, a badge update). Keep bot PRs that do change what users get, such as the upstream dependency upgrades. When you omit one, say so when reporting the validation counts so the mismatch reads as deliberate rather than missed. No PR is listed both in Highlights and a section below.
 - **Breaking Changes goes first, above Highlights, and only when the release has one.** A rename is breaking only when the old name stops working; if a deprecated alias is retained it is not breaking, so keep the two in different sections rather than merging them into one entry. Give each breaking entry an old -> new table when several names change, plus one line telling readers where to update (shell profile, CI job, Dockerfile). Do not editorialize about the version number.
+- When several breaking changes affect different workflows, group them under short `####` headings. Explain the changed behavior and required action before each table; keep automatic migration steps separate from changes users must make manually.
 - **Describe the net change between the two released versions, not intra-cycle churn.** When several PRs touch the same area within one release (one narrows a behavior, a later one broadens it back), the reader only sees the delta from `v<prev>` to `v<curr>`; describe that once, listing every PR number, and do not narrate a regression that was introduced and then fixed inside the cycle. Apply this to the intro/theme sentence too.
 - `feat` -> Features, `fix` -> Fixes & Enhancements, `refactor` and `revert` -> Refactor (never Chore), `docs` -> Docs, `test` / `ci` / `chore` -> Chore.
 - `feat(docs)` goes in Docs when the user-facing surface is the docs site.
@@ -160,6 +163,8 @@ vite and rolldown are built from pinned commits, so link the commit. The npm-ins
 
 - No em dashes or en dashes anywhere in the title or body. Use commas, colons, or parentheses.
 - Lead the title and opening theme with the most important user-visible behavior. Avoid vague benefit-only wording that the body must explain.
+- When naming a package version in prose or a heading, use one inline literal, `package@version`. Keep separate version columns in tables.
+- Link unfamiliar technical abbreviations to the relevant documentation section; keep the short abbreviation as the link text.
 - The Upgrade section is a `vp upgrade` code block.
 - Apply via a temp file, never a heredoc (heredoc quoting can escape backticks inside the table and break rendering):
 
@@ -291,7 +296,7 @@ Across the full catalog most failures are not regressions, and reporting them as
 
   **Run the control from inside the project directory.** Launching it from the vite-plus checkout makes `vp` delegate to that checkout's `packages/cli/dist` instead of the pinned release, which silently invalidates the comparison (it fails with an unrelated error such as `Fail to parse yaml as RuleConfig`).
 
-  Reset the project (`git reset --hard`, `git clean -fd`, delete lockfile and `node_modules`) before the control run so it starts from the same state as the real run. When the control reproduces the failure, say so with the evidence (same exit code and same error class) rather than just "pre-existing".
+  Run candidate and control in isolated checkouts of the same project base, starting with the same lockfile and no `node_modules`. Compare any lockfile changes made by migration so unrelated dependency versions do not invalidate the control. When the control reproduces the failure, report the evidence (same exit code and error class).
 
 - **Stale pins: weight the forks that were actually on the previous release.** A fork pinned several releases back does not test the release under review at all; `vp migrate` performs a multi-release jump, and any resulting type errors are evidence about that jump. Before drawing a conclusion, work out what each fork was on and judge the release primarily on the forks upgrading from the immediately previous release. Derive the pin from the upgrade commit itself, not from `HEAD`, since later commits on the test branch hide it:
 
@@ -303,15 +308,20 @@ Across the full catalog most failures are not regressions, and reporting them as
   Report that subset separately; "2 of the 7 forks on the previous release pass, the other 5 fail on fork infrastructure" is a far stronger statement than a headline pass rate over the whole catalog.
 
 - **Project-side and infra failures.** Dependency conflicts between the project's own packages, missing fork secrets, third-party GitHub Apps not installed on the fork, network timeouts. Retry once before classifying anything as a network failure; they pass on retry. Two recurring shapes worth naming: a package that imports a dependency it never declared and only ever resolved through hoisting (`Cannot find package 'oxfmt'`) breaks as soon as the harness regenerates the lockfile; and a project whose own dependency has no `main`/`module`/`exports` cannot load its config under any vite-plus version.
+- **Dependency drift during migration.** Regenerating a lockfile can move unrelated floating or nightly dependencies to incompatible versions. Compare with the base lockfile before blaming the candidate. On the test branch, retain the original versions and their dependency graph, then verify a frozen install and rerun the failing command.
 - **Harness artifacts.** Failures your own test setup caused, such as a lockfile the harness deleted and the install never regenerated. Fix these and re-run rather than reporting them.
 
 Report the tally by cause, not just pass/fail, and state plainly which failures you controlled for and which you classified from the error text alone. Only a failure that reproduces on the candidate but not on the previous release is a regression.
+
+When repairing timing-sensitive smoke tests, keep their assertions and make readiness or timing deterministic. Use a negative control when changing how a test observes behavior: temporarily remove or break that behavior, confirm the test fails, and restore it before committing.
 
 Two long-run mechanics worth knowing: `vp migrate` installs Vite+ git hooks in the project, so any later `git commit`/`git push` there needs `--no-verify`; and macOS has no GNU `timeout`, so a driver script that time-boxes runs needs its own watchdog. If that driver runs projects in parallel, kill the whole process tree on timeout, not just the wrapper: an orphaned `pnpm install` holds the store lock and the next project then hangs at 0% CPU with no output, which reads like a vite-plus hang and is not one.
 
 Two fork-CI blockers are worth fixing rather than reporting, both on the **test branch only** so the tracked branch stays clean against upstream. A fork whose workflows never trigger on `pull_request` reports "no checks" and proves nothing: add a minimal workflow that runs `vp run build` through whatever setup the project already uses. A fork whose workflows target third-party runners (self-hosted labels such as `blacksmith-*`) queues every job forever, because those labels only resolve for the upstream org: map them to GitHub-hosted equivalents, replacing the longest label first so an `-arm` suffix is not left half-rewritten. Runner-specific _actions_ need more than a label swap and are usually not worth fixing.
 
 ## 5. Release-branch CI
+
+Match checks to the current PR head and the latest applicable workflow runs. Superseded canceled runs can leave failed aggregate checks in the PR rollup. Check required statuses with `gh pr checks <PR#> --required`, and report required reviewer approval separately from technical CI readiness.
 
 Fixes for CI failures go through a **separate PR to `main`**, never as commits on the release branch (the binding sync in step 2 is the sole exception). After the fix PR merges:
 
@@ -330,6 +340,8 @@ Known release-branch-only failure modes:
 
 Merging the release PR is the release trigger. Before merging confirm: CI green, changelog validated, binding synced, and (if used) the preview build verified.
 
+Auto-merge being enabled is not a completed merge. Confirm `mergedAt` and the merge commit, then follow the Release run for that commit; older successful runs can have skipped publishing because the version did not change.
+
 ## 7. Automated release pipeline (what happens after merge)
 
 `release.yml` runs on the `main` push because `packages/cli/package.json` changed:
@@ -345,7 +357,8 @@ Merging the release PR is the release trigger. Before merging confirm: CI green,
 
 4. `Release`: publishes the platform-native CLI packages (`@voidzero-dev/vite-plus-cli-<platform>`, via `packages/cli/publish-native-addons.ts`) and then `@voidzero-dev/vite-plus-core` and `vite-plus` to npm (`--tag latest`), creates the `vX.Y.Z` GitHub release (draft, with installer/binary assets, then undrafted). The generated body has only Published Packages and Installation sections.
 5. `publish-docker`: multi-arch toolchain image to `ghcr.io/voidzero-dev/vite-plus`, after npm publish (the image installs vp from npm).
-6. `discord-notify`: announces to Discord with a link to the release.
+6. `deploy-docs`: deploys the production docs after a stable release is published.
+7. `discord-notify`: announces to Discord after Docker publishing and docs deployment succeed (docs are skipped for prereleases).
 
 **A green `Release` job does not mean the packages are installable.** `pnpm publish` prints `✅ Published package <name>@X.Y.Z` as soon as the registry accepts the request, and the registry can then take tens of minutes to actually serve that version. This has shipped a broken release: `vite-plus@X.Y.Z` went live on `latest` with an exact dependency on `@voidzero-dev/vite-plus-core@X.Y.Z` that was invisible for about 35 minutes, so every `npm install vite-plus` failed with `ETARGET` and both `publish-docker` and `Deploy docs` failed on `ERR_PNPM_NO_MATCHING_VERSION`. The downstream job failures are the symptom, not the cause; do not re-run them until the registry has the package.
 
@@ -368,8 +381,8 @@ d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z
 
 1. **Polish the GitHub release notes** (ask first): the auto-created release body has only Published Packages and Installation. Build the polished notes from the final release PR body:
    - Drop the closing `---` / `Merging this PR ...` boilerplate.
-   - Keep every changelog section through **Full Changelog** unchanged.
-   - Append the generated Published Packages and Installation sections, and end Installation with a Docker usage block (keep the explanation to one short sentence):
+   - Preserve every changelog section through **Full Changelog**, including any later revisions requested by the release manager.
+   - Append the generated Published Packages and Installation sections, omit the redundant `View the full commit` line, and end Installation with a Docker usage block (keep the explanation to one short sentence):
 
      ````markdown
      **Docker:**
@@ -388,7 +401,7 @@ d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z
        --title "vite-plus vX.Y.Z: <theme>" --notes-file /tmp/release-notes.md
      ```
 
-   - Re-run the step 3 validation greps against the live release body, plus `grep -c 'Merging this PR'` (must be 0).
+   - Keep the review draft, body-only notes file, and live release aligned after requested edits. Read back the live title and body to verify the update. Re-run the step 3 validation greps, plus `grep -c 'Merging this PR'` (must be 0).
 
 2. **Verify**:
 
@@ -397,19 +410,26 @@ d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z
    npm view @voidzero-dev/vite-plus-core version    # X.Y.Z
    npm view @voidzero-dev/vite-plus-cli-darwin-arm64 version   # X.Y.Z, spot-check a native platform package
    npm view vite-plus dist-tags.latest              # X.Y.Z
-   vp upgrade && vp --version                       # bundled tool versions sane
    docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version
    ```
 
-   `vp upgrade` reporting `Already up to date (X.Y.Z)` also passes. Caveat: `vp upgrade` exists only on standalone-installer (`~/.vite-plus`) installs; if the release manager's `vp` is managed another way (e.g. mise), `vp upgrade` is missing and `vp update` is not a substitute (it runs `pnpm update` on the current project, so never run it inside the vite-plus checkout). In that case rely on the npm/GHCR checks plus the in-container `vp --version`. Do not trust `vp upgrade`'s success message on its own: on a machine where `~/.vite-plus/current` is a symlink to a `local-dev-*` directory (a `pnpm bootstrap-cli` build), it can print `Updated vite-plus from A -> B` while creating no `~/.vite-plus/X.Y.Z` directory and leaving `current` untouched. The same false pass happens when the shell still carries a `VP_HOME` export or an isolated control home on `PATH` from an earlier smoke-test control run: `vp upgrade` then upgrades that throwaway home and reports success while the real install is untouched (the giveaway is an upgrade "from" a `0.0.0-commit.<sha>` version). Run the check in a clean environment and against the real binary, then confirm the result:
+   `vp upgrade` requires a standalone installation; `vp update` is not a substitute because it updates project dependencies. Resolve the intended binary and query its roots with `VP_DUMP_DIRS=1`; installations can use split XDG/platform roots, an explicit `VP_HOME`, or the legacy `~/.vite-plus` directory. Remove temporary overrides left by preview/control runs, while preserving the intended installation's configuration.
+
+   If the user's installation points to `local-dev-*` or is managed by another tool, test an isolated copy of the previous published installation under an explicit `VP_HOME`. Repoint any absolute symlinks in the copy to the copied root before testing. Label the result as an isolated upgrade; preserve the development installation and the original control used for regression tests. Run the selected binary outside a project so a local CLI cannot take over:
 
    ```bash
-   env -u VP_HOME -u VP_NODE_MANAGER PATH="$HOME/.vite-plus/bin:/usr/bin:/bin" ~/.vite-plus/bin/vp upgrade
-   readlink ~/.vite-plus/current   # must be X.Y.Z
-   ls ~/.vite-plus                 # must contain X.Y.Z
+   release_vp=/absolute/path/to/vp
+   release_data=$(VP_DUMP_DIRS=1 "$release_vp" | awk -F '\t' '$1 == "data" { print $2 }')
+   test -n "$release_data"
+   readlink "$release_data/current"
+   "$release_vp" upgrade
+   readlink "$release_data/current"   # must select the target release
+   "$release_vp" --version
    ```
 
-   If `current` did not move, say the check was inconclusive rather than reporting it as passing. The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z`. Outside a project that output lists no bundled tools, so inspect the installed image package tree under `~/.vite-plus/X.Y.Z/node_modules/.pnpm` and confirm the bundled tool packages and versions match the changelog's Bundled Versions table. `tsdown` will be absent from that tree because it is bundled into `@voidzero-dev/vite-plus-core`; verify it with `npm view @voidzero-dev/vite-plus-core@X.Y.Z bundledVersions --json` instead. If no local Docker daemon is running, confirm the `publish-docker` job succeeded and the GHCR manifest exists, then still run the in-container check once a daemon is available:
+   Require the target version directory, the expected `current` link, and `vp --version` output; a success message alone is insufficient. `Already up to date` passes only when the selected installation is already on the target version.
+
+   The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z`. Outside a project that output lists no bundled tools, so inspect the installed image package tree under `~/.vite-plus/X.Y.Z/node_modules/.pnpm` and confirm the bundled tool packages and versions match the changelog's Bundled Versions table. `tsdown` will be absent from that tree because it is bundled into `@voidzero-dev/vite-plus-core`; verify it with `npm view @voidzero-dev/vite-plus-core@X.Y.Z bundledVersions --json` instead. If no local Docker runtime is available, confirm `publish-docker` succeeded and inspect the GHCR manifest for both `linux/amd64` and `linux/arm64`. For the current stable release, confirm the version tag and `latest` have the same digest. Record each architecture's `vp --version` output from the Docker build logs when available, and distinguish that evidence from a local run:
 
    ```bash
    TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:voidzero-dev/vite-plus:pull" \
@@ -419,7 +439,7 @@ d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z
      "https://ghcr.io/v2/voidzero-dev/vite-plus/manifests/X.Y.Z" | head -1   # HTTP/2 200
    ```
 
-3. **Announce on Discord** (concise format only; do not produce a shorter variant). Keep it tight: every line is a single short phrase, no heading-plus-explanation sentences, the whole message around 20 lines. No PR links, no tables, no per-entry credits, no em dashes. Make the theme and highlights self-contained by naming the affected capability rather than using vague benefit-only wording. Use verbs that match the actual behavior, especially distinguishing guidance or suggestions from automatic actions. One emoji per line by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). Use **Upstream Upgrades** for dependency/tool version bumps, not Highlights, and list only tools whose version actually changed; a security fix caused by a dependency bump can still have a Highlight focused on the vulnerability, and that line must link the CVE/GHSA/advisory when one exists. A breaking change gets its own `:warning:` Highlight naming the old and new names and what the reader must update. Include **Also in this release** only when there are meaningful secondary user-facing items, and omit the whole section for a narrow hotfix.
+3. **Announce on Discord** (concise format). Keep it tight: every line is a single short phrase, no heading-plus-explanation sentences, the whole message around 20 lines. No PR links, no tables, no per-entry credits, no em dashes. Make the theme and highlights self-contained by naming the affected capability rather than using vague benefit-only wording. Use verbs that match the actual behavior, especially distinguishing guidance or suggestions from automatic actions. One emoji per line by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). Use **Upstream Upgrades** for dependency/tool version bumps, not Highlights, and list only tools whose version actually changed. Leave the full Bundled Versions table in the linked release notes rather than repeating it in the announcement. A security fix caused by a dependency bump can still have a Highlight focused on the vulnerability, and that line must link the CVE/GHSA/advisory when one exists. A breaking change gets its own `:warning:` Highlight naming the old and new names and what the reader must update. Include **Also in this release** only when there are meaningful secondary user-facing items, and omit the whole section for a narrow hotfix.
 
    ```markdown
    :viteplus: **vite-plus vX.Y.Z is out** :tada:
@@ -439,9 +459,6 @@ d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z
    - 2-6 short bullets, no PR links or credits
      (omit this whole section when there are no meaningful secondary user-facing items)
 
-   **Bundled versions**
-   vite `X`, rolldown `X`, tsdown `X`, vitest `X`, oxlint `X`, oxlint-tsgolint `X`, oxfmt `X`
-
    **Upgrade**: `vp upgrade`
 
    Full notes: <https://github.com/voidzero-dev/vite-plus/releases/tag/vX.Y.Z>
@@ -450,11 +467,13 @@ d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z
 
    The release-notes URL stays in `<angle brackets>` to suppress the embed; a blog post link (if any) goes bare so it unfurls. Lead the header with the server custom emoji `:viteplus:` (before the bold title, since it is a custom emoji). Link contributors as `[@user](https://github.com/user)` because Discord does not auto-link a bare GitHub handle. Keep the whole message user-facing: exclude vite-plus's own tooling/CI work.
 
-   Never post to Discord yourself. Save the draft to a file, update that file after every requested revision, and hand the approved contents over in chat. Do **not** post it as a comment on the release PR: that PR is a code-review artifact, and an announcement draft there is noise for reviewers and a second copy that can drift from the approved wording. After the release manager approves the Discord draft, proceed directly to step 9; do not wait for another prompt or treat the skill update as optional.
+   Never post to Discord yourself. Save the draft to a file, update that file after every requested revision, and hand the approved contents over in chat. Do **not** post it as a comment on the release PR: that PR is a code-review artifact, and an announcement draft there is noise for reviewers and a second copy that can drift from the approved wording. After the release manager approves the announcement or confirms announcements are complete, proceed directly to step 9; do not ask them to repeat a completed handoff.
+
+4. **X drafts, when requested:** condense the theme, a few user-facing changes, the upgrade action, and the release link into a plain-text post. Check the standard 280-character limit using X's weighted count: URLs count as 23 characters, and some Unicode characters count as two. Save the post and any requested thank-you reply in separate temporary files and update them after revisions. Credit a contributor's specific change and use their supplied or verified X handle.
 
 ## 9. Update this skill (post-release)
 
-After the release ships and the Discord announcement draft is approved, review the session for durable learnings and fold them into this file. Then ask for approval before pushing or opening a PR.
+After the release ships and announcements are approved or confirmed complete, review the session for durable learnings and fold them into this file. Then ask for approval before pushing or opening a PR.
 
 - Capture only what generalizes: a step whose instructions drifted from what actually worked, a gotcha or corrected mistake, or a command/flag that was wrong. Write it as **general guidance**, with no release-specific versions, project names, PR numbers, or one-off examples.
 - Be surgical: change only what was wrong or missing; do not reword content that was already correct. If nothing generalizes, make no change.
@@ -471,5 +490,5 @@ After the release ships and the Discord announcement draft is approved, review t
 - [ ] Release PR merged; `release` environment approved by someone other than the merger; npm + GitHub release + Docker image all published
 - [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
 - [ ] Installs verified (npm versions + latest tag, `vp upgrade`, `vp --version` output inside the ghcr Docker image)
-- [ ] Discord announcement drafted (concise only) and handed over in chat, not posted to the release PR
+- [ ] Announcements handed over in chat (Discord and any requested X drafts), or confirmed complete by the release manager
 - [ ] Skill reviewed for durable learnings; any that generalize folded in and a `docs(skill)` PR proposed
