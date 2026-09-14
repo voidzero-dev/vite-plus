@@ -159,6 +159,38 @@ UPDATE_SNAPSHOTS=1 just snapshot-test create
 
 The full case/step/interaction reference (including the `vpt` helper tool and milestone conventions for interactive tests) lives in `crates/vp_cli_snapshots/tests/cli_snapshots/README.md`; the design rationale is in `rfcs/interactive-snapshot-tests.md`.
 
+## Documentation previews from forks
+
+Documentation PRs from forks receive a Cloudflare preview from the
+`Build Docs Fork Preview` and `Deploy Docs Fork Preview` workflows. The build
+runs without deployment credentials. The deployment workflow uses code from
+the default branch and uploads the static build artifact to `viteplus-dev`.
+It checks the source repository, branch, and current PR commit before upload.
+The preview URL stays the same across updates to a PR.
+
+Repository maintainers must configure the GitHub environment `docs-preview`:
+
+- Set the environment variable `CLOUDFLARE_ACCOUNT_ID` to the account that owns
+  `viteplus-dev`.
+- Add the environment secret `CLOUDFLARE_API_TOKEN` with permission to upload
+  Worker versions to that account. Use the narrowest available token scope.
+- Enable Preview URLs for `viteplus-dev` in Cloudflare. The expected Workers
+  subdomain is `voidzero-docs.workers.dev`.
+
+The deployment workflow must be on `main` before GitHub can trigger it through
+`workflow_run`. After setup, push a documentation change to an open fork PR.
+GitHub may require approval for the contributor's first workflow run. A
+successful deployment adds or updates a comment on the original PR, with a URL
+such as `https://pr-2684-viteplus-dev.voidzero-docs.workers.dev` and the built
+commit. `wrangler versions upload` does not promote the version to production.
+
+Same-repository PRs continue to use the existing preview integrations. To test
+the fork preview helpers locally, run:
+
+```bash
+node --test .github/scripts/__tests__/docs-fork-preview.mjs
+```
+
 ## Submitting Pull Requests
 
 Prioritize stacked pull requests when your work splits into reviewable layers, for example a refactor PR with the feature PR that depends on it stacked on top. Reviewers handle a stack of small PRs faster than one large PR, and each layer merges on its own.

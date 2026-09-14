@@ -1,0 +1,78 @@
+name: Build Docs Fork Preview
+
+permissions: {}
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'packages/cli/install.sh'
+      - 'packages/cli/install.ps1'
+      - 'packages/cli/install-legacy.sh'
+      - 'packages/cli/install-legacy.ps1'
+      - '.github/workflows/build-docs-fork-preview.yml'
+      - '.github/workflows/deploy-docs-fork-preview.yml'
+      - '.github/scripts/docs-fork-preview.mjs'
+      - '.github/scripts/__tests__/docs-fork-preview.mjs'
+
+concurrency:
+  group: build-docs-fork-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: Test docs preview helpers
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: node --test .github/scripts/__tests__/docs-fork-preview.mjs
+
+  build:
+    name: Build fork docs
+    needs: test
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Build the same commit that workflow_run.head_sha identifies.
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.20.0
+        with:
+          working-directory: docs
+          cache: false
+
+      - name: Build static docs
+        run: vp run build:cloudflare
+        working-directory: docs
+        env:
+          DOCS_SITE_ORIGIN: https://pr-${{ github.event.pull_request.number }}-viteplus-dev.voidzero-docs.workers.dev
+
+      # This job has no deployment secrets or write token. Its artifact is
+      # untrusted static content, never executable input to the deploy job.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs-fork-preview
+          path: docs/.vitepress/dist
+          if-no-files-found: error
+          retention-days: 7

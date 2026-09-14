@@ -1,0 +1,130 @@
+name: Deploy Docs Fork Preview
+
+# Fork PRs cannot receive deployment credentials. This workflow runs from
+# the default branch, validates the originating workflow and current PR,
+# and uploads only static assets. It never checks out or executes fork code.
+on: # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    workflows: ['Build Docs Fork Preview']
+    types: [completed]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  authorize:
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.path == '.github/workflows/build-docs-fork-preview.yml'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      pr: ${{ steps.preview.outputs.pr }}
+      artifact-id: ${{ steps.preview.outputs.artifact-id }}
+      preview-url: ${{ steps.preview.outputs.preview-url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        id: preview
+        with:
+          script: |
+            const { authorizePreview } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/docs-fork-preview.mjs`);
+            await authorizePreview({ github, context, core });
+
+  deploy:
+    needs: authorize
+    if: needs.authorize.outputs.pr != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Serialize uploads for a PR. An older run rechecks the head after waiting,
+    # so it cannot overwrite a preview that a newer run has already uploaded.
+    concurrency:
+      group: deploy-docs-fork-preview-${{ needs.authorize.outputs.pr }}
+      cancel-in-progress: false
+    environment:
+      name: docs-preview
+      url: ${{ needs.authorize.outputs.preview-url }}
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            .github/scripts
+            docs
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      # Install only the deployment tool, outside both the checkout and the
+      # artifact. No PR dependencies, scripts, config, or caches are used here.
+      - name: Install Wrangler
+        run: npm install --prefix "$RUNNER_TEMP/docs-preview-tools" --ignore-scripts --no-package-lock wrangler@4.127.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.authorize.outputs.artifact-id }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/docs-preview-assets
+          merge-multiple: true
+
+      - name: Validate static assets
+        run: node .github/scripts/docs-fork-preview.mjs validate-assets "$RUNNER_TEMP/docs-preview-assets"
+
+      - name: Recheck the PR before upload
+        id: current
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          PR_NUMBER: ${{ needs.authorize.outputs.pr }}
+        with:
+          script: |
+            const { isCurrentPreview } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/docs-fork-preview.mjs`);
+            core.setOutput('current', await isCurrentPreview({ github, context }, Number(process.env.PR_NUMBER)));
+
+      - name: Upload preview version
+        if: steps.current.outputs.current == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PR_NUMBER: ${{ needs.authorize.outputs.pr }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          if [[ -z "$CLOUDFLARE_ACCOUNT_ID" || -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            echo '::error::Configure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in the docs-preview environment. See CONTRIBUTING.md.'
+            exit 1
+          fi
+          "$RUNNER_TEMP/docs-preview-tools/node_modules/.bin/wrangler" versions upload \
+            --config "$GITHUB_WORKSPACE/docs/wrangler.jsonc" \
+            --assets "$RUNNER_TEMP/docs-preview-assets" \
+            --preview-alias "pr-$PR_NUMBER" \
+            --message "Docs preview for PR #$PR_NUMBER ($HEAD_SHA)"
+
+      - name: Comment on the fork PR
+        if: steps.current.outputs.current == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          PR_NUMBER: ${{ needs.authorize.outputs.pr }}
+        with:
+          script: |
+            const { commentPreview } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/docs-fork-preview.mjs`);
+            await commentPreview({ github, context, core }, Number(process.env.PR_NUMBER));
