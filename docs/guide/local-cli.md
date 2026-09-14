@@ -35,19 +35,6 @@ Run its binary through your package manager. For example:
 ./node_modules/.bin/vp check
 ```
 
-Inside `package.json` scripts, `vp` resolves automatically from `node_modules/.bin`:
-
-```json [package.json]
-{
-  "scripts": {
-    "dev": "vp dev",
-    "check": "vp check",
-    "test": "vp test",
-    "build": "vp build"
-  }
-}
-```
-
 The documentation uses bare `vp` commands for readability. Without the global CLI, prefix interactive commands with your package manager's local-binary executor, such as `pnpm exec`.
 
 ### Manual Installation
@@ -94,6 +81,25 @@ Dependencies and plugins can import `vite` or `vitest` directly, even when your 
 Keep the core alias aligned with your installed `vite-plus` version and update the Vitest pin to match its bundled version when upgrading. [Issue #2356](https://github.com/voidzero-dev/vite-plus/issues/2356) describes how dependency bots can update these packages independently and leave incompatible versions installed together.
 
 :::
+
+## Best Practices
+
+We recommend using the [global CLI](/guide/global-cli) together with the project-local CLI. The global CLI makes `vp` available directly in your terminal and delegates development commands such as `vp dev`, `vp build`, and `vp test` to the project's installed `vite-plus` package. This gives you convenient access to the toolchain while keeping its version controlled by the project. You can also use only the project-local CLI if you prefer.
+
+For open-source projects or any project with collaborators, we recommend adding `package.json` scripts that call `vp`, whether you use both CLIs or only the project-local CLI. Inside scripts, `vp` resolves automatically from `node_modules/.bin`:
+
+```json [package.json]
+{
+  "scripts": {
+    "dev": "vp dev",
+    "check": "vp check",
+    "test": "vp test",
+    "build": "vp build"
+  }
+}
+```
+
+After installing the project's dependencies, contributors can run these scripts through their package manager, such as `pnpm run dev` or `npm run dev`, without installing the global CLI.
 
 ## What It Includes
 
