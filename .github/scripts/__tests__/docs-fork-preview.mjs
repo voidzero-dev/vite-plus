@@ -13,6 +13,21 @@ import {
   validateAssets,
 } from '../docs-fork-preview.mjs';
 
+const versionId = '11111111-1111-4111-8111-111111111111';
+const versionUrl = 'https://11111111-viteplus-dev.voidzero-docs.workers.dev';
+
+function uploadOutput(overrides = {}) {
+  return `${JSON.stringify({
+    type: 'version-upload',
+    version: 1,
+    worker_name: 'viteplus-dev',
+    version_id: versionId,
+    preview_url: versionUrl,
+    preview_alias_url: previewUrl(2684),
+    ...overrides,
+  })}\n`;
+}
+
 function fixture() {
   const source = { id: 42, full_name: 'contributor/vite-plus', owner: { login: 'contributor' } };
   const context = {
@@ -176,10 +191,13 @@ await test('ignores a contributor comment that copies the bot marker', async () 
     user: { login: 'contributor' },
     body: '<!-- cloudflare-docs-fork-preview -->',
   });
-  await commentPreview(f, 2684);
+  await commentPreview(f, 2684, uploadOutput());
   assert.equal(f.state.writes[0].method, 'create');
   assert.equal(f.state.writes[0].issue_number, 2684);
-  assert.match(f.state.writes[0].body, /Commit: a{40}$/);
+  assert.equal(
+    f.state.writes[0].body,
+    `<!-- cloudflare-docs-fork-preview -->\nCloudflare documentation preview: ${versionUrl}\n\nCommit: ${'a'.repeat(40)}\n\nLatest uploaded preview (may show another commit): ${previewUrl(2684)}`,
+  );
 });
 
 await test('updates the existing bot comment', async () => {
@@ -189,17 +207,77 @@ await test('updates the existing bot comment', async () => {
     user: { login: 'github-actions[bot]' },
     body: '<!-- cloudflare-docs-fork-preview -->\nPrevious preview',
   });
-  await commentPreview(f, 2684);
+  await commentPreview(f, 2684, uploadOutput());
   assert.equal(f.state.writes[0].method, 'update');
   assert.equal(f.state.writes[0].comment_id, 101);
+  assert.ok(f.state.writes[0].body.includes(versionUrl));
 });
 
 await test('does not comment if the PR changes during upload', async () => {
   const f = fixture();
   f.pr.head.sha = 'b'.repeat(40);
-  await commentPreview(f, 2684);
+  await commentPreview(f, 2684, uploadOutput());
   assert.deepEqual(f.state.writes, []);
 });
+
+await test('keeps the previous comment tied to its version when the PR changes during upload', async () => {
+  const f = fixture();
+  await commentPreview(f, 2684, uploadOutput());
+  const previousBody = f.state.writes[0].body;
+  f.state.comments.push({
+    id: 101,
+    user: { login: 'github-actions[bot]' },
+    body: previousBody,
+  });
+  f.state.writes = [];
+
+  // B passes the pre-upload check, then C arrives while B moves the PR alias.
+  f.context.payload.workflow_run.head_sha = 'b'.repeat(40);
+  f.pr.head.sha = 'b'.repeat(40);
+  assert.equal(await isCurrentPreview(f, 2684), true);
+  f.pr.head.sha = 'c'.repeat(40);
+  await commentPreview(
+    f,
+    2684,
+    uploadOutput({
+      version_id: '22222222-2222-4222-8222-222222222222',
+      preview_url: 'https://22222222-viteplus-dev.voidzero-docs.workers.dev',
+    }),
+  );
+
+  assert.deepEqual(f.state.writes, []);
+  assert.equal(f.state.comments[0].body, previousBody);
+  assert.ok(previousBody.includes(`Cloudflare documentation preview: ${versionUrl}`));
+  assert.ok(previousBody.includes(`Commit: ${'a'.repeat(40)}`));
+});
+
+await test('reads the version URL from Wrangler JSONL with other records and blank lines', async () => {
+  const f = fixture();
+  await commentPreview(f, 2684, `\n${JSON.stringify({ type: 'other' })}\n${uploadOutput()}\n`);
+  assert.ok(f.state.writes[0].body.includes(versionUrl));
+});
+
+for (const [name, output] of [
+  ['missing upload', ''],
+  ['duplicate uploads', uploadOutput() + uploadOutput()],
+  ['invalid JSON', '{'],
+  ['unsupported output version', uploadOutput({ version: 2 })],
+  ['another Worker', uploadOutput({ worker_name: 'other' })],
+  ['invalid version ID', uploadOutput({ version_id: 'invalid' })],
+  ['disabled preview URLs', uploadOutput({ preview_url: undefined })],
+  ['moving alias', uploadOutput({ preview_url: previewUrl(2684) })],
+  [
+    'another version URL',
+    uploadOutput({ preview_url: versionUrl.replace('11111111', '22222222') }),
+  ],
+  ['another host', uploadOutput({ preview_url: 'https://example.com' })],
+]) {
+  await test(`does not comment for Wrangler output with ${name}`, async () => {
+    const f = fixture();
+    await assert.rejects(commentPreview(f, 2684, output));
+    assert.deepEqual(f.state.writes, []);
+  });
+}
 
 await test('rejects invalid PR numbers before using them in URLs or requests', async () => {
   for (const number of [0, -1, 1.5, NaN, '2684', '2684\nother-output=true']) {

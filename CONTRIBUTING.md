@@ -166,7 +166,7 @@ Documentation PRs from forks receive a Cloudflare preview from the
 runs without deployment credentials. The deployment workflow uses code from
 the default branch and uploads the static build artifact to `viteplus-dev`.
 It checks the source repository, branch, and current PR commit before upload.
-The preview URL stays the same across updates to a PR.
+The PR alias stays the same across updates to a PR.
 
 Repository maintainers must configure the GitHub environment `docs-preview`:
 
@@ -180,9 +180,11 @@ Repository maintainers must configure the GitHub environment `docs-preview`:
 The deployment workflow must be on `main` before GitHub can trigger it through
 `workflow_run`. After setup, push a documentation change to an open fork PR.
 GitHub may require approval for the contributor's first workflow run. A
-successful deployment adds or updates a comment on the original PR, with a URL
-such as `https://pr-2684-viteplus-dev.voidzero-docs.workers.dev` and the built
-commit. `wrangler versions upload` does not promote the version to production.
+successful deployment adds or updates a comment on the original PR. The comment
+links to a fixed Worker version for the stated commit. It also includes the PR
+alias, such as `https://pr-2684-viteplus-dev.voidzero-docs.workers.dev`, which can
+point to a later upload. `wrangler versions upload` does not promote the version
+to production.
 
 Same-repository PRs continue to use the existing preview integrations. To test
 the fork preview helpers locally, run:

@@ -108,6 +108,7 @@ jobs:
           PR_NUMBER: ${{ needs.authorize.outputs.pr }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           WRANGLER_SEND_METRICS: 'false'
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/docs-preview-upload.jsonl
         run: |
           if [[ -z "$CLOUDFLARE_ACCOUNT_ID" || -z "$CLOUDFLARE_API_TOKEN" ]]; then
             echo '::error::Configure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in the docs-preview environment. See CONTRIBUTING.md.'
@@ -124,7 +125,10 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           PR_NUMBER: ${{ needs.authorize.outputs.pr }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/docs-preview-upload.jsonl
         with:
           script: |
+            const { readFile } = await import('node:fs/promises');
             const { commentPreview } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/docs-fork-preview.mjs`);
-            await commentPreview({ github, context, core }, Number(process.env.PR_NUMBER));
+            const output = await readFile(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8');
+            await commentPreview({ github, context, core }, Number(process.env.PR_NUMBER), output);

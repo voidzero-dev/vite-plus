@@ -87,12 +87,38 @@ export async function isCurrentPreview({ github, context }, number) {
   return matchesPreview(pr, run);
 }
 
-export async function commentPreview({ github, context, core }, number) {
+function uploadedPreviewUrl(output) {
+  // WRANGLER_OUTPUT_FILE_PATH contains JSONL, not console output. Require one
+  // upload from this job and its version URL; never substitute the moving alias.
+  const uploads = output
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => JSON.parse(line))
+    .filter((entry) => entry?.type === 'version-upload');
+  if (uploads.length !== 1) {
+    throw new Error('Expected one version-upload record from Wrangler');
+  }
+  const [upload] = uploads;
+  if (
+    upload.version !== 1 ||
+    upload.worker_name !== 'viteplus-dev' ||
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(upload.version_id) ||
+    upload.preview_url !==
+      `https://${upload.version_id.slice(0, 8)}-viteplus-dev.voidzero-docs.workers.dev`
+  ) {
+    throw new Error(
+      'Invalid version preview URL from Wrangler; check that Preview URLs are enabled',
+    );
+  }
+  return upload.preview_url;
+}
+
+export async function commentPreview({ github, context, core }, number, output) {
   if (!(await isCurrentPreview({ github, context }, number))) {
     core.info('The PR closed or changed during upload; skipping the preview comment.');
     return;
   }
-  const body = `${marker}\nCloudflare documentation preview: ${previewUrl(number)}\n\nCommit: ${context.payload.workflow_run.head_sha}`;
+  const body = `${marker}\nCloudflare documentation preview: ${uploadedPreviewUrl(output)}\n\nCommit: ${context.payload.workflow_run.head_sha}\n\nLatest uploaded preview (may show another commit): ${previewUrl(number)}`;
   const comments = await github.paginate(github.rest.issues.listComments, {
     ...context.repo,
     issue_number: number,
