@@ -3,6 +3,12 @@ name: Deploy Docs Fork Preview
 # Fork PRs cannot receive deployment credentials. This workflow runs from
 # the default branch, validates the originating workflow and current PR,
 # and uploads only static assets. It never checks out or executes fork code.
+# This file must be on main before workflow_run can trigger it.
+#
+# Maintainer setup: restrict the docs-preview environment to main. Add the
+# CLOUDFLARE_ACCOUNT_ID variable and CLOUDFLARE_API_TOKEN secret there. Scope
+# the token to the Worker account with Workers Scripts: Edit permission.
+# Enable Preview URLs for viteplus-dev on voidzero-docs.workers.dev.
 on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ['Build Docs Fork Preview']
@@ -111,7 +117,7 @@ jobs:
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/docs-preview-upload.jsonl
         run: |
           if [[ -z "$CLOUDFLARE_ACCOUNT_ID" || -z "$CLOUDFLARE_API_TOKEN" ]]; then
-            echo '::error::Configure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in the docs-preview environment. See CONTRIBUTING.md.'
+            echo '::error::Configure the CLOUDFLARE_ACCOUNT_ID variable and CLOUDFLARE_API_TOKEN secret in the docs-preview environment.'
             exit 1
           fi
           "$RUNNER_TEMP/docs-preview-tools/node_modules/.bin/wrangler" versions upload \
