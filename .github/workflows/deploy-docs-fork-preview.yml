@@ -63,10 +63,11 @@ jobs:
     if: needs.authorize.outputs.pr != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Serialize uploads for a PR. An older run rechecks the head after waiting,
-    # so it cannot overwrite a preview that a newer run has already uploaded.
+    # Serialize uploads without replacing pending jobs when an old run arrives
+    # late. Recheck the head after waiting so stale jobs do not upload.
     concurrency:
       group: deploy-docs-fork-preview-${{ needs.authorize.outputs.pr }}
+      queue: max
       cancel-in-progress: false
     environment:
       name: docs-preview

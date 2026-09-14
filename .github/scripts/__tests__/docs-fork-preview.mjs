@@ -97,7 +97,13 @@ function fixture() {
           return { data: { permission: state.permission } };
         },
       },
-      pulls: { list() {}, get: async () => ({ data: pr }) },
+      pulls: {
+        list() {},
+        get: async (params) => {
+          state.requests.push(params);
+          return { data: structuredClone(pr) };
+        },
+      },
       actions: {
         listWorkflowRunArtifacts() {},
         getWorkflowRun: async (params) => {
@@ -118,7 +124,7 @@ function fixture() {
     paginate: async (method, params) => {
       state.requests.push(params);
       if (method === github.rest.pulls.list) {
-        return state.pulls;
+        return structuredClone(state.pulls);
       }
       if (method === github.rest.actions.listWorkflowRunArtifacts) {
         return state.artifacts;
@@ -297,6 +303,17 @@ await test('isolates build concurrency by PR and SHA, including delayed old runs
   assert.equal(group(2684, 'b'.repeat(40)), newer);
 });
 
+await test('queues pending deployments without replacing them when an old run arrives late', async () => {
+  const yaml = await readFile(
+    new URL('../../workflows/deploy-docs-fork-preview.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    yaml,
+    /concurrency:\n\s+group: deploy-docs-fork-preview-\$\{\{ needs\.authorize\.outputs\.pr \}\}\n\s+queue: max\n\s+cancel-in-progress: false/,
+  );
+});
+
 await test('authorizes a fork with an empty workflow_run PR list and pins its artifact', async () => {
   const f = fixture();
   await authorizePreview(f);
@@ -310,6 +327,10 @@ await test('authorizes a fork with an empty workflow_run PR list and pins its ar
     },
     { owner: 'voidzero-dev', repo: 'vite-plus', username: 'maintainer' },
     { owner: 'voidzero-dev', repo: 'vite-plus', run_id: 123 },
+    { owner: 'voidzero-dev', repo: 'vite-plus', ref: 'a'.repeat(40), per_page: 100 },
+    { owner: 'voidzero-dev', repo: 'vite-plus', run_id: 987 },
+    { owner: 'voidzero-dev', repo: 'vite-plus', pull_number: 2684 },
+    { owner: 'voidzero-dev', repo: 'vite-plus', username: 'maintainer' },
     { owner: 'voidzero-dev', repo: 'vite-plus', ref: 'a'.repeat(40), per_page: 100 },
     { owner: 'voidzero-dev', repo: 'vite-plus', run_id: 987 },
   ]);
@@ -451,6 +472,66 @@ for (const pending of ['missing status', 'running workflow']) {
     assert.equal(await isCurrentPreview(f, 2684), false);
   });
 }
+
+await test('does not enqueue an older authorization that finishes after a newer preview', async () => {
+  const older = fixture();
+  older.approval.status = 'in_progress';
+  older.approval.conclusion = null;
+  const newerOutputs = {};
+  const newer = {
+    ...older,
+    context: structuredClone(older.context),
+    core: {
+      info() {},
+      setOutput: (key, value) => (newerOutputs[key] = value),
+    },
+  };
+  newer.context.payload.workflow_run.id = 124;
+  newer.context.payload.workflow_run.head_sha = 'b'.repeat(40);
+  older.sleep = async (ms) => {
+    older.state.sleeps.push(ms);
+    older.pr.head.sha = newer.context.payload.workflow_run.head_sha;
+    grantApproval(older.state, older.pr.head.sha, older.pr.number, 988);
+    await authorizePreview(newer);
+    older.approval.status = 'completed';
+    older.approval.conclusion = 'success';
+  };
+
+  await authorizePreview(older);
+
+  assert.equal(newerOutputs.pr, 2684);
+  assert.deepEqual(older.state.sleeps, [5000]);
+  assert.deepEqual(older.state.outputs, {});
+  assert.equal(await isCurrentPreview(newer, 2684), true);
+});
+
+for (const { name, mutate } of [
+  { name: 'label removal', mutate: (f) => (f.pr.labels = []) },
+  { name: 'PR closure', mutate: (f) => (f.pr.state = 'closed') },
+  { name: 'a base change', mutate: (f) => (f.pr.base.ref = 'release') },
+  { name: 'requester permission removal', mutate: (f) => (f.state.permission = 'read') },
+]) {
+  await test(`rechecks ${name} after approval polling and before queueing`, async () => {
+    const f = fixture();
+    f.approval.status = 'in_progress';
+    f.approval.conclusion = null;
+    f.sleep = async () => {
+      grantApproval(f.state);
+      mutate(f);
+    };
+    await authorizePreview(f);
+    assert.deepEqual(f.state.outputs, {});
+  });
+}
+
+await test('fails closed when the PR recheck before queueing fails', async () => {
+  const f = fixture();
+  f.github.rest.pulls.get = async () => {
+    throw new Error('GitHub PR lookup failed');
+  };
+  await assert.rejects(authorizePreview(f), /GitHub PR lookup failed/);
+  assert.deepEqual(f.state.outputs, {});
+});
 
 for (const api of ['statuses', 'workflow proof']) {
   await test(`fails closed when the ${api} lookup fails`, async () => {

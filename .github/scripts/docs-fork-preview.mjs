@@ -209,6 +209,12 @@ export async function authorizePreview({ github, context, core, sleep = setTimeo
     );
     return;
   }
+  // Approval polling can outlive the PR state checked above. Do not send a
+  // stale or revoked request to the deployment queue.
+  if (!(await isCurrentPreview({ github, context }, candidates[0].number))) {
+    core.info('The PR changed or preview permission was revoked; skipping the deployment queue.');
+    return;
+  }
   core.setOutput('pr', candidates[0].number);
   core.setOutput('artifact-id', matches[0].id);
   core.setOutput('preview-url', previewUrl(candidates[0].number));
