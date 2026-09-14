@@ -13,15 +13,13 @@ function validatePrNumber(number) {
   }
 }
 
-export function previewAlias(runId, attempt) {
-  if (![runId, attempt].every((value) => Number.isSafeInteger(value) && value > 0)) {
-    throw new Error('Invalid docs preview build identity');
-  }
-  return `build-${runId}-${attempt}`;
+export function previewAlias(number) {
+  validatePrNumber(number);
+  return `pr-${number}`;
 }
 
-export function previewUrl(runId, attempt) {
-  return `https://${previewAlias(runId, attempt)}-viteplus-dev.voidzero-docs.workers.dev`;
+export function previewUrl(number) {
+  return `https://${previewAlias(number)}-viteplus-dev.voidzero-docs.workers.dev`;
 }
 
 function previewRun(context) {
@@ -42,7 +40,9 @@ function previewRun(context) {
   ) {
     throw new Error('Invalid docs preview workflow run');
   }
-  previewAlias(run.id, run.run_attempt);
+  if (![run.id, run.run_attempt].every((value) => Number.isSafeInteger(value) && value > 0)) {
+    throw new Error('Invalid docs preview build identity');
+  }
   return run;
 }
 
@@ -142,8 +142,8 @@ export async function authorizePreview({ github, context, core }) {
     core.info('The workflow produced no artifacts; skipping the preview.');
     return;
   }
-  // A rerun has its own origin. Do not pair one attempt's origin with another
-  // attempt's artifact when a delayed deployment lists the run's artifacts.
+  // A rerun has its own artifact. Deploy only the triggering attempt's output,
+  // even when a delayed deployment lists artifacts from newer attempts.
   const artifactName = `docs-fork-preview-${run.run_attempt}`;
   const matches = artifacts.filter((a) => a.name === artifactName && !a.expired);
   if (matches.length !== 1) {
@@ -165,8 +165,8 @@ export async function authorizePreview({ github, context, core }) {
   validatePrNumber(candidates[0].number);
   core.setOutput('pr', candidates[0].number);
   core.setOutput('artifact-id', matches[0].id);
-  core.setOutput('preview-alias', previewAlias(run.id, run.run_attempt));
-  core.setOutput('preview-url', previewUrl(run.id, run.run_attempt));
+  core.setOutput('preview-alias', previewAlias(candidates[0].number));
+  core.setOutput('preview-url', previewUrl(candidates[0].number));
 }
 
 export async function isCurrentPreview({ github, context }, number) {
@@ -201,10 +201,10 @@ function uploadedPreviewUrl(output, expectedAliasUrl) {
     upload.preview_alias_url !== expectedAliasUrl
   ) {
     throw new Error(
-      'Invalid preview URLs from Wrangler; check that Preview URLs and the build alias are configured',
+      'Invalid preview URLs from Wrangler; check that Preview URLs and the PR alias are configured',
     );
   }
-  return upload.preview_url;
+  return upload.preview_alias_url;
 }
 
 export async function commentPreview({ github, context, core }, number, output) {
@@ -213,7 +213,7 @@ export async function commentPreview({ github, context, core }, number, output) 
     return;
   }
   const run = previewRun(context);
-  const body = `${marker}\nCloudflare documentation preview: ${uploadedPreviewUrl(output, previewUrl(run.id, run.run_attempt))}\n\nCommit: ${run.head_sha}`;
+  const body = `${marker}\nCloudflare documentation preview: ${uploadedPreviewUrl(output, previewUrl(number))}\n\nCommit: ${run.head_sha}`;
   const comments = await github.paginate(github.rest.issues.listComments, {
     ...context.repo,
     issue_number: number,

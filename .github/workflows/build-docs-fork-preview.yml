@@ -94,9 +94,9 @@ jobs:
         run: vp run build:cloudflare
         working-directory: docs
         env:
-          # Pin absolute links and piped installers to this build attempt.
+          # Use the PR's stable alias for absolute links and piped installers.
           # Keep this origin aligned with previewUrl in docs-fork-preview.mjs.
-          DOCS_SITE_ORIGIN: https://build-${{ github.run_id }}-${{ github.run_attempt }}-viteplus-dev.voidzero-docs.workers.dev
+          DOCS_SITE_ORIGIN: https://pr-${{ github.event.pull_request.number }}-viteplus-dev.voidzero-docs.workers.dev
 
       # This job has no deployment secrets or write token. Its artifact is
       # untrusted static content, never executable input to the deploy job.

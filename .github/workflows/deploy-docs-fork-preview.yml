@@ -22,8 +22,8 @@ run-name: 'Deploy docs preview at ${{ github.event.workflow_run.head_sha }} from
 # and requires environment approval for this deployment run, not an old commit.
 # An absent or unprotected environment must not silently permit deployment:
 # the deploy job also checks GitHub's review history before using credentials.
-# Each build attempt gets its own alias, so its installer URLs cannot move to
-# another build. These aliases remain subject to Cloudflare's retention limits.
+# Each PR reuses one alias for its docs and installer URLs. An approved upload
+# updates that address. Aliases are subject to Cloudflare's retention limits.
 on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ['Build Docs Fork Preview']
@@ -73,11 +73,10 @@ jobs:
     if: github.event_name == 'workflow_run' && needs.authorize.outputs.pr != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Serialize uploads without replacing pending jobs when an old run arrives
-    # late. Recheck the head after waiting so stale jobs do not upload.
+    # Serialize uploads per PR and let the running deployment finish.
+    # Keep only the last queued job; recheck the head before uploading.
     concurrency:
       group: deploy-docs-fork-preview-${{ needs.authorize.outputs.pr }}
-      queue: max
       cancel-in-progress: false
     environment:
       name: docs-preview
