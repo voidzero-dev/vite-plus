@@ -1,6 +1,6 @@
 # Project-local CLI
 
-The `vite-plus` package contains the project-local `vp` CLI and the integrated frontend toolchain. Install it as a development dependency when you want the toolchain version recorded in the project's manifest and lockfile, or when you do not want to install the standalone global CLI.
+Different from [global `vp` cli](/guide/global-cli), the `vite-plus` is a npm package which contains the project-local `vp` CLI and the integrated frontend toolchain. Install it as a development dependency when you want the toolchain version recorded in the project's manifest and lockfile, or when you do not want to install the standalone global CLI.
 
 The local package includes Vite, Rolldown, Vitest, Oxlint, Oxfmt, tsdown, the Vite+ task runner, and package-manager commands. It requires an existing Node.js runtime and package manager.
 
@@ -99,7 +99,7 @@ For open-source projects or any project with collaborators, we recommend adding 
 }
 ```
 
-After installing the project's dependencies, contributors can run these scripts through their package manager, such as `pnpm run dev` or `npm run dev`, without installing the global CLI.
+After installing the project's dependencies, contributors can run these scripts through their package manager, such as `pnpm run dev` or `npm run dev`, without being required to install the global CLI.
 
 ## What It Includes
 
