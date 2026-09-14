@@ -94,13 +94,15 @@ jobs:
         run: vp run build:cloudflare
         working-directory: docs
         env:
-          DOCS_SITE_ORIGIN: https://pr-${{ github.event.pull_request.number }}-viteplus-dev.voidzero-docs.workers.dev
+          # Pin absolute links and piped installers to this build attempt.
+          # Keep this origin aligned with previewUrl in docs-fork-preview.mjs.
+          DOCS_SITE_ORIGIN: https://build-${{ github.run_id }}-${{ github.run_attempt }}-viteplus-dev.voidzero-docs.workers.dev
 
       # This job has no deployment secrets or write token. Its artifact is
       # untrusted static content, never executable input to the deploy job.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: docs-fork-preview
+          name: docs-fork-preview-${{ github.run_attempt }}
           path: docs/.vitepress/dist
           if-no-files-found: error
           retention-days: 7

@@ -1,6 +1,7 @@
 // Run with node --test; these workflow helpers need no workspace dependencies.
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -9,6 +10,7 @@ import {
   authorizePreview,
   commentPreview,
   isCurrentPreview,
+  previewAlias,
   previewUrl,
   requireDeploymentApproval,
   validateAssets,
@@ -34,7 +36,7 @@ function uploadOutput(overrides = {}) {
     worker_name: 'viteplus-dev',
     version_id: versionId,
     preview_url: versionUrl,
-    preview_alias_url: previewUrl(2684),
+    preview_alias_url: previewUrl(123, 1),
     ...overrides,
   })}\n`;
 }
@@ -48,6 +50,7 @@ function fixture() {
     payload: {
       workflow_run: {
         id: 123,
+        run_attempt: 1,
         path: '.github/workflows/build-docs-fork-preview.yml',
         event: 'pull_request',
         conclusion: 'success',
@@ -68,7 +71,7 @@ function fixture() {
   };
   const state = {
     pulls: [pr],
-    artifacts: [{ id: 456, name: 'docs-fork-preview', expired: false }],
+    artifacts: [{ id: 456, name: 'docs-fork-preview-1', expired: false }],
     comments: [],
     outputs: {},
     writes: [],
@@ -194,6 +197,126 @@ await test('isolates build concurrency by PR and SHA, including delayed old runs
   assert.equal(group(2684, 'b'.repeat(40)), newer);
 });
 
+await test('keeps build origins, artifact names, and deployment aliases aligned', async () => {
+  const build = await readFile(
+    new URL('../../workflows/build-docs-fork-preview.yml', import.meta.url),
+    'utf8',
+  );
+  const deploy = await readFile(
+    new URL('../../workflows/deploy-docs-fork-preview.yml', import.meta.url),
+    'utf8',
+  );
+  const originTemplate = build.match(/DOCS_SITE_ORIGIN: (.+)/)?.[1];
+  const artifactTemplate = build.match(/name: (docs-fork-preview-.+)/)?.[1];
+  assert.ok(originTemplate);
+  assert.ok(artifactTemplate);
+  for (const [runId, attempt] of [
+    [123, 1],
+    [124, 1],
+    [123, 2],
+  ]) {
+    const f = fixture();
+    f.context.payload.workflow_run.id = runId;
+    f.context.payload.workflow_run.run_attempt = attempt;
+    f.state.artifacts[0].name = artifactTemplate.replace(
+      '${{ github.run_attempt }}',
+      String(attempt),
+    );
+    await authorizePreview(f);
+    const origin = originTemplate
+      .replace('${{ github.run_id }}', String(runId))
+      .replace('${{ github.run_attempt }}', String(attempt));
+    assert.equal(origin, f.state.outputs['preview-url']);
+    assert.equal(f.state.outputs['preview-alias'], previewAlias(runId, attempt));
+  }
+  assert.match(deploy, /preview-alias: \$\{\{ steps\.preview\.outputs\.preview-alias \}\}/);
+  assert.match(deploy, /PREVIEW_ALIAS: \$\{\{ needs\.authorize\.outputs\.preview-alias \}\}/);
+  assert.match(deploy, /--preview-alias "\$PREVIEW_ALIAS"/);
+  assert.doesNotMatch(deploy, /--preview-alias "pr-\$PR_NUMBER"/);
+});
+
+await test('keeps installer origins isolated after a newer build and a rerun', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'docs-preview-installers-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const snapshots = [];
+  for (const [runId, attempt] of [
+    [123, 1],
+    [124, 1],
+    [123, 2],
+  ]) {
+    const root = join(directory, `${runId}-${attempt}`);
+    const scripts = join(root, 'docs', '.vitepress', 'scripts');
+    const output = join(root, 'docs', 'public');
+    const installers = join(root, 'packages', 'cli');
+    for (const path of [scripts, output, installers]) {
+      await mkdir(path, { recursive: true });
+    }
+    const script = join(scripts, 'copy-installers.mjs');
+    await copyFile(
+      new URL('../../../docs/.vitepress/scripts/copy-installers.mjs', import.meta.url),
+      script,
+    );
+    for (const name of ['install.sh', 'install.ps1', 'install-legacy.sh', 'install-legacy.ps1']) {
+      await copyFile(
+        new URL(`../../../packages/cli/${name}`, import.meta.url),
+        join(installers, name),
+      );
+    }
+    const origin = previewUrl(runId, attempt);
+    execFileSync(process.execPath, [script], { env: { ...process.env, DOCS_SITE_ORIGIN: origin } });
+    const shell = await readFile(join(output, 'install.sh'), 'utf8');
+    const powershell = await readFile(join(output, 'install.ps1'), 'utf8');
+    assert.ok(shell.includes(`${origin}/install-legacy.sh`));
+    assert.ok(powershell.includes(`${origin}/install-legacy.ps1`));
+    snapshots.push({ origin, output, shell, powershell });
+  }
+  assert.equal(new Set(snapshots.map((snapshot) => snapshot.origin)).size, 3);
+  for (const snapshot of snapshots) {
+    assert.equal(await readFile(join(snapshot.output, 'install.sh'), 'utf8'), snapshot.shell);
+    assert.equal(await readFile(join(snapshot.output, 'install.ps1'), 'utf8'), snapshot.powershell);
+    for (const other of snapshots) {
+      if (other.origin !== snapshot.origin) {
+        assert.ok(!snapshot.shell.includes(other.origin));
+        assert.ok(!snapshot.powershell.includes(other.origin));
+      }
+    }
+  }
+});
+
+await test('pins an artifact to the triggering build attempt', async () => {
+  const f = fixture();
+  f.state.artifacts.push({ id: 789, name: 'docs-fork-preview-2', expired: false });
+  await authorizePreview(f);
+  assert.equal(f.state.outputs['artifact-id'], 456);
+  assert.equal(f.state.outputs['preview-alias'], 'build-123-1');
+  f.context.payload.workflow_run.run_attempt = 2;
+  await authorizePreview(f);
+  assert.equal(f.state.outputs['artifact-id'], 789);
+  assert.equal(f.state.outputs['preview-alias'], 'build-123-2');
+  f.context.payload.workflow_run.run_attempt = 3;
+  await assert.rejects(authorizePreview(f), /Expected one active docs-fork-preview-3/);
+});
+
+await test('validates build identities and keeps aliases within DNS limits', async () => {
+  for (const value of [undefined, 0, -1, 1.5, NaN, '123', Number.MAX_SAFE_INTEGER + 1]) {
+    for (const [runId, attempt] of [
+      [value, 1],
+      [123, value],
+    ]) {
+      assert.throws(() => previewAlias(runId, attempt), /Invalid docs preview build identity/);
+      assert.throws(() => previewUrl(runId, attempt), /Invalid docs preview build identity/);
+      const f = fixture();
+      f.context.payload.workflow_run.id = runId;
+      f.context.payload.workflow_run.run_attempt = attempt;
+      await assert.rejects(authorizePreview(f), /Invalid docs preview build identity/);
+      assert.deepEqual(f.state.requests, []);
+    }
+  }
+  const alias = previewAlias(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+  assert.match(alias, /^[a-z][a-z0-9-]*$/);
+  assert.ok(`${alias}-viteplus-dev`.length <= 63);
+});
+
 await test('queues pending deployments without replacing them when an old run arrives late', async () => {
   const yaml = await readFile(
     new URL('../../workflows/deploy-docs-fork-preview.yml', import.meta.url),
@@ -226,7 +349,8 @@ await test('authorizes a fork with an empty workflow_run PR list and pins its ar
   assert.deepEqual(f.state.outputs, {
     pr: 2684,
     'artifact-id': 456,
-    'preview-url': 'https://pr-2684-viteplus-dev.voidzero-docs.workers.dev',
+    'preview-alias': 'build-123-1',
+    'preview-url': 'https://build-123-1-viteplus-dev.voidzero-docs.workers.dev',
   });
   await assert.rejects(requireDeploymentApproval(f), /needs maintainer approval/);
   assert.equal(await isCurrentPreview(f, 2684), false);
@@ -557,11 +681,11 @@ await test('skips successful helper-only or unrelated label runs without artifac
 });
 
 for (const artifacts of [
-  [{ id: 456, name: 'docs-fork-preview', expired: true }],
+  [{ id: 456, name: 'docs-fork-preview-1', expired: true }],
   [{ id: 456, name: 'other', expired: false }],
   [
-    { id: 456, name: 'docs-fork-preview', expired: false },
-    { id: 789, name: 'docs-fork-preview', expired: false },
+    { id: 456, name: 'docs-fork-preview-1', expired: false },
+    { id: 789, name: 'docs-fork-preview-1', expired: false },
   ],
 ]) {
   await test(`rejects missing, expired, or ambiguous artifacts: ${JSON.stringify(artifacts)}`, async () => {
@@ -584,7 +708,7 @@ await test('ignores a contributor comment that copies the bot marker', async () 
   assert.equal(f.state.writes[0].issue_number, 2684);
   assert.equal(
     f.state.writes[0].body,
-    `<!-- cloudflare-docs-fork-preview -->\nCloudflare documentation preview: ${versionUrl}\n\nCommit: ${'a'.repeat(40)}\n\nLatest uploaded preview (may show another commit): ${previewUrl(2684)}`,
+    `<!-- cloudflare-docs-fork-preview -->\nCloudflare documentation preview: ${versionUrl}\n\nCommit: ${'a'.repeat(40)}`,
   );
 });
 
@@ -619,7 +743,8 @@ await test('keeps the previous comment tied to its version when the PR changes d
   });
   f.state.writes = [];
 
-  // B passes the pre-upload check, then C arrives while B moves the PR alias.
+  // B passes the pre-upload check, then C arrives while B uploads its version.
+  f.context.payload.workflow_run.id = 124;
   f.context.payload.workflow_run.head_sha = 'b'.repeat(40);
   f.pr.head.sha = 'b'.repeat(40);
   f.context.runId = 988;
@@ -655,7 +780,14 @@ for (const [name, output] of [
   ['another Worker', uploadOutput({ worker_name: 'other' })],
   ['invalid version ID', uploadOutput({ version_id: 'invalid' })],
   ['disabled preview URLs', uploadOutput({ preview_url: undefined })],
-  ['moving alias', uploadOutput({ preview_url: previewUrl(2684) })],
+  ['alias instead of version URL', uploadOutput({ preview_url: previewUrl(123, 1) })],
+  ['missing build alias', uploadOutput({ preview_alias_url: undefined })],
+  ['another build alias', uploadOutput({ preview_alias_url: previewUrl(124, 1) })],
+  ['another attempt alias', uploadOutput({ preview_alias_url: previewUrl(123, 2) })],
+  [
+    'moving PR alias',
+    uploadOutput({ preview_alias_url: 'https://pr-2684-viteplus-dev.voidzero-docs.workers.dev' }),
+  ],
   [
     'another version URL',
     uploadOutput({ preview_url: versionUrl.replace('11111111', '22222222') }),
@@ -671,7 +803,6 @@ for (const [name, output] of [
 
 await test('rejects invalid PR numbers before using them in URLs or requests', async () => {
   for (const number of [0, -1, 1.5, NaN, '2684', '2684\nother-output=true']) {
-    assert.throws(() => previewUrl(number), /Invalid pull request number/);
     await assert.rejects(isCurrentPreview(fixture(), number), /Invalid pull request number/);
   }
 });

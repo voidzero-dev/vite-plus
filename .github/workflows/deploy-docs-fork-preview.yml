@@ -22,6 +22,8 @@ run-name: 'Deploy docs preview at ${{ github.event.workflow_run.head_sha }} from
 # and requires environment approval for this deployment run, not an old commit.
 # An absent or unprotected environment must not silently permit deployment:
 # the deploy job also checks GitHub's review history before using credentials.
+# Each build attempt gets its own alias, so its installer URLs cannot move to
+# another build. These aliases remain subject to Cloudflare's retention limits.
 on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ['Build Docs Fork Preview']
@@ -50,6 +52,7 @@ jobs:
     outputs:
       pr: ${{ steps.preview.outputs.pr }}
       artifact-id: ${{ steps.preview.outputs.artifact-id }}
+      preview-alias: ${{ steps.preview.outputs.preview-alias }}
       preview-url: ${{ steps.preview.outputs.preview-url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -137,6 +140,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           PR_NUMBER: ${{ needs.authorize.outputs.pr }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          PREVIEW_ALIAS: ${{ needs.authorize.outputs.preview-alias }}
           WRANGLER_SEND_METRICS: 'false'
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/docs-preview-upload.jsonl
         run: |
@@ -147,7 +151,7 @@ jobs:
           "$RUNNER_TEMP/docs-preview-tools/node_modules/.bin/wrangler" versions upload \
             --config "$GITHUB_WORKSPACE/docs/wrangler.jsonc" \
             --assets "$RUNNER_TEMP/docs-preview-assets" \
-            --preview-alias "pr-$PR_NUMBER" \
+            --preview-alias "$PREVIEW_ALIAS" \
             --message "Docs preview for PR #$PR_NUMBER ($HEAD_SHA)"
 
       - name: Comment on the fork PR

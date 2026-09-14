@@ -7,11 +7,21 @@ const buildWorkflow = '.github/workflows/build-docs-fork-preview.yml';
 const marker = '<!-- cloudflare-docs-fork-preview -->';
 const previewLabel = 'docs-preview';
 
-export function previewUrl(number) {
+function validatePrNumber(number) {
   if (!Number.isSafeInteger(number) || number <= 0) {
     throw new Error('Invalid pull request number');
   }
-  return `https://pr-${number}-viteplus-dev.voidzero-docs.workers.dev`;
+}
+
+export function previewAlias(runId, attempt) {
+  if (![runId, attempt].every((value) => Number.isSafeInteger(value) && value > 0)) {
+    throw new Error('Invalid docs preview build identity');
+  }
+  return `build-${runId}-${attempt}`;
+}
+
+export function previewUrl(runId, attempt) {
+  return `https://${previewAlias(runId, attempt)}-viteplus-dev.voidzero-docs.workers.dev`;
 }
 
 function previewRun(context) {
@@ -32,6 +42,7 @@ function previewRun(context) {
   ) {
     throw new Error('Invalid docs preview workflow run');
   }
+  previewAlias(run.id, run.run_attempt);
   return run;
 }
 
@@ -131,9 +142,12 @@ export async function authorizePreview({ github, context, core }) {
     core.info('The workflow produced no artifacts; skipping the preview.');
     return;
   }
-  const matches = artifacts.filter((a) => a.name === 'docs-fork-preview' && !a.expired);
+  // A rerun has its own origin. Do not pair one attempt's origin with another
+  // attempt's artifact when a delayed deployment lists the run's artifacts.
+  const artifactName = `docs-fork-preview-${run.run_attempt}`;
+  const matches = artifacts.filter((a) => a.name === artifactName && !a.expired);
   if (matches.length !== 1) {
-    throw new Error('Expected one active docs-fork-preview artifact from the triggering run');
+    throw new Error(`Expected one active ${artifactName} artifact from the triggering run`);
   }
   // Environment approval happens after this job. Recheck the PR before
   // requesting it, then recheck again after the deployment job's approval wait.
@@ -148,13 +162,15 @@ export async function authorizePreview({ github, context, core }) {
     core.info('The PR changed or preview permission was revoked; skipping the deployment queue.');
     return;
   }
+  validatePrNumber(candidates[0].number);
   core.setOutput('pr', candidates[0].number);
   core.setOutput('artifact-id', matches[0].id);
-  core.setOutput('preview-url', previewUrl(candidates[0].number));
+  core.setOutput('preview-alias', previewAlias(run.id, run.run_attempt));
+  core.setOutput('preview-url', previewUrl(run.id, run.run_attempt));
 }
 
 export async function isCurrentPreview({ github, context }, number) {
-  previewUrl(number);
+  validatePrNumber(number);
   const run = previewRun(context);
   const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
   return (
@@ -164,9 +180,9 @@ export async function isCurrentPreview({ github, context }, number) {
   );
 }
 
-function uploadedPreviewUrl(output) {
+function uploadedPreviewUrl(output, expectedAliasUrl) {
   // WRANGLER_OUTPUT_FILE_PATH contains JSONL, not console output. Require one
-  // upload from this job and its version URL; never substitute the moving alias.
+  // upload from this job, its version URL, and the alias used by its installers.
   const uploads = output
     .split('\n')
     .filter((line) => line.trim() !== '')
@@ -181,10 +197,11 @@ function uploadedPreviewUrl(output) {
     upload.worker_name !== 'viteplus-dev' ||
     !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(upload.version_id) ||
     upload.preview_url !==
-      `https://${upload.version_id.slice(0, 8)}-viteplus-dev.voidzero-docs.workers.dev`
+      `https://${upload.version_id.slice(0, 8)}-viteplus-dev.voidzero-docs.workers.dev` ||
+    upload.preview_alias_url !== expectedAliasUrl
   ) {
     throw new Error(
-      'Invalid version preview URL from Wrangler; check that Preview URLs are enabled',
+      'Invalid preview URLs from Wrangler; check that Preview URLs and the build alias are configured',
     );
   }
   return upload.preview_url;
@@ -195,7 +212,8 @@ export async function commentPreview({ github, context, core }, number, output) 
     core.info('The PR changed or preview permission was revoked; skipping the preview comment.');
     return;
   }
-  const body = `${marker}\nCloudflare documentation preview: ${uploadedPreviewUrl(output)}\n\nCommit: ${context.payload.workflow_run.head_sha}\n\nLatest uploaded preview (may show another commit): ${previewUrl(number)}`;
+  const run = previewRun(context);
+  const body = `${marker}\nCloudflare documentation preview: ${uploadedPreviewUrl(output, previewUrl(run.id, run.run_attempt))}\n\nCommit: ${run.head_sha}`;
   const comments = await github.paginate(github.rest.issues.listComments, {
     ...context.repo,
     issue_number: number,
