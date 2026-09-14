@@ -213,7 +213,8 @@ async fn envs_with_explicit_package_manager_path(
         return Ok(envs);
     };
 
-    let (install_dir, _, _) = match vp_pm_cli::download_package_manager(
+    let (install_dir, _, _) = match vp_pm_cli::download_package_manager_for_cwd(
+        cwd,
         resolution.package_manager_type,
         &resolution.version,
         resolution.hash.as_deref(),

@@ -10,7 +10,7 @@ use vt_path::AbsolutePath;
 use crate::{
     EnvironmentPackageManagerResolution, PackageManager,
     cli::PackageManagerCommand,
-    download_package_manager,
+    download_package_manager_for_cwd,
     error::Error,
     helpers::build_package_manager_or_npm_default,
     resolution::{DlxArgs, run_resolution},
@@ -69,7 +69,7 @@ async fn dispatch_with_manager(
             let manager = match source {
                 ManagerSource::Detect => return dispatch_dlx(cwd, args, render_diagnostics).await,
                 ManagerSource::Environment(package_manager) => {
-                    build_selected_package_manager(package_manager).await?
+                    build_selected_package_manager(cwd, package_manager).await?
                 }
                 ManagerSource::Resolved(manager) => manager,
             };
@@ -83,7 +83,7 @@ async fn dispatch_with_manager(
     let manager = match source {
         ManagerSource::Detect => build_package_manager_or_npm_default(cwd).await?,
         ManagerSource::Environment(package_manager) => {
-            build_selected_package_manager(package_manager).await?
+            build_selected_package_manager(cwd, package_manager).await?
         }
         ManagerSource::Resolved(manager) => manager,
     };
@@ -95,9 +95,11 @@ async fn dispatch_with_manager(
 }
 
 async fn build_selected_package_manager(
+    cwd: &AbsolutePath,
     package_manager: &EnvironmentPackageManagerResolution,
 ) -> Result<PackageManager, Error> {
-    let (install_dir, _, version) = download_package_manager(
+    let (install_dir, _, version) = download_package_manager_for_cwd(
+        cwd,
         package_manager.package_manager_type,
         &package_manager.version,
         package_manager.hash.as_deref(),
