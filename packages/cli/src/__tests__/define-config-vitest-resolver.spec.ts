@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { preview } from '@vitest/browser-preview';
-import type { Alias, Plugin, UserConfig } from 'vite';
+import { resolveConfig, type Alias, type ConfigEnv, type Plugin, type UserConfig } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import { defineConfig, defineProject, isVitestFamilySpecifier } from '../define-config.ts';
@@ -84,10 +84,55 @@ describe('isVitestFamilySpecifier', () => {
 });
 
 describe('vitePlusVitestResolverPlugin', () => {
+  it.each(['serve', 'build'] as const)(
+    'leaves application dependencies unchanged during %s with browser tests configured',
+    async (command) => {
+      const config = await resolveConfig(
+        {
+          ...defineConfig({
+            mode: 'test',
+            logLevel: 'silent',
+            resolve: { alias: { 'app-alias': '/custom/app' } },
+            test: { browser: { enabled: true, provider: preview() } },
+          }),
+          configFile: false,
+        },
+        command,
+      );
+      // The test process has VITEST set. Neither that variable nor mode=test
+      // makes this application's Vite config a Vitest-owned server.
+      for (const id of ['magic-string', 'chai', 'vitest', '@testing-library/dom']) {
+        expect(
+          config.resolve.alias.some(({ find }) =>
+            typeof find === 'string' ? find === id : find.test(id),
+          ),
+        ).toBe(false);
+      }
+      expect(config.resolve.alias).toContainEqual({
+        find: 'app-alias',
+        replacement: '/custom/app',
+      });
+    },
+  );
+
+  it('does not add browser aliases to builds even with a Vitest environment', () => {
+    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
+    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
+      .handler;
+    const config: UserConfig = {
+      environments: { __vitest__: {} },
+      test: { browser: { enabled: true } },
+    };
+    hook(config, { command: 'build', mode: 'test' });
+    expect(config.resolve).toBeUndefined();
+  });
+
   it('anchors Preview optimizer dependencies without changing other providers', () => {
     const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-    const hook = (plugin.config as { handler: (config: UserConfig) => void }).handler;
+    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
+      .handler;
     const config: UserConfig = {
+      environments: { __vitest__: {} },
       test: {
         browser: {
           enabled: true,
@@ -95,22 +140,26 @@ describe('vitePlusVitestResolverPlugin', () => {
         },
       },
     };
-    hook(config);
+    hook(config, { command: 'serve', mode: 'test' });
     const aliases = config.resolve!.alias as Alias[];
     expect(aliases).toHaveLength(9);
     for (const id of ['@testing-library/user-event', '@testing-library/dom']) {
       const replacement = aliases.find(({ find }) => (find as RegExp).test(id))?.replacement;
       expect(replacement?.replaceAll('\\', '/')).toContain(id);
     }
-    hook(config);
+    hook(config, { command: 'serve', mode: 'test' });
     expect(config.resolve!.alias).toHaveLength(9);
   });
 
   it('anchors browser optimizer entries to the bundled ESM runtime', () => {
     const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-    const hook = (plugin.config as { handler: (config: UserConfig) => void }).handler;
-    const config: UserConfig = { test: { browser: { enabled: true } } };
-    hook(config);
+    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
+      .handler;
+    const config: UserConfig = {
+      environments: { __vitest__: {} },
+      test: { browser: { enabled: true } },
+    };
+    hook(config, { command: 'serve', mode: 'test' });
     const aliases = config.resolve!.alias as Alias[];
     expect(aliases).toHaveLength(7);
     for (const id of ['vitest', 'vitest/internal/browser', 'vitest/internal/traces']) {
@@ -118,26 +167,28 @@ describe('vitePlusVitestResolverPlugin', () => {
         fileURLToPath(import.meta.resolve(id)),
       );
     }
-    hook(config);
+    hook(config, { command: 'serve', mode: 'test' });
     expect(config.resolve!.alias).toHaveLength(7);
   });
 
   it('preserves explicit browser aliases and leaves Node-only configs unchanged', () => {
     const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-    const hook = (plugin.config as { handler: (config: UserConfig) => void }).handler;
+    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
+      .handler;
     const config: UserConfig = {
+      environments: { __vitest__: {} },
       resolve: { alias: { vitest: '/custom/vitest' } },
       test: { browser: { enabled: true } },
     };
-    hook(config);
+    hook(config, { command: 'serve', mode: 'test' });
     expect((config.resolve!.alias as Alias[])[0]).toEqual({
       find: 'vitest',
       replacement: '/custom/vitest',
     });
     expect(config.resolve!.alias).toHaveLength(5);
-    const nodeOnly: UserConfig = { test: {} };
-    hook(nodeOnly);
-    expect(nodeOnly).toEqual({ test: {} });
+    const nodeOnly: UserConfig = { environments: { __vitest__: {} }, test: {} };
+    hook(nodeOnly, { command: 'serve', mode: 'test' });
+    expect(nodeOnly).toEqual({ environments: { __vitest__: {} }, test: {} });
   });
 
   it('is injected into the root plugins array as an enforce:pre plugin with resolveId', () => {
