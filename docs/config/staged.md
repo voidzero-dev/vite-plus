@@ -1,7 +1,6 @@
 # Staged Config
 
-`vp staged` reads staged-file rules from the `staged` block in `vite.config.ts`. See the
-[Commit hooks guide](/guide/commit-hooks).
+`vp staged` reads staged-file rules from the `staged` block in `vite.config.ts`. See the [Commit hooks guide](/guide/commit-hooks).
 
 ## Example
 

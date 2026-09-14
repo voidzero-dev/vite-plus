@@ -1,7 +1,6 @@
 # Commit Hooks
 
-Use `vp hooks` to manage the Git hook dispatcher, `vp config` for project setup
-(hooks + agent integration), and `vp staged` to run checks on staged files.
+Use `vp hooks` to manage the Git hook dispatcher, `vp config` for project setup (hooks + agent integration), and `vp staged` to run checks on staged files.
 
 ## Overview
 
@@ -64,10 +63,7 @@ Check the `Dispatcher` and `core.hooksPath` lines to see whether hooks are actua
 
 ### `vp config`
 
-`vp config` configures Vite+ for the current project. It installs the generated Git hook
-dispatcher (unless hooks were disabled with `vp hooks disable`) and can also handle related
-project integration such as agent setup. The hooks directory defaults to `.vite-hooks`, or the
-last directory used by `vp hooks` / `vp config` in this clone:
+`vp config` configures Vite+ for the current project. It installs the generated Git hook dispatcher (unless hooks were disabled with `vp hooks disable`) and can also handle related project integration such as agent setup. The hooks directory defaults to `.vite-hooks`, or the last directory used by `vp hooks` / `vp config` in this clone:
 
 ```bash
 vp config
@@ -76,24 +72,15 @@ vp config --no-hooks
 vp config --no-agent
 ```
 
-Use `--no-hooks` when you want `vp config` to leave the Git hook dispatcher unchanged. Use
-`--no-agent` when you want it to skip updates to existing coding agent instruction files. You can
-pass both flags when you want `vp config` to skip both setup steps. After `vp hooks disable`,
-`vp config` skips reinstalling the dispatcher and points you at `vp hooks enable` instead of
-prompting again.
+Use `--no-hooks` when you want `vp config` to leave the Git hook dispatcher unchanged. Use `--no-agent` when you want it to skip updates to existing coding agent instruction files. You can pass both flags when you want `vp config` to skip both setup steps. After `vp hooks disable`, `vp config` skips reinstalling the dispatcher and points you at `vp hooks enable` instead of prompting again.
 
-You can also set `VP_GIT_HOOKS=0` to disable hook installation from lifecycle scripts such as
-`prepare` or `postinstall`.
+You can also set `VP_GIT_HOOKS=0` to disable hook installation from lifecycle scripts such as `prepare` or `postinstall`.
 
-Project-owned hook scripts such as `.vite-hooks/pre-commit` should be committed to the repository.
-The generated dispatcher and shims under `.vite-hooks/_` are ignored and recreated by `vp config`
-or `vp hooks enable`. Neither command creates or modifies project hook scripts or staged-file
-configuration.
+Project-owned hook scripts such as `.vite-hooks/pre-commit` should be committed to the repository. The generated dispatcher and shims under `.vite-hooks/_` are ignored and recreated by `vp config` or `vp hooks enable`. Neither command creates or modifies project hook scripts or staged-file configuration.
 
 ### `vp staged`
 
-`vp staged` runs staged-file checks using the `staged` config from `vite.config.ts`. To run it
-before each commit, add it to the project-owned pre-commit hook:
+`vp staged` runs staged-file checks using the `staged` config from `vite.config.ts`. To run it before each commit, add it to the project-owned pre-commit hook:
 
 ```bash
 vp staged
@@ -119,12 +106,7 @@ export default defineConfig({
 });
 ```
 
-This is the default Vite+ approach and should replace separate `lint-staged` configuration in most
-projects. When you opt into hooks during `vp create`, Vite+ scaffolds both this configuration and
-the corresponding pre-commit hook. During `vp migrate`, existing hook policy is preserved, and
-the default is introduced only when no existing hook policy is found. Because
-`vp staged` reads from `vite.config.ts`, your staged-file checks stay in the same place as your
-lint, format, test, build, and task-runner config.
+This is the default Vite+ approach and should replace separate `lint-staged` configuration in most projects. When you opt into hooks during `vp create`, Vite+ scaffolds both this configuration and the corresponding pre-commit hook. During `vp migrate`, existing hook policy is preserved, and the default is introduced only when no existing hook policy is found. Because `vp staged` reads from `vite.config.ts`, your staged-file checks stay in the same place as your lint, format, test, build, and task-runner config.
 
 ## Disabling Hooks in Specific Environments
 
@@ -157,8 +139,7 @@ Because the hook itself reads this file, it works even when the committing proce
 
 ## Removing commit hooks
 
-To stop using the Vite+ hook dispatcher in this clone (and keep `prepare` / `vp config` from
-reinstalling it):
+To stop using the Vite+ hook dispatcher in this clone (and keep `prepare` / `vp config` from reinstalling it):
 
 ```bash
 vp hooks disable
@@ -170,8 +151,7 @@ This:
 
 1. Unsets `core.hooksPath` when it points at the Vite+ dispatcher
 2. Removes the generated `<hooks-dir>/_` directory
-3. Records a **local** disable preference so lifecycle scripts skip reinstall until you run
-   `vp hooks enable` again
+3. Records a **local** disable preference so lifecycle scripts skip reinstall until you run `vp hooks enable` again
 
 To re-enable:
 
@@ -179,8 +159,7 @@ To re-enable:
 vp hooks enable
 ```
 
-If you no longer want hooks for the project at all (shared with teammates), also remove `vp config`
-from the `prepare` or `postinstall` script in `package.json`.
+If you no longer want hooks for the project at all (shared with teammates), also remove `vp config` from the `prepare` or `postinstall` script in `package.json`.
 
 ### Manual equivalent
 
@@ -195,6 +174,4 @@ git config --local vp.hooks.disabled true
 # git config --local vp.hooks.dir .vite-hooks
 ```
 
-Project-owned scripts such as `.vite-hooks/pre-commit` and the `staged` block in `vite.config.ts`
-can remain for later use, or you can remove them separately if the project no longer needs them.
-`vp hooks disable` does **not** delete those project-owned files.
+Project-owned scripts such as `.vite-hooks/pre-commit` and the `staged` block in `vite.config.ts` can remain for later use, or you can remove them separately if the project no longer needs them. `vp hooks disable` does **not** delete those project-owned files.

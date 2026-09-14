@@ -49,10 +49,7 @@ These variables control the installer scripts and the standalone Windows install
 - **Purpose**: Version to install
 - **Default**: `latest`
 - **CLI equivalent**: `--version`
-- **Note**: Vite+ 0.2.x and earlier do not support the split directory layout.
-  The installer always puts these releases in the monolithic root (`VP_HOME` or
-  `~/.vite-plus`). This rule also applies to a fresh machine. The installer
-  checks the downloaded binary and prints a notice.
+- **Note**: Vite+ 0.2.x and earlier do not support the split directory layout. The installer always puts these releases in the monolithic root (`VP_HOME` or `~/.vite-plus`). This rule also applies to a fresh machine. The installer checks the downloaded binary and prints a notice.
 - **Example**:
 
   ```bash
@@ -67,15 +64,8 @@ These variables control the installer scripts and the standalone Windows install
 
 #### `VP_HOME`
 
-- **Purpose**: Optional pin for the single-root layout. Set it to an absolute
-  path. Vite+ then puts bin, data, cache, config, and state under that directory.
-  The installed CLI reads the same variable. See [Environment](/guide/env).
-- **Default**: unset. Vite+ reuses an existing install in `~/.vite-plus` on
-  Unix or `%USERPROFILE%\.vite-plus` on Windows. The directory must contain a
-  `current` link. Otherwise, a fresh install uses the split platform layout. On
-  Unix, it uses `~/.local/share/vite-plus` and its Vite+-owned `bin`
-  subdirectory. On Windows, it uses `%LOCALAPPDATA%\vite-plus\data` and
-  `%LOCALAPPDATA%\vite-plus\bin`.
+- **Purpose**: Optional pin for the single-root layout. Set it to an absolute path. Vite+ then puts bin, data, cache, config, and state under that directory. The installed CLI reads the same variable. See [Environment](/guide/env).
+- **Default**: unset. Vite+ reuses an existing install in `~/.vite-plus` on Unix or `%USERPROFILE%\.vite-plus` on Windows. The directory must contain a `current` link. Otherwise, a fresh install uses the split platform layout. On Unix, it uses `~/.local/share/vite-plus` and its Vite+-owned `bin` subdirectory. On Windows, it uses `%LOCALAPPDATA%\vite-plus\data` and `%LOCALAPPDATA%\vite-plus\bin`.
 - **Example**:
 
   ```bash
@@ -90,14 +80,9 @@ These variables control the installer scripts and the standalone Windows install
 
 #### `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`
 
-- **Purpose**: Internal absolute directory overrides for integrations that
-  must pin a split install. Set all three variables together. The installer
-  rejects an incomplete group. Vite+ ignores the group when `VP_HOME` is set
-  or when it reuses an existing `~/.vite-plus` install.
+- **Purpose**: Internal absolute directory overrides for integrations that must pin a split install. Set all three variables together. The installer rejects an incomplete group. Vite+ ignores the group when `VP_HOME` is set or when it reuses an existing `~/.vite-plus` install.
 - **Default**: unset (XDG / platform defaults)
-- **Persistence**: The generated environment file does not export these
-  variables. An integration that uses them must provide the complete group to
-  each Vite+ process.
+- **Persistence**: The generated environment file does not export these variables. An integration that uses them must provide the complete group to each Vite+ process.
 - **Example**:
 
   ```bash
@@ -131,21 +116,15 @@ These variables control the installer scripts and the standalone Windows install
 
 #### `VP_PM_MANAGER`
 
-- **Purpose**: Set the management preference for all four package-manager
-  families: npm, pnpm, Yarn, and Bun.
-- **Values**: `yes` uses Vite+ management; `no` prefers system tools, with
-  managed tools as a fallback when a system tool is unavailable.
-- **Default**: Unset. The installer's combined Node.js and package-manager
-  choice remains the default. With the script installers, setting only
-  `VP_NODE_MANAGER` preserves existing package-manager preferences.
+- **Purpose**: Set the management preference for all four package-manager families: npm, pnpm, Yarn, and Bun.
+- **Values**: `yes` uses Vite+ management; `no` prefers system tools, with managed tools as a fallback when a system tool is unavailable.
+- **Default**: Unset. The installer's combined Node.js and package-manager choice remains the default. With the script installers, setting only `VP_NODE_MANAGER` preserves existing package-manager preferences.
 
 #### `VP_NPM_MANAGER` / `VP_PNPM_MANAGER` / `VP_YARN_MANAGER` / `VP_BUN_MANAGER`
 
-- **Purpose**: Set the management preference for an individual package-manager
-  family. Each variable overrides `VP_PM_MANAGER` for that family.
+- **Purpose**: Set the management preference for an individual package-manager family. Each variable overrides `VP_PM_MANAGER` for that family.
 - **Values**: `yes` or `no`, with the same meaning as `VP_PM_MANAGER`.
-- **Default**: Unset (use `VP_PM_MANAGER`, then the combined installer choice,
-  or preserve the existing preference).
+- **Default**: Unset (use `VP_PM_MANAGER`, then the combined installer choice, or preserve the existing preference).
 - **Example**:
 
   ```bash
@@ -153,15 +132,7 @@ These variables control the installer scripts and the standalone Windows install
   curl -fsSL https://vite.plus | VP_NODE_MANAGER=no VP_PM_MANAGER=no VP_PNPM_MANAGER=yes bash
   ```
 
-These management variables are installation choices, saved in Vite+'s config.
-The interactive prompt still controls both Node.js and package managers;
-explicit package-manager variables override that combined choice. The standalone
-`vp-setup` installer uses its existing combined option as the default for both
-variables, in interactive and silent installations alike.
-In-place upgrades preserve the saved choices. Unrecognized values are ignored.
-They select management behavior, not package-manager versions, and do not
-prevent the installer from creating shims. Older releases installed through
-the legacy installer retain their original behavior.
+These management variables are installation choices, saved in Vite+'s config. The interactive prompt still controls both Node.js and package managers; explicit package-manager variables override that combined choice. The standalone `vp-setup` installer uses its existing combined option as the default for both variables, in interactive and silent installations alike. In-place upgrades preserve the saved choices. Unrecognized values are ignored. They select management behavior, not package-manager versions, and do not prevent the installer from creating shims. Older releases installed through the legacy installer retain their original behavior.
 
 #### `VP_PR_VERSION`
 
@@ -172,12 +143,7 @@ the legacy installer retain their original behavior.
 
 #### Development variables
 
-Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself.
-`VP_LOCAL_TGZ` specifies a local `vite-plus.tgz` file. `VP_LOCAL_BINARY`
-specifies a local `vp` binary. The installers use these files for the local
-build. They use `VP_DUMP_DIRS=1` to get the layout mode and all five `EnvConfig`
-category roots from the selected binary. They do not resolve the directory
-variables. The installers set `VP_INSTALL_STOP`; do not set it manually.
+Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself. `VP_LOCAL_TGZ` specifies a local `vite-plus.tgz` file. `VP_LOCAL_BINARY` specifies a local `vp` binary. The installers use these files for the local build. They use `VP_DUMP_DIRS=1` to get the layout mode and all five `EnvConfig` category roots from the selected binary. They do not resolve the directory variables. The installers set `VP_INSTALL_STOP`; do not set it manually.
 
 ### Runtime Variables
 
@@ -277,8 +243,7 @@ Vite+ sets additional `VP_*` variables during shim dispatch and shell integratio
 #### `VP_LOG`
 
 - **Purpose**: Log filter string for `tracing_subscriber`
-- **Installer behavior**: When `CI=true`, `install.sh` hides shell file errors.
-  Set `VP_LOG=trace` to show these errors.
+- **Installer behavior**: When `CI=true`, `install.sh` hides shell file errors. Set `VP_LOG=trace` to show these errors.
 - **Default**: None
 - **Example**:
   ```bash

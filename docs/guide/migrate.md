@@ -22,9 +22,7 @@ The positional `PATH` argument is optional.
 
 - If omitted, `vp migrate` migrates the current directory
 - If provided, it migrates that target directory instead
-- For a monorepo, the target must be the workspace root. Vite+ cannot
-  migrate one workspace member, because migration updates the package-manager
-  configuration, the catalogs, and the lockfiles that all members share.
+- For a monorepo, the target must be the workspace root. Vite+ cannot migrate one workspace member, because migration updates the package-manager configuration, the catalogs, and the lockfiles that all members share.
 
 ```bash
 vp migrate
@@ -53,8 +51,7 @@ The `migrate` command is designed to move existing projects onto Vite+ quickly. 
 - Can write agent and editor configuration files
 - Formats the migrated project
 
-See [Migration Rules](./migrate-rules.md) for the exact dependency, source
-rewrite, and package-manager behavior.
+See [Migration Rules](./migrate-rules.md) for the exact dependency, source rewrite, and package-manager behavior.
 
 Most projects will require further manual adjustments after running `vp migrate`.
 
@@ -171,19 +168,13 @@ export default defineConfig({
 });
 ```
 
-When no existing hook policy owns the workflow, `vp migrate` can move supported lint-staged rules
-and remove the old configuration and dependency. If an existing hook tool is preserved, keep
-lint-staged in place until you convert that hook policy manually. See the
-[Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
+When no existing hook policy owns the workflow, `vp migrate` can move supported lint-staged rules and remove the old configuration and dependency. If an existing hook tool is preserved, keep lint-staged in place until you convert that hook policy manually. See the [Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
 
 ### Git hook tools
 
-The `vp migrate` command does not automatically convert Husky setups. When Husky is detected,
-Vite+ leaves its hooks, lifecycle scripts, configuration, and dependencies unchanged and shows a
-warning. You can migrate the project manually using the [Commit hooks guide](/guide/commit-hooks).
+The `vp migrate` command does not automatically convert Husky setups. When Husky is detected, Vite+ leaves its hooks, lifecycle scripts, configuration, and dependencies unchanged and shows a warning. You can migrate the project manually using the [Commit hooks guide](/guide/commit-hooks).
 
-Existing project-owned Vite+ hooks are also preserved. The default staged workflow is introduced
-only when no existing hook policy is found.
+Existing project-owned Vite+ hooks are also preserved. The default staged workflow is introduced only when no existing hook policy is found.
 
 If your project currently uses `lefthook`, `simple-git-hooks`, or `yorkie`, `vp migrate` will leave your existing configuration alone and show a warning. This happens even if you choose to set up hooks during the prompt or include the `--hooks` flag.
 
