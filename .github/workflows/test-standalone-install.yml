@@ -10,6 +10,7 @@ on:
       - 'packages/cli/install.ps1'
       - 'packages/cli/install-legacy.sh'
       - 'packages/cli/install-legacy.ps1'
+      - '.github/scripts/test-install-legacy-remote.ps1'
       - 'packages/tools/src/install-global-cli.ts'
       - 'packages/tools/src/local-npm-registry.ts'
       - 'crates/vp_installer/**'
@@ -554,6 +555,33 @@ jobs:
           node --version
           npm --version
           vp env doctor
+
+  test-install-ps1-remote-legacy:
+    name: Test remote legacy install.ps1 (${{ matrix.shell }})
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    env:
+      # Reproduce the setup-vp install that failed in cloudflare/vinext#3251.
+      VP_VERSION: '0.2.6'
+      VP_NODE_MANAGER: 'yes'
+      GITHUB_ACTION_REPOSITORY: voidzero-dev/setup-vp
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Install an old release through an HTTP byte-array response (PowerShell 5.1)
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: ./.github/scripts/test-install-legacy-remote.ps1
+
+      - name: Install an old release through an HTTP byte-array response (PowerShell 7)
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: ./.github/scripts/test-install-legacy-remote.ps1
 
   test-install-sh-readonly-config:
     name: Test legacy install.sh (readonly shell config)
