@@ -96,6 +96,105 @@ const DOM_GLOBALS = new Set([
   'getComputedStyle',
 ]);
 
+const CHILD_PROCESS_SOURCES = new Set(['node:child_process', 'child_process']);
+
+function processApiName(editor: SourceEditor, node: t.Node): string | undefined {
+  const imported = importedName(editor, node, CHILD_PROCESS_SOURCES);
+  if (imported) {
+    return imported;
+  }
+  let name = memberName(node);
+  let receiver = node.type === 'MemberExpression' ? node.object : node;
+  let declaration = editor.binding(receiver)?.declaration;
+  const parent = declaration && editor.parent(declaration);
+  if (
+    declaration?.type === 'ImportDefaultSpecifier' &&
+    parent?.type === 'ImportDeclaration' &&
+    CHILD_PROCESS_SOURCES.has(parent.source.value)
+  ) {
+    return name;
+  }
+  if (declaration?.type === 'Property' && parent?.type === 'ObjectPattern') {
+    name = propertyName(declaration.key);
+    declaration = editor.parent(parent);
+  }
+  if (declaration?.type === 'VariableDeclarator' && declaration.init) {
+    receiver = declaration.init;
+  }
+  return receiver.type === 'CallExpression' &&
+    receiver.callee.type === 'Identifier' &&
+    receiver.callee.name === 'require' &&
+    !editor.binding(receiver.callee) &&
+    isString(receiver.arguments[0]) &&
+    CHILD_PROCESS_SOURCES.has(receiver.arguments[0].value)
+    ? name
+    : undefined;
+}
+
+/** A package-name string in plugin code or documentation is not a runner
+ * dependency. Only module references and bound process calls establish usage. */
+export function hasVitestV5SourceUsage(file: string, source: string): boolean {
+  if (!/vitest|vite-plus|\bvp\b/.test(source)) {
+    return false;
+  }
+  let editor: SourceEditor;
+  try {
+    editor = new SourceEditor(file, source);
+  } catch {
+    // Do not let unsupported syntax bypass the version gate. The source pass
+    // retains its parse diagnostic when the original runner can be resolved.
+    return true;
+  }
+  let used = editor.comments.some(({ start, end }) =>
+    /^\/\/\/\s*<reference\s+types\s*=\s*['"](?:vitest(?:\/[^'"]*)?|@vitest\/[^'"]+|vite-plus\/test(?:\/[^'"]*)?)['"]/.test(
+      source.slice(start, end),
+    ),
+  );
+  const moduleReference = (node: t.Node | null | undefined) => {
+    if (
+      isString(node) &&
+      /^(?:vitest(?:\/|$)|@vitest\/|vite-plus\/test(?:\/|$))/.test(node.value)
+    ) {
+      used = true;
+    }
+  };
+  editor.visit({
+    ImportDeclaration: (node) => moduleReference(node.source),
+    ExportNamedDeclaration: (node) => moduleReference(node.source),
+    ExportAllDeclaration: (node) => moduleReference(node.source),
+    ImportExpression: (node) => moduleReference(node.source),
+    TSImportType: (node) => moduleReference(node.source),
+    TSExternalModuleReference: (node) => moduleReference(node.expression),
+    TSModuleDeclaration: (node) => moduleReference(node.id),
+    CallExpression(node) {
+      if (
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'require' &&
+        !editor.binding(node.callee)
+      ) {
+        moduleReference(node.arguments[0]);
+      }
+      const command = node.arguments[0];
+      if (
+        ['exec', 'execSync', 'execFile', 'execFileSync', 'spawn', 'spawnSync'].includes(
+          processApiName(editor, node.callee) ?? '',
+        ) &&
+        isString(command)
+      ) {
+        const args = node.arguments[1];
+        const argv =
+          args?.type === 'ArrayExpression' && args.elements.every(isString)
+            ? args.elements.map((arg) => arg.value).join(' ')
+            : '';
+        if (/\b(?:vitest|vp\s+test)(?:\s|$)/.test(`${command.value} ${argv}`)) {
+          used = true;
+        }
+      }
+    },
+  });
+  return used;
+}
+
 function looksLikeConstructorMock(editor: SourceEditor, node: t.CallExpression): boolean {
   if (
     node.arguments.some(

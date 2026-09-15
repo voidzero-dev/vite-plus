@@ -1,0 +1,11 @@
+[[case]]
+name = "migrate_only_the_vitest_member"
+vp = "global"
+comment = "A Vitest package-name string in the root plugin must not block migration of its Vitest v4 example. Only the example receives versioned migration state."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "src/index.ts", "examples/vite-8/unit.test.js", ".vite-plus/migrations.json"],
+  { argv = ["vp", "test", "run"], cwd = "examples/vite-8" },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".vite-plus/migrations.json"],
+]
