@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { runInNewContext } from 'node:vm';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -11,6 +12,7 @@ import {
   finishVitestV5Migration,
   formatVitestV5Findings,
   planVitestV5Migration,
+  refreshVitestV5Migration,
 } from '../migrator.ts';
 import { parseSource } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
@@ -52,6 +54,57 @@ function source(input: string, options = v4) {
 }
 
 describe('Vitest v5 config compatibility', () => {
+  it('discovers custom configs that import helpers from Vite', () => {
+    const root = project({
+      'package.json': JSON.stringify({
+        devDependencies: { vitest: '^4.1.0' },
+        scripts: { test: 'vitest --config custom.ts' },
+      }),
+      'custom.ts': `import { defineConfig } from 'vite'; export default defineConfig({ test: { browser: { enabled: true } } });`,
+    });
+    const plan = planProject(root);
+    expect(plan.projects[0].configFiles).toContain(path.join(root, 'custom.ts'));
+    expect(plan.changes.find(({ file }) => file.endsWith('/custom.ts'))?.after).toContain(
+      'exact: false',
+    );
+    expect(plan.findings).toEqual([]);
+  });
+
+  it.each([
+    `export default wrapper(defineConfig({ test: { browser: { enabled: true } } }));`,
+    `module.exports = wrapper(defineConfig({ test: { browser: { enabled: true } } }));`,
+    `const fragment = defineConfig({ test: {} }); export default wrapper(fragment);`,
+  ])('leaves wrapped config defaults unchanged: %s', (declaration) => {
+    const input = `import { defineConfig } from 'vitest/config'; ${declaration}`;
+    const result = config(input);
+    expect(result.content).toBe(input);
+    expect(result.findings).toContainEqual(expect.objectContaining({ code: 'dynamic-config' }));
+    const root = project({ 'vite.config.ts': input });
+    const plan = planProject(root);
+    applyVitestV5Migration(plan);
+    finishVitestV5Migration(plan);
+    expect(fs.readFileSync(path.join(root, 'vite.config.ts'), 'utf8')).toBe(input);
+  });
+
+  it('does not add defaults to a dynamic inline defineProject fragment', () => {
+    const fragment = 'defineProject({ test: { browser: { enabled: true } } })';
+    const result = config(
+      `import { defineConfig, defineProject } from 'vitest/config'; export default defineConfig({ test: { projects: [${fragment}] } });`,
+    );
+    expect(result.content).toContain(fragment);
+    expect(result.findings).toContainEqual(expect.objectContaining({ code: 'dynamic-project' }));
+  });
+
+  it.each([`'html'`, `['html', {}]`, `['html', { outputDir: 'reports' }]`])(
+    'reports top-level HTML outputFile with reporter %s',
+    (reporter) => {
+      expect(
+        config(
+          `export default { test: { reporters: [${reporter}], outputFile: 'old/index.html' } };`,
+        ).findings,
+      ).toContainEqual(expect.objectContaining({ code: 'html-output' }));
+    },
+  );
   it('keeps Node jest-dom matchers separate from browser matchers in one package', () => {
     const nodeTest = `import { expect } from 'vitest';\nexpect(element).toHaveTextContent('partial');`;
     const root = project({
@@ -396,6 +449,63 @@ reporters: ['default', 'json', ['junit', {}], ['html', { outputFile: 'reports/in
 });
 
 describe('Vitest v5 source migration', () => {
+  it('initializes runner aliases before executable code and retains directives', () => {
+    const result = source(
+      `'use strict';\nconst fn = getFn({});\nimport { getFn } from '@vitest/runner';`,
+    );
+    expect(result.findings).toEqual([]);
+    expect(result.content.startsWith("'use strict';")).toBe(true);
+    expect(result.content.indexOf('const getFn =')).toBeLessThan(
+      result.content.indexOf('const fn ='),
+    );
+    const executable = result.content.replace(/import \{[^}]+\} from 'vite-plus\/test';/, '');
+    expect(
+      runInNewContext(`${executable}\nfn;`, { _VitestTestRunner: { getTestFn: () => 42 } }),
+    ).toBe(42);
+    expect(source(result.content).content).toBe(result.content);
+  });
+
+  it.each([
+    `import runner, { getFn } from '@vitest/runner';`,
+    `import runner from '@vitest/runner';`,
+    `import * as runner from '@vitest/runner';`,
+  ])('retains blocked default and namespace import syntax: %s', (input) => {
+    const result = source(input);
+    expect(result.content).toBe(input);
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({ code: 'removed-api', severity: 'block' }),
+    );
+  });
+
+  it('migrates a sequential modifier and its redundant option together', () => {
+    const result = source(
+      `import { test } from 'vitest'; test.sequential('x', { sequential: true }, () => {});`,
+    );
+    expect(result.content).toBe(
+      `import { test } from 'vitest'; test('x', { concurrent: false }, () => {});`,
+    );
+    expect(result.findings).toEqual([]);
+    expect(source(result.content).content).toBe(result.content);
+  });
+
+  it.each([
+    `test.sequential('x', { sequential: false }, () => {});`,
+    `test.sequential('x', { sequential: true, concurrent: true }, () => {});`,
+    `test.sequential.each([1])('x', { sequential: true }, () => {});`,
+  ])('leaves unresolved sequential calls intact: %s', (call) => {
+    const input = `import { test } from 'vitest'; ${call}`;
+    const result = source(input);
+    expect(result.content).toBe(input);
+    expect(result.findings).toContainEqual(expect.objectContaining({ code: 'sequential-api' }));
+  });
+
+  it('reports actual DOM globals but ignores locally shadowed identifiers and objects', () => {
+    const result = source(
+      `function f(navigator, window, globalThis, global) { navigator = {}; window.navigator = {}; globalThis.navigator = {}; global.navigator = {}; }\nnavigator = {}; window.navigator = {};`,
+    );
+    expect(result.findings.filter(({ code }) => code === 'dom-global')).toHaveLength(2);
+    expect(result.findings.every(({ line }) => line === 2)).toBe(true);
+  });
   it.each(['./runners', '../runners', 'custom/runners'])(
     'leaves unrelated %s modules unchanged',
     (specifier) => {
@@ -617,6 +727,25 @@ expect.poll(() => 1).toBe(1);`);
 
 describe('Vitest v5 command migration', () => {
   it.each([
+    ['vitest --reporter=json | jq', 'reporter-stdout', 'review'],
+    ['vitest run -t "suite test"', 'test-name-pattern', 'review'],
+    ['vitest bench', 'benchmark-api', 'block'],
+    ['vitest --compare=baseline.json', 'benchmark-api', 'block'],
+    ['vitest --outputJson=baseline.json', 'benchmark-api', 'block'],
+    ['vitest && cp -r .vitest-attachements artifacts', 'artifact-paths', 'review'],
+  ])('reports %s without changing it', (command, code, severity) => {
+    const result = migrateVitestV5Command('package.json', command, true, 7);
+    expect(result.content).toBe(command);
+    expect(result.findings).toContainEqual(expect.objectContaining({ code, severity, line: 7 }));
+  });
+
+  it('does not preserve v4 collection defaults for a v5 project', () => {
+    expect(migrateVitestV5Command('package.json', 'vitest list', false)).toEqual({
+      content: 'vitest list',
+      findings: [],
+    });
+  });
+  it.each([
     'vitest list',
     'pnpm exec vitest list',
     'npm exec -- vitest list',
@@ -655,6 +784,108 @@ describe('Vitest v5 command migration', () => {
 });
 
 describe('Vitest v5 versioned preflight', () => {
+  it('retains original activity after bootstrap removes a redundant direct runner', () => {
+    const root = project();
+    const original = planProject(root);
+    fs.writeFileSync(path.join(root, 'package.json'), '{}');
+    const refreshed = refreshVitestV5Migration(original);
+    expect(refreshed.projects[0]).toMatchObject({
+      active: true,
+      sourceVersion: '4.1.0',
+      options: { preserveV4: true },
+    });
+    expect(refreshed.findings).toContainEqual(
+      expect.objectContaining({ code: 'configless-defaults' }),
+    );
+    applyVitestV5Migration(refreshed);
+    finishVitestV5Migration(refreshed);
+    expect(planProject(root).projects[0].sourceVersion).toBe('4.1.0');
+  });
+
+  it.each(['4.1.11', '5.0.0'])(
+    'does not infer original test usage from a newly added peer runner %s',
+    (version) => {
+      const root = project({ 'package.json': '{}' });
+      const original = planProject(root);
+      expect(original.projects[0].active).toBe(false);
+      fs.writeFileSync(
+        path.join(root, 'package.json'),
+        JSON.stringify({ devDependencies: { vitest: version } }),
+      );
+      const refreshed = refreshVitestV5Migration(original);
+      expect(refreshed.projects[0]).toMatchObject({
+        active: false,
+        sourceVersion: undefined,
+        options: { preserveV4: false },
+      });
+      expect(refreshed.findings).toEqual([]);
+      expect(refreshed.changes).toEqual([]);
+    },
+  );
+  it.each(['', '\uFEFF'])(
+    'preserves manifest formatting and BOM %j when changing a script',
+    (bom) => {
+      const before = `${bom}{\r\n\t"name": "test",\r\n\t"scripts": { "test": "vitest list", "filter": "vitest -t suite" },\r\n\t"devDependencies": {"vitest":"^4.1.0"}\r\n}`;
+      const root = project({ 'package.json': before });
+      const plan = planProject(root);
+      expect(plan.changes.find(({ file }) => file === path.join(root, 'package.json'))?.after).toBe(
+        before.replace('vitest list', 'vitest list --no-static-parse'),
+      );
+      expect(plan.findings).toContainEqual(
+        expect.objectContaining({ code: 'test-name-pattern', line: 3 }),
+      );
+      applyVitestV5Migration(plan);
+      expect(planProject(root).changes).toEqual([]);
+    },
+  );
+
+  it.each(['vitest list', ['vitest list'], null])(
+    'ignores malformed scripts containers: %j',
+    (scripts) => {
+      const root = project({
+        'package.json': JSON.stringify({ scripts, devDependencies: { vitest: '^4.1.0' } }),
+      });
+      expect(planProject(root).changes).toEqual([]);
+    },
+  );
+
+  it.each(['4.1.11', '5.0.0'])(
+    'refreshes changed setup inputs without losing original Vitest %s',
+    (version) => {
+      const before = JSON.stringify({
+        devDependencies: { vitest: version },
+        scripts: { test: 'vitest list' },
+      });
+      const root = project({
+        'package.json': before,
+        'vite.config.ts': 'export default { test: {} };',
+      });
+      const original = planProject(root);
+      expect(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).toBe(before);
+      // Model an earlier install/tool migration changing a manifest and config.
+      fs.writeFileSync(
+        path.join(root, 'package.json'),
+        JSON.stringify({
+          devDependencies: { vitest: '5.0.0' },
+          scripts: { test: 'vitest list', lint: 'oxlint' },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(root, 'vite.config.ts'),
+        'export default { test: { name: "keep" } };',
+      );
+      const refreshed = refreshVitestV5Migration(original);
+      expect(refreshed.projects[0].sourceVersion).toBe(version);
+      applyVitestV5Migration(refreshed);
+      const manifest = fs.readFileSync(path.join(root, 'package.json'), 'utf8');
+      expect(manifest).toContain('oxlint');
+      expect(manifest.includes('--no-static-parse')).toBe(version.startsWith('4'));
+      expect(fs.readFileSync(path.join(root, 'vite.config.ts'), 'utf8')).toContain('name: "keep"');
+      expect(fs.existsSync(path.join(root, '.vite-plus/migrations.json'))).toBe(false);
+      fs.writeFileSync(path.join(root, 'vite.config.ts'), 'export default {};');
+      expect(() => applyVitestV5Migration(refreshed)).toThrow('Migration input changed');
+    },
+  );
   it.each([
     ['an unpaired surrogate', String.raw`'\ud800'`],
     ['a deep expression', Array(160).fill('1').join(' + ')],

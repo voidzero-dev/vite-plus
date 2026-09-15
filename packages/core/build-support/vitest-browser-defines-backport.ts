@@ -18,7 +18,14 @@ export function vitestBrowserDefinesBackportBuildPlugin(vitestVersion: string): 
       if (!id.replaceAll('\\', '/').endsWith('/vite/src/node/plugins/index.ts')) {
         return undefined;
       }
-      if (!magicString || code.split(anchor).length !== 2) {
+      // The injected expression uses these upstream locals. Fail on drift
+      // instead of shipping a backport that throws when Vite creates plugins.
+      if (
+        !magicString ||
+        code.split(anchor).length !== 2 ||
+        !/^  const isBuild = config\.command === 'build'\r?$/m.test(code) ||
+        !/^  const isWorker = config\.isWorker\r?$/m.test(code)
+      ) {
         throw new Error('Cannot inject the temporary Vitest #11198 backport into Vite.');
       }
       magicString.prepend(

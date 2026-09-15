@@ -21,6 +21,19 @@ steps = [
 ]
 
 [[case]]
+name = "version_gate_preserves_sources"
+vp = "global"
+comment = "A version check after initial setup must abort before Vitest compatibility edits."
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vite/package.json", "{\"name\":\"vite\",\"version\":\"6.4.0\"}\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], continue-on-failure = true },
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "print-file", "example.test.ts"],
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "stat-file", ".vite-plus/migrations.json", "--assert", "missing"],
+]
+
+[[case]]
 name = "node_container_scope"
 vp = "global"
 comment = "Check the runtime image and feature option, not source properties or Dev Container feature tags."
