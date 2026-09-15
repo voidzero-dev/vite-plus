@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+
+import MagicString from 'magic-string';
 import { describe, expect, it, vi } from 'vitest';
 
 import { vitestBrowserDefinesBackportBuildPlugin } from '../build-support/vitest-browser-defines-backport.ts';
@@ -6,6 +9,75 @@ import { vitestBrowserDefinesBackportPlugin } from '../src/vitest-browser-define
 function runner(version = '5.0.0') {
   return { version, injectTestProject: vi.fn(async (_config: unknown) => []) };
 }
+
+function inject(
+  code: string,
+  id = '/checkout/vite/src/node/plugins/index.ts',
+  withMagicString = true,
+) {
+  const plugin = vitestBrowserDefinesBackportBuildPlugin('5.0.0');
+  if (!plugin || typeof plugin.transform !== 'function') {
+    throw new Error('Expected a backport transform');
+  }
+  const magicString = withMagicString ? new MagicString(code) : undefined;
+  return plugin.transform.call({} as never, code, id, { magicString } as never);
+}
+
+describe('temporary browser define build injection', () => {
+  const input = `export function resolvePlugins(config) {
+  const isBuild = config.command === 'build'
+  const isWorker = config.isWorker
+  return [
+    optimizedDepsPlugin(),
+  ]
+}`;
+
+  it.each([
+    '/checkout/vite/src/node/plugins/index.ts',
+    'C:\\checkout\\vite\\src\\node\\plugins\\index.ts',
+  ])('injects the guarded plugin at the exact anchor in %s', async (id) => {
+    const result = await inject(input, id);
+    expect(result && typeof result === 'object' && result.code?.toString()).toContain(
+      '    optimizedDepsPlugin(),\n    !isBuild && !isWorker ? vitestBrowserDefinesBackportPlugin() : null,',
+    );
+    expect(result && typeof result === 'object' && result.code?.toString()).toMatch(
+      /^import \{ vitestBrowserDefinesBackportPlugin \} from .*vitest-browser-defines-backport\.ts";/,
+    );
+  });
+
+  it('ignores unrelated files before checking the anchor', async () => {
+    expect(await inject('export {};', '/checkout/vite/src/node/plugins/other.ts')).toBeUndefined();
+  });
+
+  it.each([
+    input.replace('    optimizedDepsPlugin(),', ''),
+    input.replace(
+      '    optimizedDepsPlugin(),',
+      '    optimizedDepsPlugin(),\n    optimizedDepsPlugin(),',
+    ),
+    input.replaceAll('isBuild', 'building'),
+    input.replaceAll('isWorker', 'worker'),
+  ])('fails closed on upstream injection drift', (code) => {
+    expect(() => inject(code)).toThrow('Cannot inject the temporary Vitest #11198 backport');
+  });
+
+  it('requires the bundler edit buffer', () => {
+    expect(() => inject(input, undefined, false)).toThrow(
+      'Cannot inject the temporary Vitest #11198 backport',
+    );
+  });
+
+  it('matches the current vendored Vite source', async () => {
+    const input = fs.readFileSync(
+      new URL('../../../vite/packages/vite/src/node/plugins/index.ts', import.meta.url),
+      'utf8',
+    );
+    const result = await inject(input);
+    expect(result && typeof result === 'object' && result.code?.toString()).toContain(
+      '!isBuild && !isWorker ? vitestBrowserDefinesBackportPlugin() : null',
+    );
+  });
+});
 
 describe('temporary Vitest #11198 backport', () => {
   it('leaves browser define initialization to Vite without mutating shared maps', () => {

@@ -186,4 +186,14 @@ function local(require) { return require('vitest/runners'); }`;
       findings: [expect.objectContaining({ code: 'unsafe-syntax' })],
     });
   });
+
+  it('returns the whole original file when edits overlap', () => {
+    const editor = new SourceEditor('test.ts', 'const value = 1;');
+    editor.edit(6, 11, 'renamed');
+    editor.edit(6, 15, 'other = 2;');
+    expect(editor.finish()).toEqual({
+      content: 'const value = 1;',
+      findings: [expect.objectContaining({ code: 'overlapping-edits' })],
+    });
+  });
 });

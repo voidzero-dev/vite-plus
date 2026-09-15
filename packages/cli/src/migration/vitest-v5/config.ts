@@ -18,7 +18,7 @@ import {
 const isTrue = (node: t.Node | undefined) => isBoolean(node) && node.value;
 
 const CONFIG_FILENAME = /(?:^|[/\\])(?:vite|vitest)(?:\.[\w-]+)?\.config\.[cm]?[jt]s$/;
-const CONFIG_HELPER_IMPORT = /['"](?:vitest\/config|vite-plus(?:\/test\/config)?)['"]/;
+const CONFIG_HELPER_IMPORT = /['"](?:vite|vitest\/config|vite-plus(?:\/test\/config)?)['"]/;
 
 function importsConfigHelper(file: string, source: string): boolean {
   if (!CONFIG_HELPER_IMPORT.test(source)) {
@@ -536,7 +536,13 @@ export function migrateVitestV5Config(
         editor.replace(entry!, prop.value.type === 'ArrayExpression' ? tuple : `[${tuple}]`);
       }
     }
-    if (output && entries.some((entry) => isString(entry) && entry.value === 'html')) {
+    if (
+      output &&
+      entries.some((entry) => {
+        const name = entry?.type === 'ArrayExpression' ? entry.elements[0] : entry;
+        return isString(name) && name.value === 'html';
+      })
+    ) {
       editor.report(
         output,
         'html-output',
@@ -790,6 +796,36 @@ export function migrateVitestV5Config(
     CallExpression(node) {
       const name = importedName(editor, node.callee, CONFIG_SOURCES);
       if (name === 'defineConfig' || name === 'defineProject') {
+        const parent = editor.parent(node);
+        const binding =
+          parent?.type === 'VariableDeclarator' && parent.id.type === 'Identifier'
+            ? editor.binding(parent.id)
+            : undefined;
+        const directlyExported =
+          parent?.type === 'ExportDefaultDeclaration' ||
+          (parent?.type === 'AssignmentExpression' &&
+            parent.right === node &&
+            parent.left.type === 'MemberExpression' &&
+            !parent.left.computed &&
+            parent.left.object.type === 'Identifier' &&
+            parent.left.object.name === 'module' &&
+            !editor.binding(parent.left.object) &&
+            propertyName(parent.left.property) === 'exports') ||
+          (binding?.constant &&
+            binding.references.length > 0 &&
+            binding.references.every(
+              (reference) => editor.parent(reference)?.type === 'ExportDefaultDeclaration',
+            ));
+        // Wrappers and dynamic inline projects can supply their own defaults.
+        // Do not let a nested helper bypass the ownership check above.
+        if (!directlyExported && !merged) {
+          editor.report(
+            node,
+            'dynamic-config',
+            'Review this config fragment in its wrapper or inline project before adding v4 compatibility settings.',
+          );
+          return;
+        }
         const object = node.arguments[0];
         if (staticObject(object)) {
           config(object);
