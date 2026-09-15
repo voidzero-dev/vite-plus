@@ -20,17 +20,17 @@ const isTrue = (node: t.Node | undefined) => isBoolean(node) && node.value;
 const CONFIG_FILENAME = /(?:^|[/\\])(?:vite|vitest)(?:\.[\w-]+)?\.config\.[cm]?[jt]s$/;
 const CONFIG_HELPER_IMPORT = /['"](?:vite|vitest\/config|vite-plus(?:\/test\/config)?)['"]/;
 
-function importsConfigHelper(file: string, source: string): boolean {
+function hasTestConfigHelper(file: string, source: string): boolean {
   if (!CONFIG_HELPER_IMPORT.test(source)) {
     return false;
   }
   try {
     const editor = new SourceEditor(file, source);
-    return editor.ast.body.some(
+    const importsTestHelper = editor.ast.body.some(
       (node) =>
         node.type === 'ImportDeclaration' &&
         node.importKind !== 'type' &&
-        CONFIG_SOURCES.has(node.source.value) &&
+        ['vitest/config', 'vite-plus/test/config'].includes(node.source.value) &&
         node.specifiers.some(
           (specifier) =>
             specifier.type === 'ImportNamespaceSpecifier' ||
@@ -41,6 +41,29 @@ function importsConfigHelper(file: string, source: string): boolean {
               )),
         ),
     );
+    if (importsTestHelper) {
+      return true;
+    }
+    // Vite helpers also appear in plugin source and examples. A generic helper
+    // import alone does not make that file a test config. Require explicit test
+    // options; standard filenames and project references are handled separately.
+    let hasTestOptions = false;
+    editor.visit({
+      CallExpression(node) {
+        if (
+          ['defineConfig', 'defineProject', 'mergeConfig'].includes(
+            importedName(editor, node.callee, CONFIG_SOURCES) ?? '',
+          ) &&
+          node.arguments.some(
+            (argument) =>
+              argument.type === 'ObjectExpression' && !!objectProperty(argument, 'test'),
+          )
+        ) {
+          hasTestOptions = true;
+        }
+      },
+    });
+    return hasTestOptions;
   } catch {
     // Keep candidate configs in the normal parse-diagnostic path.
     return true;
@@ -55,7 +78,7 @@ export function findVitestV5ConfigFiles(sources: ReadonlyMap<string, string>): S
       .filter(
         ([file, source]) =>
           /\.[cm]?[jt]sx?$/.test(file) &&
-          (CONFIG_FILENAME.test(file) || importsConfigHelper(file, source)),
+          (CONFIG_FILENAME.test(file) || hasTestConfigHelper(file, source)),
       )
       .map(([file]) => file),
   );
