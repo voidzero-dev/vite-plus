@@ -201,7 +201,7 @@ jobs:
           cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || [ "$n" = "vp_trampoline" ] || echo -n "-p $n "; done) -p vite-plus-cli \
             --target x86_64-pc-windows-msvc --archive-file windows-tests.tar.zst
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: ./.github/actions/upload-artifact-with-retry
         with:
           name: windows-test-archive
           path: windows-tests.tar.zst
@@ -220,7 +220,7 @@ jobs:
           cargo nextest archive -p vp_cli_snapshots \
             --target x86_64-pc-windows-msvc --archive-file windows-snapshot-tests.tar.zst
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: ./.github/actions/upload-artifact-with-retry
         with:
           name: windows-snapshot-test-archive
           path: windows-snapshot-tests.tar.zst
@@ -392,6 +392,9 @@ jobs:
           cache-key: cli-e2e-test-${{ matrix.target }}
 
       - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
+
+      - name: Test CI install retries
+        run: node --test .github/scripts/__tests__/retry-install.mjs
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -1009,6 +1012,14 @@ jobs:
           RUST_BACKTRACE: '1'
           VP_SNAP_SHARD: ${{ matrix.shard }}/3
 
+      - name: Upload failed snapshots
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-snapshots-${{ matrix.target }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/*/snapshots/*.md.new
+          retention-days: 7
+
   # Runs the PTY snapshot suite (crates/vp_cli_snapshots) on Windows with
   # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
   # and vpt arrive cross-compiled in the nextest archive from
@@ -1126,6 +1137,14 @@ jobs:
           RUST_BACKTRACE: '1'
           # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
+
+      - name: Upload failed snapshots
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-snapshots-windows-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/*/snapshots/*.md.new
+          retention-days: 7
 
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
@@ -1299,6 +1318,7 @@ jobs:
       - name: Run local CLI `vp install`
         run: |
           export PATH=$PWD/node_modules/.bin:$PATH
+          retry_install="$GITHUB_WORKSPACE/.github/scripts/retry-install.sh"
           vp -h
           # Test vp install on various repositories with different package managers
           # Entry format: "owner/repo:dir" or "owner/repo:dir:ref" (tag or branch to clone)
@@ -1322,20 +1342,35 @@ jobs:
             echo "Testing vp install on $repo${ref:+ ($ref)}…"
             # remove the directory if it exists
             if [ -d "$RUNNER_TEMP/$dir_name" ]; then
-              rm -rf "$RUNNER_TEMP/$dir_name"
+              rm -rf "${RUNNER_TEMP:?}/${dir_name:?}"
             fi
             clone_args=(--depth 1)
             if [ -n "$ref" ]; then
               clone_args+=(--branch "$ref")
             fi
-            git clone "${clone_args[@]}" "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
+            if [ "$repo" = vitejs/vite ]; then
+              # Use the same pinned Vite revision as the build, with a clean worktree.
+              git clone --no-hardlinks "$GITHUB_WORKSPACE/vite" "$RUNNER_TEMP/$dir_name"
+            else
+              git clone "${clone_args[@]}" "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
+            fi
             cd "$RUNNER_TEMP/$dir_name"
-            vp install --no-frozen-lockfile
-            # run again to show install cache increase by time
-            time vp install
+            git rev-parse HEAD
+            bash "$retry_install" "$RUNNER_TEMP/install-logs/$dir_name-cold" vp install --no-frozen-lockfile
+            # Exercise the warm install separately so each failure has its own logs.
+            time bash "$retry_install" "$RUNNER_TEMP/install-logs/$dir_name-warm" vp install
             echo "✓ Successfully installed dependencies for $repo"
             echo ""
           done
+
+      - name: Upload install logs
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: install-logs-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/install-logs
+          retention-days: 7
 
   install-e2e-test-sfw:
     name: Local CLI `vp install` E2E test (Socket Firewall Free)
@@ -1355,12 +1390,8 @@ jobs:
             target: x86_64-unknown-linux-gnu
             sfw_asset: sfw-free-linux-x86_64
             vp_bin: vp
-            # Only Linux needs the TLS-bypass: the ubuntu-latest runner
-            # doesn't preinstall Node 22.18 into vp's cache, so vp's HttpClient
-            # (rustls) fetches `nodejs.org/.../SHASUMS256.txt` through sfw and
-            # hits the upstream EKU bug. macOS/Windows runners ship Node in
-            # vp's cache already, so vp never calls its HttpClient through sfw
-            # in this test — leave the verification on there.
+            # Retain the Linux-only workaround for SFW's CA interoperability
+            # issue (SocketDev/sfw-free#30, #43). Other platforms verify TLS.
             vp_insecure_tls: '1'
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1422,6 +1453,8 @@ jobs:
           fi
 
       - name: Download sfw
+        env:
+          SFW_VERSION: v1.15.1
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/sfw-bin"
@@ -1430,7 +1463,7 @@ jobs:
           # than with "exec format error" on an empty binary.
           curl --fail --location --remove-on-error --retry 3 --retry-delay 2 \
             --output "$RUNNER_TEMP/sfw-bin/sfw${{ runner.os == 'Windows' && '.exe' || '' }}" \
-            "https://github.com/SocketDev/sfw-free/releases/latest/download/${{ matrix.sfw_asset }}"
+            "https://github.com/SocketDev/sfw-free/releases/download/$SFW_VERSION/${{ matrix.sfw_asset }}"
           if [[ "${{ runner.os }}" != "Windows" ]]; then
             chmod +x "$RUNNER_TEMP/sfw-bin/sfw"
           fi
@@ -1440,28 +1473,37 @@ jobs:
         run: sfw --version
 
       - name: Run `sfw vp install` against a real repo
-        # TODO(SocketDev/sfw-free#30, SocketDev/sfw-free#43): drop `vp_insecure_tls`
-        # from the Linux matrix entry once sfw ships the EKU fix. Verified
-        # against sfw v1.11.0 (releases/latest as of 2026-05-28): on Linux,
-        # vp's HTTPS request to nodejs.org through sfw still fails with
-        # "invalid peer certificate: UnknownIssuer" because sfw's CA carries a
-        # present-but-empty Extended Key Usage extension that rustls rejects.
-        # macOS/Windows runners cache Node 22.18 in vp's directory, so vp
-        # doesn't call its HttpClient through sfw — leaving TLS verification
-        # enabled there gives us coverage that the bypass *isn't* used on
-        # those platforms.
+        timeout-minutes: 15
+        # TODO(SocketDev/sfw-free#30, #43): remove the existing Linux CA
+        # workaround once upstream resolves it. The global-package probe
+        # exercises vp's HTTP client on all platforms; macOS/Windows keep
+        # certificate verification enabled.
         env:
           VP_INSECURE_TLS: ${{ matrix.vp_insecure_tls }}
+          SFW_VERBOSE: 'true'
         run: |
           set -euo pipefail
-          # Force the registry-fetch path: install a pinned pnpm globally so
-          # vp downloads it (and therefore traverses sfw) rather than reusing
-          # whatever's preinstalled on the runner.
-          sfw "${{ matrix.vp_bin }}" i -g pnpm@9.15.0
-          # Then exercise `vp install` inside a real repo, also through sfw.
-          git clone --depth 1 https://github.com/vitejs/vite.git "$RUNNER_TEMP/vite"
+          retry_install="$GITHUB_WORKSPACE/.github/scripts/retry-install.sh"
+          # Package managers are bundled: installing pnpm globally is now a
+          # no-op. An ordinary package exercises the download and global shim.
+          bash "$retry_install" "$RUNNER_TEMP/install-logs/sfw-global" sfw "${{ matrix.vp_bin }}" i -g semver@7.7.2
+          test "$(semver 1.2.3)" = '1.2.3'
+          "${{ matrix.vp_bin }}" uninstall -g semver
+          # Use a clean clone of the revision already pinned by build-upstream.
+          git clone --no-hardlinks "$GITHUB_WORKSPACE/vite" "$RUNNER_TEMP/vite"
           cd "$RUNNER_TEMP/vite"
-          sfw "${{ matrix.vp_bin }}" install --no-frozen-lockfile
+          git rev-parse HEAD
+          # Bound request fan-out through the proxy. Keep supply-chain checks enabled.
+          bash "$retry_install" "$RUNNER_TEMP/install-logs/sfw-workspace" sfw "${{ matrix.vp_bin }}" install --no-frozen-lockfile -- --network-concurrency=4
+
+      - name: Upload Socket Firewall install logs
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sfw-install-logs-${{ matrix.target }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/install-logs
+          retention-days: 7
 
   done:
     runs-on: ubuntu-latest

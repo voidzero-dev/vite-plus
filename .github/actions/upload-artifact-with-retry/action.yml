@@ -1,0 +1,37 @@
+name: Upload artifact with retry
+description: Retry an artifact upload once after a transient service failure
+inputs:
+  name:
+    description: Artifact name
+    required: true
+  path:
+    description: Files to upload
+    required: true
+  retention-days:
+    description: Artifact retention in days
+    default: '7'
+runs:
+  using: composite
+  steps:
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      id: upload
+      continue-on-error: true
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        retention-days: ${{ inputs.retention-days }}
+        if-no-files-found: error
+    - name: Wait before retrying
+      if: steps.upload.outcome == 'failure'
+      shell: bash
+      run: sleep 5
+    # FinalizeArtifact can fail with an intermediary 403 after the upload
+    # completes. A fresh upload recovers without rebuilding the test archives.
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      if: steps.upload.outcome == 'failure'
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        retention-days: ${{ inputs.retention-days }}
+        if-no-files-found: error
+        overwrite: true
