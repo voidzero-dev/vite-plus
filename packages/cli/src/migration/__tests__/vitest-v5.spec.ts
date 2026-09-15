@@ -2031,6 +2031,85 @@ export default defineConfig(CONFIG);`,
     );
   });
 
+  it.each(['lts/*', 'latest', 'current', 'node'])(
+    'accepts the moving CI runtime alias %s without requiring a numeric pin',
+    (alias) => {
+      const workflow = `jobs:\n  test:\n    steps:\n      - uses: actions/setup-node@v6\n        with:\n          node-version: '${alias}'\n`;
+      const root = project({ '.github/workflows/test.yml': workflow });
+      const plan = planProject(root);
+      expect(plan.findings.filter(({ code }) => code === 'node-runtime')).toEqual([]);
+      expect(plan.changes.some(({ file }) => file.endsWith('test.yml'))).toBe(false);
+      expect(fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8')).toBe(workflow);
+    },
+  );
+
+  it.each([
+    ['.nvmrc', 'node'],
+    ['.nvmrc', 'stable'],
+    ['.nvmrc', 'lts/*'],
+    ['.node-version', 'lts/*'],
+    ['.node-version', 'latest'],
+    [
+      'package.json',
+      JSON.stringify({ devEngines: { runtime: { name: 'node', version: 'latest' } } }),
+    ],
+    ['package.json', JSON.stringify({ volta: { node: 'lts' } })],
+    ['Dockerfile', 'FROM node:latest\n'],
+    ['Dockerfile', 'FROM node:lts\n'],
+    ['Dockerfile', 'FROM node:current\n'],
+    ['compose.yml', 'services:\n  app:\n    image: node\n'],
+    [
+      '.devcontainer/devcontainer.json',
+      '{ "features": { "ghcr.io/devcontainers/features/node:1": { "version": "lts" } } }',
+    ],
+  ])('accepts a moving runtime alias in %s: %s', (file, content) => {
+    expect(
+      planProject(project({ [file]: content })).findings.filter(
+        ({ code }) => code === 'node-runtime',
+      ),
+    ).toEqual([]);
+  });
+
+  it.each(['lts/iron', 'lts/-2', '${{ matrix.node }}', 'custom-node', '*'])(
+    'keeps the runtime review for unresolved or broad selector %s',
+    (alias) => {
+      const findings = planProject(project({ '.node-version': alias })).findings.filter(
+        ({ code }) => code === 'node-runtime',
+      );
+      expect(findings).toEqual([expect.objectContaining({ severity: 'review' })]);
+    },
+  );
+
+  it('still blocks an incompatible numeric runtime beside moving aliases in a CI matrix', () => {
+    const root = project({
+      '.github/workflows/test.yml':
+        "jobs:\n  test:\n    strategy:\n      matrix:\n        node: ['lts/*', 'latest', 20, 25]\n",
+    });
+    const findings = planProject(root).findings.filter(({ code }) => code === 'node-runtime');
+    expect(findings).toHaveLength(2);
+    expect(findings.every(({ severity }) => severity === 'block')).toBe(true);
+  });
+
+  it.each(['node:latest@sha256:abc', 'node:lts@sha256:abc', 'node@sha256:abc'])(
+    'does not assume a digest-pinned image %s contains the current runtime',
+    (image) => {
+      const root = project({ Dockerfile: `FROM ${image}\n` });
+      expect(planProject(root).findings.filter(({ code }) => code === 'node-runtime')).toEqual([
+        expect.objectContaining({ severity: 'review', message: expect.stringContaining(image) }),
+      ]);
+    },
+  );
+
+  it.each(['lts/*', 'latest', '*', '>=18'])(
+    'does not treat public engines.node %s as a compatible runtime alias',
+    (node) => {
+      const root = project({ 'package.json': JSON.stringify({ engines: { node } }) });
+      expect(planProject(root).findings.filter(({ code }) => code === 'node-runtime')).toEqual([
+        expect.objectContaining({ severity: 'review' }),
+      ]);
+    },
+  );
+
   it('does not treat source properties, comments, or Dev Container feature tags as Node images', () => {
     const root = project({
       'worker.js': 'export const options = { node:2 };',
@@ -2042,12 +2121,7 @@ export default defineConfig(CONFIG);`,
       }`,
     });
     const findings = planProject(root).findings.filter(({ code }) => code === 'node-runtime');
-    expect(findings).toEqual([
-      expect.objectContaining({
-        severity: 'review',
-        message: expect.stringContaining('Dev Container Node feature (lts)'),
-      }),
-    ]);
+    expect(findings).toEqual([]);
   });
 
   it.each([

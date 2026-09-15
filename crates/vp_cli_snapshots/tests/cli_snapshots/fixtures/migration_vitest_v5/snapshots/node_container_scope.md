@@ -23,10 +23,7 @@ RUN echo node:2
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 2 review items (1 block dependency updates)
-
-.devcontainer/devcontainer.json
-  1:1 REVIEW [node-runtime] Resolve Dev Container Node feature (lts) and select Node ^22.18.0 || ^24.11.0 || >=26.0.0.
+Vitest v5: 1 review item (1 block dependency updates)
 
 Dockerfile
   2:1 BLOCK [node-runtime] Node container image (20) cannot run Vite+ with Vitest v5. Select Node ^22.18.0 || ^24.11.0 || >=26.0.0; use vp env pin 22 --force for a runtime pin. Do not widen a library's engines.node contract automatically.
@@ -62,18 +59,9 @@ RUN echo node:2
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
-
-.devcontainer/devcontainer.json
-  1:1 REVIEW [node-runtime] Resolve Dev Container Node feature (lts) and select Node ^22.18.0 || ^24.11.0 || >=26.0.0.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 files had imports rewritten
-! Warnings:
-  - Vitest v5: 1 review item
-
-.devcontainer/devcontainer.json
-  1:1 REVIEW [node-runtime] Resolve Dev Container Node feature (lts) and select Node ^22.18.0 || ^24.11.0 || >=26.0.0.
 ```
 
 ## `vpt print-file worker.js`
