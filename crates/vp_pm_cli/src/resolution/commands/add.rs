@@ -36,7 +36,7 @@ pub struct AddArgs {
     pub(crate) filter: Vec<String>,
 
     /// Add to workspace root
-    #[arg(short = 'w', long, not_supported(bun))]
+    #[arg(short = 'w', long, not_supported(yarn >= "2", bun))]
     pub(crate) workspace_root: bool,
 
     /// Only add if package exists in workspace (pnpm-specific)
@@ -219,7 +219,7 @@ impl Resolve<AddArgs> for Yarn {
             cmd.arg("workspaces").arg("foreach").arg("--all");
             cmd.repeated("--include", args.filter.iter());
         }
-        cmd.arg("add");
+        cmd.arg("add").arg_if("-W", args.workspace_root && !self.is_berry());
         match args.save_dependency.target() {
             Some(SaveDependencyTarget::Dev) => {
                 cmd.arg("--dev");
@@ -481,7 +481,7 @@ mod tests {
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["add", "--dev", "typescript"]);
+        assert_eq!(command.args, vec!["add", "-W", "--dev", "typescript"]);
         assert!(resolution.diagnostics.is_empty());
     }
 
@@ -574,21 +574,19 @@ mod tests {
     }
 
     #[test]
-    fn yarn_drops_workspace_root_without_warning() {
+    fn yarn_berry_drops_unsupported_workspace_root() {
         let mut args = add_args(&["react"]);
         args.workspace_root = true;
+        let resolution = resolve(&yarn("4.1.0"), args);
+        let command = expect_run(resolution.outcome);
 
-        let classic = resolve(&yarn("1.22.22"), args.clone());
-        let classic_command = expect_run(classic.outcome);
-        let berry = resolve(&yarn("4.1.0"), args);
-        let berry_command = expect_run(berry.outcome);
-
-        assert_eq!(classic_command.program, "yarn");
-        assert_eq!(classic_command.args, vec!["add", "react"]);
-        assert_eq!(berry_command.program, "yarn");
-        assert_eq!(berry_command.args, vec!["add", "react"]);
-        assert!(classic.diagnostics.is_empty());
-        assert!(berry.diagnostics.is_empty());
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["add", "react"]);
+        assert_eq!(resolution.diagnostics.len(), 1);
+        assert_eq!(
+            resolution.diagnostics[0].message,
+            "yarn >=2 does not support --workspace-root."
+        );
     }
 
     #[test]

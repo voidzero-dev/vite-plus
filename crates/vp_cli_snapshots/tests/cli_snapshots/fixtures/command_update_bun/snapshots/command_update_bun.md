@@ -35,11 +35,12 @@ Options:
 Documentation: https://viteplus.dev/guide/install
 ```
 
-## `vp update testnpm2`
+## `vp update testnpm2 --workspace-root`
 
-should update package within semver range
+warns about unsupported --workspace-root and updates within semver range
 
 ```
+warn: bun does not support --workspace-root.
 bun update <version> (<hash>)
 
  test-vite-plus-package@1.0.0

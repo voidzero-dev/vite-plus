@@ -37,7 +37,7 @@ pub struct UpdateArgs {
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long)]
+    #[arg(short = 'w', long, not_supported(yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Update only devDependencies

@@ -4,7 +4,7 @@ vp = "global"
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "update", "--help"], comment = "should show help", continue-on-failure = true },
-  { argv = ["vp", "update", "testnpm2"], comment = "should update package within semver range" },
+  { argv = ["vp", "update", "testnpm2", "--workspace-root"], comment = "warns about unsupported --workspace-root and updates within semver range" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "up", "testnpm2", "--latest"], comment = "should update to absolute latest version" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
