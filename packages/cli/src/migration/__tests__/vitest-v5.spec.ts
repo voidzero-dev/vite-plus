@@ -54,21 +54,63 @@ function source(input: string, options = v4) {
 }
 
 describe('Vitest v5 config compatibility', () => {
-  it('discovers custom configs that import helpers from Vite', () => {
-    const root = project({
-      'package.json': JSON.stringify({
-        devDependencies: { vitest: '^4.1.0' },
-        scripts: { test: 'vitest --config custom.ts' },
-      }),
-      'custom.ts': `import { defineConfig } from 'vite'; export default defineConfig({ test: { browser: { enabled: true } } });`,
-    });
-    const plan = planProject(root);
-    expect(plan.projects[0].configFiles).toContain(path.join(root, 'custom.ts'));
-    expect(plan.changes.find(({ file }) => file.endsWith('/custom.ts'))?.after).toContain(
-      'exact: false',
-    );
-    expect(plan.findings).toEqual([]);
-  });
+  it.each(['vite', 'vite-plus'])(
+    'discovers custom test configs that import helpers from %s',
+    (module) => {
+      const root = project({
+        'package.json': JSON.stringify({
+          devDependencies: { vitest: '^4.1.0' },
+          scripts: { test: 'vitest --config custom.ts' },
+        }),
+        'custom.ts': `import { defineConfig } from '${module}'; export default defineConfig({ test: { browser: { enabled: true } } });`,
+      });
+      const plan = planProject(root);
+      expect(plan.projects[0].configFiles).toContain(path.join(root, 'custom.ts'));
+      expect(
+        plan.changes.find(({ file }) => file === path.join(root, 'custom.ts'))?.after,
+      ).toContain('exact: false');
+      expect(plan.findings).toEqual([]);
+    },
+  );
+
+  it.each(['vite', 'vite-plus'])(
+    'does not treat a source example using %s helpers as a test config',
+    (module) => {
+      const input = `import { defineConfig, type Plugin } from '${module}';
+import { describe, it, expect } from 'vitest';
+const unrelated = { test: {} };
+function plugin(): Plugin { return { name: 'example', configResolved() {} }; }
+describe('plugin', () => { it('works', () => { expect(plugin()).toBeDefined(); }); });
+export default defineConfig({ plugins: [plugin()] });`;
+      const root = project({ 'src/index.ts': input });
+      const plan = planProject(root);
+      expect(plan.projects[0].configFiles.size).toBe(0);
+      expect(plan.changes).toEqual([]);
+      expect(plan.findings.map(({ code }) => code)).toEqual(['configless-defaults']);
+      applyVitestV5Migration(plan);
+      finishVitestV5Migration(plan);
+      expect(fs.readFileSync(path.join(root, 'src/index.ts'), 'utf8')).toBe(input);
+      expect(planProject(root).projects[0].configFiles.size).toBe(0);
+    },
+  );
+
+  it.each(['vite', 'vite-plus'])(
+    'preserves defaults in named and referenced %s configs without test options',
+    (module) => {
+      const root = project({
+        'vite.config.ts': `import { defineConfig } from '${module}'; export default defineConfig({});`,
+        'vitest.config.ts': `export default { test: { projects: ['./custom.ts'] } };`,
+        'custom.ts': `import { defineConfig } from '${module}'; export default defineConfig({});`,
+      });
+      const plan = planProject(root);
+      expect(plan.projects[0].configFiles.size).toBe(3);
+      for (const name of ['vite.config.ts', 'custom.ts']) {
+        expect(plan.changes.find(({ file }) => file === path.join(root, name))?.after).toContain(
+          'clearMocks: false',
+        );
+      }
+    },
+  );
 
   it.each([
     `export default wrapper(defineConfig({ test: { browser: { enabled: true } } }));`,
