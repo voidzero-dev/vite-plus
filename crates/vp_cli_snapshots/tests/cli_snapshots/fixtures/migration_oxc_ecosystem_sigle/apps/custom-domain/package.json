@@ -1,0 +1,5 @@
+{
+  "name": "custom-domain",
+  "private": true,
+  "type": "module"
+}

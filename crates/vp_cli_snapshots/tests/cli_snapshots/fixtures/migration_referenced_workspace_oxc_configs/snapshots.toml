@@ -1,0 +1,30 @@
+[[case]]
+name = "migration_referenced_workspace_oxc_configs_imported"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "packages/app/vite.config.ts", "import fmt from '../../.oxfmtrc.json' with { type: 'json' };\nimport { readFileSync } from 'node:fs';\nconst lint = JSON.parse(readFileSync(new URL('../../.oxlintrc.json', import.meta.url), 'utf8'));\nexport default { fmt, lint };\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "preserve root configs loaded by a workspace Vite config" },
+  ["vpt", "print-file", ".oxfmtrc.json"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  { argv = ["vp", "fmt", "src/index.ts"], cwd = "packages/app" },
+  ["vpt", "print-file", "packages/app/src/index.ts"],
+  { argv = ["vp", "lint", "src/index.ts"], cwd = "packages/app" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "repeated migration keeps the workspace imports usable" },
+  { argv = ["vp", "fmt", "--check", "src/index.ts"], cwd = "packages/app" },
+  { argv = ["vp", "lint", "src/index.ts"], cwd = "packages/app" },
+]
+
+[[case]]
+name = "migration_referenced_workspace_oxc_configs_extends"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "packages/app/.oxlintrc.json", "{\"extends\":[\"./config/lint-base.jsonc\"]}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/config/lint-base.jsonc", "// Shared lint rules\n{\"extends\":[\"../../../.oxlintrc.json\"]}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/src/index.ts", "console.log('hello');\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "preserve every config in a transitive JSON inheritance chain" },
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", "packages/app/.oxlintrc.json"],
+  ["vpt", "print-file", "packages/app/config/lint-base.jsonc"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "repeated migration keeps inherited rules usable" },
+  { argv = ["vp", "lint", "-c", ".oxlintrc.json", "src/index.ts"], cwd = "packages/app", comment = "the inherited no-console rule must still report the console call", continue-on-failure = true },
+]
