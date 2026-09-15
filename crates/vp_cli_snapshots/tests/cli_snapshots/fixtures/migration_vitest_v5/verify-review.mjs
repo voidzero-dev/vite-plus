@@ -3,13 +3,15 @@ import path from 'node:path';
 import { createVitest } from 'vite-plus/test/node';
 
 const scopeCheck = process.argv.includes('--scopes');
-const runner = await createVitest({ config: scopeCheck ? undefined : './vite.config.ts', watch: false, reporters: [] });
+const dirIndex = process.argv.indexOf('--dir');
+const runner = await createVitest({ config: scopeCheck ? undefined : './vite.config.ts', ...(dirIndex >= 0 ? { dir: process.argv[dirIndex + 1] } : {}), watch: false, reporters: [] });
 try {
   if (scopeCheck) {
     assert.equal(runner.projects.length, 1);
     assert.equal(runner.projects[0].config.globals, true);
     if (process.argv.includes('--root')) {
-      assert.equal(runner.projects[0].config.root, path.join(process.cwd(), 'unit'));
+      // Vitest uses forward slashes even on Windows; compare native paths.
+      assert.equal(path.normalize(runner.projects[0].config.root), path.join(process.cwd(), 'unit'));
     }
     const result = await runner.start();
     assert.equal(result.unhandledErrors.length, 0, JSON.stringify(result.unhandledErrors));
