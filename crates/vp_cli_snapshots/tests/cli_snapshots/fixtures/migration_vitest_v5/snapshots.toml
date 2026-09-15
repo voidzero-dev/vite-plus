@@ -97,6 +97,69 @@ steps = [
 ]
 
 [[case]]
+name = "test_discovery_dir"
+vp = "global"
+comment = "Match includes and excludes under test.dir, keep setup resolution relative to root, and preserve files outside the discovery directory."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { root: './app', test: { globals: true, dir: './unit', include: ['*.test.js'], exclude: ['excluded.test.js'], setupFiles: '../setup.js' } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.js", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit/right.test.js", "test.sequential('works', () => {});\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "wrong.test.js", "test('other runner', () => { expect(() => { throw Error('boom'); }).toThrow(''); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit/excluded.test.js", "test.sequential('excluded', () => {});\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/unit/wrong.test.js", "test.sequential('wrong root', () => {});\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "unit/right.test.js", "setup.js", "wrong.test.js", "unit/excluded.test.js", "app/unit/wrong.test.js"],
+  ["node", "verify-review.mjs", "--scopes"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "cli_discovery_dir"
+vp = "global"
+comment = "A literal --dir overrides config discovery without changing setup-file ownership."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.test", "vitest run --dir ./unit"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { globals: true, dir: './ignored', include: ['*.test.js'], setupFiles: './setup.js' } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.js", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit/right.test.js", "test.sequential('works', () => {});\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "wrong.test.js", "expect(() => { throw Error('boom'); }).toThrow('');\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "ignored/wrong.test.js", "test.sequential('ignored', () => {});\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "unit/right.test.js", "setup.js", "wrong.test.js", "ignored/wrong.test.js"],
+  ["node", "verify-review.mjs", "--scopes", "--dir", "./unit"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "directory_setup_globals"
+vp = "global"
+comment = "An extensionless setup directory resolves its index file and migrates its globals-only hook."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { globals: true, setupFiles: ['./setup'], include: ['unit.test.js'] } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup/index.js", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit.test.js", "test('works', () => {});\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "setup/index.js"],
+  ["node", "verify-review.mjs", "--scopes"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "setup_extension_precedence"
+vp = "global"
+comment = "Prefer setup.mjs over setup.js, and leave the inactive JavaScript file unchanged."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { globals: true, setupFiles: ['./setup'], include: ['unit.test.js'] } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.mjs", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.js", "expect(() => { throw Error('boom'); }).toThrow('');\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit.test.js", "test('works', () => {});\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "setup.mjs", "setup.js"],
+  ["node", "verify-review.mjs", "--scopes"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "conflicting_setup_globals"
 vp = "global"
 comment = "Preserve a setup file shared by projects with conflicting globals settings and retain its ownership review on repeated migration."
