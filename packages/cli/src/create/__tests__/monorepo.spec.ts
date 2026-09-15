@@ -8,6 +8,7 @@ import { PackageManager } from '../../types/index.js';
 import {
   alignMonorepoTypeScriptVersion,
   dropAliasedRuntimeDevDeps,
+  removeNestedLibraryToolConfig,
 } from '../templates/monorepo.js';
 
 function writePackageJson(directory: string, devDependencies: Record<string, string>): void {
@@ -110,6 +111,62 @@ describe('alignMonorepoTypeScriptVersion', () => {
     alignMonorepoTypeScriptVersion(tmpDir, appDir, libraryDir);
 
     expect(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')).toBe(workspaceYaml);
+  });
+});
+
+describe('removeNestedLibraryToolConfig', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-monorepo-lint-config-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('removes root-only lint and format options from the nested library config', () => {
+    const configPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      configPath,
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  pack: { exports: true },
+  lint: {
+    options: {
+      typeAware: true,
+      typeCheck: true,
+    },
+  },
+  fmt: {},
+});
+`,
+    );
+
+    removeNestedLibraryToolConfig(tmpDir);
+
+    const content = fs.readFileSync(configPath, 'utf8');
+    expect(content).not.toContain('lint:');
+    expect(content).not.toContain('fmt:');
+    expect(content).toContain('pack: { exports: true }');
+  });
+
+  it('removes the complete nested lint config', () => {
+    const configPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      configPath,
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: { rules: { 'no-console': 'error' } },
+});
+`,
+    );
+
+    removeNestedLibraryToolConfig(tmpDir);
+
+    expect(fs.readFileSync(configPath, 'utf8')).not.toContain('lint:');
   });
 });
 

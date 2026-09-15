@@ -973,6 +973,7 @@ module.exports.parseCreateArgs = nativeBinding.parseCreateArgs;
 module.exports.parseHooksArgs = nativeBinding.parseHooksArgs;
 module.exports.parseMigrateArgs = nativeBinding.parseMigrateArgs;
 module.exports.parseStagedArgs = nativeBinding.parseStagedArgs;
+module.exports.removeConfigKey = nativeBinding.removeConfigKey;
 module.exports.rewriteEslint = nativeBinding.rewriteEslint;
 module.exports.rewriteImportsInDirectory = nativeBinding.rewriteImportsInDirectory;
 module.exports.rewritePrettier = nativeBinding.rewritePrettier;

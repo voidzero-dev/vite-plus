@@ -23,6 +23,6 @@ pub use import_rewriter::{
 };
 pub use package::{rewrite_eslint, rewrite_prettier, rewrite_scripts};
 pub use vite_config::{
-    MergeResult, has_config_key, merge_json_config, merge_tsdown_config, upsert_json_config,
-    wrap_lazy_plugins,
+    MergeResult, has_config_key, merge_json_config, merge_tsdown_config, remove_config_key,
+    upsert_json_config, wrap_lazy_plugins,
 };
