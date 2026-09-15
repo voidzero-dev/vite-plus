@@ -5,3 +5,19 @@ steps = [
   { argv = ["vp", "check"], continue-on-failure = true },
   { argv = ["vp", "check", "--quiet"], comment = "warnings are suppressed while errors are still reported", continue-on-failure = true },
 ]
+
+[[case]]
+name = "check_no_color"
+vp = "local"
+env = { NO_COLOR = "1" }
+steps = [
+  { argv = ["vp", "check", "--no-fmt"], comment = "Captured lint diagnostics and Vite+ messages honor NO_COLOR in a terminal", formatted-snapshot = true },
+]
+
+[[case]]
+name = "check_force_color_zero"
+vp = "local"
+env = { FORCE_COLOR = "0" }
+steps = [
+  { argv = ["vp", "check", "--no-fmt"], comment = "Capturing lint output preserves an explicit FORCE_COLOR=0", formatted-snapshot = true },
+]

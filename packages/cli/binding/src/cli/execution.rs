@@ -129,7 +129,12 @@ pub(crate) async fn resolve_and_capture_output(
         resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd).await?;
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
-    if force_color_if_terminal && vp_shared::is_stdout_terminal() {
+    // Capturing output hides the terminal from the child. Preserve colors only when
+    // the parent supports them, without overriding an explicit FORCE_COLOR value.
+    if force_color_if_terminal
+        && console::colors_enabled()
+        && !cmd.as_std().get_envs().any(|(key, _)| key == "FORCE_COLOR")
+    {
         cmd.env("FORCE_COLOR", "1");
     }
 
