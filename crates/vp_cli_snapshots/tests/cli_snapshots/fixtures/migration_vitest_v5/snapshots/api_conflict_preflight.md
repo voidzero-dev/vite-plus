@@ -15,6 +15,7 @@ Vitest v5: 1 review item (1 block dependency updates)
 
 vite.config.ts
   1:55 BLOCK [api-conflict] Resolve conflicting test.api and test.browser.api values before upgrading.
+    Docs: https://vitest.dev/guide/migration/#browser-api-is-replaced-by-the-top-level-api
 Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.
 ```
 

@@ -16,6 +16,7 @@ Vitest v5: 1 review item (1 block dependency updates)
 
 custom-runner.ts
   1:10 BLOCK [removed-api] Migrate startTests from @vitest/runner manually; no reviewed root v5 replacement exists.
+    Docs: https://vitest.dev/guide/migration/#removed-deprecated-entrypoints
 Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.
 ```
 

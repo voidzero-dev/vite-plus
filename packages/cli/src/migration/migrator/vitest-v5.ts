@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { applyEdits, findNodeAtLocation, parse as parseJsonc, parseTree } from 'jsonc-parser';
 import semver from 'semver';
-import { isNode, isScalar, parseDocument, visit } from 'yaml';
+import { isScalar, parseDocument, visit } from 'yaml';
 
 import cliPackage from '../../../package.json' with { type: 'json' };
 import { PackageManager, type WorkspaceInfoOptional } from '../../types/index.ts';
@@ -16,6 +16,7 @@ import {
   findVitestV5MergedConfigFiles,
   migrateVitestV5Config,
 } from '../vitest-v5/config.ts';
+import { vitestV5Documentation } from '../vitest-v5/documentation.ts';
 import { lockedVitestVersion } from '../vitest-v5/lockfile.ts';
 import {
   findVitestV5ConfigEntries,
@@ -357,8 +358,6 @@ function checkNodeRange(
   label: string,
   findings: VitestV5Finding[],
   publicContract = false,
-  source = '',
-  offset = 0,
 ) {
   // At the v5 upgrade baseline, both the latest LTS and Current Node releases
   // meet our minimum versions; future majors are covered by >=26. These
@@ -368,6 +367,14 @@ function checkNodeRange(
     return;
   }
   const range = semver.validRange(value);
+  if (publicContract && range) {
+    // A public engine contract is not a runtime pin. A supported minimum
+    // is sufficient; open ranges need not exclude every unsupported major.
+    const minimum = semver.minVersion(range);
+    if (minimum && semver.satisfies(minimum, cliPackage.engines.node)) {
+      return;
+    }
+  }
   if (!range) {
     findings.push(
       finding(
@@ -375,8 +382,6 @@ function checkNodeRange(
         'node-runtime',
         `Resolve ${label} (${value}) and select Node ${cliPackage.engines.node}.`,
         'review',
-        source,
-        offset,
       ),
     );
   } else if (!publicContract && !semver.intersects(range, cliPackage.engines.node)) {
@@ -386,8 +391,6 @@ function checkNodeRange(
         'node-runtime',
         `${label} (${value}) cannot run Vite+ with Vitest v5. Select Node ${cliPackage.engines.node}; use vp env pin 22 --force for a runtime pin. Do not widen a library's engines.node contract automatically.`,
         'block',
-        source,
-        offset,
       ),
     );
   } else if (
@@ -400,31 +403,15 @@ function checkNodeRange(
         'node-runtime',
         `${label} (${value}) includes unsupported test runtimes. Pin the test/CI runtime to Node ${cliPackage.engines.node}; keep the library's public engine contract separate.`,
         'review',
-        source,
-        offset,
       ),
     );
   }
 }
 
 function scanNode(file: string, source: string, findings: VitestV5Finding[]) {
+  // Limit compatibility checks to project runtime declarations. Inferring
+  // runtimes from CI workflows, containers, or other files is out of scope.
   const base = path.basename(file);
-  const checkImage = (image: unknown, offset = 0) => {
-    if (typeof image !== 'string') {
-      return;
-    }
-    // Only the official Node image has a tag that identifies the runtime.
-    // Feature versions and custom image tags have a different meaning.
-    const match = /^(?:docker\.io\/)?(?:library\/)?node(?::([^@\s]+))?(?:@\S+)?$/.exec(image);
-    if (match) {
-      const tag = match[1] ?? 'latest';
-      // A digest fixes the image even when its tag says latest/lts. Retain
-      // that unresolved reference instead of treating it as a moving alias.
-      const version =
-        /^(\d+(?:\.\d+){0,2})(?:-[\w.-]+)?$/.exec(tag)?.[1] ?? (image.includes('@') ? image : tag);
-      checkNodeRange(file, version, 'Node container image', findings, false, source, offset);
-    }
-  };
   if (base === '.node-version' || base === '.nvmrc') {
     checkNodeRange(file, source.trim().replace(/^v/, ''), base, findings);
   }
@@ -448,54 +435,6 @@ function scanNode(file: string, source: string, findings: VitestV5Finding[]) {
       )
     ) {
       checkNodeRange(file, pkg.volta.node, 'volta.node', findings);
-    }
-  }
-  if (/\.ya?ml$/.test(file)) {
-    const document = parseDocument(source);
-    visit(document, {
-      Pair(_key, pair) {
-        if (!isScalar(pair.key)) {
-          return;
-        }
-        const key = String(pair.key.value);
-        const value = isNode(pair.value) ? pair.value.toJSON() : undefined;
-        if (key === 'image' || key === 'container') {
-          checkImage(value, pair.key.range?.[0] ?? 0);
-        }
-        if (!['node', 'node-version', 'nodejs'].includes(key)) {
-          return;
-        }
-        for (const item of Array.isArray(value) ? value : [value]) {
-          if (typeof item === 'number' || typeof item === 'string') {
-            checkNodeRange(
-              file,
-              String(item),
-              key,
-              findings,
-              false,
-              source,
-              pair.key.range?.[0] ?? 0,
-            );
-          }
-        }
-      },
-    });
-  }
-  if (/^(?:Dockerfile|Containerfile)(?:\.|$)/.test(base)) {
-    for (const match of source.matchAll(/^\s*FROM[\t ]+(?:--platform=\S+[\t ]+)?(\S+)/gim)) {
-      checkImage(match[1], match.index);
-    }
-  }
-  if (base === 'devcontainer.json' || base === '.devcontainer.json') {
-    const config = record(parseJsonc(source));
-    checkImage(config?.image);
-    for (const [feature, options] of Object.entries(record(config?.features) ?? {})) {
-      if (/^ghcr\.io\/devcontainers\/features\/node(?::[^/]+)?$/.test(feature)) {
-        const version = record(options)?.version;
-        if (typeof version === 'string') {
-          checkNodeRange(file, version, 'Dev Container Node feature', findings);
-        }
-      }
     }
   }
 }
@@ -905,6 +844,7 @@ export function formatVitestV5Findings(
     }
     lines.push(
       `  ${item.line}:${item.column} ${item.severity === 'block' ? 'BLOCK' : 'REVIEW'} [${item.code}] ${item.message}`,
+      `    Docs: ${vitestV5Documentation(item.code)}`,
     );
   }
   return lines.join('\n');

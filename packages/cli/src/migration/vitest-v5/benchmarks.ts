@@ -1,0 +1,158 @@
+import type * as t from '@oxc-project/types';
+
+import { SourceEditor, isString, memberName, propertyName, testApiName } from './ast.ts';
+
+interface BenchmarkCall {
+  call: t.CallExpression;
+  modifier?: string;
+}
+
+/** Keep the workload as a separate callback: making it the test callback
+ * would measure nothing, and inlining it into a new closure can change scope. */
+export function migrateBenchmarks(editor: SourceEditor, globals = false) {
+  const imports = new Set<t.ImportSpecifier>();
+  const calls = new Set<t.CallExpression>();
+  let fixtureName: string | undefined;
+  let shadowedGlobalThis = false;
+  editor.visit({
+    Identifier(node) {
+      if (node.name === 'globalThis' && editor.binding(node)) {
+        shadowedGlobalThis = true;
+      }
+    },
+  });
+
+  function directCall(reference: t.Node): BenchmarkCall | undefined {
+    let callee = reference;
+    let modifier: string | undefined;
+    const member = editor.parent(reference);
+    if (member?.type === 'MemberExpression' && member.object === reference) {
+      modifier = memberName(member);
+      if (member.optional || !modifier || !['skip', 'only', 'todo'].includes(modifier)) {
+        return undefined;
+      }
+      callee = member;
+    }
+    const call = editor.parent(callee);
+    if (
+      call?.type !== 'CallExpression' ||
+      call.callee !== callee ||
+      call.optional ||
+      call.typeArguments ||
+      editor.parent(call)?.type !== 'ExpressionStatement' ||
+      !isString(call.arguments[0])
+    ) {
+      return undefined;
+    }
+    const callback = call.arguments[1];
+    if (!(modifier === 'todo' && call.arguments.length === 1)) {
+      if (
+        call.arguments.length !== 2 ||
+        (callback?.type !== 'ArrowFunctionExpression' && callback?.type !== 'FunctionExpression') ||
+        callback.params.length ||
+        callback.generator
+      ) {
+        return undefined;
+      }
+    }
+    // Register only at module scope or inside ordinary describe/suite
+    // callbacks. Calls from helpers, hooks, or other benchmarks need review.
+    let fn = editor.functionParent(call);
+    while (fn) {
+      const registration = editor.parent(fn);
+      if (
+        fn.async ||
+        fn.generator ||
+        registration?.type !== 'CallExpression' ||
+        registration.optional ||
+        !registration.arguments.includes(fn)
+      ) {
+        return undefined;
+      }
+      let suite = registration.callee;
+      if (!['describe', 'suite'].includes(testApiName(editor, suite, globals) ?? '')) {
+        if (
+          suite.type !== 'MemberExpression' ||
+          suite.optional ||
+          !['skip', 'only'].includes(memberName(suite) ?? '')
+        ) {
+          return undefined;
+        }
+        suite = suite.object;
+      }
+      if (!['describe', 'suite'].includes(testApiName(editor, suite, globals) ?? '')) {
+        return undefined;
+      }
+      fn = editor.functionParent(registration);
+    }
+    return { call, modifier };
+  }
+
+  function rewrite({ call, modifier }: BenchmarkCall, test: string) {
+    calls.add(call);
+    editor.replace(call.callee, `${test}${modifier ? `.${modifier}` : ''}`);
+    const callback = call.arguments[1];
+    if (!callback) {
+      return;
+    }
+    fixtureName ??= editor.uniqueName('bench');
+    editor.edit(
+      callback.start,
+      callback.start,
+      `async ({ bench: ${fixtureName} }) => { await ${fixtureName}(${editor.text(call.arguments[0])}, `,
+    );
+    editor.edit(call.end - 1, call.end - 1, ').run(); }');
+  }
+
+  editor.visit({
+    ImportDeclaration(node) {
+      if (!['vitest', 'vite-plus/test'].includes(node.source.value) || node.importKind === 'type') {
+        return;
+      }
+      for (const specifier of node.specifiers) {
+        if (
+          specifier.type !== 'ImportSpecifier' ||
+          specifier.importKind === 'type' ||
+          propertyName(specifier.imported) !== 'bench'
+        ) {
+          continue;
+        }
+        const binding = editor.binding(specifier.local);
+        if (!binding) {
+          continue;
+        }
+        const registrations = binding.references.map(directCall);
+        // Retarget an import only when all uses are understood. A callback
+        // passed to a wrapper or a re-export must not become a test function.
+        if (registrations.some((registration) => !registration)) {
+          continue;
+        }
+        const test = editor.uniqueName('test');
+        editor.replace(specifier, `test as ${test}`);
+        imports.add(specifier);
+        for (const registration of registrations) {
+          rewrite(registration!, test);
+        }
+      }
+    },
+    Identifier(node) {
+      if (!globals || node.name !== 'bench' || editor.binding(node) || shadowedGlobalThis) {
+        return;
+      }
+      const registration = directCall(node);
+      if (registration) {
+        rewrite(registration, 'globalThis.test');
+      }
+    },
+    MemberExpression(node) {
+      if (testApiName(editor, node, globals) !== 'bench') {
+        return;
+      }
+      const registration = directCall(node);
+      if (registration && node.object.type === 'Identifier') {
+        rewrite(registration, `${editor.text(node.object)}.test`);
+      }
+    },
+  });
+  return { imports, calls };
+}

@@ -25,9 +25,11 @@ Vitest v5: 2 review items
 
 tsconfig.json
   1:1 REVIEW [jest-dom-types] If this config checks Vitest tests, load @testing-library/jest-dom/vitest in compilerOptions.types or an included TypeScript setup file. The root jest-dom type entry augments Jest, not Vitest v5.
+    Docs: https://viteplus.dev/guide/vitest-v5#review-checklist
 
 vite.config.ts
   3:1 REVIEW [dynamic-config] Review the effective exported test config and its v4 defaults.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied, 2 files had imports rewritten
@@ -37,9 +39,11 @@ vite.config.ts
 
 tsconfig.json
   1:1 REVIEW [jest-dom-types] If this config checks Vitest tests, load @testing-library/jest-dom/vitest in compilerOptions.types or an included TypeScript setup file. The root jest-dom type entry augments Jest, not Vitest v5.
+    Docs: https://viteplus.dev/guide/vitest-v5#review-checklist
 
 vite.config.ts
   7:1 REVIEW [dynamic-config] Review the effective exported test config and its v4 defaults.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ```
 
 ## `vpt print-file plugin-options.ts`
