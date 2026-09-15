@@ -116,10 +116,10 @@ Packages: -2
 --
 
 dependencies:
-- testnpm2 1.0.1
+- testnpm2
 
 devDependencies:
-- test-vite-plus-install 1.0.0
+- test-vite-plus-install
 
 Done in <duration> using pnpm <version>
 ```

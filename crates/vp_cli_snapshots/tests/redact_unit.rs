@@ -154,6 +154,48 @@ fn strips_pnpm_store_location_diagnostics() {
 }
 
 #[test]
+fn normalizes_pnpm_removed_dependency_versions() {
+    // pnpm can report a removal with or without the package version, depending
+    // on whether its manifest read finishes before the package is unlinked.
+    for section in ["dependencies", "devDependencies", "optionalDependencies"] {
+        for version in [" 1.0.0", "", " 1.0.0-beta.1+build.2"] {
+            let input = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2{version}\n- @scope/pkg{version}\n\nDone in 1s using pnpm 10.18.0\n"
+            );
+            let expected = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2\n- @scope/pkg\n\nDone in <duration> using pnpm <version>\n"
+            );
+            assert_eq!(redact_output(input, &[], true), expected);
+        }
+    }
+}
+
+#[test]
+fn preserves_pnpm_added_versions_and_text_outside_dependency_sections() {
+    let input = concat!(
+        "- outside 2.0.0\n\n",
+        "optionalDependencies:\n",
+        "- testnpm2 1.0.0\n",
+        " testnpm2 1.0.1\n",
+        " @scope/pkg 2.0.0 (3.0.0 is available)\n\n",
+        "- after-section 3.0.0\n",
+        "\"testnpm2\": \"1.0.1\"\n\n",
+        "Done in 1s using pnpm 10.18.0\n",
+    )
+    .to_owned();
+    let expected = input
+        .replace("- testnpm2 1.0.0", "- testnpm2")
+        .replace("1s using pnpm 10.18.0", "<duration> using pnpm <version>");
+    assert_eq!(redact_output(input, &[], true), expected);
+}
+
+#[test]
+fn preserves_dependency_versions_without_pnpm_output() {
+    let input = "optionalDependencies:\n- testnpm2 1.0.0\n".to_owned();
+    assert_eq!(redact_output(input.clone(), &[], true), input);
+}
+
+#[test]
 fn masks_current_vite_plus_version_in_upgrade_check_output() {
     let input = concat!(
         "info: found vite-plus@0.1.21-alpha.7 (current: 0.2.4)\n",
