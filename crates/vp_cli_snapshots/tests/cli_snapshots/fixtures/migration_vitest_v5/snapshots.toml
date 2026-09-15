@@ -11,6 +11,17 @@ steps = [
 ]
 
 [[case]]
+name = "supported_engine_minimum"
+vp = "global"
+comment = "Keep a public engine range with a supported minimum without a Node review across repeated migration."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "engines.node", ">= 22.19.0"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "package.json"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "node_preflight"
 vp = "global"
 steps = [
@@ -172,33 +183,6 @@ steps = [
 ]
 
 [[case]]
-name = "moving_ci_runtime_aliases"
-vp = "global"
-comment = "Keep current LTS and latest-release aliases without a runtime review or a numeric pin, including after repeated migration."
-steps = [
-  { argv = ["vpt", "write-file", ".github/workflows/test.yml", "jobs:\n  lts:\n    steps:\n      - uses: actions/setup-node@v6\n        with:\n          node-version: 'lts/*'\n  latest:\n    steps:\n      - uses: actions/setup-node@v6\n        with:\n          node-version: 'latest'\n"], snapshot = false },
-  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
-  ["vpt", "print-file", ".github/workflows/test.yml"],
-  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
-]
-
-[[case]]
-name = "node_container_scope"
-vp = "global"
-comment = "Check the runtime image and feature option, not source properties or Dev Container feature tags."
-steps = [
-  { argv = ["vpt", "write-file", "worker.js", "export const options = { node:2 };\n"], snapshot = false },
-  { argv = ["vpt", "write-file", ".devcontainer/devcontainer.json", "{\"features\":{\"ghcr.io/devcontainers/features/node:1\":{\"version\":\"lts\"}}}\n"], snapshot = false },
-  { argv = ["vpt", "write-file", "Dockerfile", "# FROM node:20\nFROM node:20-alpine AS build\nRUN echo node:2\n"], snapshot = false },
-  { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
-  ["vpt", "print-file", "package.json"],
-  { argv = ["vpt", "write-file", "Dockerfile", "# FROM node:20\nFROM node:24.11.0-alpine AS build\nRUN echo node:2\n"], snapshot = false },
-  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
-  ["vpt", "print-file", "worker.js"],
-  ["vpt", "print-file", ".devcontainer/devcontainer.json"],
-]
-
-[[case]]
 name = "mixed_project_assertions"
 vp = "global"
 comment = "Keep Node DOM matchers, migrate browser matchers, and retain review findings for shared transform inputs across repeated migrations."
@@ -249,8 +233,23 @@ steps = [
 name = "benchmark_preflight"
 vp = "global"
 steps = [
-  { argv = ["vpt", "write-file", "example.bench.ts", "import { bench } from 'vitest';\nbench('old benchmark', () => 20 + 22);\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "example.bench.ts", "import { bench } from 'vitest';\nbench('old benchmark', () => 20 + 22, { time: 10 });\n"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
   ["vpt", "print-file", "package.json"],
   ["vpt", "print-file", "example.bench.ts"],
+]
+
+[[case]]
+name = "benchmark_migration"
+vp = "global"
+comment = "Migrate direct benchmarks, preserve suite closures and modifiers, and execute the migrated workloads with Vitest 5. Keep the supported bench command."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { include: ['unused.test.js'], benchmark: { include: ['example.bench.ts'] } } };\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bench", "vitest bench --run"], snapshot = false },
+  { argv = ["vpt", "write-file", "example.bench.ts", "import { bench, describe } from 'vitest';\ndescribe('utilities', () => {\n  const json = '{\"value\":42}';\n  bench('parse', () => { if (JSON.parse(json).value !== 42) throw new Error('scope lost'); });\n  bench('async', async () => { if (await Promise.resolve(json) !== json) throw new Error('scope lost'); });\n  bench.skip('skipped', () => { throw new Error('must not run'); });\n  bench.todo('later');\n});\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "example.bench.ts"],
+  ["vpt", "print-file", "package.json"],
+  ["node", "verify-benchmarks.mjs"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
 ]

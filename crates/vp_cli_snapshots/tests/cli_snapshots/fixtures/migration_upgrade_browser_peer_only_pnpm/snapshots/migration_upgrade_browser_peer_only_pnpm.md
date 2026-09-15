@@ -80,4 +80,5 @@ VITE+ - The Unified Toolchain for the Web
 
 package.json
   1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default and uses exact browser locators. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
 ```

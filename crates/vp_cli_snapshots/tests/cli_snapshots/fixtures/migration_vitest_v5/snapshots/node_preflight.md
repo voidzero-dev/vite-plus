@@ -15,6 +15,7 @@ Vitest v5: 1 review item (1 block dependency updates)
 
 .node-version
   1:1 BLOCK [node-runtime] .node-version (20.19.0) cannot run Vite+ with Vitest v5. Select Node ^22.18.0 || ^24.11.0 || >=26.0.0; use vp env pin 22 --force for a runtime pin. Do not widen a library's engines.node contract automatically.
+    Docs: https://viteplus.dev/guide/vitest-v5#node-runtime
 Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.
 ```
 

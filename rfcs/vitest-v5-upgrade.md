@@ -44,7 +44,7 @@ Vitest v5 changes the package graph and project configuration model. A version-o
 ## Non-goals
 
 - Reimplement removed Vitest internals.
-- Make the v5 benchmark rewrite automatic.
+- Redesign complex benchmark comparisons and custom reporting integrations automatically.
 - Hide new Vitest behavior inside the runner after migration.
 - Support Vitest v5 on Node 20 or Node 25.
 - Require the community WebDriverIO provider to publish in lockstep with Vitest.
@@ -113,9 +113,7 @@ vp test requires Node ^22.18.0 || ^24.11.0 || >=26.0.0.
 This project selects Node 20.19.0. Run `vp env pin 22 --force`, or update the project's runtime range.
 ```
 
-The migration preflight must inspect `.node-version`, `.nvmrc`, `devEngines.runtime`, `engines.node`, CI matrices, and common container images. It may update a Vite+ runtime pin after confirmation. It must not silently widen a library's public `engines.node` contract.
-
-Read official Node image tags from Dockerfile `FROM` instructions, YAML `image` or `container` fields, and Dev Container image settings. Read the Node feature's `version` option separately; its feature tag does not identify the runtime. Ignore `node:2` properties in application code and comments that mention images.
+Limit the migration preflight's Node compatibility checks to `.node-version`, `.nvmrc`, and the `engines.node`, `devEngines.runtime`, and `volta.node` declarations in `package.json`. Exclude Node versions in CI workflows, containers, and other files. Accept a public `engines.node` range with a supported minimum, such as `>=22.19.0`, without a review. Check runtime pins against the CLI engine range. The migration may update a Vite+ runtime pin after confirmation. It must not widen a library's public `engines.node` contract without confirmation.
 
 ### 3. Public `vite-plus/test*` exports
 
@@ -255,7 +253,7 @@ This list is the authoritative scanner checklist. Report each item with a file l
 - nested `vi.mock`, `vi.unmock`, or `vi.hoisted` calls;
 - factory-free `vi.mock()` calls in browser tests;
 - class constructor mocks created with `vi.fn`, `vi.spyOn`, or `mockImplementation`;
-- the v4 benchmark API and removed benchmark CLI flags;
+- benchmark references outside the supported direct-call transform and removed benchmark CLI flags;
 - unawaited `resolves`, `rejects`, file-snapshot, poll, or browser assertions;
 - custom matcher declarations that use the old `Assertion<T>`, `Matchers<T>`, or `jest.Matchers` shape;
 - custom browser commands that receive a locator string;
@@ -293,7 +291,9 @@ JSON and JUnit can retain stdout with `{ stdout: true }`. An explicit reporter `
 
 The benchmark migration removes the top-level `bench` API; `bench.skip`, `bench.only`, and `bench.todo`; `benchmark.reporters`; `benchmark.outputFile`; `benchmark.compare`; `benchmark.outputJson`; `--compare`; and `--outputJson`. The replacement is the `bench` test-context fixture, regular test modifiers, and the JSON reporter. `Vitest.mode` is always `test`.
 
-Retain supported benchmark options, including `benchmark.enabled` and `benchmark.include`. Block the removed options listed above; report dynamic benchmark settings for review.
+Convert direct `bench` calls with literal names and inline zero-argument callbacks into tests using the `bench` fixture and `.run()`. Move simple `skip`, `only`, and `todo` modifiers to the test. Preserve surrounding `describe` and `suite` scopes. Block unresolved references, wrappers, and calls with benchmark options.
+
+Retain supported benchmark options, including `benchmark.enabled` and `benchmark.include`, and the `vitest bench` command. Block the removed config options and CLI flags listed above; report dynamic benchmark settings for review. Include a documentation link with each Vitest v5 diagnostic.
 
 The entry-point migration uses these exact mappings:
 
@@ -324,7 +324,7 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 | Hoisted mock calls must be top-level                         | A prior warning becomes a startup error.                                                                                                        | Report each nested call; do not move it automatically because scope dependencies may change.                                |
 | Browser automocks remain mocked                              | Exports that called real code now return mock defaults.                                                                                         | Report factory-free browser mocks; suggest `{ spy: true }` when real behavior is required.                                  |
 | Class mocks inherit implementation prototypes                | Methods and `instanceof` results change.                                                                                                        | Add focused release tests; report class constructor mocks as review items.                                                  |
-| Benchmark API rewrite                                        | `bench`, benchmark modes, reporters, output, and compare options are removed.                                                                   | Block on active benchmark APIs and link the new test-context fixture design.                                                |
+| Benchmark API rewrite                                        | Top-level `bench` and benchmark-specific reporter, output, and compare options are removed; `vitest bench` remains supported.                   | Convert direct calls and simple modifiers; block unsupported forms and link the new test-context fixture design.            |
 | UI token authentication                                      | Stored or proxied bare UI URLs stop working.                                                                                                    | Preserve the token URL in CLI output; report hard-coded `/__vitest__/` URLs.                                                |
 | Fake timers mock `Temporal`                                  | Time tests with a global polyfill change.                                                                                                       | Preserve v4 fake-timer behavior with `toNotFake: ['Temporal']` when detected.                                               |
 | `vi.setSystemTime()` mocks `Temporal`                        | Code can observe mocked Temporal time without enabling fake timers.                                                                             | Report scopes that contain both Temporal use and `vi.setSystemTime()`; do not rewrite them.                                 |
