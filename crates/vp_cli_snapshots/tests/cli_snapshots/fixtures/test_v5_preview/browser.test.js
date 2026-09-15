@@ -16,8 +16,8 @@ test('Preview shares runtime and browser context across public entry points', as
   expect(page).toBe(providerAliasPage);
   document.body.innerHTML = '<button type="button">Increment</button><output>0</output>';
   document.querySelector('button').addEventListener('click', () => { document.querySelector('output').textContent = '1'; });
-  // Vitest 5.0.0 Preview always calls advanceTimers, even with real timers.
-  // The separate upstream_real_timers case records that release blocker.
+  // Upstream #9891 regressed Preview real timers in 4.1.1, also affecting 5.0.0.
+  // The separate upstream_real_timers case records this pre-existing failure.
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   try {
     await page.getByRole('button', { name: 'Increment' }).click();

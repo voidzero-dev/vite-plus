@@ -8,7 +8,7 @@ steps = [{ argv = ["node", "verify.mjs"], timeout = 120000 }]
 name = "upstream_real_timers"
 vp = "local"
 env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
-comment = "Known upstream Vitest 5.0.0 release blocker, also reproduced without Vite+: Preview locator clicks call advanceTimers with real timers. Remove this expected-failure assertion when upstream is fixed."
+comment = "Known upstream regression introduced in Vitest 4.1.1 and still present in 5.0.0, not a new v5 release blocker: Preview locator clicks advance fake timers while using real timers. Require success when upstream fixes it."
 steps = [{ argv = ["node", "verify.mjs", "--real-timers"], timeout = 120000 }]
 
 [[case]]
