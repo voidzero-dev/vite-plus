@@ -13,6 +13,7 @@ import {
   propertyName,
   staticObject,
   type SourceOptions,
+  type VitestV5Finding,
 } from './ast.ts';
 import { literalArgv } from './commands.ts';
 
@@ -21,13 +22,18 @@ interface ConfigEntry {
   root: string;
   uncertain?: boolean;
   rootOverride?: string;
+  dirOverride?: string;
+  cwd?: string;
 }
 
 interface TestScope {
   root: string;
+  dir?: string;
+  discoveryRoot?: string;
   include?: string[];
   exclude?: string[];
   setupFiles?: string[];
+  unresolvedSetup?: boolean;
   browser?: boolean;
   globals?: boolean;
 }
@@ -85,16 +91,19 @@ export function findVitestV5ConfigEntries(
       }
       let config: string | undefined;
       let rootOverride: string | undefined;
+      let dirOverride: string | undefined;
       let uncertain = false;
       for (let index = start; index < argv.length && argv[index] !== '--'; index++) {
         const arg = argv[index];
         const option = arg.split('=')[0];
-        if (['--config', '-c', '--root', '-r'].includes(option)) {
+        if (['--config', '-c', '--root', '-r', '--dir'].includes(option)) {
           const value = arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : argv[++index];
           if (!value || value.startsWith('-')) {
             uncertain = true;
           } else if (option === '--config' || option === '-c') {
             config = value;
+          } else if (option === '--dir') {
+            dirOverride = path.resolve(root, value);
           } else {
             rootOverride = path.resolve(root, value);
           }
@@ -112,6 +121,7 @@ export function findVitestV5ConfigEntries(
         root,
         file,
         rootOverride,
+        dirOverride,
         uncertain: uncertain || (!!config && !sources.has(file!)),
       });
     }
@@ -132,6 +142,29 @@ function matches(file: string, root: string, pattern: string) {
   });
 }
 
+function insideDirectory(file: string, directory: string) {
+  const relative = path.relative(directory, file);
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+/** Vitest resolves local setup entries through local-pkg/mlly with import
+ * conditions, then falls back to the literal path. Do not guess TypeScript
+ * extensions or package exports that cannot be resolved from scanned files. */
+function resolveSetupFile(sources: ReadonlyMap<string, string>, root: string, reference: string) {
+  if (!/^\.\.?(?:[/\\]|$)/.test(reference) && !path.isAbsolute(reference)) {
+    return undefined;
+  }
+  const target = path.resolve(root, reference);
+  const extensions = ['.mjs', '.cjs', '.js', '.json'];
+  return [
+    target,
+    ...extensions.map((extension) =>
+      /[/\\]$/.test(reference) ? path.join(target, extension) : target + extension,
+    ),
+    ...extensions.map((extension) => path.join(target, 'index' + extension)),
+  ].find((candidate) => sources.has(candidate));
+}
+
 /** Resolve only selected configs and their project references. Unknown config
  * or conflicting project globals requires review, not silent suppression. */
 export function resolveVitestV5TestModes(
@@ -139,8 +172,9 @@ export function resolveVitestV5TestModes(
   configFiles: ReadonlySet<string>,
   preserveV4: boolean,
   entries: ConfigEntry[],
-): Map<string, VitestV5TestMode> {
+): { modes: Map<string, VitestV5TestMode>; findings: VitestV5Finding[] } {
   const scopes: TestScope[] = [];
+  const findings: VitestV5Finding[] = [];
   const queue = [...entries];
   const visitedEntries = new Set<string>();
   for (const entry of queue) {
@@ -158,6 +192,7 @@ export function resolveVitestV5TestModes(
       continue;
     }
     let found = false;
+    let editor: SourceEditor;
     const visited = new Set<t.ObjectExpression>();
     const walk = (
       object: t.Node | undefined,
@@ -190,6 +225,16 @@ export function resolveVitestV5TestModes(
       const resolvedRoot =
         (!inline && entry.rootOverride) ||
         path.resolve(directory, isString(root) ? root.value : '.');
+      const dirValue = test && objectProperty(test, 'dir')?.value;
+      const dir = dirValue
+        ? isString(dirValue)
+          ? dirValue.value
+          : undefined
+        : base
+          ? base.dir
+          : '';
+      // Unlike globals, --dir is not a per-project CLI override in Vitest.
+      const effectiveDir = (!inline ? entry.dirOverride : undefined) ?? dir;
       const include = test && objectProperty(test, 'include')?.value;
       const exclude = test && objectProperty(test, 'exclude')?.value;
       if ((include && !staticPatterns(include)) || (exclude && !staticPatterns(exclude))) {
@@ -212,6 +257,15 @@ export function resolveVitestV5TestModes(
       const setupFiles = setup ? (isString(setup) ? [setup.value] : staticPatterns(setup)) : [];
       const scope: TestScope = {
         root: resolvedRoot,
+        dir,
+        // Vitest passes dir to the globber as cwd, independently of root.
+        // Relative values use the command's cwd, including in project configs.
+        discoveryRoot:
+          effectiveDir === undefined
+            ? undefined
+            : effectiveDir
+              ? path.resolve(entry.cwd ?? entry.root, effectiveDir)
+              : resolvedRoot,
         include: include
           ? [...(base?.include ?? []), ...staticPatterns(include)!]
           : (base?.include ?? DEFAULT_TEST_INCLUDE),
@@ -229,9 +283,34 @@ export function resolveVitestV5TestModes(
             ? base.globals
             : false,
       };
+      const addScope = () => {
+        const resolvedSetup = scope.setupFiles?.map((reference) =>
+          resolveSetupFile(sources, scope.root, reference),
+        );
+        const unresolvedSetup = !resolvedSetup || resolvedSetup.some((file) => !file);
+        if (!scope.discoveryRoot) {
+          editor.report(
+            dirValue ?? object,
+            'global-api-ownership',
+            'Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.',
+          );
+        }
+        if (unresolvedSetup) {
+          editor.report(
+            setup ?? object,
+            'global-api-ownership',
+            'Resolve setupFiles before migrating global APIs. A setup entry cannot be resolved safely from the scanned files.',
+          );
+        }
+        scopes.push({
+          ...scope,
+          setupFiles: resolvedSetup?.filter((file): file is string => !!file),
+          unresolvedSetup,
+        });
+      };
       const projects = test && objectProperty(test, 'projects')?.value;
       if (!projects) {
-        scopes.push(scope);
+        addScope();
         return;
       }
       if (projects.type !== 'ArrayExpression') {
@@ -282,9 +361,9 @@ export function resolveVitestV5TestModes(
               continue;
             }
             if (file === entry.file) {
-              scopes.push(scope);
+              addScope();
             } else {
-              queue.push({ file, root: path.dirname(file) });
+              queue.push({ file, root: path.dirname(file), cwd: entry.cwd ?? entry.root });
             }
           }
           continue;
@@ -303,7 +382,7 @@ export function resolveVitestV5TestModes(
       }
     };
     try {
-      const editor = new SourceEditor(entry.file, sources.get(entry.file)!);
+      editor = new SourceEditor(entry.file, sources.get(entry.file)!);
       const exported = (node: t.Node | undefined) => {
         if (node?.type === 'Identifier') {
           const binding = editor.binding(node);
@@ -338,6 +417,7 @@ export function resolveVitestV5TestModes(
           }
         },
       });
+      findings.push(...editor.findings);
     } catch {
       unknown();
     }
@@ -345,30 +425,23 @@ export function resolveVitestV5TestModes(
       unknown();
     }
   }
-  return new Map(
+  const modes = new Map<string, VitestV5TestMode>(
     [...sources.keys()].map((file) => {
       const matching: Array<{ scope: TestScope; certain: boolean }> = [];
       for (const scope of scopes) {
         // Setup files execute in this project regardless of include/exclude.
-        const setup = scope.setupFiles?.some((reference) => {
-          const target = path.resolve(scope.root, reference);
-          const resolved = [
-            target,
-            ...['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'].map(
-              (extension) => target + extension,
-            ),
-          ].find((candidate) => sources.has(candidate));
-          return resolved === file;
-        });
-        const relative = path.relative(scope.root, file);
-        const inside = !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+        const setup = scope.setupFiles?.includes(file);
+        const inside = insideDirectory(file, scope.root);
+        const discoveryRoot = scope.discoveryRoot;
         const test =
-          inside &&
-          (!scope.include || scope.include.some((pattern) => matches(file, scope.root, pattern))) &&
-          !scope.exclude?.some((pattern) => matches(file, scope.root, pattern));
+          discoveryRoot &&
+          insideDirectory(file, discoveryRoot) &&
+          (!scope.include ||
+            scope.include.some((pattern) => matches(file, discoveryRoot, pattern))) &&
+          !scope.exclude?.some((pattern) => matches(file, discoveryRoot, pattern));
         if (setup || test) {
           matching.push({ scope, certain: !!setup || !!scope.include });
-        } else if (!scope.setupFiles && inside) {
+        } else if ((!discoveryRoot || !scope.setupFiles || scope.unresolvedSetup) && inside) {
           matching.push({ scope, certain: false });
         }
       }
@@ -389,4 +462,5 @@ export function resolveVitestV5TestModes(
       ];
     }),
   );
+  return { modes, findings };
 }

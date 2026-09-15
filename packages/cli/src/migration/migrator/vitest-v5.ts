@@ -752,7 +752,7 @@ export function planVitestV5Migration(
       /\.(?:json|ya?ml|sh)$/.test(file) &&
       /\b(?:vitest|vp\s+test)\b[^\n]*--(?:no-)?browser(?:[.=\s'"]|$)/.test(source),
   );
-  const testModesByVersion = new Map<boolean, Map<string, VitestV5TestMode>>();
+  const testModesByVersion = new Map<boolean, ReturnType<typeof resolveVitestV5TestModes>>();
   const inputs = new Map<string, string | null>(allSources);
   inputs.set(stateFile, fs.existsSync(stateFile) ? fs.readFileSync(stateFile, 'utf8') : null);
   for (const [directory, sources] of projectSources) {
@@ -837,9 +837,10 @@ export function planVitestV5Migration(
         file,
         source,
         project,
-        { ...testModes.get(file), ...(browserCliOverride ? { browser: undefined } : {}) },
+        { ...testModes.modes.get(file), ...(browserCliOverride ? { browser: undefined } : {}) },
         mergedConfigs.has(file),
       );
+      findings.push(...testModes.findings.filter((item) => item.file === file));
       findings.push(...result.findings);
       if (source !== result.content) {
         changes.push({ file, before: source, after: result.content });
