@@ -72,7 +72,10 @@ function hasTestConfigHelper(file: string, source: string): boolean {
 
 /** Include literal referenced configs even when they use a custom filename and
  * export a raw object. Candidate files come from the owning package's scan. */
-export function findVitestV5ConfigFiles(sources: ReadonlyMap<string, string>): Set<string> {
+export function findVitestV5ConfigFiles(
+  sources: ReadonlyMap<string, string>,
+  entries: string[] = [],
+): Set<string> {
   const files = new Set(
     [...sources]
       .filter(
@@ -82,6 +85,11 @@ export function findVitestV5ConfigFiles(sources: ReadonlyMap<string, string>): S
       )
       .map(([file]) => file),
   );
+  for (const file of entries) {
+    if (sources.has(file)) {
+      files.add(file);
+    }
+  }
   for (const file of files) {
     try {
       const editor = new SourceEditor(file, sources.get(file)!);
@@ -234,238 +242,6 @@ export function findVitestV5MergedConfigFiles(
     }
   }
   return merged;
-}
-
-interface TestScope {
-  root?: string;
-  include?: string[];
-  exclude?: string[];
-  browser?: boolean;
-  globals?: boolean;
-}
-
-export type VitestV5TestMode = Pick<SourceOptions, 'browser' | 'globals'>;
-
-const DEFAULT_TEST_INCLUDE = ['**/*.{test,spec}.?(c|m)[jt]s?(x)'];
-
-function staticPatterns(node: t.Node | undefined): string[] | undefined {
-  return node?.type === 'ArrayExpression' &&
-    node.elements.every((entry) => isString(entry) && !entry.value.startsWith('!'))
-    ? node.elements.map((entry) => (entry as t.StringLiteral).value)
-    : undefined;
-}
-
-/** Resolve only literal project ownership. Unbound APIs are Vitest globals only
- * when every applicable scope enables them. Explicit imports remain independent. */
-export function resolveVitestV5TestModes(
-  sources: ReadonlyMap<string, string>,
-  configFiles: ReadonlySet<string>,
-  preserveV4: boolean,
-): Map<string, VitestV5TestMode> {
-  const scopes: TestScope[] = [];
-
-  for (const file of configFiles) {
-    let found = false;
-    const visited = new Set<t.ObjectExpression>();
-    const unknown = () => {
-      found = true;
-      scopes.push({});
-    };
-    const walk = (object: t.Node | undefined, base?: TestScope) => {
-      found = true;
-      if (!staticObject(object)) {
-        unknown();
-        return;
-      }
-      if (visited.has(object)) {
-        return;
-      }
-      visited.add(object);
-      const test = objectProperty(object, 'test')?.value;
-      if (test && !staticObject(test)) {
-        unknown();
-        return;
-      }
-      const root = objectProperty(object, 'root')?.value;
-      const testRoot = test && objectProperty(test, 'root')?.value;
-      if ((root && !isString(root)) || (testRoot && !isString(testRoot))) {
-        unknown();
-        return;
-      }
-      const directory = path.resolve(
-        path.dirname(file),
-        isString(root) ? root.value : (base?.root ?? '.'),
-        isString(testRoot) ? testRoot.value : '.',
-      );
-      const include = test && objectProperty(test, 'include')?.value;
-      const exclude = test && objectProperty(test, 'exclude')?.value;
-      if ((include && !staticPatterns(include)) || (exclude && !staticPatterns(exclude))) {
-        unknown();
-        return;
-      }
-      const browser = test && objectProperty(test, 'browser')?.value;
-      const enabled = staticObject(browser) ? objectProperty(browser, 'enabled')?.value : undefined;
-      let browserMode = base ? base.browser : false;
-      if (browser) {
-        if (!staticObject(browser) || (enabled && !isBoolean(enabled))) {
-          browserMode = undefined;
-        } else if (isBoolean(enabled)) {
-          browserMode = enabled.value;
-        }
-      }
-      const globals = test && objectProperty(test, 'globals')?.value;
-      const scope: TestScope = {
-        root: directory,
-        include: include ? staticPatterns(include) : (base?.include ?? DEFAULT_TEST_INCLUDE),
-        exclude: exclude ? staticPatterns(exclude) : base?.exclude,
-        browser: browserMode,
-        globals: globals
-          ? isBoolean(globals)
-            ? globals.value
-            : undefined
-          : (base?.globals ?? false),
-      };
-      // Inherited arrays can merge. Preserve all possible includes and avoid
-      // assuming that an exclusion removes a file from both configurations.
-      if (base && include) {
-        scope.include = base.include ? [...base.include, ...scope.include!] : undefined;
-        scope.exclude = [];
-      }
-      const projects = test && objectProperty(test, 'projects')?.value;
-      if (!projects) {
-        scopes.push(scope);
-        return;
-      }
-      if (projects.type !== 'ArrayExpression') {
-        unknown();
-        return;
-      }
-      for (const project of projects.elements) {
-        if (isString(project)) {
-          // Referenced config files have their own scope in configFiles.
-          if (!project.value.startsWith('!')) {
-            const pattern = project.value.replaceAll('\\', '/').replace(/^\.\//, '');
-            const referenced = [...configFiles].some((candidate) => {
-              const relative = path.relative(path.dirname(file), candidate).replaceAll('\\', '/');
-              return (
-                minimatch(relative, pattern, { dot: true }) ||
-                minimatch(path.posix.dirname(relative), pattern, { dot: true })
-              );
-            });
-            if (!referenced) {
-              unknown();
-            }
-          }
-          continue;
-        }
-        if (!staticObject(project)) {
-          unknown();
-          continue;
-        }
-        const extendsValue = objectProperty(project, 'extends')?.value;
-        if (extendsValue && !isBoolean(extendsValue)) {
-          unknown();
-          continue;
-        }
-        const inherits = isBoolean(extendsValue) ? extendsValue.value : !preserveV4;
-        walk(project, inherits ? scope : undefined);
-      }
-    };
-    try {
-      const editor = new SourceEditor(file, sources.get(file)!);
-      editor.visit({
-        ExportDefaultDeclaration(node) {
-          const declaration = node.declaration;
-          if (declaration.type === 'CallExpression') {
-            if (
-              ['defineConfig', 'defineProject'].includes(
-                importedName(editor, declaration.callee, CONFIG_SOURCES) ?? '',
-              )
-            ) {
-              walk(declaration.arguments[0]);
-            } else {
-              unknown();
-            }
-            return;
-          }
-          if (declaration.type === 'Identifier') {
-            const binding = editor.binding(declaration);
-            const initializer =
-              binding?.constant && binding.declaration.type === 'VariableDeclarator'
-                ? binding.declaration.init
-                : undefined;
-            if (
-              initializer?.type === 'CallExpression' &&
-              ['defineConfig', 'defineProject'].includes(
-                importedName(editor, initializer.callee, CONFIG_SOURCES) ?? '',
-              )
-            ) {
-              walk(initializer.arguments[0]);
-            } else {
-              walk(initializer ?? undefined);
-            }
-          } else {
-            walk(declaration);
-          }
-        },
-        AssignmentExpression(node) {
-          if (
-            node.left.type === 'MemberExpression' &&
-            !node.left.computed &&
-            node.left.object.type === 'Identifier' &&
-            node.left.object.name === 'module' &&
-            propertyName(node.left.property) === 'exports' &&
-            !editor.binding(node.left.object)
-          ) {
-            if (node.right.type === 'CallExpression') {
-              if (
-                ['defineConfig', 'defineProject'].includes(
-                  importedName(editor, node.right.callee, CONFIG_SOURCES) ?? '',
-                )
-              ) {
-                walk(node.right.arguments[0]);
-              } else {
-                unknown();
-              }
-            } else {
-              walk(node.right);
-            }
-          }
-        },
-      });
-    } catch {
-      unknown();
-    }
-    if (!found) {
-      unknown();
-    }
-  }
-  return new Map(
-    [...sources.keys()].map((file) => {
-      const matching = scopes.filter((scope) => {
-        if (!scope.root) {
-          return true;
-        }
-        const relative = path.relative(scope.root, file).replaceAll('\\', '/');
-        if (relative.startsWith('../') || path.isAbsolute(relative)) {
-          return false;
-        }
-        return (
-          (!scope.include ||
-            scope.include.some((pattern) => minimatch(relative, pattern, { dot: true }))) &&
-          !scope.exclude?.some((pattern) => minimatch(relative, pattern, { dot: true }))
-        );
-      });
-      const browserModes = new Set(matching.map((scope) => scope.browser));
-      return [
-        file,
-        {
-          browser: browserModes.size === 1 ? matching[0].browser : undefined,
-          globals: matching.length > 0 && matching.every((scope) => scope.globals === true),
-        },
-      ];
-    }),
-  );
 }
 
 export function migrateVitestV5Config(

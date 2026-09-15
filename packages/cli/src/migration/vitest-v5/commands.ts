@@ -2,7 +2,7 @@ import type { VitestV5Finding } from './ast.ts';
 
 /** Parse only a single literal argv command. Shell expansion, pipelines, and
  * compound commands need review; treating them as argv could change behavior. */
-function literalArgv(command: string): Array<{ value: string; end: number }> | undefined {
+export function literalArgv(command: string): Array<{ value: string; end: number }> | undefined {
   const tokens: Array<{ value: string; end: number }> = [];
   let value = '';
   let quote = '';

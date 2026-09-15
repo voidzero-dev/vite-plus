@@ -64,6 +64,51 @@ steps = [
 ]
 
 [[case]]
+name = "selected_config_and_setup_globals"
+vp = "global"
+comment = "An inactive Vite config must not suppress Vitest globals. Migrate the selected test and its globals-only setup hook."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "vitest.config.mjs", "export default { test: { globals: true, include: ['unit/*.test.js'], setupFiles: './setup.js' } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.js", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit/right.test.js", "test.sequential('works', () => { expect(() => { throw new Error(''); }).toThrow(''); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "unit/right.test.js"],
+  ["vpt", "print-file", "setup.js"],
+  ["node", "verify-review.mjs", "--scopes"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "test_root_override"
+vp = "global"
+comment = "test.root overrides the Vite root. Migrate only that test and setup scope, leaving the similarly named unrelated suite unchanged."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { root: './app', test: { root: './unit', globals: true, setupFiles: './setup.js' } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit/setup.js", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit/right.test.js", "test.sequential('works', () => {});\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/unit/wrong.test.js", "test('other runner', () => { expect(() => { throw new Error('boom'); }).toThrow(''); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "unit/right.test.js"],
+  ["vpt", "print-file", "unit/setup.js"],
+  ["vpt", "print-file", "app/unit/wrong.test.js"],
+  ["node", "verify-review.mjs", "--scopes", "--root"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "conflicting_setup_globals"
+vp = "global"
+comment = "Preserve a setup file shared by projects with conflicting globals settings and retain its ownership review on repeated migration."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { projects: [{ test: { globals: true, setupFiles: './setup.js' } }, { test: { globals: false, setupFiles: './setup.js' } }] } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.js", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "setup.js"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "node_container_scope"
 vp = "global"
 comment = "Check the runtime image and feature option, not source properties or Dev Container feature tags."
