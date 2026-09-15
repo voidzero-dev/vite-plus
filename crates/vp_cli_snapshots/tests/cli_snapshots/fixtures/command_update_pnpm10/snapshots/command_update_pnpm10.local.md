@@ -178,6 +178,13 @@ optionalDependencies:
 Done in <duration> using pnpm <version>
 ```
 
+## `vpt stat-file node_modules/testnpm2/package.json node_modules/test-vite-plus-package-optional/package.json --assert file`
+
+```
+node_modules/testnpm2/package.json: file
+node_modules/test-vite-plus-package-optional/package.json: file
+```
+
 ## `vp update --no-optional --latest`
 
 ```
@@ -185,10 +192,23 @@ Packages: -2
 --
 
 optionalDependencies:
-- test-vite-plus-package-optional 1.0.0
-- testnpm2 1.0.0
+- test-vite-plus-package-optional
+- testnpm2
 
 Done in <duration> using pnpm <version>
+```
+
+## `vpt stat-file node_modules/testnpm2 node_modules/test-vite-plus-package-optional --assert missing`
+
+```
+node_modules/testnpm2: missing
+node_modules/test-vite-plus-package-optional: missing
+```
+
+## `vpt stat-file node_modules/test-vite-plus-package/package.json --assert file`
+
+```
+node_modules/test-vite-plus-package/package.json: file
 ```
 
 ## `vpt print-file package.json`

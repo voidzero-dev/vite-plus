@@ -12,6 +12,45 @@ mod redact;
 use redact::{redact_output, redact_version_probe_output};
 
 #[test]
+fn normalizes_pnpm_removal_versions_for_both_manifest_read_outcomes() {
+    let with_versions = concat!(
+        "dependencies:\n- prod-package 1.2.3\n+ prod-package 2.0.0\n\n",
+        "devDependencies:\n- @scope/dev-package 1.0.0-beta.1+build.2\n\n",
+        "optionalDependencies:\n- test-vite-plus-package-optional 1.0.0\n- testnpm2 1.0.0\n\n",
+        "Done in 1s using pnpm v10.18.0\n",
+    );
+    let without_versions = concat!(
+        "dependencies:\n- prod-package\n+ prod-package 2.0.0\n\n",
+        "devDependencies:\n- @scope/dev-package\n\n",
+        "optionalDependencies:\n- test-vite-plus-package-optional\n- testnpm2\n\n",
+        "Done in 1s using pnpm v10.18.0\n",
+    );
+    // The existing progress rule also strips the leading plus from added rows.
+    let expected = without_versions
+        .replace("1s", "<duration>")
+        .replace("v10.18.0", "<version>")
+        .replace("\n+", "\n");
+    assert_eq!(redact_output(with_versions.to_owned(), &[], true), expected);
+    assert_eq!(redact_output(without_versions.to_owned(), &[], true), expected);
+}
+
+#[test]
+fn preserves_versions_outside_pnpm_removal_summaries() {
+    let output = concat!(
+        "- unrelated 1.0.0\n\n",
+        "dependencies:\n+ added-package 2.0.0\n\n",
+        "Done in 1s using pnpm v10.18.0\n\n",
+        "{\"optionalDependencies\": {\"testnpm2\": \"1.0.1\"}}\n",
+    );
+    assert_eq!(
+        redact_output(output.to_owned(), &[], true),
+        output.replace("1s", "<duration>").replace("v10.18.0", "<version>").replace("\n+", "\n"),
+    );
+    let other_manager = "optionalDependencies:\n- testnpm2 1.0.0\n";
+    assert_eq!(redact_output(other_manager.to_owned(), &[], true), other_manager);
+}
+
+#[test]
 fn masks_bare_version_block_only_for_version_probe_steps() {
     // `npm --version` / `npx --version` print a bare semver alone in the
     // step's code fence; the runner masks it via the probe-scoped helper.

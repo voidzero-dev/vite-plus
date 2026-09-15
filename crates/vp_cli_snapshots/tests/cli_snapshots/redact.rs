@@ -207,6 +207,23 @@ static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+// pnpm reads a removed package's manifest concurrently with unlinking its
+// node_modules entry, so the removal summary can omit the version. Normalize
+// only removal rows inside pnpm dependency summaries; keep added versions and
+// package.json contents assertable.
+// https://github.com/pnpm/pnpm/blob/v10.18.0/pkg-manager/modules-cleaner/src/removeDirectDependency.ts#L23-L40
+static PNPM_DEPENDENCY_SUMMARY_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^((?:dependencies|devDependencies|optionalDependencies):\n)((?:[^\n]+\n?)+)",
+    )
+    .unwrap()
+});
+static PNPM_REMOVED_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^(- (?:@[^/\s]+/)?[^/\s]+) \d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$",
+    )
+    .unwrap()
+});
 // Stack frames under file:// URLs carry line:column offsets of the bundled
 // chunk that produced them, which shift with every build of the bundle (and
 // the chunk hash in the frame path shifts with content); the error message
@@ -579,6 +596,13 @@ pub fn redact_output(
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
     output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
+    if output.contains("using pnpm ") {
+        output = PNPM_DEPENDENCY_SUMMARY_RE
+            .replace_all(&output, |caps: &regex::Captures| {
+                format!("{}{}", &caps[1], PNPM_REMOVED_VERSION_RE.replace_all(&caps[2], "${1}"))
+            })
+            .into_owned();
+    }
 
     // Pin racy blank-line layout last, after every rule above that strips
     // whole lines (banner box, stack frames, progress rows) has run, so the
