@@ -7,6 +7,11 @@ clean checkout conservatively preserves existing Vitest
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 1 review item
+
+package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
 ◇ Updated . to Vite+ <version>
 • Node <version>  npm <version>
 • Dependencies:
@@ -14,6 +19,12 @@ VITE+ - The Unified Toolchain for the Web
     vite              → <version>
     vitest     4.1.8  → <version>
 • Package manager settings configured
+! Warnings:
+  - Vitest v5: 1 review item
+
+package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
 ```
 
 ## `vpt print-file package.json`

@@ -1,0 +1,15 @@
+[[case]]
+name = "reject_node_20"
+vp = "global"
+steps = [
+  ["vpt", "write-file", ".node-version", "20.19.0\n"],
+  { argv = ["vp", "test", "run"], timeout = 180000 },
+]
+
+[[case]]
+name = "reject_node_25"
+vp = "global"
+steps = [
+  ["vpt", "write-file", ".node-version", "25.0.0\n"],
+  { argv = ["vp", "test", "run"], timeout = 180000 },
+]

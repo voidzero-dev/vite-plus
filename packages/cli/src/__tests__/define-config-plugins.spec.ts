@@ -7,6 +7,7 @@ import {
   checkCoverageProviderVersion,
   computeAutoInlineList,
   defineConfig,
+  defineProject,
   resolveCoverageProviderToCheck,
 } from '../define-config.ts';
 import { VITEST_VERSION } from '../utils/constants.ts';
@@ -38,6 +39,7 @@ describe('defineConfig project plugin injection', () => {
       test: {
         projects: [
           {
+            extends: false,
             plugins: [existing],
             test: { name: 'unit', include: ['test/unit/**/*.spec.ts'], environment: 'node' },
           },
@@ -58,6 +60,7 @@ describe('defineConfig project plugin injection', () => {
   it('injects plugins into the return value of a function-shaped project entry', () => {
     const existing: Plugin = { name: 'user-fn-project-plugin' };
     const projectFn = () => ({
+      extends: false,
       plugins: [existing],
       test: { name: 'nuxt', environment: 'happy-dom' as const },
     });
@@ -93,6 +96,7 @@ describe('defineConfig project plugin injection', () => {
       test: {
         projects: [
           {
+            extends: false,
             test: { name: 'no-plugins', environment: 'node' },
           },
         ],
@@ -105,6 +109,60 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
+  });
+
+  it.each([undefined, true])('inherits root plugins with extends %s', (extendsRoot) => {
+    const userPlugin = { name: 'user-project' };
+    const project = { extends: extendsRoot, plugins: [userPlugin], test: { name: 'unit' } };
+    const config = defineConfig({ test: { projects: [project] } });
+    expect(config.test?.projects?.[0]).toBe(project);
+    expect(project.plugins).toEqual([userPlugin]);
+  });
+
+  it('resolves inheritance for async functions and promise projects', async () => {
+    const inherited = { test: { name: 'inherited' } };
+    const config = defineConfig({
+      test: {
+        projects: [
+          async () => inherited,
+          Promise.resolve({ extends: false, test: { name: 'independent' } }),
+        ],
+      },
+    });
+    const [fn, promise] = config.test!.projects!;
+    expect(typeof fn).toBe('function');
+    if (typeof fn !== 'function') {
+      throw new Error('Expected project function');
+    }
+    expect(await fn({ command: 'serve', mode: 'test' })).toBe(inherited);
+    const resolved = (await promise) as { plugins: unknown[] };
+    expect(resolved.plugins.map(pluginName)).toEqual([
+      RESOLVER_PLUGIN_NAME,
+      AUTO_INLINE_PLUGIN_NAME,
+      COVERAGE_GUARD_PLUGIN_NAME,
+    ]);
+  });
+
+  it('does not duplicate injected plugins when helpers are composed', () => {
+    const config = defineConfig(defineConfig({ plugins: [{ name: 'user' }] }));
+    expect(config.plugins!.map(pluginName)).toEqual([
+      RESOLVER_PLUGIN_NAME,
+      AUTO_INLINE_PLUGIN_NAME,
+      COVERAGE_GUARD_PLUGIN_NAME,
+      'user',
+    ]);
+  });
+
+  it('injects nested independent projects in referenced defineProject configs', () => {
+    const config = defineProject({
+      test: {
+        projects: [{ extends: false, test: { name: 'child' } }, { test: { name: 'inherited' } }],
+      },
+    });
+    expect(config.plugins).toHaveLength(3);
+    const [independent, inherited] = config.test!.projects! as { plugins?: unknown[] }[];
+    expect(independent.plugins).toHaveLength(3);
+    expect(inherited.plugins).toBeUndefined();
   });
 });
 

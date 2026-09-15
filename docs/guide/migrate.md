@@ -55,6 +55,8 @@ See [Migration Rules](./migrate-rules.md) for the exact dependency, source rewri
 
 Most projects will require further manual adjustments after running `vp migrate`.
 
+For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
+
 ## Recommended Workflow
 
 Before running the migration:

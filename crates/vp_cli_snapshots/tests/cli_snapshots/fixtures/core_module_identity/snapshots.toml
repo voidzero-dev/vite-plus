@@ -133,14 +133,26 @@ vp = "global"
 local-registry = true
 steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"core-module-identity\",\"private\":true,\"type\":\"module\",\"packageManager\":\"npm@11.11.0\",\"devDependencies\":{\"vite-plus\":\"latest\",\"vite\":\"npm:@voidzero-dev/vite-plus-core@latest\"}}\n"], snapshot = false },
+  { argv = ["node", "pin-core-alias.mjs"], snapshot = false },
   { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
   { argv = ["node", "check-npm-layout.mjs"] },
   { argv = ["node", "check-api.mjs"] },
   { argv = ["vp", "dev"] },
   { argv = ["vp", "build"] },
+  { argv = ["vp", "test", "run"], snapshot = false },
   { argv = ["vp", "pack", "entry.js"] },
   { argv = ["vpt", "write-file", "typecheck/package.json", "{\"name\":\"typecheck-tools\",\"private\":true,\"dependencies\":{\"typescript\":\"6.0.3\"},\"packageManager\":\"npm@11.11.0\"}\n"], snapshot = false },
   { argv = ["vp", "install", "--ignore-scripts"], cwd = "typecheck", snapshot = false },
   { argv = ["vpt", "cp", "check-config.mts", "check-config.cts"], snapshot = false },
   { argv = ["node", "typecheck/node_modules/typescript/bin/tsc", "--noEmit", "--skipLibCheck", "--module", "NodeNext", "--target", "ESNext", "check-config.mts", "check-config.cts"] },
+]
+
+[[case]]
+name = "core_module_identity_npm_tagged_alias_rejected"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"core-module-identity\",\"private\":true,\"type\":\"module\",\"packageManager\":\"npm@11.11.0\",\"devDependencies\":{\"vite-plus\":\"latest\",\"vite\":\"npm:@voidzero-dev/vite-plus-core@latest\"}}\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  ["node", "check-tagged-alias.mjs"],
 ]

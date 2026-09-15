@@ -117,6 +117,20 @@ describe('rewriteVitePlusImportSpecifier', () => {
     expect(rewriteVitePlusImportSpecifier('vitest/package.json')).toBeNull();
     // ...but other `vitest/<sub>` specifiers still rewrite normally.
     expect(rewriteVitePlusImportSpecifier('vitest/node')).toBe('vite-plus/test/node');
+    expect(rewriteVitePlusImportSpecifier('vitest/coverage')).toBe('vite-plus/test/node');
+    expect(rewriteVitePlusImportSpecifier('vitest/reporters')).toBe('vite-plus/test/node');
+    expect(rewriteVitePlusImportSpecifier('vitest/environments')).toBe('vite-plus/test/runtime');
+    expect(rewriteVitePlusImportSpecifier('vitest/snapshot')).toBe('vite-plus/test/runtime');
+    expect(rewriteVitePlusImportSpecifier('vitest/mocker')).toBe('vite-plus/test/mocker');
+    for (const subpath of [
+      'runners',
+      'suite',
+      'internal/module-runner',
+      'plugins/expect',
+      'unknown',
+    ]) {
+      expect(rewriteVitePlusImportSpecifier(`vitest/${subpath}`)).toBeNull();
+    }
     expect(rewriteVitePlusImportSpecifier('tsx')).toBeNull();
   });
 

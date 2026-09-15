@@ -7,9 +7,20 @@ migration should rewrite imports to vite-plus
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 1 review item
+
+vitest.config.ts
+  14:10 REVIEW [global-api-ownership] Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied, 1 file had imports rewritten
+! Warnings:
+  - Vitest v5: 1 review item
+
+vitest.config.ts
+  15:10 REVIEW [global-api-ownership] Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ```
 
 ## `vpt print-file vitest.config.ts`
@@ -30,8 +41,10 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   plugins: [foo()],
   test: {
+    clearMocks: false,
     dir: join(import.meta.dirname, 'test'),
     browser: {
+      locators: { exact: false },
       enabled: true,
       provider: playwright(),
       headless: true,
@@ -86,7 +99,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vitest: <version>
   vite-plus: <version>
-  '@vitest/browser-webdriverio': <version>
+  '@vitest/browser-webdriverio': ^5.0.0-beta.5 || >=5.0.0
   '@vitest/browser-playwright': <version>
   '@vitest/coverage-v8': <version>
 allowBuilds:

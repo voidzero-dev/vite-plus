@@ -2,25 +2,36 @@
 
 ## `vp migrate --no-interactive`
 
-existing Vite+ project: a Node pin below the supported range is preserved, not raised (native binding supports Node >=20)
+upgrade the incompatible runtime pin without changing the public engine contract
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 1 review item
+
+package.json
+  1:1 REVIEW [node-runtime] engines.node (24.x) includes unsupported test runtimes. Pin the test/CI runtime to Node ^22.18.0 || ^24.11.0 || >=26.0.0; keep the library's public engine contract separate.
+    Docs: https://viteplus.dev/guide/vitest-v5#node-runtime
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
     vite-plus  0.1.21 → <version>
     vite              → <version>
 • Package manager settings configured
+! Warnings:
+  - Vitest v5: 1 review item
+
+package.json
+  1:1 REVIEW [node-runtime] engines.node (24.x) includes unsupported test runtimes. Pin the test/CI runtime to Node ^22.18.0 || ^24.11.0 || >=26.0.0; keep the library's public engine contract separate.
+    Docs: https://viteplus.dev/guide/vitest-v5#node-runtime
 ```
 
 ## `vpt print-file .node-version`
 
-stays 24.3.0
+upgraded from 24.3.0 to 24.11.0
 
 ```
-24.3.0
+24.11.0
 ```
 
 ## `vpt print-file package.json`
@@ -55,7 +66,7 @@ engines.node stays 24.x and devEngines.runtime node stays ^24 (preserved, not ra
 
 ## `vpt print-file pnpm-workspace.yaml`
 
-vite-stack catalog updated to the migration target
+catalog is migrated
 
 ```
 packages:
@@ -72,4 +83,19 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
+```
+
+## `vp migrate --no-interactive`
+
+rerun preserves the upgraded runtime and public engine contract
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Vitest v5: 1 review item
+
+package.json
+  1:1 REVIEW [node-runtime] engines.node (24.x) includes unsupported test runtimes. Pin the test/CI runtime to Node ^22.18.0 || ^24.11.0 || >=26.0.0; keep the library's public engine contract separate.
+    Docs: https://viteplus.dev/guide/vitest-v5#node-runtime
+This project is already using Vite+! Happy coding!
 ```

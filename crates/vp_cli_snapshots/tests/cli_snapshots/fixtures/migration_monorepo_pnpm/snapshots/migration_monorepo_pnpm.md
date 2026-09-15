@@ -7,6 +7,16 @@ migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 2 review items
+
+packages/app/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
+
+packages/utils/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
+
 ✔ Merged .oxlintrc.json into vite.config.ts
 
 ✔ Merged .oxfmtrc.json into vite.config.ts
@@ -14,6 +24,16 @@ VITE+ - The Unified Toolchain for the Web
 • Node <version>  pnpm <version>
 • 4 config updates applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
+! Warnings:
+  - Vitest v5: 2 review items
+
+packages/app/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
+
+packages/utils/package.json
+  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
+    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
 ```
 
 ## `vpt print-file vite.config.ts`
@@ -51,6 +71,7 @@ export default defineConfig({
       }
     ]
   },
+  test: { clearMocks: false },
   plugins: lazyPlugins(() => [react()]),
 });
 ```

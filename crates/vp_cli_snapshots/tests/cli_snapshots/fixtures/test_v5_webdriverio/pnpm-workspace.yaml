@@ -1,0 +1,5 @@
+# The community provider accepts newer @vitest/browser patches. Keep this
+# fixture on the bundled runner's version when testing the packed package.
+overrides:
+  '@vitest/browser': 5.0.1
+  vitest: 5.0.1
