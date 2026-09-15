@@ -49,6 +49,7 @@ export interface SourceOptions {
   browser?: boolean;
   browserPossible?: boolean;
   globals?: boolean;
+  reviewGlobals?: boolean;
   temporalPolyfill?: boolean;
 }
 
