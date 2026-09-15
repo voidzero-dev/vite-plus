@@ -1,3 +1,49 @@
+<script setup lang="ts">
+import { getScrollOffset } from 'vitepress';
+import { nextTick, onMounted, onUnmounted } from 'vue';
+
+function openTarget() {
+  let target: HTMLElement | null;
+  try {
+    target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  } catch {
+    return;
+  }
+  if (!target?.closest('details')) return;
+
+  for (let details = target.closest('details'); details; details = details.parentElement?.closest('details') ?? null) {
+    details.open = true;
+  }
+
+  // VitePress cannot measure a heading inside closed details. Correct the scroll after revealing it.
+  requestAnimationFrame(() => {
+    if (!target.isConnected) return;
+    const top = window.scrollY + target.getBoundingClientRect().top - getScrollOffset()
+      + Number.parseInt(window.getComputedStyle(target).paddingTop, 10);
+    window.scrollTo(0, top);
+  });
+}
+
+function onAnchorClick(event: MouseEvent) {
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  const link = event.target instanceof Element ? event.target.closest('a') : null;
+  // Clicking the current hash again does not emit hashchange.
+  if (link?.href === location.href) openTarget();
+}
+
+onMounted(async () => {
+  window.addEventListener('hashchange', openTarget);
+  document.addEventListener('click', onAnchorClick);
+  await nextTick();
+  openTarget();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('hashchange', openTarget);
+  document.removeEventListener('click', onAnchorClick);
+});
+</script>
+
 # Global CLI
 
 The global CLI is a standalone `vp` binary for machine-level runtime and package management. It includes a Vite+ toolchain, does not require Node.js to be installed first, and can be used without adding `vite-plus` to a project.
