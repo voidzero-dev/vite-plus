@@ -9,6 +9,7 @@ import { createVitest } from 'vite-plus/test/node';
 import { webdriverio } from 'vite-plus/test/browser-webdriverio';
 import { webdriverio as legacyWebdriverio } from 'vite-plus/test/browser/providers/webdriverio';
 import { webdriverio as pluginWebdriverio } from 'vite-plus/test/plugins/browser-webdriverio';
+import { installedChromium } from './chromium.mjs';
 
 const require = createRequire(import.meta.resolve('vite-plus/package.json'));
 const packed = process.argv.includes('--packed');
@@ -18,15 +19,16 @@ if (packed) {
     assert.ok(!isAbsolute(installed) && !installed.startsWith('..'), `Expected an installed package in the fixture, got ${installed}`);
   }
 }
-const chromiumPath = packed
-  ? JSON.parse(readFileSync('chromium-path.json', 'utf8'))
-  : require('playwright').chromium.executablePath();
+const { executablePath, browserVersion } = packed
+  ? JSON.parse(readFileSync('chromium.json', 'utf8'))
+  : await installedChromium();
 assert.equal(require('@vitest/browser-webdriverio/package.json').version, '5.0.0');
 assert.equal(webdriverio, legacyWebdriverio);
 assert.equal(webdriverio, pluginWebdriverio);
-const provider = webdriverio({ capabilities: { 'goog:chromeOptions': {
-  binary: chromiumPath, args: ['--no-sandbox'],
-} } });
+const provider = webdriverio({ capabilities: {
+  browserVersion,
+  'goog:chromeOptions': { binary: executablePath, args: ['--no-sandbox'] },
+} });
 let sessionOpened = false;
 const createProvider = provider.providerFactory;
 provider.providerFactory = (project) => {
