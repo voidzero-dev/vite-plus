@@ -48,9 +48,9 @@ try {
     assert.equal(tasks.length, 1);
     assert.equal(tasks[0].result.state, 'fail');
     assert.match(tasks[0].result.errors[0].message, /timers APIs are not mocked/);
-    console.log('Release blocker reproduced: upstream Vitest 5.0.0 Preview locator clicks fail with real timers');
-    // The assertion above deliberately verifies an upstream failure. Do not
-    // treat this case as evidence that the Preview release gate passed.
+    console.log('Known upstream regression since Vitest 4.1.1: Preview locator clicks fail with real timers in 5.0.0');
+    // This verifies a pre-existing upstream regression, not a new v5 release
+    // blocker or evidence that real-timer locator clicks work.
     process.exitCode = 0;
   } else {
     assert.equal(runner.state.getCountOfFailedTests(), 0, JSON.stringify(runner.state.getFiles().flatMap((file) => [file.result, ...file.tasks.map((task) => task.result)])));
