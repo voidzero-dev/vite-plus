@@ -2,9 +2,12 @@ import type { VitestV5Finding } from './ast.ts';
 
 /** Parse only a single literal argv command. Shell expansion, pipelines, and
  * compound commands need review; treating them as argv could change behavior. */
-export function literalArgv(command: string): Array<{ value: string; end: number }> | undefined {
-  const tokens: Array<{ value: string; end: number }> = [];
+export function literalArgv(
+  command: string,
+): Array<{ value: string; start: number; end: number }> | undefined {
+  const tokens: Array<{ value: string; start: number; end: number }> = [];
   let value = '';
+  let start = 0;
   let quote = '';
   let active = false;
   for (let i = 0; i < command.length; i++) {
@@ -21,19 +24,25 @@ export function literalArgv(command: string): Array<{ value: string; end: number
         value += character;
       }
     } else if (character === "'" || character === '"') {
+      if (!active) {
+        start = i;
+      }
       quote = character;
       active = true;
     } else if (character === '\n' || character === '\r') {
       return undefined;
     } else if (/\s/.test(character)) {
       if (active) {
-        tokens.push({ value, end: i });
+        tokens.push({ value, start, end: i });
       }
       active = false;
       value = '';
     } else if (/[|&;<>($`\\)]/.test(character)) {
       return undefined;
     } else {
+      if (!active) {
+        start = i;
+      }
       value += character;
       active = true;
     }
@@ -42,9 +51,110 @@ export function literalArgv(command: string): Array<{ value: string; end: number
     return undefined;
   }
   if (active) {
-    tokens.push({ value, end: command.length });
+    tokens.push({ value, start, end: command.length });
   }
   return tokens;
+}
+
+function runnerEnd(values: string[]): number {
+  let start = 0;
+  if (['pnpm', 'npm', 'yarn', 'bun', 'npx', 'bunx'].includes(values[0])) {
+    start = 1;
+    if (values[start] === 'exec' || values[start] === 'x') {
+      start++;
+    }
+    if (values[start] === '--') {
+      start++;
+    }
+  }
+  return values[start] === 'vitest'
+    ? start + 1
+    : values[start] === 'vp' && values[start + 1] === 'test'
+      ? start + 2
+      : -1;
+}
+
+function migrateBenchmarkOutput(command: string): string {
+  const argv = literalArgv(command);
+  if (!argv) {
+    return command;
+  }
+  const values = argv.map(({ value }) => value);
+  const start = runnerEnd(values);
+  if (start < 0) {
+    return command;
+  }
+  const end = values.indexOf('--', start);
+  const args = argv.slice(start, end < 0 ? undefined : end);
+  // A quoted option-looking token can be another flag's value. Restrict this
+  // rewrite to known argv shapes instead of guessing how an unknown flag parses.
+  for (let index = 0; index < args.length; index++) {
+    const { value } = args[index];
+    if (/^--(?:outputJson|outputFile|reporters?)$/.test(value)) {
+      const next = args[++index]?.value;
+      if (!next || next.startsWith('-')) {
+        return command;
+      }
+    } else if (
+      value.startsWith('-') &&
+      !/^--(?:run|watch)$/.test(value) &&
+      !/^--(?:outputJson|outputFile|reporters?)=/.test(value)
+    ) {
+      return command;
+    }
+  }
+  const legacy = args.filter(({ value }) => /^--outputJson(?:=|$)/.test(value));
+  if (legacy.length !== 1) {
+    return command;
+  }
+  const flag = legacy[0];
+  const value = flag.value.startsWith('--outputJson=')
+    ? flag.value.slice('--outputJson='.length)
+    : args[args.indexOf(flag) + 1]?.value;
+  if (!value || value.startsWith('-')) {
+    return command;
+  }
+  const last = flag.value.includes('=') ? flag : args[args.indexOf(flag) + 1];
+  const raw =
+    flag === last
+      ? command.slice(flag.start + '--outputJson='.length, flag.end)
+      : command.slice(last.start, last.end);
+  // Moving an unquoted glob behind '=' can change shell expansion.
+  if (!/^[\w./:@+-]+$/.test(raw) && !/^(['"]).*\1$/.test(raw)) {
+    return command;
+  }
+  const output = args.filter(({ value }) => /^--outputFile(?:[.=]|$)/.test(value));
+  if (output.length > 1) {
+    return command;
+  }
+  if (output.length) {
+    const token = output[0];
+    if (!/^--outputFile(?:=|$)/.test(token.value)) {
+      return command;
+    }
+    const destination = token.value.includes('=')
+      ? token.value.slice('--outputFile='.length)
+      : args[args.indexOf(token) + 1]?.value;
+    if (destination !== value) {
+      return command;
+    }
+  }
+  const reporters = args.flatMap((token, index) =>
+    /^--reporters?=/.test(token.value)
+      ? [token.value.slice(token.value.indexOf('=') + 1)]
+      : /^--reporters?$/.test(token.value)
+        ? [args[index + 1]?.value ?? '']
+        : [],
+  );
+  if (reporters.some((name) => !['default', 'verbose', 'json'].includes(name))) {
+    return command;
+  }
+  const replacement = [
+    ...(!reporters.length ? ['--reporter=default'] : []),
+    ...(!reporters.includes('json') ? ['--reporter=json'] : []),
+    ...(!output.length ? [`--outputFile=${raw}`] : []),
+  ].join(' ');
+  return command.slice(0, flag.start) + replacement + command.slice(last.end);
 }
 
 export function migrateVitestV5Command(
@@ -62,6 +172,14 @@ export function migrateVitestV5Command(
   if (!/\bvitest\b|\bvp\s+test\b/.test(command)) {
     return { content: command, findings };
   }
+  const migrated = migrateBenchmarkOutput(command);
+  if (migrated !== command) {
+    command = migrated;
+    report(
+      'benchmark-output',
+      'Review consumers of this benchmark JSON file: the v5 JSON reporter includes test results and per-test benchmarks, not the v4 baseline format.',
+    );
+  }
   if (/--reporter[= ](?:json|junit)/.test(command) && !/--outputFile(?:=|\s)/.test(command)) {
     report(
       'reporter-stdout',
@@ -76,7 +194,16 @@ export function migrateVitestV5Command(
   }
   // The bench subcommand still exists in v5. Only its removed flags block
   // migration; benchmark source changes are handled by the source pass.
-  if (/(?:^|\s)(?:--compare|--outputJson)(?:\s|=|$)/.test(command)) {
+  const parsed = literalArgv(command)?.map(({ value }) => value);
+  const runner = parsed ? runnerEnd(parsed) : -1;
+  const terminator = parsed?.indexOf('--', runner);
+  const removedFlag =
+    parsed && runner >= 0
+      ? parsed
+          .slice(runner, terminator === -1 ? undefined : terminator)
+          .some((value) => /^(?:--compare|--outputJson)(?:=|$)/.test(value))
+      : /(?:^|\s)(?:--compare|--outputJson)(?:\s|=|$)/.test(command);
+  if (removedFlag) {
     report(
       'benchmark-api',
       'Replace removed --compare/--outputJson flags with bench context comparisons or regular JSON reporter output. The bench subcommand is still supported.',
@@ -105,22 +232,7 @@ export function migrateVitestV5Command(
     return { content: command, findings };
   }
   const values = argv.map((token) => token.value);
-  let start = 0;
-  if (['pnpm', 'npm', 'yarn', 'bun', 'npx', 'bunx'].includes(values[0])) {
-    start = 1;
-    if (values[start] === 'exec' || values[start] === 'x') {
-      start++;
-    }
-    if (values[start] === '--') {
-      start++;
-    }
-  }
-  const list =
-    values[start] === 'vitest'
-      ? start + 1
-      : values[start] === 'vp' && values[start + 1] === 'test'
-        ? start + 2
-        : -1;
+  const list = runnerEnd(values);
   if (list < 0 || values[list] !== 'list') {
     report(
       'static-list',

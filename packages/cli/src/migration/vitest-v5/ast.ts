@@ -105,6 +105,46 @@ export function staticObject(node: t.Node | null | undefined): node is t.ObjectE
   });
 }
 
+/** Compare data literals without evaluating config code or invoking getters.
+ * Property order and spelling do not change the value of a plain config object. */
+export function sameStaticValue(left: t.Node, right: t.Node): boolean {
+  if (left.type === 'Literal' && right.type === 'Literal') {
+    return (
+      !('regex' in left || 'regex' in right || 'bigint' in left || 'bigint' in right) &&
+      Object.is(left.value, right.value)
+    );
+  }
+  if (left.type === 'UnaryExpression' && right.type === 'UnaryExpression') {
+    return (
+      ['+', '-'].includes(left.operator) &&
+      left.operator === right.operator &&
+      left.argument.type === 'Literal' &&
+      typeof left.argument.value === 'number' &&
+      sameStaticValue(left.argument, right.argument)
+    );
+  }
+  if (left.type === 'ArrayExpression' && right.type === 'ArrayExpression') {
+    return (
+      left.elements.length === right.elements.length &&
+      left.elements.every((element, index) => {
+        const other = right.elements[index];
+        return !!element && !!other && sameStaticValue(element, other);
+      })
+    );
+  }
+  if (staticObject(left) && staticObject(right)) {
+    return (
+      left.properties.length === right.properties.length &&
+      left.properties.every((property) => {
+        const prop = property as t.ObjectProperty;
+        const other = objectProperty(right, propertyName(prop.key)!);
+        return !!other && sameStaticValue(prop.value, other.value);
+      })
+    );
+  }
+  return false;
+}
+
 export function importedName(
   editor: SourceEditor,
   node: t.Node | null | undefined,

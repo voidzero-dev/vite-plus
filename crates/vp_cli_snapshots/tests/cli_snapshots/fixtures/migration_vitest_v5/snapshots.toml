@@ -263,6 +263,33 @@ steps = [
 ]
 
 [[case]]
+name = "api_equivalent_migration"
+vp = "global"
+comment = "Deduplicate equal static API settings despite different property order and spelling, retaining restricted access."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { api: { port: 51204, host: 'localhost', allowExec: false }, browser: { enabled: false, api: { allowExec: false, 'host': 'localhost', 'port': 51204 } } } };\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "benchmark_output_migration"
+vp = "global"
+comment = "Migrate dynamic names, local workloads, built-in reporters, and config/CLI JSON paths. Run both CLI forms and verify the new report data."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { include: ['unused.test.js'], benchmark: { include: ['example.bench.ts'], reporters: 'verbose', outputJson: 'reports/config.json' } } };\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bench", "vitest bench --run --outputJson='reports/cli bench.json'"], snapshot = false },
+  { argv = ["vpt", "write-file", "example.bench.ts", "import { bench, describe } from 'vitest';\ndescribe('utilities', () => {\n  let calls = 0;\n  const name = () => { if (++calls !== 1) throw new Error('name evaluated twice'); return 'parse'; };\n  const json = '{\"value\":42}';\n  function workload() { if (JSON.parse(json).value !== 42) throw new Error('scope lost'); }\n  bench(name(), workload);\n});\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "example.bench.ts", "vite.config.ts", "package.json"],
+  { argv = ["vp", "test", "bench", "--run"], snapshot = false },
+  { argv = ["vp", "run", "bench"], snapshot = false },
+  ["node", "verify-benchmark-output.mjs", "reports/config.json", "reports/cli bench.json"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "benchmark_preflight"
 vp = "global"
 steps = [

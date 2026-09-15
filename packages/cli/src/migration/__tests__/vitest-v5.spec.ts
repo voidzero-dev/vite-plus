@@ -57,6 +57,27 @@ function source(input: string, options = v4) {
 }
 
 describe('Vitest v5 config compatibility', () => {
+  it('retains benchmark JSON consumer reviews through finalization, without repeat edits', () => {
+    const root = project({
+      'package.json': JSON.stringify({
+        devDependencies: { vitest: '4.1.11' },
+        scripts: { bench: 'vitest bench --outputJson=cli.json' },
+      }),
+      'vitest.config.mjs': `export default { test: { benchmark: { outputJson: 'config.json' } } };`,
+      'example.bench.js': `import { bench } from 'vitest'; const work = () => 42; bench('work', work);`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings.map(({ code }) => code)).toEqual(['benchmark-output', 'benchmark-output']);
+    applyVitestV5Migration(plan);
+    const findings = finishVitestV5Migration(plan);
+    expect(findings.map(({ code }) => code)).toEqual(['benchmark-output', 'benchmark-output']);
+    expect(formatVitestV5Findings({ rootDir: root, findings })).toContain(
+      'Docs: https://vitest.dev/guide/migration/#benchmarking-api-rewrite',
+    );
+    expect(planProject(root).changes).toEqual([]);
+    expect(planProject(root).findings).toEqual([]);
+  });
+
   it.each(['mjs', 'ts'])('selects vitest.config.%s over an inactive Vite config', (extension) => {
     const root = project({
       'vite.config.ts': 'export default {};',
@@ -959,6 +980,46 @@ export default mergeConfig(base, overrides);`,
     );
   });
 
+  it.each([
+    ['true', 'true'],
+    ['false', 'false'],
+    ['51204', '0xc804'],
+    [`{ host: 'localhost', port: 51204 }`, `{ "port": 51204, 'host': "localhost" }`],
+    [
+      `{ port: 51204, allowWrite: false, allowExec: false }`,
+      `{ allowExec: false, allowWrite: false, port: 51204 }`,
+    ],
+  ])('deduplicates equivalent static API values: %s and %s', (api, browserApi) => {
+    const result = config(
+      `export default { test: { api: ${api}, browser: { api: ${browserApi}, enabled: false } } };`,
+    );
+    expect(result.findings).toEqual([]);
+    expect(result.content.match(/\bapi:/g)).toHaveLength(1);
+    expect(result.content).toContain(`api: ${api}`);
+    expect(config(result.content).content).toBe(result.content);
+  });
+
+  it.each([
+    ['options', 'options'],
+    ['getApi()', 'getApi()'],
+    [`{ port: 1, ...options }`, `{ port: 1, ...options }`],
+    [`{ get port() { return 1 } }`, `{ get port() { return 1 } }`],
+    [`{ port: 1, port: 2 }`, `{ port: 1, port: 2 }`],
+    [`{ port: 1 }`, `{ port: 1, host: '0.0.0.0' }`],
+    [`{ allowExec: false }`, `{ allowExec: true }`],
+  ])(
+    'does not choose between unresolved or conflicting API values: %s and %s',
+    (api, browserApi) => {
+      const result = config(
+        `export default { test: { api: ${api}, browser: { api: ${browserApi} } } };`,
+      );
+      expect(result.findings).toContainEqual(
+        expect.objectContaining({ code: 'api-conflict', severity: 'block' }),
+      );
+      expect(result.content.match(/\bapi:/g)).toHaveLength(2);
+    },
+  );
+
   it('copies screenshots, glob perFile, and stdout defaults', () => {
     const result = config(`export default { test: {
 browser: { screenshotDirectory: 'screens', expect: { toMatchScreenshot: { threshold: 0.1 } } },
@@ -990,16 +1051,13 @@ reporters: ['default', 'json', ['junit', {}], ['html', { outputFile: 'reports/in
     expect(config(input, preserveV4)).toEqual({ content: input, findings: [] });
   });
 
-  it.each(['reporters', 'outputFile', 'compare', 'outputJson'])(
-    'blocks the removed benchmark.%s option',
-    (key) => {
-      const result = config(`export default { test: { benchmark: { ${key}: 'old' } } };`);
-      expect(result.findings).toEqual([
-        expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
-      ]);
-      expect(result.findings[0].message).toContain(`benchmark.${key}`);
-    },
-  );
+  it.each(['reporters', 'compare'])('blocks the removed benchmark.%s option', (key) => {
+    const result = config(`export default { test: { benchmark: { ${key}: 'old' } } };`);
+    expect(result.findings).toEqual([
+      expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
+    ]);
+    expect(result.findings[0].message).toContain(`benchmark.${key}`);
+  });
 
   it('reports dynamic benchmark options for review', () => {
     expect(config('export default { test: { benchmark: options } };').findings).toEqual([
@@ -1335,7 +1393,7 @@ describe('Vitest v5 command migration', () => {
     ['vitest --reporter=json | jq', 'reporter-stdout', 'review'],
     ['vitest run -t "suite test"', 'test-name-pattern', 'review'],
     ['vitest --compare=baseline.json', 'benchmark-api', 'block'],
-    ['vitest --outputJson=baseline.json', 'benchmark-api', 'block'],
+    ['vitest --outputJson=$BASELINE', 'benchmark-api', 'block'],
     ['vitest && cp -r .vitest-attachements artifacts', 'artifact-paths', 'review'],
   ])('reports %s without changing it', (command, code, severity) => {
     const result = migrateVitestV5Command('package.json', command, true, 7);
