@@ -45,7 +45,6 @@ const localSections: Record<string, string> = {
   'global-api-ownership': 'resolve-migration-findings',
   'jest-dom-types': 'review-checklist',
   'merged-config-defaults': 'preserve-existing-behavior',
-  'migration-state': 'preserve-existing-behavior',
   'node-runtime': 'node-runtime',
   'overlapping-edits': 'resolve-migration-findings',
   'source-parse': 'resolve-migration-findings',

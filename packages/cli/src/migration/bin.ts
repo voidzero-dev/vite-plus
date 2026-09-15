@@ -39,6 +39,7 @@ import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } 
 import {
   addFrameworkShim,
   applyVitestV5Migration,
+  applyVitestV5NodeMigration,
   checkVitestVersion,
   checkViteVersion,
   collectToolchainVersionChanges,
@@ -775,6 +776,9 @@ async function executeMigrationPlan(
     }
   };
 
+  // Runtime pins must be usable before package-manager or tool migration commands.
+  applyVitestV5NodeMigration(vitestV5Plan);
+
   // 1. Download package manager + version validation
   const downloadResult = await downloadSupportedPackageManager({
     rootDir: workspaceInfoOptional.rootDir,
@@ -801,7 +805,11 @@ async function executeMigrationPlan(
   // 3. Migrate node version manager file → .node-version (independent of vite version)
   if (plan.migrateNodeVersionFile && plan.nodeVersionDetection) {
     updateMigrationProgress('Migrating node version file');
-    migrateNodeVersionManagerFile(workspaceInfo.rootDir, plan.nodeVersionDetection, report);
+    // The compatibility pass may have upgraded the selected Volta pin.
+    const detection = detectNodeVersionManagerFile(workspaceInfo.rootDir);
+    if (detection) {
+      migrateNodeVersionManagerFile(workspaceInfo.rootDir, detection, report);
+    }
   }
 
   updateMigrationProgress('Updating setup-vp workflows');
@@ -1064,6 +1072,7 @@ async function main() {
       options.interactive,
     );
     let didMigrate = vitestV5NeedsMigration(vitestV5Plan);
+    const nodeUpgrades = applyVitestV5NodeMigration(vitestV5Plan);
     let installDurationMs = 0;
     let finalInstallOk = true;
     let canFormatMigratedProject = !process.env.VP_SKIP_INSTALL;
@@ -1244,7 +1253,8 @@ async function main() {
         )
       : undefined;
 
-    let needsInstall = coreMigrationResult.dependencies;
+    // Runtime metadata can participate in the package manager's lockfile.
+    let needsInstall = coreMigrationResult.dependencies || nodeUpgrades > 0;
     if (vitePlusBootstrapPending) {
       const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {

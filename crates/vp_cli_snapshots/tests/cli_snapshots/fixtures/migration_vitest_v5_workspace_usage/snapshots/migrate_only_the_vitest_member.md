@@ -1,6 +1,6 @@
 # migrate_only_the_vitest_member
 
-A Vitest package-name string in the root plugin must not block migration of its Vitest v4 example. Only the example receives versioned migration state.
+A Vitest package-name string in the root plugin must not block migration of its Vitest v4 example. Repeated migration does not create a state file.
 
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
 
@@ -12,7 +12,7 @@ VITE+ - The Unified Toolchain for the Web
 • 1 config update applied, 1 file had imports rewritten
 ```
 
-## `vpt print-file src/index.ts examples/vite-8/unit.test.js .vite-plus/migrations.json`
+## `vpt print-file src/index.ts examples/vite-8/unit.test.js`
 
 ```
 // Tool names are not imports or evidence that this package runs Vitest.
@@ -22,15 +22,12 @@ import { expect, test } from 'vite-plus/test';
 test('works', { concurrent: false }, () => {
   expect(() => { throw new Error(''); }).toThrow(/^$/);
 });
-{
-  "version": 1,
-  "vitest5": {
-    "examples/vite-8": {
-      "sourceVersion": "4.1.11",
-      "configless": false
-    }
-  }
-}
+```
+
+## `vpt stat-file .vite-plus/migrations.json --assert missing`
+
+```
+.vite-plus/migrations.json: missing
 ```
 
 ## `cd examples/vite-8 && vp test run`
@@ -59,16 +56,8 @@ VITE+ - The Unified Toolchain for the Web
 This project is already using Vite+! Happy coding!
 ```
 
-## `vpt print-file .vite-plus/migrations.json`
+## `vpt stat-file .vite-plus/migrations.json --assert missing`
 
 ```
-{
-  "version": 1,
-  "vitest5": {
-    "examples/vite-8": {
-      "sourceVersion": "4.1.11",
-      "configless": false
-    }
-  }
-}
+.vite-plus/migrations.json: missing
 ```

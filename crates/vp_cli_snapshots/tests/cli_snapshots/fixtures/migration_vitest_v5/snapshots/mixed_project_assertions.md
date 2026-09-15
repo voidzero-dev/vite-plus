@@ -1,6 +1,6 @@
 # mixed_project_assertions
 
-Keep Node DOM matchers, migrate browser matchers, and retain review findings for shared transform inputs across repeated migrations.
+Keep Node DOM matchers, migrate browser matchers, and report shared inputs during the v4 migration. Do not infer v4 matcher intent on a later v5 run.
 
 ## `vpt write-file vite.config.ts 'export default { test: { projects: [{ test: { name: '\''node'\'', include: ['\''node.test.ts'\'', '\''shared.test.ts'\''] } }, { test: { name: '\''browser'\'', browser: { enabled: true }, include: ['\''browser.test.ts'\'', '\''shared.test.ts'\''] } }] } };
 '`
@@ -68,10 +68,5 @@ expect(element).toHaveTextContent('partial');
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
-
-shared.test.ts
-  2:1 REVIEW [text-content-project] Resolve this assertion's test project: browser assertions need toMatchTextContent for v4 partial matching; keep Node jest-dom assertions unchanged.
-    Docs: https://vitest.dev/guide/migration/#tohavetextcontent-now-performs-strict-equality
 This project is already using Vite+! Happy coding!
 ```

@@ -165,9 +165,11 @@ This keeps Vite+ aligned with the v5 CLI while giving the user a direct repair.
 
 Add a versioned Vitest v5 migration pass. Run its preflight before package changes. Print the report again after edits with unresolved items grouped by file.
 
-Determine the source runner version before updating dependencies, including catalog and installed Vite+ dependencies. Record completion of the v4 compatibility pass in the migration state, including configless projects. A repeated migration must retain explicit v5 settings and must not apply v4 defaults to projects that already use v5. Unresolved findings remain visible on subsequent scans.
+Determine the source runner version before updating dependencies, including catalog and installed Vite+ dependencies. Keep that version in memory through the current invocation. Do not read or write a migration state file. On later runs, resolve the runner version again and retain v5 choices without applying v4 defaults, including in configless projects.
 
-Require installed or lockfile evidence when a dependency range spans both v4 and v5. Use portable workspace paths in the committed migration state. Retain deferred source-review findings without applying v4 edits again to a completed project.
+Require installed or lockfile evidence when a dependency range spans both v4 and v5. Retain deferred source-review findings through the current run's final report without reapplying its v4 edits. Later runs report issues detectable from current files; users must resolve or save v4-specific reviews before discarding the original dependency evidence. Ignore state files from earlier previews and leave their removal to the user.
+
+Upgrade incompatible runtime pins in `.node-version`, `.nvmrc`, and `package.json` runtime declarations before installers run. Select the nearest supported minimum at or above the old version. Preserve supported pins and public `engines.node` ranges; report unresolved selectors for review. Do not infer Node versions from CI workflows or other files.
 
 ### Behavior-preserving config edits
 
