@@ -89,8 +89,8 @@ warn: yarn does not support --workspace-root.
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
 [@vite-plus-test/utils]: Process started
 [@vite-plus-test/utils]: ➤ YN0000: · Yarn <version>
@@ -100,10 +100,10 @@ warn: yarn does not support --workspace-root.
 [@vite-plus-test/utils]: ➤ YN0000: └ Completed
 [@vite-plus-test/utils]: ➤ YN0000: ┌ Link step
 [@vite-plus-test/utils]: ➤ YN0000: └ Completed
-[@vite-plus-test/utils]: ➤ YN0000: · Done in <duration> <duration>
-[@vite-plus-test/utils]: Process exited (exit code 0), completed in <duration> <duration>
+[@vite-plus-test/utils]: ➤ YN0000: · Done in <duration>
+[@vite-plus-test/utils]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
