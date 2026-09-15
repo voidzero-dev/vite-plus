@@ -75,11 +75,12 @@ prepare packages
 }
 ```
 
-## `vp remove testnpm2 -r --filter=app --filter=@vite-plus-test/utils`
+## `vp remove testnpm2 -r --workspace-root --filter=app --filter=@vite-plus-test/utils`
 
 recursive remove affects only app and utils
 
 ```
+warn: yarn does not support --workspace-root.
 [app]: Process started
 [app]: ➤ YN0000: · Yarn <version>
 [app]: ➤ YN0000: ┌ Resolution step
