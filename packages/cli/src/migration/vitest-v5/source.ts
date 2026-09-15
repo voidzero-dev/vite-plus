@@ -387,11 +387,24 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
             }
             unresolvedSequential = false;
           } else if (
-            opts?.type === 'ArrowFunctionExpression' ||
-            opts?.type === 'FunctionExpression'
+            (opts?.type === 'ArrowFunctionExpression' || opts?.type === 'FunctionExpression') &&
+            (node.arguments.length === 2 ||
+              (node.arguments.length === 3 &&
+                node.arguments[2].type === 'Literal' &&
+                typeof node.arguments[2].value === 'number' &&
+                /^\s*,\s*$/.test(editor.source.slice(opts.end, node.arguments[2].start))))
           ) {
+            const timeout = node.arguments[2];
             editor.edit(seqMember.object.end, seqMember.end, '');
-            editor.edit(opts.start, opts.start, '{ concurrent: false }, ');
+            editor.edit(
+              opts.start,
+              opts.start,
+              `{ concurrent: false${timeout ? `, timeout: ${editor.text(timeout)}` : ''} }, `,
+            );
+            if (timeout) {
+              // Vitest accepts three arguments; a fourth timeout is ignored.
+              editor.edit(opts.end, timeout.end, '');
+            }
             unresolvedSequential = false;
           } else {
             editor.report(
