@@ -7,10 +7,19 @@ migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
 ```
 VITE+ - The Unified Toolchain for the Web
 
+Vitest v5: 1 review item
+
+vite.config.ts
+  10:10 REVIEW [global-api-ownership] Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 4 config updates applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
+! Warnings:
+  - Vitest v5: 1 review item
+
+vite.config.ts
+  34:10 REVIEW [global-api-ownership] Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.
 ```
 
 ## `vpt print-file vite.config.ts`
