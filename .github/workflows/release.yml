@@ -218,7 +218,6 @@ jobs:
           ### Published Packages
 
           - \`@voidzero-dev/vite-plus-core@${VERSION}\`
-          - \`@voidzero-dev/vite-plus-prompts@${VERSION}\`
           - \`vite-plus@${VERSION}\`
 
           ### Installation
@@ -374,7 +373,6 @@ jobs:
 
             **Published Packages:**
             • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
-            • @voidzero-dev/vite-plus-prompts@${{ env.VERSION }}
             • vite-plus@${{ env.VERSION }}
 
             **Docker (GHCR):**
