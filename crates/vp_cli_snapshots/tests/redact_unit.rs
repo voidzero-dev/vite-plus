@@ -49,6 +49,25 @@ fn omits_optional_yarn_step_timing_without_hiding_completion_text() {
 }
 
 #[test]
+fn masks_only_the_vitest_help_version_banner() {
+    for version in ["4.1.11", "5.0.1", "5.1.0-rc.1+build.2"] {
+        let input = format!("vitest/{version}\n\nUsage:\n  $ vitest [...filters]\n");
+        assert_eq!(
+            redact_output(input, &[], true),
+            "vitest/<version>\n\nUsage:\n  $ vitest [...filters]\n"
+        );
+    }
+    let input = concat!(
+        "fixture: vitest/5.0.1\n",
+        "vitest/5.0.1/config.js\n",
+        "https://example.com/vitest/5.0.1\n",
+        "installed vitest@5.0.1\n",
+        "5.0.1\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
+}
+
+#[test]
 fn masks_vitest_v5_timing_but_preserves_coverage_percentages() {
     let input = " Duration  112ms (transform 57%, import 28%, worker 8%, tests 6%)\nCoverage 90%\n";
     assert_eq!(
