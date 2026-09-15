@@ -1,0 +1,27 @@
+[[case]]
+name = "command_self_setup_nushell_config_xdg_mismatch"
+vp = "global"
+requires = ["nu"]
+skip-platforms = ["windows"]
+seed-runtime = false
+comment = "Issue #2491: with XDG_DATA_HOME unset in the parent and set in config.nu, installation succeeds but a fresh session does not load Vite+."
+steps = [
+  { argv = ["vpt", "mkdir", "external"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  ["nu", "--no-config-file", "assert.nu", "config"],
+]
+
+[[case]]
+name = "command_self_setup_nushell_parent_xdg"
+vp = "global"
+requires = ["nu"]
+skip-platforms = ["windows"]
+seed-runtime = false
+comment = "Setting XDG_DATA_HOME before Nushell starts lets new sessions load the installed snippet."
+steps = [
+  { argv = ["vpt", "mkdir", "external"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  ["nu", "--no-config-file", "assert.nu", "parent"],
+]

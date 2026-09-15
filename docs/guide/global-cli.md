@@ -265,6 +265,20 @@ Vite+ sets additional `VP_*` variables during shim dispatch and shell integratio
 
 Vite+ also respects these standard environment variables:
 
+#### Nushell and XDG directories
+
+If you customize `XDG_DATA_HOME` or `XDG_CONFIG_HOME`, set them **before starting Nushell**, through your terminal application, operating system, or parent shell. This is a [Nushell startup requirement](https://www.nushell.sh/book/configuration.html#changing-default-directories); setting them only in `config.nu` or `env.nu` does not configure the running session's startup directories.
+
+Assignments in those files still affect child processes. The Vite+ installer starts a child Nushell to locate its vendor autoload directory, so it can write `vite-plus.nu` to a directory that normal new sessions do not read. Installation can succeed while `vp` remains unavailable in those sessions.
+
+If this happens, open your Nushell configuration with `config nu` and add a `source` line pointing to the installed Vite+ `env.nu` file. For a default fresh macOS or Linux installation without a custom `XDG_CONFIG_HOME`, use:
+
+```nu
+source ~/.config/vite-plus/env.nu
+```
+
+For a custom `XDG_CONFIG_HOME`, use the absolute path to `<XDG_CONFIG_HOME>/vite-plus/env.nu` as resolved during installation. For an installation under `VP_HOME` or an existing `~/.vite-plus` installation, use `<VP_HOME>/env.nu` or `~/.vite-plus/env.nu` instead. Replace placeholders with actual paths and quote paths containing spaces. Open a new Nushell session and run `vp help` to verify the configuration.
+
 #### `CI`
 
 - **Purpose**: Indicates running in CI environment
