@@ -1,6 +1,6 @@
 # external_project_inheritance
 
-Preserve external clearMocks and locator settings, and retain the unresolved inheritance review after migration.
+Preserve external clearMocks and locator settings, and include the unresolved inheritance review in the first migration's final report.
 
 ## `vpt write-file base.mjs 'export default { test: { clearMocks: true, browser: { enabled: false, locators: { exact: true } } } };
 '`
@@ -58,10 +58,5 @@ External base settings preserved: clearMocks=true, browser.locators.exact=true
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
-
-vite.config.ts
-  4:69 REVIEW [project-inheritance] Review this external or dynamic project base before adding v4 compatibility defaults. Inherited project settings were left unchanged.
-    Docs: https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
 This project is already using Vite+! Happy coding!
 ```

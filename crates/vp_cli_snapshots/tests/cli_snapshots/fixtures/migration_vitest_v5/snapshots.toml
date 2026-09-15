@@ -6,8 +6,26 @@ steps = [
   ["vpt", "print-file", "vite.config.ts"],
   ["vpt", "print-file", "example.test.ts"],
   ["vpt", "print-file", "package.json"],
-  ["vpt", "print-file", ".vite-plus/migrations.json"],
+  ["vpt", "stat-file", ".vite-plus/migrations.json", "--assert", "missing"],
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "stat-file", ".vite-plus/migrations.json", "--assert", "missing"],
+]
+
+[[case]]
+name = "stateless_rerun"
+vp = "global"
+comment = "After upgrading, preserve new v5 choices on reruns without migration metadata. Ignore a legacy preview state file without overwriting it."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "stat-file", ".vite-plus/migrations.json", "--assert", "missing"],
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: {} };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "example.test.ts", "import { expect, test } from 'vite-plus/test';\ntest('v5 assertion', () => { expect(() => { throw new Error('boom'); }).toThrow(''); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "vite.config.ts", "example.test.ts"],
+  ["vpt", "stat-file", ".vite-plus/migrations.json", "--assert", "missing"],
+  { argv = ["vpt", "write-file", ".vite-plus/migrations.json", "legacy preview state: invalid JSON\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".vite-plus/migrations.json"],
 ]
 
 [[case]]
@@ -24,17 +42,32 @@ steps = [
 [[case]]
 name = "node_preflight"
 vp = "global"
+comment = "Upgrade the unsupported runtime pin before installation, then keep it on rerun."
 steps = [
   { argv = ["vpt", "write-file", ".node-version", "20.19.0\n"], snapshot = false },
-  { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".node-version"],
   ["vpt", "print-file", "package.json"],
   ["vpt", "print-file", "example.test.ts"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".node-version"],
+]
+
+[[case]]
+name = "volta_runtime_upgrade"
+vp = "global"
+comment = "Upgrade the Volta pin before converting it to .node-version, including the cached setup decision."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "volta.node", "20.19.0"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".node-version", "package.json"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
 ]
 
 [[case]]
 name = "external_project_inheritance"
 vp = "global"
-comment = "Preserve external clearMocks and locator settings, and retain the unresolved inheritance review after migration."
+comment = "Preserve external clearMocks and locator settings, and include the unresolved inheritance review in the first migration's final report."
 steps = [
   { argv = ["vpt", "write-file", "base.mjs", "export default { test: { clearMocks: true, browser: { enabled: false, locators: { exact: true } } } };\n"], snapshot = false },
   { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { projects: [{ extends: './base.mjs', test: { name: 'unit', browser: { enabled: false } } }] } };\n"], snapshot = false },
@@ -185,7 +218,7 @@ steps = [
 [[case]]
 name = "mixed_project_assertions"
 vp = "global"
-comment = "Keep Node DOM matchers, migrate browser matchers, and retain review findings for shared transform inputs across repeated migrations."
+comment = "Keep Node DOM matchers, migrate browser matchers, and report shared inputs during the v4 migration. Do not infer v4 matcher intent on a later v5 run."
 steps = [
   { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { projects: [{ test: { name: 'node', include: ['node.test.ts', 'shared.test.ts'] } }, { test: { name: 'browser', browser: { enabled: true }, include: ['browser.test.ts', 'shared.test.ts'] } }] } };\n"], snapshot = false },
   { argv = ["vpt", "write-file", "node.test.ts", "import { expect } from 'vitest';\nexpect(element).toHaveTextContent('partial');\n"], snapshot = false },

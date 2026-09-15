@@ -56,18 +56,10 @@ test('compatibility', { concurrent: false }, async () => {
 }
 ```
 
-## `vpt print-file .vite-plus/migrations.json`
+## `vpt stat-file .vite-plus/migrations.json --assert missing`
 
 ```
-{
-  "version": 1,
-  "vitest5": {
-    ".": {
-      "sourceVersion": "4.1.11",
-      "configless": false
-    }
-  }
-}
+.vite-plus/migrations.json: missing
 ```
 
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
@@ -76,4 +68,10 @@ test('compatibility', { concurrent: false }, async () => {
 VITE+ - The Unified Toolchain for the Web
 
 This project is already using Vite+! Happy coding!
+```
+
+## `vpt stat-file .vite-plus/migrations.json --assert missing`
+
+```
+.vite-plus/migrations.json: missing
 ```
