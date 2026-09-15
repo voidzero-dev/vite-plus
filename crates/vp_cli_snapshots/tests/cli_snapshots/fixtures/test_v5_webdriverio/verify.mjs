@@ -66,5 +66,5 @@ try {
   assert.equal(runner.state.getCountOfFailedTests(), 0, JSON.stringify(runner.state.getFiles().flatMap((file) => [file.result, ...file.tasks.map((task) => task.result)])));
   assert.equal(runner.state.getFiles().length, 1);
   assert.ok(sessionOpened);
-  console.log('WebDriverIO 5.0.0 with Vitest 5.0.0: runner/context identity, real-timer clicks, session URLs, and serialized custom-command locators passed');
+  console.log('WebDriverIO 5.0.0 with Vitest 5.0.1: runner/context identity, real-timer clicks, session URLs, and serialized custom-command locators passed');
 } finally { await runner.close(); }

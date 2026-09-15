@@ -1,4 +1,4 @@
 import { configFor } from './config.mjs';
 
-// Deliberately raw: the CLI backport must not depend on defineConfig.
+// Raw configs must preserve define values without Vite+ config helpers.
 export default configFor('raw');

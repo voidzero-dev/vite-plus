@@ -8,8 +8,7 @@ const executable = require('playwright').chromium.executablePath();
 assert.ok(existsSync(executable), `Chromium is not installed at ${executable}`);
 writeFileSync('chromium-path.json', JSON.stringify(executable));
 
-// Follow the selected runner so this regression survives the next Vitest upgrade
-// and removal of the temporary backport, without installing a second Vitest copy.
+// Follow the selected runner across Vitest upgrades without installing a second copy.
 const version = require('vitest/package.json').version;
 writeFileSync('package.json', JSON.stringify({
   name: 'test-v5-browser-defines',
