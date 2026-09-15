@@ -172,6 +172,17 @@ steps = [
 ]
 
 [[case]]
+name = "moving_ci_runtime_aliases"
+vp = "global"
+comment = "Keep current LTS and latest-release aliases without a runtime review or a numeric pin, including after repeated migration."
+steps = [
+  { argv = ["vpt", "write-file", ".github/workflows/test.yml", "jobs:\n  lts:\n    steps:\n      - uses: actions/setup-node@v6\n        with:\n          node-version: 'lts/*'\n  latest:\n    steps:\n      - uses: actions/setup-node@v6\n        with:\n          node-version: 'latest'\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".github/workflows/test.yml"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "node_container_scope"
 vp = "global"
 comment = "Check the runtime image and feature option, not source properties or Dev Container feature tags."
