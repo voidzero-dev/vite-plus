@@ -13,9 +13,11 @@ Vitest v5: 2 review items (1 block dependency updates)
 
 .node-version
   1:1 BLOCK [node-runtime] .node-version (24.3.0) cannot run Vite+ with Vitest v5. Select Node ^22.18.0 || ^24.11.0 || >=26.0.0; use vp env pin 22 --force for a runtime pin. Do not widen a library's engines.node contract automatically.
+    Docs: https://viteplus.dev/guide/vitest-v5#node-runtime
 
 package.json
   1:1 REVIEW [node-runtime] engines.node (24.x) includes unsupported test runtimes. Pin the test/CI runtime to Node ^22.18.0 || ^24.11.0 || >=26.0.0; keep the library's public engine contract separate.
+    Docs: https://viteplus.dev/guide/vitest-v5#node-runtime
 Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.
 ```
 
@@ -89,6 +91,7 @@ Vitest v5: 1 review item
 
 package.json
   1:1 REVIEW [node-runtime] engines.node (24.x) includes unsupported test runtimes. Pin the test/CI runtime to Node ^22.18.0 || ^24.11.0 || >=26.0.0; keep the library's public engine contract separate.
+    Docs: https://viteplus.dev/guide/vitest-v5#node-runtime
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
@@ -100,4 +103,5 @@ package.json
 
 package.json
   1:1 REVIEW [node-runtime] engines.node (24.x) includes unsupported test runtimes. Pin the test/CI runtime to Node ^22.18.0 || ^24.11.0 || >=26.0.0; keep the library's public engine contract separate.
+    Docs: https://viteplus.dev/guide/vitest-v5#node-runtime
 ```

@@ -19,7 +19,9 @@ Vitest v5: 2 review items
 
 setup.js
   1:1 REVIEW [global-api-ownership] Determine which Vitest project owns this global API before migrating it. Config selection, file scope, or globals settings are unresolved or conflicting; the global call was left unchanged.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
   1:20 REVIEW [global-api-ownership] Determine which Vitest project owns this global API before migrating it. Config selection, file scope, or globals settings are unresolved or conflicting; the global call was left unchanged.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 file had imports rewritten
@@ -28,7 +30,9 @@ setup.js
 
 setup.js
   1:1 REVIEW [global-api-ownership] Determine which Vitest project owns this global API before migrating it. Config selection, file scope, or globals settings are unresolved or conflicting; the global call was left unchanged.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
   1:20 REVIEW [global-api-ownership] Determine which Vitest project owns this global API before migrating it. Config selection, file scope, or globals settings are unresolved or conflicting; the global call was left unchanged.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ```
 
 ## `vpt print-file setup.js`
@@ -46,6 +50,8 @@ Vitest v5: 2 review items
 
 setup.js
   1:1 REVIEW [global-api-ownership] Determine which Vitest project owns this global API before migrating it. Config selection, file scope, or globals settings are unresolved or conflicting; the global call was left unchanged.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
   1:20 REVIEW [global-api-ownership] Determine which Vitest project owns this global API before migrating it. Config selection, file scope, or globals settings are unresolved or conflicting; the global call was left unchanged.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 This project is already using Vite+! Happy coding!
 ```

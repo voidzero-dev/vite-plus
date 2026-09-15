@@ -16,6 +16,7 @@ import {
   isRegExp,
   type SourceOptions,
 } from './ast.ts';
+import { migrateBenchmarks } from './benchmarks.ts';
 
 const RUNNER_SYMBOLS: Record<string, string> = {
   test: 'test',
@@ -252,6 +253,7 @@ function chain(
 
 export function migrateVitestV5Source(file: string, source: string, options: SourceOptions) {
   const editor = new SourceEditor(file, source);
+  const benchmarks = migrateBenchmarks(editor, options.globals);
   const runnerAliases: string[] = [];
   const asyncFunctions = new Set<t.Node>();
   // Import edits are offset-based, so bindings still refer to the old module
@@ -353,12 +355,13 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
             specifier.type === 'ImportSpecifier' &&
             propertyName(specifier.imported) === 'bench' &&
             node.importKind !== 'type' &&
-            specifier.importKind !== 'type'
+            specifier.importKind !== 'type' &&
+            !benchmarks.imports.has(specifier)
           ) {
             editor.report(
               specifier,
               'benchmark-api',
-              'Replace the removed top-level bench import with the bench test-context fixture.',
+              'Migrate these bench references manually: automatic migration requires direct calls with literal names, inline zero-argument callbacks, and no benchmark options. Review wrappers, comparison groups, and escaped references.',
               'block',
             );
           }
@@ -482,11 +485,15 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       const parent = editor.parent(node);
       const { root, members } = chain(node.callee, (node) => !!apiName(node));
       const name = apiName(root);
-      if (name === 'bench' && (root.type !== 'Identifier' || !editor.binding(root))) {
+      if (
+        name === 'bench' &&
+        (root.type !== 'Identifier' || !editor.binding(root)) &&
+        !benchmarks.calls.has(node)
+      ) {
         editor.report(
           node,
           'benchmark-api',
-          'Replace the removed top-level bench API with the bench test-context fixture.',
+          'Migrate this bench call manually: automatic migration requires a direct call with a literal name, an inline zero-argument callback, and no benchmark options.',
           'block',
         );
       }

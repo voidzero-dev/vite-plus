@@ -70,14 +70,16 @@ describe('Vitest v5 config compatibility', () => {
     expect(planProject(root).changes).toEqual([]);
   });
 
-  it('reports removed global benchmarks despite an inactive Vite config', () => {
+  it('migrates global benchmarks despite an inactive Vite config', () => {
     const root = project({
       'vite.config.mjs': 'export default {};',
       'vitest.config.mjs': 'export default { test: { globals: true } };',
       'unit.test.js': `bench('old', () => {});`,
     });
-    expect(planProject(root).findings).toContainEqual(
-      expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    expect(plan.changes.find(({ file }) => file.endsWith('unit.test.js'))?.after).toContain(
+      'globalThis.test',
     );
   });
 
@@ -1249,24 +1251,24 @@ lookup(task);`);
     expect(result.findings.some((finding) => finding.severity === 'block')).toBe(false);
   });
 
-  it('blocks unsupported active internals and benchmarks', () => {
+  it('blocks unsupported active internals while migrating direct benchmarks', () => {
     const result = source(`import { startTests } from '@vitest/runner';
 import * as internals from 'vitest/internal/module-runner';
 import { bench } from 'vitest';
 bench('old', () => {});`);
-    expect(result.findings.filter((finding) => finding.severity === 'block')).toHaveLength(3);
+    expect(result.findings.filter((finding) => finding.severity === 'block')).toHaveLength(2);
   });
 
-  it('blocks global benchmarks but preserves the new test-context fixture', () => {
+  it('migrates global benchmarks but preserves the new test-context fixture', () => {
     const result = migrateVitestV5Source(
       'example.test.ts',
       `bench('old', () => {});
 test('new', ({ bench }) => { bench('new', () => {}); });`,
       { ...v4, globals: true },
     );
-    expect(result.findings.filter((finding) => finding.code === 'benchmark-api')).toEqual([
-      expect.objectContaining({ severity: 'block', line: 1 }),
-    ]);
+    expect(result.findings).toEqual([]);
+    expect(result.content).toContain(`globalThis.test('old'`);
+    expect(result.content).toContain(`test('new', ({ bench }) => { bench('new', () => {}); });`);
   });
 
   it('rewrites resolveConfig destructuring with aliases and collect options', () => {
@@ -1322,7 +1324,6 @@ describe('Vitest v5 command migration', () => {
   it.each([
     ['vitest --reporter=json | jq', 'reporter-stdout', 'review'],
     ['vitest run -t "suite test"', 'test-name-pattern', 'review'],
-    ['vitest bench', 'benchmark-api', 'block'],
     ['vitest --compare=baseline.json', 'benchmark-api', 'block'],
     ['vitest --outputJson=baseline.json', 'benchmark-api', 'block'],
     ['vitest && cp -r .vitest-attachements artifacts', 'artifact-paths', 'review'],
@@ -2007,7 +2008,7 @@ export default defineConfig(CONFIG);`,
     expect(fs.existsSync(path.join(root, '.vite-plus'))).toBe(false);
   });
 
-  it('checks nvmrc, runtime metadata, public engines, CI matrices, and container images', () => {
+  it('checks nvmrc, package runtime metadata, and public engines', () => {
     const root = project({
       '.nvmrc': '25',
       'package.json': JSON.stringify({
@@ -2015,14 +2016,11 @@ export default defineConfig(CONFIG);`,
         engines: { node: '>=18' },
         devEngines: { runtime: { name: 'node', version: '22.12.0' } },
       }),
-      '.github/workflows/test.yml':
-        'jobs:\n  test:\n    strategy:\n      matrix:\n        node: [20, 22, 24, 25, 26]\n',
-      Dockerfile: 'FROM node:20-alpine\n',
     });
     const findings = planProject(root).findings.filter(
       (finding) => finding.code === 'node-runtime',
     );
-    expect(findings.filter((finding) => finding.severity === 'block')).toHaveLength(5);
+    expect(findings.filter((finding) => finding.severity === 'block')).toHaveLength(2);
     expect(findings).toContainEqual(
       expect.objectContaining({
         severity: 'review',
@@ -2031,17 +2029,18 @@ export default defineConfig(CONFIG);`,
     );
   });
 
-  it.each(['lts/*', 'latest', 'current', 'node'])(
-    'accepts the moving CI runtime alias %s without requiring a numeric pin',
-    (alias) => {
-      const workflow = `jobs:\n  test:\n    steps:\n      - uses: actions/setup-node@v6\n        with:\n          node-version: '${alias}'\n`;
-      const root = project({ '.github/workflows/test.yml': workflow });
-      const plan = planProject(root);
-      expect(plan.findings.filter(({ code }) => code === 'node-runtime')).toEqual([]);
-      expect(plan.changes.some(({ file }) => file.endsWith('test.yml'))).toBe(false);
-      expect(fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8')).toBe(workflow);
-    },
-  );
+  it('ignores Node declarations outside the supported project files', () => {
+    const root = project({
+      'vite.config.ts': 'export default { test: {} };',
+      '.github/workflows/test.yml':
+        'jobs:\n  test:\n    strategy:\n      matrix:\n        node: [20, 25]\n    steps:\n      - uses: actions/setup-node@v6\n        with:\n          node-version: ${{ matrix.node }}\n',
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    expect(plan.changes.some(({ file }) => file.endsWith('test.yml'))).toBe(false);
+    applyVitestV5Migration(plan);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+  });
 
   it.each([
     ['.nvmrc', 'node'],
@@ -2049,19 +2048,12 @@ export default defineConfig(CONFIG);`,
     ['.nvmrc', 'lts/*'],
     ['.node-version', 'lts/*'],
     ['.node-version', 'latest'],
+    ['.node-version', 'current'],
     [
       'package.json',
       JSON.stringify({ devEngines: { runtime: { name: 'node', version: 'latest' } } }),
     ],
     ['package.json', JSON.stringify({ volta: { node: 'lts' } })],
-    ['Dockerfile', 'FROM node:latest\n'],
-    ['Dockerfile', 'FROM node:lts\n'],
-    ['Dockerfile', 'FROM node:current\n'],
-    ['compose.yml', 'services:\n  app:\n    image: node\n'],
-    [
-      '.devcontainer/devcontainer.json',
-      '{ "features": { "ghcr.io/devcontainers/features/node:1": { "version": "lts" } } }',
-    ],
   ])('accepts a moving runtime alias in %s: %s', (file, content) => {
     expect(
       planProject(project({ [file]: content })).findings.filter(
@@ -2080,28 +2072,46 @@ export default defineConfig(CONFIG);`,
     },
   );
 
-  it('still blocks an incompatible numeric runtime beside moving aliases in a CI matrix', () => {
-    const root = project({
-      '.github/workflows/test.yml':
-        "jobs:\n  test:\n    strategy:\n      matrix:\n        node: ['lts/*', 'latest', 20, 25]\n",
-    });
-    const findings = planProject(root).findings.filter(({ code }) => code === 'node-runtime');
-    expect(findings).toHaveLength(2);
-    expect(findings.every(({ severity }) => severity === 'block')).toBe(true);
+  it.each([
+    { runtime: { name: 'node', version: '20.19.0' } },
+    {
+      runtime: [
+        { name: 'bun', version: '1.3.0' },
+        { name: 'node', version: '25.9.0' },
+      ],
+    },
+  ])('checks Node versions in package.json devEngines.runtime: %j', ({ runtime }) => {
+    const root = project({ 'package.json': JSON.stringify({ devEngines: { runtime } }) });
+    expect(planProject(root).findings.filter(({ code }) => code === 'node-runtime')).toEqual([
+      expect.objectContaining({
+        severity: 'block',
+        message: expect.stringContaining('devEngines.runtime'),
+      }),
+    ]);
   });
 
-  it.each(['node:latest@sha256:abc', 'node:lts@sha256:abc', 'node@sha256:abc'])(
-    'does not assume a digest-pinned image %s contains the current runtime',
-    (image) => {
-      const root = project({ Dockerfile: `FROM ${image}\n` });
-      expect(planProject(root).findings.filter(({ code }) => code === 'node-runtime')).toEqual([
-        expect.objectContaining({ severity: 'review', message: expect.stringContaining(image) }),
-      ]);
+  it.each(['>= 22.19.0', '>=22.18.0', '>=24.11.0', '>=26.0.0', '^22.19.0 || >=24.11.0'])(
+    'accepts public engines.node %s with a supported minimum',
+    (node) => {
+      const manifest = JSON.stringify({
+        devDependencies: { vitest: '4.1.11' },
+        engines: { node },
+      });
+      const root = project({
+        'package.json': manifest,
+        'vite.config.ts': 'export default { test: {} };',
+      });
+      const plan = planProject(root);
+      expect(plan.findings).toEqual([]);
+      applyVitestV5Migration(plan);
+      expect(finishVitestV5Migration(plan)).toEqual([]);
+      expect(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).toBe(manifest);
+      expect(planProject(root).findings).toEqual([]);
     },
   );
 
-  it.each(['lts/*', 'latest', '*', '>=18'])(
-    'does not treat public engines.node %s as a compatible runtime alias',
+  it.each(['lts/*', 'latest', '*', '>=18', '>=22.17.0', '>=24.10.0', '>=25', '20 || >=22.19'])(
+    'reviews public engines.node %s without a supported minimum',
     (node) => {
       const root = project({ 'package.json': JSON.stringify({ engines: { node } }) });
       expect(planProject(root).findings.filter(({ code }) => code === 'node-runtime')).toEqual([
@@ -2110,55 +2120,23 @@ export default defineConfig(CONFIG);`,
     },
   );
 
-  it('does not treat source properties, comments, or Dev Container feature tags as Node images', () => {
-    const root = project({
-      'worker.js': 'export const options = { node:2 };',
-      Dockerfile: '# FROM node:20\nFROM custom/node:1\nRUN echo node:2\n',
-      'compose.yml': 'services:\n  web:\n    image: custom/node:1\n    command: echo node:2\n',
-      '.devcontainer/devcontainer.json': `{
-        // The feature tag is not the Node runtime version.
-        "features": { "ghcr.io/devcontainers/features/node:1": { "version": "lts" } }
-      }`,
-    });
-    const findings = planProject(root).findings.filter(({ code }) => code === 'node-runtime');
-    expect(findings).toEqual([]);
-  });
-
-  it.each([
-    ['Dockerfile', 'FROM --platform=linux/amd64 node:20-alpine AS build\n'],
-    ['Dockerfile.test', 'FROM docker.io/library/node:25.9.0@sha256:abc\n'],
-    ['Containerfile', 'FROM library/node:20\n'],
-    ['compose.yaml', 'services:\n  test:\n    image: node:20-alpine\n'],
-    ['.github/workflows/test.yml', 'jobs:\n  test:\n    container: node:25\n'],
-    [
-      '.github/workflows/test.yml',
-      'jobs:\n  test:\n    container:\n      image: docker.io/node:20\n',
-    ],
-    ['.devcontainer/devcontainer.json', '{ "image": "node:20" }'],
-    [
-      '.devcontainer/devcontainer.json',
-      '{ "features": { "ghcr.io/devcontainers/features/node:1": { "version": "20" } } }',
-    ],
-  ])('checks a Node runtime in %s', (file, content) => {
-    const findings = planProject(project({ [file]: content })).findings.filter(
-      ({ code }) => code === 'node-runtime',
-    );
-    expect(findings).toEqual([expect.objectContaining({ severity: 'block' })]);
-  });
-
   it('keeps a library public engine contract separate from its test runtime pin', () => {
     const root = project({
       'package.json': JSON.stringify({
         devDependencies: { vitest: '4.1.11' },
-        engines: { node: '20.x' },
+        engines: { node: '>=22.19.0' },
       }),
-      '.node-version': '22.18.0',
+      '.node-version': '25.9.0',
     });
     const plan = planProject(root);
     expect(plan.findings).toContainEqual(
-      expect.objectContaining({ code: 'node-runtime', severity: 'review' }),
+      expect.objectContaining({
+        file: path.join(root, '.node-version'),
+        code: 'node-runtime',
+        severity: 'block',
+      }),
     );
-    expect(plan.findings.some(({ severity }) => severity === 'block')).toBe(false);
+    expect(plan.findings.filter(({ code }) => code === 'node-runtime')).toHaveLength(1);
   });
 
   it('checks Volta before its pin is migrated, but respects a higher-priority pin file', () => {

@@ -74,10 +74,12 @@ export function migrateVitestV5Command(
       'Review test-name patterns across suite boundaries; full names now use > separators.',
     );
   }
-  if (/(?:^|\s)(?:bench|--compare|--outputJson)(?:\s|=|$)/.test(command)) {
+  // The bench subcommand still exists in v5. Only its removed flags block
+  // migration; benchmark source changes are handled by the source pass.
+  if (/(?:^|\s)(?:--compare|--outputJson)(?:\s|=|$)/.test(command)) {
     report(
       'benchmark-api',
-      'Replace benchmark commands and removed --compare/--outputJson flags with tests using the bench context fixture.',
+      'Replace removed --compare/--outputJson flags with bench context comparisons or regular JSON reporter output. The bench subcommand is still supported.',
       'block',
     );
   }

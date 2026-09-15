@@ -19,6 +19,7 @@ Vitest v5: 1 review item
 
 vite.config.ts
   1:39 REVIEW [project-inheritance] Review this external or dynamic project base before adding v4 compatibility defaults. Inherited project settings were left unchanged.
+    Docs: https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 file had imports rewritten
@@ -27,6 +28,7 @@ vite.config.ts
 
 vite.config.ts
   4:69 REVIEW [project-inheritance] Review this external or dynamic project base before adding v4 compatibility defaults. Inherited project settings were left unchanged.
+    Docs: https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
 ```
 
 ## `vpt print-file vite.config.ts`
@@ -60,5 +62,6 @@ Vitest v5: 1 review item
 
 vite.config.ts
   4:69 REVIEW [project-inheritance] Review this external or dynamic project base before adding v4 compatibility defaults. Inherited project settings were left unchanged.
+    Docs: https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
 This project is already using Vite+! Happy coding!
 ```
