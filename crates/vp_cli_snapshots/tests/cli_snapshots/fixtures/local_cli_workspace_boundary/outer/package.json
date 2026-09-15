@@ -1,0 +1,10 @@
+{
+  "name": "outer",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "vite-plus": "0.3.1"
+  }
+}

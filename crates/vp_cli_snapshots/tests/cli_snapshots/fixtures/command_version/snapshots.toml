@@ -5,3 +5,15 @@ skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "--version"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "tool_versions_with_url_characters"
+vp = "local"
+comment = "Tool versions load from filesystem paths with spaces and URL fragment characters."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "project #1/node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "project #1/package.json", '{"name":"project","devDependencies":{"vite-plus":"9.8.7"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "project #1/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"9.8.7","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "project #1/node_modules/vite-plus/dist/versions.js", 'export const versions = { vite: "9.8.7", rolldown: "9.8.7", vitest: "9.8.7", oxfmt: "9.8.7", oxlint: "9.8.7", "oxlint-tsgolint": "9.8.7", tsdown: "9.8.7" };'], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "project #1" },
+]

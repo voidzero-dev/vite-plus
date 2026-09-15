@@ -285,16 +285,12 @@ static NODE_TRACE_WARNING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
-// A version-probe step (`npm --version` / `npx --version`) prints a lone bare
-// semver in its fenced code block (no `v` prefix, so the generic VERSION_RE
-// misses it). The value tracks the managed Node's bundled npm or a
-// packageManager pin, both of which vary by environment, so
-// mask it. Applied via `redact_version_probe_output` ONLY to steps the runner
-// identifies as version probes: other steps' bare versions in a block (a
-// printed `.node-version` file) are fixture-controlled assertions that must
-// stay verbatim. e.g. "```\n10.9.4\n```" -> "```\n<version>\n```".
-static BARE_VERSION_BLOCK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(```\n)\d+\.\d+\.\d+(?:-[0-9A-Za-z.+-]+)?(\n```)").unwrap()
+// npm and npx print a bare version; `vp lint --version` prints `Version: X.Y.Z`.
+// Apply this only to version probes so fixture-controlled versions in other
+// steps stay verbatim.
+static VERSION_PROBE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^(Version: )?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+        .unwrap()
 });
 // npm prints an "update available" notice on a throttled, per-environment
 // schedule, so whether it appears at all is non-deterministic. Strip the notice
@@ -621,14 +617,10 @@ pub fn redact_output(
     output
 }
 
-/// Masks the bare semver a version-probe step (`npm --version` /
-/// `npx --version`) prints as the sole content of its fenced code block (see
-/// BARE_VERSION_BLOCK_RE). The runner applies this on top of `redact_output`
-/// only for steps it identifies as version probes, so fixture-controlled bare
-/// versions elsewhere (a printed `.node-version` file) stay assertable.
+/// Masks bare or labeled tool versions only in version-probe steps.
 #[expect(clippy::disallowed_types, reason = "String required by regex replace_all API")]
 pub fn redact_version_probe_output(output: String) -> String {
-    BARE_VERSION_BLOCK_RE.replace_all(&output, "${1}<version>${2}").into_owned()
+    VERSION_PROBE_RE.replace_all(&output, "${1}<version>").into_owned()
 }
 
 #[expect(
