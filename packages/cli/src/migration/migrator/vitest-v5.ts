@@ -360,6 +360,13 @@ function checkNodeRange(
   source = '',
   offset = 0,
 ) {
+  // At the v5 upgrade baseline, both the latest LTS and Current Node releases
+  // meet our minimum versions; future majors are covered by >=26. These
+  // forward-moving runtime aliases do not need a numeric pin. Named/relative
+  // LTS aliases and public engines ranges still need the checks below.
+  if (!publicContract && ['lts/*', 'lts', 'latest', 'current', 'node', 'stable'].includes(value)) {
+    return;
+  }
   const range = semver.validRange(value);
   if (!range) {
     findings.push(
@@ -411,7 +418,10 @@ function scanNode(file: string, source: string, findings: VitestV5Finding[]) {
     const match = /^(?:docker\.io\/)?(?:library\/)?node(?::([^@\s]+))?(?:@\S+)?$/.exec(image);
     if (match) {
       const tag = match[1] ?? 'latest';
-      const version = /^(\d+(?:\.\d+){0,2})(?:-[\w.-]+)?$/.exec(tag)?.[1] ?? tag;
+      // A digest fixes the image even when its tag says latest/lts. Retain
+      // that unresolved reference instead of treating it as a moving alias.
+      const version =
+        /^(\d+(?:\.\d+){0,2})(?:-[\w.-]+)?$/.exec(tag)?.[1] ?? (image.includes('@') ? image : tag);
       checkNodeRange(file, version, 'Node container image', findings, false, source, offset);
     }
   };
