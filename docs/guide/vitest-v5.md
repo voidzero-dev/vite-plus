@@ -17,6 +17,8 @@ vp test
 
 Read the file-specific review report before committing the result. The migration stops before dependency updates for conflicting `test.api` and `test.browser.api` settings or removed runtime APIs without a supported replacement. Resolve these blockers and run the command again. You can finish safe edits with a successful exit status while review items remain.
 
+You can keep equivalent static `test.api` and `test.browser.api` values, including objects with different property order or quote styles. The migration removes the redundant `browser.api`. Choose one configuration for conflicting values or expressions that need evaluation; v5 uses one API server.
+
 ## Node runtime
 
 The migration upgrades incompatible runtime pins to the nearest supported minimum before installing dependencies. For example, `20.19.0` becomes `22.18.0`, `24.10.0` becomes `24.11.0`, and `25.9.0` becomes `26.0.0`. Supported pins stay unchanged. Unresolved selectors still need review.
@@ -73,7 +75,7 @@ For programmatic config loading, replace `{ viteConfig, vitestConfig }` destruct
 
 ## Benchmarks
 
-The migration converts direct `bench` calls with literal names and inline, zero-argument callbacks. It preserves the workload callback and runs it through the v5 `bench` fixture inside a test. Simple `bench.skip`, `bench.only`, and `bench.todo` calls become the corresponding test modifiers. Calls inside ordinary `describe` and `suite` callbacks retain their surrounding scopes.
+Use direct `bench` calls with inline, zero-argument callbacks or references to unchanged local functions. You can use dynamic names; the migration captures them once during registration. It preserves the workload callback and runs it through the v5 `bench` fixture inside a test. Simple `bench.skip`, `bench.only`, and `bench.todo` calls become the corresponding test modifiers. Calls inside ordinary `describe` and `suite` callbacks retain their surrounding scopes.
 
 ```ts
 // Before
@@ -89,7 +91,11 @@ _test('parse', async ({ bench: _bench }) => {
 
 Keep benchmark files matched by `benchmark.include`. The `vitest bench` and `vp test bench` commands remain supported. The migration does not remove them.
 
-Review calls with benchmark options, dynamic names, callback references, or wrappers. Removed reporter settings and the `--compare` and `--outputJson` flags remain blockers. Baseline comparisons need per-benchmark result storage and an explicit comparison inside a test. See the [Vitest benchmark migration guide](https://vitest.dev/guide/migration/#benchmarking-api-rewrite) and [benchmarking guide](https://vitest.dev/guide/benchmarking) for replacements. Use `bench.compare()` if you need a comparison table across several workloads.
+You can migrate built-in `benchmark.reporters` settings (`default` and `verbose`) and literal `benchmark.outputFile` or `benchmark.outputJson` paths to top-level reporters. Existing reporter destinations take precedence over a proposed move: resolve conflicting paths, terminal reporter choices, and JSON stdout consumers by hand. Project-specific settings, config merges, and custom or dynamic reporters also need review. In v5, regular tests and benchmarks share reporters.
+
+For a literal command such as `vitest bench --outputJson=bench.json`, the migration selects the JSON reporter and keeps the file path. Check the `benchmark-output` review item and update consumers of that file: the v5 JSON report contains test results with per-test benchmarks, so v4 baseline readers need changes.
+
+Review calls with benchmark options, imported or reassigned callbacks, callback parameters, or wrappers. Baseline `compare` settings and `--compare` flags remain blockers. Set up per-benchmark result storage and an explicit comparison inside a test. See the [Vitest benchmark migration guide](https://vitest.dev/guide/migration/#benchmarking-api-rewrite) and [benchmarking guide](https://vitest.dev/guide/benchmarking) for replacements. Use `bench.compare()` if you need a comparison table across several workloads.
 
 ## Entry points and packages
 

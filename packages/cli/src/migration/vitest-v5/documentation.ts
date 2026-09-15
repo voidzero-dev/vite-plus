@@ -7,6 +7,7 @@ const sections: Record<string, string> = {
   'assertion-types': 'assertion-types-expose-return-and-received-types',
   'async-render': 'render-is-async-in-vitest-browser-vue-and-vitest-browser-svelte',
   'benchmark-api': 'benchmarking-api-rewrite',
+  'benchmark-output': 'benchmarking-api-rewrite',
   'browser-automock': 'automocked-modules-stay-automocked-in-the-browser',
   'browser-session': 'browser-orchestrator-url-requires-a-session',
   'class-mock': 'class-mocks-keep-prototype-methods',

@@ -22,6 +22,30 @@ export function migrateBenchmarks(editor: SourceEditor, globals = false) {
     },
   });
 
+  function workload(node: t.Node, seen = new Set<t.Node>()): boolean {
+    if (
+      node.type === 'ArrowFunctionExpression' ||
+      node.type === 'FunctionExpression' ||
+      node.type === 'FunctionDeclaration'
+    ) {
+      return !!node.body && node.params.length === 0 && !node.generator;
+    }
+    if (node.type !== 'Identifier' || seen.has(node)) {
+      return false;
+    }
+    seen.add(node);
+    const binding = editor.binding(node);
+    if (!binding?.constant) {
+      return false;
+    }
+    const declaration = binding.declaration;
+    return declaration.type === 'FunctionDeclaration'
+      ? workload(declaration, seen)
+      : declaration.type === 'VariableDeclarator' &&
+          !!declaration.init &&
+          workload(declaration.init, seen);
+  }
+
   function directCall(reference: t.Node): BenchmarkCall | undefined {
     let callee = reference;
     let modifier: string | undefined;
@@ -40,18 +64,14 @@ export function migrateBenchmarks(editor: SourceEditor, globals = false) {
       call.optional ||
       call.typeArguments ||
       editor.parent(call)?.type !== 'ExpressionStatement' ||
-      !isString(call.arguments[0])
+      !call.arguments[0] ||
+      call.arguments[0].type === 'SpreadElement'
     ) {
       return undefined;
     }
     const callback = call.arguments[1];
     if (!(modifier === 'todo' && call.arguments.length === 1)) {
-      if (
-        call.arguments.length !== 2 ||
-        (callback?.type !== 'ArrowFunctionExpression' && callback?.type !== 'FunctionExpression') ||
-        callback.params.length ||
-        callback.generator
-      ) {
+      if (call.arguments.length !== 2 || !callback || !workload(callback)) {
         return undefined;
       }
     }
@@ -95,11 +115,31 @@ export function migrateBenchmarks(editor: SourceEditor, globals = false) {
     if (!callback) {
       return;
     }
+    let name = editor.text(call.arguments[0]);
+    const captures: string[] = [];
+    if (!isString(call.arguments[0])) {
+      const captured = editor.uniqueName('benchName');
+      captures.push(`const ${captured} = (${name});`);
+      editor.replace(call.arguments[0], captured);
+      name = captured;
+    }
+    if (callback.type === 'Identifier') {
+      const captured = editor.uniqueName('benchFn');
+      captures.push(`const ${captured} = ${editor.text(callback)};`);
+      editor.replace(callback, captured);
+    }
+    if (captures.length) {
+      // Capture at registration, in the original lexical scope and argument
+      // order. A test executes later, after names or callback bindings may change.
+      const statement = editor.parent(call)!;
+      editor.edit(statement.start, statement.start, `{ ${captures.join(' ')} `);
+      editor.edit(statement.end, statement.end, ' }');
+    }
     fixtureName ??= editor.uniqueName('bench');
     editor.edit(
       callback.start,
       callback.start,
-      `async ({ bench: ${fixtureName} }) => { await ${fixtureName}(${editor.text(call.arguments[0])}, `,
+      `async ({ bench: ${fixtureName} }) => { await ${fixtureName}(${name}, `,
     );
     editor.edit(call.end - 1, call.end - 1, ').run(); }');
   }

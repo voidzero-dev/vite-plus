@@ -959,7 +959,9 @@ function currentProjectConfigs(plan: VitestV5MigrationPlan): Map<string, string[
 /** Run after other migration steps create or merge configs. Keep the source
  * version and deferred reviews in memory until the final report; no state file. */
 export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Finding[] {
-  const findings: VitestV5Finding[] = [];
+  // Output paths survive the rewrite, but the old JSON schema does not. Retain
+  // this review for the current invocation after the removed options disappear.
+  const findings = plan.findings.filter(({ code }) => code === 'benchmark-output');
   const completedProjects = new Map<string, ProjectPlan>();
   const projectConfigs = currentProjectConfigs(plan);
   const configSources = new Map(
