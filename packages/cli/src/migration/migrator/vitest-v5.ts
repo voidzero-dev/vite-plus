@@ -15,7 +15,8 @@ import {
   findVitestV5ConfigFiles,
   findVitestV5MergedConfigFiles,
   migrateVitestV5Config,
-  resolveVitestV5BrowserModes,
+  resolveVitestV5TestModes,
+  type VitestV5TestMode,
 } from '../vitest-v5/config.ts';
 import { lockedVitestVersion } from '../vitest-v5/lockfile.ts';
 import { migrateVitestV5Source } from '../vitest-v5/source.ts';
@@ -490,7 +491,7 @@ function scanAndRewriteFile(
   file: string,
   source: string,
   project: ProjectPlan,
-  browserMode: boolean | undefined,
+  testMode: VitestV5TestMode,
   mergedConfig: boolean,
 ): { content: string; findings: VitestV5Finding[] } {
   const findings: VitestV5Finding[] = [];
@@ -501,14 +502,17 @@ function scanAndRewriteFile(
   let content = source;
   if (
     CODE_FILE.test(file) &&
-    (VITEST_SIGNAL.test(source) || /\.(?:test|spec)\./.test(file) || project.configFiles.has(file))
+    (testMode.globals ||
+      VITEST_SIGNAL.test(source) ||
+      /\.(?:test|spec)\./.test(file) ||
+      project.configFiles.has(file))
   ) {
     try {
       // Canonical and symbol-specific rules run before the native generic import
       // pass. Config and source edits are separate AST passes to avoid overlap.
       const sourceResult = migrateVitestV5Source(file, content, {
         ...project.options,
-        browser: browserMode,
+        ...testMode,
       });
       content = sourceResult.content;
       findings.push(...sourceResult.findings);
@@ -522,7 +526,7 @@ function scanAndRewriteFile(
         // resolveConfig consumers do not gain a warning after migration.
         const review = migrateVitestV5Source(file, content, {
           ...project.options,
-          browser: browserMode,
+          ...testMode,
           preserveV4: true,
         });
         findings.push(...review.findings.filter(({ code }) => pending.includes(code)));
@@ -740,7 +744,7 @@ export function planVitestV5Migration(
       /\.(?:json|ya?ml|sh)$/.test(file) &&
       /\b(?:vitest|vp\s+test)\b[^\n]*--(?:no-)?browser(?:[.=\s'"]|$)/.test(source),
   );
-  const browserModesByVersion = new Map<boolean, Map<string, boolean | undefined>>();
+  const testModesByVersion = new Map<boolean, Map<string, VitestV5TestMode>>();
   const inputs = new Map<string, string | null>(allSources);
   inputs.set(stateFile, fs.existsSync(stateFile) ? fs.readFileSync(stateFile, 'utf8') : null);
   for (const [directory, sources] of projectSources) {
@@ -770,9 +774,6 @@ export function planVitestV5Migration(
       reviewV4: !!version && semver.major(version) < 5,
       browser: [...sources.values()].some((source) => BROWSER_SIGNAL.test(source)),
       browserPossible,
-      globals: [...sources].some(
-        ([file, source]) => configFiles.has(file) && /\bglobals\s*:\s*true\b/.test(source),
-      ),
       temporalPolyfill: [...sources.values()].some((source) =>
         /(?:['"]temporal-polyfill\/global['"]|(?:globalThis|global)\.Temporal\s*=|Object\.(?:assign|defineProperty)\(globalThis,\s*(?:\{\s*Temporal|['"]Temporal['"]))/.test(
           source,
@@ -808,10 +809,10 @@ export function planVitestV5Migration(
       pendingSourceReviews: previous?.pendingSourceReviews,
     };
     projects.push(project);
-    let browserModes = browserModesByVersion.get(options.preserveV4);
-    if (!browserModes) {
-      browserModes = resolveVitestV5BrowserModes(allSources, allConfigs, options.preserveV4);
-      browserModesByVersion.set(options.preserveV4, browserModes);
+    let testModes = testModesByVersion.get(options.preserveV4);
+    if (!testModes) {
+      testModes = resolveVitestV5TestModes(allSources, allConfigs, options.preserveV4);
+      testModesByVersion.set(options.preserveV4, testModes);
     }
     for (const [file, source] of sources) {
       // Ignore lockfile package snapshots; runtime and source checks belong to
@@ -823,7 +824,7 @@ export function planVitestV5Migration(
         file,
         source,
         project,
-        browserCliOverride ? undefined : browserModes.get(file),
+        { ...testModes.get(file), ...(browserCliOverride ? { browser: undefined } : {}) },
         mergedConfigs.has(file),
       );
       findings.push(...result.findings);

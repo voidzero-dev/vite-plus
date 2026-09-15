@@ -21,6 +21,36 @@ steps = [
 ]
 
 [[case]]
+name = "external_project_inheritance"
+vp = "global"
+comment = "Preserve external clearMocks and locator settings, and retain the unresolved inheritance review after migration."
+steps = [
+  { argv = ["vpt", "write-file", "base.mjs", "export default { test: { clearMocks: true, browser: { enabled: false, locators: { exact: true } } } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { projects: [{ extends: './base.mjs', test: { name: 'unit', browser: { enabled: false } } }] } };\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "print-file", "base.mjs"],
+  ["node", "verify-review.mjs", "--inheritance"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "global_ownership_and_sequential_timeouts"
+vp = "global"
+comment = "Migrate only the Vitest globals and preserve numeric sequential timeouts in runtime collection. Leave the separate Jest suite unchanged."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { globals: true, include: ['unit/**/*.test.js'] } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "jest.config.cjs", "module.exports = { testMatch: ['<rootDir>/integration/**/*.test.js'] };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit/slow.test.js", "test.sequential('slow test', async () => {}, 15000);\nit.sequential('slow it', async () => {}, 12000);\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "integration/other.test.js", "test('throws', () => { expect(() => { throw new Error('boom'); }).toThrow(''); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "unit/slow.test.js"],
+  ["vpt", "print-file", "integration/other.test.js"],
+  ["node", "verify-review.mjs"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "version_gate_preserves_sources"
 vp = "global"
 comment = "A version check after initial setup must abort before Vitest compatibility edits."
