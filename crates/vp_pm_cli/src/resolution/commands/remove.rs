@@ -24,7 +24,7 @@ pub struct RemoveArgs {
     pub(crate) filter: Vec<String>,
 
     /// Remove from workspace root
-    #[arg(short = 'w', long, not_supported(bun))]
+    #[arg(short = 'w', long, not_supported(yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Remove recursively from all workspace packages
@@ -111,13 +111,11 @@ impl Resolve<RemoveArgs> for Yarn {
                 );
             }
 
-            if !args.recursive {
-                cmd.arg("workspaces").arg("foreach").arg("--all");
-                cmd.repeated("--include", args.filter.iter());
-            }
+            cmd.arg("workspaces").arg("foreach").arg("--all");
+            cmd.repeated("--include", args.filter.iter());
         }
         cmd.arg("remove")
-            .arg_if("--all", args.recursive)
+            .arg_if("--all", args.recursive && args.filter.is_empty())
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
         cmd.into()
@@ -230,6 +228,25 @@ mod tests {
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["remove", "lodash"]);
+    }
+
+    #[test]
+    fn yarn_drops_unsupported_workspace_root() {
+        for version in ["1.22.22", "4.0.0"] {
+            let mut options = remove_args(&["lodash"]);
+            options.workspace_root = true;
+            let resolution = resolve(&yarn(version), options);
+            let command = expect_run(resolution.outcome);
+
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec!["remove", "lodash"]);
+            let messages = resolution
+                .diagnostics
+                .iter()
+                .map(|entry| entry.message.as_str())
+                .collect::<Vec<_>>();
+            assert_eq!(messages, vec!["yarn does not support --workspace-root."]);
+        }
     }
 
     #[test]
@@ -505,7 +522,20 @@ mod tests {
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["remove", "--all", "lodash"]);
+        assert_eq!(
+            command.args,
+            vec![
+                "workspaces",
+                "foreach",
+                "--all",
+                "--include",
+                "app",
+                "--include",
+                "web",
+                "remove",
+                "lodash"
+            ]
+        );
     }
 
     #[test]
