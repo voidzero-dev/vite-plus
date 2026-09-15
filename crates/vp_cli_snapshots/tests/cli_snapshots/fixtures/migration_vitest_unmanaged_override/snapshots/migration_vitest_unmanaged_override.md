@@ -68,5 +68,10 @@ unmanaged Vitest ecosystem versions remain stable on rerun
 ```
 VITE+ - The Unified Toolchain for the Web
 
-This project is already using Vite+! Happy coding!
+◇ Updated . to Vite+ <version>
+• Node <version>  pnpm <version>
+• Dependencies:
+    vite               → <version>
+    vitest      4.0.13 → <version>
+    @vitest/ui  4.0.13 → <version>
 ```

@@ -15,11 +15,13 @@ vp check
 vp test
 ```
 
-Read the file-specific review report before committing the result. The migration stops before dependency updates for an incompatible runtime, conflicting `test.api` and `test.browser.api` settings, or removed runtime APIs without a supported replacement. Resolve these blockers and run the command again. You can finish safe edits with a successful exit status while review items remain.
+Read the file-specific review report before committing the result. The migration stops before dependency updates for conflicting `test.api` and `test.browser.api` settings or removed runtime APIs without a supported replacement. Resolve these blockers and run the command again. You can finish safe edits with a successful exit status while review items remain.
 
 ## Node runtime
 
-Keep your library's public `engines.node` contract separate from its test runtime. An engine range with a supported minimum, such as `>=22.19.0`, needs no review. An incompatible runtime pin still blocks migration. Use `vp env pin 22 --force` to change a Vite+ runtime pin after choosing a supported Node line.
+The migration upgrades incompatible runtime pins to the nearest supported minimum before installing dependencies. For example, `20.19.0` becomes `22.18.0`, `24.10.0` becomes `24.11.0`, and `25.9.0` becomes `26.0.0`. Supported pins stay unchanged. Unresolved selectors still need review.
+
+Keep your library's public `engines.node` contract separate from its test runtime. The migration does not change that contract. An engine range with a supported minimum, such as `>=22.19.0`, needs no review.
 
 The Node compatibility checks cover `.node-version`, `.nvmrc`, and the `engines.node`, `devEngines.runtime`, and `volta.node` declarations in `package.json`. Node versions in CI workflows, containers, and other files are outside the scope of these checks.
 
@@ -41,7 +43,9 @@ New projects use v5 defaults. After the existing suite passes, remove compatibil
 
 The Vitest pass leaves configless projects without a config. In interactive mode, you can confirm a separate action to create a minimal compatibility config. A new config can change config discovery and project structure. Other migration steps, such as merging lint configuration, can create `vite.config.ts`; the v4 compatibility settings apply to that new config during the same migration.
 
-Commit `.vite-plus/migrations.json` with the migration. It records the completed versioned pass, including configless projects. Later runs retain your v5 choices and continue to report unresolved risks. Do not delete this state to suppress review items.
+After upgrading to v5, you can rerun `vp migrate` without reapplying v4 compatibility defaults, including in projects without a config. Finish the dependency installation before rerunning migration.
+
+Resolve or save the first run's review report before discarding the original dependencies. Later runs use the current Vitest version and files, so they might not repeat reviews that depended on the original v4 behavior.
 
 ## Source changes
 
@@ -129,7 +133,7 @@ Each Vitest v5 `BLOCK` or `REVIEW` item includes a `Docs` link. Follow the link 
 
 For dynamic configs or shared files, determine the effective Vitest project settings before editing. Resolve config functions, spreads, and external inheritance, or make the compatibility changes by hand. Confirm which runner owns unimported globals in a mixed-runner project.
 
-For parser failures or overlapping edits, keep the original file and apply the documented change by hand. Run `vp migrate` again after resolving the issue. Do not delete migration state to suppress a finding; see [preserving existing behavior](#preserve-existing-behavior).
+For parser failures or overlapping edits, keep the original file and apply the documented change by hand. Run `vp migrate` again after resolving the issue. A successful exit can still include review items; keep that report until you finish the manual changes.
 
 ## Review checklist
 

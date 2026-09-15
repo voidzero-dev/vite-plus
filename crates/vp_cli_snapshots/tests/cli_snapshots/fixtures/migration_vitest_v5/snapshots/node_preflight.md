@@ -1,22 +1,25 @@
 # node_preflight
 
+Upgrade the unsupported runtime pin before installation, then keep it on rerun.
+
 ## `vpt write-file .node-version '20.19.0
 '`
 
 
-## `vp migrate --no-interactive`
-
-**Exit code:** 1
+## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item (1 block dependency updates)
+◇ Migrated . to Vite+ <version>
+• Node <version>  pnpm <version>
+• 2 files had imports rewritten
+```
 
-.node-version
-  1:1 BLOCK [node-runtime] .node-version (20.19.0) cannot run Vite+ with Vitest v5. Select Node ^22.18.0 || ^24.11.0 || >=26.0.0; use vp env pin 22 --force for a runtime pin. Do not widen a library's engines.node contract automatically.
-    Docs: https://viteplus.dev/guide/vitest-v5#node-runtime
-Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.
+## `vpt print-file .node-version`
+
+```
+22.18.0
 ```
 
 ## `vpt print-file package.json`
@@ -28,11 +31,11 @@ Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project fi
   "type": "module",
   "packageManager": "pnpm@11.24.0",
   "scripts": {
-    "test": "vitest list"
+    "test": "vp test list --no-static-parse"
   },
   "devDependencies": {
-    "vite": "^8.0.0",
-    "vitest": "<version>"
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   }
 }
 ```
@@ -40,10 +43,24 @@ Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project fi
 ## `vpt print-file example.test.ts`
 
 ```
-import { expect, test } from 'vitest';
+import { expect, test } from 'vite-plus/test';
 
-test.sequential('compatibility', () => {
-  expect(Promise.resolve(42)).resolves.toBe(42);
-  expect(() => { throw new Error(''); }).toThrow('');
+test('compatibility', { concurrent: false }, async () => {
+  await expect(Promise.resolve(42)).resolves.toBe(42);
+  expect(() => { throw new Error(''); }).toThrow(/^$/);
 });
+```
+
+## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+This project is already using Vite+! Happy coding!
+```
+
+## `vpt print-file .node-version`
+
+```
+22.18.0
 ```
