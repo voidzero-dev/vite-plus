@@ -14,8 +14,6 @@
     "directory": "packages/cli"
   },
   "bin": {
-    "oxfmt": "./bin/oxfmt",
-    "oxlint": "./bin/oxlint",
     "vp": "./bin/vp",
     "vpr": "./bin/vpr"
   },
