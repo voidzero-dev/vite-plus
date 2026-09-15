@@ -20,6 +20,22 @@ pub struct PackageVersionMetadata {
 pub struct DistInfo {
     pub tarball: String,
     pub integrity: String,
+    #[serde(default)]
+    pub attestations: Option<NpmAttestations>,
+}
+
+/// npm attestations attached to a package version.
+#[derive(Debug, Deserialize)]
+pub struct NpmAttestations {
+    #[serde(default)]
+    pub provenance: Option<NpmProvenance>,
+}
+
+/// npm provenance metadata used to identify the attestation predicate.
+#[derive(Debug, Deserialize)]
+pub struct NpmProvenance {
+    #[serde(rename = "predicateType", default)]
+    pub predicate_type: Option<String>,
 }
 
 /// Resolved version info with URLs and integrity for the platform package.
@@ -33,6 +49,32 @@ pub struct ResolvedVersion {
 const MAIN_PACKAGE_NAME: &str = "vite-plus";
 const PLATFORM_PACKAGE_SCOPE: &str = "@voidzero-dev";
 const CLI_PACKAGE_NAME_PREFIX: &str = "vite-plus-cli";
+const SUPPORTED_PROVENANCE_PREDICATE_TYPES: [&str; 2] =
+    ["https://slsa.dev/provenance/v1", "https://slsa.dev/provenance/v0.2"];
+
+fn validate_platform_package_provenance(
+    package_name: &str,
+    version: &str,
+    dist: &DistInfo,
+) -> Result<(), Error> {
+    let predicate_type = dist
+        .attestations
+        .as_ref()
+        .and_then(|attestations| attestations.provenance.as_ref())
+        .and_then(|provenance| provenance.predicate_type.as_deref())
+        .filter(|predicate_type| !predicate_type.is_empty());
+
+    if predicate_type.is_some_and(|predicate_type| {
+        SUPPORTED_PROVENANCE_PREDICATE_TYPES.contains(&predicate_type)
+    }) {
+        return Ok(());
+    }
+
+    Err(Error::UnsupportedPlatformPackageProvenance {
+        package: package_name.into(),
+        version: version.into(),
+    })
+}
 
 /// Resolve a version string from the npm registry.
 ///
@@ -86,6 +128,11 @@ pub async fn resolve_platform_package(
         )
     })?;
 
+    // npm registry signatures only prove that registry metadata was signed. The
+    // provenance object separately binds the package to its supported build
+    // attestation, so reject before exposing the tarball URL to any caller.
+    validate_platform_package_provenance(&cli_package_name, version, &cli_meta.dist)?;
+
     Ok(ResolvedVersion {
         version: version.to_owned(),
         platform_tarball_url: cli_meta.dist.tarball,
@@ -109,13 +156,189 @@ pub async fn resolve_version(
 
 #[cfg(test)]
 mod tests {
+    use httpmock::prelude::*;
+
     use super::*;
+
+    const TEST_PACKAGE_NAME: &str = "@voidzero-dev/vite-plus-cli-darwin-arm64";
+    const TEST_VERSION: &str = "1.2.3";
+
+    fn parse_metadata(dist: serde_json::Value) -> PackageVersionMetadata {
+        serde_json::from_value(serde_json::json!({
+            "version": TEST_VERSION,
+            "dist": dist,
+        }))
+        .unwrap()
+    }
+
+    fn dist_with_provenance(predicate_type: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "tarball": "https://registry.example.test/platform.tgz",
+            "integrity": "sha512-test",
+            "signatures": [{ "keyid": "registry-signature-is-not-provenance" }],
+            "attestations": {
+                "provenance": {
+                    "predicateType": predicate_type,
+                }
+            }
+        })
+    }
 
     #[test]
     fn test_cli_package_name_construction() {
         let suffix = "darwin-arm64";
         let name = format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{suffix}");
         assert_eq!(name, "@voidzero-dev/vite-plus-cli-darwin-arm64");
+    }
+
+    #[test]
+    fn test_platform_package_accepts_supported_provenance_predicates() {
+        for predicate_type in SUPPORTED_PROVENANCE_PREDICATE_TYPES {
+            let metadata = parse_metadata(dist_with_provenance(predicate_type.into()));
+            assert!(
+                validate_platform_package_provenance(
+                    TEST_PACKAGE_NAME,
+                    TEST_VERSION,
+                    &metadata.dist,
+                )
+                .is_ok(),
+                "expected {predicate_type} to be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn test_platform_package_rejects_missing_or_unsupported_provenance() {
+        let cases = [
+            serde_json::json!({
+                "tarball": "https://registry.example.test/platform.tgz",
+                "integrity": "sha512-test",
+            }),
+            serde_json::json!({
+                "tarball": "https://registry.example.test/platform.tgz",
+                "integrity": "sha512-test",
+                "attestations": {},
+            }),
+            serde_json::json!({
+                "tarball": "https://registry.example.test/platform.tgz",
+                "integrity": "sha512-test",
+                "attestations": { "provenance": {} },
+            }),
+            dist_with_provenance("".into()),
+            dist_with_provenance(" https://slsa.dev/provenance/v1 ".into()),
+            dist_with_provenance("https://example.test/unknown-provenance/v1".into()),
+            serde_json::json!({
+                "tarball": "https://registry.example.test/platform.tgz",
+                "integrity": "sha512-test",
+                "signatures": [{ "keyid": "signature-only" }],
+            }),
+        ];
+
+        for dist in cases {
+            let metadata = parse_metadata(dist);
+            let error = validate_platform_package_provenance(
+                TEST_PACKAGE_NAME,
+                TEST_VERSION,
+                &metadata.dist,
+            )
+            .unwrap_err();
+
+            match error {
+                Error::UnsupportedPlatformPackageProvenance { package, version } => {
+                    assert_eq!(package.as_str(), TEST_PACKAGE_NAME);
+                    assert_eq!(version.as_str(), TEST_VERSION);
+                }
+                other => panic!("unexpected error: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_platform_package_ignores_top_level_attestations() {
+        let metadata: PackageVersionMetadata = serde_json::from_value(serde_json::json!({
+            "version": TEST_VERSION,
+            "attestations": {
+                "provenance": {
+                    "predicateType": "https://slsa.dev/provenance/v1"
+                }
+            },
+            "dist": {
+                "tarball": "https://registry.example.test/platform.tgz",
+                "integrity": "sha512-test"
+            }
+        }))
+        .unwrap();
+
+        assert!(matches!(
+            validate_platform_package_provenance(TEST_PACKAGE_NAME, TEST_VERSION, &metadata.dist,),
+            Err(Error::UnsupportedPlatformPackageProvenance { .. })
+        ));
+    }
+
+    #[test]
+    fn test_platform_package_metadata_rejects_malformed_provenance_shape() {
+        let result = serde_json::from_value::<PackageVersionMetadata>(serde_json::json!({
+            "version": TEST_VERSION,
+            "dist": {
+                "tarball": "https://registry.example.test/platform.tgz",
+                "integrity": "sha512-test",
+                "attestations": { "provenance": "not-an-object" }
+            }
+        }));
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_platform_package_returns_verified_distribution() {
+        let server = MockServer::start();
+        let metadata_mock = server.mock(|when, then| {
+            when.method(GET).path("/@voidzero-dev/vite-plus-cli-darwin-arm64/1.2.3");
+            then.status(200).json_body(serde_json::json!({
+                "version": TEST_VERSION,
+                "dist": dist_with_provenance("https://slsa.dev/provenance/v1".into()),
+            }));
+        });
+
+        let resolved =
+            resolve_platform_package(TEST_VERSION, "darwin-arm64", Some(&server.base_url()))
+                .await
+                .unwrap();
+
+        metadata_mock.assert();
+        assert_eq!(resolved.version, TEST_VERSION);
+        assert_eq!(resolved.platform_tarball_url, "https://registry.example.test/platform.tgz");
+        assert_eq!(resolved.platform_integrity, "sha512-test");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_platform_package_rejects_before_returning_distribution() {
+        let server = MockServer::start();
+        let metadata_mock = server.mock(|when, then| {
+            when.method(GET).path("/@voidzero-dev/vite-plus-cli-darwin-arm64/1.2.3");
+            then.status(200).json_body(serde_json::json!({
+                "version": TEST_VERSION,
+                "dist": {
+                    "tarball": format!("{}/platform.tgz", server.base_url()),
+                    "integrity": "sha512-test",
+                }
+            }));
+        });
+        let tarball_mock = server.mock(|when, then| {
+            when.method(GET).path("/platform.tgz");
+            then.status(200).body("must not be downloaded");
+        });
+
+        let error =
+            resolve_platform_package(TEST_VERSION, "darwin-arm64", Some(&server.base_url()))
+                .await
+                .unwrap_err();
+
+        metadata_mock.assert();
+        assert_eq!(tarball_mock.hits(), 0);
+        assert!(matches!(error, Error::UnsupportedPlatformPackageProvenance { .. }));
+        assert!(error.to_string().contains(TEST_PACKAGE_NAME));
+        assert!(error.to_string().contains(TEST_VERSION));
     }
 
     #[test]
