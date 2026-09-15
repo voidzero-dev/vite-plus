@@ -153,6 +153,7 @@ function chain(
 
 export function migrateVitestV5Source(file: string, source: string, options: SourceOptions) {
   const editor = new SourceEditor(file, source);
+  const runnerAliases: string[] = [];
   const asyncFunctions = new Set<t.Node>();
   // Import edits are offset-based, so bindings still refer to the old module
   // while this traversal visits the assertions that must migrate with them.
@@ -294,13 +295,16 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
         unsupported(node, source, 'side-effect import', false);
       }
       if (imports.length) {
+        // A default or namespace import cannot be emitted inside named-import
+        // braces. Keep this blocked declaration intact for manual migration.
+        if (node.specifiers.some((specifier) => specifier.type !== 'ImportSpecifier')) {
+          return;
+        }
         const kept = remaining.length
           ? `import ${node.importKind === 'type' ? 'type ' : ''}{ ${remaining.join(', ')} } from ${JSON.stringify(source)};\n`
           : '';
-        editor.replace(
-          node,
-          `${kept}import { ${imports.join(', ')} } from 'vite-plus/test';${constants.length ? `\n${constants.join('\n')}` : ''}`,
-        );
+        editor.replace(node, `${kept}import { ${imports.join(', ')} } from 'vite-plus/test';`);
+        runnerAliases.push(...constants);
       }
     },
     ExportNamedDeclaration(node) {
@@ -366,20 +370,29 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
             ? node.callee
             : undefined;
         const opts = node.arguments[1];
+        const sequentialOption = staticObject(opts)
+          ? objectProperty(opts, 'sequential')
+          : undefined;
+        let unresolvedSequential = members.includes('sequential');
         if (seqMember && node.arguments.length >= 2) {
           if (
             staticObject(opts) &&
             !objectProperty(opts, 'concurrent') &&
-            !objectProperty(opts, 'sequential')
+            (!sequentialOption ||
+              (isBoolean(sequentialOption.value) && sequentialOption.value.value))
           ) {
             editor.edit(seqMember.object.end, seqMember.end, '');
-            editor.add(opts, 'concurrent', 'false');
+            if (!sequentialOption) {
+              editor.add(opts, 'concurrent', 'false');
+            }
+            unresolvedSequential = false;
           } else if (
             opts?.type === 'ArrowFunctionExpression' ||
             opts?.type === 'FunctionExpression'
           ) {
             editor.edit(seqMember.object.end, seqMember.end, '');
             editor.edit(opts.start, opts.start, '{ concurrent: false }, ');
+            unresolvedSequential = false;
           } else {
             editor.report(
               node,
@@ -395,7 +408,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
           );
         }
         for (const argument of node.arguments.slice(1)) {
-          if (!staticObject(argument)) {
+          if (unresolvedSequential || !staticObject(argument)) {
             continue;
           }
           const sequential = objectProperty(argument, 'sequential');
@@ -726,9 +739,11 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       const left = node.left;
       if (
         (left.type === 'MemberExpression' &&
+          left.object.type === 'Identifier' &&
+          !editor.binding(left.object) &&
           ['window', 'globalThis', 'global'].includes(editor.text(left.object)) &&
           DOM_GLOBALS.has(memberName(left) ?? '')) ||
-        (left.type === 'Identifier' && DOM_GLOBALS.has(left.name))
+        (left.type === 'Identifier' && DOM_GLOBALS.has(left.name) && !editor.binding(left))
       ) {
         editor.report(
           node,
@@ -801,5 +816,17 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       }
     },
   });
+  if (runnerAliases.length) {
+    // Imports are hoisted, but these aliases are not. Initialize them before
+    // any executable statement, even when an import occurs later in the file.
+    // Retain directives (and the shebang) at the start of the module.
+    const firstStatement = editor.ast.body.find(
+      (node) =>
+        node.type !== 'ImportDeclaration' &&
+        !(node.type === 'ExpressionStatement' && node.directive),
+    );
+    const offset = firstStatement?.start ?? source.length;
+    editor.edit(offset, offset, `${firstStatement ? '' : '\n'}${runnerAliases.join('\n')}\n`);
+  }
   return editor.finish();
 }

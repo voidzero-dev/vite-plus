@@ -71,6 +71,7 @@ import {
   rewriteMonorepo,
   rewriteStandaloneProject,
   planVitestV5Migration,
+  refreshVitestV5Migration,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   vitestV5ConfiglessProjects,
@@ -722,6 +723,19 @@ async function completeVitestV5Migration(
   }
 }
 
+function applyRefreshedVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5MigrationPlan {
+  const refreshed = refreshVitestV5Migration(plan);
+  if (refreshed.findings.some((finding) => finding.severity === 'block')) {
+    prompts.log.warn(formatVitestV5Findings(refreshed));
+    cancelAndExit(
+      'Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. Earlier setup steps may have changed project files; Vitest v5 edits were not applied.',
+      1,
+    );
+  }
+  applyVitestV5Migration(refreshed);
+  return refreshed;
+}
+
 async function executeMigrationPlan(
   workspaceInfoOptional: WorkspaceInfoOptional,
   plan: MigrationPlan,
@@ -735,7 +749,6 @@ async function executeMigrationPlan(
   report: MigrationReport;
 }> {
   const report = createMigrationReport();
-  applyVitestV5Migration(vitestV5Plan);
   const migrationProgress = interactive ? prompts.spinner({ indicator: 'timer' }) : undefined;
   let migrationProgressStarted = false;
   const updateMigrationProgress = (message: string) => {
@@ -870,6 +883,10 @@ async function executeMigrationPlan(
     }
   }
 
+  // Earlier setup and tool migrations can abort or change the preflight inputs.
+  // Only now apply Vitest compatibility edits, using the original runner version.
+  vitestV5Plan = applyRefreshedVitestV5Migration(vitestV5Plan);
+
   // Preserve lint-staged whenever hook setup is disabled/unsafe or existing
   // project-owned hooks remain authoritative.
   const skipStagedMigration = shouldSkipStagedMigrationForHooks(
@@ -893,10 +910,10 @@ async function executeMigrationPlan(
     );
   }
 
-  // 8. Install git hooks
   clearMigrationProgress();
   await completeVitestV5Migration(vitestV5Plan, interactive, report);
 
+  // 8. Install git hooks
   if (plan.shouldSetupHooks) {
     updateMigrationProgress('Configuring git hooks');
     installGitHooks(
@@ -1018,7 +1035,7 @@ async function main() {
   const initialChangedPaths = await collectChangedFormatPaths(workspaceInfoOptional.rootDir);
   const preExistingChangedPaths = initialChangedPaths ? new Set(initialChangedPaths) : undefined;
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
-  const vitestV5Plan = planVitestV5Migration(workspaceInfoOptional);
+  let vitestV5Plan = planVitestV5Migration(workspaceInfoOptional);
   const vitestV5Preflight = formatVitestV5Findings(vitestV5Plan);
   if (vitestV5Preflight) {
     prompts.log.warn(vitestV5Preflight);
@@ -1047,7 +1064,6 @@ async function main() {
       options.interactive,
     );
     let didMigrate = vitestV5NeedsMigration(vitestV5Plan);
-    applyVitestV5Migration(vitestV5Plan);
     let installDurationMs = 0;
     let finalInstallOk = true;
     let canFormatMigratedProject = !process.env.VP_SKIP_INSTALL;
@@ -1403,6 +1419,9 @@ async function main() {
     ) {
       didMigrate = true;
     }
+
+    // As in the full migration, defer Vitest writes until tool migration gates pass.
+    vitestV5Plan = applyRefreshedVitestV5Migration(vitestV5Plan);
 
     // Merge configs and reinstall once if any tool or bootstrap migration happened
     if (eslintMigrated || prettierMigrated || tsupMigrated) {
