@@ -575,9 +575,9 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
     let cmd_path = bin_dir.join(format!("{tool}.cmd"));
     let _ = tokio::fs::remove_file(&cmd_path).await;
 
-    // Remove .ps1 launchers (corepack's cmd-shim writes them; PowerShell
-    // resolves `<tool>.ps1` ahead of `<tool>.exe`, so a leftover would shadow
-    // the trampoline). Vite+ never creates per-tool .ps1 files in bin.
+    // Remove legacy .ps1 launchers because PowerShell resolves them ahead of
+    // `<tool>.exe`, which would shadow the trampoline. Vite+ does not create
+    // per-tool .ps1 files in bin.
     let ps1_path = bin_dir.join(format!("{tool}.ps1"));
     let _ = tokio::fs::remove_file(&ps1_path).await;
 

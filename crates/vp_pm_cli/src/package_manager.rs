@@ -107,8 +107,8 @@ impl PackageManagerType {
         }
     }
 
-    /// Whether a Corepack pin for this version covers the extracted CLI binary
-    /// and not the npm tarball.
+    /// Whether the `packageManager` integrity hash for this version covers the
+    /// extracted CLI binary rather than the npm package tarball.
     #[must_use]
     pub fn uses_cli_binary_hash(self, version: &str) -> bool {
         Version::parse(version).is_ok_and(|version| self.hashes_cli_binary_of(&version))
@@ -138,17 +138,15 @@ const VERIFIED_PIN_RECORD: &str = ".verified-pin";
 
 /// Path of the Yarn CLI inside `@yarnpkg/cli-dist`, relative to the package root.
 ///
-/// Corepack hashes this file to pin Yarn 2+. Three places must name the same
-/// path: the download, the cached-CLI check, and the error message.
+/// Yarn 2+ integrity pins cover this file. The download, cached-CLI check, and
+/// error message must use the same path.
 const YARN_CLI_ENTRY: &str = "bin/yarn.js";
 
 /// Whether a Yarn version is Berry (Yarn 2 and later).
 ///
-/// Corepack splits Yarn at 2.0.0. It matches that range with
-/// `satisfiesWithPrereleases`, which drops the prerelease tag first. Every 2.x
-/// prerelease is therefore a Berry version, so this function compares the major
-/// number alone. `VersionReq(">=2.0.0")` excludes `4.0.0-rc.53` and sends it to
-/// the Yarn Classic package, which never published that version.
+/// Compare the major version so Yarn 2+ prereleases also use Berry behavior
+/// and the `@yarnpkg/cli-dist` package. `VersionReq(">=2.0.0")` excludes
+/// `4.0.0-rc.53`, which the Yarn Classic package never published.
 pub(crate) fn is_yarn_berry(version: &Version) -> bool {
     version.major >= 2
 }
@@ -1144,8 +1142,7 @@ pub async fn download_package_manager(
 
     let is_modern_yarn = package_manager_type.hashes_cli_binary_of(&parsed_version);
     let mut package_name: Str = package_manager_type.to_string().into();
-    // handle yarn >= 2.0.0 to use `@yarnpkg/cli-dist` as package name
-    // @see https://github.com/nodejs/corepack/blob/main/config.json#L135
+    // Yarn 2+ releases, including prereleases, use `@yarnpkg/cli-dist`.
     if is_modern_yarn {
         package_name = "@yarnpkg/cli-dist".into();
     }
@@ -1198,8 +1195,8 @@ pub async fn download_package_manager(
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading {package_manager_type} v{version}...");
-    // A Corepack Yarn 2+ pin covers only the CLI. The rest of the archive stays
-    // unauthenticated, so vp never writes it to disk.
+    // A Yarn 2+ `packageManager` hash covers only the CLI. The rest of the archive
+    // is not authenticated by that hash, so vp never writes it to disk.
     let archive_file = is_modern_yarn.then(|| PathBuf::from(format!("package/{YARN_CLI_ENTRY}")));
     download_and_extract_tgz_with_hash(
         &tgz_url,
@@ -1283,21 +1280,16 @@ pub async fn download_package_manager(
 
 /// Verify a cached CLI against a pin that covers it.
 ///
-/// vp hashes the CLI once, when it installs the package manager, and records
-/// the pin it verified. A later command compares its own pin against that
-/// record, so it never hashes the multi-megabyte CLI again.
+/// vp records the verified pin when installing Yarn 2+. A matching record avoids
+/// rehashing the cached CLI. If the record is missing or the pin changes, vp
+/// hashes the CLI and updates the record.
 ///
-/// The record is missing after an install by an older vp, and it differs after
-/// the project changes its pin. Both cases hash the CLI once more.
+/// A matching record does not detect a CLI modified after installation. The
+/// record sits beside the file, so a writer that can replace one can replace
+/// the other. Write access to the managed install directory is the trust boundary.
 ///
-/// vp does not detect a CLI that changed on disk after the install, which is
-/// the guarantee Corepack gives its own cache. The record sits beside the file
-/// it describes, so a writer that can replace one can replace the other. The
-/// trust boundary is write access to `$VP_HOME`.
-///
-/// Only a Corepack Yarn 2+ pin covers a file that vp keeps. Every other pin
-/// names a tarball that vp deletes after it extracts it, so this function
-/// accepts those without a check.
+/// Only Yarn 2+ pins cover a retained CLI file. Other pins cover tarballs that
+/// vp discards after extraction and are not rechecked here.
 async fn verify_cached_cli_hash(
     package_manager_type: PackageManagerType,
     target_dir: &AbsolutePath,
@@ -2455,9 +2447,7 @@ mod tests {
         assert!(!PackageManagerType::Pnpm.uses_cli_binary_hash("10.0.0"));
         assert!(!PackageManagerType::Yarn.uses_cli_binary_hash("latest"));
 
-        // Corepack drops the prerelease tag before it matches its `>=2.0.0`
-        // range. A 2.x prerelease pin is therefore a Berry pin there too.
-        // `corepack use yarn@4.0.0-rc.53` writes a hash of `bin/yarn.js`.
+        // Yarn 2+ prereleases use the same CLI hash basis as stable Berry releases.
         assert!(PackageManagerType::Yarn.uses_cli_binary_hash("2.0.0-rc.1"));
         assert!(PackageManagerType::Yarn.uses_cli_binary_hash("4.0.0-rc.53"));
     }
@@ -3572,7 +3562,7 @@ mod tests {
                     mismatch.actual,
                     "sha512.ca75da26c00327d26267ce33536e5790f18ebd53266796fbb664d2a4a5116308042dd8ee7003b276a20eace7d3c5561c3577bdd71bcb67071187af124779620a"
                 );
-                // Yarn Classic ships the CLI inside the tarball that Corepack pins.
+                // Yarn Classic integrity pins cover the tarball, not the extracted CLI.
                 assert_eq!(mismatch.basis, "the npm package tarball");
             }
             other => panic!("Expected PackageManagerHashMismatch error, got {other:?}"),
