@@ -5,7 +5,7 @@ Help requests with additional arguments delegate to the underlying tool.
 ## `vp test --help --coverage`
 
 ```
-vitest/5.0.0
+vitest/<version>
 
 Usage:
   $ vitest [...filters]

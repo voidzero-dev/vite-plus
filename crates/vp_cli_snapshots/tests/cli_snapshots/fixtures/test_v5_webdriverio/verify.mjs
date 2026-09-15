@@ -32,9 +32,6 @@ const provider = webdriverio({ capabilities: {
   'goog:chromeOptions': {
     binary: executablePath,
     args: ['--no-sandbox'],
-    // Disable ChromeDriver's browser logging so Windows DevTools URLs and GPU
-    // diagnostics do not enter the snapshot. Runner failures still surface below.
-    excludeSwitches: ['enable-logging'],
   },
 } });
 let sessionOpened = false;

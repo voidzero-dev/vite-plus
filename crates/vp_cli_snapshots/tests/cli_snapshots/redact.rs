@@ -39,6 +39,12 @@ static VITEST_TIMING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b").unwrap()
 });
+// Vitest's delegated help prints a bare `vitest/5.0.1` banner. Match the
+// complete line so paths, dependency pins, and other fixture values stay intact.
+static VITEST_HELP_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^vitest/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+        .unwrap()
+});
 static TOOLCHAIN_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b").unwrap()
 });
@@ -491,6 +497,7 @@ pub fn redact_output(
 
     // Redact semver-shaped versions (bundled tool versions, Node versions).
     output = VERSION_RE.replace_all(&output, "<version>").into_owned();
+    output = VITEST_HELP_VERSION_RE.replace_all(&output, "vitest/<version>").into_owned();
 
     // Toolchain output is generated from the bundled manifest, so every
     // version and compiled revision changes when that manifest is refreshed.
