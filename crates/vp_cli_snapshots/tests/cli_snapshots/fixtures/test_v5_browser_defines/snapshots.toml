@@ -2,7 +2,7 @@
 name = "browser_defines"
 vp = "local"
 env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
-comment = "Regression for Vitest #11198. Keep after removing the temporary 5.0.0 backport. Raw configs, project inheritance, programmatic APIs, and the CLI must preserve define values."
+comment = "Regression for Vitest #11198, fixed upstream in 5.0.1. Raw configs, project inheritance, programmatic APIs, and the CLI must preserve define values without a Vite+ backport."
 steps = [
   { argv = ["node", "prepare-local.mjs"], snapshot = false },
   { argv = ["node", "verify.mjs"], timeout = 180000 },

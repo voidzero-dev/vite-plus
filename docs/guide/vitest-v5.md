@@ -1,6 +1,6 @@
 # Upgrade to Vitest 5
 
-Vite+ bundles Vitest `5.0.0`. Use Node `^22.18.0 || ^24.11.0 || >=26.0.0` for the CLI and tests.
+Vite+ bundles Vitest `5.0.1`. Use Node `^22.18.0 || ^24.11.0 || >=26.0.0` for the CLI and tests.
 
 Run `vp migrate` from the workspace root before updating dependencies by hand. Keep the original lockfile and installed packages available so the migration can identify the source Vitest version, including the runner inside an older `vite-plus` installation.
 
@@ -61,7 +61,7 @@ For programmatic config loading, replace `{ viteConfig, vitestConfig }` destruct
 
 ## Entry points and packages
 
-Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage providers and `@vitest/ui` at the bundled runner's exact version, `5.0.0`. Keep `@vitest/web-worker` aligned when your project uses it.
+Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage providers and `@vitest/ui` at the bundled runner's exact version, `5.0.1`. Keep `@vitest/web-worker` aligned when your project uses it.
 
 | v4 import                                | v5 import or action                                                         |
 | ---------------------------------------- | --------------------------------------------------------------------------- |
@@ -77,8 +77,6 @@ Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage pro
 Vite+ retains `vite-plus/test/coverage`, `/reporters`, `/environments`, `/snapshot`, and `/mocker` aliases through the Vite+ 1.x line. It does not provide partial runner or expect plugin shims.
 
 The community maintains `@vitest/browser-webdriverio` on its own release schedule. Install a compatible peer and check browser behavior; do not force its version to match the official package patch version. Use `5.0.0` as the compatibility test baseline.
-
-Vitest `5.0.0` assigns JSON-encoded Vite `define` values to browser globals. A string can contain extra quotes, and a boolean can become a string. Vite+ includes a temporary backport of [#11198](https://github.com/vitest-dev/vitest/pull/11198) for `5.0.0`: Vite initializes browser globals, and Vitest leaves those values unchanged. Node tests keep their upstream behavior. The backport covers raw configs, referenced projects, and programmatic project creation. It does not run with other Vitest versions. Remove the backport after upgrading to a release that includes the upstream fix.
 
 ## Reports and screenshots
 
@@ -103,7 +101,7 @@ Use the file locations in the migration report to review these changes. Run brow
 
 For jest-dom matcher types, load `@testing-library/jest-dom/vitest` in `compilerOptions.types` or import it from a TypeScript setup file that your `tsconfig.json` includes. The root `@testing-library/jest-dom` type entry augments Jest. A JavaScript setup file excluded by `allowJs: false` does not load the Vitest augmentation for type checking. Review shared Jest/Vitest configs before changing their type entries.
 
-With `vitest@5.0.0`, loading browser declarations first can also make TypeScript reject valid Node jest-dom assertions: `toHaveTextContent(/pattern/)` and CSS custom properties in `toHaveStyle()`. We reproduced this conflict with upstream imports and with Vite+ imports. Both `@testing-library/jest-dom@6.9.1` and `7.0.1` reproduce it. Check the declarations loaded by each test `tsconfig.json`; adding the jest-dom type entry alone might not resolve the conflict. Keep the affected project on the v4-based release until its Node and browser matcher types pass separate checks.
+With `vitest@5.0.1`, loading browser declarations first can also make TypeScript reject valid Node jest-dom assertions: `toHaveTextContent(/pattern/)` and CSS custom properties in `toHaveStyle()`. We reproduced this conflict with upstream imports and with Vite+ imports. Both `@testing-library/jest-dom@6.9.1` and `7.0.1` reproduce it. Check the declarations loaded by each test `tsconfig.json`; adding the jest-dom type entry alone might not resolve the conflict. Keep the affected project on the v4-based release until its Node and browser matcher types pass separate checks.
 
 | Area                     | Required review                                                                                                                                                                                            |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

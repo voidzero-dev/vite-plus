@@ -15,7 +15,7 @@ export const VITE_CONFIG_FILES = [
   'vite.config.cts',
 ] as const;
 
-export const VITEST_VERSION = '5.0.0';
+export const VITEST_VERSION = '5.0.1';
 
 // Community-maintained provider: its releases do not track the official runner.
 export const VITEST_WEBDRIVERIO_VERSION = '5.0.0-rc.1';

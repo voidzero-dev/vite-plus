@@ -1,6 +1,6 @@
 # browser_defines
 
-Regression for Vitest #11198. Keep after removing the temporary 5.0.0 backport. Raw configs, project inheritance, programmatic APIs, and the CLI must preserve define values.
+Regression for Vitest #11198, fixed upstream in 5.0.1. Raw configs, project inheritance, programmatic APIs, and the CLI must preserve define values without a Vite+ backport.
 
 ## `node prepare-local.mjs`
 
