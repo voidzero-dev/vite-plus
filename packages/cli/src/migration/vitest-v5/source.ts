@@ -361,7 +361,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
             editor.report(
               specifier,
               'benchmark-api',
-              'Migrate these bench references manually: automatic migration requires direct calls with literal names, inline zero-argument callbacks, and no benchmark options. Review wrappers, comparison groups, and escaped references.',
+              'Migrate these bench references manually: automatic migration requires direct calls with inline or locally resolved zero-argument callbacks and no benchmark options. Review wrappers, comparison groups, and escaped references.',
               'block',
             );
           }
@@ -493,7 +493,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
         editor.report(
           node,
           'benchmark-api',
-          'Migrate this bench call manually: automatic migration requires a direct call with a literal name, an inline zero-argument callback, and no benchmark options.',
+          'Migrate this bench call manually: automatic migration requires a direct call with an inline or locally resolved zero-argument callback and no benchmark options.',
           'block',
         );
       }

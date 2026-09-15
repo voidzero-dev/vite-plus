@@ -80,9 +80,129 @@ bench('comments', /* workload */ () => { /* inside */ work(); }, /* trailing */)
   });
 
   it.each([
+    `function workload() { return 42; }`,
+    `const workload = () => 42;`,
+    `const workload = async function () { return 42; };`,
+    `const original = () => 42; const workload = original;`,
+  ])('resolves a local zero-argument workload: %s', (declaration) => {
+    const result = migrate(
+      `import { bench } from 'vitest'; ${declaration} bench('local', workload);`,
+    );
+    expect(result.findings).toEqual([]);
+    expect(result.content).toContain('const _benchFn = workload;');
+    expect(result.content).toContain(`await _bench('local', _benchFn).run()`);
+    expect(migrate(result.content)).toEqual({ content: result.content, findings: [] });
+  });
+
+  it.each([
+    `let workload = () => 1; bench('mutable', workload); workload = () => 2;`,
+    `const workload = (task) => task; bench('context', workload);`,
+    `function* workload() { yield 1; } bench('generator', workload);`,
+    `const a = b; const b = a; bench('cycle', a);`,
+    `import { workload } from './workload.js'; bench('import', workload);`,
+    `declare function workload(): void; bench('declared', workload);`,
+  ])('does not guess callback semantics: %s', (body) => {
+    const input = `import { bench } from 'vitest'; ${body}`;
+    const result = migrate(input);
+    expect(result.content).toBe(input);
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
+    );
+  });
+
+  it.each([
+    `bench(getName(), workload);`,
+    `(bench(getName(), workload));`,
+    `bench((getName(), 'dynamic'), workload);`,
+    `if (true) bench(getName(), workload); else throw Error('unreachable');`,
+    `for (let i = 0; i < 1; i++) bench(getName(), workload);`,
+    `label: bench(getName(), workload);`,
+  ])(
+    'captures dynamic names once at registration and preserves callback identity: %s',
+    async (call) => {
+      const result = migrate(
+        `function workload() { events.push('work'); }
+      ${call}
+      events.push('registered');`,
+        true,
+      );
+      expect(result.findings).toEqual([]);
+      const events: string[] = [];
+      const tests: Array<{ name: string; fn: (context: unknown) => Promise<void> }> = [];
+      const context = {
+        events,
+        getName: () => {
+          events.push('name');
+          return 'dynamic';
+        },
+        test: (name: string, fn: (context: unknown) => Promise<void>) => tests.push({ name, fn }),
+      };
+      runInNewContext(result.content, context);
+      const original = runInNewContext('workload', context);
+      expect(events).toEqual(['name', 'registered']);
+      expect(tests.map(({ name }) => name)).toEqual(['dynamic']);
+      await tests[0].fn({
+        bench: (name: string, fn: () => void) => {
+          expect(name).toBe('dynamic');
+          expect(fn).toBe(original);
+          return {
+            run: async () => {
+              fn();
+              fn();
+            },
+          };
+        },
+      });
+      expect(events).toEqual(['name', 'registered', 'work', 'work']);
+      expect(migrate(result.content, true)).toEqual({ content: result.content, findings: [] });
+    },
+  );
+
+  it('retains argument evaluation order and temporal dead zones', () => {
+    const result = migrate(`bench(getName(), workload); const workload = () => {};`, true);
+    expect(result.findings).toEqual([]);
+    const events: string[] = [];
+    expect(() =>
+      runInNewContext(result.content, {
+        getName: () => {
+          events.push('name');
+          return 'case';
+        },
+        test: () => {
+          events.push('test');
+        },
+      }),
+    ).toThrow(/before initialization/);
+    expect(events).toEqual(['name']);
+  });
+
+  it('captures a changing name for an inline workload and preserves lexical this', async () => {
+    const result = migrate(
+      `let name = 'before';
+      bench(name, () => this.value);
+      name = 'after';`,
+      true,
+    );
+    expect(result.findings).toEqual([]);
+    const tests: Array<{ name: string; fn: (context: unknown) => Promise<void> }> = [];
+    runInNewContext(result.content, {
+      value: 42,
+      test: (name: string, fn: (context: unknown) => Promise<void>) => tests.push({ name, fn }),
+    });
+    expect(tests[0].name).toBe('before');
+    await tests[0].fn({
+      bench: (name: string, fn: () => number) => ({
+        run: async () => {
+          expect(name).toBe('before');
+          expect(fn()).toBe(42);
+        },
+      }),
+    });
+  });
+
+  it.each([
     `bench('options', () => work(), { time: 10 });`,
     `bench('callback', workload);`,
-    `bench(getName(), () => work());`,
     `bench('context', (task) => work(task));`,
     `bench('generator', function* () { yield 1; });`,
     `bench.each(cases)('case', () => work());`,

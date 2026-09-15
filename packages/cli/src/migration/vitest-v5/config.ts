@@ -10,10 +10,12 @@ import {
   objectProperty,
   propertyName,
   staticObject,
+  sameStaticValue,
   isString,
   isBoolean,
   type SourceOptions,
 } from './ast.ts';
+import { migrateBenchmarkConfig } from './benchmark-config.ts';
 
 const isTrue = (node: t.Node | undefined) => isBoolean(node) && node.value;
 
@@ -250,10 +252,32 @@ export function migrateVitestV5Config(
   options: SourceOptions,
   mergedConfig = false,
 ) {
+  // Resolve output moves first so reporter/default edits use fresh offsets and
+  // see the new JSON destinations rather than accidentally enabling stdout.
+  const output = migrateConfig(file, source, options, mergedConfig, true);
+  const result = migrateConfig(file, output.content, options, mergedConfig);
+  return {
+    content: result.content,
+    findings: [
+      ...output.findings.filter(({ code }) =>
+        ['benchmark-output', 'overlapping-edits', 'unsafe-syntax'].includes(code),
+      ),
+      ...result.findings,
+    ],
+  };
+}
+
+function migrateConfig(
+  file: string,
+  source: string,
+  options: SourceOptions,
+  mergedConfig: boolean,
+  benchmarkOnly = false,
+) {
   const editor = new SourceEditor(file, source);
   const visited = new Set<t.ObjectExpression>();
   const merged = mergedConfig || hasConfigMerge(editor);
-  const preserveDefaults = options.preserveV4 && !merged;
+  const preserveDefaults = options.preserveV4 && !merged && !benchmarkOnly;
   if (merged && (options.preserveV4 || options.reviewV4)) {
     editor.report(
       undefined,
@@ -365,6 +389,14 @@ export function migrateVitestV5Config(
     inherits: boolean,
     parentTest?: t.ObjectExpression,
   ) {
+    if (benchmarkOnly) {
+      // Reporters are global; do not invent destinations on inline projects or
+      // fragments whose effective root settings depend on a merge.
+      if (!parentTest && !merged) {
+        migrateBenchmarkConfig(editor, test);
+      }
+      return;
+    }
     if (preserveDefaults && !inherits) {
       editor.add(test, 'clearMocks', 'false');
     }
@@ -382,7 +414,7 @@ export function migrateVitestV5Config(
       const api = objectProperty(value, 'api');
       if (api) {
         const target = objectProperty(test, 'api');
-        if (target && editor.text(target.value) !== editor.text(api.value)) {
+        if (target && !sameStaticValue(target.value, api.value)) {
           editor.report(
             api,
             'api-conflict',
@@ -492,7 +524,6 @@ export function migrateVitestV5Config(
         );
       }
     }
-
     const projects = objectProperty(test, 'projects');
     if (!projects) {
       return;
@@ -620,6 +651,9 @@ export function migrateVitestV5Config(
     CallExpression(node) {
       const name = importedName(editor, node.callee, CONFIG_SOURCES);
       if (name === 'defineConfig' || name === 'defineProject') {
+        if (benchmarkOnly && name === 'defineProject') {
+          return;
+        }
         const parent = editor.parent(node);
         const binding =
           parent?.type === 'VariableDeclarator' && parent.id.type === 'Identifier'
