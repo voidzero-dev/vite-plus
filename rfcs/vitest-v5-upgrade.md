@@ -2,12 +2,12 @@
 
 - Status: Proposed
 - Tracking issue: [#2405](https://github.com/voidzero-dev/vite-plus/issues/2405)
-- Upstream baseline: [`v5.0.0`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.0)
+- Upstream baseline: [`v5.0.1`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.1)
 - Release target: Vite+ before `1.0`
 
 ## Decision
 
-Upgrade `vp test` and the `vite-plus/test*` API to Vitest `5.0.0` before Vite+ 1.0. Pin the official Vitest packages to the final release.
+Upgrade `vp test` and the `vite-plus/test*` API to Vitest `5.0.1` before Vite+ 1.0. Pin the official Vitest packages to this patch release.
 
 The upgrade has four parts:
 
@@ -70,11 +70,13 @@ The audit covers every v5 prerelease, the final [`v5.0.0` release](https://githu
 
 Vitest published `v5.0.0` on September 3, 2026. The comparison from `rc.4` to the final tag contains fixes, documentation, dependency updates, and performance work. It contains no additional breaking commit. The final package manifests retain the audited Node, Vite, export, browser-provider, and Istanbul dependency contracts.
 
+The Vitest maintainers released [`v5.0.1`](https://github.com/vitest-dev/vitest/releases/tag/v5.0.1) on September 15, 2026, with the browser `define` fix from [#11198](https://github.com/vitest-dev/vitest/pull/11198). Use the upstream fix and remove the temporary Vite+ backport. Keep the browser regression fixtures.
+
 ## Compatibility design
 
 ### 1. Runtime and dependency graph
 
-Pin the official Vitest packages to the exact version `5.0.0`. Keep the existing coverage-provider version guard. Coverage packages remain project-installed peers and must match the bundled runner exactly.
+Pin the official Vitest packages to the exact version `5.0.1`. Keep the existing coverage-provider version guard. Coverage packages remain project-installed peers and must match the bundled runner exactly.
 
 | Package group                                                                                 | Policy                                                                                                                                                                                                                                |
 | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -135,7 +137,7 @@ Keep the Playwright and Preview provider aliases. Keep the WebDriverIO aliases o
 
 Route the existing browser-context runtime aliases to `vitest/browser`. This includes provider `/context` paths, `vite-plus/test/browser/context`, `vite-plus/test/context`, and `vite-plus/test/plugins/browser-context`. Keep their upstream type declarations and augmentations. In v5, the `@vitest/browser/context` JavaScript export is an error stub; the browser plugin resolves only `vitest/browser` as its virtual context module.
 
-Use the final community WebDriverIO provider `5.0.0` as the compatibility test baseline with Vitest `5.0.0`. Keep the optional peer range `^5.0.0-beta.5 || >=5.0.0` from the final Vitest manifest. Test future community releases before changing the baseline; the provider follows its own release schedule.
+Use the final community WebDriverIO provider `5.0.0` as the compatibility test baseline with Vitest `5.0.1`. Keep the optional peer range `^5.0.0-beta.5 || >=5.0.0` from the final Vitest manifest. Test future community releases before changing the baseline; the provider follows its own release schedule.
 
 ### 4. Config integration and project inheritance
 
@@ -356,7 +358,7 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 
 ### Phase 1: compatibility branch
 
-- Pin the official Vitest packages to `5.0.0` in a development branch.
+- Pin the official Vitest packages to `5.0.1` in a development branch.
 - Update the package graph, export generator, resolver, project plugin injection, and migration package set.
 - Add export snapshots and unit fixtures before accepting generated package changes.
 - Preserve the root Vitest pin during upstream catalog synchronization and align Vite's direct test dependencies.
@@ -369,8 +371,8 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 
 ### Phase 3: Vite+ prerelease
 
-- Confirm that the lockfile resolves the final official `5.0.0` package graph.
-- Verify one compatible community WebDriverIO provider against Vitest `5.0.0`.
+- Confirm that the lockfile resolves the official `5.0.1` package graph.
+- Verify one compatible community WebDriverIO provider against Vitest `5.0.1`.
 - Publish a Vite+ prerelease and run ecosystem CI against real projects.
 - Keep the v4-based Vite+ release available for Node 20 and for any WebDriverIO user blocked by community-provider timing.
 
@@ -380,7 +382,7 @@ Release only after the gates below pass. State the Node requirement and the `vp 
 
 ## Validation and release gates
 
-The earlier investigation spike used `5.0.0-rc.2`. It removed the unavailable runner package, built the CLI and 60 generated test exports, and passed the focused config/resolver tests. The complete TypeScript unit run passed 63 files and 1,029 tests. The spike also reproduced the vendored Rolldown catalog conflict, which confirms that dependency synchronization needs an explicit solution. Repeat these checks against final `5.0.0`; the `rc.4` static-collection change was not present in the spike.
+The earlier investigation spike used `5.0.0-rc.2`. It removed the unavailable runner package, built the CLI and 60 generated test exports, and passed the focused config/resolver tests. The complete TypeScript unit run passed 63 files and 1,029 tests. The spike also reproduced the vendored Rolldown catalog conflict, which confirms that dependency synchronization needs an explicit solution. Repeat these checks against `5.0.1`; the `rc.4` static-collection change was not present in the spike.
 
 The implementation must pass these gates:
 
@@ -446,5 +448,5 @@ The `test_v5_preview` fixture records the known failure separately from the pass
 
 1. Does the final community `@vitest/browser-webdriverio` release pass the Vite+ browser suite with final Vitest v5? If not, document the provider exception and keep affected users on the v4-based Vite+ release.
 2. Does a clean checkout install with `--frozen-lockfile` after aligning Vite's dependencies with the root Vitest pin? Keep this installation check without requiring upstream Vite or Rolldown test-suite migrations.
-3. Do browser globals receive decoded `define` values? Vitest `5.0.0` assigns JSON-encoded Vite values to browser globals. A string becomes `'"/messages"'` instead of `'/messages'`, and `'false'` remains a string. A clean upstream Preview project reproduces this without Vite+. `npmx.dev` requests quoted translation-resource URLs and fails browser assertions. The Vitest maintainers merged [#11198](https://github.com/vitest-dev/vitest/pull/11198) on September 8, 2026, but the latest release as of September 11 is still `5.0.0`. The approved temporary backport clears browser runtime define maps through bundled Vite's `configureVitest` hook and covers late `injectTestProject` calls. Build-time and runtime guards restrict it to `5.0.0`; Node projects keep their defines. The `test_v5_preview` define case now requires success, and `test_v5_browser_defines` covers raw configs, project inheritance, programmatic APIs, and packed installations. Remove the backport modules and build registration after upgrading to a release containing #11198, but keep these regressions. A September 11 rerun of `npmx.dev` with the packed backport passed 1,028 browser tests and skipped five, without the quoted translation-URL failures. Its remaining 45 failures in `a11y.spec.ts` report Vue's `decodeEntities` warning. The full browser gate remains open.
-4. Can Node jest-dom and browser matcher declarations coexist? With Vitest and Preview `5.0.0`, importing `vitest/browser` before the jest-dom augmentation rejects Node regex text assertions and CSS custom-property assertions. Reversing the imports passes the same type checks. The `test_v5_upstream_types` fixture verifies both orders with `@testing-library/jest-dom` versions `6.9.1` and `7.0.1`, without Vite+ installed. `dify` still fails its type check even with an explicit jest-dom type entry. Resolve the declaration conflict before enabling the upgrade for affected projects.
+3. Do browser globals receive decoded `define` values? The Vitest maintainers fixed the `5.0.0` JSON-encoding regression in `5.0.1` through [#11198](https://github.com/vitest-dev/vitest/pull/11198). This upgrade removes the temporary backport and its build registration. Keep `test_v5_preview` and `test_v5_browser_defines` to check strings and booleans in raw configs, inherited projects, programmatic APIs, and packed installations. The September 11 `npmx.dev` run with the backport passed 1,028 browser tests and skipped five; 45 failures in `a11y.spec.ts` reported Vue's `decodeEntities` warning. Rerun that ecosystem gate with the upstream release.
+4. Can Node jest-dom and browser matcher declarations coexist? With Vitest and Preview `5.0.1`, importing `vitest/browser` before the jest-dom augmentation rejects Node regex text assertions and CSS custom-property assertions. Reversing the imports passes the same type checks. The `test_v5_upstream_types` fixture verifies both orders with `@testing-library/jest-dom` versions `6.9.1` and `7.0.1`, without Vite+ installed. `dify` still fails its type check even with an explicit jest-dom type entry. Resolve the declaration conflict before enabling the upgrade for affected projects.

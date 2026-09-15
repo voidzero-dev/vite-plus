@@ -115,7 +115,7 @@ Reads vitest's exports plus the three `@vitest/browser-*` provider packages and 
 
 Ship `vite` as a dependency alias for the same `@voidzero-dev/vite-plus-core` version. Vitest v5 requires a `vite` peer. Yarn users must be able to install `vite-plus` without adding `vite` or `vitest` to their project. Keep the alias in `dependencies`, not `devDependencies`.
 
-The main surface mirrors Vitest `5.0.0`, except for package metadata and wildcard
+The main surface mirrors Vitest `5.0.1`, except for package metadata and wildcard
 exports. The final export keys are snapshotted in the export tests. The following
 paths are Vite+ compatibility contracts through the `1.x` release line:
 

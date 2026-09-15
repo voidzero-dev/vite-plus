@@ -48,7 +48,7 @@ try {
     assert.equal(tasks.length, 1);
     assert.equal(tasks[0].result.state, 'fail');
     assert.match(tasks[0].result.errors[0].message, /timers APIs are not mocked/);
-    console.log('Known upstream regression since Vitest 4.1.1: Preview locator clicks fail with real timers in 5.0.0');
+    console.log(`Known upstream regression since Vitest 4.1.1: Preview locator clicks fail with real timers in ${runner.version}`);
     // This verifies a pre-existing upstream regression, not a new v5 release
     // blocker or evidence that real-timer locator clicks work.
     process.exitCode = 0;

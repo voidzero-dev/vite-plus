@@ -19,7 +19,6 @@ import { glob } from 'tinyglobby';
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
 import cliPkgJson from '../cli/package.json' with { type: 'json' };
-import { VITEST_VERSION } from '../cli/src/utils/constants.ts';
 import { buildCjsDeps } from './build-support/build-cjs-deps.js';
 import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
@@ -30,7 +29,6 @@ import {
   type ReplacementRule,
 } from './build-support/rewrite-module-specifiers.js';
 import { rewriteRolldownBindingRequires } from './build-support/rewrite-rolldown-binding.js';
-import { vitestBrowserDefinesBackportBuildPlugin } from './build-support/vitest-browser-defines-backport.ts';
 import pkgJson from './package.json' with { type: 'json' };
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
@@ -135,7 +133,6 @@ async function buildVite() {
       config.plugins = [
         // Add RewriteImportsPlugin to handle vite/rolldown import rewrites
         RewriteImportsPlugin,
-        vitestBrowserDefinesBackportBuildPlugin(VITEST_VERSION),
         {
           name: 'fix-module-runner-dynamic-request-url',
           transform(_, id, meta) {
