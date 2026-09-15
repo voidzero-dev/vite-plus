@@ -1823,9 +1823,7 @@ function makeWorkspaceInfo(
     packageManagerVersion: version,
     downloadPackageManager: {
       name: packageManager,
-      installDir: '/tmp',
       binPrefix: '/tmp/bin',
-      packageName: packageManager,
       version,
     },
     packages: [],
