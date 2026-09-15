@@ -157,9 +157,37 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
   const asyncFunctions = new Set<t.Node>();
   // Import edits are offset-based, so bindings still refer to the old module
   // while this traversal visits the assertions that must migrate with them.
-  const apiName = (node: t.Node) =>
-    testApiName(editor, node, options.globals) ??
-    (importedName(editor, node, EXPECT_SOURCES) === 'expect' ? 'expect' : undefined);
+  const apiName = (node: t.Node) => {
+    const name =
+      testApiName(editor, node, options.globals) ??
+      (importedName(editor, node, EXPECT_SOURCES) === 'expect' ? 'expect' : undefined);
+    if (
+      !name &&
+      options.reviewGlobals &&
+      node.type === 'Identifier' &&
+      !editor.binding(node) &&
+      [
+        'test',
+        'it',
+        'describe',
+        'suite',
+        'bench',
+        'expect',
+        'vi',
+        'beforeEach',
+        'afterEach',
+        'beforeAll',
+        'afterAll',
+      ].includes(node.name)
+    ) {
+      editor.report(
+        node,
+        'global-api-ownership',
+        'Determine which Vitest project owns this global API before migrating it. Config selection, file scope, or globals settings are unresolved or conflicting; the global call was left unchanged.',
+      );
+    }
+    return name;
+  };
   const canAwait = (node: t.Node) => {
     const fn = editor.functionParent(node);
     if (!fn) {

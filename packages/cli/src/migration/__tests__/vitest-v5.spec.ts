@@ -54,6 +54,214 @@ function source(input: string, options = v4) {
 }
 
 describe('Vitest v5 config compatibility', () => {
+  it.each(['mjs', 'ts'])('selects vitest.config.%s over an inactive Vite config', (extension) => {
+    const root = project({
+      'vite.config.ts': 'export default {};',
+      [`vitest.config.${extension}`]: 'export default { test: { globals: true } };',
+      'unit.test.js': `test.sequential('works', () => { expect(() => {}).toThrow(''); });`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    finishVitestV5Migration(plan);
+    const migrated = fs.readFileSync(path.join(root, 'unit.test.js'), 'utf8');
+    expect(migrated).toContain("test('works', { concurrent: false }");
+    expect(migrated).toContain('toThrow(/^$/)');
+    expect(planProject(root).changes).toEqual([]);
+  });
+
+  it('reports removed global benchmarks despite an inactive Vite config', () => {
+    const root = project({
+      'vite.config.mjs': 'export default {};',
+      'vitest.config.mjs': 'export default { test: { globals: true } };',
+      'unit.test.js': `bench('old', () => {});`,
+    });
+    expect(planProject(root).findings).toContainEqual(
+      expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
+    );
+  });
+
+  it('resolves an inline test.root relative to the declaring project root', () => {
+    const root = project({
+      'vitest.config.mjs': `export default { root: './parent', test: { projects: [{ extends: false, root: './app', test: { root: './unit', globals: true } }] } };`,
+      'parent/unit/right.test.js': `test.sequential('works', () => {});`,
+      'parent/app/unit/wrong.test.js': `expect(() => {}).toThrow('');`,
+      'unit/wrong.test.js': `expect(() => {}).toThrow('');`,
+    });
+    const plan = planProject(root);
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'parent/unit/right.test.js'))?.after,
+    ).toContain('concurrent: false');
+    expect(plan.changes.filter(({ file }) => file.endsWith('wrong.test.js'))).toEqual([]);
+  });
+
+  it('uses an explicit config path relative to the script root, not its own directory', () => {
+    const root = project({
+      'package.json': JSON.stringify({
+        devDependencies: { vitest: '4.1.11' },
+        scripts: { test: 'vitest --config configs/custom.mjs' },
+      }),
+      'configs/custom.mjs': `export default { root: './app', test: { root: './unit', globals: true, setupFiles: './setup.js' } };`,
+      'unit/right.test.js': `test.sequential('works', () => {});`,
+      'unit/setup.js': 'beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });',
+      'configs/unit/wrong.test.js': `expect(() => {}).toThrow('');`,
+    });
+    const plan = planProject(root);
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'unit/right.test.js'))?.after,
+    ).toContain('concurrent: false');
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'unit/setup.js'))?.after,
+    ).toContain('beforeEach(async');
+    expect(plan.changes.some(({ file }) => file.endsWith('wrong.test.js'))).toBe(false);
+  });
+
+  it('does not apply a CLI root again to inline project roots', () => {
+    const root = project({
+      'package.json': JSON.stringify({
+        devDependencies: { vitest: '4.1.11' },
+        scripts: { test: 'vitest --root parent' },
+      }),
+      'parent/vitest.config.mjs': `export default { test: { projects: [{ test: { root: './unit', globals: true } }] } };`,
+      'parent/unit/right.test.js': `test.sequential('works', () => {});`,
+      'parent/wrong.test.js': `expect(() => {}).toThrow('');`,
+    });
+    const plan = planProject(root);
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'parent/unit/right.test.js'))?.after,
+    ).toContain('concurrent: false');
+    expect(plan.changes.some(({ file }) => file.endsWith('wrong.test.js'))).toBe(false);
+  });
+
+  it.each([
+    'vitest --config custom.mjs',
+    'vitest -c custom.mjs',
+    'vp test --config=custom.mjs',
+    'pnpm exec vitest run --config "custom.mjs"',
+  ])('respects explicit config selection: %s', (command) => {
+    const root = project({
+      'package.json': JSON.stringify({
+        devDependencies: { vitest: '4.1.11' },
+        scripts: { test: command },
+      }),
+      'vitest.config.mjs': 'export default { test: { globals: false } };',
+      'custom.mjs': 'export default { test: { globals: true } };',
+      'unit.test.js': `test.sequential('works', () => {});`,
+    });
+    const plan = planProject(root);
+    expect(plan.projects[0].configFiles).toContain(path.join(root, 'custom.mjs'));
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'unit.test.js'))?.after,
+    ).toContain('concurrent: false');
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    finishVitestV5Migration(plan);
+    expect(planProject(root).changes).toEqual([]);
+  });
+
+  it.each([
+    `export default { root: './app', test: { root: './unit', globals: true } };`,
+    `export default { root: rootAtRuntime, test: { root: './unit', globals: true } };`,
+    `export default { test: { projects: [{ root: './app', test: { root: './unit', globals: true } }] } };`,
+    `export default { test: { globals: true, projects: [{ extends: true, root: './app', test: { root: './unit' } }] } };`,
+  ])('uses test.root instead of concatenating roots: %s', (configSource) => {
+    const unrelated = `expect(() => { throw new Error('boom'); }).toThrow('');`;
+    const root = project({
+      'vitest.config.mjs': configSource,
+      'unit/right.test.js': `test.sequential('works', () => {});`,
+      'app/unit/wrong.test.js': unrelated,
+    });
+    const plan = planProject(root);
+    applyVitestV5Migration(plan);
+    expect(fs.readFileSync(path.join(root, 'unit/right.test.js'), 'utf8')).toContain(
+      'concurrent: false',
+    );
+    expect(fs.readFileSync(path.join(root, 'app/unit/wrong.test.js'), 'utf8')).toBe(unrelated);
+    expect(plan.findings).toEqual([]);
+  });
+
+  it.each([
+    `export default { test: { globals: true, setupFiles: './setup.js', include: ['unit.test.js'], exclude: ['setup.js'] } };`,
+    `export default { test: { globals: true, setupFiles: ['./setup.js'] } };`,
+    `export default { test: { globals: true, setupFiles: ['./setup.js'], projects: [{ extends: true, test: {} }] } };`,
+    `export default { test: { projects: [{ test: { globals: true, setupFiles: ['./setup.js'] } }] } };`,
+  ])('migrates globals in declared setup files: %s', (configSource) => {
+    const root = project({
+      'vitest.config.mjs': configSource,
+      'setup.js': 'beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });',
+      'unit.test.js': `test('works', () => {});`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    finishVitestV5Migration(plan);
+    expect(fs.readFileSync(path.join(root, 'setup.js'), 'utf8')).toBe(
+      'beforeEach(async () => { await expect(Promise.resolve(1)).resolves.toBe(1); });',
+    );
+    expect(planProject(root).changes).toEqual([]);
+  });
+
+  it('applies project directory precedence and setup ownership to referenced configs', () => {
+    const root = project({
+      'vitest.config.mjs': `export default { test: { projects: ['./unit'] } };`,
+      'unit/vite.config.ts': 'export default {};',
+      'unit/vitest.config.mjs': `export default { test: { globals: true, setupFiles: '../shared/setup.js' } };`,
+      'unit/right.test.js': `test.sequential('works', () => {});`,
+      'shared/setup.js': 'beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });',
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'unit/right.test.js'))?.after,
+    ).toContain('concurrent: false');
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'shared/setup.js'))?.after,
+    ).toContain('beforeEach(async () => { await expect');
+  });
+
+  it.each([
+    `export default { test: { projects: [{ test: { globals: true, setupFiles: './setup.js' } }, { test: { globals: false, setupFiles: './setup.js' } }] } };`,
+    `export default { test: { globals: true, setupFiles: filesAtRuntime } };`,
+    `export default () => ({ test: { globals: true, setupFiles: './setup.js' } });`,
+  ])('reports unresolved global ownership without rewriting calls: %s', (configSource) => {
+    const input = 'beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });';
+    const root = project({
+      'vitest.config.mjs': configSource,
+      'setup.js': input,
+      'imported.js': `import { expect } from 'vitest'; expect(() => {}).toThrow('');`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({ code: 'global-api-ownership', file: path.join(root, 'setup.js') }),
+    );
+    applyVitestV5Migration(plan);
+    finishVitestV5Migration(plan);
+    expect(fs.readFileSync(path.join(root, 'setup.js'), 'utf8')).toBe(input);
+    expect(fs.readFileSync(path.join(root, 'imported.js'), 'utf8')).toContain('toThrow(/^$/)');
+    expect(planProject(root).findings).toContainEqual(
+      expect.objectContaining({ code: 'global-api-ownership' }),
+    );
+  });
+
+  it.each(['vitest --config "$CONFIG"', 'cd unit && vitest', 'vitest --config missing.mjs'])(
+    'reports unresolved script selections: %s',
+    (command) => {
+      const root = project({
+        'package.json': JSON.stringify({
+          devDependencies: { vitest: '4.1.11' },
+          scripts: { test: command },
+        }),
+        'vitest.config.mjs': 'export default { test: { globals: true } };',
+        'unit.test.js': `test.sequential('works', () => {});`,
+      });
+      const plan = planProject(root);
+      expect(plan.changes.some(({ file }) => file === path.join(root, 'unit.test.js'))).toBe(false);
+      expect(plan.findings).toContainEqual(
+        expect.objectContaining({ code: 'global-api-ownership' }),
+      );
+    },
+  );
+
   it.each([`{ name: 'unit' }`, `{ name: 'unit', browser: { enabled: true } }`])(
     'preserves defaults inherited from an external base: %s',
     (testOptions) => {

@@ -15,10 +15,13 @@ import {
   findVitestV5ConfigFiles,
   findVitestV5MergedConfigFiles,
   migrateVitestV5Config,
-  resolveVitestV5TestModes,
-  type VitestV5TestMode,
 } from '../vitest-v5/config.ts';
 import { lockedVitestVersion } from '../vitest-v5/lockfile.ts';
+import {
+  findVitestV5ConfigEntries,
+  resolveVitestV5TestModes,
+  type VitestV5TestMode,
+} from '../vitest-v5/scopes.ts';
 import { migrateVitestV5Source } from '../vitest-v5/source.ts';
 
 const STATE_PATH = '.vite-plus/migrations.json';
@@ -503,6 +506,7 @@ function scanAndRewriteFile(
   if (
     CODE_FILE.test(file) &&
     (testMode.globals ||
+      testMode.reviewGlobals ||
       VITEST_SIGNAL.test(source) ||
       /\.(?:test|spec)\./.test(file) ||
       project.configFiles.has(file))
@@ -736,7 +740,11 @@ export function planVitestV5Migration(
       allSources.set(file, source);
     }
   }
-  const allConfigs = findVitestV5ConfigFiles(allSources);
+  const configEntries = findVitestV5ConfigEntries(allSources, projectSources.keys());
+  const allConfigs = findVitestV5ConfigFiles(
+    allSources,
+    configEntries.flatMap((entry) => (entry.file ? [entry.file] : [])),
+  );
   const mergedConfigs = findVitestV5MergedConfigFiles(allSources, allConfigs);
   const browserPossible = [...allSources.values()].some((source) => BROWSER_SIGNAL.test(source));
   const browserCliOverride = [...allSources].some(
@@ -811,7 +819,12 @@ export function planVitestV5Migration(
     projects.push(project);
     let testModes = testModesByVersion.get(options.preserveV4);
     if (!testModes) {
-      testModes = resolveVitestV5TestModes(allSources, allConfigs, options.preserveV4);
+      testModes = resolveVitestV5TestModes(
+        allSources,
+        allConfigs,
+        options.preserveV4,
+        configEntries,
+      );
       testModesByVersion.set(options.preserveV4, testModes);
     }
     for (const [file, source] of sources) {
@@ -952,10 +965,13 @@ function currentProjectConfigs(plan: VitestV5MigrationPlan): Map<string, string[
   const filesByProject = new Map(
     plan.projects.map((project) => [project.directory, filesInProject(project.directory)]),
   );
+  const sources = new Map(
+    [...filesByProject.values()].flat().map((file) => [file, fs.readFileSync(file, 'utf8')]),
+  );
+  const entries = findVitestV5ConfigEntries(sources, filesByProject.keys());
   const configs = findVitestV5ConfigFiles(
-    new Map(
-      [...filesByProject.values()].flat().map((file) => [file, fs.readFileSync(file, 'utf8')]),
-    ),
+    sources,
+    entries.flatMap((entry) => (entry.file ? [entry.file] : [])),
   );
   return new Map(
     [...filesByProject].map(([directory, files]) => [
