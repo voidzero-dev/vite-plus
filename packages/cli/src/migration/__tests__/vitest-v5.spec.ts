@@ -1681,6 +1681,108 @@ export default defineConfig(CONFIG);`,
   });
 
   it.each([
+    "export const tools = ['vite', 'vitest', '@vitest/runner', 'vite-plus/test'];",
+    "export const tool = { name: 'vitest' };",
+    "// import { test } from 'vitest';\nexport const value = 1;",
+    "/* export * from 'vitest'; vitest run */\nexport const value = 1;",
+    'export const example = "import { test } from \'vitest\';";',
+    'export const help = `Run vitest run or vp test`;',
+    "console.log('vitest run');",
+    "const execSync = (command) => command; execSync('vitest run');",
+    "const { execSync } = require('./logger'); execSync('vitest run');",
+    'const docs = `\n/// <reference types="vitest/globals" />\n`;',
+    '/*\n/// <reference types="vitest/globals" />\n*/',
+    "function require(name) { return name; } require('vitest');",
+    "const loader = { require(name) { return name; } }; loader.require('vitest');",
+    "import { expect } from 'vitest-like';",
+    "export * from 'vite-plus/testing';",
+  ])('does not require a runner version for incidental source text: %s', (input) => {
+    const root = project({ 'package.json': '{}', 'src/plugin.ts': input });
+    const plan = planProject(root);
+    expect(plan.projects[0].active).toBe(false);
+    expect(plan.findings).toEqual([]);
+    expect(plan.changes).toEqual([]);
+  });
+
+  it.each([
+    "import { test } from 'vitest';",
+    "import 'vitest';",
+    "import type { TestAPI } from 'vitest';",
+    "export { test } from 'vite-plus/test';",
+    "export * from '@vitest/runner';",
+    "const runner = await import('vitest/node');",
+    "const runner = require('vitest');",
+    "import runner = require('vitest');",
+    "type Runner = import('vitest/node').Vitest;",
+    "declare module 'vitest' { interface ProvidedContext { port: number } }",
+    '/// <reference types="vitest/globals" />',
+    "import { execSync as run } from 'node:child_process'; run('pnpm exec vitest run');",
+    "import * as cp from 'child_process'; cp.spawn('vitest', ['run']);",
+    "import cp from 'node:child_process'; cp.execSync('vp test');",
+    "import { spawnSync } from 'node:child_process'; spawnSync('pnpm', ['exec', 'vitest', 'run']);",
+    "import { execFileSync } from 'child_process'; execFileSync('vp', ['test']);",
+    "const { execSync: run } = require('node:child_process'); run('vitest run');",
+    "const cp = require('child_process'); cp.spawn('vitest', ['run']);",
+    "require('node:child_process').execSync('vp test');",
+  ])('still requires a runner version for actual source usage: %s', (input) => {
+    const root = project({ 'package.json': '{}', 'runner.ts': input });
+    const plan = planProject(root);
+    expect(plan.projects[0].active).toBe(true);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({ code: 'source-version', severity: 'block' }),
+    );
+    expect(plan.changes).toEqual([]);
+  });
+
+  it('keeps the version check when source usage cannot be parsed', () => {
+    const root = project({
+      'package.json': '{}',
+      'runner.ts': "import { test } from 'vitest'; const broken = ;",
+    });
+    const plan = planProject(root);
+    expect(plan.projects[0].active).toBe(true);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({ code: 'source-version', severity: 'block' }),
+    );
+  });
+
+  it('migrates Vitest workspace members without activating their plugin package', () => {
+    const plugin = "export const NON_RUNTIME_PKGS = ['vite', 'vitest'];";
+    const root = project({
+      'package.json': JSON.stringify({
+        name: 'plugin',
+        scripts: { test: 'node test-examples.js' },
+      }),
+      'src/index.ts': plugin,
+      'examples/vite-8/package.json': JSON.stringify({ devDependencies: { vitest: '^4.1.11' } }),
+      'examples/vite-8/vitest.config.ts': 'export default { test: { globals: true } };',
+      'examples/vite-8/unit.test.js': "test.sequential('works', () => {});",
+    });
+    const workspace = {
+      rootDir: root,
+      packageManager: PackageManager.pnpm,
+      packages: [{ name: 'example', path: 'examples/vite-8' }],
+    };
+    const plan = planVitestV5Migration(workspace);
+    expect(plan.projects.map(({ active, sourceVersion }) => ({ active, sourceVersion }))).toEqual([
+      { active: false, sourceVersion: undefined },
+      { active: true, sourceVersion: '4.1.11' },
+    ]);
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+    expect(fs.readFileSync(path.join(root, 'src/index.ts'), 'utf8')).toBe(plugin);
+    expect(fs.readFileSync(path.join(root, 'examples/vite-8/unit.test.js'), 'utf8')).toContain(
+      "test('works', { concurrent: false }",
+    );
+    const repeated = planVitestV5Migration(workspace);
+    expect(repeated.projects[0].active).toBe(false);
+    expect(repeated.findings).toEqual([]);
+    expect(repeated.changes).toEqual([]);
+    expect(Object.keys(repeated.state.vitest5!)).toEqual(['examples/vite-8']);
+  });
+
+  it.each([
     ['vitest', '4.1.11', '4.1.11', {}],
     [
       'vitest',
