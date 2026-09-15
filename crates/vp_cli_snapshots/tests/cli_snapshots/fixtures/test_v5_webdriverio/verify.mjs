@@ -23,11 +23,19 @@ const { executablePath, browserVersion } = packed
   ? JSON.parse(readFileSync('chromium.json', 'utf8'))
   : await installedChromium();
 assert.equal(require('@vitest/browser-webdriverio/package.json').version, '5.0.0');
+const providerRequire = createRequire(require.resolve('@vitest/browser-webdriverio/package.json'));
+assert.equal(providerRequire('@vitest/browser/package.json').version, require('vitest/package.json').version);
 assert.equal(webdriverio, legacyWebdriverio);
 assert.equal(webdriverio, pluginWebdriverio);
 const provider = webdriverio({ capabilities: {
   browserVersion,
-  'goog:chromeOptions': { binary: executablePath, args: ['--no-sandbox'] },
+  'goog:chromeOptions': {
+    binary: executablePath,
+    args: ['--no-sandbox'],
+    // Disable ChromeDriver's browser logging so Windows DevTools URLs and GPU
+    // diagnostics do not enter the snapshot. Runner failures still surface below.
+    excludeSwitches: ['enable-logging'],
+  },
 } });
 let sessionOpened = false;
 const createProvider = provider.providerFactory;
