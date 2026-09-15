@@ -1,6 +1,6 @@
 # Upgrade to Vitest 5
 
-Vite+ bundles Vitest `5.0.0`. Use Node `^22.18.0 || ^24.11.0 || >=26.0.0` for the CLI and tests. Node 20 and Node 25 cannot run this toolchain.
+Vite+ bundles Vitest `5.0.0`. Use Node `^22.18.0 || ^24.11.0 || >=26.0.0` for the CLI and tests.
 
 Run `vp migrate` from the workspace root before updating dependencies by hand. Keep the original lockfile and installed packages available so the migration can identify the source Vitest version, including the runner inside an older `vite-plus` installation.
 
