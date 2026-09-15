@@ -78,9 +78,7 @@ Vite+ retains `vite-plus/test/coverage`, `/reporters`, `/environments`, `/snapsh
 
 The community maintains `@vitest/browser-webdriverio` on its own release schedule. Install a compatible peer and check browser behavior; do not force its version to match the official package patch version. Use `5.0.0` as the compatibility test baseline.
 
-Vitest `5.0.0` Preview fails locator clicks with real timers because its user-event adapter advances fake timers without checking whether they are enabled. This upstream issue blocks the stable rollout. Use Playwright or retain a v4-based Vite+ release while the issue remains open. Enabling fake timers changes test behavior and does not resolve the release blocker.
-
-Vitest `5.0.0` also assigns JSON-encoded Vite `define` values to browser globals. A string can contain extra quotes, and a boolean can become a string. Vite+ includes a temporary backport of [#11198](https://github.com/vitest-dev/vitest/pull/11198) for `5.0.0`: Vite initializes browser globals, and Vitest leaves those values unchanged. Node tests keep their upstream behavior. The backport covers raw configs, referenced projects, and programmatic project creation. It does not run with other Vitest versions. Remove the backport after upgrading to a release that includes the upstream fix.
+Vitest `5.0.0` assigns JSON-encoded Vite `define` values to browser globals. A string can contain extra quotes, and a boolean can become a string. Vite+ includes a temporary backport of [#11198](https://github.com/vitest-dev/vitest/pull/11198) for `5.0.0`: Vite initializes browser globals, and Vitest leaves those values unchanged. Node tests keep their upstream behavior. The backport covers raw configs, referenced projects, and programmatic project creation. It does not run with other Vitest versions. Remove the backport after upgrading to a release that includes the upstream fix.
 
 ## Reports and screenshots
 
