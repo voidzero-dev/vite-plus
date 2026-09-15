@@ -22,7 +22,7 @@ import {
   resolveVitestV5TestModes,
   type VitestV5TestMode,
 } from '../vitest-v5/scopes.ts';
-import { migrateVitestV5Source } from '../vitest-v5/source.ts';
+import { hasVitestV5SourceUsage, migrateVitestV5Source } from '../vitest-v5/source.ts';
 
 const STATE_PATH = '.vite-plus/migrations.json';
 const SKIP_DIRS = new Set([
@@ -774,7 +774,7 @@ export function planVitestV5Migration(
         ) ||
         [...sources].some(
           ([file, source]) =>
-            (CODE_FILE.test(file) && VITEST_SIGNAL.test(source)) ||
+            (CODE_FILE.test(file) && hasVitestV5SourceUsage(file, source)) ||
             (configFiles.has(file) && /\btest\s*:/.test(source)),
         ));
     const options: SourceOptions = {

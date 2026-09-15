@@ -182,12 +182,12 @@ export function testApiName(
 /** Offset edits retain comments and formatting outside the precise changed span. */
 export class SourceEditor {
   readonly ast: t.Program;
+  readonly comments: t.Span[];
   readonly findings: VitestV5Finding[] = [];
   private readonly nodes: t.Node[] = [];
   private readonly parents = new Map<t.Node, t.Node>();
   private readonly bindings = new Map<number, Binding>();
   private readonly names = new Set<string>();
-  private readonly comments: t.Span[];
   private readonly edits: Array<{ start: number; end: number; text: string }> = [];
   private readonly additions = new Map<t.ObjectExpression, Map<string, string>>();
 
