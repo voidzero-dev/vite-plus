@@ -130,10 +130,11 @@ Merging this PR will trigger the release workflow.
 
 ### Categorization rules
 
-- Every PR from `generate-notes` appears exactly once, with one exception: omit bot-authored PRs that carry nothing for a user to read or act on (a docs stats refresh, a badge update). Keep bot PRs that do change what users get, such as the upstream dependency upgrades. When you omit one, say so when reporting the validation counts so the mismatch reads as deliberate rather than missed. No PR is listed both in Highlights and a section below.
+- Every PR from `generate-notes` appears exactly once, except fully reverted changes described below and bot-authored PRs that carry nothing for a user to read or act on (a docs stats refresh, a badge update). Keep bot PRs that do change what users get, such as the upstream dependency upgrades. Record each omitted PR and its reason when reporting validation counts. No PR is listed both in Highlights and a section below.
 - **Breaking Changes goes first, above Highlights, and only when the release has one.** A rename is breaking only when the old name stops working; if a deprecated alias is retained it is not breaking, so keep the two in different sections rather than merging them into one entry. Give each breaking entry an old -> new table when several names change, plus one line telling readers where to update (shell profile, CI job, Dockerfile). Do not editorialize about the version number.
 - When several breaking changes affect different workflows, group them under short `####` headings. Explain the changed behavior and required action before each table; keep automatic migration steps separate from changes users must make manually.
 - **Describe the net change between the two released versions, not intra-cycle churn.** When several PRs touch the same area within one release (one narrows a behavior, a later one broadens it back), the reader only sees the delta from `v<prev>` to `v<curr>`; describe that once, listing every PR number, and do not narrate a regression that was introduced and then fixed inside the cycle. Apply this to the intro/theme sentence too.
+- If a change and its complete revert are both unreleased, omit both when they leave no net change. Remove sections with no remaining entries. A revert of behavior in the previous release still needs an entry.
 - `feat` -> Features, `fix` -> Fixes & Enhancements, `refactor` and `revert` -> Refactor (never Chore), `docs` -> Docs, `test` / `ci` / `chore` -> Chore.
 - `feat(docs)` goes in Docs when the user-facing surface is the docs site.
 - **Docs means the published docs site, not contributor files.** A `docs` commit that changes an RFC, `AGENTS.md`, the repo map, or a skill under `.claude/` belongs in Chore: a vite-plus user never reads those. Docs should hold only entries a reader could go and look at on the site or in the README.
@@ -176,7 +177,7 @@ gh pr edit <PR#> --repo voidzero-dev/vite-plus --title "release: vX.Y.Z: <theme>
 
 ```bash
 BODY=$(gh pr view <PR#> --repo voidzero-dev/vite-plus --json body -q '.body')
-# every generate-notes PR present (minus any deliberately omitted bot PR), none duplicated:
+# every generate-notes PR present (minus documented omissions), none duplicated:
 echo "$BODY" | grep -oE 'voidzero-dev/vite-plus/pull/[0-9]+' | sort -u | wc -l
 echo "$BODY" | grep -oE '(vite-plus|vite-task)/pull/[0-9]+' | sort | uniq -d   # must be empty
 echo "$BODY" | grep -nE '[—–]'                                                  # must be empty
@@ -184,7 +185,7 @@ echo "$BODY" | grep -c '\\`'                                                    
 echo "$BODY" | tail -1                                                          # boilerplate closing line intact
 ```
 
-Diff the body's PR numbers against `generate-notes` rather than only counting them: a count alone hides one missing entry offsetting one extra. Every number in the missing list must be a bot PR you chose to omit.
+Diff the body's PR numbers against `generate-notes` rather than only counting them: a count alone hides one missing entry offsetting one extra. Every number in the missing list must have a documented reason for omission.
 
 ## 4. Preview build smoke test (before merging)
 
@@ -240,6 +241,8 @@ Do this before both the local sweep and the fork PRs. If PRs were already opened
 **Validate in the project's own CI.** Beyond the local `vp migrate`, exercise the prerelease in the fork's real CI by opening a draft PR on the fork, following "Smoke-test via a fork PR" in TESTING.md: branch `update-vite-plus-prerelease-test-<version>` synced from `source`, apply the upgrade, open a **draft** PR on the fork (never upstream) **assigned to the release manager**, then watch its checks for upgrade-related failures. Offer this alongside the local sweep rather than treating it as an afterthought; it is the only level that exercises each project's own build and tests. Some projects' CIs install with a non-standard tool that cannot resolve preview builds through the bridge `.npmrc` (e.g. cnpmcore's `utoo`), so check the install step before trusting fork-CI results.
 
 The workflow triggers only on the `labeled` event, not on new pushes. To rebuild after the head moves (e.g. after a step 5 merge from `main`), remove and re-add the label (this cancels an in-flight build for the branch). A stale build whose diff to the new head is test-only is still valid for smoke testing; ask before re-triggering.
+
+Record each project's base commit, starting version, resolved preview commit, fork PR head, and CI run. After a new preview build, identify which projects ran again and which retain earlier evidence. Do not report a partial repeat as a full-catalog run on the new preview.
 
 ### Example (v0.2.2, PR #2016)
 
@@ -355,12 +358,12 @@ Auto-merge being enabled is not a completed merge. Confirm `mergedAt` and the me
      -q '.[] | "\(.environment.name) can_approve=\(.current_user_can_approve) reviewers=\([.reviewers[]?.reviewer.login] | join(","))"'
    ```
 
-4. `Release`: publishes the platform-native CLI packages (`@voidzero-dev/vite-plus-cli-<platform>`, via `packages/cli/publish-native-addons.ts`) and then `@voidzero-dev/vite-plus-core` and `vite-plus` to npm (`--tag latest`), creates the `vX.Y.Z` GitHub release (draft, with installer/binary assets, then undrafted). The generated body has only Published Packages and Installation sections.
+4. `Release`: publishes the NAPI bindings (`@voidzero-dev/vite-plus-<platform>`) and standalone CLI packages (`@voidzero-dev/vite-plus-cli-<platform>`, via `packages/cli/publish-native-addons.ts`), then `@voidzero-dev/vite-plus-core` and `vite-plus` to npm (`--tag latest`). Each dependency tier waits for npm propagation before publication advances. It then creates the `vX.Y.Z` GitHub release (draft, with installer/binary assets, then undrafted). The generated body has only Published Packages and Installation sections.
 5. `publish-docker`: multi-arch toolchain image to `ghcr.io/voidzero-dev/vite-plus`, after npm publish (the image installs vp from npm).
 6. `deploy-docs`: deploys the production docs after a stable release is published.
 7. `discord-notify`: announces to Discord after Docker publishing and docs deployment succeed (docs are skipped for prereleases).
 
-**A green `Release` job does not mean the packages are installable.** `pnpm publish` prints `✅ Published package <name>@X.Y.Z` as soon as the registry accepts the request, and the registry can then take tens of minutes to actually serve that version. This has shipped a broken release: `vite-plus@X.Y.Z` went live on `latest` with an exact dependency on `@voidzero-dev/vite-plus-core@X.Y.Z` that was invisible for about 35 minutes, so every `npm install vite-plus` failed with `ETARGET` and both `publish-docker` and `Deploy docs` failed on `ERR_PNPM_NO_MATCHING_VERSION`. The downstream job failures are the symptom, not the cause; do not re-run them until the registry has the package.
+**A successful publish command does not mean the packages are installable.** `pnpm publish` prints `✅ Published package <name>@X.Y.Z` as soon as the registry accepts the request, and the registry can then take tens of minutes to actually serve that version. This has shipped a broken release: `vite-plus@X.Y.Z` went live on `latest` with an exact dependency on `@voidzero-dev/vite-plus-core@X.Y.Z` that was invisible for about 35 minutes, so every `npm install vite-plus` failed with `ETARGET` and both `publish-docker` and `Deploy docs` failed on `ERR_PNPM_NO_MATCHING_VERSION`. The downstream job failures are the symptom, not the cause; do not re-run them until the registry has the package.
 
 Check visibility directly, not through `npm view`, which caches:
 
@@ -376,6 +379,8 @@ Both must report `True` before you trust the release. A stale `modified` timesta
 ```bash
 d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z --no-audit --no-fund
 ```
+
+The full package document can update before npm's separately cached installation metadata. The workflow's `.github/scripts/wait-for-npm-packages.ts` checks that installation metadata and the referenced tarball, then waits for settlement. Use that script to reproduce its availability check; local visibility does not prove the workflow runner sees the same state.
 
 ## 8. Post-release
 
@@ -413,6 +418,8 @@ d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z
    docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version
    ```
 
+   In a project installation, the CLI depends on core through the `vite` npm alias. Resolve `vite/package.json` from `vite-plus/package.json` when checking core's installed version. Check `@voidzero-dev/vite-plus-<platform>` for the installed NAPI binding; the standalone CLI package is separate.
+
    `vp upgrade` requires a standalone installation; `vp update` is not a substitute because it updates project dependencies. Resolve the intended binary and query its roots with `VP_DUMP_DIRS=1`; installations can use split XDG/platform roots, an explicit `VP_HOME`, or the legacy `~/.vite-plus` directory. Remove temporary overrides left by preview/control runs, while preserving the intended installation's configuration.
 
    If the user's installation points to `local-dev-*` or is managed by another tool, test an isolated copy of the previous published installation under an explicit `VP_HOME`. Repoint any absolute symlinks in the copy to the copied root before testing. Label the result as an isolated upgrade; preserve the development installation and the original control used for regression tests. Run the selected binary outside a project so a local CLI cannot take over:
@@ -438,6 +445,8 @@ d=$(mktemp -d); cd "$d" && npm init -y >/dev/null && npm install vite-plus@X.Y.Z
      -H "Accept: application/vnd.oci.image.index.v1+json" \
      "https://ghcr.io/v2/voidzero-dev/vite-plus/manifests/X.Y.Z" | head -1   # HTTP/2 200
    ```
+
+   Without Docker, package manifests can also be read from each architecture's published installer layer. Check the layer digest first. pnpm package files can be tar hardlinks into the package store; read their targets within the archive without extracting it.
 
 3. **Announce on Discord** (concise format). Keep it tight: every line is a single short phrase, no heading-plus-explanation sentences, the whole message around 20 lines. No PR links, no tables, no per-entry credits, no em dashes. Make the theme and highlights self-contained by naming the affected capability rather than using vague benefit-only wording. Use verbs that match the actual behavior, especially distinguishing guidance or suggestions from automatic actions. One emoji per line by theme (`:lock:` security, `:zap:` performance, `:sparkles:` DX, `:seedling:` scaffolding, `:hammer_and_wrench:` tooling, `:package:` deps). Use **Upstream Upgrades** for dependency/tool version bumps, not Highlights, and list only tools whose version actually changed. Leave the full Bundled Versions table in the linked release notes rather than repeating it in the announcement. A security fix caused by a dependency bump can still have a Highlight focused on the vulnerability, and that line must link the CVE/GHSA/advisory when one exists. A breaking change gets its own `:warning:` Highlight naming the old and new names and what the reader must update. Include **Also in this release** only when there are meaningful secondary user-facing items, and omit the whole section for a narrow hotfix.
 
@@ -483,7 +492,7 @@ After the release ships and announcements are approved or confirmed complete, re
 
 - [ ] `prepare_release` run for the target version; release PR open
 - [ ] `binding/index.cjs` synced on the release branch (step 2 commit message shape)
-- [ ] PR description written from the head branch data; every PR exactly once except deliberately omitted bot-noise PRs; breaking changes in their own section above Highlights; no em/en dashes; closing boilerplate intact
+- [ ] PR description written from the head branch data; every PR exactly once except documented omissions; breaking changes in their own section above Highlights; no em/en dashes; closing boilerplate intact
 - [ ] Dependency-upgrade PRs consolidated; vite-task bump expanded with upstream credits; security advisories linked
 - [ ] Smoke test offered to the release manager at both levels (local sweep and fork-PR CI), with the commit count stated and a recommendation to run it when that count is above 10; if accepted, forks synced to upstream first, preview build published, and the full ecosystem-ci catalog verified via `test-pkg-pr-new-migrate` (following TESTING.md), with every failure triaged and regressions ruled out against the previous release
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
