@@ -111,13 +111,11 @@ impl Resolve<RemoveArgs> for Yarn {
                 );
             }
 
-            if !args.recursive {
-                cmd.arg("workspaces").arg("foreach").arg("--all");
-                cmd.repeated("--include", args.filter.iter());
-            }
+            cmd.arg("workspaces").arg("foreach").arg("--all");
+            cmd.repeated("--include", args.filter.iter());
         }
         cmd.arg("remove")
-            .arg_if("--all", args.recursive)
+            .arg_if("--all", args.recursive && args.filter.is_empty())
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
         cmd.into()
@@ -505,7 +503,20 @@ mod tests {
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["remove", "--all", "lodash"]);
+        assert_eq!(
+            command.args,
+            vec![
+                "workspaces",
+                "foreach",
+                "--all",
+                "--include",
+                "app",
+                "--include",
+                "web",
+                "remove",
+                "lodash"
+            ]
+        );
     }
 
     #[test]
