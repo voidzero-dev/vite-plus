@@ -236,12 +236,15 @@ export function findVitestV5MergedConfigFiles(
   return merged;
 }
 
-interface BrowserTestScope {
+interface TestScope {
   root?: string;
   include?: string[];
   exclude?: string[];
   browser?: boolean;
+  globals?: boolean;
 }
+
+export type VitestV5TestMode = Pick<SourceOptions, 'browser' | 'globals'>;
 
 const DEFAULT_TEST_INCLUDE = ['**/*.{test,spec}.?(c|m)[jt]s?(x)'];
 
@@ -252,14 +255,14 @@ function staticPatterns(node: t.Node | undefined): string[] | undefined {
     : undefined;
 }
 
-/** Resolve only literal project ownership. A file shared by Node and browser
- * projects, or covered by dynamic config, needs review before a matcher rename. */
-export function resolveVitestV5BrowserModes(
+/** Resolve only literal project ownership. Unbound APIs are Vitest globals only
+ * when every applicable scope enables them. Explicit imports remain independent. */
+export function resolveVitestV5TestModes(
   sources: ReadonlyMap<string, string>,
   configFiles: ReadonlySet<string>,
   preserveV4: boolean,
-): Map<string, boolean | undefined> {
-  const scopes: BrowserTestScope[] = [];
+): Map<string, VitestV5TestMode> {
+  const scopes: TestScope[] = [];
 
   for (const file of configFiles) {
     let found = false;
@@ -268,7 +271,7 @@ export function resolveVitestV5BrowserModes(
       found = true;
       scopes.push({});
     };
-    const walk = (object: t.Node | undefined, base?: BrowserTestScope) => {
+    const walk = (object: t.Node | undefined, base?: TestScope) => {
       found = true;
       if (!staticObject(object)) {
         unknown();
@@ -310,11 +313,17 @@ export function resolveVitestV5BrowserModes(
           browserMode = enabled.value;
         }
       }
-      const scope: BrowserTestScope = {
+      const globals = test && objectProperty(test, 'globals')?.value;
+      const scope: TestScope = {
         root: directory,
         include: include ? staticPatterns(include) : (base?.include ?? DEFAULT_TEST_INCLUDE),
         exclude: exclude ? staticPatterns(exclude) : base?.exclude,
         browser: browserMode,
+        globals: globals
+          ? isBoolean(globals)
+            ? globals.value
+            : undefined
+          : (base?.globals ?? false),
       };
       // Inherited arrays can merge. Preserve all possible includes and avoid
       // assuming that an exclusion removes a file from both configurations.
@@ -369,10 +378,12 @@ export function resolveVitestV5BrowserModes(
           const declaration = node.declaration;
           if (declaration.type === 'CallExpression') {
             if (
-              !['defineConfig', 'defineProject'].includes(
+              ['defineConfig', 'defineProject'].includes(
                 importedName(editor, declaration.callee, CONFIG_SOURCES) ?? '',
               )
             ) {
+              walk(declaration.arguments[0]);
+            } else {
               unknown();
             }
             return;
@@ -397,15 +408,6 @@ export function resolveVitestV5BrowserModes(
             walk(declaration);
           }
         },
-        CallExpression(node) {
-          if (
-            ['defineConfig', 'defineProject'].includes(
-              importedName(editor, node.callee, CONFIG_SOURCES) ?? '',
-            )
-          ) {
-            walk(node.arguments[0]);
-          }
-        },
         AssignmentExpression(node) {
           if (
             node.left.type === 'MemberExpression' &&
@@ -417,10 +419,12 @@ export function resolveVitestV5BrowserModes(
           ) {
             if (node.right.type === 'CallExpression') {
               if (
-                !['defineConfig', 'defineProject'].includes(
+                ['defineConfig', 'defineProject'].includes(
                   importedName(editor, node.right.callee, CONFIG_SOURCES) ?? '',
                 )
               ) {
+                walk(node.right.arguments[0]);
+              } else {
                 unknown();
               }
             } else {
@@ -452,8 +456,14 @@ export function resolveVitestV5BrowserModes(
           !scope.exclude?.some((pattern) => minimatch(relative, pattern, { dot: true }))
         );
       });
-      const modes = new Set(matching.map((scope) => scope.browser));
-      return [file, modes.size === 1 ? matching[0].browser : undefined];
+      const browserModes = new Set(matching.map((scope) => scope.browser));
+      return [
+        file,
+        {
+          browser: browserModes.size === 1 ? matching[0].browser : undefined,
+          globals: matching.length > 0 && matching.every((scope) => scope.globals === true),
+        },
+      ];
     }),
   );
 }
@@ -748,6 +758,21 @@ export function migrateVitestV5Config(
       return;
     }
     visited.add(object);
+    const extendsValue = objectProperty(object, 'extends');
+    if (
+      extendsValue &&
+      !isBoolean(extendsValue.value) &&
+      (options.preserveV4 || options.reviewV4)
+    ) {
+      // A string refers to a different base, not parentTest. Until that base's
+      // effective options are known, child defaults can override explicit values.
+      editor.report(
+        extendsValue,
+        'project-inheritance',
+        'Review this external or dynamic project base before adding v4 compatibility defaults. Inherited project settings were left unchanged.',
+      );
+      return;
+    }
     const test = objectProperty(object, 'test');
     if (!test) {
       if (preserveDefaults && !inherits) {

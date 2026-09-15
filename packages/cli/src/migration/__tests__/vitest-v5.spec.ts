@@ -54,6 +54,126 @@ function source(input: string, options = v4) {
 }
 
 describe('Vitest v5 config compatibility', () => {
+  it.each([`{ name: 'unit' }`, `{ name: 'unit', browser: { enabled: true } }`])(
+    'preserves defaults inherited from an external base: %s',
+    (testOptions) => {
+      const child = `{ extends: './base.mjs', test: ${testOptions} }`;
+      const base = `export default { test: { clearMocks: true, browser: { locators: { exact: true } } } };`;
+      const root = project({
+        'base.mjs': base,
+        'vitest.config.mjs': `export default { test: { projects: [${child}] } };`,
+      });
+      const plan = planProject(root);
+      expect(plan.findings).toContainEqual(
+        expect.objectContaining({ code: 'project-inheritance', severity: 'review' }),
+      );
+      applyVitestV5Migration(plan);
+      finishVitestV5Migration(plan);
+      expect(fs.readFileSync(path.join(root, 'base.mjs'), 'utf8')).toBe(base);
+      expect(fs.readFileSync(path.join(root, 'vitest.config.mjs'), 'utf8')).toContain(child);
+      // A completed migration must retain this unresolved inheritance review.
+      const repeated = planProject(root);
+      expect(repeated.changes).toEqual([]);
+      expect(repeated.findings).toContainEqual(
+        expect.objectContaining({ code: 'project-inheritance' }),
+      );
+    },
+  );
+
+  it.each([`'./missing.mjs'`, `baseConfig`])(
+    'preserves unresolved project inheritance: %s',
+    (base) => {
+      const child = `{ extends: ${base} }`;
+      const result = config(`export default { test: { projects: [${child}] } };`);
+      expect(result.content).toContain(child);
+      expect(result.findings).toContainEqual(
+        expect.objectContaining({ code: 'project-inheritance' }),
+      );
+    },
+  );
+
+  it('limits Vitest globals to included files in a mixed Jest/Vitest package', () => {
+    const input = `test('throws', () => { expect(() => { throw new Error('boom'); }).toThrow(''); });`;
+    const root = project({
+      'package.json': JSON.stringify({ devDependencies: { vitest: '4.1.11', jest: '29.7.0' } }),
+      'vitest.config.mjs': `export default { test: { globals: true, include: ['unit/**/*.test.ts', 'unit/custom.ts'], exclude: ['unit/excluded.test.ts'] } };`,
+      'jest.config.cjs': `module.exports = { testMatch: ['<rootDir>/integration/**/*.test.ts'] };`,
+      'unit/example.test.ts': input,
+      'unit/custom.ts': input,
+      'unit/excluded.test.ts': input,
+      'integration/other.test.ts': input,
+      'helpers/imported.test.ts': `import { test, expect } from 'vitest';\n${input}`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    finishVitestV5Migration(plan);
+    for (const name of ['unit/example.test.ts', 'unit/custom.ts', 'helpers/imported.test.ts']) {
+      expect(fs.readFileSync(path.join(root, name), 'utf8')).toContain('toThrow(/^$/)');
+    }
+    for (const name of ['unit/excluded.test.ts', 'integration/other.test.ts']) {
+      expect(fs.readFileSync(path.join(root, name), 'utf8')).toBe(input);
+    }
+    expect(planProject(root).changes).toEqual([]);
+  });
+
+  it.each([
+    `import { defineConfig } from 'vitest/config'; const unused = defineConfig({ test: { globals: true } }); export default { test: { include: ['other.test.ts'] } };`,
+    `export default { test: { include: ['unit.test.ts'] } }; // globals: true`,
+    `export default { test: { globals: enabledAtRuntime } };`,
+    `export default { test: { globals: true, include: patterns } };`,
+    `export default { test: { globals: true, exclude: patterns } };`,
+    `export default () => ({ test: { globals: true } });`,
+    `export default { test: { globals: true, projects: [{ test: { include: ['unit.test.ts'] } }] } };`,
+    `export default { test: { projects: [{ test: { globals: true } }, { test: { globals: false } }] } };`,
+  ])('preserves unbound APIs without certain Vitest global ownership: %s', (configSource) => {
+    const input = `test.sequential('x', () => expect(() => {}).toThrow(''));`;
+    const root = project({ 'vitest.config.mjs': configSource, 'unit.test.ts': input });
+    expect(
+      planProject(root).changes.some(({ file }) => file === path.join(root, 'unit.test.ts')),
+    ).toBe(false);
+  });
+
+  it.each([
+    `import { defineConfig } from 'vitest/config'; export default defineConfig({ test: { globals: true, include: ['unit/**/*.test.ts'] } });`,
+    `import { defineConfig } from 'vitest/config'; const config = defineConfig({ test: { globals: true, include: ['unit/**/*.test.ts'] } }); export default config;`,
+    `import { defineConfig } from 'vitest/config'; module.exports = defineConfig({ test: { globals: true, include: ['unit/**/*.test.ts'] } });`,
+    `export default { test: { projects: [{ test: { globals: true, include: ['unit/**/*.test.ts'] } }, { test: { globals: false, include: ['integration/**/*.test.ts'] } }] } };`,
+    `export default { test: { globals: true, include: ['unit/**/*.test.ts'], projects: [{ extends: true, test: {} }, { extends: false, test: { include: ['integration/**/*.test.ts'] } }] } };`,
+    `export default { root: './unit', test: { globals: true } };`,
+  ])('resolves global ownership from inline projects and roots: %s', (configSource) => {
+    const input = `expect(() => {}).toThrow('');`;
+    const root = project({
+      'vitest.config.mjs': configSource,
+      'unit/example.test.ts': input,
+      'integration/other.test.ts': input,
+    });
+    const plan = planProject(root);
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'unit/example.test.ts'))?.after,
+    ).toContain('toThrow(/^$/)');
+    expect(
+      plan.changes.some(({ file }) => file === path.join(root, 'integration/other.test.ts')),
+    ).toBe(false);
+  });
+
+  it('resolves global ownership from a referenced project config', () => {
+    const input = `expect(() => {}).toThrow('');`;
+    const root = project({
+      'vitest.config.mjs': `export default { test: { projects: ['./unit/project.mjs'] } };`,
+      'unit/project.mjs': `export default { test: { globals: true } };`,
+      'unit/example.test.ts': input,
+      'integration/other.test.ts': input,
+    });
+    const plan = planProject(root);
+    expect(
+      plan.changes.find(({ file }) => file === path.join(root, 'unit/example.test.ts'))?.after,
+    ).toContain('toThrow(/^$/)');
+    expect(
+      plan.changes.some(({ file }) => file === path.join(root, 'integration/other.test.ts')),
+    ).toBe(false);
+  });
+
   it.each(['vite', 'vite-plus'])(
     'discovers custom test configs that import helpers from %s',
     (module) => {
@@ -528,6 +648,37 @@ describe('Vitest v5 source migration', () => {
     );
     expect(result.findings).toEqual([]);
     expect(source(result.content).content).toBe(result.content);
+  });
+
+  it.each(['test', 'it'])('preserves the numeric timeout of %s.sequential', (api) => {
+    for (const callback of ['async () => {}', 'function () {}']) {
+      const input = `import { ${api} } from 'vitest'; ${api}.sequential('slow', ${callback}, 15_000);`;
+      const result = source(input);
+      expect(result.content).toBe(
+        `import { ${api} } from 'vitest'; ${api}('slow', { concurrent: false, timeout: 15_000 }, ${callback});`,
+      );
+      expect(result.findings).toEqual([]);
+      expect(source(result.content).content).toBe(result.content);
+      const calls: unknown[][] = [];
+      runInNewContext(result.content.replace(/^import[^;]+;/, ''), {
+        [api]: (...args: unknown[]) => calls.push(args),
+      });
+      expect(calls[0]).toHaveLength(3);
+      expect(calls[0][1]).toEqual({ concurrent: false, timeout: 15000 });
+    }
+  });
+
+  it.each([
+    `test.sequential('slow', async () => {}, timeout);`,
+    `it.sequential('slow', async () => {}, { timeout: 15000 });`,
+    `test.sequential('slow', async () => {}, ...options);`,
+    `it.sequential('slow', async () => {}, 15000, extra);`,
+    `test.sequential('slow', async () => {}, /* keep timeout comment */ 15000);`,
+  ])('preserves sequential calls with unresolved trailing arguments: %s', (call) => {
+    const input = `import { test, it } from 'vitest'; ${call}`;
+    const result = source(input);
+    expect(result.content).toBe(input);
+    expect(result.findings).toContainEqual(expect.objectContaining({ code: 'sequential-api' }));
   });
 
   it.each([
