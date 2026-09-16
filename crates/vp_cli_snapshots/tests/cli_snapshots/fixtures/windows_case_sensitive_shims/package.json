@@ -1,0 +1,8 @@
+{
+  "name": "case-sensitive-shims",
+  "private": true,
+  "packageManager": "pnpm@12.4.1",
+  "scripts": {
+    "probe": "vp run --filter @fixture/app probe"
+  }
+}

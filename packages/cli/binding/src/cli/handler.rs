@@ -42,6 +42,22 @@ impl CommandHandler for VitePlusCommandHandler {
         // `vpr build`, etc. are synthesized in-session rather than spawning a new CLI process.
         let program = command.program.as_str();
         if program != "vp" && program != "vpr" {
+            // Vite Task resolves verbatim commands itself. Supply the actual
+            // filename before its which lookup, which otherwise misses .cmd
+            // shims in case-sensitive Windows directories with .CMD in PATHEXT.
+            #[cfg(windows)]
+            if let Ok(path) = vp_command::resolve_bin(
+                program,
+                command
+                    .envs
+                    .iter()
+                    .find(|(key, _)| super::is_path_env_key(key))
+                    .map(|(_, value)| value.as_ref()),
+                &command.cwd,
+            ) && let Some(path) = path.as_path().to_str()
+            {
+                command.program = path.into();
+            }
             return Ok(HandledCommand::Verbatim);
         }
 
@@ -108,6 +124,46 @@ impl CommandHandler for VitePlusCommandHandler {
                     command.to_synthetic_plan_request(UserCacheConfig::disabled()),
                 ))
             }
+        }
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use std::{ffi::OsStr, sync::Arc};
+
+    use rustc_hash::FxHashMap;
+    use vt_path::AbsolutePathBuf;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn verbatim_commands_use_the_task_path_with_any_key_casing() {
+        let temp = tempfile::tempdir().unwrap();
+        let cwd: Arc<AbsolutePath> =
+            AbsolutePathBuf::new(temp.path().canonicalize().unwrap()).unwrap().into();
+        let shim = cwd.as_path().join("task-only.cmd");
+        std::fs::write(&shim, "@echo off\r\n").unwrap();
+        let mut handler = VitePlusCommandHandler::new(SubcommandResolver::new(cwd.clone()));
+        for key in ["PATH", "Path", "path"] {
+            let envs = Arc::new(FxHashMap::from_iter([(
+                Arc::from(OsStr::new(key)),
+                Arc::from(cwd.as_path().as_os_str()),
+            )]));
+            let mut command = ScriptCommand {
+                program: "task-only.CMD".into(),
+                args: Arc::from([Str::from("argument with spaces")]),
+                envs: envs.clone(),
+                cwd: cwd.clone(),
+            };
+            assert!(matches!(
+                handler.handle_command(&mut command).await.unwrap(),
+                HandledCommand::Verbatim
+            ));
+            assert_eq!(command.program.as_str(), shim.to_str().unwrap());
+            assert_eq!(command.args.as_ref(), [Str::from("argument with spaces")]);
+            assert!(Arc::ptr_eq(&command.envs, &envs));
+            assert!(Arc::ptr_eq(&command.cwd, &cwd));
         }
     }
 }

@@ -1,0 +1,7 @@
+{
+  "name": "@fixture/app",
+  "private": true,
+  "scripts": {
+    "probe": "astro --version"
+  }
+}

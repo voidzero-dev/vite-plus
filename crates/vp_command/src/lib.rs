@@ -20,6 +20,8 @@ use vp_error::Error;
 use vt_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
 mod ps1_shim;
+#[cfg(any(windows, test))]
+mod windows_resolve;
 
 /// Result of running a command with fspy tracking.
 #[derive(Debug)]
@@ -30,8 +32,8 @@ pub struct FspyCommandResult {
     pub path_accesses: HashMap<RelativePathBuf, AccessMode>,
 }
 
-/// Resolve a binary name to a full path using the `which` crate.
-/// Handles PATHEXT (`.cmd`/`.bat`) resolution natively on Windows.
+/// Resolve a binary name to a full path, including PATHEXT on Windows.
+/// Windows filename matching also works in case-sensitive directories.
 ///
 /// If `path_env` is `None`, searches the process's current `PATH`.
 pub fn resolve_bin(
@@ -46,6 +48,10 @@ pub fn resolve_bin(
         current_path = std::env::var_os("PATH").unwrap_or_default();
         &current_path
     };
+    #[cfg(windows)]
+    let path = windows_resolve::resolve(bin_name, path_env, cwd.as_ref())
+        .ok_or_else(|| Error::CannotFindBinaryPath(bin_name.into()))?;
+    #[cfg(not(windows))]
     let path = which::which_in(bin_name, Some(path_env), cwd.as_ref())
         .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
     AbsolutePathBuf::new(path).ok_or_else(|| Error::CannotFindBinaryPath(bin_name.into()))
