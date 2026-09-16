@@ -7,11 +7,6 @@ migration should rewrite imports to vite-plus
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
-
-vitest.config.ts
-  14:10 REVIEW [global-api-ownership] Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.
-    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied, 1 file had imports rewritten

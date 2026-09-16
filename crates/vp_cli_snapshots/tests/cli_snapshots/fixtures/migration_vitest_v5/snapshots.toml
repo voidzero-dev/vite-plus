@@ -12,6 +12,16 @@ steps = [
 ]
 
 [[case]]
+name = "review_only_rerun"
+vp = "global"
+comment = "Show a non-blocking review once in the final summary, and retain it on a no-op rerun without reconciling dependencies."
+steps = [
+  { argv = ["vpt", "write-file", "example.test.ts", "import { expect, test } from 'vitest';\ntest('poll', async () => { await expect.poll(() => 42).toBe(42); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "configless_defaults"
 vp = "global"
 comment = "Migrate a configless workspace member's source APIs without a review or a new compatibility config."
@@ -277,8 +287,10 @@ steps = [
 [[case]]
 name = "removed_api_preflight"
 vp = "global"
+comment = "Show blockers and accompanying reviews once before stopping without dependency changes."
 steps = [
   { argv = ["vpt", "write-file", "custom-runner.ts", "import { startTests } from '@vitest/runner';\nstartTests([]);\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "review.test.ts", "import { expect } from 'vitest';\nawait expect.poll(() => 42).toBe(42);\n"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
   ["vpt", "print-file", "package.json"],
 ]

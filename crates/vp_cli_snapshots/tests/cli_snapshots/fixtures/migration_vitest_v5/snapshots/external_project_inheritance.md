@@ -15,11 +15,6 @@ Preserve external clearMocks and locator settings, and include the unresolved in
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
-
-vite.config.ts
-  1:39 REVIEW [project-inheritance] Review this external or dynamic project base before adding v4 compatibility defaults. Inherited project settings were left unchanged.
-    Docs: https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 file had imports rewritten

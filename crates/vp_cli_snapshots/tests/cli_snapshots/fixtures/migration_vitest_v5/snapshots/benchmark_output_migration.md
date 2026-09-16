@@ -25,15 +25,6 @@ describe('\''utilities'\'', () => {
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 2 review items
-
-package.json
-  10:1 REVIEW [benchmark-output] Review consumers of this benchmark JSON file: the v5 JSON reporter includes test results and per-test benchmarks, not the v4 baseline format.
-    Docs: https://vitest.dev/guide/migration/#benchmarking-api-rewrite
-
-vite.config.ts
-  1:121 REVIEW [benchmark-output] Review consumers of this benchmark JSON file: the v5 JSON reporter includes test results and per-test benchmarks, not the v4 baseline format.
-    Docs: https://vitest.dev/guide/migration/#benchmarking-api-rewrite
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 files had imports rewritten
