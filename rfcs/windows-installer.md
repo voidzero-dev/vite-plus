@@ -119,7 +119,7 @@ vp_installer (binary, ~3-5 MB)
   ├── clap (CLI parsing)
   ├── tokio (async runtime)
   ├── indicatif (progress bars)
-  └── owo-colors (terminal colors)
+  └── console (terminal colors)
 
 vp_global_cli (existing)
   ├── vp_setup (replaces inline upgrade code)

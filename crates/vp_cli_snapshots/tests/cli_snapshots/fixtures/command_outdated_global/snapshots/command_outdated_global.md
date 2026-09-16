@@ -61,7 +61,7 @@ should warn and skip when the recorded version spec no longer resolves
 
 ```
 All global packages are up to date.
-[1m[33mwarn:[39m[0m npm view failed for testnpm2@no-such-tag: npm error code E404; skipping
+warn: npm view failed for testnpm2@no-such-tag: npm error code E404; skipping
 ```
 
 ## `vpt json-edit $VP_HOME/packages/testnpm2.json versionSpec null`
@@ -106,8 +106,8 @@ should override a recorded version spec with --latest
 ## `vp update -g --latest`
 
 ```
-[1m[94minfo:[39m[0m Updating 1 global package with Node.js <version>
-[32m✓[39m Updated [1mtestnpm2[0m to [1m1.0.1[0m
+info: Updating 1 global package with Node.js <version>
+✓ Updated testnpm2 to 1.0.1
 ```
 
 ## `vpt grep-file $VP_HOME/packages/testnpm2.json versionSpec`
@@ -168,7 +168,7 @@ should not persist an explicit spec that fails to resolve
 
 ```
 All global packages are up to date.
-[1m[33mwarn:[39m[0m npm view failed for testnpm2@no-such-tag: npm error code E404; skipping
+warn: npm view failed for testnpm2@no-such-tag: npm error code E404; skipping
 ```
 
 ## `vpt grep-file $VP_HOME/packages/testnpm2.json 'versionSpec": "1.0.1'`

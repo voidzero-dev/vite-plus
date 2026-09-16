@@ -134,5 +134,5 @@ the note still reaches piped output, such as an AI agent capturing the command; 
 ```
 Found 0 warnings and 0 errors.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
-[1m[2mnote:[0m[0m You are running [94m`vp lint`[39m as a Vite+ built-in command. If you meant to run the lint npm script, use [94m`vpr lint`[39m instead.
+note: You are running `vp lint` as a Vite+ built-in command. If you meant to run the lint npm script, use `vpr lint` instead.
 ```

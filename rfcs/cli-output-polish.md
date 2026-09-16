@@ -54,7 +54,7 @@ Neither identifies the experience as "Vite+". Users who installed `vite-plus` se
 
 | Layer              | Library                 |
 | ------------------ | ----------------------- |
-| Rust (global CLI)  | `owo_colors`            |
+| Rust (global CLI)  | `console`               |
 | JS (vite-plus CLI) | `node:util styleText()` |
 | vite               | `picocolors`            |
 
@@ -226,7 +226,7 @@ A full audit of vite source for user-visible "vite" strings:
 Add formatting functions to a shared location. This could be a new `vite_output` crate or a module within an existing shared crate.
 
 ```rust
-use owo_colors::OwoColorize;
+use console::style;
 
 // Standard status symbols
 pub const CHECK: &str = "\u{2713}";   // ✓ — success
@@ -236,27 +236,27 @@ pub const ARROW: &str = "\u{2192}";   // → — transitions
 
 /// Print an info message to stderr.
 pub fn info(msg: &str) {
-    eprintln!("{} {}", "info:".bright_blue().bold(), msg);
+    eprintln!("{} {}", style("info:").for_stderr().blue().bright().bold(), msg);
 }
 
 /// Print a warning message to stderr.
 pub fn warn(msg: &str) {
-    eprintln!("{} {}", "warn:".yellow().bold(), msg);
+    eprintln!("{} {}", style("warn:").for_stderr().yellow().bold(), msg);
 }
 
 /// Print an error message to stderr.
 pub fn error(msg: &str) {
-    eprintln!("{} {}", "error:".red().bold(), msg);
+    eprintln!("{} {}", style("error:").for_stderr().red().bold(), msg);
 }
 
 /// Print a note message to stderr (supplementary info).
 pub fn note(msg: &str) {
-    eprintln!("{} {}", "note:".dimmed().bold(), msg);
+    eprintln!("{} {}", style("note:").for_stderr().dim().bold(), msg);
 }
 
 /// Print a success line with checkmark to stdout.
 pub fn success(msg: &str) {
-    println!("{} {}", CHECK.green(), msg);
+    println!("{} {}", style(CHECK).green(), msg);
 }
 ```
 
@@ -279,20 +279,20 @@ Adopt a single set everywhere:
 
 Commands to update (representative, not exhaustive):
 
-| File                 | Current                               | New                                |
-| -------------------- | ------------------------------------- | ---------------------------------- |
-| `upgrade/mod.rs:58`  | `eprintln!("info: checking...")`      | `output::info("checking...")`      |
-| `upgrade/mod.rs:69`  | `eprintln!("info: found...")`         | `output::info("found...")`         |
-| `upgrade/mod.rs:173` | `eprintln!("warn: Shim refresh...")`  | `output::warn("Shim refresh...")`  |
-| `upgrade/mod.rs:75`  | `"\u{2714}".green()`                  | `output::CHECK.green()`            |
-| `main.rs:75`         | `eprintln!("Error: Failed...")`       | `output::error("Failed...")`       |
-| `main.rs:121`        | `eprintln!("Error: {e}")`             | `output::error(...)`               |
-| `vpx.rs:72`          | `eprintln!("Error: vpx requires...")` | `output::error("vpx requires...")` |
-| `which.rs:40`        | `"error:".red().bold()`               | `output::error(...)`               |
-| `pin.rs:142`         | `println!("  Note: Version...")`      | `output::note("Version...")`       |
-| `pin.rs:155`         | `eprintln!("Warning: Failed...")`     | `output::warn("Failed...")`        |
-| `dlx.rs:167`         | `eprintln!("Warning: yarn dlx...")`   | `output::warn("yarn dlx...")`      |
-| `dlx.rs:184`         | `eprintln!("Note: yarn@1...")`        | `output::note("yarn@1...")`        |
+| File                 | Current                                     | New                                |
+| -------------------- | ------------------------------------------- | ---------------------------------- |
+| `upgrade/mod.rs:58`  | `eprintln!("info: checking...")`            | `output::info("checking...")`      |
+| `upgrade/mod.rs:69`  | `eprintln!("info: found...")`               | `output::info("found...")`         |
+| `upgrade/mod.rs:173` | `eprintln!("warn: Shim refresh...")`        | `output::warn("Shim refresh...")`  |
+| `upgrade/mod.rs:75`  | `"\u{2714}".green()`                        | `style(output::CHECK).green()`     |
+| `main.rs:75`         | `eprintln!("Error: Failed...")`             | `output::error("Failed...")`       |
+| `main.rs:121`        | `eprintln!("Error: {e}")`                   | `output::error(...)`               |
+| `vpx.rs:72`          | `eprintln!("Error: vpx requires...")`       | `output::error("vpx requires...")` |
+| `which.rs:40`        | `style("error:").for_stderr().red().bold()` | `output::error(...)`               |
+| `pin.rs:142`         | `println!("  Note: Version...")`            | `output::note("Version...")`       |
+| `pin.rs:155`         | `eprintln!("Warning: Failed...")`           | `output::warn("Failed...")`        |
+| `dlx.rs:167`         | `eprintln!("Warning: yarn dlx...")`         | `output::warn("yarn dlx...")`      |
+| `dlx.rs:184`         | `eprintln!("Note: yarn@1...")`              | `output::note("yarn@1...")`        |
 
 The `vite_install` crate also has `Warning:` and `Note:` messages across multiple command files (`list.rs`, `why.rs`, `outdated.rs`, `pack.rs`, `publish.rs`, `cache.rs`, `config.rs`, `audit.rs`, `dlx.rs`, `unlink.rs`, `update.rs`, `rebuild.rs`, `whoami.rs`). All should be migrated.
 
@@ -395,11 +395,11 @@ Migrate JS-side code (`migration/bin.ts`, `create/bin.ts`) to use these shared f
 
 **Rationale:** Parsing or wrapping sub-tool stdout/stderr is fragile and can break ANSI colors, progress indicators, and interactive output. A single leading line is non-intrusive. Long-term, these sub-tools should be directly modified once their source is cloned.
 
-### D6: Keep each layer's color library
+### D6: Use each layer's color detection
 
-**Decision:** Rust keeps `owo_colors`, JS keeps `node:util styleText()`, vite keeps `picocolors`.
+**Decision:** Rust uses `console`, JS uses `node:util styleText()`, and vite uses `picocolors`.
 
-**Rationale:** Changing color libraries is high-risk, low-reward. The shared formatting module abstracts the library choice so the output convention is consistent regardless of the underlying library.
+**Rationale:** These libraries already handle terminal color preferences such as `NO_COLOR`. Rust output uses the same library as the installer, prompts, and progress bars, with stream-specific detection for stdout and stderr. Vite+ relies on this detection rather than maintaining a separate color policy.
 
 ## Scope of vite Changes
 

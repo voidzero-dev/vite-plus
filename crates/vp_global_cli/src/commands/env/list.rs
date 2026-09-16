@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, process::ExitStatus};
 
-use owo_colors::OwoColorize;
+use console::style;
 use serde::Serialize;
 use vp_pm_cli::{PackageManagerType, package_manager_bin_path, package_manager_install_dir};
 use vt_path::AbsolutePathBuf;
@@ -175,14 +175,14 @@ fn print_section(title: &str, versions: &[InstalledVersionJson], node: bool) {
         let suffix = if markers.is_empty() {
             String::new()
         } else if colorize {
-            format!(" {}", markers.join(" ").dimmed())
+            format!(" {}", style(&markers.join(" ")).dim())
         } else {
             format!(" {}", markers.join(" "))
         };
         let display = if node { format!("v{}", version.version) } else { version.version.clone() };
         let line = format!("* {display}");
         if version.current && colorize {
-            println!("  {}{suffix}", line.bright_blue());
+            println!("  {}{suffix}", style(&line).blue().bright());
         } else {
             println!("  {line}{suffix}");
         }
@@ -190,5 +190,5 @@ fn print_section(title: &str, versions: &[InstalledVersionJson], node: bool) {
 }
 
 pub(super) fn use_color() -> bool {
-    vp_shared::is_stdout_terminal() && std::env::var_os("NO_COLOR").is_none()
+    console::colors_enabled()
 }

@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, process::ExitStatus};
 
+use console::style;
 use futures::future::try_join_all;
-use owo_colors::OwoColorize;
 use serde::Serialize;
 use vp_js_runtime::{LtsInfo, NodeProvider, NodeVersionEntry};
 use vp_pm_cli::{fetch_package_manager_versions, resolve_package_manager_version};
@@ -178,7 +178,7 @@ pub async fn execute(
 
 fn print_node_versions(versions: &[NodeVersionJson]) {
     if versions.is_empty() {
-        eprintln!("  {}", "No versions were found!".red());
+        eprintln!("  {}", style("No versions were found!").for_stderr().red());
         return;
     }
 
@@ -224,18 +224,18 @@ fn format_remote_version(
 
     if colorize {
         let display = if current {
-            display.bright_blue().to_string()
+            style(&display).blue().bright().to_string()
         } else if installed {
-            display.green().to_string()
+            style(&display).green().to_string()
         } else {
             display.to_string()
         };
         let annotation = if annotation.is_empty() {
             String::new()
         } else {
-            annotation.bright_blue().to_string()
+            style(&annotation).blue().bright().to_string()
         };
-        let labels = if labels.is_empty() { labels } else { labels.dimmed().to_string() };
+        let labels = if labels.is_empty() { labels } else { style(&labels).dim().to_string() };
         format!("{display}{annotation}{labels}")
     } else {
         // Preserve installed state in redirected output, where color is unavailable.

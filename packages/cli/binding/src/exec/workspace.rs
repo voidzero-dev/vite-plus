@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, process::Stdio, sync::Arc};
 
-use owo_colors::OwoColorize;
+use console::style;
 use petgraph::prelude::DiGraphMap;
 use vp_error::Error;
 use vp_shared::{PrependOptions, ToolPathEnv};
@@ -233,9 +233,9 @@ pub(super) async fn execute_exec_workspace(
             ) {
                 Ok(cmd) => cmd,
                 Err(Error::CannotFindBinaryPath(_)) if single_package => {
-                    let command = args.command[0].bright_blue().to_string();
-                    let vp_install = "`vp install`".bright_blue().to_string();
-                    let vpx = "`vpx`".bright_blue().to_string();
+                    let command = style(&args.command[0]).for_stderr().blue().bright().to_string();
+                    let vp_install = style("`vp install`").for_stderr().blue().bright().to_string();
+                    let vpx = style("`vpx`").for_stderr().blue().bright().to_string();
                     vp_shared::output::error(&vt_str::format!(
                         "Command '{}' not found in node_modules/.bin\n\n\
                          Run {} to install dependencies, or use {} for invoking remote commands.",

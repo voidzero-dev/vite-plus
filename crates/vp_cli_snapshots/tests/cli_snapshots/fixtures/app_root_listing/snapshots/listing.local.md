@@ -9,8 +9,8 @@ root (rfcs/cwd-flag.md).
 **Exit code:** 1
 
 ```
-[1m[2mnote:[0m[0m You are running [94m`vp build`[39m as a Vite+ built-in command. If you meant to run the build npm script, use [94m`vpr build`[39m instead.
-[1m[31merror:[39m[0m `vp build` at the workspace root needs a target package.
+note: You are running `vp build` as a Vite+ built-in command. If you meant to run the build npm script, use `vpr build` instead.
+error: `vp build` at the workspace root needs a target package.
 
   Packages in this workspace:
     admin             apps/admin
@@ -29,7 +29,7 @@ dev at the root no longer starts a server against the root
 **Exit code:** 1
 
 ```
-[1m[31merror:[39m[0m `vp dev` at the workspace root needs a target package.
+error: `vp dev` at the workspace root needs a target package.
 
   Packages in this workspace:
     admin             apps/admin

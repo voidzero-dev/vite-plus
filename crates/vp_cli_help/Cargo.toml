@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 clap = { workspace = true }
-owo-colors = { workspace = true }
+console = { workspace = true }
 terminal_size = { workspace = true }
 vp_shared = { workspace = true }
 
