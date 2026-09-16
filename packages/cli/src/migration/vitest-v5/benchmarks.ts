@@ -1,6 +1,13 @@
 import type * as t from '@oxc-project/types';
 
-import { SourceEditor, isString, memberName, propertyName, testApiName } from './ast.ts';
+import {
+  SourceEditor,
+  isImportMetaVitest,
+  isString,
+  memberName,
+  propertyName,
+  testApiName,
+} from './ast.ts';
 
 interface BenchmarkCall {
   call: t.CallExpression;
@@ -12,8 +19,13 @@ interface BenchmarkCall {
 export function migrateBenchmarks(
   editor: SourceEditor,
   globals = false,
-): { imports: Set<t.ImportSpecifier>; calls: Set<t.CallExpression> } {
+): {
+  imports: Set<t.ImportSpecifier>;
+  bindings: Set<t.BindingProperty>;
+  calls: Set<t.CallExpression>;
+} {
   const imports = new Set<t.ImportSpecifier>();
+  const bindings = new Set<t.BindingProperty>();
   const calls = new Set<t.CallExpression>();
   const benchIdentifiers: t.Span[] = [];
   let fixtureAlias: string | undefined;
@@ -165,7 +177,47 @@ export function migrateBenchmarks(
     editor.edit(callback.end, callback.end, ').run(); }');
   }
 
+  function unsupportedInSource(node: t.Node) {
+    editor.report(
+      node,
+      'benchmark-api',
+      'Migrate this import.meta.vitest bench reference manually: automatic migration requires direct calls with locally resolved zero-argument callbacks and no benchmark options or escaped references. Keep the import.meta.vitest guard.',
+      'block',
+    );
+  }
+
   editor.visit({
+    VariableDeclarator(node) {
+      if (node.id.type !== 'ObjectPattern' || !isImportMetaVitest(node.init)) {
+        return;
+      }
+      for (const property of node.id.properties) {
+        if (property.type !== 'Property' || propertyName(property.key) !== 'bench') {
+          continue;
+        }
+        const binding = editor.binding(property.value);
+        const registrations = binding?.references.map(directCall);
+        if (
+          property.computed ||
+          node.id.typeAnnotation ||
+          !binding?.constant ||
+          node.id.properties.some((prop) => prop.type === 'RestElement') ||
+          !registrations ||
+          registrations.some((registration) => !registration)
+        ) {
+          unsupportedInSource(property);
+          continue;
+        }
+        // Retarget the binding in place: importing test at module scope would
+        // change production behavior when import.meta.vitest is undefined.
+        const test = editor.uniqueName('test', true);
+        editor.replace(property, test === 'test' ? 'test' : `test: ${test}`);
+        bindings.add(property);
+        for (const registration of registrations) {
+          rewrite(registration!, test);
+        }
+      }
+    },
     ImportDeclaration(node) {
       if (!['vitest', 'vite-plus/test'].includes(node.source.value) || node.importKind === 'type') {
         return;
@@ -206,14 +258,17 @@ export function migrateBenchmarks(
       }
     },
     MemberExpression(node) {
-      if (testApiName(editor, node, globals) !== 'bench') {
+      const inSource = isImportMetaVitest(node.object) && memberName(node) === 'bench';
+      if (!inSource && testApiName(editor, node, globals) !== 'bench') {
         return;
       }
-      const registration = directCall(node);
-      if (registration && node.object.type === 'Identifier') {
+      const registration = !node.optional && directCall(node);
+      if (registration && (inSource || node.object.type === 'Identifier')) {
         rewrite(registration, `${editor.text(node.object)}.test`);
+      } else if (inSource) {
+        unsupportedInSource(node);
       }
     },
   });
-  return { imports, calls };
+  return { imports, bindings, calls };
 }

@@ -43,7 +43,9 @@ interface TestScope {
   globals?: boolean;
 }
 
-export type VitestV5TestMode = Pick<SourceOptions, 'browser' | 'globals' | 'reviewGlobals'>;
+export type VitestV5TestMode = Pick<SourceOptions, 'browser' | 'globals' | 'reviewGlobals'> & {
+  benchmark?: boolean;
+};
 
 const DEFAULT_TEST_INCLUDE = ['**/*.{test,spec}.?(c|m)[jt]s?(x)'];
 const DEFAULT_BENCHMARK_INCLUDE = ['**/*.{bench,benchmark}.?(c|m)[jt]s?(x)'];
@@ -454,6 +456,7 @@ export function resolveVitestV5TestModes(
   const modes = new Map<string, VitestV5TestMode>(
     [...sources.keys()].map((file) => {
       const matching: Array<{ scope: TestScope; certain: boolean }> = [];
+      let benchmarkFile = false;
       for (const scope of scopes) {
         // Setup files execute in this project regardless of include/exclude.
         const setup = scope.setupFiles?.includes(file);
@@ -479,6 +482,7 @@ export function resolveVitestV5TestModes(
               matches(file, discoveryRoot, pattern),
             ) &&
               sources.get(file)?.includes('import.meta.vitest')));
+        benchmarkFile ||= !!benchmark;
         if (setup || test || benchmark) {
           matching.push({ scope, certain: !!setup || !!benchmark || !!(test && scope.include) });
         } else if (
@@ -497,6 +501,7 @@ export function resolveVitestV5TestModes(
       return [
         file,
         {
+          benchmark: benchmarkFile,
           browser: browserModes.size === 1 ? browserModes.values().next().value : undefined,
           globals,
           reviewGlobals:

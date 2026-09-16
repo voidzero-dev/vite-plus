@@ -12,6 +12,7 @@ import {
   staticObject,
   testApiName,
   isString,
+  isImportMetaVitest,
   isBoolean,
   isRegExp,
   type RewriteResult,
@@ -153,7 +154,7 @@ function processApiName(editor: SourceEditor, node: t.Node): string | undefined 
 }
 
 /** A package-name string in plugin code or documentation is not a runner
- * dependency. Only module references and bound process calls establish usage. */
+ * dependency. Module references, in-source APIs, and bound process calls establish usage. */
 export function hasVitestV5SourceUsage(file: string, source: string): boolean {
   if (!/vitest|vite-plus|\bvp\b/.test(source)) {
     return false;
@@ -180,6 +181,11 @@ export function hasVitestV5SourceUsage(file: string, source: string): boolean {
     }
   };
   editor.visit({
+    MemberExpression(node) {
+      if (isImportMetaVitest(node)) {
+        used = true;
+      }
+    },
     ImportDeclaration: (node) => moduleReference(node.source),
     ExportNamedDeclaration: (node) => moduleReference(node.source),
     ExportAllDeclaration: (node) => moduleReference(node.source),
@@ -972,7 +978,9 @@ export function migrateVitestV5Source(
   }
   const result = editor.finish();
   const benchmark =
-    benchmarks.imports.values().next().value ?? benchmarks.calls.values().next().value;
+    benchmarks.imports.values().next().value ??
+    benchmarks.bindings.values().next().value ??
+    benchmarks.calls.values().next().value;
   if (benchmark && result.content === source) {
     // Suppress removed-API findings only for edits that survive validation.
     // A rollback retains the legacy API and must stop dependency upgrades.
