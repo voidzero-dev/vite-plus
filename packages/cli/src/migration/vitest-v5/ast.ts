@@ -324,8 +324,8 @@ export class SourceEditor {
     return node.type === 'Identifier' ? this.bindings.get(node.start) : undefined;
   }
 
-  uniqueName(base: string): string {
-    let name = `_${base}`;
+  uniqueName(base: string, preferBase = false): string {
+    let name = preferBase && !this.names.has(base) ? base : `_${base}`;
     let suffix = 2;
     while (this.names.has(name)) {
       name = `_${base}${suffix++}`;
