@@ -80,28 +80,26 @@ jobs:
         timeout-minutes: 180
         uses: anthropics/claude-code-action@7b0b255830a1fab6e602658672acad11c12d841d # v1.0.226
         env:
-          ANTHROPIC_BASE_URL: https://api.moonshot.ai/anthropic
-          ANTHROPIC_CUSTOM_HEADERS: 'Authorization: Bearer ${{ secrets.MOONSHOT_API_KEY }}'
+          ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
           CLI_HELP_DIFF_CHANGED: ${{ steps.cli-help-diff.outputs.has-changes }}
           CLI_HELP_DIFF_REPORT: ${{ env.UPGRADE_DEPS_META_DIR }}/cli-help-report.md
           RELEASE_BUILD: 'true'
         with:
-          # The action currently requires an Anthropic credential input even when an
-          # Anthropic-compatible gateway is authenticated by a custom Bearer header.
           anthropic_api_key: ${{ secrets.MOONSHOT_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: 'true'
           settings: |
             {
               "env": {
-                "ANTHROPIC_BASE_URL": "https://api.moonshot.ai/anthropic",
-                "ANTHROPIC_MODEL": "kimi-k3[1m]",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-k3[1m]",
-                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-k3[1m]",
-                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-k3[1m]",
-                "ANTHROPIC_DEFAULT_FABLE_MODEL": "kimi-k3[1m]",
-                "CLAUDE_CODE_SUBAGENT_MODEL": "kimi-k3[1m]",
-                "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1000000",
+                "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
+                "ANTHROPIC_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
+                "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
                 "CLAUDE_CODE_EFFORT_LEVEL": "max"
               }
             }
@@ -224,7 +222,7 @@ jobs:
             Do NOT run `git commit` or `git push`. A later workflow step commits every
             modified file for you.
           claude_args: |
-            --model "kimi-k3[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model "k3[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
 
@@ -247,24 +245,23 @@ jobs:
         continue-on-error: true
         uses: anthropics/claude-code-action@7b0b255830a1fab6e602658672acad11c12d841d # v1.0.226
         env:
-          ANTHROPIC_BASE_URL: https://api.moonshot.ai/anthropic
-          ANTHROPIC_CUSTOM_HEADERS: 'Authorization: Bearer ${{ secrets.MOONSHOT_API_KEY }}'
+          ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
         with:
-          # See the credential compatibility note on the upgrade-check step.
           anthropic_api_key: ${{ secrets.MOONSHOT_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: 'true'
           settings: |
             {
               "env": {
-                "ANTHROPIC_BASE_URL": "https://api.moonshot.ai/anthropic",
-                "ANTHROPIC_MODEL": "kimi-k3[1m]",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-k3[1m]",
-                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-k3[1m]",
-                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-k3[1m]",
-                "ANTHROPIC_DEFAULT_FABLE_MODEL": "kimi-k3[1m]",
-                "CLAUDE_CODE_SUBAGENT_MODEL": "kimi-k3[1m]",
-                "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1000000",
+                "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
+                "ANTHROPIC_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
+                "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
                 "CLAUDE_CODE_EFFORT_LEVEL": "max"
               }
             }
@@ -332,7 +329,7 @@ jobs:
               two output files. A later workflow step will consume them.
             - Do NOT modify any file inside the repository working tree.
           claude_args: |
-            --model "kimi-k3[1m]" --allowedTools "Bash,Read,Write,Edit"
+            --model "k3[1m]" --allowedTools "Bash,Read,Write,Edit"
           additional_permissions: |
             actions: read
 
