@@ -17,7 +17,7 @@ VITE+ - The Unified Toolchain for the Web
 warn: yarn does not support --frozen-lockfile.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + install-option-dep@file:./dep#./dep::hash=8572a9&locator=install-package-options%40workspace%3A.
+➤ YN0085: │ + install-option-dep@file:./dep#./dep::hash=<hash>&locator=install-package-options%40workspace%3A.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
 ➤ YN0013: │ A package was added to the project (+ <size> KiB).
@@ -44,8 +44,8 @@ VITE+ - The Unified Toolchain for the Web
 
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + install-option-dep@file:./dep-v2#./dep-v2::hash=ca2da2&locator=install-package-options%40workspace%3A.
-➤ YN0085: │ - install-option-dep@file:./dep#./dep::hash=8572a9&locator=install-package-options%40workspace%3A.
+➤ YN0085: │ + install-option-dep@file:./dep-v2#./dep-v2::hash=<hash>&locator=install-package-options%40workspace%3A.
+➤ YN0085: │ - install-option-dep@file:./dep#./dep::hash=<hash>&locator=install-package-options%40workspace%3A.
 ➤ YN0000: └ Completed
 
 ➤ YN0000: ┌ Post-resolution validation
@@ -56,11 +56,11 @@ VITE+ - The Unified Toolchain for the Web
 ➤ YN0000: │
 ➤ YN0028: │ -"install-option-dep@file:./dep::locator=install-package-options%40workspace%3A.":
 ➤ YN0028: │ -  version: 1.0.0
-➤ YN0028: │ -  resolution: "install-option-dep@file:./dep#./dep::hash=8572a9&locator=install-package-options%40workspace%3A."
-➤ YN0028: │ -  checksum: 10c0/32675cb2e55f886e9f975fdaefa9cb706071880078bda04af25dd0343941bf33780453c0ec848b30d3aa53cb9d5d5b3a6aeef902552100f255ed35fac8a8ff06
+➤ YN0028: │ -  resolution: "install-option-dep@file:./dep#./dep::hash=<hash>&locator=install-package-options%40workspace%3A."
+➤ YN0028: │ -  checksum: <hash>
 ➤ YN0028: │ +"install-option-dep@file:./dep-v2::locator=install-package-options%40workspace%3A.":
 ➤ YN0028: │ +  version: 2.0.0
-➤ YN0028: │ +  resolution: "install-option-dep@file:./dep-v2#./dep-v2::hash=ca2da2&locator=install-package-options%40workspace%3A."
+➤ YN0028: │ +  resolution: "install-option-dep@file:./dep-v2#./dep-v2::hash=<hash>&locator=install-package-options%40workspace%3A."
 ➤ YN0000: │    languageName: node
 ➤ YN0000: │    linkType: hard
 ➤ YN0000: │
@@ -93,8 +93,8 @@ VITE+ - The Unified Toolchain for the Web
 
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + install-option-dep@file:./dep-v2#./dep-v2::hash=ca2da2&locator=install-package-options%40workspace%3A.
-➤ YN0085: │ - install-option-dep@file:./dep#./dep::hash=8572a9&locator=install-package-options%40workspace%3A.
+➤ YN0085: │ + install-option-dep@file:./dep-v2#./dep-v2::hash=<hash>&locator=install-package-options%40workspace%3A.
+➤ YN0085: │ - install-option-dep@file:./dep#./dep::hash=<hash>&locator=install-package-options%40workspace%3A.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
 ➤ YN0000: └ Completed
@@ -117,8 +117,8 @@ direct add also warns for the unsupported immutable override
 warn: yarn does not support --no-frozen-lockfile.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + install-option-dep@file:./dep#./dep::hash=8572a9&locator=install-package-options%40workspace%3A.
-➤ YN0085: │ - install-option-dep@file:./dep-v2#./dep-v2::hash=ca2da2&locator=install-package-options%40workspace%3A.
+➤ YN0085: │ + install-option-dep@file:./dep#./dep::hash=<hash>&locator=install-package-options%40workspace%3A.
+➤ YN0085: │ - install-option-dep@file:./dep-v2#./dep-v2::hash=<hash>&locator=install-package-options%40workspace%3A.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
 ➤ YN0000: └ Completed

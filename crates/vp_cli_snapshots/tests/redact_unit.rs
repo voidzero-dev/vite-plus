@@ -129,6 +129,23 @@ fn masks_size_numbers_keeping_units_and_spares_plain_stems() {
 }
 
 #[test]
+fn masks_yarn_file_hashes_and_lockfile_diff_checksums() {
+    let input = concat!(
+        "➤ YN0085: │ + dep@file:./dep#./dep::hash=8572a9&locator=app%40workspace%3A.\n",
+        "➤ YN0028: │ -  checksum: 10c0/deadbeef\n",
+        "➤ YN0028: │ +  version: 2.0.0\n",
+        "checksum: 10c0/deadbeef\n",
+    );
+    let expected = concat!(
+        "➤ YN0085: │ + dep@file:./dep#./dep::hash=<hash>&locator=app%40workspace%3A.\n",
+        "➤ YN0028: │ -  checksum: <hash>\n",
+        "➤ YN0028: │ +  version: 2.0.0\n",
+        "checksum: 10c0/deadbeef\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), expected);
+}
+
+#[test]
 fn drops_the_vite_build_banner_line() {
     // The banner races the Rust reporter's same-line erase writes, so its
     // presence in a PTY grid depends on machine speed; the rule drops it in

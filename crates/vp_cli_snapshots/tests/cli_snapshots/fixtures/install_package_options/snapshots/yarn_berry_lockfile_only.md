@@ -13,7 +13,7 @@ VITE+ - The Unified Toolchain for the Web
 warn: yarn@2+ --mode can only be specified once; --lockfile-only takes priority over --ignore-scripts
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + install-option-dep@file:./dep#./dep::hash=8572a9&locator=install-package-options%40workspace%3A.
+➤ YN0085: │ + install-option-dep@file:./dep#./dep::hash=<hash>&locator=install-package-options%40workspace%3A.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
 ➤ YN0013: │ A package was added to the project (+ <size> KiB).
