@@ -3,42 +3,60 @@
 ## `vpt json-edit package.json packageManager yarn@1.22.22`
 
 
-## `vp install ./dep`
+## `vp install ./dep --frozen-lockfile`
 
-
-## `vpt cp yarn.lock before.lock`
-
-
-## `vpt cp package.json before.json`
-
-
-## `vp install ./dep-v2 --frozen-lockfile`
-
-reject named-package frozen installs before invoking Classic add
-
-**Exit code:** 1
+named-package installs warn and drop the unsupported add option
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Invalid argument: Yarn Classic `add` cannot enforce `--frozen-lockfile`.
+warn: yarn does not support --frozen-lockfile.
+yarn add <version>
+info No lockfile found.
+[1/4] Resolving packages...
+[2/4] Fetching packages...
+[3/4] Linking dependencies...
+[4/4] Building fresh packages...
+
+success Saved lockfile.
+success Saved 1 new dependency.
+info Direct dependencies
+└─ install-option-dep@1.0.0
+info All dependencies
+└─ install-option-dep@1.0.0
+
+Done in <duration>.
 ```
 
-## `vp add ./dep-v2 --frozen-lockfile`
-
-direct add rejects the same combination
-
-**Exit code:** 1
+## `vpt stat-file yarn.lock --assert file`
 
 ```
-Invalid argument: Yarn Classic `add` cannot enforce `--frozen-lockfile`.
+yarn.lock: file
 ```
 
-## `node -e 'const fs = require('\''node:fs'\''); for (const [file, before] of [['\''package.json'\'', '\''before.json'\''], ['\''yarn.lock'\'', '\''before.lock'\'']]) { if ('\!'fs.readFileSync(file).equals(fs.readFileSync(before))) process.exit(1); } console.log('\''manifest and lockfile unchanged'\'');'`
+## `vp add ./dep --frozen-lockfile`
+
+direct add also warns and continues without the option
 
 ```
-manifest and lockfile unchanged
+warn: yarn does not support --frozen-lockfile.
+yarn add <version>
+[1/4] Resolving packages...
+[2/4] Fetching packages...
+[3/4] Linking dependencies...
+[4/4] Building fresh packages...
+
+success Saved 1 new dependency.
+info Direct dependencies
+└─ install-option-dep@1.0.0
+info All dependencies
+└─ install-option-dep@1.0.0
+
+Done in <duration>.
 ```
+
+## `vpt cp yarn.lock before.lock`
+
 
 ## `node -p require('./node_modules/install-option-dep/package.json').version`
 
@@ -55,7 +73,9 @@ VITE+ - The Unified Toolchain for the Web
 
 yarn install <version>
 [1/4] Resolving packages...
-success Already up-to-date.
+[2/4] Fetching packages...
+[3/4] Linking dependencies...
+[4/4] Building fresh packages...
 
 Done in <duration>.
 ```

@@ -78,12 +78,10 @@ name = "yarn_classic_frozen_lockfile_modes"
 vp = "global"
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@1.22.22"], snapshot = false },
-  { argv = ["vp", "install", "./dep"], snapshot = false },
+  { argv = ["vp", "install", "./dep", "--frozen-lockfile"], comment = "named-package installs warn and drop the unsupported add option" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  { argv = ["vp", "add", "./dep", "--frozen-lockfile"], comment = "direct add also warns and continues without the option" },
   { argv = ["vpt", "cp", "yarn.lock", "before.lock"], snapshot = false },
-  { argv = ["vpt", "cp", "package.json", "before.json"], snapshot = false },
-  { argv = ["vp", "install", "./dep-v2", "--frozen-lockfile"], comment = "reject named-package frozen installs before invoking Classic add", continue-on-failure = true },
-  { argv = ["vp", "add", "./dep-v2", "--frozen-lockfile"], comment = "direct add rejects the same combination", continue-on-failure = true },
-  { argv = ["node", "-e", "const fs = require('node:fs'); for (const [file, before] of [['package.json', 'before.json'], ['yarn.lock', 'before.lock']]) { if (!fs.readFileSync(file).equals(fs.readFileSync(before))) process.exit(1); } console.log('manifest and lockfile unchanged');"], continue-on-failure = true },
   ["node", "-p", "require('./node_modules/install-option-dep/package.json').version"],
   { argv = ["vp", "install", "--frozen-lockfile"], comment = "package-free frozen installs succeed when the manifest and lockfile agree" },
   { argv = ["vpt", "json-edit", "package.json", "dependencies.install-option-dep", "file:./dep-v2"], snapshot = false },

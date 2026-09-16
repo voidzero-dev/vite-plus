@@ -14,7 +14,7 @@ named-package installs use add, which has no immutable option
 ```
 VITE+ - The Unified Toolchain for the Web
 
-warn: yarn >=2 does not support --frozen-lockfile.
+warn: yarn does not support --frozen-lockfile.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + install-option-dep@file:./dep#./dep::hash=8572a9&locator=install-package-options%40workspace%3A.

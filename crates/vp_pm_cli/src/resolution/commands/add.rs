@@ -36,7 +36,12 @@ pub struct AddArgs {
     pub(crate) no_optional: bool,
 
     /// Fail if lockfile needs to be updated
-    #[arg(long, conflicts_with = "global", overrides_with = "no_frozen_lockfile", not_supported(npm, pnpm, yarn >= "2"))]
+    #[arg(
+        long,
+        conflicts_with = "global",
+        overrides_with = "no_frozen_lockfile",
+        not_supported(npm, pnpm, yarn)
+    )]
     pub(crate) frozen_lockfile: bool,
 
     /// Allow lockfile updates
@@ -266,14 +271,6 @@ impl Resolve<AddArgs> for Yarn {
     fn resolve(&self, args: &AddArgs, diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
             return Npm::resolve_add(args);
-        }
-
-        // Classic accepts the flag but skips the frozen-lockfile consistency check on add.
-        if !self.is_berry() && args.frozen_lockfile {
-            return CommandResolution::InvalidArgument(
-                "Invalid argument: Yarn Classic `add` cannot enforce `--frozen-lockfile`."
-                    .to_string(),
-            );
         }
 
         let mut cmd = CommandBuilder::new("yarn");
@@ -658,38 +655,22 @@ mod tests {
     }
 
     #[test]
-    fn yarn_add_respects_frozen_lockfile_support() {
-        for flag in ["--frozen-lockfile", "--no-frozen-lockfile"] {
-            let args = parse_args::<AddArgs>([flag, "react"]).unwrap();
-            let classic = resolve(&yarn("1.22.22"), args.clone());
-            if flag == "--frozen-lockfile" {
-                assert!(matches!(
-                    classic.outcome,
-                    CommandResolution::InvalidArgument(message)
-                        if message == "Invalid argument: Yarn Classic `add` cannot enforce `--frozen-lockfile`."
-                ));
-                assert!(classic.diagnostics.is_empty());
-            } else {
-                assert_eq!(expect_run(classic.outcome).args, ["add", "react"]);
-                assert_eq!(classic.diagnostics.len(), 1);
+    fn yarn_add_drops_frozen_lockfile_options() {
+        for version in ["1.22.22", "4.0.0"] {
+            for flag in ["--frozen-lockfile", "--no-frozen-lockfile"] {
+                let args = parse_args::<AddArgs>([flag, "react"]).unwrap();
+                let resolution = resolve(&yarn(version), args);
+                assert_eq!(expect_run(resolution.outcome).args, ["add", "react"]);
+                assert_eq!(resolution.diagnostics.len(), 1);
                 assert_eq!(
-                    classic.diagnostics[0].message,
-                    "yarn does not support --no-frozen-lockfile.",
+                    resolution.diagnostics[0].kind,
+                    DiagnosticKind::UnsupportedOptionDropped
+                );
+                assert_eq!(
+                    resolution.diagnostics[0].message,
+                    vt_str::format!("yarn does not support {flag}.").as_str(),
                 );
             }
-
-            let berry = resolve(&yarn("4.0.0"), args);
-            assert_eq!(expect_run(berry.outcome).args, ["add", "react"]);
-            assert_eq!(berry.diagnostics.len(), 1);
-            assert_eq!(berry.diagnostics[0].kind, DiagnosticKind::UnsupportedOptionDropped);
-            assert_eq!(
-                berry.diagnostics[0].message,
-                if flag == "--frozen-lockfile" {
-                    "yarn >=2 does not support --frozen-lockfile."
-                } else {
-                    "yarn does not support --no-frozen-lockfile."
-                },
-            );
         }
     }
 
