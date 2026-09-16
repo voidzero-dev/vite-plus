@@ -97,7 +97,6 @@ VITE+ - The Unified Toolchain for the Web
 ➤ YN0085: │ - install-option-dep@file:./dep#./dep::hash=8572a9&locator=install-package-options%40workspace%3A.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
-➤ YN0013: │ A package was added to the project, and one was removed (+ <size> KiB).
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
@@ -122,7 +121,6 @@ warn: yarn does not support --no-frozen-lockfile.
 ➤ YN0085: │ - install-option-dep@file:./dep-v2#./dep-v2::hash=ca2da2&locator=install-package-options%40workspace%3A.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
-➤ YN0013: │ A package was added to the project, and one was removed (- <size> KiB).
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed

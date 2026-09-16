@@ -32,8 +32,7 @@ steps = [
 name = "npm_offline"
 vp = "global"
 steps = [
-  { argv = ["vpt", "write-file", ".npmrc", "registry=http://127.0.0.1:9\nfetch-retries=0\ncache=.npm-cache\n"], snapshot = false },
-  { argv = ["vp", "install", "vp-install-option-uncached-probe@1.0.0", "--offline"], comment = "an uncached package fails in offline mode rather than attempting a connection", continue-on-failure = true },
+  { argv = ["vp", "install", "vp-install-option-uncached-probe@1.0.0", "--offline", "--", "--registry=http://127.0.0.1:9", "--fetch-retries=0"], comment = "an uncached package fails in offline mode rather than attempting a connection", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "node_modules", "--assert", "missing"], continue-on-failure = true },
   ["vpt", "stat-file", "package-lock.json", "--assert", "missing"],
 ]
@@ -65,7 +64,7 @@ steps = [
 [[case]]
 name = "yarn_berry_lockfile_only"
 vp = "global"
-env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
+env = { YARN_ENABLE_TELEMETRY = "0" }
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
   { argv = ["vp", "install", "./dep", "--lockfile-only", "--ignore-scripts"], comment = "use update-lockfile rather than skip-build when both options are supplied" },
@@ -98,7 +97,7 @@ steps = [
 [[case]]
 name = "yarn_berry_frozen_lockfile_modes"
 vp = "global"
-env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
+env = { YARN_ENABLE_TELEMETRY = "0" }
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
   { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
