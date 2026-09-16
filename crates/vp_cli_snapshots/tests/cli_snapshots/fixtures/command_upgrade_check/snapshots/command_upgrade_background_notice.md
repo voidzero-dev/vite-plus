@@ -18,6 +18,25 @@ The foreground command launches the detached checker and returns without waiting
 Machine-readable output does not consume the pending notice.
 
 
+## `vpt write-file package.json '{"name":"silent-add","private":true,"packageManager":"npm@11.13.0"}'`
+
+
+## `vpt mkdir dep`
+
+
+## `vpt write-file dep/package.json '{"name":"silent-add-dep","version":"1.0.0"}'`
+
+
+## `vp add ./dep --silent --save-catalog --lockfile-only`
+
+Silent add suppresses compatibility diagnostics and leaves the cached update notice pending.
+
+```
+```
+
+## `vpt stat-file package-lock.json --assert file`
+
+
 ## `vp env off`
 
 The next interactive command displays the cached update notice.
