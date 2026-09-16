@@ -20,7 +20,7 @@ vite.config.ts
   - Vitest v5: 1 review item
 
 vite.config.ts
-  34:10 REVIEW [global-api-ownership] Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.
+  37:10 REVIEW [global-api-ownership] Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.
     Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ```
 
@@ -64,10 +64,18 @@ export default defineConfig({
   },
   plugins: lazyPlugins(() => [react()]),
   test: {
+    // Vitest v4 compatibility: preserve mock call history.
+    // Remove after tests no longer rely on calls from setup or earlier tests.
+    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
     clearMocks: false,
     dir: join(import.meta.dirname, 'test'),
     browser: {
-      locators: { exact: false },
+      locators: {
+        // Vitest v4 compatibility: keep partial, case-insensitive locator matching.
+        // Remove after updating locators for full, case-sensitive matches.
+        // https://vitest.dev/guide/migration/#locators-are-strict-by-default
+        exact: false
+      },
       enabled: true,
       provider: playwright(),
       headless: true,

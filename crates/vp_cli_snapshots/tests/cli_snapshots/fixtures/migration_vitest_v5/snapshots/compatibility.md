@@ -19,10 +19,36 @@ export default defineConfig({
   fmt: {},
   lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
   test: {
+    // Vitest v4 compatibility: preserve mock call history.
+    // Remove after tests no longer rely on calls from setup or earlier tests.
+    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
     clearMocks: false,
+    // Vitest v4 compatibility: keep separate Vite servers for inline projects.
+    // Remove when plugins and config hooks can run once for shared projects.
+    // https://vitest.dev/guide/migration/#inline-projects-share-the-vite-server-by-default
     sharedViteServer: false,
-    reporters: [['json', { stdout: true }], ['junit', { stdout: true }]],
-    projects: [{ extends: false,  test: { clearMocks: false,  name: 'unit' } }, { extends: true, test: { name: 'inherited' } }],
+    reporters: [['json', {
+      // Vitest v4 compatibility: write JSON/JUnit reports to stdout.
+      // Remove after report consumers use output files; keep if stdout is required.
+      // https://vitest.dev/guide/migration/#generated-reports-and-artifacts-use-the-vitest-directory
+      stdout: true
+    }], ['junit', {
+      // Vitest v4 compatibility: write JSON/JUnit reports to stdout.
+      // Remove after report consumers use output files; keep if stdout is required.
+      // https://vitest.dev/guide/migration/#generated-reports-and-artifacts-use-the-vitest-directory
+      stdout: true
+    }]],
+    projects: [{
+      // Vitest v4 compatibility: keep this inline project independent of the root config.
+      // Remove to inherit root options, including plugins and setup files.
+      // https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
+      extends: false,
+      test: {
+        // Vitest v4 compatibility: preserve mock call history.
+        // Remove after tests no longer rely on calls from setup or earlier tests.
+        // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+        clearMocks: false,
+        name: 'unit' } }, { extends: true, test: { name: 'inherited' } }],
   },
 });
 ```

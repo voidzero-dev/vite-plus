@@ -27,7 +27,7 @@ vite.config.ts
   - Vitest v5: 1 review item
 
 vite.config.ts
-  4:69 REVIEW [project-inheritance] Review this external or dynamic project base before adding v4 compatibility defaults. Inherited project settings were left unchanged.
+  13:20 REVIEW [project-inheritance] Review this external or dynamic project base before adding v4 compatibility defaults. Inherited project settings were left unchanged.
     Docs: https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default
 ```
 
@@ -37,7 +37,16 @@ vite.config.ts
 export default {
   fmt: {},
   lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
-  test: { clearMocks: false, sharedViteServer: false,  projects: [{ extends: './base.mjs', test: { name: 'unit', browser: { enabled: false } } }] }
+  test: {
+      // Vitest v4 compatibility: preserve mock call history.
+      // Remove after tests no longer rely on calls from setup or earlier tests.
+      // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+      clearMocks: false,
+      // Vitest v4 compatibility: keep separate Vite servers for inline projects.
+      // Remove when plugins and config hooks can run once for shared projects.
+      // https://vitest.dev/guide/migration/#inline-projects-share-the-vite-server-by-default
+      sharedViteServer: false,
+      projects: [{ extends: './base.mjs', test: { name: 'unit', browser: { enabled: false } } }] }
 }
 ```
 

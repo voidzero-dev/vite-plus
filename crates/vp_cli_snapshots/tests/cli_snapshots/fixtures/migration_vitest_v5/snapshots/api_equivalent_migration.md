@@ -22,7 +22,19 @@ VITE+ - The Unified Toolchain for the Web
 export default {
   fmt: {},
   lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
-  test: { clearMocks: false,  api: { port: 51204, host: 'localhost', allowExec: false }, browser: { locators: { exact: false },  enabled: false  } }
+  test: {
+      // Vitest v4 compatibility: preserve mock call history.
+      // Remove after tests no longer rely on calls from setup or earlier tests.
+      // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+      clearMocks: false,
+      api: { port: 51204, host: 'localhost', allowExec: false }, browser: {
+        locators: {
+          // Vitest v4 compatibility: keep partial, case-insensitive locator matching.
+          // Remove after updating locators for full, case-sensitive matches.
+          // https://vitest.dev/guide/migration/#locators-are-strict-by-default
+          exact: false
+        },
+        enabled: false  } }
 }
 ```
 

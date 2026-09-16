@@ -270,6 +270,31 @@ export function isImportMetaVitest(node: t.Node | null | undefined): boolean {
   );
 }
 
+export interface AddedProperty {
+  key: string;
+  value: string | AddedProperty[];
+  comment?: string;
+}
+
+function printAddedProperty(property: AddedProperty, indent: string, newline: string): string {
+  const comment = property.comment
+    ? `${property.comment.replaceAll('\n', `${newline}${indent}`)}${newline}${indent}`
+    : '';
+  const value =
+    typeof property.value === 'string'
+      ? property.value
+      : printAddedObject(property.value, indent, newline);
+  return `${comment}${property.key}: ${value}`;
+}
+
+/** Format generated objects without reindenting copied expressions or string literals. */
+export function printAddedObject(properties: AddedProperty[], indent = '', newline = '\n'): string {
+  const childIndent = `${indent}  `;
+  return `{${newline}${properties
+    .map((property) => `${childIndent}${printAddedProperty(property, childIndent, newline)}`)
+    .join(`,${newline}`)}${newline}${indent}}`;
+}
+
 /** Offset edits retain comments and formatting outside the precise changed span. */
 export class SourceEditor {
   readonly ast: t.Program;
@@ -280,7 +305,7 @@ export class SourceEditor {
   private readonly bindings = new Map<number, Binding>();
   private readonly names = new Set<string>();
   private readonly edits: Array<{ start: number; end: number; text: string }> = [];
-  private readonly additions = new Map<t.ObjectExpression, Map<string, string>>();
+  private readonly additions = new Map<t.ObjectExpression, Map<string, AddedProperty>>();
 
   constructor(
     readonly file: string,
@@ -383,7 +408,12 @@ export class SourceEditor {
     this.edits.push({ start, end, text });
   }
 
-  add(object: t.ObjectExpression, key: string, value: string): void {
+  add(
+    object: t.ObjectExpression,
+    key: string,
+    value: AddedProperty['value'],
+    comment?: string,
+  ): void {
     if (objectProperty(object, key)) {
       return;
     }
@@ -392,7 +422,7 @@ export class SourceEditor {
       additions = new Map();
       this.additions.set(object, additions);
     }
-    additions.set(key, value);
+    additions.set(key, { key, value, comment });
   }
 
   remove(object: t.ObjectExpression, prop: t.ObjectProperty): void {
@@ -449,18 +479,43 @@ export class SourceEditor {
       const start = object.start + 1;
       const first = object.properties[0]?.start ?? object.end - 1;
       const prefix = this.source.slice(start, first);
-      const newline = prefix.includes('\r\n') ? '\r\n' : '\n';
-      const multiline = prefix.indexOf('\n') !== -1;
+      const newline = this.source.includes('\r\n') ? '\r\n' : '\n';
+      const multilinePrefix = prefix.includes('\n');
+      const multiline =
+        multilinePrefix ||
+        [...additions.values()].some(({ comment, value }) => comment || Array.isArray(value));
       const indent =
         this.source.slice(this.source.lastIndexOf('\n', first) + 1, first).match(/^[\t ]*/)?.[0] ??
         '';
-      const propertyIndent = object.properties.length ? indent : `${indent}  `;
-      const entries = [...additions].map(([key, value]) => `${key}: ${value}`);
+      let objectIndent = indent;
+      if (!multilinePrefix) {
+        // Nested inline objects share a source line. Account for their depth
+        // when generated comments expand them onto separate lines.
+        const lineStart = this.source.lastIndexOf('\n', object.start) + 1;
+        let parent = this.parent(object);
+        while (parent && parent.start >= lineStart) {
+          if (parent.type === 'ObjectExpression') {
+            objectIndent += '  ';
+          }
+          parent = this.parent(parent);
+        }
+      }
+      const propertyIndent =
+        multilinePrefix && object.properties.length ? indent : `${objectIndent}  `;
+      const entries = [...additions.values()].map((property) =>
+        printAddedProperty(property, propertyIndent, newline),
+      );
+      // A generated line comment must end before the original inline properties
+      // or closing brace. Keep the original trivia, including existing comments.
+      const suffix =
+        multiline && !multilinePrefix
+          ? `${newline}${object.properties.length ? propertyIndent : objectIndent}`
+          : '';
       this.edit(
         start,
-        start,
+        multiline && !multilinePrefix && /^\s*$/.test(prefix) ? first : start,
         multiline
-          ? `${newline}${propertyIndent}${entries.join(`,${newline}${propertyIndent}`)}${object.properties.length ? ',' : ''}`
+          ? `${newline}${propertyIndent}${entries.join(`,${newline}${propertyIndent}`)}${object.properties.length ? ',' : ''}${suffix}`
           : ` ${entries.join(', ')}${object.properties.length ? ',' : ''} `,
       );
     }
