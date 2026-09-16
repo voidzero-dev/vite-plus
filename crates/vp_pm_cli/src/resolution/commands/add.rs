@@ -2,7 +2,7 @@ use vp_pm_cli_macros::pm_args;
 
 use super::parse_positive_usize;
 use crate::resolution::{
-    Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, Pnpm, Resolve, Yarn,
+    Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm, Resolve, Yarn,
 };
 
 #[pm_args]
@@ -30,6 +30,52 @@ pub struct AddArgs {
     /// Do not run lifecycle scripts
     #[arg(long)]
     pub(crate) ignore_scripts: bool,
+
+    /// Do not install optionalDependencies
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2"))]
+    pub(crate) no_optional: bool,
+
+    /// Fail if lockfile needs to be updated
+    // Yarn Classic accepts this on `add` but skips install's frozen-lockfile validation.
+    #[arg(long, conflicts_with = "global", overrides_with = "no_frozen_lockfile", not_supported(npm, pnpm, yarn >= "2"))]
+    pub(crate) frozen_lockfile: bool,
+
+    /// Allow lockfile updates
+    #[arg(
+        long,
+        conflicts_with = "global",
+        overrides_with = "frozen_lockfile",
+        not_supported(npm, pnpm, yarn)
+    )]
+    pub(crate) no_frozen_lockfile: bool,
+
+    /// Only update lockfile, don't install
+    #[arg(long, conflicts_with = "global", not_supported(yarn < "2"))]
+    pub(crate) lockfile_only: bool,
+
+    /// Use cached packages when available
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
+    pub(crate) prefer_offline: bool,
+
+    /// Only use packages already in cache
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
+    pub(crate) offline: bool,
+
+    /// Force reinstall all dependencies
+    #[arg(short = 'f', long, conflicts_with = "global", not_supported(yarn >= "2"))]
+    pub(crate) force: bool,
+
+    /// Don't read or generate lockfile
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
+    pub(crate) no_lockfile: bool,
+
+    /// Create flat node_modules (pnpm only)
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
+    pub(crate) shamefully_hoist: bool,
+
+    /// Suppress package manager output
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2"))]
+    pub(crate) silent: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
     #[arg(long, value_name = "PATTERN", not_supported(bun < "1.4"))]
@@ -151,6 +197,14 @@ impl Resolve<AddArgs> for Pnpm {
             cmd.arg(vt_str::format!("--allow-build={allow_build}"));
         }
         cmd.arg_if("--ignore-scripts", args.ignore_scripts)
+            .arg_if("--no-optional", args.no_optional)
+            .arg_if("--lockfile-only", args.lockfile_only)
+            .arg_if("--prefer-offline", args.prefer_offline)
+            .arg_if("--offline", args.offline)
+            .arg_if("--force", args.force)
+            .arg_if("--no-lockfile", args.no_lockfile)
+            .arg_if("--shamefully-hoist", args.shamefully_hoist)
+            .arg_if("--silent", args.silent)
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
         cmd.into()
@@ -189,8 +243,16 @@ impl Npm {
         }
         cmd.arg_if("--save-exact", args.save_exact)
             .arg_if("--ignore-scripts", args.ignore_scripts)
-            .extend(args.pass_through_args.iter())
-            .extend(args.packages.iter());
+            .arg_if("--omit=optional", args.no_optional)
+            .arg_if("--package-lock-only", args.lockfile_only)
+            .arg_if("--prefer-offline", args.prefer_offline)
+            .arg_if("--offline", args.offline)
+            .arg_if("--force", args.force)
+            .arg_if("--no-package-lock", args.no_lockfile);
+        if args.silent {
+            cmd.arg("--loglevel").arg("silent");
+        }
+        cmd.extend(args.pass_through_args.iter()).extend(args.packages.iter());
         cmd.into()
     }
 }
@@ -202,7 +264,7 @@ impl Resolve<AddArgs> for Npm {
 }
 
 impl Resolve<AddArgs> for Yarn {
-    fn resolve(&self, args: &AddArgs, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &AddArgs, diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
             return Npm::resolve_add(args);
         }
@@ -233,12 +295,27 @@ impl Resolve<AddArgs> for Yarn {
             Some(SaveDependencyTarget::Production) | None => {}
         }
         cmd.arg_if("--exact", args.save_exact);
-        if args.ignore_scripts {
-            if self.is_berry() {
+        if self.is_berry() {
+            if args.lockfile_only {
+                cmd.arg("--mode").arg("update-lockfile");
+                if args.ignore_scripts {
+                    diag.warn(
+                        DiagnosticKind::BehaviorChange,
+                        "yarn@2+ --mode can only be specified once; --lockfile-only takes priority over --ignore-scripts",
+                    );
+                }
+            } else if args.ignore_scripts {
                 cmd.arg("--mode").arg("skip-build");
-            } else {
-                cmd.arg("--ignore-scripts");
             }
+        } else {
+            cmd.arg_if("--ignore-scripts", args.ignore_scripts)
+                .arg_if("--ignore-optional", args.no_optional)
+                .arg_if("--frozen-lockfile", args.frozen_lockfile)
+                .arg_if("--prefer-offline", args.prefer_offline)
+                .arg_if("--offline", args.offline)
+                .arg_if("--force", args.force)
+                .arg_if("--no-lockfile", args.no_lockfile)
+                .arg_if("--silent", args.silent);
         }
         cmd.extend(args.pass_through_args.iter()).extend(args.packages.iter());
         cmd.into()
@@ -267,8 +344,18 @@ impl Resolve<AddArgs> for Bun {
         cmd.arg_if("--exact", args.save_exact)
             .arg_if("--catalog", args.save_catalog)
             .arg_if("--ignore-scripts", args.ignore_scripts)
-            .extend(args.pass_through_args.iter())
-            .extend(args.packages.iter());
+            .arg_if("--lockfile-only", args.lockfile_only)
+            .arg_if("--force", args.force)
+            .arg_if("--silent", args.silent);
+        if args.no_optional {
+            cmd.arg("--omit").arg("optional");
+        }
+        if args.no_frozen_lockfile {
+            cmd.arg("--no-frozen-lockfile");
+        } else {
+            cmd.arg_if("--frozen-lockfile", args.frozen_lockfile);
+        }
+        cmd.extend(args.pass_through_args.iter()).extend(args.packages.iter());
         cmd.into()
     }
 }
@@ -562,6 +649,81 @@ mod tests {
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["add", "--allow-build=react,napi", "react"]);
+    }
+
+    #[test]
+    fn yarn_add_respects_frozen_lockfile_support() {
+        for flag in ["--frozen-lockfile", "--no-frozen-lockfile"] {
+            let args = parse_args::<AddArgs>([flag, "react"]).unwrap();
+            let classic = resolve(&yarn("1.22.22"), args.clone());
+            if flag == "--frozen-lockfile" {
+                assert_eq!(expect_run(classic.outcome).args, ["add", flag, "react"]);
+                assert!(classic.diagnostics.is_empty());
+            } else {
+                assert_eq!(expect_run(classic.outcome).args, ["add", "react"]);
+                assert_eq!(classic.diagnostics.len(), 1);
+                assert_eq!(
+                    classic.diagnostics[0].message,
+                    "yarn does not support --no-frozen-lockfile.",
+                );
+            }
+
+            let berry = resolve(&yarn("4.0.0"), args);
+            assert_eq!(expect_run(berry.outcome).args, ["add", "react"]);
+            assert_eq!(berry.diagnostics.len(), 1);
+            assert_eq!(berry.diagnostics[0].kind, DiagnosticKind::UnsupportedOptionDropped);
+            assert_eq!(
+                berry.diagnostics[0].message,
+                if flag == "--frozen-lockfile" {
+                    "yarn >=2 does not support --frozen-lockfile."
+                } else {
+                    "yarn does not support --no-frozen-lockfile."
+                },
+            );
+        }
+    }
+
+    #[test]
+    fn yarn_lockfile_only_takes_priority_over_ignore_scripts() {
+        let resolution = resolve(
+            &yarn("4.0.0"),
+            AddArgs { lockfile_only: true, ignore_scripts: true, ..add_args(&["react"]) },
+        );
+        let command = expect_run(resolution.outcome);
+        assert_eq!(command.args, ["add", "--mode", "update-lockfile", "react"]);
+        assert_eq!(resolution.diagnostics.len(), 1);
+        assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::BehaviorChange);
+    }
+
+    #[test]
+    fn add_install_options_do_not_change_managed_global_commands() {
+        for flag in [
+            "--no-optional",
+            "--frozen-lockfile",
+            "--no-frozen-lockfile",
+            "--lockfile-only",
+            "--prefer-offline",
+            "--offline",
+            "--force",
+            "--no-lockfile",
+            "--shamefully-hoist",
+            "--silent",
+        ] {
+            let error = parse_args::<AddArgs>(["--global", flag, "react"]).unwrap_err();
+            assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict, "{flag}");
+        }
+    }
+
+    #[test]
+    fn add_frozen_lockfile_flags_use_last_value() {
+        for (first, last) in [
+            ("--frozen-lockfile", "--no-frozen-lockfile"),
+            ("--no-frozen-lockfile", "--frozen-lockfile"),
+        ] {
+            let args = parse_args::<AddArgs>([first, last, "react"]).unwrap();
+            let command = expect_run(resolve(&bun("1.3.11"), args).outcome);
+            assert_eq!(command.args, ["add", last, "react"]);
+        }
     }
 
     #[test]
