@@ -16,48 +16,11 @@
 //! Category C - Local CLI Delegation:
 //! - `delegate`: Local CLI delegation
 
-use std::{collections::HashMap, io::BufReader};
-
+use vp_local_cli::{find_nearest_package_json, package_json_has_vite_plus_dependency};
 use vp_shared::{PrependOptions, output, prepend_tools_to_path_env};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{error::Error, js_executor::JsExecutor};
-
-#[derive(serde::Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-struct DepCheckPackageJson {
-    #[serde(default)]
-    dependencies: HashMap<String, serde_json::Value>,
-    #[serde(default)]
-    dev_dependencies: HashMap<String, serde_json::Value>,
-    #[serde(default)]
-    optional_dependencies: HashMap<String, serde_json::Value>,
-}
-
-fn find_nearest_package_json(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let mut current = cwd;
-    loop {
-        let package_json_path = current.join("package.json");
-        if package_json_path.as_path().exists() {
-            return Some(package_json_path);
-        }
-        match current.parent() {
-            Some(parent) if parent != current => current = parent,
-            _ => return None,
-        }
-    }
-}
-
-fn package_json_has_vite_plus_dependency(package_json_path: &AbsolutePath) -> bool {
-    if let Ok(file) = std::fs::File::open(package_json_path)
-        && let Ok(pkg) = serde_json::from_reader::<_, DepCheckPackageJson>(BufReader::new(file))
-    {
-        return pkg.dependencies.contains_key("vite-plus")
-            || pkg.dev_dependencies.contains_key("vite-plus")
-            || pkg.optional_dependencies.contains_key("vite-plus");
-    }
-    false
-}
 
 fn find_vite_plus_dependency(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     let mut current = cwd;
@@ -210,6 +173,18 @@ mod tests {
         std::fs::write(
             temp_path.join("package.json"),
             r#"{ "devDependencies": { "vite-plus": "^1.0.0" } }"#,
+        )
+        .unwrap();
+        assert!(has_vite_plus_dependency(&temp_path));
+    }
+
+    #[test]
+    fn test_has_vite_plus_in_bom_prefixed_manifest() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        std::fs::write(
+            temp_path.join("package.json"),
+            "\u{feff}{\"devDependencies\":{\"vite-plus\":\"^1.0.0\"}}",
         )
         .unwrap();
         assert!(has_vite_plus_dependency(&temp_path));

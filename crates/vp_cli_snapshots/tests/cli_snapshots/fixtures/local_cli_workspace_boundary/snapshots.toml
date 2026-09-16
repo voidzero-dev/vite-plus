@@ -1,0 +1,124 @@
+[[case]]
+name = "version_project_boundary"
+vp = ["local", "global"]
+comment = "Both CLI entry points reject an excluded project's ancestor install, allow workspace members to share it, and find an optional local dependency."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules", "outer/external/inner/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "--version"], cwd = "outer/packages/member" },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/external/inner/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/package.json", '{"name":"inner","optionalDependencies":{"vite-plus":"9.8.7"}}'], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+]
+
+[[case]]
+name = "version_manifest_resolution"
+vp = ["local", "global"]
+comment = "Both CLI entry points handle package exports, BOMs, and malformed ancestors through the same resolver."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/external/inner/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/external/inner/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"9.8.7","exports":{".":"./dist/bin.js"}}'], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vpt", "write-file", "outer/external/inner/node_modules/vite-plus/package.json", "\uFEFF{\"name\":\"vite-plus\",\"version\":\"9.8.7\"}"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vpt", "rm", "outer/external/inner/package.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/pnpm-workspace.yaml", "packages: []\n"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vpt", "write-file", "outer/package.json", "{"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+]
+
+[[case]]
+name = "excluded_project"
+vp = "global"
+comment = "An independent project outside the workspace patterns cannot borrow its ancestor's CLI."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
+]
+
+[[case]]
+name = "workspace_member"
+vp = "global"
+comment = "A member can use the workspace root's declared CLI dependency."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/packages/member" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/packages/member" },
+]
+
+[[case]]
+name = "workspace_without_root_manifest"
+vp = "global"
+comment = "A pnpm workspace without a root package.json cannot borrow an outer project's CLI, but can use its own install."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules", "outer/external/inner/apps/app"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "rm", "outer/external/inner/package.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/pnpm-workspace.yaml", "packages:\n  - apps/*\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/apps/app/package.json", '{"name":"app","devDependencies":{"vite-plus":"0.3.1"}}'], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner/apps/app" },
+  { argv = ["vpt", "mkdir", "-p", "outer/external/inner/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/external/inner/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/node_modules/vite-plus/dist/bin.js", "console.log('Workspace-local CLI executed.')\n"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
+]
+
+[[case]]
+name = "malformed_ancestor"
+vp = "global"
+comment = "A malformed ancestor manifest cannot remove the independent project's boundary."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/package.json", "{"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner", comment = "the global CLI reports the malformed manifest instead of running the ancestor CLI" },
+]
+
+[[case]]
+name = "bom_manifest"
+vp = "global"
+comment = "A UTF-8 BOM does not hide the project's vite-plus dependency."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/package.json", "\uFEFF{\"name\":\"inner\",\"devDependencies\":{\"vite-plus\":\"0.3.1\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/pnpm-workspace.yaml", "packages: []\n"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
+]
+
+[[case]]
+name = "package_json_not_exported"
+vp = "global"
+comment = "Version reporting and delegation both require the local package.json export."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/external/inner/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/external/inner/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"9.8.7","exports":{".":"./dist/bin.js"}}'], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
+]
+
+[[case]]
+name = "rootless_malformed_ancestor"
+vp = "global"
+comment = "Oxc rejects a malformed ancestor manifest even when a rootless workspace has a local installation."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "outer/external/inner/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "outer-cli", "outer/external/inner/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "rm", "outer/external/inner/package.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/external/inner/pnpm-workspace.yaml", "packages: []\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "outer/package.json", "{"], snapshot = false },
+  { argv = ["vp", "--version"], cwd = "outer/external/inner" },
+  { argv = ["vp", "lint", "--version"], cwd = "outer/external/inner" },
+]
