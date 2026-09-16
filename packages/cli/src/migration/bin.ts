@@ -43,7 +43,6 @@ import {
   checkVitestVersion,
   checkViteVersion,
   collectToolchainVersionChanges,
-  createVitestV5CompatibilityConfig,
   confirmPrettierMigration,
   detectEslintProject,
   detectFramework,
@@ -75,7 +74,6 @@ import {
   refreshVitestV5Migration,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
-  vitestV5ConfiglessProjects,
   vitestV5NeedsMigration,
   type Framework,
   type NodeVersionManagerDetection,
@@ -697,25 +695,7 @@ async function downloadSupportedPackageManager(options: {
   return downloadResult;
 }
 
-async function completeVitestV5Migration(
-  plan: VitestV5MigrationPlan,
-  interactive: boolean,
-  report: MigrationReport,
-) {
-  if (interactive) {
-    for (const directory of vitestV5ConfiglessProjects(plan)) {
-      const confirmed = await prompts.confirm({
-        message: `Create a minimal Vitest v4 compatibility config in ${displayRelative(directory, plan.rootDir) || '.'}? A new config can change config discovery and project structure.`,
-        initialValue: false,
-      });
-      if (prompts.isCancel(confirmed)) {
-        cancelAndExit();
-      }
-      if (confirmed) {
-        createVitestV5CompatibilityConfig(plan, directory);
-      }
-    }
-  }
+function completeVitestV5Migration(plan: VitestV5MigrationPlan, report: MigrationReport) {
   const findings = finishVitestV5Migration(plan);
   report.warnings = report.warnings.filter((warning) => !warning.startsWith('Vitest v5:'));
   const summary = formatVitestV5Findings({ rootDir: plan.rootDir, findings });
@@ -919,7 +899,7 @@ async function executeMigrationPlan(
   }
 
   clearMigrationProgress();
-  await completeVitestV5Migration(vitestV5Plan, interactive, report);
+  completeVitestV5Migration(vitestV5Plan, report);
 
   // 8. Install git hooks
   if (plan.shouldSetupHooks) {
@@ -1475,7 +1455,7 @@ async function main() {
 
     if (needsInstall) {
       clearMigrationProgress();
-      await completeVitestV5Migration(vitestV5Plan, options.interactive, report);
+      completeVitestV5Migration(vitestV5Plan, report);
       const resolved = await ensureExistingPackageManager();
       updateMigrationProgress('Installing dependencies');
       const resolvedVersion = resolved?.version ?? packageManagerVersion;
@@ -1551,7 +1531,7 @@ async function main() {
     // Check for Rolldown-incompatible config patterns (root + workspace packages)
     if (!needsInstall) {
       clearMigrationProgress();
-      await completeVitestV5Migration(vitestV5Plan, options.interactive, report);
+      completeVitestV5Migration(vitestV5Plan, report);
     }
     await checkWorkspaceRolldownCompatibility(
       workspaceInfoOptional,

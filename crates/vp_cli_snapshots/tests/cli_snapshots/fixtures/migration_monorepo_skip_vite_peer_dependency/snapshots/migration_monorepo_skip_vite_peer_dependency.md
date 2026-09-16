@@ -12,20 +12,9 @@ migration should preserve vite peer contracts in workspace packages
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
-
-packages/vite-plugin/package.json
-  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
-    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied, 1 file had imports rewritten
-! Warnings:
-  - Vitest v5: 1 review item
-
-packages/vite-plugin/package.json
-  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
-    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
 ```
 
 ## `vpt print-file packages/vite-plugin/src/index.ts`

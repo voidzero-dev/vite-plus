@@ -800,15 +800,6 @@ export function planVitestV5Migration(
         changes.push({ file, before: source, after: result.content });
       }
     }
-    if (active && options.reviewV4 && configFiles.size === 0) {
-      findings.push(
-        finding(
-          path.join(directory, 'package.json'),
-          'configless-defaults',
-          `No test config exists. Vitest v5 clears mocks by default${options.browser ? ' and uses exact browser locators' : ''}. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.`,
-        ),
-      );
-    }
   }
   return {
     rootDir: workspace.rootDir,
@@ -910,18 +901,6 @@ export function vitestV5NeedsMigration(plan: VitestV5MigrationPlan): boolean {
     plan.changes.length > 0 ||
     plan.projects.some((project) => project.active && project.options.preserveV4)
   );
-}
-
-export function vitestV5ConfiglessProjects(plan: VitestV5MigrationPlan): string[] {
-  const configs = currentProjectConfigs(plan);
-  return plan.projects
-    .filter(
-      (project) =>
-        project.active &&
-        project.options.preserveV4 &&
-        configs.get(project.directory)!.length === 0,
-    )
-    .map((project) => project.directory);
 }
 
 function currentProjectConfigs(plan: VitestV5MigrationPlan): Map<string, string[]> {
@@ -1031,30 +1010,4 @@ export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Fi
     ),
   );
   return [...findings, ...after.findings];
-}
-
-/** The caller must obtain a separate explicit confirmation. This is never a
- * default side effect of the versioned pass or noninteractive --yes mode. */
-export function createVitestV5CompatibilityConfig(
-  plan: VitestV5MigrationPlan,
-  directory: string,
-): string {
-  const project = plan.projects.find((project) => project.directory === directory);
-  if (!project?.active || !project.sourceVersion || semver.major(project.sourceVersion) >= 5) {
-    throw new Error('This project does not need a v4 compatibility config.');
-  }
-  if (currentProjectConfigs(plan).get(directory)!.length > 0) {
-    throw new Error('A test config already exists; it will not be overwritten.');
-  }
-  const file = path.join(directory, 'vite.config.ts');
-  const browser = project.options.browser ? ', browser: { locators: { exact: false } }' : '';
-  const temporal = project.options.temporalPolyfill
-    ? ", fakeTimers: { toNotFake: ['Temporal'] }"
-    : '';
-  fs.writeFileSync(
-    file,
-    `import { defineConfig } from 'vite-plus';\n\nexport default defineConfig({ test: { clearMocks: false${browser}${temporal} } });\n`,
-    { flag: 'wx' },
-  );
-  return file;
 }

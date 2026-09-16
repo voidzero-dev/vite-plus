@@ -43,7 +43,7 @@ For v4 configs, the migration adds compatibility settings where you omitted the 
 
 New projects use v5 defaults. After the existing suite passes, remove compatibility settings one at a time to adopt those defaults.
 
-The Vitest pass leaves configless projects without a config. In interactive mode, you can confirm a separate action to create a minimal compatibility config. A new config can change config discovery and project structure. Other migration steps, such as merging lint configuration, can create `vite.config.ts`; the v4 compatibility settings apply to that new config during the same migration.
+If your project has no test config, you can use the v5 defaults without a review prompt or a new compatibility config. Other migration steps, such as merging lint configuration, can create `vite.config.ts`; the v4 compatibility settings apply to that new config during the same migration.
 
 After upgrading to v5, you can rerun `vp migrate` without reapplying v4 compatibility defaults, including in projects without a config. Finish the dependency installation before rerunning migration.
 

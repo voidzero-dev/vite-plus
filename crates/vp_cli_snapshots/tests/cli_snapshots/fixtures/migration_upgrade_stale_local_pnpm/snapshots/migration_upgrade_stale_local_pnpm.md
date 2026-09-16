@@ -10,23 +10,12 @@ newer global CLI must bypass the installed stale local CLI
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
-
-package.json
-  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
-    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
     vite-plus  0.1.24 → <version>
     vite              → <version>
 • Package manager settings configured
-! Warnings:
-  - Vitest v5: 1 review item
-
-package.json
-  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
-    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
 ```
 
 ## `vpt print-file package.json`

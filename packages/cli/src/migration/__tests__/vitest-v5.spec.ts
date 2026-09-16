@@ -9,12 +9,10 @@ import { PackageManager } from '../../types/index.ts';
 import {
   applyVitestV5Migration,
   applyVitestV5NodeMigration,
-  createVitestV5CompatibilityConfig,
   finishVitestV5Migration,
   formatVitestV5Findings,
   planVitestV5Migration,
   refreshVitestV5Migration,
-  vitestV5ConfiglessProjects,
   vitestV5NeedsMigration,
 } from '../migrator.ts';
 import { parseSource } from '../vitest-v5/ast.ts';
@@ -639,7 +637,7 @@ export default defineConfig({ plugins: [plugin()] });`;
       const plan = planProject(root);
       expect(plan.projects[0].configFiles.size).toBe(0);
       expect(plan.changes).toEqual([]);
-      expect(plan.findings.map(({ code }) => code)).toEqual(['configless-defaults']);
+      expect(plan.findings).toEqual([]);
       applyVitestV5Migration(plan);
       finishVitestV5Migration(plan);
       expect(fs.readFileSync(path.join(root, 'src/index.ts'), 'utf8')).toBe(input);
@@ -1483,13 +1481,9 @@ describe('Vitest v5 versioned preflight', () => {
       sourceVersion: '4.1.0',
       options: { preserveV4: true },
     });
-    expect(refreshed.findings).toContainEqual(
-      expect.objectContaining({ code: 'configless-defaults' }),
-    );
+    expect(refreshed.findings).toEqual([]);
     applyVitestV5Migration(refreshed);
-    expect(finishVitestV5Migration(refreshed)).toContainEqual(
-      expect.objectContaining({ code: 'configless-defaults' }),
-    );
+    expect(finishVitestV5Migration(refreshed)).toEqual([]);
     expect(planProject(root).projects[0].sourceVersion).toBeUndefined();
   });
 
@@ -1670,7 +1664,7 @@ export default defineConfig(CONFIG);`,
     });
     const plan = planProject(root);
     expect(plan.projects[0].configFiles.size).toBe(0);
-    expect(plan.findings.map((finding) => finding.code)).toEqual(['configless-defaults']);
+    expect(plan.findings).toEqual([]);
   });
 
   it('retains the Yarn catalog resolver when scanning after dependency updates', () => {
@@ -1719,7 +1713,6 @@ export default defineConfig(CONFIG);`,
     expect(fs.readFileSync(path.join(root, 'packages/unit/checks.ts'), 'utf8')).toContain(
       'clearMocks: false',
     );
-    expect(vitestV5ConfiglessProjects(plan)).not.toContain(path.join(root, 'packages/unit'));
     expect(fs.existsSync(path.join(root, '.vite-plus/migrations.json'))).toBe(false);
   });
 
@@ -1767,6 +1760,27 @@ export default defineConfig(CONFIG);`,
       "import { expect } from 'vite-plus/test'; expect(() => {}).toThrow('');",
     );
     expect(planProject(root).changes).toEqual([]);
+  });
+
+  it('still migrates source APIs and blocks unsupported APIs without a config', () => {
+    const root = project({
+      'example.test.ts': "import { test } from 'vitest'; test.sequential('works', () => {});",
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    expect(plan.changes[0].after).toContain("test('works', { concurrent: false }");
+    applyVitestV5Migration(plan);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+    expect(fs.existsSync(path.join(root, 'vite.config.ts'))).toBe(false);
+    fs.writeFileSync(
+      path.join(root, 'example.bench.ts'),
+      "import { bench } from 'vitest'; bench('work', () => 42, { time: 1 });",
+    );
+    const blocked = planProject(root);
+    expect(blocked.findings).toEqual([
+      expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
+    ]);
+    expect(() => applyVitestV5Migration(blocked)).toThrow('blocking');
   });
   it('does not treat stale overrides or transitive lockfile packages as active tests', () => {
     const root = project({
@@ -2346,30 +2360,39 @@ export default defineConfig(CONFIG);`,
     expect(planProject(root).changes).toEqual([]);
   });
 
-  it('keeps configless projects configless without recording completion', () => {
-    const root = project({ '.gitignore': '.vitest-reports/\n__screenshots__/\n' });
-    const plan = planProject(root);
-    expect(plan.findings.some((finding) => finding.code === 'configless-defaults')).toBe(true);
-    applyVitestV5Migration(plan);
-    expect(vitestV5NeedsMigration(plan)).toBe(true);
-    expect(finishVitestV5Migration(plan)).toContainEqual(
-      expect.objectContaining({ code: 'configless-defaults' }),
-    );
-    expect(fs.existsSync(path.join(root, 'vite.config.ts'))).toBe(false);
-    expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe(
-      '.vitest-reports/\n__screenshots__/\n.vitest/\n',
-    );
-    expect(fs.existsSync(path.join(root, '.vite-plus'))).toBe(false);
-    fs.writeFileSync(
-      path.join(root, 'package.json'),
-      JSON.stringify({ devDependencies: { vitest: '5.0.1' } }),
-    );
-    const repeated = planProject(root);
-    expect(repeated.findings).toEqual([]);
-    expect(vitestV5NeedsMigration(repeated)).toBe(false);
-    expect(vitestV5ConfiglessProjects(repeated)).toEqual([]);
-    expect(fs.existsSync(path.join(root, 'vite.config.ts'))).toBe(false);
-  });
+  it.each(['vitest run', 'vitest run --browser'])(
+    'keeps configless %s projects without a review',
+    (command) => {
+      const root = project({
+        'package.json': JSON.stringify({
+          devDependencies: { vitest: '4.1.11' },
+          scripts: { test: command },
+        }),
+        '.gitignore': '.vitest-reports/\n__screenshots__/\n',
+      });
+      const plan = planProject(root);
+      expect(plan.findings).toEqual([]);
+      expect(plan.projects[0].configFiles.size).toBe(0);
+      expect(plan.changes).toEqual([]);
+      applyVitestV5Migration(plan);
+      expect(vitestV5NeedsMigration(plan)).toBe(true);
+      expect(finishVitestV5Migration(plan)).toEqual([]);
+      expect(fs.existsSync(path.join(root, 'vite.config.ts'))).toBe(false);
+      expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe(
+        '.vitest-reports/\n__screenshots__/\n.vitest/\n',
+      );
+      expect(fs.existsSync(path.join(root, '.vite-plus'))).toBe(false);
+      fs.writeFileSync(
+        path.join(root, 'package.json'),
+        JSON.stringify({ devDependencies: { vitest: '5.0.1' } }),
+      );
+      const repeated = planProject(root);
+      expect(repeated.findings).toEqual([]);
+      expect(vitestV5NeedsMigration(repeated)).toBe(false);
+      expect(repeated.projects[0].configFiles.size).toBe(0);
+      expect(fs.existsSync(path.join(root, 'vite.config.ts'))).toBe(false);
+    },
+  );
 
   it('preserves defaults in a config created by another migration step', () => {
     const root = project();
@@ -2383,14 +2406,6 @@ export default defineConfig(CONFIG);`,
     expect(fs.readFileSync(path.join(root, 'vite.config.ts'), 'utf8')).toContain(
       'clearMocks: false',
     );
-  });
-
-  it('offers a separate creation action and never overwrites an existing config', () => {
-    const root = project();
-    const plan = planProject(root);
-    const file = createVitestV5CompatibilityConfig(plan, root);
-    expect(fs.readFileSync(file, 'utf8')).toContain('clearMocks: false');
-    expect(() => createVitestV5CompatibilityConfig(plan, root)).toThrow('already exists');
   });
 
   it('does not reapply compatibility defaults after the user adopts v5 defaults', () => {
