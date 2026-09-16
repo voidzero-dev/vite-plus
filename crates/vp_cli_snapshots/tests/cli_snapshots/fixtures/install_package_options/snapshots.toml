@@ -32,7 +32,8 @@ steps = [
 name = "npm_offline"
 vp = "global"
 steps = [
-  { argv = ["vp", "install", "vp-install-option-uncached-probe@1.0.0", "--offline", "--", "--registry=http://127.0.0.1:9", "--fetch-retries=0"], comment = "an uncached package fails in offline mode rather than attempting a connection", continue-on-failure = true },
+  { argv = ["vpt", "write-file", ".npmrc", "registry=http://127.0.0.1:9\nfetch-retries=0\ncache=.npm-cache\n"], snapshot = false },
+  { argv = ["vp", "install", "vp-install-option-uncached-probe@1.0.0", "--offline"], comment = "an uncached package fails in offline mode rather than attempting a connection", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "node_modules", "--assert", "missing"], continue-on-failure = true },
   ["vpt", "stat-file", "package-lock.json", "--assert", "missing"],
 ]
@@ -64,7 +65,7 @@ steps = [
 [[case]]
 name = "yarn_berry_lockfile_only"
 vp = "global"
-env = { YARN_ENABLE_TELEMETRY = "0" }
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
   { argv = ["vp", "install", "./dep", "--lockfile-only", "--ignore-scripts"], comment = "use update-lockfile rather than skip-build when both options are supplied" },
@@ -76,6 +77,7 @@ steps = [
 [[case]]
 name = "yarn_classic_frozen_lockfile_modes"
 vp = "global"
+# dep-v2's manifest must differ in size because Classic skips copying files with equal size/mtime.
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@1.22.22"], snapshot = false },
   { argv = ["vp", "install", "./dep", "--frozen-lockfile"], comment = "named-package installs warn and drop the unsupported add option" },
@@ -96,7 +98,7 @@ steps = [
 [[case]]
 name = "yarn_berry_frozen_lockfile_modes"
 vp = "global"
-env = { YARN_ENABLE_TELEMETRY = "0" }
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
   { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },

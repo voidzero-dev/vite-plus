@@ -1,6 +1,12 @@
 # npm_offline
 
-## `vp install vp-install-option-uncached-probe@1.0.0 --offline -- --registry=http://127.0.0.1:9 --fetch-retries=0`
+## `vpt write-file .npmrc 'registry=http://127.0.0.1:9
+fetch-retries=0
+cache=.npm-cache
+'`
+
+
+## `vp install vp-install-option-uncached-probe@1.0.0 --offline`
 
 an uncached package fails in offline mode rather than attempting a connection
 
@@ -11,7 +17,7 @@ VITE+ - The Unified Toolchain for the Web
 
 npm error code ENOTCACHED
 npm error request to http://127.0.0.1:<port>/vp-install-option-uncached-probe failed: cache mode is 'only-if-cached' but no cached response is available.
-npm error A complete log of this run can be found in: <home>/.npm/_logs/<timestamp>-debug-0.log
+npm error A complete log of this run can be found in: <workspace>/.npm-cache/_logs/<timestamp>-debug-0.log
 ```
 
 ## `vpt stat-file node_modules --assert missing`
