@@ -1102,6 +1102,17 @@ jobs:
         with:
           tool: cargo-nextest
 
+      # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
+      # which Yarn Classic discovers when walking parent directories.
+      - name: Create NTFS snapshot temp directory
+        id: snapshot-temp
+        shell: pwsh
+        run: |
+          $volume = [System.IO.Path]::GetPathRoot($env:RUNNER_TEMP)
+          $snapshotTemp = Join-Path $volume ('vp-snapshots-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $snapshotTemp | Out-Null
+          "directory=$snapshotTemp" >> $env:GITHUB_OUTPUT
+
       # `cargo-nextest` is invoked directly so the job never depends on the
       # runner's Rust toolchain. --workspace-remap makes nextest rewrite
       # CARGO_MANIFEST_DIR and CARGO_BIN_EXE_vpt to this checkout, which is
@@ -1127,7 +1138,7 @@ jobs:
           # Rust's GetTempPath2 ignores TEMP/TMP under the SYSTEM account.
           # Use the runner's NTFS workspace volume: C:\Windows\SystemTemp
           # rejects the case-sensitive directory flag on these hosts.
-          SystemTemp: ${{ runner.temp }}
+          SystemTemp: ${{ steps.snapshot-temp.outputs.directory }}
           # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
 

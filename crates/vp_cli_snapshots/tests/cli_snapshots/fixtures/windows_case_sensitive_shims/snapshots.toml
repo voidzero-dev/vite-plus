@@ -7,7 +7,7 @@ steps = [
   { argv = ["node", "setup.cjs"], snapshot = false },
   { argv = ["vp", "run", "probe"], tty = false, comment = "Nested task planning resolves the lowercase shim with uppercase PATHEXT." },
   { argv = ["vp", "exec", "astro", "--version"], cwd = "packages/app", tty = false },
-  { argv = ["vpt", "write-file", "node_modules/.bin/astro.CMD", "@echo wrong workspace shim %*"], snapshot = false },
+  { argv = ["node", "later-shim.cjs"], snapshot = false },
   { argv = ["vp", "run", "probe"], tty = false, comment = "The earlier package-local lowercase shim wins over a later uppercase shim." },
   { argv = ["vp", "exec", "astro", "--version"], cwd = "packages/app", tty = false },
   { argv = ["vp", "run", "cached"], cwd = "packages/app", tty = false },

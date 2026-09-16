@@ -18,7 +18,7 @@ local shim --version
 local shim --version
 ```
 
-## `vpt write-file node_modules/.bin/astro.CMD "@echo wrong workspace shim %*"`
+## `node later-shim.cjs`
 
 
 ## `vp run probe`
