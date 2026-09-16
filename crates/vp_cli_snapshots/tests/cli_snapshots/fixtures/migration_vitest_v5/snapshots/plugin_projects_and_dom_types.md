@@ -42,7 +42,7 @@ tsconfig.json
     Docs: https://viteplus.dev/guide/vitest-v5#review-checklist
 
 vite.config.ts
-  7:1 REVIEW [dynamic-config] Review the effective exported test config and its v4 defaults.
+  12:1 REVIEW [dynamic-config] Review the effective exported test config and its v4 defaults.
     Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ```
 

@@ -821,7 +821,18 @@ export default config;`,
       'export default {\r\n  test: {\r\n    // Keep this comment.\r\n    globals: true,\r\n  },\r\n};',
     );
     expect(result.content).toBe(
-      'export default {\r\n  test: {\r\n    clearMocks: false,\r\n    // Keep this comment.\r\n    globals: true,\r\n  },\r\n};',
+      [
+        'export default {',
+        '  test: {',
+        '    // Vitest v4 compatibility: preserve mock call history.',
+        '    // Remove after tests no longer rely on calls from setup or earlier tests.',
+        '    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default',
+        '    clearMocks: false,',
+        '    // Keep this comment.',
+        '    globals: true,',
+        '  },',
+        '};',
+      ].join('\r\n'),
     );
     expect(config(result.content).content).toBe(result.content);
   });
@@ -919,7 +930,7 @@ export default mergeConfig(base, overrides);`,
     const result = config(`export default { test: {
   projects: [{ extends: true, test: { browser: { enabled: true } } }],
 } };`);
-    expect(result.content).toContain('locators: { exact: false }');
+    expect(result.content).toMatch(/locators: \{\s*(?:\/\/[^\n]*\n\s*)+exact: false/);
     expect(result.findings).toEqual([]);
   });
 
@@ -929,7 +940,7 @@ export default mergeConfig(base, overrides);`,
   projects: [{ extends: true, test: { browser: { enabled: true } } }],
 } };`);
     expect(result.content.match(/locators:/g)).toHaveLength(1);
-    expect(result.content).toContain('locators: { exact: false }');
+    expect(result.content).toMatch(/locators: \{\s*(?:\/\/[^\n]*\n\s*)+exact: false/);
   });
 
   it('does not override dynamic inherited browser settings', () => {

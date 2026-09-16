@@ -63,7 +63,12 @@ describe('utilities', () => {
 export default {
   fmt: {},
   lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
-  test: { clearMocks: false,  reporters: ["verbose","json"], outputFile: { json: "reports/config.json" },  include: ['unused.test.js'], benchmark: { include: ['example.bench.ts'],   } }
+  test: {
+      // Vitest v4 compatibility: preserve mock call history.
+      // Remove after tests no longer rely on calls from setup or earlier tests.
+      // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+      clearMocks: false,
+      reporters: ["verbose","json"], outputFile: { json: "reports/config.json" },  include: ['unused.test.js'], benchmark: { include: ['example.bench.ts'],   } }
 }
 {
   "devDependencies": {

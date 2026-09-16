@@ -29,19 +29,30 @@ The Node compatibility checks cover `.node-version`, `.nvmrc`, and the `engines.
 
 ## Preserve existing behavior
 
-For v4 configs, the migration adds compatibility settings where you omitted the corresponding option. Explicit settings take precedence.
+For v4 configs, the migration adds compatibility settings where you omitted the corresponding option. Explicit settings take precedence. Beside each added setting, you get a comment with the reason, guidance for adopting v5 behavior, and a link to the Vitest migration guide:
 
-| Setting                              | Reason to retain it during the upgrade                                 |
-| ------------------------------------ | ---------------------------------------------------------------------- |
-| `test.clearMocks: false`             | Retain mock history from setup files, `beforeAll`, and earlier tests.  |
-| `test.sharedViteServer: false`       | Retain separate servers for inline projects.                           |
-| Inline `extends: false`              | Retain v4's lack of root-config inheritance.                           |
-| `browser.locators.exact: false`      | Retain partial and case-insensitive locator matching.                  |
-| Reporter `{ stdout: true }`          | Retain stdout for JSON/JUnit reporters without an output file.         |
-| Glob threshold `perFile: true`       | Retain enforcement inherited from `coverage.thresholds.perFile` in v4. |
-| `fakeTimers.toNotFake: ['Temporal']` | Retain fake-timer behavior with a global Temporal polyfill.            |
+```ts
+test: {
+  // Vitest v4 compatibility: preserve mock call history.
+  // Remove after tests no longer rely on calls from setup or earlier tests.
+  // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+  clearMocks: false,
+}
+```
 
-New projects use v5 defaults. After the existing suite passes, remove compatibility settings one at a time to adopt those defaults.
+| Added setting                                                                                                                          | Behavior to check before removing it                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [`test.clearMocks: false`](https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default)                                       | Check assertions that depend on mock calls from setup, `beforeAll`, or earlier tests. V5 clears that history before each test.          |
+| [`test.sharedViteServer: false`](https://vitest.dev/guide/migration/#inline-projects-share-the-vite-server-by-default)                 | Check plugins and config hooks with a shared server. V5 initializes them once for eligible inline projects.                             |
+| [Inline `extends: false`](https://vitest.dev/guide/migration/#inline-projects-inherit-the-root-config-by-default)                      | Check inherited root options, plugins, and setup files. V5 merges arrays, so avoid duplicate setup.                                     |
+| [`browser.locators.exact: false`](https://vitest.dev/guide/migration/#locators-are-strict-by-default)                                  | Update locators for full, case-sensitive matches, or opt out on individual locators.                                                    |
+| [JSON/JUnit reporter `{ stdout: true }`](https://vitest.dev/guide/migration/#generated-reports-and-artifacts-use-the-vitest-directory) | Update CI and report consumers to read output files. Keep the setting if you need stdout.                                               |
+| [Glob threshold `perFile: true`](https://vitest.dev/guide/migration/#glob-coverage-thresholds-no-longer-inherit-perfile)               | Keep for per-file coverage enforcement. Remove to check matching files as a group.                                                      |
+| [`fakeTimers.toNotFake: ['Temporal']`](https://vitest.dev/guide/migration/#fake-timers-and-setsystemtime-now-mock-temporal)            | Check tests that use the global Temporal polyfill with fake timers. Remove only `Temporal` to use mocked time; retain other exclusions. |
+
+New projects use v5 defaults. To adopt those defaults in an existing project, change one setting at a time and run the affected tests. Check CI and report consumers for output changes. Remove the accompanying comment after you accept the new behavior, or replace it with your project's reason for keeping the setting. These options remain supported in v5; you do not need to remove them all.
+
+The migration leaves your existing settings and comments untouched. It does not add comments to settings from an earlier migration, since it cannot distinguish those settings from your own choices. Repeated runs do not duplicate comments or restore comments you removed.
 
 If your project has no test config, you can use the v5 defaults without a review prompt or a new compatibility config. Other migration steps, such as merging lint configuration, can create `vite.config.ts`; the v4 compatibility settings apply to that new config during the same migration.
 

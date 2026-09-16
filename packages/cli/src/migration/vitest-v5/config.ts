@@ -14,10 +14,13 @@ import {
   isString,
   isBoolean,
   isModuleExports,
+  printAddedObject,
+  type AddedProperty,
   type RewriteResult,
   type SourceOptions,
 } from './ast.ts';
 import { migrateBenchmarkConfig } from './benchmark-config.ts';
+import { compatibilityProperty } from './compatibility.ts';
 
 function isTrue(node: t.Node | undefined): boolean {
   return isBoolean(node) && node.value;
@@ -286,12 +289,12 @@ function migrateConfig(
   function nested(
     object: t.ObjectExpression,
     key: string,
-    additions: string,
+    additions: string | AddedProperty[],
     apply: (node: t.ObjectExpression) => void,
   ) {
     const prop = objectProperty(object, key);
     if (!prop) {
-      editor.add(object, key, `{ ${additions} }`);
+      editor.add(object, key, typeof additions === 'string' ? `{ ${additions} }` : additions);
     } else if (staticObject(prop.value)) {
       apply(prop.value);
     } else {
@@ -301,6 +304,14 @@ function migrateConfig(
         `Resolve ${key} before applying Vitest v5 compatibility options.`,
       );
     }
+  }
+
+  function addCompatibility(
+    object: t.ObjectExpression,
+    key: Parameters<typeof compatibilityProperty>[0],
+  ) {
+    const property = compatibilityProperty(key);
+    editor.add(object, key, property.value, property.comment);
   }
 
   function reporters(test: t.ObjectExpression) {
@@ -359,11 +370,25 @@ function migrateConfig(
         );
       } else if (staticObject(opts)) {
         if (!objectProperty(opts, 'outputFile')) {
-          editor.add(opts, 'stdout', 'true');
+          addCompatibility(opts, 'stdout');
         }
       } else {
-        const tuple = `[${editor.text(name)}, { stdout: true }]`;
-        editor.replace(entry!, prop.value.type === 'ArrayExpression' ? tuple : `[${tuple}]`);
+        const indent =
+          source
+            .slice(source.lastIndexOf('\n', entry!.start) + 1, entry!.start)
+            .match(/^[\t ]*/)?.[0] ?? '';
+        const object = printAddedObject(
+          [compatibilityProperty('stdout')],
+          indent,
+          source.includes('\r\n') ? '\r\n' : '\n',
+        );
+        if (entry?.type === 'ArrayExpression') {
+          // Retain comments and a possible trailing comma in a reporter tuple.
+          editor.edit(name.end, name.end, `, ${object}`);
+        } else {
+          const tuple = `[${editor.text(name)}, ${object}]`;
+          editor.replace(entry!, prop.value.type === 'ArrayExpression' ? tuple : `[${tuple}]`);
+        }
       }
     }
     if (
@@ -395,7 +420,7 @@ function migrateConfig(
       return;
     }
     if (preserveDefaults && !inherits) {
-      editor.add(test, 'clearMocks', 'false');
+      addCompatibility(test, 'clearMocks');
     }
     const browser = objectProperty(test, 'browser');
     if (browser && staticObject(browser.value)) {
@@ -404,8 +429,8 @@ function migrateConfig(
       // Do not replace its explicit or dynamic locator setting in the child.
       const inheritsBrowser = inherits && parentTest && objectProperty(parentTest, 'browser');
       if (preserveDefaults && !inheritsBrowser) {
-        nested(value, 'locators', 'exact: false', (locators) =>
-          editor.add(locators, 'exact', 'false'),
+        nested(value, 'locators', [compatibilityProperty('exact')], (locators) =>
+          addCompatibility(locators, 'exact'),
         );
       }
       const api = objectProperty(value, 'api');
@@ -448,8 +473,8 @@ function migrateConfig(
     }
 
     if (preserveDefaults && options.temporalPolyfill) {
-      nested(test, 'fakeTimers', "toNotFake: ['Temporal']", (timers) =>
-        editor.add(timers, 'toNotFake', "['Temporal']"),
+      nested(test, 'fakeTimers', [compatibilityProperty('toNotFake')], (timers) =>
+        addCompatibility(timers, 'toNotFake'),
       );
     }
     const coverage = objectProperty(test, 'coverage');
@@ -487,7 +512,7 @@ function migrateConfig(
             continue;
           }
           if (staticObject(threshold.value)) {
-            editor.add(threshold.value, 'perFile', 'true');
+            addCompatibility(threshold.value, 'perFile');
           } else {
             editor.report(
               threshold,
@@ -535,7 +560,7 @@ function migrateConfig(
     }
     const hasInline = projects.value.elements.some((item) => item && !isString(item));
     if (hasInline && preserveDefaults) {
-      editor.add(test, 'sharedViteServer', 'false');
+      addCompatibility(test, 'sharedViteServer');
     }
     for (const project of projects.value.elements) {
       if (!project || isString(project)) {
@@ -551,7 +576,7 @@ function migrateConfig(
       }
       const extendsValue = objectProperty(project, 'extends');
       if (preserveDefaults) {
-        editor.add(project, 'extends', 'false');
+        addCompatibility(project, 'extends');
       }
       config(project, isTrue(extendsValue?.value), test);
     }
@@ -580,11 +605,11 @@ function migrateConfig(
     const test = objectProperty(object, 'test');
     if (!test) {
       if (preserveDefaults && !inherits) {
-        editor.add(
-          object,
-          'test',
-          `{ clearMocks: false${options.temporalPolyfill ? ", fakeTimers: { toNotFake: ['Temporal'] }" : ''} }`,
-        );
+        const properties = [compatibilityProperty('clearMocks')];
+        if (options.temporalPolyfill) {
+          properties.push({ key: 'fakeTimers', value: [compatibilityProperty('toNotFake')] });
+        }
+        editor.add(object, 'test', properties);
       }
     } else if (staticObject(test.value)) {
       testOptions(test.value, inherits, parentTest);
