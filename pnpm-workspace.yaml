@@ -9,10 +9,10 @@ packages:
 catalog:
   '@babel/core': ^7.29.7
   '@babel/parser': ^7.29.8
-  '@babel/traverse': ^7.29.8
-  '@babel/types': ^7.29.8
   '@babel/preset-env': ^7.29.7
   '@babel/preset-typescript': ^7.29.7
+  '@babel/traverse': ^7.29.8
+  '@babel/types': ^7.29.8
   '@clack/core': ^1.0.0
   '@emnapi/core': 2.0.0-alpha.5
   '@emnapi/runtime': 2.0.0-alpha.5
