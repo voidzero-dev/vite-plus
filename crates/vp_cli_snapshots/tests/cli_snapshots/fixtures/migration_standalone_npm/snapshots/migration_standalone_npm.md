@@ -7,12 +7,6 @@ migration should work with npm, add overrides, and update lockfile
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
-
-package.json
-  1:1 REVIEW [configless-defaults] No test config exists. Vitest v5 clears mocks by default. A separate confirmed action can create compatibility config, but a new config can change config discovery and project structure.
-    Docs: https://viteplus.dev/guide/vitest-v5#preserve-existing-behavior
-
 Formatting code...
 
 Code formatted

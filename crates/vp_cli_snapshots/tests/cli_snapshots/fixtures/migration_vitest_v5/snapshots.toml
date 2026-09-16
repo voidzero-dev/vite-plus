@@ -12,6 +12,36 @@ steps = [
 ]
 
 [[case]]
+name = "configless_defaults"
+vp = "global"
+comment = "Migrate a configless workspace member's source APIs without a review or a new compatibility config."
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - packages/*\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/unit/package.json", "{\"name\":\"unit\",\"private\":true,\"type\":\"module\",\"devDependencies\":{\"vitest\":\"4.1.11\"}}\n"], snapshot = false },
+  { argv = ["vpt", "cp", "example.test.ts", "packages/unit/example.test.ts"], snapshot = false },
+  { argv = ["vpt", "rm", "example.test.ts"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "stat-file", "packages/unit/vite.config.ts", "--assert", "missing"],
+  ["vpt", "print-file", "packages/unit/example.test.ts"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "configless_interactive"
+vp = "global"
+comment = "Complete interactive migration without prompting to create a Vitest compatibility config in a configless workspace member."
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - packages/*\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/unit/package.json", "{\"name\":\"unit\",\"private\":true,\"type\":\"module\",\"devDependencies\":{\"vitest\":\"4.1.11\"}}\n"], snapshot = false },
+  { argv = ["vpt", "cp", "example.test.ts", "packages/unit/example.test.ts"], snapshot = false },
+  { argv = ["vpt", "rm", "example.test.ts"], snapshot = false },
+  { argv = ["vp", "pm", "config", "get", "registry"], snapshot = false },
+  ["vp", "migrate", "--interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "stat-file", "packages/unit/vite.config.ts", "--assert", "missing"],
+  ["vpt", "print-file", "packages/unit/example.test.ts"],
+]
+
+[[case]]
 name = "stateless_rerun"
 vp = "global"
 comment = "After upgrading, preserve new v5 choices on reruns without migration metadata. Ignore a legacy preview state file without overwriting it."

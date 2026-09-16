@@ -40,7 +40,6 @@ const sections: Record<string, string> = {
 };
 
 const localSections: Record<string, string> = {
-  'configless-defaults': 'preserve-existing-behavior',
   'dynamic-config': 'resolve-migration-findings',
   'dynamic-project': 'resolve-migration-findings',
   'global-api-ownership': 'resolve-migration-findings',
