@@ -51,7 +51,7 @@ Options:
       --shamefully-hoist
           Create flat node_modules (pnpm only)
       --silent
-          Suppress package manager output
+          Suppress Vite+ output and enable native silent mode where supported
       --filter <PATTERN>
           Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root

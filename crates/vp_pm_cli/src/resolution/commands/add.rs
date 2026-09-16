@@ -77,7 +77,7 @@ pub struct AddArgs {
     #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) shamefully_hoist: bool,
 
-    /// Suppress package manager output
+    /// Suppress Vite+ output and enable native silent mode where supported
     #[arg(long, conflicts_with = "global", not_supported(yarn >= "2"))]
     pub(crate) silent: bool,
 

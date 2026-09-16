@@ -169,7 +169,7 @@ Options:
   -f, --force                         Force reinstall all dependencies
   --no-lockfile                       Don't read or generate lockfile
   --shamefully-hoist                  Create flat node_modules (pnpm only)
-  --silent                            Suppress package manager output
+  --silent                            Suppress Vite+ output and enable native silent mode where supported
   --filter <PATTERN>                  Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root                Add to workspace root
   --workspace                         Only add if package exists in workspace (pnpm-specific)
