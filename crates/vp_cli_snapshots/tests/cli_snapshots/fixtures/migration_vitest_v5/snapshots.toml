@@ -300,6 +300,54 @@ steps = [
 ]
 
 [[case]]
+name = "benchmark_global_default_scope"
+vp = "global"
+comment = "Migrate globals in default benchmark paths independently of test patterns, preserve an unrelated runner's file, and execute the parenthesized workload."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { globals: true } };\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bench", "vitest bench --run"], snapshot = false },
+  { argv = ["vpt", "write-file", "example.bench.js", "bench('work', (() => { for (let i = 0; i < 100; i++) JSON.parse('{\"value\":42}'); }));\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unrelated.js", "bench('other runner', () => { expect(() => {}).toThrow(''); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "example.bench.js", "unrelated.js"],
+  { argv = ["vp", "test", "bench", "--run", "--reporter=json", "--outputFile=benchmark.json"], snapshot = false },
+  ["node", "verify-benchmark-regressions.mjs", "example.bench.js", "work"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "benchmark_global_custom_scope"
+vp = "global"
+comment = "Use benchmark include/exclude independently of test exclusions. Preserve excluded and out-of-scope files, including the overridden default benchmark path."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { globals: true, exclude: ['perf/**'], benchmark: { include: ['perf/*.js'], exclude: ['perf/excluded.js'] } } };\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bench", "vitest bench --run"], snapshot = false },
+  { argv = ["vpt", "write-file", "perf/work.js", "bench('work', () => { for (let i = 0; i < 100; i++) JSON.parse('{\"value\":42}'); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "perf/excluded.js", "bench('excluded', () => { expect(() => {}).toThrow(''); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "example.bench.js", "bench('other runner', () => { expect(() => {}).toThrow(''); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "perf/work.js", "perf/excluded.js", "example.bench.js"],
+  { argv = ["vp", "test", "bench", "--run", "--reporter=json", "--outputFile=benchmark.json"], snapshot = false },
+  ["node", "verify-benchmark-regressions.mjs", "perf/work.js", "work"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "benchmark_parenthesized_workloads"
+vp = "global"
+comment = "Migrate and run parenthesized arrows, function expressions, and local callbacks without losing parentheses, comments, or trailing commas."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: {} };\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bench", "vitest bench --run"], snapshot = false },
+  { argv = ["vpt", "write-file", "example.bench.js", "import { bench } from 'vitest';\nconst workload = () => { for (let i = 0; i < 100; i++) JSON.parse('{\"value\":42}'); };\nbench('arrow', (() => workload()));\nbench('nested', ((() => workload())));\nbench('function', (function () { workload(); }));\nbench('local', (workload));\nbench('comments', (/* before */ (() => workload()) /* after */), /* trailing */);\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "example.bench.js"],
+  { argv = ["vp", "test", "bench", "--run", "--reporter=json", "--outputFile=benchmark.json"], snapshot = false },
+  ["node", "verify-benchmark-regressions.mjs", "example.bench.js", "arrow", "nested", "function", "local", "comments"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "benchmark_migration"
 vp = "global"
 comment = "Migrate direct benchmarks, preserve suite closures and modifiers, and execute the migrated workloads with Vitest 5. Keep the supported bench command."

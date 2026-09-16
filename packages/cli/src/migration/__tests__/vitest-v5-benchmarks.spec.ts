@@ -148,6 +148,36 @@ bench('comments', /* workload */ () => { /* inside */ work(); }, /* trailing */)
   });
 
   it.each([
+    '(() => 42)',
+    '((() => 42))',
+    '(function () { return 42; })',
+    '(workload)',
+    '((workload))',
+    '(/* before */ (() => 42) /* after */), /* trailing */',
+    '(() => 42 // trailing line comment\n)',
+  ])('preserves parenthesized workload arguments: %s', async (callback) => {
+    const result = migrate(`const workload = () => 42; bench('work', ${callback});`, true);
+    expect(result.findings).toEqual([]);
+    const tests: Array<(context: unknown) => Promise<void>> = [];
+    runInNewContext(result.content, {
+      test: (_name: string, fn: (context: unknown) => Promise<void>) => tests.push(fn),
+    });
+    expect(tests).toHaveLength(1);
+    let executions = 0;
+    await tests[0]({
+      bench: (name: string, fn: () => number) => ({
+        run: () => {
+          expect(name).toBe('work');
+          expect(fn()).toBe(42);
+          executions++;
+        },
+      }),
+    });
+    expect(executions).toBe(1);
+    expect(migrate(result.content, true)).toEqual({ content: result.content, findings: [] });
+  });
+
+  it.each([
     `function workload() { return 42; }`,
     `const workload = () => 42;`,
     `const workload = async function () { return 42; };`,

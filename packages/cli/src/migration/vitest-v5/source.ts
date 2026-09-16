@@ -970,5 +970,18 @@ export function migrateVitestV5Source(
     const offset = firstStatement?.start ?? source.length;
     editor.edit(offset, offset, `${firstStatement ? '' : '\n'}${runnerAliases.join('\n')}\n`);
   }
-  return editor.finish();
+  const result = editor.finish();
+  const benchmark =
+    benchmarks.imports.values().next().value ?? benchmarks.calls.values().next().value;
+  if (benchmark && result.content === source) {
+    // Suppress removed-API findings only for edits that survive validation.
+    // A rollback retains the legacy API and must stop dependency upgrades.
+    editor.report(
+      benchmark,
+      'benchmark-api',
+      'The benchmark rewrite was discarded. Migrate the remaining legacy bench API manually before upgrading to Vitest v5.',
+      'block',
+    );
+  }
+  return result;
 }
