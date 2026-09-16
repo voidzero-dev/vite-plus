@@ -13,8 +13,8 @@ should keep the recorded spec when the reinstall fails
 **Exit code:** 1
 
 ```
-[1m[94minfo:[39m[0m Updating 1 global package with Node.js <version>
-[1m[31merror:[39m[0m Failed to update semver: Executable 'semver' is already installed by conflicting-package
+info: Updating 1 global package with Node.js <version>
+error: Failed to update semver: Executable 'semver' is already installed by conflicting-package
 
 Please remove conflicting-package before installing semver, or use --force to auto-replace
 ```
