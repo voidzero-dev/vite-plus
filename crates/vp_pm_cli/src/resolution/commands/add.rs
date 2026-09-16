@@ -36,7 +36,6 @@ pub struct AddArgs {
     pub(crate) no_optional: bool,
 
     /// Fail if lockfile needs to be updated
-    // Yarn Classic accepts this on `add` but skips install's frozen-lockfile validation.
     #[arg(long, conflicts_with = "global", overrides_with = "no_frozen_lockfile", not_supported(npm, pnpm, yarn >= "2"))]
     pub(crate) frozen_lockfile: bool,
 
@@ -269,6 +268,14 @@ impl Resolve<AddArgs> for Yarn {
             return Npm::resolve_add(args);
         }
 
+        // Classic accepts the flag but skips the frozen-lockfile consistency check on add.
+        if !self.is_berry() && args.frozen_lockfile {
+            return CommandResolution::InvalidArgument(
+                "Invalid argument: Yarn Classic `add` cannot enforce `--frozen-lockfile`."
+                    .to_string(),
+            );
+        }
+
         let mut cmd = CommandBuilder::new("yarn");
         if !args.filter.is_empty() {
             if !self.is_berry() {
@@ -310,7 +317,6 @@ impl Resolve<AddArgs> for Yarn {
         } else {
             cmd.arg_if("--ignore-scripts", args.ignore_scripts)
                 .arg_if("--ignore-optional", args.no_optional)
-                .arg_if("--frozen-lockfile", args.frozen_lockfile)
                 .arg_if("--prefer-offline", args.prefer_offline)
                 .arg_if("--offline", args.offline)
                 .arg_if("--force", args.force)
@@ -657,7 +663,11 @@ mod tests {
             let args = parse_args::<AddArgs>([flag, "react"]).unwrap();
             let classic = resolve(&yarn("1.22.22"), args.clone());
             if flag == "--frozen-lockfile" {
-                assert_eq!(expect_run(classic.outcome).args, ["add", flag, "react"]);
+                assert!(matches!(
+                    classic.outcome,
+                    CommandResolution::InvalidArgument(message)
+                        if message == "Invalid argument: Yarn Classic `add` cannot enforce `--frozen-lockfile`."
+                ));
                 assert!(classic.diagnostics.is_empty());
             } else {
                 assert_eq!(expect_run(classic.outcome).args, ["add", "react"]);

@@ -9,39 +9,59 @@
 ## `vpt cp yarn.lock before.lock`
 
 
+## `vpt cp package.json before.json`
+
+
 ## `vp install ./dep-v2 --frozen-lockfile`
 
-Classic add preserves the lockfile but allows manifest changes
+reject named-package frozen installs before invoking Classic add
+
+**Exit code:** 1
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-yarn add <version>
-[1/4] Resolving packages...
-[2/4] Fetching packages...
-[3/4] Linking dependencies...
-[4/4] Building fresh packages...
+Invalid argument: Yarn Classic `add` cannot enforce `--frozen-lockfile`.
+```
 
-success Saved 1 new dependency.
-info Direct dependencies
-└─ install-option-dep@2.0.0
-info All dependencies
-└─ install-option-dep@2.0.0
+## `vp add ./dep-v2 --frozen-lockfile`
+
+direct add rejects the same combination
+
+**Exit code:** 1
+
+```
+Invalid argument: Yarn Classic `add` cannot enforce `--frozen-lockfile`.
+```
+
+## `node -e 'const fs = require('\''node:fs'\''); for (const [file, before] of [['\''package.json'\'', '\''before.json'\''], ['\''yarn.lock'\'', '\''before.lock'\'']]) { if ('\!'fs.readFileSync(file).equals(fs.readFileSync(before))) process.exit(1); } console.log('\''manifest and lockfile unchanged'\'');'`
+
+```
+manifest and lockfile unchanged
+```
+
+## `node -p require('./node_modules/install-option-dep/package.json').version`
+
+```
+1.0.0
+```
+
+## `vp install --frozen-lockfile`
+
+package-free frozen installs succeed when the manifest and lockfile agree
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+yarn install <version>
+[1/4] Resolving packages...
+success Already up-to-date.
 
 Done in <duration>.
 ```
 
-## `node -e 'const fs = require('\''node:fs'\''); if ('\!'fs.readFileSync('\''yarn.lock'\'').equals(fs.readFileSync('\''before.lock'\''))) process.exit(1); console.log('\''lockfile unchanged'\'');'`
+## `vpt json-edit package.json dependencies.install-option-dep file:./dep-v2`
 
-```
-lockfile unchanged
-```
-
-## `node -p require('./package.json').dependencies['install-option-dep']`
-
-```
-./dep-v2
-```
 
 ## `vp install --frozen-lockfile`
 
