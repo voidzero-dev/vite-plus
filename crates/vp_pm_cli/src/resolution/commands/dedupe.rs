@@ -8,7 +8,7 @@ use crate::resolution::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct DedupeArgs {
     /// Check if deduplication would make changes
-    #[arg(long)]
+    #[arg(long, not_supported(yarn < "2", bun < "1.4"))]
     pub(crate) check: bool,
 
     /// Additional arguments to pass through to the package manager
@@ -126,6 +126,7 @@ mod tests {
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["dedupe", "--check"]);
+        assert!(resolution.diagnostics.is_empty());
     }
 
     #[test]
@@ -135,12 +136,14 @@ mod tests {
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["install"]);
-        assert_eq!(resolution.diagnostics.len(), 1);
+        assert_eq!(resolution.diagnostics.len(), 2);
+        assert_eq!(resolution.diagnostics[0].message, "yarn <2 does not support --check.");
+        assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::UnsupportedOptionDropped);
         assert_eq!(
-            resolution.diagnostics[0].message,
+            resolution.diagnostics[1].message,
             "Yarn Classic dedupes during install, falling back to yarn install"
         );
-        assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::FallbackCommand);
+        assert_eq!(resolution.diagnostics[1].kind, DiagnosticKind::FallbackCommand);
     }
 
     #[test]
@@ -156,6 +159,24 @@ mod tests {
             "bun dedupe requires bun >= 1.4, falling back to bun install"
         );
         assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::FallbackCommand);
+    }
+
+    #[test]
+    fn test_bun_dedupe_check_warns_and_falls_back_to_install() {
+        let resolution = resolve(&bun("1.3.11"), DedupeArgs { check: true, ..Default::default() });
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "bun");
+        assert_eq!(command.args, vec!["install"]);
+        let messages =
+            resolution.diagnostics.iter().map(|entry| entry.message.as_str()).collect::<Vec<_>>();
+        assert_eq!(
+            messages,
+            vec![
+                "bun <1.4 does not support --check.",
+                "bun dedupe requires bun >= 1.4, falling back to bun install"
+            ]
+        );
     }
 
     #[test]
@@ -175,6 +196,7 @@ mod tests {
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["dedupe", "--check"]);
+        assert!(resolution.diagnostics.is_empty());
     }
 
     #[test]
