@@ -6,7 +6,7 @@ use std::{
     process::ExitStatus,
 };
 
-use owo_colors::OwoColorize;
+use console::style;
 use rustc_hash::FxHashSet;
 use vp_shared::output;
 use vt_path::AbsolutePathBuf;
@@ -325,7 +325,7 @@ fn confirm_implode(
         }
     }
     output::raw("");
-    output::raw(&vt_str::format!("Type {} to confirm:", "uninstall".bold()));
+    output::raw(&vt_str::format!("Type {} to confirm:", style("uninstall").bold()));
 
     // String is needed here for read_line
     #[expect(clippy::disallowed_types)]

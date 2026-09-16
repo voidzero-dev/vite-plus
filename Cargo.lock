@@ -6969,9 +6969,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.44"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6725596c3f2c3a0aef021139e145d4eafe314a6623e4680ca83852b2c67ab2ba"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "once_cell",
  "ring",
@@ -8632,12 +8632,12 @@ dependencies = [
  "async-trait",
  "base64-simd",
  "clap",
+ "console",
  "cow-utils",
  "fspy",
  "napi",
  "napi-build",
  "napi-derive",
- "owo-colors",
  "petgraph 0.8.3",
  "pretty_assertions",
  "rolldown_binding",
@@ -8668,7 +8668,7 @@ name = "vp_cli_help"
 version = "0.0.0"
 dependencies = [
  "clap",
- "owo-colors",
+ "console",
  "terminal_size",
  "vp_shared",
 ]
@@ -8741,6 +8741,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap_complete",
+ "console",
  "crossterm",
  "dialoguer",
  "directories",
@@ -8751,7 +8752,6 @@ dependencies = [
  "indicatif",
  "indoc",
  "node-semver",
- "owo-colors",
  "oxc_resolver",
  "rustc-hash",
  "same-file",
@@ -8913,9 +8913,9 @@ dependencies = [
 name = "vp_shared"
 version = "0.0.0"
 dependencies = [
+ "console",
  "directories",
  "nix 0.30.1",
- "owo-colors",
  "reqwest",
  "rustls",
  "serde",

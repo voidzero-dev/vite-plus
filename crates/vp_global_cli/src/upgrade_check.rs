@@ -12,7 +12,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use owo_colors::OwoColorize;
+use console::style;
 use serde::{Deserialize, Serialize};
 use vp_setup::registry;
 
@@ -308,12 +308,12 @@ pub fn display_cached_upgrade_notice() {
 
     eprintln!(
         "\n{} {} {} {}{} {}",
-        "vp update available:".bright_black(),
-        current_version.bright_black(),
-        "\u{2192}".bright_black(),
-        cache.latest.bright_green().bold(),
-        ", run".bright_black(),
-        "vp upgrade".bright_green().bold(),
+        style("vp update available:").for_stderr().black().bright(),
+        style(&current_version).for_stderr().black().bright(),
+        style("\u{2192}").for_stderr().black().bright(),
+        style(&cache.latest).for_stderr().green().bright().bold(),
+        style(", run").for_stderr().black().bright(),
+        style("vp upgrade").for_stderr().green().bright().bold(),
     );
 
     cache.prompted_at = now;

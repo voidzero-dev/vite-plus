@@ -1,11 +1,12 @@
 //! Shared CLI output formatting for consistent message prefixes and status symbols.
 //!
 //! All commands should use these functions instead of ad-hoc formatting to ensure
-//! consistent output across the entire CLI.
+//! consistent output across the entire CLI. Styling uses console's color detection
+//! for the stream receiving each message.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use owo_colors::OwoColorize;
+use console::style;
 
 /// When set, user-facing stdout output (info/pass/note/success/raw) is routed
 /// to stderr instead. Shim dispatch enables this once at entry: a shim's
@@ -39,9 +40,9 @@ pub const ARROW: &str = "\u{2192}";
 #[expect(clippy::print_stdout, clippy::print_stderr, clippy::disallowed_macros)]
 pub fn info(msg: &str) {
     if user_output_to_stderr() {
-        eprintln!("{} {msg}", "info:".bright_blue().bold());
+        eprintln!("{} {msg}", style("info:").for_stderr().blue().bright().bold());
     } else {
-        println!("{} {msg}", "info:".bright_blue().bold());
+        println!("{} {msg}", style("info:").blue().bright().bold());
     }
 }
 
@@ -49,22 +50,22 @@ pub fn info(msg: &str) {
 #[expect(clippy::print_stdout, clippy::print_stderr, clippy::disallowed_macros)]
 pub fn pass(msg: &str) {
     if user_output_to_stderr() {
-        eprintln!("{} {msg}", "pass:".bright_blue().bold());
+        eprintln!("{} {msg}", style("pass:").for_stderr().blue().bright().bold());
     } else {
-        println!("{} {msg}", "pass:".bright_blue().bold());
+        println!("{} {msg}", style("pass:").blue().bright().bold());
     }
 }
 
 /// Print a warning message to stderr.
 #[expect(clippy::print_stderr, clippy::disallowed_macros)]
 pub fn warn(msg: &str) {
-    eprintln!("{} {msg}", "warn:".yellow().bold());
+    eprintln!("{} {msg}", style("warn:").for_stderr().yellow().bold());
 }
 
 /// Print an error message to stderr.
 #[expect(clippy::print_stderr, clippy::disallowed_macros)]
 pub fn error(msg: &str) {
-    eprintln!("{} {msg}", "error:".red().bold());
+    eprintln!("{} {msg}", style("error:").for_stderr().red().bold());
 }
 
 /// Print a note message to stderr (supplementary info).
@@ -74,16 +75,16 @@ pub fn error(msg: &str) {
 /// or a parser keeps the command's own output intact.
 #[expect(clippy::print_stderr, clippy::disallowed_macros)]
 pub fn note(msg: &str) {
-    eprintln!("{} {msg}", "note:".dimmed().bold());
+    eprintln!("{} {msg}", style("note:").for_stderr().dim().bold());
 }
 
 /// Print a success line with checkmark to stdout.
 #[expect(clippy::print_stdout, clippy::print_stderr, clippy::disallowed_macros)]
 pub fn success(msg: &str) {
     if user_output_to_stderr() {
-        eprintln!("{} {msg}", CHECK.green());
+        eprintln!("{} {msg}", style(CHECK).for_stderr().green());
     } else {
-        println!("{} {msg}", CHECK.green());
+        println!("{} {msg}", style(CHECK).green());
     }
 }
 

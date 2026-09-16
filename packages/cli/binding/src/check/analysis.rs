@@ -1,4 +1,4 @@
-use owo_colors::OwoColorize;
+use console::style;
 use vp_shared::output;
 
 #[derive(Debug, Clone)]
@@ -163,7 +163,7 @@ pub(super) fn print_summary_line(message: &str) {
         let mut is_accent = true;
         for segment in segments {
             if is_accent {
-                formatted.push_str(&format!("{}", format!("`{segment}`").bright_blue()));
+                formatted.push_str(&format!("{}", style(format!("`{segment}`")).blue().bright()));
             } else {
                 formatted.push_str(segment);
             }
@@ -185,7 +185,11 @@ pub(super) fn print_error_block(error_msg: &str, combined_output: &str, summary_
 
 pub(super) fn print_pass_line(message: &str, detail: Option<&str>) {
     if let Some(detail) = detail {
-        output::raw(&format!("{} {message} {}", "pass:".bright_blue().bold(), detail.dimmed()));
+        output::raw(&format!(
+            "{} {message} {}",
+            style("pass:").blue().bright().bold(),
+            style(&detail).dim()
+        ));
     } else {
         output::pass(message);
     }
