@@ -26,11 +26,6 @@ expect(element).toHaveTextContent('\''partial'\'');
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
-
-shared.test.ts
-  2:1 REVIEW [text-content-project] Resolve this assertion's test project: browser assertions need toMatchTextContent for v4 partial matching; keep Node jest-dom assertions unchanged.
-    Docs: https://vitest.dev/guide/migration/#tohavetextcontent-now-performs-strict-equality
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 4 files had imports rewritten

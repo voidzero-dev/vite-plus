@@ -1025,10 +1025,8 @@ async function main() {
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
   let vitestV5Plan = planVitestV5Migration(workspaceInfoOptional);
   const vitestV5Preflight = formatVitestV5Findings(vitestV5Plan);
-  if (vitestV5Preflight) {
-    prompts.log.warn(vitestV5Preflight);
-  }
   if (vitestV5Plan.findings.some((finding) => finding.severity === 'block')) {
+    prompts.log.warn(vitestV5Preflight);
     cancelAndExit(
       'Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.',
       1,
@@ -1057,9 +1055,9 @@ async function main() {
     let finalInstallOk = true;
     let canFormatMigratedProject = !process.env.VP_SKIP_INSTALL;
     const report = createMigrationReport();
-    // Preflight findings were already printed. Add the remaining findings
-    // after actual edits; review-only items must not force an otherwise
-    // up-to-date project through dependency reconciliation on every run.
+    // Report reviews at the end with updated locations. Keep them out of the
+    // report until then so review-only items do not force an up-to-date project
+    // through dependency reconciliation on every run.
     const migrationProgress = options.interactive
       ? prompts.spinner({ indicator: 'timer' })
       : undefined;
@@ -1210,6 +1208,9 @@ async function main() {
         ? hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
         : hasExplicitExistingVitePlusSetupRequest(options))
     ) {
+      if (vitestV5Preflight) {
+        prompts.log.warn(vitestV5Preflight);
+      }
       if (skippedSetupCandidates) {
         log(FULL_MIGRATION_HINT);
       }
