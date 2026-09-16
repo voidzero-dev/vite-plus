@@ -28,6 +28,28 @@ defaults:
     shell: bash
 
 jobs:
+  windows-case-sensitivity-probe:
+    runs-on: namespace-profile-windows-4c-8g
+    steps:
+      - name: Inspect case-sensitive directory support
+        shell: pwsh
+        run: |
+          Get-Volume | Format-Table DriveLetter, FileSystem, FileSystemLabel
+          $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'
+          Get-ItemProperty -Path $key -Name NtfsEnableDirCaseSensitivity -ErrorAction SilentlyContinue
+          New-ItemProperty -Path $key -Name NtfsEnableDirCaseSensitivity -PropertyType DWord -Value 1 -Force | Out-Null
+          Get-ItemProperty -Path $key -Name NtfsEnableDirCaseSensitivity
+          foreach ($root in @([System.IO.Path]::GetTempPath(), $env:RUNNER_TEMP)) {
+            $probe = Join-Path $root ('vp-case-probe-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $probe -Force | Out-Null
+            Write-Output "Testing $probe"
+            fsutil.exe fsinfo volumeinfo ([System.IO.Path]::GetPathRoot($probe))
+            fsutil.exe file setCaseSensitiveInfo $probe enable
+            Write-Output "setCaseSensitiveInfo exit: $LASTEXITCODE"
+            fsutil.exe file queryCaseSensitiveInfo $probe
+          }
+          exit 0
+
   detect-changes:
     runs-on: ubuntu-latest
     permissions:
