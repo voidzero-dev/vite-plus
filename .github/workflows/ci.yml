@@ -1035,6 +1035,15 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
+      # Windows Server images without WSL can leave per-directory NTFS case
+      # sensitivity disabled. The shim regression fixture enables it on an
+      # empty directory and asserts that differently cased names are distinct.
+      - name: Enable per-directory NTFS case sensitivity
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' `
+            -Name NtfsEnableDirCaseSensitivity -PropertyType DWord -Value 1 -Force | Out-Null
+
       # Route TEMP/TMP onto a Dev Drive (ReFS): staged fixture workspaces
       # live under os.tmpdir() and must resolve pnpm junction reparse points
       # cleanly. NTFS-on-C: preserves the junction-target backslashes during
