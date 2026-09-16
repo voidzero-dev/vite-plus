@@ -83,9 +83,9 @@ import { bench } from 'vitest';
 bench('parse', () => JSON.parse('{"value":1}'));
 
 // After
-import { test as _test } from 'vitest';
-_test('parse', async ({ bench: _bench }) => {
-  await _bench('parse', () => JSON.parse('{"value":1}')).run();
+import { test } from 'vitest';
+test('parse', async ({ bench }) => {
+  await bench('parse', () => JSON.parse('{"value":1}')).run();
 });
 ```
 

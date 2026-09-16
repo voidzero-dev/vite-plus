@@ -15,10 +15,14 @@ export function migrateBenchmarks(
 ): { imports: Set<t.ImportSpecifier>; calls: Set<t.CallExpression> } {
   const imports = new Set<t.ImportSpecifier>();
   const calls = new Set<t.CallExpression>();
-  let fixtureName: string | undefined;
+  const benchIdentifiers: t.Span[] = [];
+  let fixtureAlias: string | undefined;
   let shadowedGlobalThis = false;
   editor.visit({
     Identifier(node) {
+      if (node.name === 'bench') {
+        benchIdentifiers.push(node);
+      }
       if (node.name === 'globalThis' && editor.binding(node)) {
         shadowedGlobalThis = true;
       }
@@ -141,11 +145,20 @@ export function migrateBenchmarks(
       editor.edit(statement.start, statement.start, `{ ${captures.join(' ')} `);
       editor.edit(statement.end, statement.end, ' }');
     }
-    fixtureName ??= editor.uniqueName('bench');
+    // Only inline workloads move into the fixture's scope. Named workloads
+    // keep their original scope through the callback captured above.
+    const shadowsBench =
+      callback.type !== 'Identifier' &&
+      benchIdentifiers.some((node) => node.start >= callback.start && node.end <= callback.end);
+    let fixtureName = 'bench';
+    if (shadowsBench) {
+      fixtureName = fixtureAlias ??= editor.uniqueName('bench');
+    }
+    const fixture = fixtureName === 'bench' ? 'bench' : `bench: ${fixtureName}`;
     editor.edit(
       callback.start,
       callback.start,
-      `async ({ bench: ${fixtureName} }) => { await ${fixtureName}(${name}, `,
+      `async ({ ${fixture} }) => { await ${fixtureName}(${name}, `,
     );
     editor.edit(call.end - 1, call.end - 1, ').run(); }');
   }
@@ -173,8 +186,8 @@ export function migrateBenchmarks(
         if (registrations.some((registration) => !registration)) {
           continue;
         }
-        const test = editor.uniqueName('test');
-        editor.replace(specifier, `test as ${test}`);
+        const test = editor.uniqueName('test', true);
+        editor.replace(specifier, test === 'test' ? 'test' : `test as ${test}`);
         imports.add(specifier);
         for (const registration of registrations) {
           rewrite(registration!, test);

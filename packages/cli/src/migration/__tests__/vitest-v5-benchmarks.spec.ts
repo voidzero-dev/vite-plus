@@ -20,12 +20,12 @@ describe('utilities', () => {
 });`;
       const result = migrate(input);
       expect(result.findings).toEqual([]);
-      expect(result.content).toContain('import { test as _test, describe }');
+      expect(result.content).toContain('import { test, describe }');
       expect(result.content).toContain(
-        `_test('parse', async ({ bench: _bench }) => { await _bench('parse', () => { JSON.parse(input); }).run(); });`,
+        `test('parse', async ({ bench }) => { await bench('parse', () => { JSON.parse(input); }).run(); });`,
       );
       expect(result.content).toContain(
-        `await _bench('async', async () => { await Promise.resolve(input); }).run();`,
+        `await bench('async', async () => { await Promise.resolve(input); }).run();`,
       );
       expect(migrate(result.content)).toEqual({ content: result.content, findings: [] });
     },
@@ -36,14 +36,14 @@ describe('utilities', () => {
       `import { bench } from 'vitest'; bench.${modifier}('case', () => work());`,
     );
     expect(result.findings).toEqual([]);
-    expect(result.content).toContain(`_test.${modifier}('case', async ({ bench: _bench })`);
-    expect(result.content).toContain(`await _bench('case', () => work()).run();`);
+    expect(result.content).toContain(`test.${modifier}('case', async ({ bench })`);
+    expect(result.content).toContain(`await bench('case', () => work()).run();`);
   });
 
   it('migrates a todo with no workload', () => {
     const result = migrate(`import { bench } from 'vitest'; bench.todo('later');`);
     expect(result.findings).toEqual([]);
-    expect(result.content).toContain(`_test.todo('later');`);
+    expect(result.content).toContain(`test.todo('later');`);
     expect(result.content).not.toContain('.run()');
   });
 
@@ -52,7 +52,7 @@ describe('utilities', () => {
 v.bench('old', () => work());
 v.test('new', async ({ bench }) => { await bench('new', () => work()).run(); });`);
     expect(result.findings).toEqual([]);
-    expect(result.content).toContain(`v.test('old', async ({ bench: _bench })`);
+    expect(result.content).toContain(`v.test('old', async ({ bench })`);
     expect(result.content).toContain(
       `v.test('new', async ({ bench }) => { await bench('new', () => work()).run(); });`,
     );
@@ -60,14 +60,82 @@ v.test('new', async ({ bench }) => { await bench('new', () => work()).run(); });
   });
 
   it('avoids collisions with existing test and bench identifiers', () => {
-    const result = migrate(`import { bench, test } from 'vitest';
-const _test = 1, _bench = 2;
-bench('scope', function () { consume(_test, _bench, test); });`);
+    const result = migrate(`import { bench as measure, test } from 'vitest';
+const _test = 1, _bench = 2, bench = 3;
+measure('scope', function () { consume(_test, _bench, test, bench); });`);
     expect(result.findings).toEqual([]);
     expect(result.content).toContain('test as _test2');
     expect(result.content).toContain('bench: _bench2');
-    expect(result.content).toContain('function () { consume(_test, _bench, test); }');
+    expect(result.content).toContain('function () { consume(_test, _bench, test, bench); }');
   });
+
+  it('avoids a test binding inside the registration scope', () => {
+    const result = migrate(`import { bench, describe } from 'vitest';
+describe('group', () => {
+  const test = () => 42;
+  bench('scope', () => test());
+});`);
+    expect(result.findings).toEqual([]);
+    expect(result.content).toContain('import { test as _test, describe }');
+    expect(result.content).toContain(`_test('scope', async ({ bench })`);
+    expect(result.content).toContain(`await bench('scope', () => test()).run()`);
+    expect(migrate(result.content)).toEqual({ content: result.content, findings: [] });
+  });
+
+  it('reserves generated test imports across separate benchmark imports', () => {
+    const result = migrate(`import { bench as first } from 'vitest';
+import { bench as second } from 'vite-plus/test';
+first('first', () => work());
+second('second', () => work());`);
+    expect(result.findings).toEqual([]);
+    expect(result.content).toContain(`import { test } from 'vitest';`);
+    expect(result.content).toContain(`import { test as _test } from 'vite-plus/test';`);
+    expect(result.content).toContain(`test('first', async ({ bench })`);
+    expect(result.content).toContain(`_test('second', async ({ bench })`);
+    expect(migrate(result.content)).toEqual({ content: result.content, findings: [] });
+  });
+
+  it('uses a plain fixture for a named workload that closes over bench', () => {
+    const result = migrate(`import { bench as measure } from 'vitest';
+const bench = 42;
+function workload() { consume(bench); }
+measure('scope', workload);`);
+    expect(result.findings).toEqual([]);
+    expect(result.content).toContain(`import { test } from 'vitest';`);
+    expect(result.content).toContain('function workload() { consume(bench); }');
+    expect(result.content).toContain('const _benchFn = workload;');
+    expect(result.content).toContain(`test('scope', async ({ bench })`);
+    expect(result.content).toContain(`await bench('scope', _benchFn).run()`);
+    expect(migrate(result.content)).toEqual({ content: result.content, findings: [] });
+  });
+
+  it.each(['const bench = 42;', ''])(
+    'preserves bound and unbound workload references when adding aliases: %s',
+    async (declaration) => {
+      const result = migrate(`import { bench as measure } from 'vitest';
+${declaration}
+measure('scope', () => results.push([test, bench]));
+measure('plain', () => results.push('plain'));`);
+      expect(result.findings).toEqual([]);
+      expect(result.content).toContain(`import { test as _test } from 'vitest';`);
+      expect(result.content).toContain(`_test('scope', async ({ bench: _bench })`);
+      expect(result.content).toContain(`_test('plain', async ({ bench })`);
+      const results: unknown[] = [];
+      const tests: Array<(context: unknown) => Promise<void>> = [];
+      runInNewContext(result.content.replace(/^import[^\n]+\n/, ''), {
+        results,
+        test: 'original test',
+        bench: 42,
+        _test: (_name: string, fn: (context: unknown) => Promise<void>) => tests.push(fn),
+      });
+      expect(results).toEqual([]);
+      for (const fn of tests) {
+        await fn({ bench: (_name: string, workload: () => void) => ({ run: workload }) });
+      }
+      expect(results).toEqual([['original test', 42], 'plain']);
+      expect(migrate(result.content)).toEqual({ content: result.content, findings: [] });
+    },
+  );
 
   it('preserves comments and trailing commas', () => {
     const result = migrate(`import { bench } from 'vitest';
@@ -90,7 +158,7 @@ bench('comments', /* workload */ () => { /* inside */ work(); }, /* trailing */)
     );
     expect(result.findings).toEqual([]);
     expect(result.content).toContain('const _benchFn = workload;');
-    expect(result.content).toContain(`await _bench('local', _benchFn).run()`);
+    expect(result.content).toContain(`await bench('local', _benchFn).run()`);
     expect(migrate(result.content)).toEqual({ content: result.content, findings: [] });
   });
 

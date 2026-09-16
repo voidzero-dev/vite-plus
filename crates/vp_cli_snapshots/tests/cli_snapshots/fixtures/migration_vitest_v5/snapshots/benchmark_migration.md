@@ -33,13 +33,13 @@ VITE+ - The Unified Toolchain for the Web
 ## `vpt print-file example.bench.ts`
 
 ```
-import { test as _test, describe } from 'vite-plus/test';
+import { test, describe } from 'vite-plus/test';
 describe('utilities', () => {
   const json = '{"value":42}';
-  _test('parse', async ({ bench: _bench }) => { await _bench('parse', () => { if (JSON.parse(json).value !== 42) throw new Error('scope lost'); }).run(); });
-  _test('async', async ({ bench: _bench }) => { await _bench('async', async () => { if (await Promise.resolve(json) !== json) throw new Error('scope lost'); }).run(); });
-  _test.skip('skipped', async ({ bench: _bench }) => { await _bench('skipped', () => { throw new Error('must not run'); }).run(); });
-  _test.todo('later');
+  test('parse', async ({ bench }) => { await bench('parse', () => { if (JSON.parse(json).value !== 42) throw new Error('scope lost'); }).run(); });
+  test('async', async ({ bench }) => { await bench('async', async () => { if (await Promise.resolve(json) !== json) throw new Error('scope lost'); }).run(); });
+  test.skip('skipped', async ({ bench }) => { await bench('skipped', () => { throw new Error('must not run'); }).run(); });
+  test.todo('later');
 });
 ```
 

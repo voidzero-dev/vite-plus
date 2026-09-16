@@ -52,13 +52,13 @@ vite.config.ts
 ## `vpt print-file example.bench.ts vite.config.ts package.json`
 
 ```
-import { test as _test, describe } from 'vite-plus/test';
+import { test, describe } from 'vite-plus/test';
 describe('utilities', () => {
   let calls = 0;
   const name = () => { if (++calls !== 1) throw new Error('name evaluated twice'); return 'parse'; };
   const json = '{"value":42}';
   function workload() { if (JSON.parse(json).value !== 42) throw new Error('scope lost'); }
-  { const _benchName = (name()); const _benchFn = workload; _test(_benchName, async ({ bench: _bench }) => { await _bench(_benchName, _benchFn).run(); }); }
+  { const _benchName = (name()); const _benchFn = workload; test(_benchName, async ({ bench }) => { await bench(_benchName, _benchFn).run(); }); }
 });
 export default {
   fmt: {},
