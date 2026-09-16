@@ -23,7 +23,7 @@ You can keep equivalent static `test.api` and `test.browser.api` values, includi
 
 The migration upgrades incompatible runtime pins to the nearest supported minimum before installing dependencies. For example, `20.19.0` becomes `22.18.0`, `24.10.0` becomes `24.11.0`, and `25.9.0` becomes `26.0.0`. Supported pins stay unchanged. Unresolved selectors still need review.
 
-Keep your library's public `engines.node` contract separate from its test runtime. The migration does not change that contract. An engine range with a supported minimum, such as `>=22.19.0`, needs no review.
+Keep your library's public `engines.node` contract separate from its test runtime. The migration does not change that contract. You do not need to review an engine range with a supported minimum, such as `>=22.19.0`, or a whole supported major, such as `24.x`. Use a concrete runtime pin at or above the supported minimum for that major.
 
 The Node compatibility checks cover `.node-version`, `.nvmrc`, and the `engines.node`, `devEngines.runtime`, and `volta.node` declarations in `package.json`. Node versions in CI workflows, containers, and other files are outside the scope of these checks.
 

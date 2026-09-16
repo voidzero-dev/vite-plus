@@ -2308,35 +2308,61 @@ export default defineConfig(CONFIG);`,
     expect(planProject(root).changes).toEqual([]);
   });
 
-  it.each(['>= 22.19.0', '>=22.18.0', '>=24.11.0', '>=26.0.0', '^22.19.0 || >=24.11.0'])(
-    'accepts public engines.node %s with a supported minimum',
-    (node) => {
-      const manifest = JSON.stringify({
-        devDependencies: { vitest: '4.1.11' },
-        engines: { node },
-      });
-      const root = project({
-        'package.json': manifest,
-        'vite.config.ts': 'export default { test: {} };',
-      });
-      const plan = planProject(root);
-      expect(plan.findings).toEqual([]);
-      applyVitestV5Migration(plan);
-      expect(finishVitestV5Migration(plan)).toEqual([]);
-      expect(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).toBe(manifest);
-      expect(planProject(root).findings).toEqual([]);
-    },
-  );
+  it.each([
+    '>= 22.19.0',
+    '>=22.18.0',
+    '>=24.11.0',
+    '>=26.0.0',
+    '^22.19.0 || >=24.11.0',
+    '22',
+    '22.x',
+    '^22',
+    '24',
+    '24.x',
+    '24.*',
+    '~24',
+    '^24.0.0',
+    '>=24',
+    '22.x || 24.x',
+    '24.x || >=26',
+  ])('accepts public engines.node %s with a supported minimum or whole major', (node) => {
+    const manifest = JSON.stringify({
+      devDependencies: { vitest: '4.1.11' },
+      engines: { node },
+    });
+    const root = project({
+      'package.json': manifest,
+      'vite.config.ts': 'export default { test: {} };',
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+    expect(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).toBe(manifest);
+    expect(planProject(root).findings).toEqual([]);
+  });
 
-  it.each(['lts/*', 'latest', '*', '>=18', '>=22.17.0', '>=24.10.0', '>=25', '20 || >=22.19'])(
-    'reviews public engines.node %s without a supported minimum',
-    (node) => {
-      const root = project({ 'package.json': JSON.stringify({ engines: { node } }) });
-      expect(planProject(root).findings.filter(({ code }) => code === 'node-runtime')).toEqual([
-        expect.objectContaining({ severity: 'review' }),
-      ]);
-    },
-  );
+  it.each([
+    'lts/*',
+    'latest',
+    '*',
+    '>=18',
+    '>=22.17.0',
+    '>=24.10.0',
+    '>=25',
+    '20 || >=22.19',
+    '20.x',
+    '23.x',
+    '25.x',
+    '24.0.x',
+    '24.3.0',
+    '^24.10.0',
+  ])('reviews public engines.node %s without a supported minimum', (node) => {
+    const root = project({ 'package.json': JSON.stringify({ engines: { node } }) });
+    expect(planProject(root).findings.filter(({ code }) => code === 'node-runtime')).toEqual([
+      expect.objectContaining({ severity: 'review' }),
+    ]);
+  });
 
   it('keeps a library public engine contract separate from its test runtime pin', () => {
     const root = project({
