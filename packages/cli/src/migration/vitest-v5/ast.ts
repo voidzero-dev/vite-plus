@@ -235,10 +235,39 @@ export function testApiName(
   if (imported) {
     return imported;
   }
+  if (node?.type === 'MemberExpression' && !node.optional && isImportMetaVitest(node.object)) {
+    return memberName(node);
+  }
+  const binding = node && editor.binding(node);
+  const property = binding?.declaration;
+  const pattern = property && editor.parent(property);
+  const declaration = pattern && editor.parent(pattern);
+  if (
+    binding?.constant &&
+    property?.type === 'Property' &&
+    !property.computed &&
+    property.value.type === 'Identifier' &&
+    pattern?.type === 'ObjectPattern' &&
+    declaration?.type === 'VariableDeclarator' &&
+    isImportMetaVitest(declaration.init)
+  ) {
+    return propertyName(property.key);
+  }
   if (globals && node?.type === 'Identifier' && !editor.binding(node)) {
     return node.name;
   }
   return undefined;
+}
+
+export function isImportMetaVitest(node: t.Node | null | undefined): boolean {
+  return (
+    node?.type === 'MemberExpression' &&
+    !node.optional &&
+    memberName(node) === 'vitest' &&
+    node.object.type === 'MetaProperty' &&
+    node.object.meta.name === 'import' &&
+    node.object.property.name === 'meta'
+  );
 }
 
 /** Offset edits retain comments and formatting outside the precise changed span. */

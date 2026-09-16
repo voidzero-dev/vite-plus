@@ -166,6 +166,54 @@ describe('Vitest v5 benchmark migration plans', () => {
     expect(plan.changes.some(({ file }) => file.endsWith('.js'))).toBe(false);
   });
 
+  describe.each([false, true])('in-source plans with globals: %s', (globals) => {
+    it.each([
+      `const { bench } = import.meta.vitest; bench('work', () => work());`,
+      `import.meta.vitest.bench('work', () => work());`,
+    ])('scans, applies, and finalizes %s', (body) => {
+      const workspace = project({
+        'vitest.config.mjs': `export default { test: { globals: ${globals}, benchmark: { include: [], includeSource: ['perf/*.js'] } } };`,
+        'perf/work.js': `export const work = () => 42; if (import.meta.vitest) { ${body} }`,
+        'perf/other.js': `bench('other runner', () => 42);`,
+      });
+      const plan = planVitestV5Migration(workspace);
+      expect(plan.findings).toEqual([]);
+      const content = plan.changes.find(({ file }) => file.endsWith('work.js'))?.after;
+      expect(content).toContain('export const work = () => 42; if (import.meta.vitest)');
+      expect(content).toContain(`test('work', async ({ bench })`);
+      expect(content).not.toMatch(/\bimport\s*[{*]/);
+      applyVitestV5Migration(plan);
+      expect(finishVitestV5Migration(plan)).toEqual([]);
+      expect(fs.readFileSync(path.join(workspace.rootDir, 'perf/other.js'), 'utf8')).toBe(
+        `bench('other runner', () => 42);`,
+      );
+      expect(planVitestV5Migration(workspace).changes).toEqual([]);
+    });
+
+    it.each([
+      `const { bench } = import.meta.vitest; bench('work', () => 42, { time: 1 });`,
+      `import.meta.vitest.bench('work', () => 42, { time: 1 });`,
+      `const { bench } = import.meta.vitest; register(bench);`,
+    ])('blocks dependency changes for retained APIs: %s', (body) => {
+      const original = `if (import.meta.vitest) { ${body} }`;
+      const workspace = project({
+        'vitest.config.mjs': `export default { test: { globals: ${globals}, benchmark: { include: [], includeSource: ['perf/*.js'] } } };`,
+        'perf/work.js': original,
+      });
+      const manifest = fs.readFileSync(path.join(workspace.rootDir, 'package.json'), 'utf8');
+      const plan = planVitestV5Migration(workspace);
+      expect(plan.findings).toContainEqual(
+        expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
+      );
+      expect(() => applyVitestV5Migration(plan)).toThrow('blocking');
+      expect(fs.readFileSync(path.join(workspace.rootDir, 'package.json'), 'utf8')).toBe(manifest);
+      expect(fs.readFileSync(path.join(workspace.rootDir, 'perf/work.js'), 'utf8')).toBe(original);
+      expect(finishVitestV5Migration(plan)).toContainEqual(
+        expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
+      );
+    });
+  });
+
   it.each([
     'runtimeOptions',
     '{ include: runtimePatterns }',
@@ -228,6 +276,9 @@ describe('Vitest v5 benchmark migration plans', () => {
       `import * as v from 'vitest'; v.bench('work', () => 42);`,
       `bench('work', () => 42);`,
       `import { bench } from 'vitest';`,
+      `if (import.meta.vitest) { const { bench } = import.meta.vitest; bench('work', () => 42); }`,
+      `if (import.meta.vitest) { import.meta.vitest.bench('work', () => 42); }`,
+      `if (import.meta.vitest) { const { bench } = import.meta.vitest; }`,
     ])('blocks the plan while the legacy API remains: %s', (original) => {
       const workspace = project({
         '.node-version': '20.19.0\n',

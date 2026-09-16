@@ -333,6 +333,50 @@ steps = [
 ]
 
 [[case]]
+name = "benchmark_in_source"
+vp = "global"
+comment = "Migrate destructured and direct import.meta.vitest benchmarks with default globals. Execute the migrated benchmarks and import the production module without Vitest."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { benchmark: { include: [], includeSource: ['perf/*.js'] } } };\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bench", "vitest bench --run"], snapshot = false },
+  { argv = ["vpt", "write-file", "perf/work.js", "export function work() { for (let i = 0; i < 100; i++) JSON.parse('{\"value\":42}'); return 42; }\nif (import.meta.vitest) {\n  const { bench } = import.meta.vitest;\n  bench('destructured', () => work());\n  import.meta.vitest.bench('member', (() => work()));\n}\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "perf/work.js"],
+  { argv = ["vp", "test", "bench", "--run", "--reporter=json", "--outputFile=benchmark.json"], snapshot = false },
+  ["node", "verify-benchmark-regressions.mjs", "perf/work.js", "destructured", "member"],
+  ["node", "--input-type=module", "-e", "import assert from 'node:assert/strict'; import { work } from './perf/work.js'; assert.equal(work(), 42); console.log('Production import works without Vitest');"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "benchmark_in_source_globals"
+vp = "global"
+comment = "Recognize local in-source API bindings independently of globals: true, without removing the production guard."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { globals: true, benchmark: { include: [], includeSource: ['perf/*.js'] } } };\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bench", "vitest bench --run"], snapshot = false },
+  { argv = ["vpt", "write-file", "perf/work.js", "export function work() { for (let i = 0; i < 100; i++) JSON.parse('{\"value\":42}'); return 42; }\nif (import.meta.vitest) {\n  const { bench: measure } = import.meta.vitest;\n  measure('destructured', () => work());\n  import.meta.vitest.bench('member', (() => work()));\n}\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "perf/work.js"],
+  { argv = ["vp", "test", "bench", "--run", "--reporter=json", "--outputFile=benchmark.json"], snapshot = false },
+  ["node", "verify-benchmark-regressions.mjs", "perf/work.js", "destructured", "member"],
+  ["node", "--input-type=module", "-e", "import assert from 'node:assert/strict'; import { work } from './perf/work.js'; assert.equal(work(), 42); console.log('Production import works without Vitest');"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "benchmark_in_source_preflight"
+vp = "global"
+comment = "Block unsupported in-source benchmark options before dependency changes and retain the guarded source."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { benchmark: { include: [], includeSource: ['perf/*.js'] } } };\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bench", "vitest bench --run"], snapshot = false },
+  { argv = ["vpt", "write-file", "perf/work.js", "if (import.meta.vitest) {\n  const { bench } = import.meta.vitest;\n  bench('work', () => 42, { time: 1 });\n}\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], continue-on-failure = true },
+  ["vpt", "print-file", "package.json", "perf/work.js"],
+]
+
+[[case]]
 name = "benchmark_parenthesized_workloads"
 vp = "global"
 comment = "Migrate and run parenthesized arrows, function expressions, and local callbacks without losing parentheses, comments, or trailing commas."

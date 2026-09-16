@@ -9,6 +9,81 @@ const migrate = (source: string, globals = false) =>
   migrateVitestV5Source('example.bench.ts', source, { preserveV4: true, globals });
 
 describe('Vitest v5 benchmark migration', () => {
+  describe.each([false, true])('in-source benchmarks with globals: %s', (globals) => {
+    it.each([
+      `const { bench } = import.meta.vitest; bench('work', () => work());`,
+      `const { bench: measure } = import.meta.vitest; measure('work', (() => work()));`,
+      `import.meta.vitest.bench('work', () => work());`,
+      `import.meta.vitest['bench']('work', () => work());`,
+      `const { bench, describe } = import.meta.vitest; describe('suite', () => { bench('work', () => work()); });`,
+      `const { bench } = import.meta.vitest; const test = 1; bench('work', () => work());`,
+    ])('preserves the guard and workload for %s', async (body) => {
+      const result = migrate(`if (import.meta.vitest) { ${body} }`, globals);
+      expect(result.findings).toEqual([]);
+      expect(result.content).toMatch(/^if \(import\.meta\.vitest\) \{/);
+      expect(result.content).not.toMatch(/from ['"](?:vitest|vite-plus)/);
+      expect(migrate(result.content, globals)).toEqual({ content: result.content, findings: [] });
+
+      const tests: Array<(context: unknown) => Promise<void>> = [];
+      let executions = 0;
+      const work = () => {
+        executions++;
+        return 42;
+      };
+      const script = result.content.replaceAll('import.meta.vitest', '__vitest');
+      // Production evaluation must not import or register any test APIs.
+      expect(() => runInNewContext(script, { __vitest: undefined, work })).not.toThrow();
+      runInNewContext(script, {
+        work,
+        __vitest: {
+          test: (_name: string, fn: (context: unknown) => Promise<void>) => tests.push(fn),
+          describe: (_name: string, fn: () => void) => fn(),
+        },
+      });
+      expect(tests).toHaveLength(1);
+      expect(executions).toBe(0);
+      await tests[0]({
+        bench: (name: string, workload: () => number) => ({
+          run: () => {
+            expect(name).toBe('work');
+            expect(workload()).toBe(42);
+          },
+        }),
+      });
+      expect(executions).toBe(1);
+    });
+
+    it.each([
+      `const { bench } = import.meta.vitest; bench('work', () => 42, { time: 1 });`,
+      `const { bench } = import.meta.vitest; register(bench);`,
+      `const { bench = fallback } = import.meta.vitest; bench('work', () => 42);`,
+      `const { bench }: { bench: Function } = import.meta.vitest; bench('work', () => 42);`,
+      `const { bench, ...rest } = import.meta.vitest; bench('work', () => 42);`,
+      `let { bench } = import.meta.vitest; bench = other; bench('work', () => 42);`,
+      `import.meta.vitest.bench('work', () => 42, { time: 1 });`,
+      `import.meta.vitest.bench?.('work', () => 42);`,
+      `import.meta.vitest?.bench('work', () => 42);`,
+      `register(import.meta.vitest.bench);`,
+    ])('blocks unsupported references: %s', (body) => {
+      const input = `if (import.meta.vitest) { ${body} }`;
+      const result = migrate(input, globals);
+      expect(result.content).toBe(input);
+      expect(result.findings).toContainEqual(
+        expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
+      );
+    });
+
+    it('does not treat a shadowed bench or a test-context fixture as the legacy API', () => {
+      const input = `if (import.meta.vitest) {
+  const { bench } = otherRunner;
+  bench('other', () => 42);
+  const { test } = import.meta.vitest;
+  test('new', async ({ bench }) => { await bench('new', () => 42).run(); });
+}`;
+      expect(migrate(input, globals)).toEqual({ content: input, findings: [] });
+    });
+  });
+
   it.each(['vitest', 'vite-plus/test'])(
     'migrates direct calls imported from %s and preserves workload scopes',
     (module) => {

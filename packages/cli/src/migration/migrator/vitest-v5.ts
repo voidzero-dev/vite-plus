@@ -42,7 +42,7 @@ const SKIP_DIRS = new Set([
 ]);
 const CODE_FILE = /\.[cm]?[jt]sx?$/;
 const VITEST_SIGNAL =
-  /(?:['"](?:vitest(?:\/[^'"]*)?|@vitest\/[^'"]+|vite-plus\/test[^'"]*)['"]|\bvp\s+test\b|\bvitest\s+(?:run|list|bench))/;
+  /(?:['"](?:vitest(?:\/[^'"]*)?|@vitest\/[^'"]+|vite-plus\/test[^'"]*)['"]|\bvp\s+test\b|\bvitest\s+(?:run|list|bench)|\bimport\s*\.\s*meta\s*\.\s*vitest\b)/;
 const VITEST_COMMAND = /\b(?:vp\s+test|vitest)(?:\s|$)/;
 const BROWSER_SIGNAL =
   /@vitest\/browser|(?:vitest|vite-plus\/test)\/browser|vitest-browser-|browser\s*:\s*\{|--browser(?:[.=\s'"]|$)/;
@@ -498,7 +498,8 @@ function scanAndRewriteFile(
   let content = source;
   if (
     CODE_FILE.test(file) &&
-    (testMode.globals ||
+    (testMode.benchmark ||
+      testMode.globals ||
       testMode.reviewGlobals ||
       VITEST_SIGNAL.test(source) ||
       /\.(?:test|spec)\./.test(file) ||
