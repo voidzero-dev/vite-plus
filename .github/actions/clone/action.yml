@@ -51,7 +51,7 @@ runs:
     # setup-node installs with --frozen-lockfile, so this must run before it.
     - name: Align vendored Vite's Vitest dependencies
       shell: bash
-      run: node packages/tools/src/vendored-vitest.mjs
+      run: npx --yes tsx packages/tools/src/vendored-vitest.ts
 
     # Disable autocrlf to preserve LF line endings on Windows
     # This prevents prettier/eslint from failing with "Delete ␍" errors

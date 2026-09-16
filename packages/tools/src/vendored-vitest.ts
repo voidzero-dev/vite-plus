@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // This module runs before dependency installation and Node.js setup in CI.
-// Keep it as plain JavaScript with only built-in imports.
+// Keep it independent of installed project dependencies, with only built-in imports.
 // These official packages share the runner version selected by upgrade-deps.ts.
 // Community packages, such as browser-webdriverio, have independent versions.
 export const VITEST_EXACT_VERSION_PACKAGES = new Set([
@@ -23,11 +23,13 @@ export const VITEST_EXACT_VERSION_PACKAGES = new Set([
 ]);
 export const REMOVED_VITEST_PACKAGES = new Set(['@vitest/runner', '@vitest/expect']);
 
-/**
- * @param {string} rootDir
- * @param {string} version
- */
-export function alignVendoredVitestDependencies(rootDir, version) {
+interface PackageJson {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+}
+
+export function alignVendoredVitestDependencies(rootDir: string, version: string): void {
   // Keep Vite's direct dependencies aligned with the root catalog so sync-remote
   // and CI use the same lockfile. Leave Rolldown's test dependencies to upstream.
   const packagesDir = join(rootDir, 'vite', 'packages');
@@ -43,10 +45,11 @@ export function alignVendoredVitestDependencies(rootDir, version) {
       continue;
     }
     const source = readFileSync(file, 'utf8');
-    const pkg = JSON.parse(source);
+    const pkg: PackageJson = JSON.parse(source);
     let changed = false;
-    for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
-      for (const name of Object.keys(pkg[field] ?? {})) {
+    for (const field of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
+      const dependencies = pkg[field] ?? {};
+      for (const [name, currentVersion] of Object.entries(dependencies)) {
         if (REMOVED_VITEST_PACKAGES.has(name)) {
           throw new Error(`Migrate removed ${name} use in ${file} before synchronizing Vitest`);
         }
@@ -54,8 +57,8 @@ export function alignVendoredVitestDependencies(rootDir, version) {
           continue;
         }
         // Only the default catalog is aligned during sync; named catalogs can still use v4.
-        if (pkg[field][name] !== version && pkg[field][name] !== 'catalog:') {
-          pkg[field][name] = version;
+        if (currentVersion !== version && currentVersion !== 'catalog:') {
+          dependencies[name] = version;
           changed = true;
         }
       }
@@ -73,7 +76,7 @@ if (
 ) {
   const rootDir = process.cwd();
   // upgrade-deps.ts keeps this exact runtime pin in sync with the root catalog.
-  // Read the declaration without loading TypeScript or an installed YAML parser.
+  // Read the declaration without importing CLI code or an installed YAML parser.
   const constants = readFileSync(join(rootDir, 'packages/cli/src/utils/constants.ts'), 'utf8');
   const version = constants.match(/^export const VITEST_VERSION = '(5\.\d+\.\d+)';\r?$/m)?.[1];
   if (!version) {
