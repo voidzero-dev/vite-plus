@@ -14,6 +14,7 @@ import {
   isString,
   isBoolean,
   isRegExp,
+  type RewriteResult,
   type SourceOptions,
 } from './ast.ts';
 import { migrateBenchmarks } from './benchmarks.ts';
@@ -74,6 +75,12 @@ const REMOVED_SOURCES = new Set([
   'vite-plus/test/plugins/runner-utils',
   'vite-plus/test/plugins/runner-types',
 ]);
+const LEGACY_API_SOURCES = new Set([
+  ...RUNNER_SOURCES,
+  ...RUNNERS_SOURCES,
+  ...EXPECT_SOURCES,
+  ...REMOVED_SOURCES,
+]);
 const RENDER_SOURCES = new Set(['vitest-browser-vue', 'vitest-browser-svelte']);
 const REGISTRATIONS = new Set(['test', 'it', 'describe', 'suite']);
 const ASYNC_CALLBACKS = new Set(['test', 'it', 'beforeEach', 'afterEach', 'beforeAll', 'afterAll']);
@@ -98,6 +105,19 @@ const DOM_GLOBALS = new Set([
 ]);
 
 const CHILD_PROCESS_SOURCES = new Set(['node:child_process', 'child_process']);
+
+function replacementImport(source: string, name: string): string | undefined {
+  if (RUNNER_SOURCES.has(source)) {
+    return RUNNER_SYMBOLS[name];
+  }
+  if (RUNNERS_SOURCES.has(source) && name === 'VitestTestRunner') {
+    return 'TestRunner';
+  }
+  if (EXPECT_SOURCES.has(source) && EXPECT_SYMBOLS.has(name)) {
+    return name;
+  }
+  return undefined;
+}
 
 function processApiName(editor: SourceEditor, node: t.Node): string | undefined {
   const imported = importedName(editor, node, CHILD_PROCESS_SOURCES);
@@ -251,14 +271,18 @@ function chain(
   return { root: node, members, calls };
 }
 
-export function migrateVitestV5Source(file: string, source: string, options: SourceOptions) {
+export function migrateVitestV5Source(
+  file: string,
+  source: string,
+  options: SourceOptions,
+): RewriteResult {
   const editor = new SourceEditor(file, source);
   const benchmarks = migrateBenchmarks(editor, options.globals);
   const runnerAliases: string[] = [];
   const asyncFunctions = new Set<t.Node>();
   // Import edits are offset-based, so bindings still refer to the old module
   // while this traversal visits the assertions that must migrate with them.
-  const apiName = (node: t.Node) => {
+  function apiName(node: t.Node): string | undefined {
     const name =
       testApiName(editor, node, options.globals) ??
       (importedName(editor, node, EXPECT_SOURCES) === 'expect' ? 'expect' : undefined);
@@ -288,8 +312,8 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       );
     }
     return name;
-  };
-  const canAwait = (node: t.Node) => {
+  }
+  function canAwait(node: t.Node): boolean {
     const fn = editor.functionParent(node);
     if (!fn) {
       return false;
@@ -317,7 +341,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
       asyncFunctions.add(fn);
     }
     return true;
-  };
+  }
 
   function unsupported(node: t.Node, source: string, symbol: string, typeOnly: boolean) {
     editor.report(
@@ -329,12 +353,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
   }
 
   function dynamicImport(node: t.Node, source: string): void {
-    if (
-      REMOVED_SOURCES.has(source) ||
-      RUNNER_SOURCES.has(source) ||
-      EXPECT_SOURCES.has(source) ||
-      RUNNERS_SOURCES.has(source)
-    ) {
+    if (LEGACY_API_SOURCES.has(source)) {
       unsupported(node, source, 'dynamic/CommonJS import', false);
     }
     if (source === '@vitest/ws-client') {
@@ -382,10 +401,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
         );
         return;
       }
-      const runners = RUNNERS_SOURCES.has(source);
-      const runner = RUNNER_SOURCES.has(source);
-      const expect = EXPECT_SOURCES.has(source);
-      if (!runner && !runners && !expect && !REMOVED_SOURCES.has(source)) {
+      if (!LEGACY_API_SOURCES.has(source)) {
         return;
       }
       const imports: string[] = [];
@@ -397,18 +413,12 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
           node.importKind === 'type' ||
           (specifier.type === 'ImportSpecifier' && specifier.importKind === 'type');
         const name = specifier.type === 'ImportSpecifier' ? propertyName(specifier.imported)! : '*';
-        const target = runner
-          ? RUNNER_SYMBOLS[name]
-          : runners && name === 'VitestTestRunner'
-            ? 'TestRunner'
-            : expect && EXPECT_SYMBOLS.has(name)
-              ? name
-              : undefined;
+        const target = replacementImport(source, name);
         if (target) {
           imports.push(
             `${typeOnly ? 'type ' : ''}${target}${specifier.local.name === target ? '' : ` as ${specifier.local.name}`}`,
           );
-        } else if (runner && RUNNER_METHODS[name] && !typeOnly) {
+        } else if (RUNNER_SOURCES.has(source) && RUNNER_METHODS[name] && !typeOnly) {
           if (!runnerName) {
             runnerName = editor.uniqueName('VitestTestRunner');
             imports.push(`TestRunner as ${runnerName}`);
@@ -447,12 +457,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
           node.source!,
           JSON.stringify(entryPoints[source as keyof typeof entryPoints]),
         );
-      } else if (
-        RUNNER_SOURCES.has(source) ||
-        EXPECT_SOURCES.has(source) ||
-        REMOVED_SOURCES.has(source) ||
-        RUNNERS_SOURCES.has(source)
-      ) {
+      } else if (LEGACY_API_SOURCES.has(source)) {
         // Re-exports can expose a library contract. Do not silently replace it.
         for (const specifier of node.specifiers) {
           unsupported(
@@ -467,12 +472,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
     },
     ExportAllDeclaration(node) {
       const source = node.source.value;
-      if (
-        RUNNER_SOURCES.has(source) ||
-        EXPECT_SOURCES.has(source) ||
-        REMOVED_SOURCES.has(source) ||
-        RUNNERS_SOURCES.has(source)
-      ) {
+      if (LEGACY_API_SOURCES.has(source)) {
         unsupported(node, source, 'export *', node.exportKind === 'type');
       }
     },
@@ -926,12 +926,7 @@ export function migrateVitestV5Source(file: string, source: string, options: Sou
     },
     TSImportType(node) {
       const source = node.source.value;
-      if (
-        RUNNER_SOURCES.has(source) ||
-        EXPECT_SOURCES.has(source) ||
-        REMOVED_SOURCES.has(source) ||
-        RUNNERS_SOURCES.has(source)
-      ) {
+      if (LEGACY_API_SOURCES.has(source)) {
         unsupported(node, source, 'type import', true);
       }
     },

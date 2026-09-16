@@ -1,11 +1,15 @@
-import type { VitestV5Finding } from './ast.ts';
+import type { RewriteResult, VitestV5Finding } from './ast.ts';
+
+interface CommandToken {
+  value: string;
+  start: number;
+  end: number;
+}
 
 /** Parse only a single literal argv command. Shell expansion, pipelines, and
  * compound commands need review; treating them as argv could change behavior. */
-export function literalArgv(
-  command: string,
-): Array<{ value: string; start: number; end: number }> | undefined {
-  const tokens: Array<{ value: string; start: number; end: number }> = [];
+export function literalArgv(command: string): CommandToken[] | undefined {
+  const tokens: CommandToken[] = [];
   let value = '';
   let start = 0;
   let quote = '';
@@ -56,7 +60,8 @@ export function literalArgv(
   return tokens;
 }
 
-function runnerEnd(values: string[]): number {
+/** Locate the runner's arguments after a supported package-manager wrapper. */
+export function vitestCommandArgsStart(values: readonly string[]): number {
   let start = 0;
   if (['pnpm', 'npm', 'yarn', 'bun', 'npx', 'bunx'].includes(values[0])) {
     start = 1;
@@ -67,11 +72,13 @@ function runnerEnd(values: string[]): number {
       start++;
     }
   }
-  return values[start] === 'vitest'
-    ? start + 1
-    : values[start] === 'vp' && values[start + 1] === 'test'
-      ? start + 2
-      : -1;
+  if (values[start] === 'vitest') {
+    return start + 1;
+  }
+  if (values[start] === 'vp' && values[start + 1] === 'test') {
+    return start + 2;
+  }
+  return -1;
 }
 
 function migrateBenchmarkOutput(command: string): string {
@@ -80,7 +87,7 @@ function migrateBenchmarkOutput(command: string): string {
     return command;
   }
   const values = argv.map(({ value }) => value);
-  const start = runnerEnd(values);
+  const start = vitestCommandArgsStart(values);
   if (start < 0) {
     return command;
   }
@@ -139,13 +146,14 @@ function migrateBenchmarkOutput(command: string): string {
       return command;
     }
   }
-  const reporters = args.flatMap((token, index) =>
-    /^--reporters?=/.test(token.value)
-      ? [token.value.slice(token.value.indexOf('=') + 1)]
-      : /^--reporters?$/.test(token.value)
-        ? [args[index + 1]?.value ?? '']
-        : [],
-  );
+  const reporters: string[] = [];
+  for (const [index, { value }] of args.entries()) {
+    if (/^--reporters?=/.test(value)) {
+      reporters.push(value.slice(value.indexOf('=') + 1));
+    } else if (/^--reporters?$/.test(value)) {
+      reporters.push(args[index + 1]?.value ?? '');
+    }
+  }
   if (reporters.some((name) => !['default', 'verbose', 'json'].includes(name))) {
     return command;
   }
@@ -162,7 +170,7 @@ export function migrateVitestV5Command(
   command: string,
   preserveV4: boolean,
   line = 1,
-) {
+): RewriteResult {
   const findings: VitestV5Finding[] = [];
   const report = (
     code: string,
@@ -194,15 +202,16 @@ export function migrateVitestV5Command(
   }
   // The bench subcommand still exists in v5. Only its removed flags block
   // migration; benchmark source changes are handled by the source pass.
-  const parsed = literalArgv(command)?.map(({ value }) => value);
-  const runner = parsed ? runnerEnd(parsed) : -1;
-  const terminator = parsed?.indexOf('--', runner);
-  const removedFlag =
-    parsed && runner >= 0
-      ? parsed
-          .slice(runner, terminator === -1 ? undefined : terminator)
-          .some((value) => /^(?:--compare|--outputJson)(?:=|$)/.test(value))
-      : /(?:^|\s)(?:--compare|--outputJson)(?:\s|=|$)/.test(command);
+  const argv = literalArgv(command);
+  const values = argv?.map(({ value }) => value);
+  const runner = values ? vitestCommandArgsStart(values) : -1;
+  let removedFlag = /(?:^|\s)(?:--compare|--outputJson)(?:\s|=|$)/.test(command);
+  if (values && runner >= 0) {
+    const terminator = values.indexOf('--', runner);
+    removedFlag = values
+      .slice(runner, terminator === -1 ? undefined : terminator)
+      .some((value) => /^(?:--compare|--outputJson)(?:=|$)/.test(value));
+  }
   if (removedFlag) {
     report(
       'benchmark-api',
@@ -223,16 +232,14 @@ export function migrateVitestV5Command(
   if (!/\blist\b/.test(command)) {
     return { content: command, findings };
   }
-  const argv = literalArgv(command);
-  if (!argv) {
+  if (!argv || !values) {
     report(
       'static-list',
       'Review this wrapped or compound list command and explicitly choose --no-static-parse to retain runtime collection.',
     );
     return { content: command, findings };
   }
-  const values = argv.map((token) => token.value);
-  const list = runnerEnd(values);
+  const list = runner;
   if (list < 0 || values[list] !== 'list') {
     report(
       'static-list',

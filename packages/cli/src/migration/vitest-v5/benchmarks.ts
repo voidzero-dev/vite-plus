@@ -9,7 +9,10 @@ interface BenchmarkCall {
 
 /** Keep the workload as a separate callback: making it the test callback
  * would measure nothing, and inlining it into a new closure can change scope. */
-export function migrateBenchmarks(editor: SourceEditor, globals = false) {
+export function migrateBenchmarks(
+  editor: SourceEditor,
+  globals = false,
+): { imports: Set<t.ImportSpecifier>; calls: Set<t.CallExpression> } {
   const imports = new Set<t.ImportSpecifier>();
   const calls = new Set<t.CallExpression>();
   let fixtureName: string | undefined;
@@ -39,11 +42,14 @@ export function migrateBenchmarks(editor: SourceEditor, globals = false) {
       return false;
     }
     const declaration = binding.declaration;
-    return declaration.type === 'FunctionDeclaration'
-      ? workload(declaration, seen)
-      : declaration.type === 'VariableDeclarator' &&
-          !!declaration.init &&
-          workload(declaration.init, seen);
+    if (declaration.type === 'FunctionDeclaration') {
+      return workload(declaration, seen);
+    }
+    return (
+      declaration.type === 'VariableDeclarator' &&
+      !!declaration.init &&
+      workload(declaration.init, seen)
+    );
   }
 
   function directCall(reference: t.Node): BenchmarkCall | undefined {

@@ -8,14 +8,14 @@ import {
   SourceEditor,
   importedName,
   isBoolean,
+  isModuleExports,
   isString,
   objectProperty,
-  propertyName,
   staticObject,
   type SourceOptions,
   type VitestV5Finding,
 } from './ast.ts';
-import { literalArgv } from './commands.ts';
+import { literalArgv, vitestCommandArgsStart } from './commands.ts';
 
 interface ConfigEntry {
   file?: string;
@@ -46,7 +46,7 @@ const CONFIG_NAMES = ['vitest.config', 'vite.config'].flatMap((name) =>
   ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'].map((extension) => name + extension),
 );
 
-function defaultConfig(sources: ReadonlyMap<string, string>, root: string) {
+function defaultConfig(sources: ReadonlyMap<string, string>, root: string): string | undefined {
   return CONFIG_NAMES.map((name) => path.join(root, name)).find((file) => sources.has(file));
 }
 
@@ -71,21 +71,8 @@ export function findVitestV5ConfigEntries(
     }
     for (const command of commands) {
       const argv = literalArgv(command)?.map((token) => token.value);
-      let start = 0;
-      if (argv && ['pnpm', 'npm', 'yarn', 'bun', 'npx', 'bunx'].includes(argv[0])) {
-        start++;
-        if (['exec', 'x'].includes(argv[start])) {
-          start++;
-        }
-        if (argv[start] === '--') {
-          start++;
-        }
-      }
-      if (argv?.[start] === 'vitest') {
-        start++;
-      } else if (argv?.[start] === 'vp' && argv[start + 1] === 'test') {
-        start += 2;
-      } else {
+      const start = argv ? vitestCommandArgsStart(argv) : -1;
+      if (!argv || start < 0) {
         entries.push({ root, uncertain: true });
         continue;
       }
@@ -130,19 +117,30 @@ export function findVitestV5ConfigEntries(
 }
 
 function staticPatterns(node: t.Node | undefined): string[] | undefined {
-  return node?.type === 'ArrayExpression' &&
-    node.elements.every((entry) => isString(entry) && !entry.value.startsWith('!'))
-    ? node.elements.map((entry) => (entry as t.StringLiteral).value)
-    : undefined;
+  if (node?.type !== 'ArrayExpression' || !node.elements.every(isString)) {
+    return undefined;
+  }
+  const patterns = node.elements.map((entry) => entry.value);
+  return patterns.some((pattern) => pattern.startsWith('!')) ? undefined : patterns;
 }
 
-function matches(file: string, root: string, pattern: string) {
+function booleanOption(
+  node: t.Node | undefined,
+  fallback: boolean | undefined,
+): boolean | undefined {
+  if (!node) {
+    return fallback;
+  }
+  return isBoolean(node) ? node.value : undefined;
+}
+
+function matches(file: string, root: string, pattern: string): boolean {
   return minimatch(path.relative(root, file).replaceAll('\\', '/'), pattern.replace(/^\.\//, ''), {
     dot: true,
   });
 }
 
-function insideDirectory(file: string, directory: string) {
+function insideDirectory(file: string, directory: string): boolean {
   const relative = path.relative(directory, file);
   return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
@@ -150,7 +148,11 @@ function insideDirectory(file: string, directory: string) {
 /** Vitest resolves local setup entries through local-pkg/mlly with import
  * conditions, then falls back to the literal path. Do not guess TypeScript
  * extensions or package exports that cannot be resolved from scanned files. */
-function resolveSetupFile(sources: ReadonlyMap<string, string>, root: string, reference: string) {
+function resolveSetupFile(
+  sources: ReadonlyMap<string, string>,
+  root: string,
+  reference: string,
+): string | undefined {
   if (!/^\.\.?(?:[/\\]|$)/.test(reference) && !path.isAbsolute(reference)) {
     return undefined;
   }
@@ -226,13 +228,10 @@ export function resolveVitestV5TestModes(
         (!inline && entry.rootOverride) ||
         path.resolve(directory, isString(root) ? root.value : '.');
       const dirValue = test && objectProperty(test, 'dir')?.value;
-      const dir = dirValue
-        ? isString(dirValue)
-          ? dirValue.value
-          : undefined
-        : base
-          ? base.dir
-          : '';
+      let dir = base ? base.dir : '';
+      if (dirValue) {
+        dir = isString(dirValue) ? dirValue.value : undefined;
+      }
       // Unlike globals, --dir is not a per-project CLI override in Vitest.
       const effectiveDir = (!inline ? entry.dirOverride : undefined) ?? dir;
       const include = test && objectProperty(test, 'include')?.value;
@@ -245,27 +244,26 @@ export function resolveVitestV5TestModes(
       const enabled = staticObject(browser) ? objectProperty(browser, 'enabled')?.value : undefined;
       let browserMode = base ? base.browser : false;
       if (browser) {
-        browserMode =
-          !staticObject(browser) || (enabled && !isBoolean(enabled))
-            ? undefined
-            : isBoolean(enabled)
-              ? enabled.value
-              : browserMode;
+        browserMode = staticObject(browser) ? booleanOption(enabled, browserMode) : undefined;
       }
       const globals = test && objectProperty(test, 'globals')?.value;
       const setup = test && objectProperty(test, 'setupFiles')?.value;
-      const setupFiles = setup ? (isString(setup) ? [setup.value] : staticPatterns(setup)) : [];
+      let setupFiles: string[] | undefined = [];
+      if (setup) {
+        setupFiles = isString(setup) ? [setup.value] : staticPatterns(setup);
+      }
+      // Vitest passes dir to the globber as cwd, independently of root.
+      // Relative values use the command's cwd, including in project configs.
+      let discoveryRoot: string | undefined;
+      if (effectiveDir !== undefined) {
+        discoveryRoot = effectiveDir
+          ? path.resolve(entry.cwd ?? entry.root, effectiveDir)
+          : resolvedRoot;
+      }
       const scope: TestScope = {
         root: resolvedRoot,
         dir,
-        // Vitest passes dir to the globber as cwd, independently of root.
-        // Relative values use the command's cwd, including in project configs.
-        discoveryRoot:
-          effectiveDir === undefined
-            ? undefined
-            : effectiveDir
-              ? path.resolve(entry.cwd ?? entry.root, effectiveDir)
-              : resolvedRoot,
+        discoveryRoot,
         include: include
           ? [...(base?.include ?? []), ...staticPatterns(include)!]
           : (base?.include ?? DEFAULT_TEST_INCLUDE),
@@ -275,13 +273,7 @@ export function resolveVitestV5TestModes(
             ? [...(base?.setupFiles ?? []), ...setupFiles]
             : undefined,
         browser: browserMode,
-        globals: globals
-          ? isBoolean(globals)
-            ? globals.value
-            : undefined
-          : base
-            ? base.globals
-            : false,
+        globals: booleanOption(globals, base ? base.globals : false),
       };
       const addScope = () => {
         const resolvedSetup = scope.setupFiles?.map((reference) =>
@@ -405,14 +397,7 @@ export function resolveVitestV5TestModes(
           exported(node.declaration);
         },
         AssignmentExpression(node) {
-          if (
-            node.left.type === 'MemberExpression' &&
-            !node.left.computed &&
-            node.left.object.type === 'Identifier' &&
-            node.left.object.name === 'module' &&
-            propertyName(node.left.property) === 'exports' &&
-            !editor.binding(node.left.object)
-          ) {
+          if (isModuleExports(editor, node.left)) {
             exported(node.right);
           }
         },

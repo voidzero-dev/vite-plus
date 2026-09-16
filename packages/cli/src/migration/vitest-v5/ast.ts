@@ -14,6 +14,12 @@ interface Binding {
   constant: boolean;
 }
 
+interface ParsedSource {
+  program: t.Program;
+  bindings: SourceAnalysis['bindings'];
+  comments: t.Span[];
+}
+
 type Visitors = {
   [Type in t.Node['type']]?: (node: Extract<t.Node, { type: Type }>) => void;
 };
@@ -41,6 +47,11 @@ export interface VitestV5Finding {
   code: string;
   severity: 'review' | 'block';
   message: string;
+}
+
+export interface RewriteResult {
+  content: string;
+  findings: VitestV5Finding[];
 }
 
 export interface SourceOptions {
@@ -71,6 +82,17 @@ export function memberName(node: t.Node | null | undefined): string | undefined 
     return undefined;
   }
   return propertyName(node.property);
+}
+
+export function isModuleExports(editor: SourceEditor, node: t.Node): boolean {
+  return (
+    node.type === 'MemberExpression' &&
+    !node.computed &&
+    node.object.type === 'Identifier' &&
+    node.object.name === 'module' &&
+    propertyName(node.property) === 'exports' &&
+    !editor.binding(node.object)
+  );
 }
 
 export function objectProperty(
@@ -193,7 +215,7 @@ export const CONFIG_SOURCES = new Set([
 ]);
 export const NODE_SOURCES = new Set(['vitest/node', 'vite-plus/test/node']);
 
-export function parseSource(file: string, source: string) {
+export function parseSource(file: string, source: string): ParsedSource {
   // Native errors (including unsupported Flow) reach the existing preflight
   // diagnostic path, which preserves the original file for manual review.
   const { ast, bindings, comments } = JSON.parse(
@@ -312,15 +334,15 @@ export class SourceEditor {
     return name;
   }
 
-  text(node: t.Node) {
+  text(node: t.Node): string {
     return this.source.slice(node.start, node.end);
   }
 
-  replace(node: t.Node, text: string) {
+  replace(node: t.Node, text: string): void {
     this.edit(node.start, node.end, text);
   }
 
-  edit(start: number, end: number, text: string) {
+  edit(start: number, end: number, text: string): void {
     const same = this.edits.find((edit) => edit.start === start && edit.end === end);
     if (same?.text === text) {
       return;
@@ -332,18 +354,19 @@ export class SourceEditor {
     this.edits.push({ start, end, text });
   }
 
-  add(object: t.ObjectExpression, key: string, value: string) {
+  add(object: t.ObjectExpression, key: string, value: string): void {
     if (objectProperty(object, key)) {
       return;
     }
     let additions = this.additions.get(object);
     if (!additions) {
-      this.additions.set(object, (additions = new Map()));
+      additions = new Map();
+      this.additions.set(object, additions);
     }
     additions.set(key, value);
   }
 
-  remove(object: t.ObjectExpression, prop: t.ObjectProperty) {
+  remove(object: t.ObjectExpression, prop: t.ObjectProperty): void {
     const index = object.properties.indexOf(prop);
     const nextStart = object.properties[index + 1]?.start ?? object.end - 1;
     const previousEnd = object.properties[index - 1]?.end ?? object.start + 1;
@@ -374,7 +397,7 @@ export class SourceEditor {
     code: string,
     message: string,
     severity: VitestV5Finding['severity'] = 'review',
-  ) {
+  ): void {
     const prefix = this.source.slice(0, node?.start ?? 0);
     const lines = prefix.split(/\r\n|[\r\n\u2028\u2029]/);
     const line = lines.length;
@@ -392,7 +415,7 @@ export class SourceEditor {
     }
   }
 
-  finish() {
+  finish(): RewriteResult {
     for (const [object, additions] of this.additions) {
       const start = object.start + 1;
       const first = object.properties[0]?.start ?? object.end - 1;

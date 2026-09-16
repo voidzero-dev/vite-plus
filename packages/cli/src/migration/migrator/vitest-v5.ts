@@ -9,7 +9,7 @@ import cliPackage from '../../../package.json' with { type: 'json' };
 import { PackageManager, type WorkspaceInfoOptional } from '../../types/index.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { createCatalogDependencyResolver } from '../migrator.ts';
-import { type SourceOptions, type VitestV5Finding } from '../vitest-v5/ast.ts';
+import type { RewriteResult, SourceOptions, VitestV5Finding } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
 import {
   findVitestV5ConfigFiles,
@@ -71,6 +71,20 @@ export interface VitestV5MigrationPlan {
   findings: VitestV5Finding[];
   changes: FileChange[];
   inputs: ReadonlyMap<string, string | null>;
+}
+
+type MigrationWorkspace = Pick<WorkspaceInfoOptional, 'rootDir' | 'packageManager'> &
+  Partial<Pick<WorkspaceInfoOptional, 'packages'>>;
+
+function workspaceFromPlan(plan: VitestV5MigrationPlan): MigrationWorkspace {
+  return {
+    rootDir: plan.rootDir,
+    packageManager: plan.packageManager,
+    packages: plan.projects.slice(1).map((project) => ({
+      name: '',
+      path: path.relative(plan.rootDir, project.directory),
+    })),
+  };
 }
 
 function readJson(file: string): Record<string, unknown> {
@@ -385,16 +399,8 @@ function checkNodeRange(
       return undefined;
     }
   }
-  if (!range) {
-    findings.push(
-      finding(
-        file,
-        'node-runtime',
-        `Resolve ${label} (${value}) and select Node ${cliPackage.engines.node}.`,
-        'review',
-      ),
-    );
-  } else if (!publicContract && !semver.intersects(range, cliPackage.engines.node)) {
+  let message = `Resolve ${label} (${value}) and select Node ${cliPackage.engines.node}.`;
+  if (range && !publicContract && !semver.intersects(range, cliPackage.engines.node)) {
     const current = semver.minVersion(range);
     const upgrade =
       current &&
@@ -408,27 +414,16 @@ function checkNodeRange(
       // For example, 20 -> 22.18.0, 24.10 -> 24.11.0, and 25 -> 26.0.0.
       return upgrade.version;
     }
-    findings.push(
-      finding(
-        file,
-        'node-runtime',
-        `Resolve ${label} (${value}) and select Node ${cliPackage.engines.node}.`,
-        'review',
-      ),
-    );
-  } else if (
-    !semver.subset(range, cliPackage.engines.node) &&
-    (publicContract || /[<>|*]/.test(value))
-  ) {
-    findings.push(
-      finding(
-        file,
-        'node-runtime',
-        `${label} (${value}) includes unsupported test runtimes. Pin the test/CI runtime to Node ${cliPackage.engines.node}; keep the library's public engine contract separate.`,
-        'review',
-      ),
-    );
+  } else if (range) {
+    if (
+      semver.subset(range, cliPackage.engines.node) ||
+      (!publicContract && !/[<>|*]/.test(value))
+    ) {
+      return undefined;
+    }
+    message = `${label} (${value}) includes unsupported test runtimes. Pin the test/CI runtime to Node ${cliPackage.engines.node}; keep the library's public engine contract separate.`;
   }
+  findings.push(finding(file, 'node-runtime', message));
   return undefined;
 }
 
@@ -495,7 +490,7 @@ function scanAndRewriteFile(
   project: ProjectPlan,
   testMode: VitestV5TestMode,
   mergedConfig: boolean,
-): { content: string; findings: VitestV5Finding[] } {
+): RewriteResult {
   const findings: VitestV5Finding[] = [];
   if (!project.active) {
     return { content: migrateNode(file, source, findings), findings };
@@ -679,8 +674,7 @@ function scanAndRewriteFile(
 /** Read-only preflight. Call before package-manager conversion, installs,
  * catalog updates, or generic import rewrites can erase the source version. */
 export function planVitestV5Migration(
-  workspace: Pick<WorkspaceInfoOptional, 'rootDir' | 'packageManager'> &
-    Partial<Pick<WorkspaceInfoOptional, 'packages'>>,
+  workspace: MigrationWorkspace,
   originalProjects?: ReadonlyMap<string, ProjectPlan>,
 ): VitestV5MigrationPlan {
   const findings: VitestV5Finding[] = [];
@@ -902,14 +896,7 @@ export function applyVitestV5NodeMigration(plan: VitestV5MigrationPlan): number 
  * every write. Run this after the earlier tool migration gates have passed. */
 export function refreshVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5MigrationPlan {
   return planVitestV5Migration(
-    {
-      rootDir: plan.rootDir,
-      packageManager: plan.packageManager,
-      packages: plan.projects.slice(1).map((project) => ({
-        name: '',
-        path: path.relative(plan.rootDir, project.directory),
-      })),
-    },
+    workspaceFromPlan(plan),
     // Preserve both activity and version: removing a redundant runner must not
     // erase pending compatibility work, and adding one to satisfy a peer does
     // not prove the project previously used v4 defaults.
@@ -1034,13 +1021,7 @@ export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Fi
   // Preserve inactive projects too: newly installed peers do not establish
   // original test usage. The next invocation redetects versions from scratch.
   const after = planVitestV5Migration(
-    {
-      rootDir: plan.rootDir,
-      packages: plan.projects
-        .slice(1)
-        .map((project) => ({ name: '', path: path.relative(plan.rootDir, project.directory) })),
-      packageManager: plan.packageManager,
-    },
+    workspaceFromPlan(plan),
     new Map(
       plan.projects.map((project) => [
         project.directory,

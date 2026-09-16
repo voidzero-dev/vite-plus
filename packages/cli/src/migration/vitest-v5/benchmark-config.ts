@@ -39,13 +39,19 @@ export function migrateBenchmarkConfig(editor: SourceEditor, test: t.ObjectExpre
   ) {
     return;
   }
-  const destinations = [oldOutput, oldJson].filter((prop) => prop !== undefined);
-  if (destinations.some((prop) => !isString(prop.value) || !prop.value.value)) {
-    return;
-  }
-  const destination = (destinations[0]?.value as t.StringLiteral | undefined)?.value;
-  if (destinations.some((prop) => (prop.value as t.StringLiteral).value !== destination)) {
-    return;
+  let destination: string | undefined;
+  for (const prop of [oldOutput, oldJson]) {
+    if (!prop) {
+      continue;
+    }
+    if (
+      !isString(prop.value) ||
+      !prop.value.value ||
+      (destination !== undefined && destination !== prop.value.value)
+    ) {
+      return;
+    }
+    destination = prop.value.value;
   }
   const reporters = objectProperty(test, 'reporters');
   const names = reporters ? reporterNames(reporters.value) : benchmarkNames;

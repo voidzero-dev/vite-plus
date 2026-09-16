@@ -13,11 +13,15 @@ import {
   sameStaticValue,
   isString,
   isBoolean,
+  isModuleExports,
+  type RewriteResult,
   type SourceOptions,
 } from './ast.ts';
 import { migrateBenchmarkConfig } from './benchmark-config.ts';
 
-const isTrue = (node: t.Node | undefined) => isBoolean(node) && node.value;
+function isTrue(node: t.Node | undefined): boolean {
+  return isBoolean(node) && node.value;
+}
 
 const CONFIG_FILENAME = /(?:^|[/\\])(?:vite|vitest)(?:\.[\w-]+)?\.config\.[cm]?[jt]s$/;
 const CONFIG_HELPER_IMPORT = /['"](?:vite|vitest\/config|vite-plus(?:\/test\/config)?)['"]/;
@@ -163,14 +167,7 @@ export function findVitestV5ConfigFiles(
           }
         },
         AssignmentExpression(node) {
-          if (
-            node.left.type === 'MemberExpression' &&
-            !node.left.computed &&
-            node.left.object.type === 'Identifier' &&
-            node.left.object.name === 'module' &&
-            propertyName(node.left.property) === 'exports' &&
-            !editor.binding(node.left.object)
-          ) {
+          if (isModuleExports(editor, node.left)) {
             collectReferences(node.right);
           }
         },
@@ -251,7 +248,7 @@ export function migrateVitestV5Config(
   source: string,
   options: SourceOptions,
   mergedConfig = false,
-) {
+): RewriteResult {
   // Resolve output moves first so reporter/default edits use fresh offsets and
   // see the new JSON destinations rather than accidentally enabling stdout.
   const output = migrateConfig(file, source, options, mergedConfig, true);
@@ -273,7 +270,7 @@ function migrateConfig(
   options: SourceOptions,
   mergedConfig: boolean,
   benchmarkOnly = false,
-) {
+): RewriteResult {
   const editor = new SourceEditor(file, source);
   const visited = new Set<t.ObjectExpression>();
   const merged = mergedConfig || hasConfigMerge(editor);
@@ -602,15 +599,7 @@ function migrateConfig(
 
   editor.visit({
     AssignmentExpression(node) {
-      const left = node.left;
-      if (
-        left.type === 'MemberExpression' &&
-        !left.computed &&
-        left.object.type === 'Identifier' &&
-        left.object.name === 'module' &&
-        propertyName(left.property) === 'exports' &&
-        !editor.binding(left.object)
-      ) {
+      if (isModuleExports(editor, node.left)) {
         if (staticObject(node.right)) {
           config(node.right);
         } else if (node.right.type !== 'CallExpression') {
@@ -663,12 +652,7 @@ function migrateConfig(
           parent?.type === 'ExportDefaultDeclaration' ||
           (parent?.type === 'AssignmentExpression' &&
             parent.right === node &&
-            parent.left.type === 'MemberExpression' &&
-            !parent.left.computed &&
-            parent.left.object.type === 'Identifier' &&
-            parent.left.object.name === 'module' &&
-            !editor.binding(parent.left.object) &&
-            propertyName(parent.left.property) === 'exports') ||
+            isModuleExports(editor, parent.left)) ||
           (binding?.constant &&
             binding.references.length > 0 &&
             binding.references.every(

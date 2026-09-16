@@ -440,14 +440,6 @@ export function computeAutoInlineList(
 function vitePlusAutoInlineMatcherPlugin(): PluginOption {
   let projectRoot = '';
   type TestConfig = Pick<VitestInlineConfig, 'server'>;
-  const inlineMatchers = (testConfig: TestConfig, root: string) => {
-    const merged = computeAutoInlineList(testConfig.server?.deps?.inline, root);
-    if (merged !== null) {
-      testConfig.server ??= {};
-      testConfig.server.deps ??= {};
-      testConfig.server.deps.inline = merged;
-    }
-  };
   return {
     name: 'vite-plus:auto-inline-matcher-deps',
     enforce: 'pre',
@@ -459,11 +451,7 @@ function vitePlusAutoInlineMatcherPlugin(): PluginOption {
     configEnvironment(_name, config) {
       const existing = config.resolve?.noExternal;
       const merged = computeAutoInlineList(
-        existing === true
-          ? true
-          : typeof existing === 'string' || existing instanceof RegExp
-            ? [existing]
-            : existing,
+        typeof existing === 'string' || existing instanceof RegExp ? [existing] : existing,
         projectRoot,
       );
       if (merged !== null) {
@@ -474,7 +462,12 @@ function vitePlusAutoInlineMatcherPlugin(): PluginOption {
     configResolved(resolvedConfig) {
       const config = resolvedConfig as { root: string; test?: TestConfig };
       config.test ??= {};
-      inlineMatchers(config.test, config.root);
+      const merged = computeAutoInlineList(config.test.server?.deps?.inline, config.root);
+      if (merged !== null) {
+        config.test.server ??= {};
+        config.test.server.deps ??= {};
+        config.test.server.deps.inline = merged;
+      }
     },
   };
 }
