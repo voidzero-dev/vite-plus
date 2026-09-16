@@ -14,12 +14,6 @@ VITE+ - The Unified Toolchain for the Web
     vite                  → <version>
     @vitest/utils  4.1.8  → <version>
 • Package manager settings configured
-! Warnings:
-  - Vitest v5: 1 review item
-
-package.json
-  1:1 REVIEW [legacy-dependency] Review the direct @vitest/ws-client dependency after migrating its imports; it is no longer part of the bundled Vitest graph.
-    Docs: https://vitest.dev/guide/migration/#package-migration
 ```
 
 ## `vpt print-file package.json`

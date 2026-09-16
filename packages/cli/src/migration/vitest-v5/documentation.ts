@@ -3,21 +3,16 @@ const upstream = 'https://vitest.dev/guide/migration/';
 
 const sections: Record<string, string> = {
   'api-conflict': 'browser-api-is-replaced-by-the-top-level-api',
-  'artifact-paths': 'generated-reports-and-artifacts-use-the-vitest-directory',
   'assertion-types': 'assertion-types-expose-return-and-received-types',
   'async-render': 'render-is-async-in-vitest-browser-vue-and-vitest-browser-svelte',
   'benchmark-api': 'benchmarking-api-rewrite',
-  'benchmark-output': 'benchmarking-api-rewrite',
   'browser-automock': 'automocked-modules-stay-automocked-in-the-browser',
   'browser-session': 'browser-orchestrator-url-requires-a-session',
   'class-mock': 'class-mocks-keep-prototype-methods',
   'coverage-patterns': 'coverage-include-and-exclude-match-more-precisely',
   'coverage-thresholds': 'glob-coverage-thresholds-no-longer-inherit-perfile',
   'dom-global': 'dom-environment-global-assignments-now-update-the-underlying-window',
-  'formatted-titles': 'test-titles-and-inspected-values-use-pretty-format',
   'global-descriptors': 'populateglobal-returns-descriptors-in-originals',
-  'html-output': 'generated-reports-and-artifacts-use-the-vitest-directory',
-  'legacy-dependency': 'package-migration',
   'locator-commands': 'locators-in-commands-are-serialized-as-objects',
   'nested-hoisted-mock': 'hoisted-mocking-calls-must-be-at-the-top-level',
   'nested-project-merge': 'referenced-config-files-can-define-their-own-projects',
@@ -25,8 +20,6 @@ const sections: Record<string, string> = {
   'project-inheritance': 'inline-projects-inherit-the-root-config-by-default',
   'project-server-lifecycle': 'inline-projects-share-the-vite-server-by-default',
   'removed-api': 'removed-deprecated-entrypoints',
-  'reporter-options': 'generated-reports-and-artifacts-use-the-vitest-directory',
-  'reporter-stdout': 'generated-reports-and-artifacts-use-the-vitest-directory',
   'resolve-config': 'resolveconfig-returns-the-resolved-vite-config',
   'sequential-api': 'removed-test-sequential-describe-sequential-and-sequential-options',
   'temporal-system-time': 'fake-timers-and-setsystemtime-now-mock-temporal',
@@ -36,7 +29,6 @@ const sections: Record<string, string> = {
   'ui-token': 'vitest-ui-requires-an-authenticated-url',
   'unawaited-assertion': 'unawaited-asynchronous-assertions-fail-the-test',
   'worker-id': 'worker-and-concurrency-ids-are-1-based',
-  'ws-client': 'package-migration',
 };
 
 const localSections: Record<string, string> = {

@@ -73,11 +73,6 @@ export function migrateBenchmarkConfig(editor: SourceEditor, test: t.ObjectExpre
     ) {
       return;
     }
-    // A pre-existing JSON reporter without a file writes to stdout in v4.
-    // Do not redirect that stream to the benchmark's file during consolidation.
-    if (names.includes('json') && !jsonOutput) {
-      return;
-    }
   }
   const combined = [
     ...new Set([
@@ -112,12 +107,5 @@ export function migrateBenchmarkConfig(editor: SourceEditor, test: t.ObjectExpre
     if (prop) {
       editor.remove(benchmark, prop);
     }
-  }
-  if (destination) {
-    editor.report(
-      oldJson ?? oldOutput,
-      'benchmark-output',
-      'Review consumers of this benchmark JSON file: the v5 JSON reporter includes test results and per-test benchmarks, not the v4 baseline format.',
-    );
   }
 }

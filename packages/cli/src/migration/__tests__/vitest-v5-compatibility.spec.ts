@@ -30,11 +30,6 @@ describe('Vitest v4 compatibility comments', () => {
       'exact: false',
       'locators-are-strict-by-default',
     ],
-    ...["'json'", "['json']", "[['json']]", "[['junit', {}]]"].map((reporters) => [
-      `export default { test: { reporters: ${reporters} } }`,
-      'stdout: true',
-      'generated-reports-and-artifacts-use-the-vitest-directory',
-    ]),
     [
       "export default { test: { coverage: { thresholds: { perFile: true, 'src/**': { lines: 90 } } } } }",
       'perFile: true',
@@ -85,10 +80,9 @@ describe('Vitest v4 compatibility comments', () => {
     const result = migrate(input);
     expect(result.findings).toEqual([]);
     expect(result.content).toContain('Report consumer.');
-    expect(result.content).toContain(
-      '// Vitest v4 compatibility: write JSON/JUnit reports to stdout.',
-    );
-    expect(evaluate(result.content).test.reporters).toEqual([['json', { stdout: true }]]);
+    expect(result.content).toContain(`reporters: [${reporter}]`);
+    expect(result.content).not.toContain('stdout');
+    expect(evaluate(result.content).test.reporters).toEqual([['json']]);
     expect(migrate(result.content)).toEqual(result);
   });
 
@@ -122,10 +116,7 @@ describe('Vitest v4 compatibility comments', () => {
             },
           ],
           browser: { locators: { exact: false } },
-          reporters: [
-            ['json', { stdout: true }],
-            ['junit', { stdout: true }],
-          ],
+          reporters: ['json', ['junit', {}]],
           coverage: { thresholds: { perFile: true, 'src/**': { perFile: true, lines: 90 } } },
         },
       });

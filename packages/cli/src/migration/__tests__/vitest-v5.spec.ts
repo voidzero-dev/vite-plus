@@ -54,8 +54,122 @@ function source(input: string, options = v4) {
   return result;
 }
 
+describe('Vitest v5 diagnostic scope', () => {
+  it.each(['4.1.11', '5.0.1'])(
+    'ignores output-only changes and dependency advisories from %s',
+    (version) => {
+      const input = `import { expect, it, test } from 'vitest';
+import '@vitest/ws-client';
+it.each(['system', 'light', 'dark'])('accepts %s', value => { expect(value).toBe(value); });
+test.for([{ value: 'system' }])('accepts $value', ({ value }) => { expect(value).toBe(value); });
+const artifacts = ['__screenshots__', '.vitest-attachements', '.vitest-reports', 'html/index.html'];`;
+      const settings = `export default { test: { clearMocks: false,
+      reporters: ['json', ['junit', {}], ['html', { outputFile: 'reports/index.html' }]],
+    } };`;
+      const root = project({
+        'package.json': JSON.stringify({
+          devDependencies: {
+            vitest: version,
+            '@vitest/ws-client': version,
+            '@vitest/runner': version,
+            '@vitest/expect': version,
+          },
+          scripts: {
+            test: 'vitest --reporter=json | jq',
+            artifacts: 'vitest && cp -r .vitest-attachements artifacts',
+          },
+        }),
+        'vitest.config.mjs': settings,
+        'example.test.ts': input,
+        '.github/workflows/test.yml':
+          'steps:\n  - uses: actions/upload-artifact@v4\n    with:\n      path: .vitest-reports/\n',
+      });
+      const plan = planProject(root);
+      expect(plan.findings).toEqual([]);
+      expect(plan.changes).toEqual([]);
+      applyVitestV5Migration(plan);
+      expect(finishVitestV5Migration(plan)).toEqual([]);
+      expect(fs.readFileSync(path.join(root, 'example.test.ts'), 'utf8')).toBe(input);
+      expect(fs.readFileSync(path.join(root, 'vitest.config.mjs'), 'utf8')).toBe(settings);
+    },
+  );
+
+  it('retains v4 execution reviews during finalization but not after upgrading to v5', () => {
+    const root = project({
+      'package.json': JSON.stringify({
+        devDependencies: { vitest: '4.1.11' },
+        scripts: { test: 'vitest -t "suite test"' },
+      }),
+      'vitest.config.mjs': `export default { test: { coverage: { include: ['src/**'] } } };`,
+      'example.test.ts': `import { expect, test } from 'vitest'; test('poll', async () => { await expect.poll(() => 42).toBe(42); });`,
+    });
+    const plan = planProject(root);
+    const codes = ['coverage-patterns', 'poll-timeout', 'test-name-pattern'];
+    expect(plan.findings.map(({ code }) => code).toSorted()).toEqual(codes);
+    applyVitestV5Migration(plan);
+    const manifest = path.join(root, 'package.json');
+    fs.writeFileSync(manifest, fs.readFileSync(manifest, 'utf8').replace('4.1.11', '5.0.1'));
+    const findings = finishVitestV5Migration(plan);
+    expect([...new Set(findings.map(({ code }) => code))].toSorted()).toEqual(codes);
+    expect(formatVitestV5Findings({ rootDir: root, findings })).toContain(
+      'Vitest v5: 3 review items',
+    );
+    expect(planProject(root).findings).toEqual([]);
+    expect(planProject(root).changes).toEqual([]);
+  });
+
+  it.each(["'json'", "['json']", "[['junit']]", 'reporters', "[['json', options]]"])(
+    'leaves static or dynamic reporters unchanged without a review: %s',
+    (reporters) => {
+      const input = `export default { test: { clearMocks: false, reporters: ${reporters} } };`;
+      expect(config(input)).toEqual({ content: input, findings: [] });
+      expect(config(input, false)).toEqual({ content: input, findings: [] });
+    },
+  );
+
+  it('does not review existing v5 behavior in source or dynamic configs', () => {
+    const input = `import { expect, vi, test } from 'vitest';
+vi.mock('./module'); vi.fn(class {}); vi.setSystemTime(Temporal.Now.instant());
+process.env.VITEST_POOL_ID; const { VITEST_WORKER_ID } = process.env;
+globalThis.navigator = value; globalThis.foo = originals.get('foo');
+interface Assertion<T> {}
+other.collect(options);
+test('poll', async () => { await expect.poll(() => 42).toBe(42); });`;
+    expect(source(input, { preserveV4: false, browser: true })).toEqual({
+      content: input,
+      findings: [],
+    });
+    const dynamic = 'export default () => ({ test: options });';
+    expect(config(dynamic, false)).toEqual({ content: dynamic, findings: [] });
+    expect(config(dynamic).findings).toContainEqual(
+      expect.objectContaining({ code: 'dynamic-config' }),
+    );
+  });
+
+  it('still blocks removed APIs and fixes unawaited assertions in v5 projects', () => {
+    const root = project({
+      'package.json': JSON.stringify({ devDependencies: { vitest: '5.0.1' } }),
+      'example.test.ts': `import { expect, test } from 'vitest';
+test('async', () => { expect(Promise.resolve(1)).resolves.toBe(1); });`,
+    });
+    // An unresolved benchmark cannot use the removed top-level API, even on v5.
+    fs.writeFileSync(
+      path.join(root, 'example.bench.ts'),
+      `import { bench } from 'vitest'; export { bench };`,
+    );
+    const plan = planProject(root);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
+    );
+    expect(plan.changes.find(({ file }) => file.endsWith('example.test.ts'))?.after).toContain(
+      'await expect(',
+    );
+    expect(() => applyVitestV5Migration(plan)).toThrow();
+  });
+});
+
 describe('Vitest v5 config compatibility', () => {
-  it('retains benchmark JSON consumer reviews through finalization, without repeat edits', () => {
+  it('migrates removed benchmark output options without consumer reviews or repeat edits', () => {
     const root = project({
       'package.json': JSON.stringify({
         devDependencies: { vitest: '4.1.11' },
@@ -65,12 +179,15 @@ describe('Vitest v5 config compatibility', () => {
       'example.bench.js': `import { bench } from 'vitest'; const work = () => 42; bench('work', work);`,
     });
     const plan = planProject(root);
-    expect(plan.findings.map(({ code }) => code)).toEqual(['benchmark-output', 'benchmark-output']);
+    expect(plan.findings).toEqual([]);
     applyVitestV5Migration(plan);
     const findings = finishVitestV5Migration(plan);
-    expect(findings.map(({ code }) => code)).toEqual(['benchmark-output', 'benchmark-output']);
-    expect(formatVitestV5Findings({ rootDir: root, findings })).toContain(
-      'Docs: https://vitest.dev/guide/migration/#benchmarking-api-rewrite',
+    expect(findings).toEqual([]);
+    expect(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).toContain(
+      '--outputFile=cli.json',
+    );
+    expect(fs.readFileSync(path.join(root, 'vitest.config.mjs'), 'utf8')).toContain(
+      'json: "config.json"',
     );
     expect(planProject(root).changes).toEqual([]);
     expect(planProject(root).findings).toEqual([]);
@@ -689,13 +806,10 @@ export default defineConfig({ plugins: [plugin()] });`;
   });
 
   it.each([`'html'`, `['html', {}]`, `['html', { outputDir: 'reports' }]`])(
-    'reports top-level HTML outputFile with reporter %s',
+    'preserves top-level HTML outputFile with reporter %s without a review',
     (reporter) => {
-      expect(
-        config(
-          `export default { test: { reporters: [${reporter}], outputFile: 'old/index.html' } };`,
-        ).findings,
-      ).toContainEqual(expect.objectContaining({ code: 'html-output' }));
+      const input = `export default { test: { clearMocks: false, reporters: [${reporter}], outputFile: 'old/index.html' } };`;
+      expect(config(input)).toEqual({ content: input, findings: [] });
     },
   );
   it('keeps Node jest-dom matchers separate from browser matchers in one package', () => {
@@ -1029,7 +1143,7 @@ export default mergeConfig(base, overrides);`,
     },
   );
 
-  it('copies screenshots, glob perFile, and stdout defaults', () => {
+  it('copies screenshot and glob perFile settings without changing report formatting', () => {
     const result = config(`export default { test: {
 browser: { screenshotDirectory: 'screens', expect: { toMatchScreenshot: { threshold: 0.1 } } },
 coverage: { include: ['src'], thresholds: { perFile: true, 'src/**': { lines: 90 }, 'lib/**': { perFile: false } } },
@@ -1038,19 +1152,22 @@ reporters: ['default', 'json', ['junit', {}], ['html', { outputFile: 'reports/in
     expect(result.content.match(/screenshotDirectory: 'screens'/g)).toHaveLength(2);
     expect(result.content.match(/perFile: true/g)).toHaveLength(2);
     expect(result.content).toContain('perFile: false');
-    expect(result.content.match(/stdout: true/g)).toHaveLength(2);
-    expect(result.content).toContain('outputDir: "reports"');
+    expect(result.content).not.toContain('stdout');
+    expect(result.content).toContain(
+      "reporters: ['default', 'json', ['junit', {}], ['html', { outputFile: 'reports/index.html' }]]",
+    );
     expect(result.findings.map((finding) => finding.code)).toEqual(['coverage-patterns']);
     expect(config(result.content).content).toBe(result.content);
   });
 
-  it('keeps explicit report destinations and reviews non-index HTML files', () => {
+  it('keeps explicit report destinations without reviewing non-index HTML files', () => {
     const result = config(
       `export default { test: { outputFile: { json: 'report.json' }, reporters: ['json', ['junit', { stdout: false }], ['html', { outputFile: 'custom.html' }]] } };`,
     );
     expect(result.content).not.toContain('stdout: true');
     expect(result.content).toContain('stdout: false');
-    expect(result.findings.map((finding) => finding.code)).toContain('html-output');
+    expect(result.content).toContain("outputFile: 'custom.html'");
+    expect(result.findings).toEqual([]);
   });
 
   it.each([true, false])('retains supported benchmark options (preserveV4=%s)', (preserveV4) => {
@@ -1378,7 +1495,6 @@ interface Assertion<T> {}
 expect.poll(() => 1).toBe(1);`);
     expect(result.findings.map((finding) => finding.code)).toEqual(
       expect.arrayContaining([
-        'ws-client',
         'nested-hoisted-mock',
         'browser-automock',
         'class-mock',
@@ -1399,11 +1515,36 @@ expect.poll(() => 1).toBe(1);`);
 
 describe('Vitest v5 command migration', () => {
   it.each([
-    ['vitest --reporter=json | jq', 'reporter-stdout', 'review'],
+    'vitest run -t adds',
+    'vitest run --testNamePattern=adds_numbers',
+    'vitest run -- -t',
+    'vitest --reporter=json | jq',
+    'vitest && cp -r .vitest-attachements artifacts',
+  ])('leaves output settings and simple name filters alone: %s', (command) => {
+    expect(migrateVitestV5Command('package.json', command, true)).toEqual({
+      content: command,
+      findings: [],
+    });
+  });
+
+  it.each(['vitest run -t "suite test"', '(vitest list)'])(
+    'does not review an existing v5 command: %s',
+    (command) => {
+      expect(migrateVitestV5Command('package.json', command, false)).toEqual({
+        content: command,
+        findings: [],
+      });
+      expect(migrateVitestV5Command('package.json', command, false, 1, true).findings).toHaveLength(
+        1,
+      );
+    },
+  );
+
+  it.each([
     ['vitest run -t "suite test"', 'test-name-pattern', 'review'],
+    ['vitest run -t suite.test', 'test-name-pattern', 'review'],
     ['vitest --compare=baseline.json', 'benchmark-api', 'block'],
     ['vitest --outputJson=$BASELINE', 'benchmark-api', 'block'],
-    ['vitest && cp -r .vitest-attachements artifacts', 'artifact-paths', 'review'],
   ])('reports %s without changing it', (command, code, severity) => {
     const result = migrateVitestV5Command('package.json', command, true, 7);
     expect(result.content).toBe(command);
@@ -1521,7 +1662,7 @@ describe('Vitest v5 versioned preflight', () => {
   it.each(['', '\uFEFF'])(
     'preserves manifest formatting and BOM %j when changing a script',
     (bom) => {
-      const before = `${bom}{\r\n\t"name": "test",\r\n\t"scripts": { "test": "vitest list", "filter": "vitest -t suite" },\r\n\t"devDependencies": {"vitest":"^4.1.0"}\r\n}`;
+      const before = `${bom}{\r\n\t"name": "test",\r\n\t"scripts": { "test": "vitest list", "filter": "vitest -t suite.test" },\r\n\t"devDependencies": {"vitest":"^4.1.0"}\r\n}`;
       const root = project({ 'package.json': before });
       const plan = planProject(root);
       expect(plan.changes.find(({ file }) => file === path.join(root, 'package.json'))?.after).toBe(
