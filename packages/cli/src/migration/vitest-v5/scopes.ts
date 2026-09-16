@@ -32,6 +32,11 @@ interface TestScope {
   discoveryRoot?: string;
   include?: string[];
   exclude?: string[];
+  benchmark?: {
+    include?: string[];
+    exclude?: string[];
+    includeSource?: string[];
+  };
   setupFiles?: string[];
   unresolvedSetup?: boolean;
   browser?: boolean;
@@ -41,6 +46,8 @@ interface TestScope {
 export type VitestV5TestMode = Pick<SourceOptions, 'browser' | 'globals' | 'reviewGlobals'>;
 
 const DEFAULT_TEST_INCLUDE = ['**/*.{test,spec}.?(c|m)[jt]s?(x)'];
+const DEFAULT_BENCHMARK_INCLUDE = ['**/*.{bench,benchmark}.?(c|m)[jt]s?(x)'];
+const DEFAULT_BENCHMARK_EXCLUDE = ['**/node_modules/**', '**/.git/**'];
 // Match Vitest's discovery order, including precedence across extensions.
 const CONFIG_NAMES = ['vitest.config', 'vite.config'].flatMap((name) =>
   ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'].map((extension) => name + extension),
@@ -95,7 +102,9 @@ export function findVitestV5ConfigEntries(
             rootOverride = path.resolve(root, value);
           }
         } else if (
-          /^--(?:no-)?(?:globals|include|exclude|project|workspace|setupFiles)(?:[.=]|$)/.test(arg)
+          /^--(?:no-)?(?:globals|include|exclude|project|workspace|setupFiles|benchmark\.(?:include|exclude|includeSource))(?:[.=]|$)/.test(
+            arg,
+          )
         ) {
           // These flags change ownership. Preserve globals until the command's
           // effective project options can be determined, rather than guessing.
@@ -132,6 +141,27 @@ function booleanOption(
     return fallback;
   }
   return isBoolean(node) ? node.value : undefined;
+}
+
+function benchmarkPatterns(
+  node: t.Node | undefined,
+  inherited: TestScope['benchmark'],
+): TestScope['benchmark'] {
+  if (!inherited || (node && !staticObject(node))) {
+    return undefined;
+  }
+  const patterns = { ...inherited };
+  for (const key of ['include', 'exclude', 'includeSource'] as const) {
+    const value = node && objectProperty(node, key)?.value;
+    if (value) {
+      const resolved = staticPatterns(value);
+      if (!resolved) {
+        return undefined;
+      }
+      patterns[key] = [...(inherited[key] ?? []), ...resolved];
+    }
+  }
+  return patterns;
 }
 
 function matches(file: string, root: string, pattern: string): boolean {
@@ -247,6 +277,7 @@ export function resolveVitestV5TestModes(
         browserMode = staticObject(browser) ? booleanOption(enabled, browserMode) : undefined;
       }
       const globals = test && objectProperty(test, 'globals')?.value;
+      const benchmark = test && objectProperty(test, 'benchmark')?.value;
       const setup = test && objectProperty(test, 'setupFiles')?.value;
       let setupFiles: string[] | undefined = [];
       if (setup) {
@@ -268,6 +299,9 @@ export function resolveVitestV5TestModes(
           ? [...(base?.include ?? []), ...staticPatterns(include)!]
           : (base?.include ?? DEFAULT_TEST_INCLUDE),
         exclude: exclude ? [...(base?.exclude ?? []), ...staticPatterns(exclude)!] : base?.exclude,
+        // Apply defaults only when matching: implicit parent defaults must not
+        // be appended to an inline project's explicit benchmark patterns.
+        benchmark: benchmarkPatterns(benchmark, base ? base.benchmark : {}),
         setupFiles:
           setupFiles && (!base || base.setupFiles)
             ? [...(base?.setupFiles ?? []), ...setupFiles]
@@ -292,6 +326,13 @@ export function resolveVitestV5TestModes(
             setup ?? object,
             'global-api-ownership',
             'Resolve setupFiles before migrating global APIs. A setup entry cannot be resolved safely from the scanned files.',
+          );
+        }
+        if (!scope.benchmark) {
+          editor.report(
+            benchmark ?? object,
+            'global-api-ownership',
+            'Resolve test.benchmark file patterns before migrating global APIs. Benchmark file ownership is not statically known.',
           );
         }
         scopes.push({
@@ -424,9 +465,26 @@ export function resolveVitestV5TestModes(
           (!scope.include ||
             scope.include.some((pattern) => matches(file, discoveryRoot, pattern))) &&
           !scope.exclude?.some((pattern) => matches(file, discoveryRoot, pattern));
-        if (setup || test) {
-          matching.push({ scope, certain: !!setup || !!scope.include });
-        } else if ((!discoveryRoot || !scope.setupFiles || scope.unresolvedSetup) && inside) {
+        const benchmark =
+          discoveryRoot &&
+          insideDirectory(file, discoveryRoot) &&
+          scope.benchmark &&
+          !(scope.benchmark.exclude ?? DEFAULT_BENCHMARK_EXCLUDE).some((pattern) =>
+            matches(file, discoveryRoot, pattern),
+          ) &&
+          ((scope.benchmark.include ?? DEFAULT_BENCHMARK_INCLUDE).some((pattern) =>
+            matches(file, discoveryRoot, pattern),
+          ) ||
+            (scope.benchmark.includeSource?.some((pattern) =>
+              matches(file, discoveryRoot, pattern),
+            ) &&
+              sources.get(file)?.includes('import.meta.vitest')));
+        if (setup || test || benchmark) {
+          matching.push({ scope, certain: !!setup || !!benchmark || !!(test && scope.include) });
+        } else if (
+          ((!discoveryRoot || !scope.setupFiles || scope.unresolvedSetup) && inside) ||
+          (!scope.benchmark && discoveryRoot && insideDirectory(file, discoveryRoot))
+        ) {
           matching.push({ scope, certain: false });
         }
       }

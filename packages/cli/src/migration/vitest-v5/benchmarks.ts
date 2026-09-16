@@ -160,7 +160,9 @@ export function migrateBenchmarks(
       callback.start,
       `async ({ ${fixture} }) => { await ${fixtureName}(${name}, `,
     );
-    editor.edit(call.end - 1, call.end - 1, ').run(); }');
+    // Keep surrounding parentheses and trailing comments around the new test
+    // callback by inserting both ends of the wrapper at the callback's span.
+    editor.edit(callback.end, callback.end, ').run(); }');
   }
 
   editor.visit({
