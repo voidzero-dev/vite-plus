@@ -395,8 +395,16 @@ function checkNodeRange(
     // A public engine contract is not a runtime pin. A supported minimum
     // is sufficient; open ranges need not exclude every unsupported major.
     const minimum = semver.minVersion(range);
-    if (minimum && semver.satisfies(minimum, cliPackage.engines.node)) {
-      return undefined;
+    if (minimum) {
+      // A whole-major range such as 24.x also permits a supported release.
+      // Do not mistake its implicit 24.0.0 minimum for an exact runtime pin.
+      const majorRange = `${minimum.major}.x`;
+      if (
+        semver.satisfies(minimum, cliPackage.engines.node) ||
+        (semver.subset(majorRange, range) && semver.intersects(majorRange, cliPackage.engines.node))
+      ) {
+        return undefined;
+      }
     }
   }
   let message = `Resolve ${label} (${value}) and select Node ${cliPackage.engines.node}.`;
