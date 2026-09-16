@@ -36,7 +36,7 @@ export default defineConfig({
   },
   fmt: {},
   lint: {
-    plugins: ["oxc", "typescript", "unicorn", "react"],
+    plugins: ["oxc", "typescript", "unicorn"],
     categories: {
       correctness: "warn",
     },
@@ -147,6 +147,7 @@ export default defineConfig({
             },
           ],
         },
+        plugins: ["react"],
         env: {
           es2020: true,
           browser: true,
