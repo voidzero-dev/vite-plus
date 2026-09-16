@@ -8,6 +8,15 @@ Bun falls back to install because it does not support dedupe
 warn: bun dedupe requires bun >= 1.4, falling back to bun install
 ```
 
+## `vp dedupe --check -- --silent`
+
+warns about unsupported --check and still falls back to install
+
+```
+warn: bun <1.4 does not support --check.
+warn: bun dedupe requires bun >= 1.4, falling back to bun install
+```
+
 ## `vpt print-file package.json`
 
 verify Bun completed
