@@ -16,8 +16,42 @@ name = "review_only_rerun"
 vp = "global"
 comment = "Show a non-blocking review once in the final summary, and retain it on a no-op rerun without reconciling dependencies."
 steps = [
+  { argv = ["vpt", "write-file", "example.test.ts", "import { test } from 'vitest';\ntest('ui', () => { const url = 'http://localhost:51204/__vitest__/'; void url; });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "v4_reviews_do_not_repeat"
+vp = "global"
+comment = "Show execution-related v4 reviews in the first final summary, but not after upgrading to v5."
+steps = [
   { argv = ["vpt", "write-file", "example.test.ts", "import { expect, test } from 'vitest';\ntest('poll', async () => { await expect.poll(() => 42).toBe(42); });\n"], snapshot = false },
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "output_only_changes"
+vp = "global"
+comment = "Keep parameterized titles and reporter options without cosmetic compatibility edits or review prompts."
+steps = [
+  { argv = ["vpt", "write-file", "example.test.ts", "import { expect, it } from 'vitest';\nit.each(['system', 'light', 'dark'])('accepts %s', value => { expect(value).toBe(value); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { reporters: ['json', ['junit', {}], ['html', { outputFile: 'reports/index.html' }]] } };\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "vite.config.ts", "example.test.ts"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "v5_without_compatibility_reviews"
+vp = "global"
+comment = "Migrate an original Vitest v5 project without v4 default edits or behavior reviews."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vitest", "5.0.1"], snapshot = false },
+  { argv = ["vpt", "write-file", "example.test.ts", "import { expect, it, test } from 'vitest';\nit.each(['system', 'light', 'dark'])('accepts %s', value => { expect(value).toBe(value); });\ntest('poll', async () => { await expect.poll(() => 42).toBe(42); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "vite.config.ts", "example.test.ts", "package.json"],
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
 ]
 

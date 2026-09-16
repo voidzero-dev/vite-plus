@@ -584,6 +584,7 @@ function scanAndRewriteFile(
         command,
         project.options.preserveV4,
         source.slice(0, node.offset).split('\n').length,
+        project.options.preserveV4 || project.options.reviewV4,
       );
       findings.push(...result.findings);
       if (result.content !== command) {
@@ -595,17 +596,6 @@ function scanAndRewriteFile(
       }
     }
     content = applyEdits(source, edits);
-    for (const name of ['@vitest/ws-client', '@vitest/runner', '@vitest/expect']) {
-      if (dependency(pkg, name)) {
-        findings.push(
-          finding(
-            file,
-            'legacy-dependency',
-            `Review the direct ${name} dependency after migrating its imports; it is no longer part of the bundled Vitest graph.`,
-          ),
-        );
-      }
-    }
   } else if (/^tsconfig(?:\..+)?\.json$/.test(path.basename(file))) {
     const types = record(record(parseJsonc(source))?.compilerOptions)?.types;
     if (
@@ -642,6 +632,7 @@ function scanAndRewriteFile(
           value.includes('\n') ? `(${value})` : value,
           project.options.preserveV4,
           source.slice(0, pair.key.range?.[0] ?? 0).split('\n').length,
+          project.options.preserveV4 || project.options.reviewV4,
         );
         findings.push(...result.findings);
         if (!value.includes('\n') && result.content !== value) {
@@ -655,25 +646,14 @@ function scanAndRewriteFile(
     }
   } else if (file.endsWith('.sh')) {
     findings.push(
-      ...migrateVitestV5Command(file, `(${source})`, project.options.preserveV4).findings,
+      ...migrateVitestV5Command(
+        file,
+        `(${source})`,
+        project.options.preserveV4,
+        1,
+        project.options.preserveV4 || project.options.reviewV4,
+      ).findings,
     );
-  }
-  // CI upload paths and tools that consume reports may not invoke Vitest.
-  if (!CODE_FILE.test(file) && path.basename(file) !== '.gitignore') {
-    for (const match of source.matchAll(
-      /\.vitest-attachements\/?|\.vitest-reports\/?|__screenshots__\/?|html\/index\.html/g,
-    )) {
-      findings.push(
-        finding(
-          file,
-          'artifact-paths',
-          'Review this consumer of old output paths. Artifacts now use .vitest/attachments, .vitest/blob, and .vitest/index.html.',
-          'review',
-          source,
-          match.index,
-        ),
-      );
-    }
   }
   // Apply Node value edits after script rewriting so manifest offsets refer
   // to the current text and neither pass can overwrite the other's changes.
@@ -934,9 +914,7 @@ function currentProjectConfigs(plan: VitestV5MigrationPlan): Map<string, string[
 /** Run after other migration steps create or merge configs. Keep the source
  * version and deferred reviews in memory until the final report; no state file. */
 export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Finding[] {
-  // Output paths survive the rewrite, but the old JSON schema does not. Retain
-  // this review for the current invocation after the removed options disappear.
-  const findings = plan.findings.filter(({ code }) => code === 'benchmark-output');
+  const findings: VitestV5Finding[] = [];
   const completedProjects = new Map<string, ProjectPlan>();
   const projectConfigs = currentProjectConfigs(plan);
   const configSources = new Map(

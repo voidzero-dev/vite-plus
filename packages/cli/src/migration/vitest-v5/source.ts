@@ -283,6 +283,7 @@ export function migrateVitestV5Source(
   options: SourceOptions,
 ): RewriteResult {
   const editor = new SourceEditor(file, source);
+  const reviewV4 = options.preserveV4 || options.reviewV4;
   const benchmarks = migrateBenchmarks(editor, options.globals);
   const runnerAliases: string[] = [];
   const asyncFunctions = new Set<t.Node>();
@@ -362,13 +363,6 @@ export function migrateVitestV5Source(
     if (LEGACY_API_SOURCES.has(source)) {
       unsupported(node, source, 'dynamic/CommonJS import', false);
     }
-    if (source === '@vitest/ws-client') {
-      editor.report(
-        node,
-        'ws-client',
-        'Replace direct @vitest/ws-client use; it does not receive Vitest v5 features.',
-      );
-    }
   }
 
   editor.visit({
@@ -391,14 +385,6 @@ export function migrateVitestV5Source(
             );
           }
         }
-      }
-      if (source === '@vitest/ws-client') {
-        editor.report(
-          node,
-          'ws-client',
-          'Replace direct @vitest/ws-client use; it does not receive Vitest v5 features.',
-        );
-        return;
       }
       if (source in entryPoints) {
         editor.replace(
@@ -583,13 +569,6 @@ export function migrateVitestV5Source(
             );
           }
         }
-        if (members.includes('each') || members.includes('for')) {
-          editor.report(
-            node,
-            'formatted-titles',
-            'Review generated test-title snapshots; v5 uses pretty-format and different string placeholders.',
-          );
-        }
       }
 
       if (name === 'vi' || name === 'vitest') {
@@ -618,6 +597,7 @@ export function migrateVitestV5Source(
           }
         }
         if (
+          reviewV4 &&
           (options.browser || (options.browser === undefined && options.browserPossible)) &&
           method === 'mock' &&
           node.arguments.length === 1
@@ -628,14 +608,18 @@ export function migrateVitestV5Source(
             'Browser automocks now keep mock defaults; choose { spy: true } if real implementations are required.',
           );
         }
-        if ((method === 'fn' || method === 'spyOn') && looksLikeConstructorMock(editor, node)) {
+        if (
+          reviewV4 &&
+          (method === 'fn' || method === 'spyOn') &&
+          looksLikeConstructorMock(editor, node)
+        ) {
           editor.report(
             node,
             'class-mock',
             'If this mock replaces a constructor, review its prototype, methods, and instanceof behavior.',
           );
         }
-        if (method === 'setSystemTime' && /\bTemporal\b/.test(source)) {
+        if (reviewV4 && method === 'setSystemTime' && /\bTemporal\b/.test(source)) {
           editor.report(
             node,
             'temporal-system-time',
@@ -644,6 +628,7 @@ export function migrateVitestV5Source(
         }
       }
       if (
+        reviewV4 &&
         memberName(node.callee) === 'mockImplementation' &&
         looksLikeConstructorMock(editor, node)
       ) {
@@ -665,7 +650,7 @@ export function migrateVitestV5Source(
         ) {
           editor.replace(first, '/^$/');
         }
-        if ((options.preserveV4 || options.reviewV4) && matcher === 'toHaveTextContent') {
+        if (reviewV4 && matcher === 'toHaveTextContent') {
           const browserAssertion = members.includes('element') || options.browser === true;
           const literal = isString(first) || isRegExp(first);
           if (options.preserveV4 && browserAssertion && literal) {
@@ -688,7 +673,7 @@ export function migrateVitestV5Source(
             );
           }
         }
-        if (members.includes('poll') && matcher !== 'poll') {
+        if (reviewV4 && members.includes('poll') && matcher !== 'poll') {
           editor.report(
             node,
             'poll-timeout',
@@ -831,9 +816,10 @@ export function migrateVitestV5Source(
             );
           }
         } else if (
-          !known ||
-          node.arguments.some((argument) => argument.type === 'SpreadElement') ||
-          (opts && !staticObject(opts))
+          reviewV4 &&
+          (!known ||
+            node.arguments.some((argument) => argument.type === 'SpreadElement') ||
+            (opts && !staticObject(opts)))
         ) {
           editor.report(
             node,
@@ -857,7 +843,7 @@ export function migrateVitestV5Source(
       }
     },
     MemberExpression(node) {
-      if (['VITEST_POOL_ID', 'VITEST_WORKER_ID'].includes(memberName(node) ?? '')) {
+      if (reviewV4 && ['VITEST_POOL_ID', 'VITEST_WORKER_ID'].includes(memberName(node) ?? '')) {
         editor.report(
           node,
           'worker-id',
@@ -866,7 +852,7 @@ export function migrateVitestV5Source(
       }
     },
     VariableDeclarator(node) {
-      if (node.id.type === 'ObjectPattern') {
+      if (reviewV4 && node.id.type === 'ObjectPattern') {
         for (const prop of node.id.properties) {
           if (
             prop.type === 'Property' &&
@@ -882,7 +868,7 @@ export function migrateVitestV5Source(
       }
     },
     AssignmentExpression(node) {
-      if (/\boriginals\b/.test(editor.text(node.right))) {
+      if (reviewV4 && /\boriginals\b/.test(editor.text(node.right))) {
         editor.report(
           node,
           'global-descriptors',
@@ -891,12 +877,13 @@ export function migrateVitestV5Source(
       }
       const left = node.left;
       if (
-        (left.type === 'MemberExpression' &&
+        reviewV4 &&
+        ((left.type === 'MemberExpression' &&
           left.object.type === 'Identifier' &&
           !editor.binding(left.object) &&
           ['window', 'globalThis', 'global'].includes(editor.text(left.object)) &&
           DOM_GLOBALS.has(memberName(left) ?? '')) ||
-        (left.type === 'Identifier' && DOM_GLOBALS.has(left.name) && !editor.binding(left))
+          (left.type === 'Identifier' && DOM_GLOBALS.has(left.name) && !editor.binding(left)))
       ) {
         editor.report(
           node,
@@ -907,6 +894,7 @@ export function migrateVitestV5Source(
     },
     TSInterfaceDeclaration(node) {
       if (
+        reviewV4 &&
         ['Assertion', 'Matchers'].includes(node.id.name) &&
         (node.typeParameters?.params.length ?? 0) < 2
       ) {
@@ -920,6 +908,7 @@ export function migrateVitestV5Source(
     TSTypeReference(node) {
       const name = editor.text(node.typeName);
       if (
+        reviewV4 &&
         ['Assertion', 'Matchers', 'jest.Matchers'].includes(name) &&
         (node.typeArguments?.params.length ?? 0) < 2
       ) {
@@ -953,13 +942,6 @@ export function migrateVitestV5Source(
           node,
           'browser-session',
           'Use the browser orchestrator URL opened by Vitest, including its sessionId.',
-        );
-      }
-      if (/\.vitest-attachements|\.vitest-reports|__screenshots__|html\/index\.html/.test(value)) {
-        editor.report(
-          node,
-          'artifact-paths',
-          'Review this old artifact/report path. Generated output moved under .vitest; reference screenshots remain separate.',
         );
       }
     },

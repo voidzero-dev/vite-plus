@@ -170,6 +170,7 @@ export function migrateVitestV5Command(
   command: string,
   preserveV4: boolean,
   line = 1,
+  reviewV4 = preserveV4,
 ): RewriteResult {
   const findings: VitestV5Finding[] = [];
   const report = (
@@ -180,37 +181,32 @@ export function migrateVitestV5Command(
   if (!/\bvitest\b|\bvp\s+test\b/.test(command)) {
     return { content: command, findings };
   }
-  const migrated = migrateBenchmarkOutput(command);
-  if (migrated !== command) {
-    command = migrated;
-    report(
-      'benchmark-output',
-      'Review consumers of this benchmark JSON file: the v5 JSON reporter includes test results and per-test benchmarks, not the v4 baseline format.',
-    );
-  }
-  if (/--reporter[= ](?:json|junit)/.test(command) && !/--outputFile(?:=|\s)/.test(command)) {
-    report(
-      'reporter-stdout',
-      'JSON/JUnit now write to .vitest/json/output.json or .vitest/junit/output.xml. Configure reporter stdout: true if this command needs the old stdout output.',
-    );
-  }
-  if (/(?:^|\s)(?:-t|--testNamePattern)(?:\s|=)/.test(command)) {
-    report(
-      'test-name-pattern',
-      'Review test-name patterns across suite boundaries; full names now use > separators.',
-    );
-  }
+  command = migrateBenchmarkOutput(command);
   // The bench subcommand still exists in v5. Only its removed flags block
   // migration; benchmark source changes are handled by the source pass.
   const argv = literalArgv(command);
   const values = argv?.map(({ value }) => value);
   const runner = values ? vitestCommandArgsStart(values) : -1;
   let removedFlag = /(?:^|\s)(?:--compare|--outputJson)(?:\s|=|$)/.test(command);
+  let reviewNamePattern = /(?:^|\s)(?:-t|--testNamePattern)(?:\s|=)/.test(command);
   if (values && runner >= 0) {
     const terminator = values.indexOf('--', runner);
-    removedFlag = values
-      .slice(runner, terminator === -1 ? undefined : terminator)
-      .some((value) => /^(?:--compare|--outputJson)(?:=|$)/.test(value));
+    const args = values.slice(runner, terminator === -1 ? undefined : terminator);
+    removedFlag = args.some((value) => /^(?:--compare|--outputJson)(?:=|$)/.test(value));
+    reviewNamePattern = args.some((value, index) => {
+      if (!/^(?:-t|--testNamePattern)(?:=|$)/.test(value)) {
+        return false;
+      }
+      const pattern = value.includes('=') ? value.slice(value.indexOf('=') + 1) : args[index + 1];
+      // A plain single-segment substring is unaffected by suite separators.
+      return !pattern || !/^[\w-]+$/.test(pattern);
+    });
+  }
+  if (reviewV4 && reviewNamePattern) {
+    report(
+      'test-name-pattern',
+      'Review test-name patterns across suite boundaries; full names now use > separators.',
+    );
   }
   if (removedFlag) {
     report(
@@ -219,17 +215,7 @@ export function migrateVitestV5Command(
       'block',
     );
   }
-  if (
-    /\.vitest-attachements|\.vitest-reports|__screenshots__|html\/index\.html|--reporter[= ](?:json|junit).*\|/.test(
-      command,
-    )
-  ) {
-    report(
-      'artifact-paths',
-      'Review artifact paths and JSON/JUnit stdout consumers; output defaults moved under .vitest.',
-    );
-  }
-  if (!/\blist\b/.test(command)) {
+  if (!reviewV4 || !/\blist\b/.test(command)) {
     return { content: command, findings };
   }
   if (!argv || !values) {

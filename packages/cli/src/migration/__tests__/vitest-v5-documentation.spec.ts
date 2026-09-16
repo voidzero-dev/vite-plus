@@ -8,7 +8,6 @@ import { vitestV5Documentation } from '../vitest-v5/documentation.ts';
 
 it.each([
   ['benchmark-api', 'https://vitest.dev/guide/migration/#benchmarking-api-rewrite'],
-  ['benchmark-output', 'https://vitest.dev/guide/migration/#benchmarking-api-rewrite'],
   ['node-runtime', 'https://viteplus.dev/guide/vitest-v5#node-runtime'],
   ['source-version', 'https://viteplus.dev/guide/vitest-v5#before-you-migrate'],
   ['global-api-ownership', 'https://viteplus.dev/guide/vitest-v5#resolve-migration-findings'],

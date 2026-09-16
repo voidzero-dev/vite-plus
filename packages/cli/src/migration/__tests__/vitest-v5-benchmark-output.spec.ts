@@ -25,9 +25,7 @@ describe('Vitest v5 benchmark output config migration', () => {
         outputFile: { json: 'reports/bench.json' },
         benchmark: { include: ['*.bench.js'] },
       });
-      expect(result.findings).toEqual([
-        expect.objectContaining({ code: 'benchmark-output', severity: 'review' }),
-      ]);
+      expect(result.findings).toEqual([]);
       expect(
         migrateVitestV5Config('vitest.config.js', result.content, { preserveV4: true }),
       ).toEqual({ content: result.content, findings: [] });
@@ -59,6 +57,17 @@ describe('Vitest v5 benchmark output config migration', () => {
     });
   });
 
+  it('reuses a JSON reporter without preserving its old stdout default', () => {
+    const result = config(`reporters: ['json'], benchmark: { outputJson: 'bench.json' }`);
+    expect(resolved(result.content)).toEqual({
+      clearMocks: false,
+      reporters: ['json', 'default'],
+      outputFile: { json: 'bench.json' },
+      benchmark: {},
+    });
+    expect(result.findings).toEqual([]);
+  });
+
   it.each([`'bench.json'`, `{ json: 'bench.json' }`])(
     'reuses an equivalent destination: %s',
     (output) => {
@@ -67,7 +76,7 @@ describe('Vitest v5 benchmark output config migration', () => {
       expect(resolved(result.content).reporters).toEqual(['default', 'json']);
       expect(resolved(result.content).benchmark).toEqual({});
       expect(result.content).not.toContain('stdout');
-      expect(result.findings).toHaveLength(1);
+      expect(result.findings).toEqual([]);
     },
   );
 
@@ -90,7 +99,6 @@ describe('Vitest v5 benchmark output config migration', () => {
     `benchmark: { outputFile: { default: 'bench.json' } }`,
     `benchmark: { outputFile: 'one.json', outputJson: 'two.json' }`,
     `reporters: ['default'], benchmark: { reporters: 'verbose' }`,
-    `reporters: ['json'], benchmark: { outputJson: 'bench.json' }`,
     `reporters: [['json', { stdout: true }]], benchmark: { outputJson: 'bench.json' }`,
     `reporters: ['default', /* keep */ 'junit'], benchmark: { outputJson: 'bench.json' }`,
     `outputFile: 'tests.json', benchmark: { outputJson: 'bench.json' }`,
@@ -101,7 +109,6 @@ describe('Vitest v5 benchmark output config migration', () => {
     expect(result.findings).toContainEqual(
       expect.objectContaining({ code: 'benchmark-api', severity: 'block' }),
     );
-    expect(result.findings.some(({ code }) => code === 'benchmark-output')).toBe(false);
     expect(result.content).toContain('benchmark: {');
   });
 
@@ -159,9 +166,7 @@ describe('Vitest v5 benchmark JSON command migration', () => {
       expect(result.content).toBe(
         `${runner} bench --run --reporter=default --reporter=json --outputFile=bench.json`,
       );
-      expect(result.findings).toEqual([
-        expect.objectContaining({ code: 'benchmark-output', severity: 'review' }),
-      ]);
+      expect(result.findings).toEqual([]);
       expect(migrateVitestV5Command('package.json', result.content, true)).toEqual({
         content: result.content,
         findings: [],
@@ -193,7 +198,7 @@ describe('Vitest v5 benchmark JSON command migration', () => {
   ])('preserves quoting and explicit destinations in %s', (input, output) => {
     const result = migrateVitestV5Command('package.json', input, true);
     expect(result.content).toBe(output);
-    expect(result.findings.map(({ code }) => code)).toEqual(['benchmark-output']);
+    expect(result.findings).toEqual([]);
   });
 
   it.each([

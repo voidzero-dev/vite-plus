@@ -25,12 +25,6 @@ const settings = {
     adoption: 'Remove after updating locators for full, case-sensitive matches.',
     section: 'locators-are-strict-by-default',
   },
-  stdout: {
-    value: 'true',
-    reason: 'write JSON/JUnit reports to stdout.',
-    adoption: 'Remove after report consumers use output files; keep if stdout is required.',
-    section: 'generated-reports-and-artifacts-use-the-vitest-directory',
-  },
   perFile: {
     value: 'true',
     reason: 'enforce this coverage threshold per file.',

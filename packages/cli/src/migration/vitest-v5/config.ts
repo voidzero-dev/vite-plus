@@ -14,7 +14,6 @@ import {
   isString,
   isBoolean,
   isModuleExports,
-  printAddedObject,
   type AddedProperty,
   type RewriteResult,
   type SourceOptions,
@@ -252,15 +251,14 @@ export function migrateVitestV5Config(
   options: SourceOptions,
   mergedConfig = false,
 ): RewriteResult {
-  // Resolve output moves first so reporter/default edits use fresh offsets and
-  // see the new JSON destinations rather than accidentally enabling stdout.
+  // Resolve removed benchmark options first so config edits use fresh offsets.
   const output = migrateConfig(file, source, options, mergedConfig, true);
   const result = migrateConfig(file, output.content, options, mergedConfig);
   return {
     content: result.content,
     findings: [
       ...output.findings.filter(({ code }) =>
-        ['benchmark-output', 'overlapping-edits', 'unsafe-syntax'].includes(code),
+        ['overlapping-edits', 'unsafe-syntax'].includes(code),
       ),
       ...result.findings,
     ],
@@ -278,11 +276,12 @@ function migrateConfig(
   const visited = new Set<t.ObjectExpression>();
   const merged = mergedConfig || hasConfigMerge(editor);
   const preserveDefaults = options.preserveV4 && !merged && !benchmarkOnly;
-  if (merged && (options.preserveV4 || options.reviewV4)) {
+  const reviewV4 = options.preserveV4 || options.reviewV4;
+  if (merged && reviewV4) {
     editor.report(
       undefined,
       'merged-config-defaults',
-      'Review the effective merged config before adding v4 defaults for clearMocks, browser locators, fake timers, reporters, and projects. Defaults were not added to config fragments because they can override explicit settings in another fragment.',
+      'Review the effective merged config before adding v4 defaults for clearMocks, browser locators, fake timers, and projects. Defaults were not added to config fragments because they can override explicit settings in another fragment.',
     );
   }
 
@@ -312,98 +311,6 @@ function migrateConfig(
   ) {
     const property = compatibilityProperty(key);
     editor.add(object, key, property.value, property.comment);
-  }
-
-  function reporters(test: t.ObjectExpression) {
-    const prop = objectProperty(test, 'reporters');
-    if (!prop) {
-      return;
-    }
-    const output = objectProperty(test, 'outputFile');
-    const entries = prop.value.type === 'ArrayExpression' ? prop.value.elements : [prop.value];
-    for (const entry of entries) {
-      const name = entry?.type === 'ArrayExpression' ? entry.elements[0] : entry;
-      if (!isString(name)) {
-        editor.report(
-          entry ?? prop,
-          'reporter-options',
-          'Review dynamic reporter options and JSON/JUnit stdout consumers.',
-        );
-        continue;
-      }
-      const opts = entry?.type === 'ArrayExpression' ? entry.elements[1] : undefined;
-      if (name.value === 'html' && staticObject(opts)) {
-        const old = objectProperty(opts, 'outputFile');
-        if (old) {
-          if (objectProperty(opts, 'outputDir')) {
-            editor.report(
-              old,
-              'html-output',
-              'Review HTML outputFile and outputDir; both are configured.',
-            );
-          } else if (isString(old.value) && /(^|[/\\])index\.html$/.test(old.value.value)) {
-            editor.replace(old.key, 'outputDir');
-            editor.replace(
-              old.value,
-              JSON.stringify(path.posix.dirname(old.value.value.replaceAll('\\', '/'))),
-            );
-          } else {
-            editor.report(
-              old,
-              'html-output',
-              'Replace the HTML outputFile with an outputDir. The v5 file name is index.html.',
-            );
-          }
-        }
-      }
-      if (!preserveDefaults || !['json', 'junit'].includes(name.value)) {
-        continue;
-      }
-      if (output && (!staticObject(output.value) || objectProperty(output.value, name.value))) {
-        continue;
-      }
-      if (opts && !staticObject(opts)) {
-        editor.report(
-          opts,
-          'reporter-options',
-          `Review ${name.value} output: v5 writes a file unless stdout is true.`,
-        );
-      } else if (staticObject(opts)) {
-        if (!objectProperty(opts, 'outputFile')) {
-          addCompatibility(opts, 'stdout');
-        }
-      } else {
-        const indent =
-          source
-            .slice(source.lastIndexOf('\n', entry!.start) + 1, entry!.start)
-            .match(/^[\t ]*/)?.[0] ?? '';
-        const object = printAddedObject(
-          [compatibilityProperty('stdout')],
-          indent,
-          source.includes('\r\n') ? '\r\n' : '\n',
-        );
-        if (entry?.type === 'ArrayExpression') {
-          // Retain comments and a possible trailing comma in a reporter tuple.
-          editor.edit(name.end, name.end, `, ${object}`);
-        } else {
-          const tuple = `[${editor.text(name)}, ${object}]`;
-          editor.replace(entry!, prop.value.type === 'ArrayExpression' ? tuple : `[${tuple}]`);
-        }
-      }
-    }
-    if (
-      output &&
-      entries.some((entry) => {
-        const name = entry?.type === 'ArrayExpression' ? entry.elements[0] : entry;
-        return isString(name) && name.value === 'html';
-      })
-    ) {
-      editor.report(
-        output,
-        'html-output',
-        'Move the HTML outputFile into reporter outputDir options; retain other reporter output files.',
-      );
-    }
   }
 
   function testOptions(
@@ -464,7 +371,7 @@ function migrateConfig(
           'Review browser command parameters: locators are SerializedLocator objects, not selector strings.',
         );
       }
-    } else if (browser) {
+    } else if (browser && reviewV4) {
       editor.report(
         browser,
         'dynamic-project',
@@ -481,7 +388,7 @@ function migrateConfig(
     if (coverage && staticObject(coverage.value)) {
       for (const key of ['include', 'exclude']) {
         const pattern = objectProperty(coverage.value, key);
-        if (pattern) {
+        if (pattern && reviewV4) {
           editor.report(
             pattern,
             'coverage-patterns',
@@ -523,7 +430,6 @@ function migrateConfig(
         }
       }
     }
-    reporters(test);
     const benchmark = objectProperty(test, 'benchmark');
     if (benchmark) {
       if (staticObject(benchmark.value)) {
@@ -551,11 +457,13 @@ function migrateConfig(
       return;
     }
     if (projects.value.type !== 'ArrayExpression') {
-      editor.report(
-        projects,
-        'dynamic-project',
-        'Resolve dynamic projects and review inheritance and sharedViteServer before upgrading.',
-      );
+      if (reviewV4) {
+        editor.report(
+          projects,
+          'dynamic-project',
+          'Resolve dynamic projects and review inheritance and sharedViteServer before upgrading.',
+        );
+      }
       return;
     }
     const hasInline = projects.value.elements.some((item) => item && !isString(item));
@@ -567,11 +475,13 @@ function migrateConfig(
         continue;
       }
       if (!staticObject(project)) {
-        editor.report(
-          project,
-          'dynamic-project',
-          'Review this function, promise, or dynamic inline project. Set explicit inheritance and v4 compatibility options.',
-        );
+        if (reviewV4) {
+          editor.report(
+            project,
+            'dynamic-project',
+            'Review this function, promise, or dynamic inline project. Set explicit inheritance and v4 compatibility options.',
+          );
+        }
         continue;
       }
       const extendsValue = objectProperty(project, 'extends');
@@ -588,11 +498,7 @@ function migrateConfig(
     }
     visited.add(object);
     const extendsValue = objectProperty(object, 'extends');
-    if (
-      extendsValue &&
-      !isBoolean(extendsValue.value) &&
-      (options.preserveV4 || options.reviewV4)
-    ) {
+    if (extendsValue && !isBoolean(extendsValue.value) && reviewV4) {
       // A string refers to a different base, not parentTest. Until that base's
       // effective options are known, child defaults can override explicit values.
       editor.report(
@@ -613,7 +519,7 @@ function migrateConfig(
       }
     } else if (staticObject(test.value)) {
       testOptions(test.value, inherits, parentTest);
-    } else {
+    } else if (reviewV4) {
       editor.report(
         test,
         'dynamic-config',
@@ -627,7 +533,7 @@ function migrateConfig(
       if (isModuleExports(editor, node.left)) {
         if (staticObject(node.right)) {
           config(node.right);
-        } else if (node.right.type !== 'CallExpression') {
+        } else if (node.right.type !== 'CallExpression' && reviewV4) {
           editor.report(
             node,
             'dynamic-config',
@@ -647,14 +553,14 @@ function migrateConfig(
           staticObject(binding.declaration.init)
         ) {
           config(binding.declaration.init);
-        } else {
+        } else if (reviewV4) {
           editor.report(
             node,
             'dynamic-config',
             'Review the effective exported test config and its v4 defaults.',
           );
         }
-      } else if (node.declaration.type !== 'CallExpression') {
+      } else if (node.declaration.type !== 'CallExpression' && reviewV4) {
         editor.report(
           node,
           'dynamic-config',
@@ -686,17 +592,19 @@ function migrateConfig(
         // Wrappers and dynamic inline projects can supply their own defaults.
         // Do not let a nested helper bypass the ownership check above.
         if (!directlyExported && !merged) {
-          editor.report(
-            node,
-            'dynamic-config',
-            'Review this config fragment in its wrapper or inline project before adding v4 compatibility settings.',
-          );
+          if (reviewV4) {
+            editor.report(
+              node,
+              'dynamic-config',
+              'Review this config fragment in its wrapper or inline project before adding v4 compatibility settings.',
+            );
+          }
           return;
         }
         const object = node.arguments[0];
         if (staticObject(object)) {
           config(object);
-        } else {
+        } else if (reviewV4) {
           editor.report(
             object,
             'dynamic-config',
@@ -704,7 +612,7 @@ function migrateConfig(
           );
         }
       }
-      if (name === 'mergeConfig') {
+      if (name === 'mergeConfig' && reviewV4) {
         editor.report(
           node,
           'nested-project-merge',
@@ -714,6 +622,7 @@ function migrateConfig(
     },
     Property(node) {
       if (
+        reviewV4 &&
         ['config', 'configResolved', 'configureServer', 'configureVitest'].includes(
           propertyName(node.key) ?? '',
         )

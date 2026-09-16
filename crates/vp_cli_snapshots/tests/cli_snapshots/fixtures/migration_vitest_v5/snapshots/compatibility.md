@@ -27,17 +27,7 @@ export default defineConfig({
     // Remove when plugins and config hooks can run once for shared projects.
     // https://vitest.dev/guide/migration/#inline-projects-share-the-vite-server-by-default
     sharedViteServer: false,
-    reporters: [['json', {
-      // Vitest v4 compatibility: write JSON/JUnit reports to stdout.
-      // Remove after report consumers use output files; keep if stdout is required.
-      // https://vitest.dev/guide/migration/#generated-reports-and-artifacts-use-the-vitest-directory
-      stdout: true
-    }], ['junit', {
-      // Vitest v4 compatibility: write JSON/JUnit reports to stdout.
-      // Remove after report consumers use output files; keep if stdout is required.
-      // https://vitest.dev/guide/migration/#generated-reports-and-artifacts-use-the-vitest-directory
-      stdout: true
-    }]],
+    reporters: ['json', ['junit', {}]],
     projects: [{
       // Vitest v4 compatibility: keep this inline project independent of the root config.
       // Remove to inherit root options, including plugins and setup files.
