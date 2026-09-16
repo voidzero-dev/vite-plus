@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { expect, test } from 'vitest';
 
 import { brandVite } from '../brand-vite.ts';
-import { alignVendoredVitestDependencies } from '../vendored-vitest.mjs';
+import { alignVendoredVitestDependencies } from '../vendored-vitest.ts';
 
 const upstreamSources = {
   'constants.ts': 'export const VERSION = version as string\n',

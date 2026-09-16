@@ -13,13 +13,13 @@ import {
   syncCargoOxcVersions,
   syncViteDevtoolsDependencies,
 } from '../sync-remote-deps.ts';
-import { alignVendoredVitestDependencies } from '../vendored-vitest.mjs';
+import { alignVendoredVitestDependencies } from '../vendored-vitest.ts';
 
 describe('vendored Vitest dependency alignment', () => {
   test('can be imported from stdin without running the bootstrap', () => {
     const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-import-'));
     try {
-      const url = new URL('../vendored-vitest.mjs', import.meta.url).href;
+      const url = new URL('../vendored-vitest.ts', import.meta.url).href;
       const result = spawnSync(process.execPath, ['--input-type=module', '-'], {
         cwd: root,
         encoding: 'utf8',
@@ -50,8 +50,8 @@ describe('vendored Vitest dependency alignment', () => {
           join(constantsDir, 'constants.ts'),
           `export const VITEST_VERSION = '${version}';\n`,
         );
-        const script = join(root, 'vendored-vitest.mjs');
-        copyFileSync(new URL('../vendored-vitest.mjs', import.meta.url), script);
+        const script = join(root, 'vendored-vitest.ts');
+        copyFileSync(new URL('../vendored-vitest.ts', import.meta.url), script);
         const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
         expect(result.status).not.toBe(0);
         expect(result.stderr).toContain('VITEST_VERSION must declare an exact stable v5 version');
@@ -73,8 +73,8 @@ describe('vendored Vitest dependency alignment', () => {
           `export const VITEST_VERSION = '${version}';\n`,
         );
         // Copy the entry point outside the repo so it cannot resolve node_modules.
-        const script = join(root, 'vendored-vitest.mjs');
-        copyFileSync(new URL('../vendored-vitest.mjs', import.meta.url), script);
+        const script = join(root, 'vendored-vitest.ts');
+        copyFileSync(new URL('../vendored-vitest.ts', import.meta.url), script);
         const directory = join(root, 'vite/packages/vite');
         mkdirSync(directory, { recursive: true });
         const manifest = join(directory, 'package.json');

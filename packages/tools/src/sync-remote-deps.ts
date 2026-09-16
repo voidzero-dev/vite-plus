@@ -8,7 +8,7 @@ import {
   alignVendoredVitestDependencies,
   REMOVED_VITEST_PACKAGES,
   VITEST_EXACT_VERSION_PACKAGES,
-} from './vendored-vitest.mjs';
+} from './vendored-vitest.ts';
 
 interface PnpmWorkspace {
   packages?: string[];
