@@ -64,7 +64,7 @@ steps = [
 [[case]]
 name = "yarn_berry_lockfile_only"
 vp = "global"
-env = { YARN_ENABLE_TELEMETRY = "0" }
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
   { argv = ["vp", "install", "./dep", "--lockfile-only", "--ignore-scripts"], comment = "use update-lockfile rather than skip-build when both options are supplied" },
