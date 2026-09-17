@@ -17,7 +17,7 @@ async fn resolve_and_build_command(
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
 ) -> Result<tokio::process::Command, Error> {
-    let resolved = resolver.resolve(subcommand, envs, cwd).await.map_err(|e| Error::Anyhow(e))?;
+    let resolved = resolver.resolve(subcommand, envs, cwd).await.map_err(Error::Anyhow)?;
 
     // Resolve the program path using `which` to handle Windows .cmd/.bat files (PATHEXT)
     let program_path = {
