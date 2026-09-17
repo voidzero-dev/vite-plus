@@ -381,6 +381,7 @@ async fn main() -> ExitCode {
     }
 
     vp_shared::ensure_blocking_stdio();
+    vp_shared::ensure_windows_pathext();
 
     // Initialize tracing
     vp_shared::init_tracing();

@@ -9,5 +9,8 @@ fs.mkdirSync(bin, { recursive: true });
 // on the checkout's NTFS flags or the casing chosen by a package manager.
 execFileSync('fsutil.exe', ['file', 'setCaseSensitiveInfo', bin, 'enable'], { stdio: 'inherit' });
 fs.writeFileSync(path.join(bin, 'astro.cmd'), '@echo off\r\nnode "%~dp0/../../print.cjs" %*\r\n');
+// A lowercase executable must win over an uppercase command shim in the same directory.
+fs.copyFileSync(process.execPath, path.join(bin, 'node-priority.exe'));
+fs.writeFileSync(path.join(bin, 'node-priority.CMD'), '@echo wrong cmd shim\r\n@exit /b 1\r\n');
 assert.equal(fs.existsSync(path.join(bin, 'astro.CMD')), false);
-assert.equal(process.env.PATHEXT, '.COM;.EXE;.BAT;.CMD');
+assert.ok(process.env.PATHEXT.split(';').includes('.CMD'));

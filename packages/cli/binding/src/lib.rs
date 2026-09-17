@@ -45,6 +45,7 @@ use crate::cli::{
 #[allow(clippy::disallowed_macros)]
 pub fn init() {
     vp_shared::ensure_blocking_stdio();
+    vp_shared::ensure_windows_pathext();
     crate::cli::init_tracing();
 
     // Install a Vite+ panic hook so panics are correctly attributed to Vite+.

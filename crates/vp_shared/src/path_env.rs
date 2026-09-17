@@ -1,4 +1,4 @@
-//! PATH environment variable manipulation utilities.
+//! PATH and PATHEXT environment variable manipulation utilities.
 //!
 //! This module provides functions for prepending directories to the PATH
 //! environment variable with various deduplication strategies.
@@ -8,6 +8,44 @@ use std::{collections::BTreeSet, env, ffi::OsString, io, path::Path};
 use vt_path::AbsolutePath;
 
 use crate::env_vars;
+
+/// Add uppercase and lowercase variants of each configured Windows extension.
+/// Call during CLI initialization, before `which` caches PATHEXT. This also
+/// supplies the same extension order to Vite Task, fspy, and child processes.
+pub fn ensure_windows_pathext() {
+    #[cfg(windows)]
+    if let Ok(pathext) = env::var("PATHEXT") {
+        let expanded = expand_pathext_case_variants(&pathext);
+        if expanded != pathext {
+            // SAFETY: Environment mutation is thread-safe on Windows. This is
+            // also called when the NAPI binding loads in a Node.js process.
+            unsafe { env::set_var("PATHEXT", expanded) };
+        }
+    }
+}
+
+#[cfg(any(windows, test))]
+fn expand_pathext_case_variants(pathext: &str) -> String {
+    use std::borrow::Cow;
+
+    use cow_utils::CowUtils;
+
+    let mut extensions = Vec::new();
+    for extension in pathext.split(';') {
+        // Keep each variant next to its original extension so .EXE and .exe
+        // both precede .CMD and .cmd in the standard Windows search order.
+        for variant in [
+            Cow::Borrowed(extension),
+            extension.cow_to_ascii_uppercase(),
+            extension.cow_to_ascii_lowercase(),
+        ] {
+            if !extensions.contains(&variant) {
+                extensions.push(variant);
+            }
+        }
+    }
+    extensions.join(";")
+}
 
 /// PATH and the tools whose real binary directories Vite+ has injected into it.
 /// Keep both values together when preparing a child process environment.
@@ -98,6 +136,22 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
+
+    #[test]
+    fn pathext_keeps_exe_variants_before_cmd_variants() {
+        assert_eq!(
+            expand_pathext_case_variants(".COM;.EXE;.BAT;.CMD"),
+            ".COM;.com;.EXE;.exe;.BAT;.bat;.CMD;.cmd"
+        );
+    }
+
+    #[test]
+    fn pathext_preserves_custom_order_and_is_idempotent() {
+        let expanded = expand_pathext_case_variants(".cmd;.exe;.CMD;.PY");
+        assert_eq!(expanded, ".cmd;.CMD;.exe;.EXE;.PY;.py");
+        assert_eq!(expand_pathext_case_variants(&expanded), expanded);
+        assert_eq!(expand_pathext_case_variants(""), "");
+    }
 
     #[test]
     fn injected_tools_accumulate_without_changing_other_environments() {

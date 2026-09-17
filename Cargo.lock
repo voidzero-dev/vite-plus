@@ -8923,6 +8923,7 @@ name = "vp_shared"
 version = "0.0.0"
 dependencies = [
  "console",
+ "cow-utils",
  "directories",
  "nix 0.30.1",
  "reqwest",

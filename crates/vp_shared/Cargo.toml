@@ -18,6 +18,7 @@ test-utils = ["dep:temp-env", "dep:tempfile"]
 directories = { workspace = true }
 nix = { workspace = true, features = ["fs", "poll", "term"] }
 console = { workspace = true }
+cow-utils = { workspace = true }
 serde = { workspace = true }
 # use `preserve_order` feature to preserve the order of the fields in `package.json`
 serde_json = { workspace = true, features = ["preserve_order"] }

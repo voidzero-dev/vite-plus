@@ -5,6 +5,8 @@ skip-platforms = ["linux", "macos"]
 env = { PATHEXT = ".COM;.EXE;.BAT;.CMD" }
 steps = [
   { argv = ["node", "setup.cjs"], snapshot = false },
+  { argv = ["vp", "run", "priority"], cwd = "packages/app", tty = false, snapshot = false },
+  { argv = ["vp", "exec", "node-priority", "-e", "process.exit(0)"], cwd = "packages/app", tty = false, snapshot = false },
   { argv = ["vp", "run", "probe"], tty = false, comment = "Nested task planning resolves the lowercase shim with uppercase PATHEXT." },
   { argv = ["vp", "exec", "astro", "--version"], cwd = "packages/app", tty = false },
   { argv = ["node", "later-shim.cjs"], snapshot = false },
