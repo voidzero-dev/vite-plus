@@ -207,6 +207,19 @@ static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+// pnpm reads a removed package's manifest concurrently with unlinking the
+// package, so its removal summary may omit the version. Strip that version
+// within dependency sections of pnpm output; keep names and added versions.
+static PNPM_DEPENDENCY_SECTION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^(?:dependencies|devDependencies|optionalDependencies):\n(?:[^\n]+\n?)*",
+    )
+    .unwrap()
+});
+static PNPM_REMOVED_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^(- \S+) \d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+        .unwrap()
+});
 // Stack frames under file:// URLs carry line:column offsets of the bundled
 // chunk that produced them, which shift with every build of the bundle (and
 // the chunk hash in the frame path shifts with content); the error message
@@ -579,6 +592,14 @@ pub fn redact_output(
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
     output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
+
+    if output.contains("Done in <duration> using pnpm <version>") {
+        output = PNPM_DEPENDENCY_SECTION_RE
+            .replace_all(&output, |caps: &regex::Captures| {
+                PNPM_REMOVED_VERSION_RE.replace_all(&caps[0], "${1}").into_owned()
+            })
+            .into_owned();
+    }
 
     // Pin racy blank-line layout last, after every rule above that strips
     // whole lines (banner box, stack frames, progress rows) has run, so the

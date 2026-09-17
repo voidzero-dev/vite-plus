@@ -75,18 +75,34 @@ jobs:
             --output "${UPGRADE_DEPS_META_DIR}/cli-help-report.md" \
             --github-output "${GITHUB_OUTPUT}"
 
-      - name: Check upgrade dependencies
+      - name: Check upgrade dependencies with Kimi K3
         id: check-upgrade-dependencies
         timeout-minutes: 180
-        uses: anthropics/claude-code-action@0a8d3c9443bbff909ab973b6a17a340b913f229f # v1.0.221
+        uses: anthropics/claude-code-action@7b0b255830a1fab6e602658672acad11c12d841d # v1.0.226
         env:
+          ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
           CLI_HELP_DIFF_CHANGED: ${{ steps.cli-help-diff.outputs.has-changes }}
           CLI_HELP_DIFF_REPORT: ${{ env.UPGRADE_DEPS_META_DIR }}/cli-help-report.md
           RELEASE_BUILD: 'true'
         with:
-          claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ secrets.MOONSHOT_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: 'true'
+          settings: |
+            {
+              "env": {
+                "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
+                "ANTHROPIC_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
+                "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
+                "CLAUDE_CODE_EFFORT_LEVEL": "max"
+              }
+            }
           prompt: |
             Your goal: after the daily upstream-dependency upgrade, bring the project back
             to a fully green state. The upgrade script has bumped every dep to its latest
@@ -206,7 +222,7 @@ jobs:
             Do NOT run `git commit` or `git push`. A later workflow step commits every
             modified file for you.
           claude_args: |
-            --model opus --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model "k3[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
 
@@ -224,14 +240,31 @@ jobs:
         continue-on-error: true
         run: pnpm fmt
 
-      - name: Enhance PR description with Claude
+      - name: Enhance PR description with Kimi K3
         id: enhance-pr-description
         continue-on-error: true
-        uses: anthropics/claude-code-action@0a8d3c9443bbff909ab973b6a17a340b913f229f # v1.0.221
+        uses: anthropics/claude-code-action@7b0b255830a1fab6e602658672acad11c12d841d # v1.0.226
+        env:
+          ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
         with:
-          claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ secrets.MOONSHOT_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: 'true'
+          settings: |
+            {
+              "env": {
+                "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
+                "ANTHROPIC_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
+                "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
+                "CLAUDE_CODE_EFFORT_LEVEL": "max"
+              }
+            }
           prompt: |
             Your task is to generate an accurate commit message and PR description for this
             automated upstream-dependency upgrade PR. All output must be written in English.
@@ -296,7 +329,7 @@ jobs:
               two output files. A later workflow step will consume them.
             - Do NOT modify any file inside the repository working tree.
           claude_args: |
-            --model opus --allowedTools "Bash,Read,Write,Edit"
+            --model "k3[1m]" --allowedTools "Bash,Read,Write,Edit"
           additional_permissions: |
             actions: read
 

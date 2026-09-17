@@ -5,7 +5,7 @@ use std::{
     process::ExitStatus,
 };
 
-use owo_colors::OwoColorize;
+use console::style;
 use serde::Serialize;
 use vp_pm_cli::OutdatedFormat;
 
@@ -290,23 +290,28 @@ fn print_list(packages: &[OutdatedPackage], long: bool) {
             println!();
         }
 
-        println!("{} {}", package.name.bold(), "(global)".dimmed());
+        println!("{} {}", style(&package.name).bold(), style("(global)").dim());
         if package.wanted == package.latest {
-            println!("{} {} {}", package.current.dimmed(), "=>".dimmed(), package.wanted.bold());
+            println!(
+                "{} {} {}",
+                style(&package.current).dim(),
+                style("=>").dim(),
+                style(&package.wanted).bold()
+            );
         } else {
             println!(
                 "{} {} {} {}",
-                package.current.dimmed(),
-                "=>".dimmed(),
-                package.wanted.bold(),
-                format!("(latest: {})", package.latest).dimmed()
+                style(&package.current).dim(),
+                style("=>").dim(),
+                style(&package.wanted).bold(),
+                style(format!("(latest: {})", package.latest)).dim()
             );
         }
 
         if long {
-            println!("{} {}", "node".dimmed(), package.node);
+            println!("{} {}", style("node").dim(), package.node);
             if !package.bins.is_empty() {
-                println!("{} {}", "bins".dimmed(), package.bins.join(", "));
+                println!("{} {}", style("bins").dim(), package.bins.join(", "));
             }
         }
     }
@@ -359,7 +364,7 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
         if long {
             println!(
                 "{}{:>gap$}{:<w_current$}{:>gap$}{:<w_wanted$}{:>gap$}{:<w_latest$}{:>gap$}{:<w_node$}{:>gap$}{}",
-                format!("{:<w_pkg$}", package.name).bright_blue(),
+                style(format!("{:<w_pkg$}", package.name)).blue().bright(),
                 "",
                 package.current,
                 "",
@@ -374,7 +379,7 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
         } else {
             println!(
                 "{}{:>gap$}{:<w_current$}{:>gap$}{:<w_wanted$}{:>gap$}{}",
-                format!("{:<w_pkg$}", package.name).bright_blue(),
+                style(format!("{:<w_pkg$}", package.name)).blue().bright(),
                 "",
                 package.current,
                 "",

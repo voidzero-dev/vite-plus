@@ -112,6 +112,12 @@ jobs:
           pattern: core
           merge-multiple: true
 
+      - name: Download prompts dist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: prompts
+          path: packages/prompts/dist
+
       - name: Download LICENSE files
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -164,6 +170,13 @@ jobs:
       - name: Prepare and publish native addons
         run: node ./packages/cli/publish-native-addons.ts --mode npm
 
+      - name: Publish prompts
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "@voidzero-dev/vite-plus-prompts@${VERSION}"
+          --
+          pnpm publish --filter=./packages/prompts --tag latest --access public --no-git-checks
+
       - name: Publish core dependency tier
         run: >-
           node ./.github/scripts/publish-npm-package.ts
@@ -186,8 +199,11 @@ jobs:
           pnpm publish --filter=./packages/cli --tag latest --access public --no-git-checks
 
       # Downstream jobs build Docker images by installing this release from npm.
-      - name: Wait for Vite+ to propagate
-        run: node ./.github/scripts/wait-for-npm-packages.ts "vite-plus@${VERSION}"
+      - name: Wait for published packages to propagate
+        run: >-
+          node ./.github/scripts/wait-for-npm-packages.ts
+          "vite-plus@${VERSION}"
+          "@voidzero-dev/vite-plus-prompts@${VERSION}"
 
       - name: Create release body
         env:

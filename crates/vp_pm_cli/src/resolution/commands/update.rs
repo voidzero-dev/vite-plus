@@ -37,7 +37,7 @@ pub struct UpdateArgs {
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long)]
+    #[arg(short = 'w', long, not_supported(yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Update only devDependencies
@@ -124,8 +124,10 @@ impl Yarn {
     fn resolve_berry_update(args: &UpdateArgs) -> CommandResolution {
         let mut cmd = CommandBuilder::new("yarn");
         if !args.filter.is_empty() {
-            cmd.arg("workspaces").arg("foreach").arg("--all");
-            cmd.repeated("--include", args.filter.iter());
+            // `yarn up` updates the whole project, even when run through `foreach`.
+            return CommandResolution::InvalidArgument(
+                "Invalid argument: `--filter` is not supported by Yarn Berry `update`.".to_string(),
+            );
         }
         cmd.arg("up")
             .arg_if("--recursive", args.recursive)
@@ -367,17 +369,18 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_v4_update_with_filter() {
+    fn test_yarn_berry_update_rejects_filter() {
         let mut options = update_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&yarn("4.0.0"), options);
-        let command = expect_run(resolution.outcome);
 
-        assert_eq!(command.program, "yarn");
         assert_eq!(
-            command.args,
-            vec!["workspaces", "foreach", "--all", "--include", "app", "up", "react"]
+            resolution.outcome,
+            CommandResolution::InvalidArgument(
+                "Invalid argument: `--filter` is not supported by Yarn Berry `update`.".to_string()
+            )
         );
+        assert!(resolution.diagnostics.is_empty());
     }
 
     #[test]
@@ -519,27 +522,22 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_v4_update_multiple_filters() {
-        let mut options = update_args(&["lodash"]);
-        options.filter = vec!["app".to_string(), "web".to_string()];
-        let resolution = resolve(&yarn("4.0.0"), options);
-        let command = expect_run(resolution.outcome);
+    fn test_yarn_berry_update_rejects_multiple_filters() {
+        for recursive in [false, true] {
+            let mut options = update_args(&["lodash"]);
+            options.filter = vec!["app".to_string(), "web".to_string()];
+            options.recursive = recursive;
+            let resolution = resolve(&yarn("4.0.0"), options);
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(
-            command.args,
-            vec![
-                "workspaces",
-                "foreach",
-                "--all",
-                "--include",
-                "app",
-                "--include",
-                "web",
-                "up",
-                "lodash"
-            ]
-        );
+            assert_eq!(
+                resolution.outcome,
+                CommandResolution::InvalidArgument(
+                    "Invalid argument: `--filter` is not supported by Yarn Berry `update`."
+                        .to_string()
+                )
+            );
+            assert!(resolution.diagnostics.is_empty());
+        }
     }
 
     #[test]

@@ -5,7 +5,7 @@
 
 use std::process::ExitStatus;
 
-use owo_colors::OwoColorize;
+use console::style;
 use vp_pm_cli::HttpClient;
 use vp_setup::{install, integrity, platform, registry};
 use vp_shared::output;
@@ -39,6 +39,20 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     if options.background_check {
         crate::upgrade_check::run_background_check().await;
         return Ok(ExitStatus::default());
+    }
+
+    if crate::homebrew::owns_current_exe() {
+        if options.check && !options.rollback {
+            if !options.silent {
+                output::info(
+                    "Homebrew manages this installation. Run `brew outdated vite-plus` to check for updates.",
+                );
+            }
+            return Ok(ExitStatus::default());
+        }
+        return Err(Error::Upgrade(
+            "Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.".into(),
+        ));
     }
 
     let config = vp_shared::EnvConfig::get();
@@ -77,7 +91,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 4: Handle --check (report and exit)
     if options.check {
         if resolved.version == current_version {
-            println!("\n{} Already up to date ({})", output::CHECK.green(), current_version);
+            println!("\n{} Already up to date ({})", style(output::CHECK).green(), current_version);
         } else {
             println!("Update available: {} \u{2192} {}", current_version, resolved.version);
             println!("Run `vp upgrade` to update.");
@@ -88,7 +102,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 5: Handle already up-to-date
     if resolved.version == current_version && !options.force {
         if !options.silent {
-            println!("\n{} Already up to date ({})", output::CHECK.green(), current_version);
+            println!("\n{} Already up to date ({})", style(output::CHECK).green(), current_version);
         }
         return Ok(ExitStatus::default());
     }
@@ -228,7 +242,7 @@ async fn install_platform_and_main(
     if !silent {
         println!(
             "\n{} Updated vite-plus from {} {} {}",
-            output::CHECK.green(),
+            style(output::CHECK).green(),
             current_version,
             output::ARROW,
             new_version
@@ -277,7 +291,7 @@ async fn execute_rollback(
     install::refresh_shims(install_dir).await?;
 
     if !silent {
-        println!("\n{} Rolled back to {}", output::CHECK.green(), previous);
+        println!("\n{} Rolled back to {}", style(output::CHECK).green(), previous);
     }
 
     Ok(ExitStatus::default())

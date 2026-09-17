@@ -18,6 +18,7 @@ mod command_picker;
 mod commands;
 mod error;
 mod help;
+mod homebrew;
 mod js_executor;
 mod self_setup;
 mod shim;
@@ -31,7 +32,7 @@ use std::{
 
 use clap::error::{ContextKind, ContextValue};
 use clap_complete::env::CompleteEnv;
-use owo_colors::OwoColorize;
+use console::style;
 use vp_shared::{exit_code_from_status, output};
 
 pub use crate::cli::try_parse_args_from;
@@ -178,13 +179,15 @@ fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<InvalidSubc
 fn print_invalid_subcommand_error(details: &InvalidSubcommandDetails) {
     vp_shared::header::print_header();
 
-    let highlighted_subcommand = details.invalid_subcommand.bright_blue().to_string();
+    let highlighted_subcommand =
+        style(&details.invalid_subcommand).for_stderr().blue().bright().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
 }
 
 fn print_nested_suggestion(suggestion: &str) {
     eprintln!();
-    let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
+    let highlighted_suggestion =
+        style(format!("`vp {suggestion}`")).for_stderr().blue().bright().to_string();
     eprintln!("Did you mean {highlighted_suggestion}?");
 }
 
@@ -216,7 +219,8 @@ fn prompt_to_run_suggested_command(suggestion: &str) -> bool {
     }
 
     eprintln!();
-    let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
+    let highlighted_suggestion =
+        style(format!("`vp {suggestion}`")).for_stderr().blue().bright().to_string();
     eprint!("Do you want to run {highlighted_suggestion}? (y/N): ");
     if std::io::stderr().flush().is_err() {
         return false;
@@ -333,14 +337,14 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
 
     vp_shared::header::print_header();
 
-    let highlighted_argument = invalid_argument.bright_blue().to_string();
+    let highlighted_argument = style(&invalid_argument).for_stderr().blue().bright().to_string();
     output::error(&format!("Unexpected argument '{highlighted_argument}'"));
 
     if has_pass_as_value_suggestion(error) {
         eprintln!();
         let pass_through_argument = format!("-- {invalid_argument}");
         let highlighted_pass_through_argument =
-            format!("`{}`", pass_through_argument.bright_blue());
+            format!("`{}`", style(&pass_through_argument).for_stderr().blue().bright());
         eprintln!("Use {highlighted_pass_through_argument} to pass the argument as a value");
     }
 

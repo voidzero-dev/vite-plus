@@ -75,6 +75,92 @@ prepare packages
 }
 ```
 
+## `vp remove testnpm2 -r --workspace-root --filter=app --filter=@vite-plus-test/utils`
+
+recursive remove affects only app and utils
+
+```
+warn: yarn does not support --workspace-root.
+[app]: Process started
+[app]: ➤ YN0000: · Yarn <version>
+[app]: ➤ YN0000: ┌ Resolution step
+[app]: ➤ YN0000: └ Completed
+[app]: ➤ YN0000: ┌ Fetch step
+[app]: ➤ YN0000: └ Completed
+[app]: ➤ YN0000: ┌ Link step
+[app]: ➤ YN0000: └ Completed
+[app]: ➤ YN0000: · Done in <duration> <duration>
+[app]: Process exited (exit code 0), completed in <duration> <duration>
+
+[@vite-plus-test/utils]: Process started
+[@vite-plus-test/utils]: ➤ YN0000: · Yarn <version>
+[@vite-plus-test/utils]: ➤ YN0000: ┌ Resolution step
+[@vite-plus-test/utils]: ➤ YN0000: └ Completed
+[@vite-plus-test/utils]: ➤ YN0000: ┌ Fetch step
+[@vite-plus-test/utils]: ➤ YN0000: └ Completed
+[@vite-plus-test/utils]: ➤ YN0000: ┌ Link step
+[@vite-plus-test/utils]: ➤ YN0000: └ Completed
+[@vite-plus-test/utils]: ➤ YN0000: · Done in <duration> <duration>
+[@vite-plus-test/utils]: Process exited (exit code 0), completed in <duration> <duration>
+
+Done in <duration> <duration>
+```
+
+## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
+
+root and admin keep testnpm2
+
+```
+{
+  "name": "command-remove-yarn4-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "yarn@4.10.3",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "admin",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+```
+
 ## `vp remove testnpm2 -r`
 
 should remove package from all workspaces and root
@@ -189,9 +275,9 @@ should remove optional package from all workspaces
 }
 ```
 
-## `vp remove test-vite-plus-install --filter=app`
+## `vp remove test-vite-plus-install -r --filter=app`
 
-should remove package by filter=app
+recursive remove affects only app
 
 ```
 [app]: Process started

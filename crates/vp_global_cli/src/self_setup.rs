@@ -1,5 +1,6 @@
 //! First-start installation followed by command execution through the deployed binary.
 
+mod external;
 mod shell;
 
 use std::{path::Path, process::ExitCode};
@@ -39,22 +40,55 @@ pub(crate) async fn maybe_run() -> Result<Option<ExitCode>, Error> {
     }
 
     vp_shared::validate_vp_dir_env().map_err(|error| Error::Other(error.to_string().into()))?;
+    let data = normalize_target(&EnvConfig::get().dirs.data)?;
+    let external = if dunce::simplified(&binary).starts_with(dunce::simplified(data.as_path())) {
+        None
+    } else {
+        Some(external::SetupState::new(&binary, local_install_version().as_deref())?)
+    };
+    let bundled = external.is_some() && has_bundled_package(&binary);
+    // Installers explicitly request setup, including same-version reinstalls.
+    if shell.is_none()
+        && std::env::var_os(env_vars::VP_SELF_SETUP_REPLACE_EXISTING).is_none()
+        && let Some(state) = &external
+        && let Some(installed_binary) = state.completed_binary(bundled).await?
+    {
+        if installed_binary.as_path() == binary {
+            return Ok(None);
+        }
+        return execute_installed(&installed_binary, false);
+    }
     // Setup diagnostics must not pollute the original command's machine-readable stdout.
     output::route_user_output_to_stderr();
-    let installed_binary = run(&binary).await?;
+    let installed_binary = run(&binary, bundled).await?;
+    if let Some(state) = external {
+        state.save(&installed_binary).await?;
+    }
+    output::success("Vite+ setup complete.");
     if let Some(shell) = shell.as_deref() {
         print_shell_result(shell);
         return Ok(Some(ExitCode::SUCCESS));
     }
+    execute_installed(&installed_binary, true)
+}
+
+fn execute_installed(
+    binary: &AbsolutePath,
+    just_installed: bool,
+) -> Result<Option<ExitCode>, Error> {
     let mut args = std::env::args_os();
     let argv0 = args.next();
     let shim_tool =
         argv0.as_deref().and_then(|name| name.to_str()).and_then(crate::shim::detect_shim_tool);
-    if args.len() == 0 && shim_tool.is_none() && std::env::var_os("VP_COMPLETE").is_none() {
+    if just_installed
+        && args.len() == 0
+        && shim_tool.is_none()
+        && std::env::var_os("VP_COMPLETE").is_none()
+    {
         return Ok(Some(ExitCode::SUCCESS));
     }
     // Re-enter through the marked installation, inheriting cwd, environment and stdio.
-    let mut command = std::process::Command::new(installed_binary.as_path());
+    let mut command = std::process::Command::new(binary.as_path());
     command.args(args);
     #[cfg(unix)]
     {
@@ -73,6 +107,21 @@ pub(crate) async fn maybe_run() -> Result<Option<ExitCode>, Error> {
         let status = command.status()?;
         Ok(Some(ExitCode::from(vp_shared::exit_code_from_status(status) as u8)))
     }
+}
+
+fn has_bundled_package(binary: &Path) -> bool {
+    let Some(prefix) = binary.parent().and_then(Path::parent) else { return false };
+    let package = prefix.join("node_modules/vite-plus");
+    // Unix shims can target an external binary; Windows trampolines need the managed layout.
+    cfg!(unix) && package.join("package.json").is_file() && package.join("dist/bin.js").is_file()
+}
+
+fn local_install_version() -> Option<String> {
+    let skip_deps = std::env::var_os("VP_SKIP_DEPS_INSTALL")?;
+    if skip_deps.is_empty() {
+        return None;
+    }
+    std::env::var("VP_VERSION").ok()
 }
 
 // Only successful setup emits executable output; logs use stderr in this mode.
@@ -98,11 +147,13 @@ fn print_shell_result(shell: &str) {
 }
 
 /// Setup Vite+ for the first run
-async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
+async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
     let env = EnvConfig::get();
     let dirs = &env.dirs;
     let active_binary = dirs.data.join("current").join("bin").join(VP_BINARY_NAME);
     let in_place = same_file::is_same_file(source, active_binary.as_path()).unwrap_or(false);
+    // External package managers own their payload. Only set up the user's config and shims.
+    let deploy = !in_place && !bundled;
     #[cfg(windows)]
     if !in_place
         && ["vp.exe", "vpx.exe", "vpr.exe"]
@@ -119,12 +170,17 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
             "Installation cancelled; existing Vite+ commands were kept.".into(),
         ));
     }
-    let previous_install = previous_install()?;
+    let previous_install = if deploy { previous_install()? } else { None };
     let node_override = manager_mode("VP_NODE_MANAGER");
+    // A package upgrade can change the executable path or expire its receipt.
+    // Preferences belong to the user, not to that particular binary.
+    let configured = bundled && config::get_config_path()?.as_path().is_file();
     // A supplied Node choice skips the combined prompt; upgrades preserve all saved choices.
-    let default_mode =
-        if in_place || node_override.is_some() { None } else { management_default()? };
-    let node_mode = if in_place { None } else { node_override.or(default_mode) };
+    let default_mode = if in_place || configured || node_override.is_some() {
+        None
+    } else {
+        management_default()?
+    };
     let version = env!("CARGO_PKG_VERSION");
     let registry = std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER)
         .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY))
@@ -138,7 +194,7 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
     let registry = registry.as_deref();
     // The local bootstrap provisions JS dependencies itself after this invocation.
     let skip_deps = std::env::var_os("VP_SKIP_DEPS_INSTALL").is_some_and(|value| !value.is_empty());
-    let local_version = skip_deps.then(|| std::env::var("VP_VERSION").ok()).flatten();
+    let local_version = local_install_version();
     let install_version = local_version.as_deref().unwrap_or(version);
     if !in_place
         && (install_version.is_empty()
@@ -153,22 +209,30 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
 
     // 1. Prepare the payload before activating it. Upgrade has already done this in the in-place case.
     let previous_version = install::read_current_version(&dirs.data).await;
-    let version_dir = if in_place {
+    let version_dir = if deploy {
+        let name =
+            install::target_install_dir_name(install_version, previous_version.as_deref(), true);
+        dirs.data.join(name)
+    } else {
         AbsolutePathBuf::new(
             source.parent().and_then(Path::parent).ok_or(Error::CliBinaryNotFound)?.to_path_buf(),
         )
         .ok_or(Error::CliBinaryNotFound)?
-    } else {
-        let name =
-            install::target_install_dir_name(install_version, previous_version.as_deref(), true);
-        dirs.data.join(name)
     };
-    let binary = version_dir.join("bin").join(VP_BINARY_NAME);
-    if !in_place {
+    let binary = if bundled {
+        AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?
+    } else {
+        version_dir.join("bin").join(VP_BINARY_NAME)
+    };
+    if deploy {
         tokio::fs::create_dir_all(version_dir.join("bin")).await?;
         install::clear_self_setup_marker(&version_dir).await?;
         if !same_file::is_same_file(source, binary.as_path()).unwrap_or(false) {
-            tokio::fs::copy(source, &binary).await?;
+            // A failed install can leave a read-only copy from a package manager.
+            // Replace it atomically instead of opening it for writing on retry.
+            let temporary = tempfile::NamedTempFile::new_in(version_dir.join("bin"))?;
+            tokio::fs::copy(source, temporary.path()).await?;
+            temporary.persist(binary.as_path()).map_err(|error| error.error)?;
         }
     }
     if !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file() {
@@ -179,7 +243,7 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
         }
     }
     #[cfg(windows)]
-    if !version_dir.join("bin/vp-shim.exe").as_path().is_file() {
+    if !bundled && !version_dir.join("bin/vp-shim.exe").as_path().is_file() {
         let sibling = source.with_file_name("vp-shim.exe");
         if sibling.is_file() {
             tokio::fs::copy(sibling, version_dir.join("bin/vp-shim.exe")).await?;
@@ -205,7 +269,9 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
 
     if !in_place {
         // Prepare the payload first, then let the old uninstaller clean its shell entries before writing ours.
-        remove_previous_install(previous_install.as_deref()).await?;
+        if deploy {
+            remove_previous_install(previous_install.as_deref()).await?;
+        }
         if std::env::var(env_vars::VP_SELF_SETUP_NO_MODIFY_PATH).as_deref() != Ok("1") {
             if let Err(error) = shell::configure().await {
                 output::warn(&format!(
@@ -214,10 +280,8 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
                 ));
             }
         }
-    }
-    if !in_place {
         let mut settings = config::load_config().await?;
-        if let Some(mode) = node_mode {
+        if let Some(mode) = node_override.or(default_mode) {
             settings.node_shim_mode = mode;
         }
         let pm_mode = manager_mode("VP_PM_MANAGER").or(default_mode);
@@ -235,7 +299,7 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
     }
 
     // 2. Activate a standalone download; an upgrade hook must not overwrite rollback history.
-    if !in_place {
+    if deploy {
         install::save_previous_version(&dirs.data).await?;
         let name = version_dir
             .as_path()
@@ -251,7 +315,7 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
     // VpDirs::bin is private by default, so replacing its shims leaves system-first tools elsewhere on PATH intact.
     // Users explicitly pointing VpDirs::bin at a shared directory accept replacement of conflicting entries there.
     setup::execute_for_binary(binary.as_path(), true, true, false).await?;
-    if !in_place {
+    if deploy {
         let name = version_dir
             .as_path()
             .file_name()
@@ -269,8 +333,9 @@ async fn run(source: &Path) -> Result<AbsolutePathBuf, Error> {
     }
 
     // A failure above leaves the marker absent so a later launch can retry.
-    tokio::fs::write(version_dir.join("bin").join(SELF_SETUP_MARKER), b"").await?;
-    output::success("Vite+ setup complete.");
+    if !bundled {
+        tokio::fs::write(version_dir.join("bin").join(SELF_SETUP_MARKER), b"").await?;
+    }
     Ok(binary)
 }
 

@@ -36,7 +36,7 @@ Before post-release work, fetch `origin/main` and read its copy of this skill (`
 3. Merging the PR pushes a `packages/cli/package.json` change to `main`, which triggers `release.yml`: build, manual approval gate, npm publish, GitHub release, Docker image, Discord notification.
 4. Release manager: polish the GitHub release notes, verify installs, announce.
 
-Canonical sources: `.github/workflows/prepare_release.yml`, `.github/workflows/release.yml`, `.github/workflows/publish-to-pkg.pr.new.yml`.
+Canonical sources: `.github/workflows/prepare_release.yml`, `.github/workflows/release.yml`, `.github/workflows/publish-preview.yml`.
 
 ## 1. Start the release
 
