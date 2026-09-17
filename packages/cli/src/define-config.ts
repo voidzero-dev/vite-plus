@@ -254,6 +254,7 @@ export function isVitestFamilySpecifier(id: string): boolean {
  *     [[vitePlusCoverageVersionGuardPlugin]] fails fast on a mismatch instead.
  */
 function vitePlusVitestResolverPlugin(): PluginOption {
+  let isVitestServer = false;
   return {
     name: 'vite-plus:vitest-resolver',
     enforce: 'pre',
@@ -263,11 +264,8 @@ function vitePlusVitestResolverPlugin(): PluginOption {
         // Vitest adds this environment before post config hooks, including for
         // programmatic runners and child projects. A browser test config alone
         // must not redirect application dependencies during `vp dev` or `vp build`.
-        if (
-          command !== 'serve' ||
-          !config.environments?.['__vitest__'] ||
-          !config.test?.browser?.enabled
-        ) {
+        isVitestServer = command === 'serve' && !!config.environments?.['__vitest__'];
+        if (!isVitestServer || !config.test?.browser?.enabled) {
           return;
         }
         // The browser optimizer resolves forced includes with an alias-only
@@ -337,6 +335,15 @@ function vitePlusVitestResolverPlugin(): PluginOption {
       plugins.splice(0, plugins.length, ...unique);
     },
     async resolveId(id, importer, options) {
+      if (isVitestServer && id === 'vite-plus/test') {
+        // pnpm can install separate vite-plus/Vitest peer instances for a
+        // workspace's root and children. Externalizing the child wrapper lets
+        // Node load its uninitialized runner state, bypassing Vite's hooks.
+        // Resolve the API before externalization through Vitest's own resolver:
+        // it selects the active runner (or the browser's optimized instance),
+        // not the Vitest copy next to this config's vite-plus installation.
+        return this.resolve('vitest', importer, { ...options, skipSelf: true });
+      }
       if (!isVitestFamilySpecifier(id)) {
         return null;
       }
