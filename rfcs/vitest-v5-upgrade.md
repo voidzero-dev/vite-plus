@@ -154,14 +154,9 @@ Change the injection algorithm as follows:
 
 Referenced config files and directories still resolve their own Vite config. Their `defineConfig` or `defineProject` call injects the Vite+ plugins. Add fixtures for raw config files that do not use the Vite+ helpers and give them the existing soft fallback behavior.
 
-Do not restore Vitest's removed parent-directory config lookup inside the runner. If `vp test` starts below a parent config and no explicit config was passed, inspect parents only to produce this diagnostic:
+Keep Vitest's directory-local config lookup. Do not scan parent directories or print a startup warning. From a subdirectory, users can select the parent config with `vp test --config ../vite.config.ts --dir .`; document this command in the migration guide.
 
-```text
-No test config was found in this directory.
-A config exists at ../vite.config.ts. Run `vp test --config ../vite.config.ts --dir .`.
-```
-
-This keeps Vite+ aligned with the v5 CLI while giving the user a direct repair.
+Limit matcher-dependency detection to Vitest servers. Cache installed and missing packages per project root during each config load, then clear the cache on config reload. Cache the bundled Vitest export metadata across browser entry points and project configs.
 
 ## Migration design
 
@@ -359,7 +354,7 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 | Glob thresholds no longer inherit `perFile`                  | Coverage enforcement can become weaker.                                                                                                                 | Copy `perFile: true` into existing glob threshold objects.                                                                                      |
 | `coverage.thresholds.perFile` also accepts an object         | Config libraries that assume a boolean can reject or misread the new shape.                                                                             | Update Vite+ config types and serializers; the old boolean form needs no migration.                                                             |
 | Coverage include/exclude matching is precise                 | The measured file set can shrink or change.                                                                                                             | Compare resolved v4/v5 file sets. If comparison is unavailable, report all configured patterns for review.                                      |
-| Parent config lookup is removed                              | Running below the config root can ignore configuration.                                                                                                 | Give a parent-config diagnostic with `--config` and `--dir`; do not change v5 lookup rules.                                                     |
+| Parent config lookup is removed                              | Running below the config root can ignore configuration.                                                                                                 | Document explicit `--config` and `--dir`; preserve v5 lookup rules without a startup diagnostic.                                                |
 | DOM global assignment updates the window                     | `matchMedia` and other DOM APIs can observe new values.                                                                                                 | Cover jsdom and happy-dom fixtures; report assignments to known DOM globals.                                                                    |
 | `populateGlobal().originals` contains descriptors            | Custom environment teardown can restore descriptor objects as values.                                                                                   | Report assignments from `originals`; recommend `Object.defineProperty`.                                                                         |
 | Browser orchestrator URLs need a session                     | Direct `/__vitest_test__/` links fail.                                                                                                                  | Report hard-coded URLs and retain the URL printed or opened by Vitest.                                                                          |

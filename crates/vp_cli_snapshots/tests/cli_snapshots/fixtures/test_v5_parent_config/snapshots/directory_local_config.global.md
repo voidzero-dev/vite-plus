@@ -1,10 +1,9 @@
-# diagnostic
+# directory_local_config
 
 ## `vp test run`
 
 ```
-warn: No test config was found in this directory.
-A config exists at ../vite.config.ts. Run `vp test --config ../vite.config.ts --dir .`.
+VITE+ - The Unified Toolchain for the Web
 
  RUN  <version> <workspace>/sub
 

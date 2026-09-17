@@ -169,13 +169,20 @@ function getVitestAnchor(): string | null {
   return vitestAnchor;
 }
 
+// The bundled manifest is fixed for this module's lifetime. Share it across
+// browser entry points and project configs, just like the cached package path.
+let vitestExports: Record<string, unknown> | undefined;
 function getVitestImportTarget(id: string): string {
   const anchor = getVitestAnchor();
   if (!anchor) {
     throw new Error('Cannot resolve the bundled Vitest package. Reinstall vite-plus.');
   }
-  const pkg = JSON.parse(readFileSync(anchor, 'utf8')) as { exports: Record<string, unknown> };
-  let target = pkg.exports[id === 'vitest' ? '.' : `.${id.slice('vitest'.length)}`];
+  vitestExports ??= (
+    JSON.parse(readFileSync(anchor, 'utf8')) as {
+      exports: Record<string, unknown>;
+    }
+  ).exports;
+  let target = vitestExports[id === 'vitest' ? '.' : `.${id.slice('vitest'.length)}`];
   while (target && typeof target === 'object') {
     const conditions = target as Record<string, unknown>;
     target = conditions.import ?? conditions.default;
@@ -407,11 +414,13 @@ export const AUTO_INLINE_DEPS: ReadonlyArray<string> = [
  *
  * Exported for unit testing. The `_createRequire` parameter lets tests inject
  * a controlled resolver without needing to spy on Node's ESM module namespace.
+ * Callers may share installation results for the same root within one config load.
  */
 export function computeAutoInlineList(
   existingInline: (string | RegExp)[] | true | undefined,
   projectRoot: string,
   _createRequire: (from: string) => { resolve: (id: string) => string } = createRequire,
+  installedPackages = new Map<string, boolean>(),
 ): (string | RegExp)[] | null {
   // User opted into "inline everything" — don't touch.
   if (existingInline === true) {
@@ -419,7 +428,7 @@ export function computeAutoInlineList(
   }
   // Build a require resolver anchored at the project root so we only
   // inline packages that are actually installed there.
-  const projectRequire = _createRequire(`${projectRoot}/package.json`);
+  let projectRequire: ReturnType<typeof _createRequire> | undefined;
   // Start from a copy of the user-supplied array (or a fresh array when
   // none was provided) so the originating user-config object is not mutated.
   const merged: (string | RegExp)[] = Array.isArray(existingInline) ? [...existingInline] : [];
@@ -428,10 +437,18 @@ export function computeAutoInlineList(
     if (merged.some((entry) => entry === pkg || (entry instanceof RegExp && entry.test(pkg)))) {
       continue;
     }
-    try {
-      projectRequire.resolve(pkg);
-    } catch {
-      // Package not installed in the project — skip silently.
+    let installed = installedPackages.get(pkg);
+    if (installed === undefined) {
+      projectRequire ??= _createRequire(`${projectRoot}/package.json`);
+      try {
+        projectRequire.resolve(pkg);
+        installed = true;
+      } catch {
+        installed = false;
+      }
+      installedPackages.set(pkg, installed);
+    }
+    if (!installed) {
       continue;
     }
     merged.push(pkg);
@@ -446,18 +463,37 @@ export function computeAutoInlineList(
 
 function vitePlusAutoInlineMatcherPlugin(): PluginOption {
   let projectRoot = '';
+  let isVitestServer = false;
+  const installedByRoot = new Map<string, Map<string, boolean>>();
   type TestConfig = Pick<VitestInlineConfig, 'server'>;
+  function inlineList(existing: (string | RegExp)[] | true | undefined, root: string) {
+    root = resolve(root);
+    let installed = installedByRoot.get(root);
+    if (!installed) {
+      installed = new Map();
+      installedByRoot.set(root, installed);
+    }
+    return computeAutoInlineList(existing, root, createRequire, installed);
+  }
   return {
     name: 'vite-plus:auto-inline-matcher-deps',
     enforce: 'pre',
-    config(config) {
-      // Environment hooks run after this config hook, with Vite's root option
-      // available. Vitest shares their externalization rules with child projects.
-      projectRoot = resolve(config.root ?? '.');
+    config: {
+      order: 'post',
+      handler(config, { command }) {
+        isVitestServer = command === 'serve' && !!config.environments?.['__vitest__'];
+        projectRoot = resolve(config.root ?? '.');
+        // Reuse positive and negative lookups across environments and the
+        // resolved-config hook, but refresh them when Vite reloads the config.
+        installedByRoot.clear();
+      },
     },
     configEnvironment(_name, config) {
+      if (!isVitestServer) {
+        return;
+      }
       const existing = config.resolve?.noExternal;
-      const merged = computeAutoInlineList(
+      const merged = inlineList(
         typeof existing === 'string' || existing instanceof RegExp ? [existing] : existing,
         projectRoot,
       );
@@ -467,10 +503,13 @@ function vitePlusAutoInlineMatcherPlugin(): PluginOption {
       }
     },
     configResolved(resolvedConfig) {
+      if (!isVitestServer) {
+        return;
+      }
       const config = resolvedConfig as { root: string; test?: TestConfig };
-      config.test ??= {};
-      const merged = computeAutoInlineList(config.test.server?.deps?.inline, config.root);
+      const merged = inlineList(config.test?.server?.deps?.inline, config.root);
       if (merged !== null) {
+        config.test ??= {};
         config.test.server ??= {};
         config.test.server.deps ??= {};
         config.test.server.deps.inline = merged;
