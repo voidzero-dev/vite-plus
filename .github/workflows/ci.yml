@@ -1447,8 +1447,11 @@ jobs:
           fi
           echo "$RUNNER_TEMP/sfw-bin" >> "$GITHUB_PATH"
 
-      - name: Verify sfw on PATH
-        run: sfw --version
+      - name: Verify sfw and embedded Node versions
+        run: |
+          printf '%s\n' 'console.error("SFW embedded Node:", process.version, process.execPath);' \
+            > "$RUNNER_TEMP/sfw-node-version.cjs"
+          NODE_OPTIONS="--require=\"$RUNNER_TEMP/sfw-node-version.cjs\"" sfw --version
 
       - name: Run `sfw vp install` against a real repo
         # TODO(SocketDev/sfw-free#30, SocketDev/sfw-free#43): drop `vp_insecure_tls`
