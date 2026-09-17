@@ -1,0 +1,84 @@
+# Cover every filename in Vite's DEFAULT_CONFIG_FILES and VITE_CONFIG_FILES.
+# Auto-discovery currently supports only vite.config.ts. Keep the other cases
+# active so upstream support changes appear as snapshot diffs on dependency upgrades.
+# Each explicit -c invocation proves that the config itself is valid and loadable.
+# With full extension support, automatic and explicit loading should report the
+# same no-console error and formatting issues.
+
+[[case]]
+name = "vite_config_js"
+comment = "Known upstream gap: auto-discovery ignores vite.config.js, but explicit loading works. An upstream fix must change this snapshot."
+vp = "local"
+steps = [
+  { argv = ["vpt", "cp", "config.mjs", "vite.config.js"], snapshot = false },
+  { argv = ["vp", "lint", "src"], comment = "Automatic discovery should apply the lint block in vite.config.js.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "--check", "src"], comment = "Automatic discovery should apply the fmt block in vite.config.js.", continue-on-failure = true },
+  { argv = ["vp", "check", "src"], comment = "The composite command should use the same config.", continue-on-failure = true },
+  { argv = ["vp", "lint", "-c", "vite.config.js", "src"], comment = "Explicit loading confirms that the lint config is valid.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "-c", "vite.config.js", "--check", "src"], comment = "Explicit loading confirms that the fmt config is valid.", continue-on-failure = true },
+]
+
+[[case]]
+name = "vite_config_mjs"
+comment = "Known upstream gap: auto-discovery ignores vite.config.mjs, but explicit loading works. An upstream fix must change this snapshot."
+vp = "local"
+steps = [
+  { argv = ["vpt", "cp", "config.mjs", "vite.config.mjs"], snapshot = false },
+  { argv = ["vp", "lint", "src"], comment = "Automatic discovery should apply the lint block in vite.config.mjs.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "--check", "src"], comment = "Automatic discovery should apply the fmt block in vite.config.mjs.", continue-on-failure = true },
+  { argv = ["vp", "check", "src"], comment = "The composite command should use the same config.", continue-on-failure = true },
+  { argv = ["vp", "lint", "-c", "vite.config.mjs", "src"], comment = "Explicit loading confirms that the lint config is valid.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "-c", "vite.config.mjs", "--check", "src"], comment = "Explicit loading confirms that the fmt config is valid.", continue-on-failure = true },
+]
+
+[[case]]
+name = "vite_config_ts"
+comment = "Baseline: auto-discovery and explicit loading both support vite.config.ts."
+vp = "local"
+steps = [
+  { argv = ["vpt", "cp", "config.mjs", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "lint", "src"], comment = "Automatic discovery should apply the lint block in vite.config.ts.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "--check", "src"], comment = "Automatic discovery should apply the fmt block in vite.config.ts.", continue-on-failure = true },
+  { argv = ["vp", "check", "src"], comment = "The composite command should use the same config.", continue-on-failure = true },
+  { argv = ["vp", "lint", "-c", "vite.config.ts", "src"], comment = "Explicit loading confirms that the lint config is valid.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "-c", "vite.config.ts", "--check", "src"], comment = "Explicit loading confirms that the fmt config is valid.", continue-on-failure = true },
+]
+
+[[case]]
+name = "vite_config_cjs"
+comment = "Known upstream gap: auto-discovery ignores vite.config.cjs, but explicit loading works. An upstream fix must change this snapshot."
+vp = "local"
+steps = [
+  { argv = ["vpt", "cp", "config.cjs", "vite.config.cjs"], snapshot = false },
+  { argv = ["vp", "lint", "src"], comment = "Automatic discovery should apply the lint block in vite.config.cjs.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "--check", "src"], comment = "Automatic discovery should apply the fmt block in vite.config.cjs.", continue-on-failure = true },
+  { argv = ["vp", "check", "src"], comment = "The composite command should use the same config.", continue-on-failure = true },
+  { argv = ["vp", "lint", "-c", "vite.config.cjs", "src"], comment = "Explicit loading confirms that the lint config is valid.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "-c", "vite.config.cjs", "--check", "src"], comment = "Explicit loading confirms that the fmt config is valid.", continue-on-failure = true },
+]
+
+[[case]]
+name = "vite_config_mts"
+comment = "Known upstream gap: auto-discovery ignores vite.config.mts, but explicit loading works. An upstream fix must change this snapshot."
+vp = "local"
+steps = [
+  { argv = ["vpt", "cp", "config.mjs", "vite.config.mts"], snapshot = false },
+  { argv = ["vp", "lint", "src"], comment = "Automatic discovery should apply the lint block in vite.config.mts.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "--check", "src"], comment = "Automatic discovery should apply the fmt block in vite.config.mts.", continue-on-failure = true },
+  { argv = ["vp", "check", "src"], comment = "The composite command should use the same config.", continue-on-failure = true },
+  { argv = ["vp", "lint", "-c", "vite.config.mts", "src"], comment = "Explicit loading confirms that the lint config is valid.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "-c", "vite.config.mts", "--check", "src"], comment = "Explicit loading confirms that the fmt config is valid.", continue-on-failure = true },
+]
+
+[[case]]
+name = "vite_config_cts"
+comment = "Known upstream gap: auto-discovery ignores vite.config.cts, but explicit loading works. An upstream fix must change this snapshot."
+vp = "local"
+steps = [
+  { argv = ["vpt", "cp", "config.cjs", "vite.config.cts"], snapshot = false },
+  { argv = ["vp", "lint", "src"], comment = "Automatic discovery should apply the lint block in vite.config.cts.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "--check", "src"], comment = "Automatic discovery should apply the fmt block in vite.config.cts.", continue-on-failure = true },
+  { argv = ["vp", "check", "src"], comment = "The composite command should use the same config.", continue-on-failure = true },
+  { argv = ["vp", "lint", "-c", "vite.config.cts", "src"], comment = "Explicit loading confirms that the lint config is valid.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "-c", "vite.config.cts", "--check", "src"], comment = "Explicit loading confirms that the fmt config is valid.", continue-on-failure = true },
+]
