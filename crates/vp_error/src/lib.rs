@@ -121,9 +121,9 @@ impl Error {
 
 /// Details of a failed `packageManager` integrity check.
 ///
-/// `basis` names the artifact that vp hashed. Corepack hashes the extracted CLI
-/// for Yarn 2+, and the npm tarball for every other package manager. A message
-/// that says only "hash mismatch" reads like a corrupt download.
+/// `basis` names the artifact that vp hashed: the extracted CLI for Yarn 2+ or
+/// the npm package tarball for npm, pnpm, and Yarn Classic. Naming the artifact
+/// distinguishes a wrong hash basis from a corrupt download.
 #[derive(Error, Debug)]
 #[error(
     "Hash mismatch for {name}@{version}: expected {expected}, got {actual}\n\

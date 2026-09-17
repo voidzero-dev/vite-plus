@@ -22,9 +22,7 @@ The positional `PATH` argument is optional.
 
 - If omitted, `vp migrate` migrates the current directory
 - If provided, it migrates that target directory instead
-- For a monorepo, the target must be the workspace root. Vite+ cannot
-  migrate one workspace member, because migration updates the package-manager
-  configuration, the catalogs, and the lockfiles that all members share.
+- For a monorepo, the target must be the workspace root. Vite+ cannot migrate one workspace member, because migration updates the package-manager configuration, the catalogs, and the lockfiles that all members share.
 
 ```bash
 vp migrate
@@ -53,8 +51,7 @@ The `migrate` command is designed to move existing projects onto Vite+ quickly. 
 - Can write agent and editor configuration files
 - Formats the migrated project
 
-See [Migration Rules](./migrate-rules.md) for the exact dependency, source
-rewrite, and package-manager behavior.
+See [Migration Rules](./migrate-rules.md) for the exact dependency, source rewrite, and package-manager behavior.
 
 Most projects will require further manual adjustments after running `vp migrate`.
 
@@ -71,40 +68,6 @@ After running the migration:
 - Run `vp check`
 - Run `vp test`
 - Run `vp build` (or `vp pack` if you are building a library)
-
-## Manual Installation & Migration
-
-If you are manually migrating a project to Vite+, install these dev dependencies first:
-
-```bash
-vp install -D vite-plus
-```
-
-You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
-
-```json
-"overrides": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.11"
-}
-```
-
-If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
-
-```yaml
-overrides:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: 4.1.11
-```
-
-Or, if you are using Yarn:
-
-```json
-"resolutions": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "4.1.11"
-}
-```
 
 ## Migration Prompt
 
@@ -205,19 +168,13 @@ export default defineConfig({
 });
 ```
 
-When no existing hook policy owns the workflow, `vp migrate` can move supported lint-staged rules
-and remove the old configuration and dependency. If an existing hook tool is preserved, keep
-lint-staged in place until you convert that hook policy manually. See the
-[Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
+When no existing hook policy owns the workflow, `vp migrate` can move supported lint-staged rules and remove the old configuration and dependency. If an existing hook tool is preserved, keep lint-staged in place until you convert that hook policy manually. See the [Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
 
 ### Git hook tools
 
-The `vp migrate` command does not automatically convert Husky setups. When Husky is detected,
-Vite+ leaves its hooks, lifecycle scripts, configuration, and dependencies unchanged and shows a
-warning. You can migrate the project manually using the [Commit hooks guide](/guide/commit-hooks).
+The `vp migrate` command does not automatically convert Husky setups. When Husky is detected, Vite+ leaves its hooks, lifecycle scripts, configuration, and dependencies unchanged and shows a warning. You can migrate the project manually using the [Commit hooks guide](/guide/commit-hooks).
 
-Existing project-owned Vite+ hooks are also preserved. The default staged workflow is introduced
-only when no existing hook policy is found.
+Existing project-owned Vite+ hooks are also preserved. The default staged workflow is introduced only when no existing hook policy is found.
 
 If your project currently uses `lefthook`, `simple-git-hooks`, or `yorkie`, `vp migrate` will leave your existing configuration alone and show a warning. This happens even if you choose to set up hooks during the prompt or include the `--hooks` flag.
 

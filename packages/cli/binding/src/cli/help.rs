@@ -1,5 +1,5 @@
 use clap::error::{ContextKind, ContextValue, ErrorKind};
-use owo_colors::OwoColorize;
+use console::style;
 use vp_error::Error;
 use vp_shared::output;
 use vt::ExitStatus;
@@ -120,19 +120,22 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
     };
 
     if GLOBAL_ONLY_SUBCOMMANDS.contains(&invalid_subcommand.as_str()) {
-        let command = format!("`{invalid_subcommand}`").bright_blue().to_string();
+        let command =
+            style(format!("`{invalid_subcommand}`")).for_stderr().blue().bright().to_string();
         output::error(&format!(
             "The {command} command is only available in the global `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary."
         ));
         return true;
     }
 
-    let highlighted_subcommand = invalid_subcommand.bright_blue().to_string();
+    let highlighted_subcommand =
+        style(&invalid_subcommand).for_stderr().blue().bright().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
 
     if let Some(suggestion) = suggestion {
         eprintln!();
-        let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
+        let highlighted_suggestion =
+            style(format!("`vp {suggestion}`")).for_stderr().blue().bright().to_string();
         eprintln!("Did you mean {highlighted_suggestion}?");
     }
 
@@ -169,14 +172,14 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
         return false;
     };
 
-    let highlighted_argument = invalid_argument.bright_blue().to_string();
+    let highlighted_argument = style(&invalid_argument).for_stderr().blue().bright().to_string();
     output::error(&format!("Unexpected argument '{highlighted_argument}'"));
 
     if has_pass_as_value_suggestion(error) {
         eprintln!();
         let pass_through_argument = format!("-- {invalid_argument}");
         let highlighted_pass_through_argument =
-            format!("`{}`", pass_through_argument.bright_blue());
+            format!("`{}`", style(&pass_through_argument).for_stderr().blue().bright());
         eprintln!("Use {highlighted_pass_through_argument} to pass the argument as a value");
     }
 

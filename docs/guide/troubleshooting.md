@@ -15,18 +15,14 @@ Vite+ expects modern upstream tool versions.
 
 If you are migrating an existing project and it still depends on older Vite or Vitest versions, upgrade those first before adopting Vite+.
 
-Run `vp toolchain` to show the versions from the local Vite+ package.
-Run `vp toolchain --global` to show the versions from the global Vite+ release.
+Run `vp toolchain` to show the versions from the local Vite+ package. Run `vp toolchain --global` to show the versions from the global Vite+ release.
 
 ## `vp check` does not run type-aware lint rules or type checks
 
 - Confirm that `lint.options.typeAware` and `lint.options.typeCheck` are enabled in `vite.config.ts`
 - Check whether your `tsconfig.json` still uses `compilerOptions.baseUrl`
 
-The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`.
-`vp migrate` and `vp lint --init` try to run the `vp dlx @andrewbranch/ts5to6 --fixBaseUrl .`
-fix before enabling type-aware linting. If that fix fails or is declined, Vite+
-skips `typeAware` and `typeCheck`.
+The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`. `vp migrate` and `vp lint --init` try to run the `vp dlx @andrewbranch/ts5to6 --fixBaseUrl .` fix before enabling type-aware linting. If that fix fails or is declined, Vite+ skips `typeAware` and `typeCheck`.
 
 ## Nested lint or format config is not applied
 
@@ -76,8 +72,7 @@ If `vp staged` fails or your pre-commit hook does not run:
 - if status shows `Preference: disabled (local)`, re-enable with `vp hooks enable`
 - check whether hooks were skipped intentionally through `VP_GIT_HOOKS=0`
 
-To stop hooks in this clone without deleting project policy files, run `vp hooks disable`.
-See the [Commit hooks guide](/guide/commit-hooks) for the full workflow.
+To stop hooks in this clone without deleting project policy files, run `vp hooks disable`. See the [Commit hooks guide](/guide/commit-hooks) for the full workflow.
 
 A minimal staged config looks like this:
 

@@ -4,6 +4,10 @@
 
 const { readFileSync } = require('fs');
 let nativeBinding = null;
+// Which artifact actually loaded. The WASI fallback chain overwrites it with
+// the flavor it resolved; the late native retry below leaves it alone because
+// it only runs while no WASI candidate has been loaded.
+let __napiLoadedBindingTarget = 'native';
 const loadErrors = [];
 
 const isMusl = () => {
@@ -64,7 +68,16 @@ const isMuslFromChildProcess = () => {
 function requireNative() {
   if (process.env.NAPI_RS_NATIVE_LIBRARY_PATH) {
     try {
-      return require(process.env.NAPI_RS_NATIVE_LIBRARY_PATH);
+      const overrideBinding = require(process.env.NAPI_RS_NATIVE_LIBRARY_PATH);
+      // The override may be a generated WASI loader, which already reports its
+      // own flavor. Adopt it: `module.exports` aliases this object, so claiming
+      // 'native' would both misreport the artifact and overwrite the loader's
+      // marker through the alias.
+      __napiLoadedBindingTarget =
+        overrideBinding && typeof overrideBinding.__napiBindingTarget === 'string'
+          ? overrideBinding.__napiBindingTarget
+          : 'native';
+      return overrideBinding;
     } catch (err) {
       loadErrors.push(err);
     }
@@ -80,12 +93,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-android-arm64/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -103,12 +116,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-android-arm-eabi/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -138,12 +151,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-win32-x64-gnu/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -161,12 +174,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-win32-x64-msvc/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -185,12 +198,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-win32-ia32-msvc/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -208,12 +221,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-win32-arm64-msvc/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -234,12 +247,12 @@ function requireNative() {
       const bindingPackageVersion =
         require('@voidzero-dev/vite-plus-darwin-universal/package.json').version;
       if (
-        bindingPackageVersion !== '0.3.1' &&
+        bindingPackageVersion !== '0.3.2' &&
         process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
         process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
       ) {
         throw new Error(
-          `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
         );
       }
       return binding;
@@ -257,12 +270,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-darwin-x64/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -280,12 +293,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-darwin-arm64/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -307,12 +320,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-freebsd-x64/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -330,12 +343,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-freebsd-arm64/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -358,12 +371,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-x64-musl/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -381,12 +394,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-x64-gnu/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -406,12 +419,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-arm64-musl/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -429,12 +442,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-arm64-gnu/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -454,12 +467,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-arm-musleabihf/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -477,12 +490,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-arm-gnueabihf/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -502,12 +515,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-loong64-musl/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -525,12 +538,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-loong64-gnu/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -550,12 +563,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-riscv64-musl/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -573,12 +586,12 @@ function requireNative() {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-linux-riscv64-gnu/package.json').version;
           if (
-            bindingPackageVersion !== '0.3.1' &&
+            bindingPackageVersion !== '0.3.2' &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
             process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
           ) {
             throw new Error(
-              `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
           return binding;
@@ -597,12 +610,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-linux-ppc64-gnu/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -620,12 +633,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-linux-s390x-gnu/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -647,12 +660,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-openharmony-arm64/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -670,12 +683,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-openharmony-x64/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -693,12 +706,12 @@ function requireNative() {
         const bindingPackageVersion =
           require('@voidzero-dev/vite-plus-openharmony-arm/package.json').version;
         if (
-          bindingPackageVersion !== '0.3.1' &&
+          bindingPackageVersion !== '0.3.2' &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
           process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
         ) {
           throw new Error(
-            `Native binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            `Native binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
           );
         }
         return binding;
@@ -815,6 +828,7 @@ if (!nativeBinding || forceWasi) {
       if (!candidateFailed) {
         wasiBinding = require('./vite-plus.wasi.cjs');
         nativeBinding = wasiBinding;
+        __napiLoadedBindingTarget = 'wasm32-wasi';
         wasiBindingLoaded = true;
       }
     } catch (err) {
@@ -843,14 +857,15 @@ if (!nativeBinding || forceWasi) {
         ) {
           const bindingPackageVersion =
             require('@voidzero-dev/vite-plus-wasm32-wasi/package.json').version;
-          if (bindingPackageVersion !== '0.3.1') {
+          if (bindingPackageVersion !== '0.3.2') {
             throw new Error(
-              `WASI binding package version mismatch, expected 0.3.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+              `WASI binding package version mismatch, expected 0.3.2 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
             );
           }
         }
         wasiBinding = require('@voidzero-dev/vite-plus-wasm32-wasi');
         nativeBinding = wasiBinding;
+        __napiLoadedBindingTarget = 'wasm32-wasi';
         wasiBindingLoaded = true;
       }
     } catch (err) {
@@ -891,6 +906,71 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`);
 }
 
+function __napiStampBindingTarget(exportsObject, target) {
+  if (Object.prototype.hasOwnProperty.call(exportsObject, '__napiBindingTarget')) {
+    if (exportsObject.__napiBindingTarget === target) {
+      // Already ours: the root entry aliases the object it loaded, so a WASI
+      // fallback candidate — or a `NAPI_RS_NATIVE_LIBRARY_PATH` override that
+      // is a generated loader — arrives already stamped with this same value.
+      return target;
+    }
+    const error = new Error(
+      '`__napiBindingTarget` is reserved by the generated binding loader, but the loaded binding already exports it. Rename the export, e.g. #[napi(js_name = "...")].',
+    );
+    error.code = 'ERR_NAPI_BINDING_TARGET_CONFLICT';
+    throw error;
+  }
+  if (!Object.isExtensible(exportsObject)) {
+    // A `#[napi(module_exports)]` hook may seal or freeze this object
+    // (`Object::seal` / `Object::freeze`). Reporting the artifact is metadata,
+    // never a reason to fail an otherwise successful load, so the stamp is
+    // skipped. What a consumer still sees then follows the entry point: the
+    // browser and deferred loaders declare `__napiBindingTarget` at module
+    // level and go on reporting it, while the CommonJS entries hand back this
+    // very object as `module.exports`, so there the value is absent.
+    return target;
+  }
+  try {
+    // [[Define]], not [[Set]]: an ordinary assignment walks the prototype
+    // chain, so an inherited accessor could swallow the value or throw and
+    // fail an otherwise successful load. The descriptor is what a successful
+    // assignment would have produced.
+    Object.defineProperty(exportsObject, '__napiBindingTarget', {
+      configurable: true,
+      enumerable: true,
+      value: target,
+      writable: true,
+    });
+  } catch {
+    // Same rule as the non-extensible skip above: reporting the artifact is
+    // metadata, never a reason to fail an otherwise successful load. An exotic
+    // object (a Proxy whose defineProperty trap refuses) is skipped, not
+    // thrown over.
+  }
+  // The CommonJS loaders assign this return value so `cjs-module-lexer` — and
+  // therefore Node's CJS -> ESM named export detection — can see
+  // `__napiBindingTarget` statically.
+  return target;
+}
+// Stamp before the alias, not after. The guard only reads `nativeBinding`
+// (`hasOwnProperty` plus a comparison), which is safe against any addon
+// accessor; an assignment is not, because a `#[napi(module_exports)]` hook can
+// expose a getter reporting this very value and a setter that throws. So the
+// assignment lands on the loader's own `module.exports`, still the original
+// object here, and the alias below replaces it.
+//
+// The assignment is what keeps the marker a statically visible CommonJS export:
+// `cjs-module-lexer` is Node's CJS -> ESM named export detection, it cannot see
+// a bare call, and the later `module.exports = nativeBinding` does not undo the
+// detection. The assignment itself always succeeds — its target is this
+// loader's own, still extensible `module.exports` — and the alias below then
+// discards the value it wrote. What a consumer reads is whatever the guard put
+// on `nativeBinding`, so on a frozen binding, where the guard skips, the
+// linked import resolves to `undefined`.
+module.exports.__napiBindingTarget = __napiStampBindingTarget(
+  nativeBinding,
+  __napiLoadedBindingTarget,
+);
 module.exports = nativeBinding;
 module.exports.LegalCommentsMode = nativeBinding.LegalCommentsMode;
 module.exports.minify = nativeBinding.minify;
@@ -941,6 +1021,7 @@ module.exports.BindingWatcherEvent = nativeBinding.BindingWatcherEvent;
 module.exports.ParallelJsPluginRegistry = nativeBinding.ParallelJsPluginRegistry;
 module.exports.TraceSubscriberGuard = nativeBinding.TraceSubscriberGuard;
 module.exports.TsconfigCache = nativeBinding.TsconfigCache;
+module.exports.__internalForcePanic = nativeBinding.__internalForcePanic;
 module.exports.BindingAttachDebugInfo = nativeBinding.BindingAttachDebugInfo;
 module.exports.BindingBuiltinPluginName = nativeBinding.BindingBuiltinPluginName;
 module.exports.BindingChunkModuleOrderBy = nativeBinding.BindingChunkModuleOrderBy;

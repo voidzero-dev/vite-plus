@@ -10,37 +10,7 @@ You can use `voidzero-dev/setup-vp` to use Vite+ in CI environments.
 
 Set `<setup-vp-version>` in each example to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead. Do not use the `v1` tag. The `v1` tag no longer receives updates.
 
-Run `vp migrate` to replace exact `voidzero-dev/setup-vp@v1` references in
-GitHub Actions workflows and composite actions under `.github` with the latest
-exact release known to your Vite+ version. Existing exact versions and commit
-SHAs remain unchanged.
-
-### Automatic Version Updates
-
-Dependabot and Renovate can update exact versions in GitHub Actions workflows.
-
-To use [Dependabot version updates](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates), add a `github-actions` entry to `.github/dependabot.yml`:
-
-```yaml [.github/dependabot.yml]
-version: 2
-updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-```
-
-Dependabot checks `uses:` entries in `.github/workflows` each week.
-
-[Renovate's GitHub Actions manager](https://docs.renovatebot.com/modules/manager/github-actions/) detects `uses:` entries by default. You do not need a package rule for `setup-vp`.
-
-When you use a commit SHA, add the exact release tag in a comment. Renovate uses the comment to find updates:
-
-```yaml
-- uses: voidzero-dev/setup-vp@<commit-sha> # <setup-vp-version>
-```
-
-These settings apply only to GitHub Actions workflows. For GitLab CI/CD and Azure Pipelines, update both version values together.
+Run `vp migrate` to replace exact `voidzero-dev/setup-vp@v1` references in GitHub Actions workflows and composite actions under `.github` with the latest exact release known to your Vite+ version. Existing exact versions and commit SHAs remain unchanged.
 
 ## GitHub Actions
 
@@ -124,6 +94,33 @@ Pin `ref` and `setupRef` to the same tag or commit SHA for strict reproducibilit
 The Azure Pipelines template supports Microsoft-hosted Linux, macOS, and Windows agents. It uses Azure's native `UseNode@1` and `Cache@2` tasks to set up Node.js and cache package-manager data.
 
 For advanced configuration and the complete parameter reference, see the [`setup-vp` Azure Pipelines documentation](https://github.com/voidzero-dev/setup-vp#azure-pipelines).
+
+## Automatic Version Updates
+
+Dependabot and Renovate can update exact versions in GitHub Actions workflows.
+
+To use [Dependabot version updates](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates), add a `github-actions` entry to `.github/dependabot.yml`:
+
+```yaml [.github/dependabot.yml]
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+```
+
+Dependabot checks `uses:` entries in `.github/workflows` each week.
+
+[Renovate's GitHub Actions manager](https://docs.renovatebot.com/modules/manager/github-actions/) detects `uses:` entries by default. You do not need a package rule for `setup-vp`.
+
+When you use a commit SHA, add the exact release tag in a comment. Renovate uses the comment to find updates:
+
+```yaml
+- uses: voidzero-dev/setup-vp@<commit-sha> # <setup-vp-version>
+```
+
+These settings apply only to GitHub Actions workflows. For GitLab CI/CD and Azure Pipelines, update both version values together.
 
 ## Simplifying Existing Workflows
 

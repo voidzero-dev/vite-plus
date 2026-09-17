@@ -57,8 +57,7 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 - `--hooks` enables pre-commit hook setup (dispatcher + `.vite-hooks` + `staged` config)
 - `--no-hooks` skips hook setup
 
-After create, manage the dispatcher with `vp hooks status`, `vp hooks disable`, and `vp hooks enable`.
-See the [Commit hooks guide](/guide/commit-hooks).
+After create, manage the dispatcher with `vp hooks status`, `vp hooks disable`, and `vp hooks enable`. See the [Commit hooks guide](/guide/commit-hooks).
 
 ### Dependency build scripts
 

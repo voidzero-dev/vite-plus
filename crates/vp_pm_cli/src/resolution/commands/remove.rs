@@ -24,7 +24,7 @@ pub struct RemoveArgs {
     pub(crate) filter: Vec<String>,
 
     /// Remove from workspace root
-    #[arg(short = 'w', long, not_supported(bun))]
+    #[arg(short = 'w', long, not_supported(yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Remove recursively from all workspace packages
@@ -103,12 +103,19 @@ impl Resolve<RemoveArgs> for Yarn {
         }
 
         let mut cmd = CommandBuilder::new("yarn");
-        if !args.filter.is_empty() && !args.recursive {
+        if !args.filter.is_empty() {
+            if !self.is_berry() {
+                return CommandResolution::InvalidArgument(
+                    "Invalid argument: `--filter` is not supported by Yarn Classic `remove`."
+                        .to_string(),
+                );
+            }
+
             cmd.arg("workspaces").arg("foreach").arg("--all");
             cmd.repeated("--include", args.filter.iter());
         }
         cmd.arg("remove")
-            .arg_if("--all", args.recursive)
+            .arg_if("--all", args.recursive && args.filter.is_empty())
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
         cmd.into()
@@ -224,17 +231,44 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_remove_with_workspace() {
-        let mut options = remove_args(&["lodash"]);
-        options.filter = vec!["app".to_string()];
-        let resolution = resolve(&yarn("1.22.0"), options);
-        let command = expect_run(resolution.outcome);
+    fn yarn_drops_unsupported_workspace_root() {
+        for version in ["1.22.22", "4.0.0"] {
+            let mut options = remove_args(&["lodash"]);
+            options.workspace_root = true;
+            let resolution = resolve(&yarn(version), options);
+            let command = expect_run(resolution.outcome);
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(
-            command.args,
-            vec!["workspaces", "foreach", "--all", "--include", "app", "remove", "lodash"]
-        );
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec!["remove", "lodash"]);
+            let messages = resolution
+                .diagnostics
+                .iter()
+                .map(|entry| entry.message.as_str())
+                .collect::<Vec<_>>();
+            assert_eq!(messages, vec!["yarn does not support --workspace-root."]);
+        }
+    }
+
+    #[test]
+    fn test_yarn_classic_rejects_filtered_remove() {
+        for filters in
+            [vec!["app".to_string()], vec!["app-*".to_string(), "@scope/web".to_string()]]
+        {
+            for recursive in [false, true] {
+                let mut options = remove_args(&["lodash"]);
+                options.filter = filters.clone();
+                options.recursive = recursive;
+                let resolution = resolve(&yarn("1.22.22"), options);
+
+                assert_eq!(
+                    resolution.outcome,
+                    CommandResolution::InvalidArgument(
+                        "Invalid argument: `--filter` is not supported by Yarn Classic `remove`."
+                            .to_string()
+                    )
+                );
+            }
+        }
     }
 
     #[test]
@@ -456,10 +490,10 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_remove_with_multiple_filters() {
+    fn test_yarn_berry_remove_with_multiple_filters() {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
-        let resolution = resolve(&yarn("1.22.0"), options);
+        let resolution = resolve(&yarn("4.0.0"), options);
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
@@ -480,15 +514,28 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_remove_with_recursive_and_multiple_filters() {
+    fn test_yarn_berry_remove_with_recursive_and_multiple_filters() {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
         options.recursive = true;
-        let resolution = resolve(&yarn("1.22.0"), options);
+        let resolution = resolve(&yarn("4.0.0"), options);
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["remove", "--all", "lodash"]);
+        assert_eq!(
+            command.args,
+            vec![
+                "workspaces",
+                "foreach",
+                "--all",
+                "--include",
+                "app",
+                "--include",
+                "web",
+                "remove",
+                "lodash"
+            ]
+        );
     }
 
     #[test]

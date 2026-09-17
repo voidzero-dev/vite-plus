@@ -189,8 +189,8 @@ Packages: -2
 --
 
 optionalDependencies:
-- test-vite-plus-package-optional 1.0.0
-- testnpm2 1.0.0
+- test-vite-plus-package-optional
+- testnpm2
 
 Done in <duration> using pnpm <version>
 ```

@@ -6,7 +6,7 @@ use std::{
     process::ExitStatus,
 };
 
-use owo_colors::OwoColorize;
+use console::style;
 use rustc_hash::FxHashSet;
 use vp_shared::output;
 use vt_path::AbsolutePathBuf;
@@ -53,6 +53,7 @@ fn lexical_path(path: &Path) -> PathBuf {
 pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     let env_config = vp_shared::EnvConfig::get();
     let dirs = &env_config.dirs;
+    let homebrew = crate::homebrew::owns_current_exe();
 
     // Build a unique set of Vite+-owned roots. In a single-root layout, data,
     // config, and state use the same directory. Cache is inside that directory.
@@ -78,7 +79,12 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     }
 
     if !delete_set.iter().any(|root| root.as_path().exists()) {
-        output::info("vite-plus is not installed. No installation directory exists.");
+        if homebrew {
+            output::info("No Vite+-managed data directories exist.");
+            print_homebrew_uninstall_notice();
+        } else {
+            output::info("vite-plus is not installed. No installation directory exists.");
+        }
         return Ok(exit_status(0));
     }
 
@@ -134,9 +140,21 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
 
     output::raw("");
     output::success("Vite+ removed its managed files and shell entries from your system.");
+    if homebrew {
+        print_homebrew_uninstall_notice();
+    }
     output::note("Restart your terminal to apply shell changes.");
 
     Ok(exit_status(0))
+}
+
+fn print_homebrew_uninstall_notice() {
+    output::note(
+        "The Homebrew package remains installed. Run `brew uninstall vite-plus` to remove it.",
+    );
+    output::note(
+        "To run `vp` again, restart your terminal or run `hash -r` in Bash. The remaining Homebrew package will start setup again.",
+    );
 }
 
 /// Remove the shim files vite-plus owns from the bin directory.
@@ -311,7 +329,13 @@ fn confirm_implode(
         ));
     }
 
-    output::warn("This will completely remove vite-plus from your system!");
+    if crate::homebrew::owns_current_exe() {
+        output::warn(
+            "This will remove Vite+-managed data, shims, and shell entries. The Homebrew package will remain installed.",
+        );
+    } else {
+        output::warn("This will completely remove vite-plus from your system!");
+    }
     output::raw("");
     output::raw("  Directories to remove:");
     for root in delete_set {
@@ -325,7 +349,7 @@ fn confirm_implode(
         }
     }
     output::raw("");
-    output::raw(&vt_str::format!("Type {} to confirm:", "uninstall".bold()));
+    output::raw(&vt_str::format!("Type {} to confirm:", style("uninstall").bold()));
 
     // String is needed here for read_line
     #[expect(clippy::disallowed_types)]

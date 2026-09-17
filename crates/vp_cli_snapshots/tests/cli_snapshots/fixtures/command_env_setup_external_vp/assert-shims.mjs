@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const expected = path.resolve('external/vp');
+const expected = path.resolve('external/bin/vp');
 const shims = [
   'vp',
   'node',

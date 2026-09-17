@@ -32,7 +32,7 @@ pub struct WhyArgs {
     pub(crate) filter: Vec<String>,
 
     /// Check in workspace root
-    #[arg(short = 'w', long, not_supported(bun))]
+    #[arg(short = 'w', long, not_supported(yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Only production dependencies

@@ -27,46 +27,32 @@ function rewriteInstallUrls(text: string): string {
     .replaceAll('https://vite.plus', installShUrl);
 }
 
-const taskRunnerGuideItems = [
-  {
-    text: 'Run',
-    link: '/guide/run',
-  },
-  {
-    text: 'Task Caching',
-    link: '/guide/cache',
-    items: [
-      { text: 'Automatic Data Tracking', link: '/guide/automatic-data-tracking' },
-      { text: 'GitHub Actions Cache', link: '/guide/github-actions-cache' },
-    ],
-  },
-  {
-    text: 'Running Binaries',
-    link: '/guide/vpx',
-  },
-];
-
 const guideSidebar = [
   {
     text: 'Introduction',
     items: [
       { text: 'Getting Started', link: '/guide/' },
+      { text: 'Global CLI', link: '/guide/global-cli' },
+      { text: 'Project-local CLI', link: '/guide/local-cli' },
+      { text: 'Why Vite+', link: '/guide/why' },
+    ],
+  },
+  {
+    text: 'Set Up a Project',
+    items: [
       { text: 'Creating a Project', link: '/guide/create' },
       {
         text: 'Migrate to Vite+',
         link: '/guide/migrate',
         items: [{ text: 'Migration Rules', link: '/guide/migrate-rules' }],
       },
-      { text: 'Installing Dependencies', link: '/guide/install' },
-      { text: 'Environment', link: '/guide/env' },
-      { text: 'Installer Environment Variables', link: '/guide/installer-env-vars' },
-      { text: 'Why Vite+', link: '/guide/why' },
+      { text: 'Update Vite+', link: '/guide/upgrade-project' },
+      { text: 'Package Management', link: '/guide/install' },
     ],
   },
   {
-    text: 'Develop',
+    text: 'Project Toolchain',
     items: [
-      { text: 'Dev', link: '/guide/dev' },
       {
         text: 'Check',
         link: '/guide/check',
@@ -76,22 +62,33 @@ const guideSidebar = [
         ],
       },
       { text: 'Test', link: '/guide/test' },
-    ],
-  },
-  {
-    text: 'Execute',
-    items: taskRunnerGuideItems,
-  },
-  {
-    text: 'Build',
-    items: [
+      { text: 'Dev', link: '/guide/dev' },
       { text: 'Build', link: '/guide/build' },
       { text: 'Pack', link: '/guide/pack' },
+      {
+        text: 'Run',
+        link: '/guide/run',
+      },
+      {
+        text: 'Task Caching',
+        link: '/guide/cache',
+        items: [
+          { text: 'Automatic Data Tracking', link: '/guide/automatic-data-tracking' },
+          { text: 'GitHub Actions Cache', link: '/guide/github-actions-cache' },
+        ],
+      },
+      {
+        text: 'Running Binaries',
+        link: '/guide/vpx',
+      },
+      { text: 'Commit Hooks', link: '/guide/commit-hooks' },
+      { text: 'Monorepo Guide', link: '/guide/monorepo' },
     ],
   },
   {
-    text: 'Maintain',
+    text: 'Global CLI',
     items: [
+      { text: 'Environment', link: '/guide/env' },
       { text: 'Upgrading Vite+', link: '/guide/upgrade' },
       { text: 'Removing Vite+', link: '/guide/implode' },
     ],
@@ -102,10 +99,11 @@ const guideSidebar = [
       { text: 'IDE Integration', link: '/guide/ide-integration' },
       { text: 'CI', link: '/guide/ci' },
       { text: 'Docker', link: '/guide/docker' },
-      { text: 'Commit Hooks', link: '/guide/commit-hooks' },
-      { text: 'Monorepo Guide', link: '/guide/monorepo' },
-      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
     ],
+  },
+  {
+    text: 'Reference',
+    items: [{ text: 'Troubleshooting', link: '/guide/troubleshooting' }],
   },
 ];
 

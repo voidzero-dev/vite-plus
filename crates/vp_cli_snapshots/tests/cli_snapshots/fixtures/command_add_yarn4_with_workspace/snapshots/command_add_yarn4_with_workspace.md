@@ -5,6 +5,7 @@
 should add package to workspace root
 
 ```
+warn: yarn >=2 does not support --workspace-root.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + testnpm2@npm:1.0.1
@@ -46,6 +47,7 @@ should add package to workspace root
 should add @vite-plus-test/utils to workspace root
 
 ```
+warn: yarn >=2 does not support --workspace-root.
 warn: yarn does not support --workspace.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step

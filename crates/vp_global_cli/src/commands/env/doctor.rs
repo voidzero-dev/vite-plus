@@ -2,7 +2,7 @@
 
 use std::process::ExitStatus;
 
-use owo_colors::OwoColorize;
+use console::style;
 use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
 use vp_shared::{env_vars, output};
 use vt_path::{AbsolutePathBuf, current_dir};
@@ -44,16 +44,16 @@ const KEY_WIDTH: usize = 18;
 /// Print a section header (bold, with blank line before).
 fn print_section(name: &str) {
     println!();
-    println!("{}", name.bold());
+    println!("{}", style(&name).bold());
 }
 
 /// Print an aligned key-value line with a status indicator.
 ///
-/// `status` should be a colored string like "✓".green(), "✗".red(), etc.
+/// `status` should be a styled string like `style("✓").green().to_string()`.
 /// Use `" "` for informational lines with no status.
 fn print_check(status: &str, key: &str, value: &str) {
     if status.trim().is_empty() {
-        println!("  {key:<KEY_WIDTH$}{value}");
+        println!("    {key:<KEY_WIDTH$}{value}");
     } else if key.trim().is_empty() {
         println!("  {status} {value}");
     } else {
@@ -66,12 +66,12 @@ fn print_package_manager_mode(key: &str, mode: ShimMode) {
         ShimMode::Managed => "managed mode",
         ShimMode::SystemFirst => "system-first mode",
     };
-    print_check(&output::CHECK.green().to_string(), key, mode);
+    print_check(&style(output::CHECK).green().to_string(), key, mode);
 }
 
 /// Print a continuation/hint line (dimmed).
 fn print_hint(text: &str) {
-    println!("  {}", format!("note: {text}").dimmed());
+    println!("  {}", style(format!("note: {text}")).dim());
 }
 
 /// Abbreviate home directory to `~` for display.
@@ -90,7 +90,13 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     let mut has_errors = false;
 
     // Section: Installation
-    println!("{}", "Installation".bold());
+    println!("{}", style("Installation").bold());
+    if crate::homebrew::owns_current_exe() {
+        print_check(" ", "CLI source", "Homebrew");
+        if let Ok(binary) = std::env::current_exe().and_then(std::fs::canonicalize) {
+            print_check(" ", "CLI binary", &abbreviate_home(&binary.display().to_string()));
+        }
+    }
     has_errors |= !check_dirs().await;
     has_errors |= !check_shims(scope).await;
 
@@ -144,11 +150,13 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     if has_errors {
         println!(
             "{}",
-            "\u{2717} Some issues found. Run the suggested commands to fix them.".red().bold()
+            style("\u{2717} Some issues found. Run the suggested commands to fix them.")
+                .red()
+                .bold()
         );
         Ok(super::exit_status(1))
     } else {
-        println!("{}", "\u{2713} All checks passed".green().bold());
+        println!("{}", style("\u{2713} All checks passed").green().bold());
         Ok(ExitStatus::default())
     }
 }
@@ -172,20 +180,20 @@ async fn check_dirs() -> bool {
     for (label, dir, required) in rows {
         let display = abbreviate_home(&dir.as_path().display().to_string());
         if tokio::fs::try_exists(dir).await.unwrap_or(false) {
-            print_check(&output::CHECK.green().to_string(), label, &display);
+            print_check(&style(output::CHECK).green().to_string(), label, &display);
         } else if required {
             print_check(
-                &output::CROSS.red().to_string(),
+                &style(output::CROSS).red().to_string(),
                 label,
-                &format!("{display} {}", "(does not exist)".red()),
+                &format!("{display} {}", style("(does not exist)").red()),
             );
             print_hint("Run 'vp env setup' to create the directory.");
             ok = false;
         } else {
             print_check(
-                &output::CHECK.green().to_string(),
+                &style(output::CHECK).green().to_string(),
                 label,
-                &format!("{display} {}", "(not created yet)".bright_black()),
+                &format!("{display} {}", style("(not created yet)").black().bright()),
             );
         }
     }
@@ -225,13 +233,13 @@ async fn check_shims(scope: EnvScope) -> bool {
     }
 
     if missing.is_empty() {
-        print_check(&output::CHECK.green().to_string(), "Shims", &tools.join(", "));
+        print_check(&style(output::CHECK).green().to_string(), "Shims", &tools.join(", "));
         true
     } else {
         print_check(
-            &output::CROSS.red().to_string(),
+            &style(output::CROSS).red().to_string(),
             "Missing shims",
-            &missing.join(", ").red().to_string(),
+            &style(&missing.join(", ")).red().to_string(),
         );
         print_hint("Run 'vp env setup' to create missing shims.");
         false
@@ -258,9 +266,9 @@ async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePat
         Ok(c) => c,
         Err(e) => {
             print_check(
-                &output::WARN_SIGN.yellow().to_string(),
+                &style(output::WARN_SIGN).yellow().to_string(),
                 "Node.js",
-                &format!("config error: {e}").yellow().to_string(),
+                &style(format!("config error: {e}")).yellow().to_string(),
             );
             return (config::Config::default(), None);
         }
@@ -271,13 +279,13 @@ async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePat
     if scope.includes_node() {
         match config.node_shim_mode {
             ShimMode::Managed => {
-                print_check(&output::CHECK.green().to_string(), "Node.js", "managed mode");
+                print_check(&style(output::CHECK).green().to_string(), "Node.js", "managed mode");
             }
             ShimMode::SystemFirst => {
                 print_check(
-                    &output::CHECK.green().to_string(),
+                    &style(output::CHECK).green().to_string(),
                     "Node.js",
-                    &"system-first mode".bright_blue().to_string(),
+                    &style("system-first mode").blue().bright().to_string(),
                 );
 
                 // Check if system Node.js is available
@@ -290,9 +298,9 @@ async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePat
                     system_node_path = Some(system_node);
                 } else {
                     print_check(
-                        &output::WARN_SIGN.yellow().to_string(),
+                        &style(output::WARN_SIGN).yellow().to_string(),
                         "System Node.js",
-                        &"not found (will fall back to managed)".yellow().to_string(),
+                        &style("not found (will fall back to managed)").yellow().to_string(),
                     );
                 }
             }
@@ -344,7 +352,7 @@ async fn check_package_manager_resolution(
             Ok(selected) => selected.map(|resolution| resolution.package_manager_type),
             Err(error) => {
                 print_check(
-                    &output::CROSS.red().to_string(),
+                    &style(output::CROSS).red().to_string(),
                     "Package manager",
                     &error.to_string(),
                 );
@@ -363,9 +371,9 @@ async fn check_package_manager_resolution(
         let Some(version) = try_get_tool_version(&system_binary).await else {
             print_check(" ", "Source", "system PATH");
             print_check(
-                &output::CROSS.red().to_string(),
+                &style(output::CROSS).red().to_string(),
                 "PM binary",
-                &format!("{} (could not execute)", system_binary.as_path().display())
+                &style(format!("{} (could not execute)", system_binary.as_path().display()))
                     .red()
                     .to_string(),
             );
@@ -375,10 +383,10 @@ async fn check_package_manager_resolution(
         print_check(
             " ",
             "Version",
-            &format!("{selected_type}@{version}").bright_green().to_string(),
+            &style(format!("{selected_type}@{version}")).green().bright().to_string(),
         );
         print_check(
-            &output::CHECK.green().to_string(),
+            &style(output::CHECK).green().to_string(),
             "PM binary",
             &system_binary.as_path().display().to_string(),
         );
@@ -395,8 +403,9 @@ async fn check_package_manager_resolution(
             print_check(
                 " ",
                 "Version",
-                &format!("{}@{}", resolution.package_manager_type, resolution.version)
-                    .bright_green()
+                &style(format!("{}@{}", resolution.package_manager_type, resolution.version))
+                    .green()
+                    .bright()
                     .to_string(),
             );
             let installed =
@@ -408,9 +417,9 @@ async fn check_package_manager_resolution(
                     });
             let status = if installed { "installed" } else { "not installed" };
             let indicator = if installed {
-                output::CHECK.green().to_string()
+                style(output::CHECK).green().to_string()
             } else {
-                output::WARN_SIGN.yellow().to_string()
+                style(output::WARN_SIGN).yellow().to_string()
             };
             print_check(&indicator, "PM binaries", status);
             true
@@ -420,7 +429,11 @@ async fn check_package_manager_resolution(
             true
         }
         Err(error) => {
-            print_check(&output::CROSS.red().to_string(), "Package manager", &error.to_string());
+            print_check(
+                &style(output::CROSS).red().to_string(),
+                "Package manager",
+                &error.to_string(),
+            );
             false
         }
     }
@@ -446,7 +459,7 @@ fn check_env_sourcing() -> EnvSourcingStatus {
     // First: check IDE-relevant profiles (login/environment files visible to GUI apps)
     if let Some(file) = check_profile_files(&env_path, IDE_SHELL_PROFILES) {
         print_check(
-            &output::CHECK.green().to_string(),
+            &style(output::CHECK).green().to_string(),
             "IDE integration",
             &format!("env sourced in {file}"),
         );
@@ -456,12 +469,12 @@ fn check_env_sourcing() -> EnvSourcingStatus {
     // Second: check all shell profiles (interactive terminal sessions)
     if let Some(file) = check_profile_files(&env_path, ALL_SHELL_PROFILES) {
         print_check(
-            &output::WARN_SIGN.yellow().to_string(),
+            &style(output::WARN_SIGN).yellow().to_string(),
             "IDE integration",
             &format!(
                 "{} {}",
-                format!("env sourced in {file}").yellow(),
-                "(may not be visible to GUI apps)".dimmed(),
+                style(format!("env sourced in {file}")).yellow(),
+                style("(may not be visible to GUI apps)").dim(),
             ),
         );
         return EnvSourcingStatus::ShellOnly;
@@ -476,9 +489,9 @@ fn check_session_override() {
         let version = version.trim();
         if !version.is_empty() {
             print_check(
-                &output::WARN_SIGN.yellow().to_string(),
+                &style(output::WARN_SIGN).yellow().to_string(),
                 "Session override",
-                &format!("{}={version}", env_vars::VP_NODE_VERSION).yellow().to_string(),
+                &style(format!("{}={version}", env_vars::VP_NODE_VERSION)).yellow().to_string(),
             );
             print_hint("Overrides all file-based resolution.");
             print_hint("Run 'vp env use --unset' to remove.");
@@ -488,9 +501,9 @@ fn check_session_override() {
     // Also check session version file
     if let Some(version) = config::read_session_version_sync() {
         print_check(
-            &output::WARN_SIGN.yellow().to_string(),
+            &style(output::WARN_SIGN).yellow().to_string(),
             "Session override (file)",
-            &format!("{}={version}", config::SESSION_VERSION_FILE).yellow().to_string(),
+            &style(format!("{}={version}", config::SESSION_VERSION_FILE)).yellow().to_string(),
         );
         print_hint("Written by 'vp env use'. Run 'vp env use --unset' to remove.");
     }
@@ -503,6 +516,23 @@ async fn check_path(scope: EnvScope) -> bool {
         Err(_) => return false,
     };
 
+    // The public vp can be on PATH even when the user's shim directory is not.
+    let vp_path = find_in_path("vp");
+    if let Some(path) = &vp_path {
+        print_check(
+            &style(output::CHECK).green().to_string(),
+            "vp",
+            &abbreviate_home(&path.display().to_string()),
+        );
+    } else {
+        print_check(
+            &style(output::CROSS).red().to_string(),
+            "vp",
+            &style("not in PATH").red().to_string(),
+        );
+        print_hint("Run 'vp env setup' to create the vp shim.");
+    }
+
     let path_var = std::env::var_os("PATH").unwrap_or_default();
     let paths: Vec<_> = std::env::split_paths(&path_var).collect();
 
@@ -513,9 +543,13 @@ async fn check_path(scope: EnvScope) -> bool {
     let bin_display = abbreviate_home(&bin_dir.as_path().display().to_string());
 
     if bin_in_path {
-        print_check(&output::CHECK.green().to_string(), "vp", "in PATH");
+        print_check(&style(output::CHECK).green().to_string(), "Shim dir", &bin_display);
     } else {
-        print_check(&output::CROSS.red().to_string(), "vp", &"not in PATH".red().to_string());
+        print_check(
+            &style(output::CROSS).red().to_string(),
+            "Shim dir",
+            &style("not in PATH").red().to_string(),
+        );
         print_hint(&format!("Expected: {bin_display}"));
         println!();
         print_path_fix(&vp_shared::EnvConfig::get().dirs.config);
@@ -529,15 +563,15 @@ async fn check_path(scope: EnvScope) -> bool {
             let display = abbreviate_home(&tool_path.display().to_string());
             if tool_path == expected.as_path() {
                 print_check(
-                    &output::CHECK.green().to_string(),
+                    &style(output::CHECK).green().to_string(),
                     tool,
-                    &format!("{display} {}", "(vp shim)".dimmed()),
+                    &format!("{display} {}", style("(vp shim)").dim()),
                 );
             } else {
                 print_check(
-                    &output::WARN_SIGN.yellow().to_string(),
+                    &style(output::WARN_SIGN).yellow().to_string(),
                     tool,
-                    &format!("{} {}", display.yellow(), "(not vp shim)".dimmed()),
+                    &format!("{} {}", style(&display).yellow(), style("(not vp shim)").dim()),
                 );
             }
         } else {
@@ -545,7 +579,7 @@ async fn check_path(scope: EnvScope) -> bool {
         }
     }
 
-    true
+    vp_path.is_some()
 }
 
 /// Find an executable in PATH.
@@ -570,28 +604,28 @@ fn print_path_fix(env_dir: &vt_path::AbsolutePath) {
             env_path
         };
 
-        println!("  {}", "Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):".dimmed());
+        println!("  {}", style("Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):").dim());
         println!();
         println!("  . \"{env_path}/env\"");
         println!();
-        println!("  {}", "For fish shell, add to ~/.config/fish/config.fish:".dimmed());
+        println!("  {}", style("For fish shell, add to ~/.config/fish/config.fish:").dim());
         println!();
         println!("  source \"{env_path}/env.fish\"");
         println!();
-        println!("  {}", "For Nushell, add to ~/.config/nushell/config.nu:".dimmed());
+        println!("  {}", style("For Nushell, add to ~/.config/nushell/config.nu:").dim());
         println!();
         println!("  source '{env_path}/env.nu'");
         println!();
-        println!("  {}", "Then restart your terminal.".dimmed());
+        println!("  {}", style("Then restart your terminal.").dim());
     }
 
     #[cfg(windows)]
     {
         let _ = env_dir;
-        println!("  {}", "Add the bin directory to your PATH via:".dimmed());
+        println!("  {}", style("Add the bin directory to your PATH via:").dim());
         println!("  System Properties -> Environment Variables -> Path");
         println!();
-        println!("  {}", "Then restart your terminal.".dimmed());
+        println!("  {}", style("Then restart your terminal.").dim());
     }
 }
 
@@ -641,34 +675,34 @@ fn print_ide_setup_guidance(env_dir: &vt_path::AbsolutePath) {
 
     print_section("IDE Setup");
     print_check(
-        &output::WARN_SIGN.yellow().to_string(),
+        &style(output::WARN_SIGN).yellow().to_string(),
         "",
-        &"GUI applications may not see shell PATH changes.".yellow().to_string(),
+        &style("GUI applications may not see shell PATH changes.").yellow().to_string(),
     );
     println!();
 
     #[cfg(target_os = "macos")]
     {
-        println!("  {}", "macOS:".dimmed());
-        println!("  {}", "Add to ~/.zshenv or ~/.profile:".dimmed());
+        println!("  {}", style("macOS:").dim());
+        println!("  {}", style("Add to ~/.zshenv or ~/.profile:").dim());
         println!("  . \"{env_path}/env\"");
-        println!("  {}", "Then restart your IDE to apply changes.".dimmed());
+        println!("  {}", style("Then restart your IDE to apply changes.").dim());
     }
 
     #[cfg(target_os = "linux")]
     {
-        println!("  {}", "Linux:".dimmed());
-        println!("  {}", "Add to ~/.profile:".dimmed());
+        println!("  {}", style("Linux:").dim());
+        println!("  {}", style("Add to ~/.profile:").dim());
         println!("  . \"{env_path}/env\"");
-        println!("  {}", "Then log out and log back in for changes to take effect.".dimmed());
+        println!("  {}", style("Then log out and log back in for changes to take effect.").dim());
     }
 
     // Fallback for other Unix platforms
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
-        println!("  {}", "Add to your shell profile:".dimmed());
+        println!("  {}", style("Add to your shell profile:").dim());
         println!("  . \"{env_path}/env\"");
-        println!("  {}", "Then restart your IDE to apply changes.".dimmed());
+        println!("  {}", style("Then restart your IDE to apply changes.").dim());
     }
 }
 
@@ -700,17 +734,17 @@ async fn check_current_resolution(
         if let Some(system_node) = system_node_path {
             let version = get_node_version(&system_node).await;
             print_check(" ", "Source", "system PATH");
-            print_check(" ", "Version", &version.bright_green().to_string());
+            print_check(" ", "Version", &style(&version).green().bright().to_string());
             print_check(
-                &output::CHECK.green().to_string(),
+                &style(output::CHECK).green().to_string(),
                 "Node binary",
                 &system_node.as_path().display().to_string(),
             );
         } else {
             print_check(
-                &output::WARN_SIGN.yellow().to_string(),
+                &style(output::WARN_SIGN).yellow().to_string(),
                 "System Node.js",
-                &"not found in PATH".yellow().to_string(),
+                &style("not found in PATH").yellow().to_string(),
             );
             print_hint("Install Node.js or run 'vp env on' to use managed Node.js.");
         }
@@ -722,7 +756,7 @@ async fn check_current_resolution(
             let source_display =
                 format_version_source(&resolution.source, resolution.source_path.as_deref());
             print_check(" ", "Source", &source_display);
-            print_check(" ", "Version", &resolution.version.bright_green().to_string());
+            print_check(" ", "Version", &style(&resolution.version).green().bright().to_string());
 
             // Check if Node.js is installed
             let home_dir = vp_shared::EnvConfig::get()
@@ -738,12 +772,12 @@ async fn check_current_resolution(
             let binary_path = home_dir.join("bin").join("node");
 
             if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-                print_check(&output::CHECK.green().to_string(), "Node binary", "installed");
+                print_check(&style(output::CHECK).green().to_string(), "Node binary", "installed");
             } else {
                 print_check(
-                    &output::WARN_SIGN.yellow().to_string(),
+                    &style(output::WARN_SIGN).yellow().to_string(),
                     "Node binary",
-                    &"not installed".yellow().to_string(),
+                    &style("not installed").yellow().to_string(),
                 );
                 print_hint("Version will be downloaded on first use.");
             }
@@ -751,9 +785,9 @@ async fn check_current_resolution(
         }
         Err(e) => {
             print_check(
-                &output::CROSS.red().to_string(),
+                &style(output::CROSS).red().to_string(),
                 "Resolution",
-                &format!("failed: {e}").red().to_string(),
+                &style(format!("failed: {e}")).red().to_string(),
             );
             None
         }
@@ -844,9 +878,9 @@ async fn check_dev_engines(
     for finding in findings {
         if finding.warn {
             print_check(
-                &output::WARN_SIGN.yellow().to_string(),
+                &style(output::WARN_SIGN).yellow().to_string(),
                 finding.key,
-                &finding.message.yellow().to_string(),
+                &style(&finding.message).yellow().to_string(),
             );
         } else {
             print_check(" ", finding.key, &finding.message);
@@ -1176,16 +1210,16 @@ fn check_conflicts() {
         print_section("Conflicts");
         for manager in &conflicts {
             print_check(
-                &output::WARN_SIGN.yellow().to_string(),
+                &style(output::WARN_SIGN).yellow().to_string(),
                 manager,
-                &format!(
+                &style(format!(
                     "detected ({} is set)",
                     KNOWN_VERSION_MANAGERS
                         .iter()
                         .find(|(n, _)| n == manager)
                         .map(|(_, e)| *e)
                         .unwrap_or("in PATH")
-                )
+                ))
                 .yellow()
                 .to_string(),
             );

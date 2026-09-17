@@ -2,7 +2,7 @@
 
 use std::process::ExitStatus;
 
-use owo_colors::OwoColorize;
+use console::style;
 
 use crate::{commands::env::package_metadata::PackageMetadata, error::Error};
 
@@ -58,7 +58,7 @@ pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Er
             let bins = pkg.bins.join(", ");
             println!(
                 "{}{:>gap$}{:<w_node$}{:>gap$}{}",
-                name.bright_blue(),
+                style(&name).blue().bright(),
                 "",
                 pkg.platform.node,
                 "",

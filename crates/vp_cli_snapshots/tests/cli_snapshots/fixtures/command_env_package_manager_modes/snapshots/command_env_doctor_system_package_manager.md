@@ -21,13 +21,14 @@ Configuration
   ✓ Package manager   system-first mode
 
 PATH
-  ✓ vp                in PATH
+  ✓ vp                ~/.vite-plus/bin/vp
+  ✓ Shim dir          ~/.vite-plus/bin
   ✓ pnpm              ~/.vite-plus/bin/pnpm (vp shim)
   ✓ pnpx              ~/.vite-plus/bin/pnpx (vp shim)
 
 Package Manager Resolution
-  Source            system PATH
-  Version           pnpm@10.18.0
+    Source            system PATH
+    Version           pnpm@10.18.0
   ✓ PM binary         <workspace>/system-bin/pnpm
 ```
 

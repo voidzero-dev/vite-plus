@@ -1,12 +1,21 @@
 # Environment
 
-`vp env` manages the complete JavaScript environment: one Node.js runtime and one selected package manager. npm, pnpm, Yarn, and Bun are peer package-manager families.
+`vp env` manages the complete JavaScript environment: one Node.js runtime and one selected package manager. npm, pnpm, Yarn, and Bun are peer package-manager families. It belongs to the [global CLI](/guide/global-cli) and is not included in the project-local `vite-plus` package.
 
 ## Overview
 
+Think of the project environment as two independently selected components:
+
+- **Node.js** is the runtime used to execute JavaScript tools and scripts. Each project can declare the Node.js version it needs.
+- **The package manager** installs and manages project dependencies. Each project can select npm, pnpm, Yarn, or Bun and declare its version.
+
+For example, a project can use Node.js 24 with pnpm 10. Changing its Node.js version does not change its package-manager selection, and switching from pnpm to Yarn does not change its Node.js version. Vite+ resolves both components when you run a command so that you can move between projects without manually switching tools.
+
+Vite+ connects these selections to your shell through **shims**: small launchers named `node`, `npm`, `pnpm`, `yarn`, and `bun`, along with their aliases. In managed mode, a shim resolves and launches the appropriate tool for the current project. Commands such as `vp install` use the project's selected package manager; invoking `pnpm` directly always runs pnpm, even in a project that selects another manager.
+
 Managed mode is on by default, so Node.js and configured package-manager shims resolve through Vite+ and pick the right versions for the current project. Fresh installers record managed mode for npm, pnpm, Yarn, and Bun after the user enables environment management.
 
-When an upgrade adds a package-manager shim that has no recorded mode, its first interactive invocation asks what to do only when the corresponding system binary is already on PATH. The current family defaults to managed mode; choosing a system tool or applying a choice to every family remains explicit. Non-interactive invocations use managed mode without recording a choice.
+Use `vp env off` to disable managed mode for Node.js and package managers. See [Environment Modes](#environment-modes) below for details and how to switch to system tools.
 
 Most commands operate on both components when no selector is given. Add `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the command. `pm` means all four families for listing and cleanup, but the single selected package manager for project operations.
 
@@ -19,16 +28,18 @@ vp env pin node@24 pnpm@12      # Both components
 vp env pin 22.0.0 pnpm@10.18.0  # Also both components
 ```
 
-Vite+ checks the current directory first, then walks up through its parents. The nearest directory
-with a supported declaration wins. Within each directory, sources are checked in this order:
+Use `vp env pin` to save a project's versions, `vp env default` to set fallback versions, and `vp env use` to override versions for the current shell. Run `vp env current` to see the resolved environment.
+
+## Node.js Selection
+
+To select the project's Node.js version, Vite+ checks the current directory first, then walks up through its parents. The nearest directory with a supported declaration wins. Within each directory, sources are checked in this order:
 
 1. `.node-version` file
 2. `devEngines.runtime` in `package.json` (the [devEngines standard](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines))
 3. `engines.node` in `package.json`
 4. `.nvmrc` file
 
-If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the
-latest LTS.
+If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the latest LTS.
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
@@ -43,6 +54,8 @@ pnpm config set --global runtimeOnFail ignore
 
 This setting also disables pnpm's automatic management of other declared runtimes, including Bun and Deno. Consider whether any of your projects rely on that behavior before setting it globally.
 :::
+
+## Package-Manager Selection
 
 Package-manager selection uses this priority:
 
@@ -76,16 +89,17 @@ VP_PNPM_VERSION=10.20.0 pnpm --version
 
 The overrides apply in managed mode. A package manager can also perform its own version switching after Vite+ launches it; for example, pnpm's `managePackageManagerVersions` setting may switch back to the version in `package.json`.
 
-A project selection applies only to its matching shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The resolved version is cached for one hour and an expired cache remains available when the registry cannot be reached. The directly invoked npm shim keeps its Node-bundled fallback, while an explicit `vp env ... npm` family scope uses standalone npm's latest release.
+A project selection applies only to its matching shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The directly invoked npm shim keeps its Node-bundled fallback, while an explicit `vp env ... npm` family scope uses standalone npm's latest release.
 
-A fresh install uses the split platform layout by default. On Unix, Vite+
-stores managed runtimes and related files in `~/.local/share/vite-plus`. It
-stores executables in the Vite+-owned `~/.local/share/vite-plus/bin` directory.
-On Windows, Vite+ uses `%LOCALAPPDATA%\vite-plus\data` for data and
-`%LOCALAPPDATA%\vite-plus\bin` for executables. Vite+ does not move an existing
-`~/.vite-plus` install. `VP_HOME` puts all categories under one custom root.
+::: details Latest-version caching
+When a named shim falls back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached.
+:::
 
-If you want to keep that behavior, run:
+## Environment Modes
+
+Managed mode is on by default, so Node.js and configured package-manager shims resolve through Vite+ and pick the right versions for the current project. Fresh installers record managed mode for npm, pnpm, Yarn, and Bun after the user enables environment management.
+
+To enable managed mode, run:
 
 ```bash
 vp env on
@@ -124,8 +138,7 @@ PowerShell needs to dot-source the generated setup script in the current shell b
 . "$env:APPDATA\vite-plus\env.ps1"
 ```
 
-If an older Vite+ install uses `%USERPROFILE%\.vite-plus`, source the `env.ps1`
-file in that directory instead.
+If an older Vite+ install uses `%USERPROFILE%\.vite-plus`, source the `env.ps1` file in that directory instead.
 
 Add that line to the end of your PowerShell `$PROFILE` to apply it automatically in new shells. It does not require elevated privileges.
 
@@ -151,10 +164,7 @@ vp-use --unset
 
 Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` in the bin directory on Windows.
 
-In CI, `vp env use` can run without shell initialization. It writes a temporary
-session file per runtime or package manager in the resolved state directory,
-such as `.session-node-version` or `.session-pnpm-version`. Later
-shim calls in the same job use these files to resolve the same environment.
+In CI, `vp env use` can run without shell initialization. It writes a temporary session file per runtime or package manager in the resolved state directory, such as `.session-node-version` or `.session-pnpm-version`. Later shim calls in the same job use these files to resolve the same environment.
 
 ### Manage
 

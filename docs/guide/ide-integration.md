@@ -120,8 +120,7 @@ For the best Vite+ experience with JetBrains IDEs such as IntelliJ & WebStorm, i
 When you create or migrate a project, Vite+ prompts you to choose whether you want the editor config written for JetBrains IDEs.
 
 ::: tip Vite+ does not merge with existing config files
-Due to some complexities with merging XML files, Vite+ currently does not merge your current files if the files already exist.
-You'll be given the opportunity to replace any existing files, instead of merging.
+Due to some complexities with merging XML files, Vite+ currently does not merge your current files if the files already exist. You'll be given the opportunity to replace any existing files, instead of merging.
 :::
 
 You can also manually set up the IDE configuration to match your Vite+ setup:

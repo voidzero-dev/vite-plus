@@ -1,0 +1,108 @@
+name: Build Docs Fork Preview
+
+# Maintainers: review the current fork commit, then apply docs-preview.
+# New commits do not rebuild automatically; remove and reapply the label.
+# This PR-controlled gate saves build work. It is not a security boundary:
+# the trusted deploy workflow requires environment approval for each build.
+# This follows publish-preview.yml; only static artifacts cross to deployment.
+permissions: {}
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - 'docs/**'
+      - 'packages/cli/install.sh'
+      - 'packages/cli/install.ps1'
+      - 'packages/cli/install-legacy.sh'
+      - 'packages/cli/install-legacy.ps1'
+      - '.github/workflows/build-docs-fork-preview.yml'
+      - '.github/workflows/deploy-docs-fork-preview.yml'
+      - '.github/scripts/docs-fork-preview.mjs'
+      - '.github/scripts/__tests__/docs-fork-preview.mjs'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: Test docs preview helpers
+    # Keep helper checks automatic for same-repository PRs. Fork code runs
+    # only when a maintainer explicitly requests a docs preview.
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      (
+        github.event.pull_request.head.repo.full_name == github.repository ||
+        (github.event.action == 'labeled' && github.event.label.name == 'docs-preview')
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check fork preview requester
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo,
+              username: context.actor,
+            });
+            if (!['admin', 'maintain', 'write'].includes(data.permission)) {
+              core.setFailed('A maintainer with write permission must request the docs preview.');
+            }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: node --test .github/scripts/__tests__/docs-fork-preview.mjs
+
+  build:
+    name: Build fork docs
+    needs: test
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'docs-preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A delayed old run must not cancel a build for a newer approved commit.
+    concurrency:
+      group: build-docs-fork-preview-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Build the same commit that workflow_run.head_sha identifies.
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.20.0
+        with:
+          working-directory: docs
+          cache: false
+
+      - name: Build static docs
+        run: vp run build:cloudflare
+        working-directory: docs
+        env:
+          # Use the PR's stable alias for absolute links and piped installers.
+          # Keep this origin aligned with previewUrl in docs-fork-preview.mjs.
+          DOCS_SITE_ORIGIN: https://pr-${{ github.event.pull_request.number }}-viteplus-dev.voidzero-docs.workers.dev
+
+      # This job has no deployment secrets or write token. Its artifact is
+      # untrusted static content, never executable input to the deploy job.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs-fork-preview-${{ github.run_attempt }}
+          path: docs/.vitepress/dist
+          if-no-files-found: error
+          retention-days: 7

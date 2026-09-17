@@ -337,7 +337,8 @@ function Invoke-LegacyInstaller {
         . $legacyScript -BinarySource $BinarySource -ResolvedVersion $ViteVersion -PreviewRef $PrVersion
     } else {
         $response = Invoke-WebRequest -Uri $LegacyInstallerUrl -UseBasicParsing
-        . ([scriptblock]::Create($response.Content)) -BinarySource $BinarySource -ResolvedVersion $ViteVersion -PreviewRef $PrVersion
+        $content = if ($response.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($response.Content) } else { $response.Content }
+        . ([scriptblock]::Create($content)) -BinarySource $BinarySource -ResolvedVersion $ViteVersion -PreviewRef $PrVersion
     }
     # A child script's exit only returns to this bootstrap, so forward its failure.
     if ($LASTEXITCODE -ne 0) {

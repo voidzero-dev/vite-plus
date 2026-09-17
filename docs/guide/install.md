@@ -1,6 +1,6 @@
-# Installing Dependencies
+# Package Management
 
-`vp install` installs dependencies using the current workspace's package manager.
+`vp` detects and runs the current workspace's package manager. These commands are available from both the [global CLI](/guide/global-cli) and the [project-local CLI](/guide/local-cli).
 
 ## Overview
 
@@ -21,8 +21,6 @@ Vite+ detects the package manager from the workspace root in this order:
 
 If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran, but package-manager detection never rewrites `package.json`. Use `vp env pin <package-manager>@<version>` when the project should declare an exact version explicitly.
 
-After selecting the package manager, Vite+ forwards the command without separately validating whether `package.json` exists. Missing-manifest behavior therefore matches the selected package manager.
-
 The [`devEngines.packageManager`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines) field accepts a single object or an array of objects, and its `version` may be a semver range:
 
 ```json
@@ -40,13 +38,6 @@ The [`devEngines.packageManager`](https://docs.npmjs.com/cli/v11/configuring-npm
 A range resolves to an already-downloaded satisfying version when possible, otherwise to the latest satisfying version from the npm registry. The range itself stays the source of truth; Vite+ never freezes it into an exact `packageManager` pin. When both `packageManager` and `devEngines.packageManager` are declared, the `packageManager` field drives selection and Vite+ warns when it does not satisfy the devEngines constraint (`vp env doctor` shows details).
 
 Vite+ currently downloads the declared package manager (the `onFail: "download"` behavior); the other `onFail` values are accepted but not yet differentiated.
-
-A `packageManager` pin can carry an integrity hash (`yarn@4.17.1+sha512.…`). `corepack use` writes that hash. Vite+ hashes the same artifact as Corepack:
-
-- the extracted CLI binary (`bin/yarn.js`) for Yarn 2 and later
-- the npm package tarball for npm, pnpm, and Yarn Classic
-
-Vite+ hashes the CLI once, when it installs Yarn, and records the pin it verified. A later command compares its own pin against that record. A pin that does not match the record fails the check, and the command stops. Corepack keeps the same kind of record for its own cache.
 
 The explicit `packageManager` field (or the `devEngines.packageManager` declaration) also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
 
@@ -83,8 +74,7 @@ Updates keep the version spec a package was installed with: a package installed 
 ::: warning
 These commands do **NOT** interact with the underlying package manager's global installation directory.
 
-Instead, Vite+ stores its global packages in `packages/` under the resolved data
-directory. These packages remain available across different Node.js versions.
+Instead, Vite+ stores its global packages in `packages/` under the resolved data directory. These packages remain available across different Node.js versions.
 
 As a result, commands such as `vp link` do not affect Vite+'s global packages and will not appear in `vp list -g`.
 :::
@@ -121,6 +111,10 @@ Use `vp install` when you want to install exactly what the current `package.json
 - `vp install --ignore-scripts` skips lifecycle scripts
 - `vp install --filter <pattern>` scopes install work in monorepos
 - `vp install -w` installs in the workspace root
+
+##### Git and remote tarball dependencies (npm v12+)
+
+npm v12 stops resolving git dependencies (`github:`, `git+https:`) and remote tarball URLs by default; such installs fail with `EALLOWGIT` / `EALLOWREMOTE`. Opt back in per project with npm's `allow-git` / `allow-remote` config.
 
 #### Global Install
 
@@ -160,10 +154,7 @@ Use these when you need to understand the current state of dependencies.
 - `vp why react` explains why `react` is installed
 - `vp info react` shows registry metadata such as versions and dist-tags
 
-These commands show the packages that the package manager installed. They do
-not show tools that Vite+ bundles or compiles. Run `vp toolchain [tool]` to show
-these tools, including Vite, Rolldown, and Oxc. For readable output, `vp why`
-shows a hint when Vite+ also provides the package.
+These commands show the packages that the package manager installed. They do not show tools that Vite+ bundles or compiles. Run `vp toolchain [tool]` to show these tools, including Vite, Rolldown, and Oxc. For readable output, `vp why` shows a hint when Vite+ also provides the package.
 
 #### Rebuild
 
@@ -193,8 +184,6 @@ npm v12 skips dependency install scripts (`preinstall` / `install` / `postinstal
 - `vp pm approve-builds` lists the packages whose scripts are not yet covered
 
 Approval only records the allowlist: scripts an earlier install skipped do not run until you run `vp rebuild <pkg>`. With npm 11.16 - 11.x the same commands work, but npm treats the allowlist as advisory and still runs scripts.
-
-npm v12 also stops resolving git dependencies (`github:`, `git+https:`) and remote tarball URLs by default; such installs fail with `EALLOWGIT` / `EALLOWREMOTE`. Opt back in per project with npm's `allow-git` / `allow-remote` config.
 
 #### Advanced
 
@@ -228,3 +217,12 @@ vp pm stage reject <stage-id>    # discard a staged version (2FA)
 - pnpm (`pnpm stage`, requires pnpm ≥ 11.3) and npm (`npm stage`, requires npm ≥ 11.15 and Node ≥ 22.14) pass through directly.
 - yarn (Berry) uses its npm plugin (`yarn npm publish --staged`, `yarn npm stage …`); `view`/`download` fall back to npm.
 - yarn Classic and bun have no staged-publishing support and fall back to `npm stage`.
+
+## Package-Manager Integrity Verification
+
+A `packageManager` pin can carry an integrity hash (`yarn@4.17.1+sha512.…`). `corepack use` writes that hash. Vite+ hashes the same artifact as Corepack:
+
+- the extracted CLI binary (`bin/yarn.js`) for Yarn 2 and later
+- the npm package tarball for npm, pnpm, and Yarn Classic
+
+Vite+ hashes the CLI once, when it installs Yarn, and records the pin it verified. A later command compares its own pin against that record. A pin that does not match the record fails the check, and the command stops. Corepack keeps the same kind of record for its own cache.

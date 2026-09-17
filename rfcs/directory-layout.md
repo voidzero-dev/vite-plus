@@ -86,7 +86,7 @@ platform conventions:
 | `data`   | CLI versions, managed runtimes, package managers (`<DATA>/current`, `<DATA>/js_runtime`, `<DATA>/package_manager`, `<DATA>/packages`, `<DATA>/bins`) |
 | `cache`  | Disposable caches (`resolve_cache.json`, `.upgrade-check.json`, create-org tarballs)                                                                 |
 | `config` | User configuration (`<CONFIG>/env*`, `<CONFIG>/config.json`)                                                                                         |
-| `state`  | State files (session version)                                                                                                                        |
+| `state`  | State files (session version, external-install setup receipts under `<STATE>/self-setup`)                                                            |
 
 #### `<BIN>` ownership invariant
 
@@ -230,9 +230,10 @@ Each category checks the following sources in order. A source can provide a path
 or provide no value. The first path wins.
 
 `~/.vite-plus` is the only source that checks file-system state. It provides a
-path only when the directory contains a `current` link. Each global install
-creates this link. The check runs once during resolution and does not follow the
-link. The installers use the same check.
+path only when the directory contains a `current` link. A Vite+-managed CLI
+install creates this link; an external install with a bundled CLI does not.
+The check runs once during resolution and does not follow the link. The
+installers use the same check.
 
 Directory existence alone is not sufficient. A local pre-split Vite+ dependency
 can create `~/.vite-plus` for caches, config, and managed runtimes. This source
@@ -351,9 +352,65 @@ The installers write environment scripts under **config**. The split layout
 uses `~/.config/vite-plus/env*`, and the monolithic layout uses the install root.
 `PATH` entries point to the resolved **bin** directory.
 
-External installers and integrations must get resolved paths from the Vite+
-binary through `VP_DUMP_DIRS`. They must not construct `<BIN>` from `$HOME`, XDG
-variables, or platform rules.
+Integrations that need Vite+-managed paths must get them from the binary through
+`VP_DUMP_DIRS`. They must not construct `<BIN>` from `$HOME`, XDG variables, or
+platform rules. An external package manager can keep its own installation
+prefix and leave the Vite+ directory variables unset.
+
+#### First-run setup for external binaries
+
+Managed installations record completed setup in
+`<DATA>/<version>/bin/.vp-setup-complete`. A marker beside the running binary
+continues to skip setup. Without that marker, a binary outside the resolved
+`<DATA>` uses a per-user receipt under `<STATE>/self-setup/<source-hash>.json`.
+The source hash identifies the executable path. The receipt records that path,
+the CLI version, the file modification time and size, and the deployed binary.
+
+On Unix, setup reuses an external installation when its prefix contains both
+`node_modules/vite-plus/package.json` and `node_modules/vite-plus/dist/bin.js`
+beside the `bin` directory. This includes the Homebrew layout. Setup configures
+the user's shell, preferences, and shims without copying the CLI, installing
+its dependencies, changing `current`, or writing a marker in the external
+prefix. Later launches with a matching receipt use the external CLI directly.
+
+The Homebrew `INSTALL_RECEIPT.json` beside the resolved binary's `bin` directory
+identifies Homebrew ownership. `vp upgrade` rejects changes to these installations
+and directs users to `brew upgrade vite-plus`. Its `--check` option directs users
+to `brew outdated vite-plus`. Automatic npm update checks and notices are disabled.
+This check does not depend on the Homebrew prefix or `brew` being on `PATH`.
+`vp env doctor` reports Homebrew ownership and the resolved CLI binary. It checks
+the public `vp` command and the user's shim directory on `PATH` separately.
+`vp implode` still removes Vite+-managed data and shell entries. Its confirmation
+distinguishes this cleanup from removal of the Homebrew package. After cleanup,
+it directs users to `brew uninstall vite-plus`. It also explains how to clear
+cached shell command paths before another `vp` invocation starts setup again.
+
+Unix shims use a public `vp` entrypoint that resolves to the same binary when
+one is available through `PATH`, the explicit invocation, or existing shims.
+They retain that path instead of resolving it to a versioned package directory.
+Aliases through the user's shim directory are excluded to prevent link cycles.
+Thus, a package-manager upgrade can replace and remove the old prefix without
+breaking saved shim paths. JavaScript resolution still uses the real binary's
+prefix. With no public entrypoint, shims target the external binary directly.
+
+An external binary without this bundled CLI installs a managed copy under
+`<DATA>`. Later launches use the receipt to execute that copy. The copy must
+still have its completion marker. Windows uses this managed layout even when
+the external prefix contains JavaScript, because its trampolines require it.
+
+Setup writes a receipt only after it succeeds. A changed source, a missing
+target, a missing managed marker, or an invalid receipt causes setup to retry.
+For bundled installations with an existing user configuration, this retry
+preserves management preferences without prompting. Explicit management
+variables can still change the preferences during setup.
+When a failed attempt leaves a read-only binary copy, the retry replaces that
+copy atomically. It does not open the old copy for writing.
+
+Explicit installer requests through `VP_SELF_SETUP_SHELL` or
+`VP_SELF_SETUP_REPLACE_EXISTING` bypass external receipts, so same-version
+reinstalls still run setup. Managed markers and the `env setup --refresh`
+upgrade handoff remain unchanged. Older upgrade and rollback targets continue
+to use that command without needing to understand receipts.
 
 #### Node-manager shim ownership
 

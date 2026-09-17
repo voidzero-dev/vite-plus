@@ -12,9 +12,10 @@ allowed-tools: Read, Grep, Glob, Edit, Bash
    package name and its old exact version. Do not treat changelogs, RFC examples,
    snapshots, or broad ranges such as `vitest@4.x` as current-version references.
 3. Update references that promise to match Vite+'s currently bundled version. In
-   particular, keep every exact Vitest pin in the manual-migration examples in sync,
-   including `docs/guide/migrate.md`, `README.md`, and `packages/cli/README.md` when
-   those examples are present.
+   particular, keep every exact Vitest pin in the manual-installation examples in
+   `docs/guide/local-cli.md`, `README.md`, and `packages/cli/README.md` in sync.
+   Project-local upgrade guidance lives in `docs/guide/upgrade-project.md`;
+   `docs/guide/upgrade.md` covers global CLI upgrades.
 4. Preserve the surrounding wording and formatting. Do not rewrite examples whose
    version is intentionally historical or illustrative.
 5. Re-run the searches for the changed packages and inspect the focused diff. No

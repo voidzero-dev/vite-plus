@@ -96,14 +96,8 @@ export default defineConfig({
 
 For rule tests, `RuleTester` is available from `vite-plus/lint/plugins-dev`.
 
-Both entrypoints re-export the copy that ships with Vite+. The API therefore
-always matches the bundled Oxlint.
+Both entrypoints re-export the copy that ships with Vite+. The API therefore always matches the bundled Oxlint.
 
-Use them instead of adding `@oxlint/plugins` or `oxlint` as a direct
-dependency. A separately pinned copy can drift from the linter that loads your
-plugin. It also does not resolve from a plugin file under pnpm's strict layout,
-unless every package that holds a plugin declares it.
+Use them instead of adding `@oxlint/plugins` or `oxlint` as a direct dependency. A separately pinned copy can drift from the linter that loads your plugin. It also does not resolve from a plugin file under pnpm's strict layout, unless every package that holds a plugin declares it.
 
-`vp migrate` rewrites existing `oxlint` and `@oxlint/plugins` imports for you.
-See [Oxlint JS Plugin Imports](/guide/migrate-rules#oxlint-js-plugin-imports).
-The `vite-plus/prefer-vite-plus-imports` rule reports any that come back.
+`vp migrate` rewrites existing `oxlint` and `@oxlint/plugins` imports for you. See [Oxlint JS Plugin Imports](/guide/migrate-rules#oxlint-js-plugin-imports). The `vite-plus/prefer-vite-plus-imports` rule reports any that come back.
