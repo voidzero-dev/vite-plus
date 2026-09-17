@@ -65,37 +65,23 @@ impl SubcommandResolver {
     pub(super) async fn resolve(
         &self,
         subcommand: SynthesizableSubcommand,
-        resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
         envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
         cwd: &AbsolutePath,
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
-            SynthesizableSubcommand::Lint { mut args } => {
+            SynthesizableSubcommand::Lint { args } => {
                 let cli_options = self.cli_options()?;
                 let resolved = (cli_options.lint)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
-                let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
-                } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
-                };
-
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.lint, &resolved_vite_config.config_file)
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
-                }
-
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"))
                         .chain(iter::once(Str::from(js_path_str)))
+                        // Auto-discover the config, but keep per-file nested configs disabled.
+                        .chain(iter::once(Str::from("--disable-nested-config")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
@@ -107,31 +93,17 @@ impl SubcommandResolver {
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
-            SynthesizableSubcommand::Fmt { mut args } => {
+            SynthesizableSubcommand::Fmt { args } => {
                 let cli_options = self.cli_options()?;
                 let resolved = (cli_options.fmt)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
-                let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
-                } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
-                };
-
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
-                }
-
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from(js_path_str))
+                        .chain(iter::once(Str::from("--disable-nested-config")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
@@ -362,13 +334,9 @@ mod tests {
         })
     }
 
-    #[tokio::test]
-    async fn builtins_reuse_the_calling_node_runtime() {
-        let temp = tempfile::tempdir().unwrap();
-        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let runtime: Arc<OsStr> = Arc::from(cwd.join("custom runtime").as_path().as_os_str());
-        let resolver = SubcommandResolver::new(cwd.clone().into()).with_cli_options(CliOptions {
-            node_exec_path: Arc::clone(&runtime),
+    fn cli_options(runtime: Arc<OsStr>) -> CliOptions {
+        CliOptions {
+            node_exec_path: runtime,
             lint: tool_resolver(),
             fmt: tool_resolver(),
             vite: tool_resolver(),
@@ -377,8 +345,19 @@ mod tests {
             doc: tool_resolver(),
             toolchain_manifest_path: String::new(),
             vite_plus_package_path: String::new(),
-            resolve_universal_vite_config: Arc::new(|_| Box::pin(async { Ok("{}".to_string()) })),
-        });
+            resolve_universal_vite_config: Arc::new(|_| {
+                Box::pin(async { anyhow::bail!("built-in tools must load their own config") })
+            }),
+        }
+    }
+
+    #[tokio::test]
+    async fn builtins_reuse_the_calling_node_runtime() {
+        let temp = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let runtime: Arc<OsStr> = Arc::from(cwd.join("custom runtime").as_path().as_os_str());
+        let resolver = SubcommandResolver::new(cwd.clone().into())
+            .with_cli_options(cli_options(Arc::clone(&runtime)));
         let envs = Arc::new(FxHashMap::default());
         for command in [
             SynthesizableSubcommand::Lint { args: vec![] },
@@ -390,8 +369,42 @@ mod tests {
             SynthesizableSubcommand::Preview { args: vec![] },
             SynthesizableSubcommand::Doc { args: vec![] },
         ] {
-            let resolved = resolver.resolve(command, None, &envs, &cwd).await.unwrap();
+            let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
             assert_eq!(resolved.program, runtime);
+        }
+    }
+
+    #[tokio::test]
+    async fn lint_and_fmt_preserve_args_without_loading_config() {
+        let temp = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let resolver = SubcommandResolver::new(cwd.clone().into())
+            .with_cli_options(cli_options(Arc::from(OsStr::new("node"))));
+        let envs = Arc::new(FxHashMap::default());
+
+        for args in [
+            vec!["src".to_string()],
+            vec!["-c".to_string(), "custom.json".to_string(), "src".to_string()],
+            vec!["--config".to_string(), "custom.json".to_string(), "src".to_string()],
+            vec!["--config=custom.json".to_string(), "src".to_string()],
+        ] {
+            for command in [
+                SynthesizableSubcommand::Lint { args: args.clone() },
+                SynthesizableSubcommand::Fmt { args: args.clone() },
+            ] {
+                let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
+                let forwarded_args: Vec<&str> = resolved
+                    .args
+                    .iter()
+                    .skip_while(|arg| arg.as_str() != "tool.js")
+                    .skip(1)
+                    .map(|arg| arg.as_str())
+                    .collect();
+                let expected_args: Vec<&str> = iter::once("--disable-nested-config")
+                    .chain(args.iter().map(String::as_str))
+                    .collect();
+                assert_eq!(forwarded_args, expected_args);
+            }
         }
     }
 }

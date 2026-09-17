@@ -1,0 +1,5 @@
+{
+  "name": "oxc-config-auto-discovery",
+  "private": true,
+  "type": "module"
+}
