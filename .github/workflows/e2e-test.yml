@@ -358,6 +358,13 @@ jobs:
               vp run test:types
               vp test --project nuxt
               vp test --project unit
+          - name: codiff
+            node-version: 24
+            timeout: 20
+            command: |
+              vp run build
+              # The separate Workers integration suite still requires Vitest 4.
+              vp test run
           - name: vite-plus-jest-dom-repro
             node-version: 24
             command: |
@@ -452,6 +459,10 @@ jobs:
           - os: namespace-profile-windows-4c-8g
             project:
               name: varlet
+          # Codiff's upstream test job is Ubuntu-only and needs native-keymap system libraries.
+          - os: namespace-profile-windows-4c-8g
+            project:
+              name: codiff
           # tiptap upstream CI is ubuntu-only
           - os: namespace-profile-windows-4c-8g
             project:
@@ -480,6 +491,12 @@ jobs:
         with:
           name: vite-plus-packages-${{ matrix.os }}
           path: tmp/tgz
+
+      - name: Install Codiff native-keymap dependencies
+        if: matrix.project.name == 'codiff'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libx11-dev libxkbfile-dev
 
       - name: Install vp CLI
         shell: bash
