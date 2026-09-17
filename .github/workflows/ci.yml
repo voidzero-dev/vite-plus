@@ -1104,7 +1104,7 @@ jobs:
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
       # which Yarn Classic discovers when walking parent directories.
-      - name: Create NTFS snapshot temp directory
+      - name: Create NTFS temp directory for case-sensitive shim snapshots
         id: snapshot-temp
         shell: pwsh
         run: |
@@ -1132,13 +1132,20 @@ jobs:
           export VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v pwsh.exe)")"
           # --no-fail-fast: on a snapshot suite every diff is diagnostic
           # signal; cancelling on the first failure hides the rest.
-          cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast --partition hash:${{ matrix.shard }}/3
+          test_exit=0
+          cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast --partition hash:${{ matrix.shard }}/3 \
+            -E 'not test(windows_case_sensitive_shims)' || test_exit=$?
+
+          # Only this fixture needs NTFS and case-sensitive directory support.
+          # Rust's GetTempPath2 ignores TEMP/TMP under the SYSTEM account.
+          # C:\Windows\SystemTemp rejects the case-sensitive flag on these hosts.
+          # A shard with neither flavor of this fixture has no tests to run.
+          SystemTemp='${{ steps.snapshot-temp.outputs.directory }}' \
+            cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast --partition hash:${{ matrix.shard }}/3 \
+              -E 'test(windows_case_sensitive_shims)' --no-tests=pass || test_exit=$?
+          exit "$test_exit"
         env:
           RUST_BACKTRACE: '1'
-          # Rust's GetTempPath2 ignores TEMP/TMP under the SYSTEM account.
-          # Use the runner's NTFS workspace volume: C:\Windows\SystemTemp
-          # rejects the case-sensitive directory flag on these hosts.
-          SystemTemp: ${{ steps.snapshot-temp.outputs.directory }}
           # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
 
