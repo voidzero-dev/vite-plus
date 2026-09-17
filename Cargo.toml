@@ -400,10 +400,10 @@ rolldown_watcher = { path = "./rolldown/crates/rolldown_watcher" }
 rolldown_workspace = { path = "./rolldown/crates/rolldown_workspace" }
 string_wizard = { path = "./rolldown/crates/string_wizard", features = ["serde"] }
 
-[patch.crates-io]
+# [patch.crates-io]
 # Resolve Windows shims in case-sensitive directories for all which callers.
 # Remove this patch after https://github.com/harryfei/which-rs/pull/131 is released.
-which = { git = "https://github.com/fengmk2/which-rs.git", rev = "4f6f1b81b23f2887409bf838f4369690f9c2e336" }
+# which = { git = "https://github.com/fengmk2/which-rs.git", rev = "4f6f1b81b23f2887409bf838f4369690f9c2e336" }
 
 # =============================================================================
 # Local Development Patches
