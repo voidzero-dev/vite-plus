@@ -125,11 +125,12 @@ cache_root="${XDG_CACHE_HOME:-$original_home/.cache}"
 pr_home="${VP_PKG_PR_NEW_HOME:-$cache_root/vite-plus/pkg-pr-new/$pr_ref}"
 installer_home="$(mktemp -d "${TMPDIR:-/tmp}/vite-plus-pr-installer.XXXXXX")"
 
-cached_version_dir="$pr_home/pkg-pr-new-$resolved_ref"
 vp_bin="$pr_home/bin/vp"
 vite_plus_package_json="$pr_home/current/node_modules/vite-plus/package.json"
 global_cli_entry="$pr_home/current/node_modules/vite-plus/dist/bin.js"
-commit_marker="$cached_version_dir/.pkg-pr-new-commit"
+# Follow the installer's active directory: native setup uses the commit version,
+# while the legacy installer uses pkg-pr-new-<sha>.
+commit_marker="$pr_home/current/.pkg-pr-new-commit"
 
 read_installed_commit() {
   if [ -f "$commit_marker" ]; then
@@ -139,7 +140,8 @@ read_installed_commit() {
 
   if [ -f "$vite_plus_package_json" ]; then
     awk -F '"' '
-      $2 == "@voidzero-dev/vite-plus-core" {
+      $2 == "@voidzero-dev/vite-plus-core" ||
+        ($2 == "vite" && $4 ~ /^npm:@voidzero-dev\/vite-plus-core@/) {
         value = $4
         sub(/^.*@/, "", value)               # pkg.pr.new URL form: keep trailing sha
         sub(/^0\.0\.0-commit\./, "", value)  # registry bridge version form: keep sha
@@ -153,9 +155,13 @@ read_installed_commit() {
 installed_commit="$(read_installed_commit || true)"
 current_target="$(readlink "$pr_home/current" 2>/dev/null || true)"
 reuse_install=0
+current_target_matches=0
+case "$current_target" in
+  "$commit_version" | "$commit_version"+force.* | "pkg-pr-new-$resolved_ref") current_target_matches=1 ;;
+esac
 
 if [ "$installed_commit" = "$resolved_ref" ] &&
-  [ "$current_target" = "pkg-pr-new-$resolved_ref" ] &&
+  [ "$current_target_matches" -eq 1 ] &&
   [ -x "$vp_bin" ] &&
   [ -f "$vite_plus_package_json" ] &&
   [ -f "$global_cli_entry" ]; then
@@ -168,7 +174,6 @@ cleanup() {
 trap cleanup EXIT
 
 if [ "$reuse_install" -eq 1 ]; then
-  printf '%s\n' "$resolved_ref" > "$commit_marker"
   echo "Reusing installed Vite+ pkg.pr.new build $resolved_ref (requested $pr_ref) from $pr_home"
 else
   if [ -n "$installed_commit" ] && [ "$installed_commit" != "$resolved_ref" ]; then
@@ -200,7 +205,6 @@ else
   if [ -n "$previous_target" ]; then
     rm -rf "$pr_home/$previous_target"
   fi
-  printf '%s\n' "$resolved_ref" > "$commit_marker"
 fi
 
 if [ ! -x "$vp_bin" ]; then
@@ -217,6 +221,8 @@ if [ ! -f "$global_cli_entry" ]; then
   echo "error: installed Vite+ CLI entry not found: $global_cli_entry" >&2
   exit 1
 fi
+
+printf '%s\n' "$resolved_ref" > "$commit_marker"
 
 vitest_version="$(awk -F '"' '$2 == "vitest" { print $4; exit }' "$vite_plus_package_json")"
 if [ -z "$vitest_version" ]; then
