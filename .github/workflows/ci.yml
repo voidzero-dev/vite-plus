@@ -1339,6 +1339,10 @@ jobs:
 
   install-e2e-test-sfw:
     name: Local CLI `vp install` E2E test (Socket Firewall Free)
+    env:
+      # Includes nodejs/node#61999 (first backported in Node 24.20.0).
+      # Override vp's project pins; sfw's embedded Node runtime is separate.
+      VP_NODE_VERSION: '24.21.0'
     needs:
       - download-previous-rolldown-binaries
       - build-windows-cli
@@ -1421,6 +1425,10 @@ jobs:
             echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
           fi
 
+      - name: Prepare Node.js for SFW tests
+        # Download the selected runtime before entering sfw's proxy.
+        run: vp env exec node --version
+
       - name: Download sfw
         run: |
           set -euo pipefail
@@ -1454,6 +1462,7 @@ jobs:
           VP_INSECURE_TLS: ${{ matrix.vp_insecure_tls }}
         run: |
           set -euo pipefail
+          sfw "${{ matrix.vp_bin }}" env exec node --version
           # Force the registry-fetch path: install a pinned pnpm globally so
           # vp downloads it (and therefore traverses sfw) rather than reusing
           # whatever's preinstalled on the runner.
