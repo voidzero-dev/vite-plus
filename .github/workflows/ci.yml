@@ -1347,7 +1347,7 @@ jobs:
       - download-previous-rolldown-binaries
       - build-windows-cli
     # Run if: not a PR (push-to-main / workflow_dispatch), OR PR has 'test: sfw' label.
-    # Heavy job (3 OSes × real registry traffic) — gated to avoid running on every PR.
+    # Heavy job (real registry traffic) — gated to avoid running on every PR.
     if: >-
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'test: sfw')
@@ -1371,13 +1371,16 @@ jobs:
             sfw_asset: sfw-free-macos-arm64
             vp_bin: vp
             vp_insecure_tls: ''
-          - os: namespace-profile-windows-4c-8g
-            target: x86_64-pc-windows-msvc
-            sfw_asset: sfw-free-windows-x86_64.exe
-            # On Windows vp ships as `vp.exe`; sfw spawns its child process
-            # directly without applying PATHEXT, so the bare `vp` lookup fails.
-            vp_bin: vp.exe
-            vp_insecure_tls: ''
+          # TODO: Re-enable Windows when SFW's embedded Node includes
+          # https://github.com/nodejs/node/pull/61999 (Node 24.20.0 / 26.7.0).
+          # SFW 1.15.2 embeds Node 24.9.0 and hits UV_HANDLE_CLOSING at shutdown.
+          # VP_NODE_VERSION only changes the child runtime, not SFW's runtime.
+          # - os: namespace-profile-windows-4c-8g
+          #   target: x86_64-pc-windows-msvc
+          #   sfw_asset: sfw-free-windows-x86_64.exe
+          #   # SFW spawns directly without PATHEXT, so use vp.exe on Windows.
+          #   vp_bin: vp.exe
+          #   vp_insecure_tls: ''
     runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
