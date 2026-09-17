@@ -9397,8 +9397,7 @@ dependencies = [
 [[package]]
 name = "which"
 version = "8.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bae2f2b2b816647a1cab1acc91f5bd20812d53cb344382635ec2181940c8034f"
+source = "git+https://github.com/fengmk2/which-rs.git?rev=4f6f1b81b23f2887409bf838f4369690f9c2e336#4f6f1b81b23f2887409bf838f4369690f9c2e336"
 dependencies = [
  "libc",
  "tracing",
