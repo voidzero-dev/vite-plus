@@ -1,0 +1,13 @@
+[[case]]
+name = "workspace_test_api_identity"
+vp = "global"
+local-registry = true
+comment = "Workspace test imports must use the active Vitest runner, even when pnpm installs separate root and child peer instances."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false, timeout = 180000 },
+  { argv = ["node", "verify.mjs"], timeout = 120000 },
+  { argv = ["vp", "test", "run"], timeout = 120000 },
+  { argv = ["vp", "test", "run"], envs = [["IDENTITY_MODE", "shared"]], timeout = 120000 },
+  { argv = ["vp", "test", "run"], envs = [["IDENTITY_MODE", "separate"]], timeout = 120000 },
+  { argv = ["vp", "test", "run"], cwd = "packages/child", timeout = 120000 },
+]

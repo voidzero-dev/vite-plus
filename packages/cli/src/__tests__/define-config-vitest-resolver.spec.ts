@@ -286,6 +286,50 @@ function makeCtx(resolveFor: (call: ResolveCall) => ResolveResult): {
   return { ctx, calls };
 }
 
+describe('workspace test API identity', () => {
+  function resolver(command: 'serve' | 'build', vitestServer: boolean): ResolveId {
+    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
+    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
+      .handler;
+    hook(vitestServer ? { environments: { __vitest__: {} } } : {}, { command, mode: 'test' });
+    return plugin.resolveId as ResolveId;
+  }
+
+  it('routes the wrapper through Vitest rather than the child package dependency tree', async () => {
+    const resolveId = resolver('serve', true);
+    const runnerApi = '/workspace/root-vitest/dist/index.js';
+    const { ctx, calls } = makeCtx(({ id, fromProject }) =>
+      id === 'vitest' && fromProject ? { id: runnerApi } : null,
+    );
+    expect(idOf(await resolveId.call(ctx, 'vite-plus/test', PROJECT_IMPORTER, {}))).toBe(runnerApi);
+    expect(calls).toEqual([{ id: 'vitest', importer: PROJECT_IMPORTER, fromProject: true }]);
+  });
+
+  it.each([
+    ['serve', false],
+    ['build', false],
+    ['build', true],
+  ] as const)(
+    'does not redirect application imports during %s (Vitest: %s)',
+    async (command, active) => {
+      const resolveId = resolver(command, active);
+      const { ctx, calls } = makeCtx(() => ({ id: '/should/not/be/used' }));
+      expect(await resolveId.call(ctx, 'vite-plus/test', PROJECT_IMPORTER, {})).toBeNull();
+      expect(calls).toEqual([]);
+    },
+  );
+
+  it.each(['vite-plus', 'vite-plus/testing', 'vite-plus/test?raw', 'vite-plus/test/browser'])(
+    'leaves %s on its existing resolution path',
+    async (id) => {
+      const resolveId = resolver('serve', true);
+      const { ctx, calls } = makeCtx(() => ({ id: '/should/not/be/used' }));
+      expect(await resolveId.call(ctx, id, PROJECT_IMPORTER, {})).toBeNull();
+      expect(calls).toEqual([]);
+    },
+  );
+});
+
 describe('vitePlusVitestResolverPlugin resolveId (bundle-first)', () => {
   // The runner `vp test` spawns is the Vitest bundled with vite-plus (see
   // resolve-test.ts). For the run to use a SINGLE physical Vitest, every
