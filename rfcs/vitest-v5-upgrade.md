@@ -109,12 +109,7 @@ Vitest v5 supports Node `^22.12.0 || ^24.0.0 || >=26.0.0` and Vite `^6.4.0 || ^7
 
 Set the published `vite-plus` engine to `^22.18.0 || ^24.11.0 || >=26.0.0`. This removes Node 20 and Node 25 from the CLI package. Do not raise the standalone core package's engine only because of Vitest.
 
-Before the global CLI delegates `vp test` to a local CLI, validate the selected project runtime against the local `vite-plus` engine. On failure, stop before loading Vitest and print an action such as:
-
-```text
-vp test requires Node ^22.18.0 || ^24.11.0 || >=26.0.0.
-This project selects Node 20.19.0. Run `vp env pin 22 --force`, or update the project's runtime range.
-```
+Use the selected project runtime for `vp test` without a separate Node-version check at command startup. Keep the requirements in package metadata and migration checks. Users who select an unsupported Node version may get an upstream error instead of a custom diagnostic.
 
 Limit the migration preflight's Node compatibility checks to `.node-version`, `.nvmrc`, and the `engines.node`, `devEngines.runtime`, and `volta.node` declarations in `package.json`. Exclude Node versions in CI workflows, containers, and other files.
 
@@ -335,7 +330,7 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 
 | Change                                                       | Upgrade risk                                                                                                                                            | Vite+ handling                                                                                                                                  |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node `>=22.12` and Vite `>=6.4`                              | The local CLI can fail before tests start.                                                                                                              | Raise the CLI engine, validate the selected runtime, and keep bundled Vite in range.                                                            |
+| Node `>=22.12` and Vite `>=6.4`                              | The local CLI can fail before tests start.                                                                                                              | Raise the CLI engine, migrate incompatible Node declarations, and keep bundled Vite in range.                                                   |
 | `clearMocks: true` default                                   | Setup-file, top-level, `beforeAll`, and cross-test mock history disappears.                                                                             | Add commented `clearMocks: false` to v4 configs when absent; preserve explicit and inherited settings.                                          |
 | Configless v4 projects                                       | New defaults apply without a config file that the migration can edit.                                                                                   | Use v5 defaults without a prompt or a new compatibility config; apply v4 defaults if another step creates a config.                             |
 | Full test names use `>`                                      | `-t 'suite test'` no longer matches across the boundary.                                                                                                | Review filters that may span a boundary; do not report plain single-segment filters.                                                            |
@@ -413,7 +408,7 @@ The implementation must pass these gates:
 1. `pnpm tsgo`, `vp check`, `pnpm test:unit`, Rust checks for changed global-CLI code, and the CLI snapshot suite.
 2. Package export tests that resolve every generated `vite-plus/test*` path under its published conditions and compile all typed paths with TypeScript. Import Node-facing APIs under Node ESM, test-facing APIs inside Vitest, and browser-only APIs inside a browser test. Type-only exports and upstream context-error stubs must retain their upstream behavior; importing a browser-only API in plain Node is not a success condition.
 3. Identity tests that prove `vp test`, `vite-plus/test`, browser providers, custom matchers, and coverage use one runner and assertion state.
-4. Node 22.18, 24.11, and 26 jobs, plus actionable `vp test` rejection tests for Node 20 and 25 project pins. Check automatic pin upgrades separately through `vp migrate`.
+4. Node 22.18, 24.11, and 26 jobs. Cover command preparation without a Node-version probe and automatic pin upgrades through `vp migrate`.
 5. npm, pnpm, Yarn, and Bun install and test fixtures. Vite+ does not support Yarn PnP runtime resolution. Start the Yarn fixture with PnP, run the documented `vp migrate` conversion to `node_modules`, then execute its tests. Adding PnP runtime support is outside this upgrade.
 6. Configless, single-project, inherited inline-project, `extends: false`, referenced-config, nested-project, and shared-server fixtures. Add a fixture that combines `extends: false` with `sharedViteServer: false`. Assert independent server and plugin-hook behavior without extra inheritance. Cover config precedence, root and directory overrides, setup resolution, and test/benchmark ownership with preservation checks for unrelated files.
 7. Playwright and Preview browser suites. Track the existing Preview real-timer regression separately from new v5 failures, as described below. Run the WebDriverIO suite against a verified community release without requiring an exact Vitest patch version.
