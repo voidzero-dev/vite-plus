@@ -579,9 +579,12 @@ async function createBareBrowserShims(
     return result;
   }
   const browserPkg = JSON.parse(await readFile(browserPkgPath, 'utf-8'));
-  const browserPkgRoot = dirname(browserPkgPath);
   const browserExports = (browserPkg.exports ?? {}) as Record<string, unknown>;
 
+  // The base browser package already resolves through vite-plus's own dependency
+  // edge. Forward its declarations instead of copying them: relative helpers
+  // stay resolvable, and context aliases share the provider-augmented types.
+  // Keep declaration inlining scoped to provider packages.
   const bareSubpaths = ['./client', './context', './locators', './matchers', './utils'] as const;
   for (const sub of bareSubpaths) {
     const exportValue = browserExports[sub];
@@ -597,7 +600,6 @@ async function createBareBrowserShims(
       exportValue,
       importSpecifier,
       testDistDir,
-      { providerPkgRoot: browserPkgRoot },
     );
     if (shimExport) {
       result[cliPath] = shimExport;

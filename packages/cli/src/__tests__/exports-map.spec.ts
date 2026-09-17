@@ -35,6 +35,28 @@ function namedValueExports(mod: Record<string, unknown>): string[] {
   return Object.keys(mod).filter((key) => key !== 'default');
 }
 
+function typeDiagnostics(source: string, separator: string = path.sep): string[] {
+  const filename = path.join(cliPkgDir, '__test_exports__.mts').replaceAll(/[\\/]/g, separator);
+  const options: ts.CompilerOptions = {
+    noEmit: true,
+    strict: true,
+    skipLibCheck: true,
+    types: [],
+    module: ts.ModuleKind.NodeNext,
+    target: ts.ScriptTarget.ESNext,
+  };
+  const host = ts.createCompilerHost(options);
+  const getSourceFile = host.getSourceFile.bind(host);
+  host.getSourceFile = (file, ...args) =>
+    file.replaceAll('\\', '/') === filename.replaceAll('\\', '/')
+      ? ts.createSourceFile(file, source, ts.ScriptTarget.ESNext, true)
+      : getSourceFile(file, ...args);
+  const program = ts.createProgram([filename], options, host);
+  return ts
+    .getPreEmitDiagnostics(program)
+    .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+}
+
 describe('package.json exports map', () => {
   it('provides the bundled Vitest Vite peer without relying on project dependencies', () => {
     const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
@@ -87,26 +109,70 @@ expect(42).toMatchReceived('42');
 // @ts-expect-error An asynchronous matcher does not return void.
 const invalidReturn: void = expect(Promise.resolve(42)).resolves.toMatchReceived(42);
 `;
-    const filename = path.join(cliPkgDir, '__test_exports__.mts').replaceAll(/[\\/]/g, separator);
-    const options: ts.CompilerOptions = {
-      noEmit: true,
-      strict: true,
-      skipLibCheck: true,
-      types: [],
-      module: ts.ModuleKind.NodeNext,
-      target: ts.ScriptTarget.ESNext,
-    };
-    const host = ts.createCompilerHost(options);
-    const getSourceFile = host.getSourceFile.bind(host);
-    host.getSourceFile = (file, ...args) =>
-      file.replaceAll('\\', '/') === filename.replaceAll('\\', '/')
-        ? ts.createSourceFile(file, source, ts.ScriptTarget.ESNext, true)
-        : getSourceFile(file, ...args);
-    const program = ts.createProgram([filename], options, host);
-    const diagnostics = ts.getPreEmitDiagnostics(program);
-    expect(diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual(
-      [],
-    );
+    expect(typeDiagnostics(source, separator)).toEqual([]);
+  });
+
+  it('loads browser matchers without another browser entry masking missing declarations', () => {
+    expect(
+      typeDiagnostics(`
+import 'vite-plus/test/matchers';
+import { expect } from 'vite-plus/test';
+expect(document.body).toBeInTheDocument();
+expect(document.body).toHaveFocus();
+expect(document.body).toHaveAttribute('id', 'app');
+// @ts-expect-error Attribute names must be strings.
+expect(document.body).toHaveAttribute(123);
+`),
+    ).toEqual([]);
+  });
+
+  it.each([
+    'browser',
+    'context',
+    'browser/context',
+    'plugins/browser-context',
+    'browser-playwright/context',
+    'browser-preview/context',
+    'browser-webdriverio/context',
+    'browser/providers/playwright/context',
+    'browser/providers/preview/context',
+    'browser/providers/webdriverio/context',
+  ])('preserves provider augmentations and role types through %s independently', (name) => {
+    // Do not import the other aliases here: their augmentations can hide a
+    // broken declaration. Provider options and roles must retain their types.
+    expect(
+      typeDiagnostics(`
+import 'vite-plus/test/browser-playwright';
+import { page, type UserEventClickOptions } from 'vite-plus/test/${name}';
+declare const click: UserEventClickOptions;
+const force: boolean | undefined = click.force;
+await page.getByRole('button').screenshot({ caret: 'hide' });
+// @ts-expect-error Roles accept strings, not numbers.
+page.getByRole(123);
+// @ts-expect-error Playwright's force option must remain a boolean.
+const invalidClick: UserEventClickOptions = { force: 'yes' };
+`),
+    ).toEqual([]);
+  });
+
+  it('resolves every relative import in generated test declarations', () => {
+    const directory = path.join(cliPkgDir, 'dist/test');
+    const options = { module: ts.ModuleKind.NodeNext };
+    for (const name of fs.readdirSync(directory, { recursive: true, encoding: 'utf8' })) {
+      if (!/\.d\.(?:ts|mts|cts)$/.test(name)) {
+        continue;
+      }
+      const file = path.join(directory, name);
+      const source = fs.readFileSync(file, 'utf8');
+      for (const { fileName: specifier } of ts.preProcessFile(source).importedFiles) {
+        if (specifier.startsWith('.')) {
+          expect(
+            ts.resolveModuleName(specifier, file, options, ts.sys).resolvedModule,
+            `${name}: ${specifier}`,
+          ).toBeDefined();
+        }
+      }
+    }
   });
 
   it.each([
