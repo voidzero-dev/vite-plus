@@ -1,5 +1,5 @@
 [[case]]
-name = "diagnostic"
+name = "directory_local_config"
 vp = ["local", "global"]
 cwd = "sub"
 steps = [["vp", "test", "run"]]
