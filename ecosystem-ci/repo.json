@@ -108,6 +108,12 @@
     "forceFreshMigration": true,
     "playwright": true
   },
+  "codiff": {
+    "repository": "https://github.com/nkzw-tech/codiff.git",
+    "branch": "main",
+    "hash": "1bfbe4506f5321bd419d56f40d8b02a5f6fc82c7",
+    "forceFreshMigration": true
+  },
   "vite-plus-jest-dom-repro": {
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-jest-dom-repro.git",
     "branch": "master",
