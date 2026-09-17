@@ -308,6 +308,90 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
   env: migrateEnv,
 });
 
+if (project === 'vue-mini') {
+  // Apply the assertion-types review item without changing matcher behavior.
+  // Remove when the pinned setup declares both Vitest 5 type parameters.
+  // https://vitest.dev/guide/migration/#assertion-types-expose-return-and-received-types
+  const setupPath = join(repoRoot, 'vitest.setup.ts');
+  const setup = await readFile(setupPath, 'utf-8');
+  const legacyAssertion = 'interface Assertion<T = any> extends CustomMatchers<T> {}';
+  if (setup.split(legacyAssertion).length !== 2) {
+    throw new Error('vue-mini patch: expected the pinned custom matcher declaration');
+  }
+  await writeFile(
+    setupPath,
+    setup.replace(legacyAssertion, 'interface Assertion<R, T> extends CustomMatchers<R> {}'),
+    'utf-8',
+  );
+}
+
+if (project === 'dify') {
+  // The happy-dom setup registers jest-dom matchers, but omits their Vitest
+  // types. Its jest-dom 6 adapter still augments the old Assertion<T> interface;
+  // use the v5 extension point so browser declarations cannot take precedence.
+  // Remove when the pinned project provides a v5-compatible matcher augmentation.
+  // https://vitest.dev/guide/migration/#assertion-types-expose-return-and-received-types
+  const setupPath = join(repoRoot, 'web', 'vitest.setup.ts');
+  const setup = await readFile(setupPath, 'utf-8');
+  const registration = "if (typeof expect.extend === 'function') {";
+  if (
+    setup.split(registration).length !== 2 ||
+    setup.includes('interface Matchers<') ||
+    !setup.includes('expect.extend(jestDomMatchers)')
+  ) {
+    throw new Error('dify patch: expected the pinned Jest DOM setup');
+  }
+  await writeFile(
+    setupPath,
+    setup.replace(
+      registration,
+      `// Match the jest-dom implementations registered below, not browser-mode matchers.
+declare module 'vite-plus/test' {
+  interface Matchers<R, T> extends jestDomMatchers.TestingLibraryMatchers<T, R> {}
+}
+
+${registration}`,
+    ),
+    'utf-8',
+  );
+}
+
+if (project === 'npmx.dev') {
+  // Vitest 5 adds browser optimizer dependencies after Nuxt's config hook has
+  // filtered its exclusions. Reapply that filter only in the Nuxt test project.
+  // Remove when an upstream fix preserves those exclusions after the merge.
+  // https://github.com/why-reproductions-are-required/vitest-browser-optimizer-config-order
+  const viteConfigPath = join(repoRoot, 'vite.config.ts');
+  const viteConfig = await readFile(viteConfigPath, 'utf-8');
+  const nuxtProject = /defineVitestProject\(\{\s*test:\s*\{/g;
+  if ([...viteConfig.matchAll(nuxtProject)].length !== 1) {
+    throw new Error('npmx.dev patch: expected the pinned Nuxt test project configuration');
+  }
+  await writeFile(
+    viteConfigPath,
+    viteConfig.replace(
+      nuxtProject,
+      `defineVitestProject({
+          plugins: [{
+            // Temporary Vitest 5 workaround: preserve Nuxt's optimizer exclusions.
+            // https://github.com/why-reproductions-are-required/vitest-browser-optimizer-config-order
+            name: 'npmx:test:preserve-optimizer-exclusions',
+            configureServer(server) {
+              for (const options of [
+                server.config.optimizeDeps,
+                server.environments.client.config.optimizeDeps,
+              ]) {
+                const excluded = new Set(options.exclude ?? [])
+                options.include = options.include?.filter(dep => !excluded.has(dep))
+              }
+            },
+          }],
+          test: {`,
+    ),
+    'utf-8',
+  );
+}
+
 if (project === 'bun-vite-template') {
   // The pinned template runs Vitest only. Its JS setup file loads jest-dom's
   // Vitest runtime, but allowJs: false excludes that file from type checking.
