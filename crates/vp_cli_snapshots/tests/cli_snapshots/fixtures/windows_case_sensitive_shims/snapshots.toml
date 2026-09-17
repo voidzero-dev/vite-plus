@@ -15,3 +15,13 @@ steps = [
   { argv = ["vp", "run", "cached"], cwd = "packages/app", tty = false },
   { argv = ["vp", "run", "cached"], cwd = "packages/app", tty = false, comment = "Resolving the program keeps the task's cache behavior." },
 ]
+
+[[case]]
+name = "windows_case_sensitive_shims_external_node"
+vp = "local"
+skip-platforms = ["linux", "macos"]
+env = { PATHEXT = ".COM;.EXE;.BAT;.CMD" }
+steps = [
+  { argv = ["node", "setup.cjs"], snapshot = false },
+  { argv = ["node", "local-cli.cjs"], tty = false, comment = "The local CLI resolves the lowercase shim when real Node starts with uppercase PATHEXT." },
+]
