@@ -3,6 +3,12 @@
 ## `node setup.cjs`
 
 
+## `cd packages/app && vp run priority`
+
+
+## `cd packages/app && vp exec node-priority -e process.exit(0)`
+
+
 ## `vp run probe`
 
 Nested task planning resolves the lowercase shim with uppercase PATHEXT.
