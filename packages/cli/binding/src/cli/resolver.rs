@@ -76,14 +76,18 @@ impl SubcommandResolver {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
+
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
-                    args: iter::once(Str::from("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"))
-                        .chain(iter::once(Str::from(js_path_str)))
+                    args: [
+                        Str::from("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"),
+                        Str::from(js_path_str),
                         // Auto-discover the config, but keep per-file nested configs disabled.
-                        .chain(iter::once(Str::from("--disable-nested-config")))
-                        .chain(args.into_iter().map(Str::from))
-                        .collect(),
+                        Str::from("--disable-nested-config"),
+                    ]
+                    .into_iter()
+                    .chain(args.into_iter().map(Str::from))
+                    .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
                         untracked_env: None,
@@ -100,10 +104,11 @@ impl SubcommandResolver {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
+
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
-                    args: iter::once(Str::from(js_path_str))
-                        .chain(iter::once(Str::from("--disable-nested-config")))
+                    args: [Str::from(js_path_str), Str::from("--disable-nested-config")]
+                        .into_iter()
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
@@ -383,27 +388,30 @@ mod tests {
         let envs = Arc::new(FxHashMap::default());
 
         for args in [
-            vec!["src".to_string()],
-            vec!["-c".to_string(), "custom.json".to_string(), "src".to_string()],
-            vec!["--config".to_string(), "custom.json".to_string(), "src".to_string()],
-            vec!["--config=custom.json".to_string(), "src".to_string()],
+            &["src"][..],
+            &["-c", "custom.json", "src"],
+            &["--config", "custom.json", "src"],
+            &["--config=custom.json", "src"],
         ] {
-            for command in [
-                SynthesizableSubcommand::Lint { args: args.clone() },
-                SynthesizableSubcommand::Fmt { args: args.clone() },
+            let tool_args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+            for (command, prefix) in [
+                (
+                    SynthesizableSubcommand::Lint { args: tool_args.clone() },
+                    &[
+                        "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+                        "tool.js",
+                        "--disable-nested-config",
+                    ][..],
+                ),
+                (
+                    SynthesizableSubcommand::Fmt { args: tool_args.clone() },
+                    &["tool.js", "--disable-nested-config"],
+                ),
             ] {
                 let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
-                let forwarded_args: Vec<&str> = resolved
-                    .args
-                    .iter()
-                    .skip_while(|arg| arg.as_str() != "tool.js")
-                    .skip(1)
-                    .map(|arg| arg.as_str())
-                    .collect();
-                let expected_args: Vec<&str> = iter::once("--disable-nested-config")
-                    .chain(args.iter().map(String::as_str))
-                    .collect();
-                assert_eq!(forwarded_args, expected_args);
+                let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
+                let expected_args = [prefix, args].concat();
+                assert_eq!(actual_args, expected_args);
             }
         }
     }
