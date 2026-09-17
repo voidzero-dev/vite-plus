@@ -360,6 +360,9 @@ jobs:
             node-version: 24
             timeout: 20
             command: |
+              # Migration skips install scripts. node-pty has no Linux prebuild,
+              # so build its approved native addon before running the tests.
+              vp pm rebuild node-pty
               vp run build
               # The separate Workers integration suite still requires Vitest 4.
               vp test run
