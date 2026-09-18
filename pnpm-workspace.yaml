@@ -163,6 +163,7 @@ minimumReleaseAgeExclude:
   - '@types/*'
   - '@vitejs/*'
   - '@vitest/*'
+  - '@void/*'
   - '@voidzero-dev/*'
   - oxc-minify
   - oxc-parser
