@@ -65,7 +65,7 @@ Package-manager selection uses this priority:
 4. `devEngines.packageManager`
 5. Lockfile or manager-specific configuration
 6. The named package manager's global default version
-7. The named shim's latest release (Node.js' bundled version version for `npm`)
+7. The named shim's latest release (Node.js' bundled version for `npm`)
 
 `VP_PACKAGE_MANAGER` selects the manager and version for commands such as `vp install`. Direct package-manager shims ignore this variable and use independent version overrides:
 
