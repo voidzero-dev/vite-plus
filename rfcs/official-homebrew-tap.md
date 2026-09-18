@@ -11,74 +11,89 @@ Add `HomebrewFormula/vp.rb`, with the Ruby class `Vp < Formula`. The tap name is
 `voidzero-dev/vite-plus`, and the formula name is `voidzero-dev/vite-plus/vp`.
 `vp` is the actual formula name, not an alias for a `vite-plus` formula.
 
-The formula installs a complete, prebuilt CLI bundle from a versioned GitHub
-release. Homebrew owns the binary and bundled JavaScript in its Cellar. The
-first `vp` invocation uses the existing Rust setup code to configure the user's
-shell, shims, and management preferences.
+Use the npm registry as the primary distribution source. Download the existing
+`@voidzero-dev/vite-plus-cli-<platform>` package for the native binary and install
+`vite-plus` at the same version with its production dependencies. Keep the npm
+package contents unchanged. No new complete release bundle is required.
 
-This shares release outputs and setup logic with the script installer. It keeps
-package ownership with Homebrew: `brew upgrade` updates the package, and
-`brew uninstall` removes it. The formula does not run `install.sh` or install a
-second CLI into the user's data directory.
+Follow the script installer's sequence: acquire the native binary, prepare its
+JavaScript dependencies, then configure the user's environment. Homebrew performs
+the first two steps in its installation directories. The first `vp` invocation
+uses the existing Rust setup code for shell configuration, shims, and preferences.
+Homebrew owns the installed binary and JavaScript, including upgrades and removal.
 
-The recommended starting point is a complete bundle, rather than a binary that
-downloads its JavaScript on first use. The alternatives below remain open for
-discussion.
+Support `HOMEBREW_NPM_CONFIG_REGISTRY` and registry credentials in `~/.npmrc`
+through a tap-owned downloader. Use `HOMEBREW_NPM_TOKEN` in token placeholders
+when the value must pass through Homebrew's environment filter.
 
-## Motivation and current behavior
+## Motivation and feasibility
 
 Issue [#1171](https://github.com/voidzero-dev/vite-plus/issues/1171) requested
 Homebrew distribution for Bluefin Dx and other Universal Blue / Atomic Fedora
 systems. It also identified enterprise management through WorkBrew as a use
-case. These requirements motivate Linux support and Homebrew ownership of
-installation, upgrades, and removal. Issue
-[#2719](https://github.com/voidzero-dev/vite-plus/issues/2719) later exposed a
-first-run setup failure with the core formula on macOS.
+case. Issue [#2719](https://github.com/voidzero-dev/vite-plus/issues/2719) later
+exposed a first-run setup failure with the core formula on macOS.
 
 The [core formula](https://github.com/Homebrew/homebrew-core/blob/main/Formula/v/vite-plus.rb)
 builds from source when a bottle is unavailable or a user requests a source
-build. It stages upstream repositories, adjusts package-manager configuration,
-runs `just build` and `cargo install`, and deploys production JavaScript with
-`pnpm`. Normal bottle installs already avoid this build work.
+build. It stages upstream repositories, runs Rust and JavaScript builds, and
+deploys the resulting package. A project-owned tap can reuse published npm
+packages and avoid those source builds.
 
-A project-owned tap could reuse the release build instead of maintaining a
-second build recipe. It would let the project test and publish packaging changes
-with the corresponding CLI release. The project would also take responsibility
-for that packaging and its support.
+The [script installer](../packages/cli/install.sh) already downloads the native
+CLI from npm. Its self-setup code installs `vite-plus` through a wrapper manifest
+and a pinned pnpm version. The [package publisher](../packages/cli/publish-native-addons.ts)
+publishes the native CLI separately from the JavaScript package and native
+bindings. These existing packages provide the inputs for the tap.
 
-The canonical [script installer](../packages/cli/install.sh) downloads a native
-CLI package and delegates installation to that binary's self-setup code. Old
-binaries use the legacy installer. This is simpler than duplicating setup in
-Ruby, but the standalone path still installs JavaScript dependencies from an
-npm registry.
+Current [external setup](../crates/vp_global_cli/src/self_setup.rs) recognizes a
+Unix binary with `node_modules/vite-plus` beside its `bin` directory. It reuses
+that payload and records setup in the user's state directory. The
+[JavaScript resolver](../crates/vp_global_cli/src/js_executor.rs) already supports
+this layout. The registry-based approach therefore does not need a new package
+format or a new JavaScript resolution layout.
 
-Current [external setup](../crates/vp_global_cli/src/self_setup.rs) already
-recognizes a Unix binary with `node_modules/vite-plus` beside its `bin`
-directory. It reuses that payload and records setup in the user's state
-directory. A tap can use this behavior without taking ownership of the user's
-Vite+ directories.
+Running `install.sh` unchanged inside a formula would use the installing user's
+data directories and configure that user's shell. Installing only its binary
+would still trigger standalone bootstrap on first use. The tap must prepare the
+JavaScript dependencies in the keg before normal CLI execution.
 
-The existing [GitHub release archives](../.github/workflows/reusable-release-build.yml)
-contain the native CLI, the version synchronization script, and the toolchain
-manifest. They do not contain the complete JavaScript dependency tree. Installing
-one of these archives alone would still enter standalone bootstrap. A complete
-bundle is new release work, not just a new formula URL.
+| Step                    | Script installation                             | Homebrew installation                                                        |
+| ----------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| Version selection       | Requested version or npm tag                    | Exact version pinned by the formula                                          |
+| Native CLI              | Existing platform npm tarball                   | The same package, with a formula checksum                                    |
+| JavaScript dependencies | pnpm installs into the user's version directory | Pinned pnpm installs into staging; Homebrew installs the result into the keg |
+| User setup              | Runs during installer handoff                   | Runs on the user's first `vp` invocation                                     |
+| Upgrade and removal     | `vp upgrade` and `vp implode`                   | Homebrew manages the package; `vp implode` manages user data                 |
+
+The current Rust [dependency installer](../crates/vp_setup/src/install.rs)
+also provisions managed Node.js and pnpm. The formula should reuse its package
+selection and installation layout, with Homebrew supplying the build environment.
+It must not call this user-installation routine unchanged. Reading `.npmrc` for
+native tarball authentication is also new download logic; the current shell
+installer does not provide that functionality.
 
 ## Goals and boundaries
 
-- Install the released CLI without a local Rust, CMake, or pnpm build.
-- Obtain the complete CLI payload without contacting an npm registry on the user's machine.
-- Reuse existing setup, directory resolution, runtime management, and tool dispatch.
-- Keep upgrades, package removal, and package files under Homebrew's control.
+- Install existing released npm packages without compiling Vite+ from source.
+- Use the same native package, JavaScript version, and pnpm installation model as the script installer.
+- Support corporate npm registries and scoped bearer-token authentication.
+- Keep package files, upgrades, and removal under Homebrew's control.
 - Preserve user settings and working shims across package replacement.
+- Keep all published package formats unchanged.
 
-The first version supports stable releases. Preview builds, historical formulae,
-Windows, and musl Linux remain outside this tap's initial scope. The script
-installer retains its existing platforms and version-selection behavior.
+The first version supports stable releases. Proposed targets are macOS ARM64
+and x64, and glibc Linux ARM64 and x64. Advertise each target only after its
+Homebrew installation tests pass. Windows, musl Linux, preview builds, and
+historical formulae remain outside the initial tap scope.
 
-This proposal does not remove the core formula or automatically migrate its
-users. It also does not make project dependency installation or runtime downloads
-work without network access.
+Registry access is required to acquire the CLI and its dependencies unless the
+files are already cached. A corporate mirror can provide that access when the
+public npm registry is blocked. This design does not provide installation when
+both the public registry and all configured mirrors are inaccessible.
+Homebrew dependencies, Node.js runtime downloads, and project dependencies have
+their own network requirements. The core formula and script installer remain
+available independently.
 
 ## Installation and ownership
 
@@ -90,57 +105,102 @@ brew install voidzero-dev/vite-plus/vp
 vp
 ```
 
-Use the fully qualified formula name in tap instructions to distinguish it from
+Use the fully qualified formula name to distinguish it from
 `homebrew/core/vite-plus` and core's `vp` alias. The initial `brew tap` command
-needs the explicit URL. Without it, Homebrew looks for
+needs the explicit URL. Otherwise, Homebrew looks for
 `voidzero-dev/homebrew-vite-plus`. Subsequent installs and upgrades use the saved
 remote. See [the tap command documentation](https://docs.brew.sh/Manpage#tap-options-userrepo-url).
 
 ### Repository layout
 
-The proposed files live beside the existing release and installation code:
-
 ```text
 vite-plus/
 ├── HomebrewFormula/
-│   └── vp.rb                            # new: formula
+│   ├── vp.rb                            # new: formula
+│   └── vp/
+│       ├── package.json                 # new: pinned installation manifest
+│       ├── pnpm-lock.yaml               # new: production dependency lock
+│       └── resources.json               # new: package versions and checksums by target
+├── lib/homebrew/
+│   └── vp_npm_download_strategy.rb      # new: registry configuration and authenticated downloads
 ├── .github/
 │   ├── workflows/
-│   │   ├── release.yml                  # extend: publish bundles and open formula PRs
+│   │   ├── release.yml                  # extend: open formula update PRs after npm publication
 │   │   └── test-homebrew.yml            # new: installation tests
 │   └── scripts/
-│       ├── package-homebrew-bundle.mjs   # new: assemble the release bundle
-│       └── update-homebrew-formula.mjs   # new: update version, URLs, and checksums
+│       └── update-homebrew-formula.mjs   # new: update version, lock, and resource checksums
 ├── packages/cli/
 │   └── install.sh                       # existing script installer
 ├── crates/vp_global_cli/src/
-│   ├── self_setup.rs                    # shared per-user setup
+│   ├── self_setup.rs                    # existing per-user setup
 │   └── homebrew.rs                      # ownership and formula identity
 └── rfcs/
     └── official-homebrew-tap.md
 ```
 
-New script and workflow names are illustrative. Only `HomebrewFormula/vp.rb`
-is needed for formula discovery. Release bundles remain GitHub release assets;
-they are not committed to the source tree.
+Support-file names are illustrative. Keep Ruby support code outside the formula
+directory. The lock and resource manifest are small text files; npm tarballs,
+package caches, and installed dependencies are not committed to the repository.
 
-Homebrew recognizes a root-level `HomebrewFormula/` directory. It taps the Git
-repository, not a subdirectory URL. Standard tap installation clones the project
-repository, and updates fetch its changes, including changes unrelated to the
-formula. It does not limit the checkout to `HomebrewFormula/`. This is the download
+Homebrew recognizes `HomebrewFormula/` at the repository root. Standard tap
+installation clones the project repository, including files unrelated to the
+formula. It does not limit checkout to this directory. This is the download
 cost of keeping packaging in the same repository. See
 [Homebrew's tap layout documentation](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap#creating-a-tap)
 and [clone implementation](https://github.com/Homebrew/brew/blob/main/Library/Homebrew/tap.rb).
 
-The formula on `main` must reference a published stable release, even while the
-source contains newer development work. Update it only after the corresponding
-bundles and checksums are available. Formula PRs follow the repository's review
-rules; CI should use path filters to avoid unnecessary product builds for these
-packaging-only changes.
+The formula on `main` references the last published stable release. Update its
+version, dependency lock, and checksums together after the npm packages become
+available. Formula PRs follow repository review rules. Use CI path filters to
+avoid unrelated product builds for formula-only changes.
 
-### Installed layout
+### Package preparation
 
-The formula installs this layout:
+The proposed formula uses the following sequence:
+
+1. Fetch the native CLI and the pinned pnpm package from npm as Homebrew resources.
+2. Fetch the locked production dependency tarballs for the target, including required optional native packages.
+3. Stage an installation manifest that pins `vite-plus` to the native CLI's version. Point a working copy of the lockfile at the verified local tarballs.
+4. Run the pinned pnpm with `--offline --frozen-lockfile --prod --ignore-scripts` in an isolated build directory.
+5. Install the native executable into `prefix/bin` and the resulting dependency tree into `prefix/node_modules`. Add `vpr` and `vpx` links to `vp`.
+
+Declare Homebrew Node.js as a build dependency to run pnpm. Pin pnpm to the
+version used by the standalone dependency installer, currently `10.33.0`, and
+update that selection deliberately. The formula does not depend on a user's
+Node.js or pnpm installation. No Rust, CMake, or upstream source checkout is
+needed to prepare Vite+ itself.
+
+Generate the wrapper manifest, lock, and resource list during formula-update CI.
+Pin transitive versions and integrity values, not only `vite-plus`. The resource
+list must match the lock and select the correct OS, CPU, and libc packages.
+Use Homebrew's normal resource download stage for authenticated acquisition,
+before the build sandbox. Each resource retains a reviewed checksum. The offline
+installation then needs neither registry credentials nor access to `~/.npmrc`.
+This uses Homebrew's [resource downloads](https://docs.brew.sh/Formula-Cookbook#language-specific-dependencies)
+and pnpm's [offline installation mode](https://pnpm.io/cli/install#--offline).
+
+The working lockfile may replace remote tarball locations with staged `file:`
+locations while retaining package versions and integrity values. This adapts
+Homebrew's verified downloads to pnpm's offline installer. Do not replace locked
+integrity values when a mirror serves different bytes.
+
+Use an isolated pnpm store and copy package files into the installed tree.
+Internal relative pnpm links are acceptable; no link may depend on the build
+directory, an external store, or the user's files. The installed CLI must work
+after the build directory and store are removed.
+
+Retain native optional dependencies such as Oxfmt, Oxlint, Rolldown, and the
+required platform bindings. Do not use `--no-optional`. The initial design skips
+dependency lifecycle scripts and relies on published prebuilt files. Functional
+tests must detect any release that starts requiring a build or postinstall
+script. Such a release needs a packaging decision before the formula advances.
+
+This preparation follows the script installer's package installation model.
+The locked resource list and offline installation are Homebrew-specific additions
+that make downloads verifiable and keep credentials outside the build sandbox.
+They do not change the published npm packages or require new GitHub bundles.
+
+### Installed layout and first use
 
 ```text
 <Cellar>/vp/<version>/
@@ -149,76 +209,83 @@ The formula installs this layout:
 │   ├── vpr -> vp
 │   └── vpx -> vp
 ├── node_modules/
-│   └── vite-plus/          # JS, native bindings, and production dependencies
-├── share/                 # completions and license notices
+│   ├── vite-plus/          # may be an internal relative pnpm link
+│   └── .pnpm/              # package files and production dependencies
 └── INSTALL_RECEIPT.json    # written by Homebrew
 ```
 
-This layout matches the current [JavaScript resolver](../crates/vp_global_cli/src/js_executor.rs)
-and [Homebrew ownership check](../crates/vp_global_cli/src/homebrew.rs).
-Keep the real executable at `prefix/bin/vp`; a `libexec` wrapper would require
-another ownership and path-resolution contract.
-The npm package remains named `vite-plus`; the Homebrew formula name does not
-change JavaScript package names or Vite+-managed directory names.
+Keep the real executable at `prefix/bin/vp`. This matches the existing
+[Homebrew ownership check](../crates/vp_global_cli/src/homebrew.rs) and JavaScript
+resolver. Include applicable license files. The npm package remains named
+`vite-plus`; the formula name does not change JavaScript package names or user
+directory names.
 
-| Owner               | Files and operations                                                                                      |
-| ------------------- | --------------------------------------------------------------------------------------------------------- |
-| Homebrew            | Cellar payload, public command links, package version, package removal                                    |
-| Vite+ for each user | Setup receipt, shell configuration, tool shims, preferences, downloaded runtimes, caches, global packages |
+The formula does not run normal `vp` commands or first-run setup during
+installation. It does not modify user shell profiles, set `VP_HOME` or
+`VP_*_DIR`, or ship `.vp-setup-complete`. Setup is specific to each user.
 
-The formula only extracts and installs the bundle. It does not execute `vp`
-during `install` or `post_install`, edit shell profiles, or set `VP_HOME` and
-`VP_*_DIR`. Completions are generated in release CI and copied as files.
-It must not ship `.vp-setup-complete`, because setup is specific to each user.
+On first use, the existing bundled-external setup configures that user's shell,
+shims, and preferences. It must not copy the payload, install dependencies, or
+write inside the keg. It reports when the user must restart the terminal.
+Later invocations reuse the receipt.
 
-On first use, the CLI performs the same per-user setup as other bundled external
-installations. It must not copy the payload, install its npm dependencies, or
-write inside the keg. It reports when the user must restart the terminal to
-activate shell changes. Later invocations reuse the receipt.
+Shims follow a stable Homebrew entrypoint. Replacing the package can refresh
+its receipt, but must preserve managed mode and mixed per-tool preferences.
+Test saved `vp` and tool-shim paths after the previous keg is removed.
 
-Shims must follow a stable Homebrew entrypoint, not a versioned Cellar path.
-Replacing the package can refresh its receipt, but must preserve both managed
-mode and mixed per-tool preferences. Tests must exercise a saved `vp` path and
-a tool shim after Homebrew removes the previous keg.
+Node.js at runtime continues to follow the existing CLI resolver. System-first
+mode can use Node.js on `PATH`; managed mode can download a separate runtime.
+The Node.js build dependency does not override this user preference or make
+all commands work offline. A separate runtime policy would need its own decision.
 
-## Bundle and runtime requirements
+## Registry configuration and authentication
 
-Add separate assets, tentatively named `vp-bundle-<target>.tar.gz`, to the existing
-release. Keep the current small archives unchanged for existing consumers.
-Proposed targets are macOS ARM64 and x64, and glibc Linux ARM64 and x64.
-Only advertise a target after its Homebrew installation test passes. Minimum OS,
-libc, and CPU requirements must match the binaries in the bundle.
+Use a nonempty `HOMEBREW_NPM_CONFIG_REGISTRY` as the default registry override.
+Otherwise, read `registry` from `~/.npmrc`, then fall back to
+`https://registry.npmjs.org`. Honor scoped registry settings such as
+`@voidzero-dev:registry` for the corresponding packages, as npm does. These scoped
+settings take precedence over the default registry. Do not read a project's
+`.npmrc` based on the directory from which the user runs `brew`.
+The proposed tap implements this setting; it is not a built-in Homebrew setting.
 
-Each bundle contains the native CLI and the complete production dependency tree
-for the same version and target. Packaging must retain required optional native
-packages, including Oxfmt, Oxlint, and Rolldown bindings. Blanket use of
-`--no-optional` is unsuitable. Workspace links, pnpm store links, and build-machine
-paths must not escape the extracted bundle. Include third-party license notices.
+Homebrew's [launcher](https://github.com/Homebrew/brew/blob/main/bin/brew) removes
+`NPM_CONFIG_REGISTRY` and ordinary token variables before formula evaluation.
+It preserves `HOMEBREW_*` variables. Users could forward an existing setting:
 
-Use the existing release binaries and package outputs. Add an explicit assembly
-step for the production dependency tree; the current binary archive step is not
-sufficient. The assembly must pin dependency versions, verify package versions,
-and test the extracted bundle outside the source checkout. Fetching and preparing
-dependencies happens in release CI.
+```sh
+HOMEBREW_NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-}" \
+  brew install voidzero-dev/vite-plus/vp
+```
 
-Validate archive contents and dynamic library dependencies for each target.
-Missing assets, checksum failures, or an unsupported target must fail installation
-without falling back to an npm bootstrap or a source build.
+Support registry-scoped `_authToken` entries in `~/.npmrc`. For example, a user
+could configure the following and export `HOMEBREW_NPM_TOKEN` in their shell:
 
-The proposed formula does not depend on Homebrew's `node` and does not bundle a
-private Node.js initially. It uses the current runtime resolver: system-first
-mode can use Node.js on `PATH`; otherwise the CLI obtains a managed runtime.
-Consequently, a first JavaScript command can still download Node.js. Choosing
-system-first mode does not guarantee offline operation when no usable Node.js
-exists. This runtime choice needs agreement before implementation.
+```ini
+registry=https://registry.example.com/repository/npm/
+//registry.example.com/repository/npm/:_authToken=${HOMEBREW_NPM_TOKEN}
+```
 
-The GitHub bundle proposal removes npm access from CLI payload installation.
-It does not remove network access from every command. Users still need access to GitHub release
-assets and any required Homebrew downloads. Runtime downloads and project
-dependencies have their own network requirements. Existing registry settings
-continue to govern npm operations where supported; they do not select the
-bundle URL. No new registry variable is needed for GitHub bundles. The npm
-download alternative below has separate registry and authentication requirements.
+Literal tokens in the file are also supported by this design. Existing entries
+that reference `${NPM_TOKEN}` need an explicit forwarding mechanism or a change
+to the placeholder; that variable does not survive Homebrew's launcher. Do not
+silently substitute a different token or send an unresolved placeholder.
+
+Resolve user configuration and credentials at download time in the tap-owned
+download strategy for both the binary and every dependency resource. Do not read
+credentials during formula evaluation or from `install`: Homebrew's
+[build sandbox](https://github.com/Homebrew/brew/blob/main/Library/Homebrew/sandbox.rb)
+restricts access to the user's home, including `.npmrc`. Keep registry tokens
+out of formula metadata, receipts, downloaded artifacts, and diagnostic output.
+The install step should consume downloaded files without user credentials.
+
+Use the pinned package version's metadata to obtain `dist.tarball`; private
+registries can use different tarball paths. Match credentials to each request's
+host and path, including tarball requests and redirects. A registry override must
+not send another registry's token to the new URL. Retain the formula's SHA-256
+check, and report authentication failures without falling back to the public
+registry. Follow npm's [configuration and authentication rules](https://docs.npmjs.com/cli/v11/configuring-npm/npmrc/).
+The initial authentication support covers bearer tokens. Other enterprise
+requirements, such as client certificates, need separate design and validation.
 
 ## Commands and diagnostics
 
@@ -252,33 +319,33 @@ delete another user's files from an uninstall hook.
 
 ## Release automation and recovery
 
-The Vite+ release pipeline assembles and tests bundles, then publishes them with
-SHA-256 checksums. Formula URLs reference a specific release tag. The formula
-contains each target's checksum; it never downloads a mutable `latest` URL or
-executes a remote installation script.
+The release pipeline publishes the existing npm packages. Once the native CLI,
+JavaScript package, core package, and required native bindings are available,
+a separate job opens a formula update PR in `voidzero-dev/vite-plus`.
 
-After the stable release and required assets are available, a separate job opens
-a PR in `voidzero-dev/vite-plus` to update `HomebrewFormula/vp.rb`. The job only
-needs write access to this repository. Its credentials must support the required
-PR checks, either through normal events or an explicit test workflow dispatch.
-Ordinary PR jobs receive no publishing credentials.
+The update job selects an exact release version. It generates the installation
+manifest, production lock, target resource lists, and SHA-256 checksums from the
+published artifacts. Validate package versions and contents before opening the
+PR. User installations must not resolve a mutable `latest` tag or regenerate
+the dependency lock.
 
-The update job verifies every required asset before changing the formula. It
-uses the release version as its idempotency key, updates an existing PR on retry,
-and rejects an update that would replace a newer formula with an older release.
-The Homebrew workflow tests the candidate before a maintainer merges it. A
-formula-only merge must not publish another product release. Automatic merging
-can be considered after the process proves reliable.
+The job only needs write access to this repository. Its credentials must support
+required PR checks, through normal events or an explicit workflow dispatch.
+Ordinary PR jobs receive no publishing credentials. Use the release version as
+an idempotency key, update an existing PR on retry, and reject updates that
+replace a newer formula with an older release.
 
-A failed tap update leaves the previous formula available. It does not undo an
-already published npm or GitHub release. Report the failure in the release run
-and allow the same update job to be retried without rebuilding published assets.
+Run installation checks against each candidate before a maintainer merges it.
+A formula-only merge must not publish another product release. A failed update
+leaves the previous formula available and does not undo npm publication.
 
-Do not overwrite a published asset to repair packaging. Use an immutable packaging
-revision with a new URL and checksum, or a new product release. Document recovery
-for users already on a bad version; reverting a formula commit alone does not
-cause Homebrew to downgrade those users. The first implementation must not promise
-`vp upgrade --rollback` support for Homebrew installations.
+Do not overwrite published packages to repair installation. Use a formula
+`revision` for a corrected recipe or dependency lock with unchanged product
+packages, or publish a new product release when package contents must change.
+Keep checksums and dependency metadata consistent. Document recovery for users
+already on a bad version: reverting a formula commit alone does not cause
+Homebrew to downgrade their installation. `vp upgrade --rollback` remains
+unavailable for Homebrew-owned packages.
 
 ## Coexistence and migration
 
@@ -296,9 +363,9 @@ or use core's `vp` alias to select the tap package.
 The initial documented route should prefetch `voidzero-dev/vite-plus/vp`, remove
 `homebrew/core/vite-plus`, and install the fully qualified tap formula. Keep user
 data and settings; do not use `vp implode` as a migration step. Check the
-installed receipt and active command
-afterward. Test the exact sequence, dependency behavior, and recovery from a
-failed installation before publishing copy-and-paste instructions.
+installed receipt and active command afterward. Test the exact sequence,
+dependency behavior, and recovery from a failed installation before publishing
+copy-and-paste instructions.
 
 Switching from a script installation needs separate guidance. Its shims can
 precede Homebrew's `bin` on `PATH`. Run the new Homebrew executable by its explicit
@@ -317,127 +384,67 @@ requirement to backport the new tap to old Vite+ releases. Core, script, and
 
 ## Validation before launch
 
-Keep the formula installation test small, but cover a real bundled JavaScript
-command. A Rust-only `vp --help` test cannot detect missing native dependencies.
-Use an isolated user home and explicit management settings.
+Use isolated homes and synthetic credentials. Test the actual npm tarballs,
+including the published native bindings, without a project-local `vite-plus`
+installation that could hide missing global dependencies.
 
-The release and tap tests must cover:
+The tap tests must cover:
 
-- Installation without Rust, CMake, or pnpm; no source checkout or external store links in the bundle.
-- First and second invocation with a read-only keg, checking that only user setup state changes.
-- Formatting, linting, and a small build outside a project-local `vite-plus` installation, to exercise bundled native packages.
-- CLI startup and bundled commands with npm registry access blocked, using an available Node.js runtime to isolate that requirement.
-- Runtime acquisition with no system Node.js, plus system-first behavior with an existing runtime.
-- Two users sharing a package with separate setup receipts and management preferences.
-- Package replacement and removal of the old keg, followed by saved `vp` and tool shim paths in existing Bash and Zsh sessions.
-- Managed and mixed per-tool settings across upgrades, reinstall, and interrupted setup.
-- `upgrade`, `upgrade --check`, `implode`, and doctor output for both formula names, including incomplete receipts.
-- Formula discovery through the explicit repository URL, conflict handling, and core's existing `vp` alias.
-- Migration in both directions, script installation coexistence, package removal, and retained user data.
+- Native package and JavaScript version agreement, locked dependency checksums, and target filtering.
+- Offline dependency installation from downloaded resources with an empty pnpm store and no lifecycle scripts.
+- Relocation and operation after the staging directory and pnpm store are removed.
+- First and second invocation with a read-only keg; no dependency bootstrap or writes to package files.
+- Formatting, linting, and a small production build through the installed global CLI.
+- Public registry downloads, a custom registry, scoped registry settings, and `.npmrc` bearer tokens.
+- Token substitution, custom `dist.tarball` paths, redirects, authentication failures, missing packages, and checksum failures.
+- No credentials in logs, formula metadata, receipts, or installed files; no fallback to the public registry after an authentication error.
+- `brew fetch`, installation, reinstall, upgrade, and removal on every supported target.
+- Two users sharing the package with separate setup receipts and preferences.
+- Removal of an old keg followed by saved `vp` and tool-shim paths in existing Bash and Zsh sessions.
+- Mixed management preferences, runtime selection, lifecycle command guidance, and channel migration.
 
-Run Homebrew checks on PRs that change `HomebrewFormula/vp.rb` or its packaging
-scripts, and bundle checks on release candidates. Allow maintainers to request
-the full Homebrew installation suite for other source changes with the
-`test: install-e2e` label. Run untrusted PR code without publishing credentials.
-These checks need not run on every ordinary source PR.
+Run Homebrew checks on changes to the formula, downloader, dependency metadata,
+and update script. Allow maintainers to request the full installation suite for
+other source changes with the `test: install-e2e` label. Run untrusted PR code
+without publishing credentials. These checks need not run on every source PR.
 
 ## Alternatives
 
 A separate repository such as `voidzero-dev/homebrew-tap` would provide a smaller
-checkout and direct installation without an initial custom-URL tap command. It
-would also need separate repository administration and release-update access.
+checkout and direct installation without an initial custom-URL tap command.
 Keeping the formula in `vite-plus` puts code, packaging, and tests in one review
-process. A separate tap remains an option if checkout size becomes a problem;
-it is not required for the installation design.
+process. A separate repository remains an option if checkout size becomes a
+problem.
 
-| Approach                                              | Benefit                                                                    | Cost or limitation                                                                                                  |
-| ----------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Complete bundle in a project-owned tap (proposed)     | Small formula; no local build or npm bootstrap; Homebrew retains ownership | New bundle assembly, larger assets, and project-owned release support                                               |
-| Existing native archive only                          | Small download and nearly identical to script bootstrap                    | Downloads JS on first use; current setup deploys a user-managed copy, so Homebrew no longer controls the active CLI |
-| Run `install.sh` from a formula                       | Reuses the installation entrypoint directly                                | Writes user state during package installation and separates installed version tracking from the active CLI          |
-| Maintain a source formula and publish our own bottles | Conventional Homebrew build and bottle flow                                | Retains source recipe complexity and adds a bottle build pipeline                                                   |
-| Continue with core only                               | No additional formula or distribution channel                              | Packaging updates follow core's process and source build constraints                                                |
-| macOS cask                                            | Suitable for a prebuilt macOS distribution                                 | Requires a separate Linux solution and different installation detection                                             |
+| Approach                                                             | Benefit                                                                           | Cost or limitation                                                                                                    |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Existing npm packages (proposed)                                     | Reuses released packages and the script installer's dependency installation model | Requires Node.js and pnpm during installation, dependency metadata, and registry authentication support               |
+| Complete bundle on GitHub Releases                                   | Simple extraction and no npm access during CLI payload installation               | Requires new bundle assembly, larger assets, and another packaging format                                             |
+| Run `install.sh` from a formula                                      | Reuses the entrypoint directly                                                    | Installs user-managed files and loses Homebrew ownership of the active CLI                                            |
+| Keep only a native binary in the keg and install JavaScript per user | Avoids dependency installation during `brew install`                              | Requires a new external-binary setup and JavaScript resolution contract, per-user downloads, and version coordination |
+| Source formula with project-built bottles                            | Conventional Homebrew packaging                                                   | Retains source recipe complexity and adds a bottle pipeline                                                           |
+| Continue with core only                                              | No additional distribution channel                                                | Packaging follows core's process and source build constraints                                                         |
 
-An upstream tap can distribute prebuilt archives; the
-[Bun tap](https://github.com/oven-sh/homebrew-bun/blob/main/Formula/bun.rb)
-provides an example. This does not imply that the same formula would be accepted
-in core. The proposed binary formula would not offer a source-build mode;
-`--build-from-source` would not recreate the upstream build. Source builds remain
-available through the project and core.
-
-### npm registry downloads and authentication
-
-The tap could download the existing `@voidzero-dev/vite-plus-cli-<platform>`
-package from an npm registry. This option keeps the npm package format unchanged.
-It still needs a decision about how to install the JavaScript dependencies under
-Homebrew ownership; downloading the native binary alone does not provide them.
-Registry authentication must also cover those dependency downloads if this
-option is selected.
-
-Use a nonempty `HOMEBREW_NPM_CONFIG_REGISTRY` as the default registry override.
-Otherwise, read `registry` from `~/.npmrc`, then fall back to
-`https://registry.npmjs.org`. Honor scoped registry settings such as
-`@voidzero-dev:registry` for the corresponding packages, as npm does. These scoped
-settings take precedence over the default registry. Do not read a project's
-`.npmrc` based on the directory from which the user runs `brew`.
-The tap implements this setting; it is not a built-in Homebrew setting.
-
-Homebrew's [launcher](https://github.com/Homebrew/brew/blob/main/bin/brew) removes
-`NPM_CONFIG_REGISTRY` and ordinary token variables before formula evaluation.
-It preserves `HOMEBREW_*` variables. Users could forward an existing setting:
-
-```sh
-HOMEBREW_NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-}" \
-  brew install voidzero-dev/vite-plus/vp
-```
-
-Support registry-scoped `_authToken` entries in `~/.npmrc`. For example, a user
-could configure the following and export `HOMEBREW_NPM_TOKEN` in their shell:
-
-```ini
-registry=https://registry.example.com/repository/npm/
-//registry.example.com/repository/npm/:_authToken=${HOMEBREW_NPM_TOKEN}
-```
-
-Literal tokens in the file are also supported by this design. Existing entries
-that reference `${NPM_TOKEN}` need an explicit forwarding mechanism or a change
-to the placeholder; that variable does not survive Homebrew's launcher. Do not
-silently substitute a different token or send an unresolved placeholder.
-
-Resolve user configuration and credentials at download time in a tap-owned
-download strategy. Do not read credentials during formula evaluation or from
-`install`: Homebrew's [build sandbox](https://github.com/Homebrew/brew/blob/main/Library/Homebrew/sandbox.rb)
-restricts access to the user's home, including `.npmrc`. Keep registry tokens
-out of formula metadata, receipts, downloaded artifacts, and diagnostic output.
-The install step should consume downloaded files without user credentials.
-
-Use the pinned package version's metadata to obtain `dist.tarball`; private
-registries can use different tarball paths. Match credentials to each request's
-host and path, including tarball requests and redirects. A registry override must
-not send another registry's token to the new URL. Retain the formula's SHA-256
-check, and report authentication failures without falling back to the public
-registry. Follow npm's [configuration and authentication rules](https://docs.npmjs.com/cli/v11/configuring-npm/npmrc/).
-This initial option covers bearer tokens; other enterprise requirements such as
-client certificates need separate design and validation.
-
-Before selecting this option, use an isolated registry and synthetic `.npmrc`
-files to check registry precedence, scoped tokens, token substitution, custom
-tarball paths, redirects, authentication failures, checksum failures, and secret
-redaction. Test `brew fetch`, installation, reinstall, and upgrade on macOS and
-Linux. This is a proposed download design, not existing tap functionality.
+The tap can distribute prebuilt executables inside npm tarballs. This does not
+imply that the same recipe would be accepted in `homebrew/core`. The formula
+prepares published binaries and packages; `--build-from-source` would not compile
+the Vite+ sources. Source builds remain available through the project and core.
 
 ## Decisions requested
 
-1. Should Homebrew retain ownership of the active CLI, with complete bundles as proposed, or should the tap only bootstrap a script-managed install?
-2. Who owns formula updates and Homebrew support within the Vite+ project?
-3. Should the initial tap cover all four proposed targets, or start with macOS while Linux tests mature?
-4. Is the existing Node.js runtime resolver sufficient, or should the tap require Homebrew Node.js or ship a private runtime?
-5. Should tap updates require maintainer review initially, and what packaging-repair version scheme should we use?
-6. Should the tap use GitHub bundles, or existing npm packages with `HOMEBREW_NPM_CONFIG_REGISTRY` and authenticated `~/.npmrc` support? The npm option also needs a dependency installation design.
+The primary direction is existing npm packages with Homebrew ownership, using
+`HOMEBREW_NPM_CONFIG_REGISTRY` and authenticated `~/.npmrc` support. The npm
+package format stays unchanged. Remaining decisions are:
 
-After agreement, split implementation into bundle assembly, CLI ownership
-metadata, the tap and its tests, and release publication. Keep product
-documentation on the current installation instructions until the tap is usable.
-Then update the global CLI, upgrade, and implode guides, plus the directory
-layout RFC where the ownership metadata contract changes.
+1. Who owns formula updates and Homebrew support within the project?
+2. Should the initial tap cover all four proposed targets, or start with macOS while Linux tests mature?
+3. Is a Homebrew Node.js build dependency acceptable while the CLI retains its existing runtime selection?
+4. Does the locked-resource and offline-pnpm approach provide the right balance of reproducibility and formula complexity?
+5. Which enterprise authentication requirements beyond scoped bearer tokens belong in the first version?
+
+After agreement, split implementation into registry downloads, package
+installation and formula metadata, CLI formula identity, and release automation
+with Homebrew tests. Keep product documentation on the current installation
+instructions until the tap is usable. Then update the global CLI, upgrade, and
+implode guides, plus the directory layout RFC where the ownership contract
+changes.
