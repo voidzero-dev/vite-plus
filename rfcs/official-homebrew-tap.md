@@ -5,9 +5,10 @@
 
 ## Proposal
 
-Maintain a public Homebrew tap under the VoidZero organization. The proposed
-repository is `voidzero-dev/homebrew-tap`, with the formula
-`voidzero-dev/tap/vite-plus`.
+Maintain the Homebrew tap in the existing `voidzero-dev/vite-plus` repository.
+Add `HomebrewFormula/vp.rb`, with the Ruby class `Vp < Formula`. The tap name is
+`voidzero-dev/vite-plus`, and the formula name is `voidzero-dev/vite-plus/vp`.
+`vp` is the actual formula name, not an alias for a `vite-plus` formula.
 
 The formula installs a complete, prebuilt CLI bundle from a versioned GitHub
 release. Homebrew owns the binary and bundled JavaScript in its Cellar. The
@@ -75,18 +76,65 @@ work without network access.
 After the tap is available, a new user would run:
 
 ```sh
-brew install voidzero-dev/tap/vite-plus
+brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus
+brew install voidzero-dev/vite-plus/vp
 vp
 ```
 
 Use the fully qualified formula name in tap instructions to distinguish it from
-`homebrew/core/vite-plus`. Homebrew can add a tap during direct installation.
-See [Homebrew's tap guide](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap#installing).
+`homebrew/core/vite-plus` and core's `vp` alias. The initial `brew tap` command
+needs the explicit URL. Without it, Homebrew looks for
+`voidzero-dev/homebrew-vite-plus`. Subsequent installs and upgrades use the saved
+remote. See [the tap command documentation](https://docs.brew.sh/Manpage#tap-options-userrepo-url).
+
+### Repository layout
+
+The proposed files live beside the existing release and installation code:
+
+```text
+vite-plus/
+├── HomebrewFormula/
+│   └── vp.rb                            # new: formula
+├── .github/
+│   ├── workflows/
+│   │   ├── release.yml                  # extend: publish bundles and open formula PRs
+│   │   └── test-homebrew.yml            # new: installation tests
+│   └── scripts/
+│       ├── package-homebrew-bundle.mjs   # new: assemble the release bundle
+│       └── update-homebrew-formula.mjs   # new: update version, URLs, and checksums
+├── packages/cli/
+│   └── install.sh                       # existing script installer
+├── crates/vp_global_cli/src/
+│   ├── self_setup.rs                    # shared per-user setup
+│   └── homebrew.rs                      # ownership and formula identity
+└── rfcs/
+    └── official-homebrew-tap.md
+```
+
+New script and workflow names are illustrative. Only `HomebrewFormula/vp.rb`
+is needed for formula discovery. Release bundles remain GitHub release assets;
+they are not committed to the source tree.
+
+Homebrew recognizes a root-level `HomebrewFormula/` directory. It taps the Git
+repository, not a subdirectory URL. Standard tap installation clones the project
+repository, and updates fetch its changes, including changes unrelated to the
+formula. It does not limit the checkout to `HomebrewFormula/`. This is the download
+cost of keeping packaging in the same repository. See
+[Homebrew's tap layout documentation](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap#creating-a-tap)
+and [clone implementation](https://github.com/Homebrew/brew/blob/main/Library/Homebrew/tap.rb).
+
+The formula on `main` must reference a published stable release, even while the
+source contains newer development work. Update it only after the corresponding
+bundles and checksums are available. Formula PRs follow the repository's review
+rules; CI should use path filters to avoid unnecessary product builds for these
+packaging-only changes.
+
+### Installed layout
 
 The formula installs this layout:
 
 ```text
-<Cellar>/vite-plus/<version>/
+<Cellar>/vp/<version>/
 ├── bin/
 │   ├── vp
 │   ├── vpr -> vp
@@ -101,6 +149,8 @@ This layout matches the current [JavaScript resolver](../crates/vp_global_cli/sr
 and [Homebrew ownership check](../crates/vp_global_cli/src/homebrew.rs).
 Keep the real executable at `prefix/bin/vp`; a `libexec` wrapper would require
 another ownership and path-resolution contract.
+The npm package remains named `vite-plus`; the Homebrew formula name does not
+change JavaScript package names or Vite+-managed directory names.
 
 | Owner               | Files and operations                                                                                      |
 | ------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -166,19 +216,23 @@ Retain the ownership rules introduced for core installations:
 
 | Command                                            | Expected behavior for the tap                                                                     |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `vp upgrade`                                       | Direct the user to `brew upgrade voidzero-dev/tap/vite-plus`; do not install a managed copy       |
-| `vp upgrade --check`                               | Direct the user to `brew outdated voidzero-dev/tap/vite-plus`                                     |
+| `vp upgrade`                                       | Direct the user to `brew upgrade voidzero-dev/vite-plus/vp`; do not install a managed copy        |
+| `vp upgrade --check`                               | Direct the user to `brew outdated voidzero-dev/vite-plus/vp`                                      |
 | Upgrade with a version, `--force`, or `--rollback` | Keep the Homebrew ownership guard; do not switch installation channels                            |
 | Automatic update check                             | Keep npm checks disabled for Homebrew-owned binaries                                              |
 | `vp env doctor`                                    | Report Homebrew ownership, formula identity, binary path, and actual PATH/shim problems           |
 | `vp implode`                                       | Explain and remove Vite+-managed user data; retain the keg and direct package removal to Homebrew |
-| `brew uninstall voidzero-dev/tap/vite-plus`        | Remove the keg and public links; retain user data                                                 |
+| `brew uninstall voidzero-dev/vite-plus/vp`         | Remove the keg and public links; retain user data                                                 |
 
 Current detection returns a boolean, and command messages use `vite-plus`.
-Extend the ownership information to obtain the tap from the Homebrew receipt
-when available. Use the formula's full name in guidance. Preserve the existing
-generic guidance for older or incomplete receipts. Do not run `brew` merely to
-identify the active CLI, and do not add upgrade advice to unrelated doctor output.
+Extend the ownership information to identify the installed formula and read
+`source.tap` from the Homebrew receipt when available. Use the full name in
+guidance: `voidzero-dev/vite-plus/vp` for this tap and `homebrew/core/vite-plus`
+for core. Do not infer the formula name from the npm package name. If an older
+or incomplete receipt prevents identification, keep the ownership guard and
+ask the user to check the installed formula rather than guess its name.
+Do not run `brew` merely to identify the active CLI, and do not add upgrade
+advice to unrelated doctor output.
 
 For complete removal, document `vp implode` before `brew uninstall`, including
 its removal of runtimes, settings, and global packages. Package removal alone
@@ -194,14 +248,17 @@ contains each target's checksum; it never downloads a mutable `latest` URL or
 executes a remote installation script.
 
 After the stable release and required assets are available, a separate job opens
-an update PR in the tap. A narrowly scoped GitHub App token grants write access
-to that repository. Ordinary PR jobs receive no publishing credentials.
+a PR in `voidzero-dev/vite-plus` to update `HomebrewFormula/vp.rb`. The job only
+needs write access to this repository. Its credentials must support the required
+PR checks, either through normal events or an explicit test workflow dispatch.
+Ordinary PR jobs receive no publishing credentials.
 
 The update job verifies every required asset before changing the formula. It
 uses the release version as its idempotency key, updates an existing PR on retry,
 and rejects an update that would replace a newer formula with an older release.
-Tap CI tests the candidate before a maintainer merges it. Automatic merging can
-be considered after the process proves reliable.
+The Homebrew workflow tests the candidate before a maintainer merges it. A
+formula-only merge must not publish another product release. Automatic merging
+can be considered after the process proves reliable.
 
 A failed tap update leaves the previous formula available. It does not undo an
 already published npm or GitHub release. Report the failure in the release run
@@ -220,11 +277,16 @@ The core formula remains independently maintained. Homebrew's
 does not promise removal or redirection of a core formula when an upstream tap
 appears. Continue fixing compatibility with core installations.
 
-The tap and core formula share the name `vite-plus` and cannot be installed
-side by side in the same Homebrew prefix. Migration is explicit. The initial
-documented route should prefetch the tap package, remove the core package, and
-install the fully qualified tap formula. Keep user data and settings; do not use
-`vp implode` as a migration step. Check the installed receipt and active command
+The tap formula is named `vp`, while the core formula is named `vite-plus`.
+They use different Cellar directories, but both install `vp`, `vpr`, and `vpx`
+into Homebrew's public `bin`. Declare a conflict with `vite-plus` in the tap
+formula and document an explicit migration. Do not overwrite the existing links
+or use core's `vp` alias to select the tap package.
+
+The initial documented route should prefetch `voidzero-dev/vite-plus/vp`, remove
+`homebrew/core/vite-plus`, and install the fully qualified tap formula. Keep user
+data and settings; do not use `vp implode` as a migration step. Check the
+installed receipt and active command
 afterward. Test the exact sequence, dependency behavior, and recovery from a
 failed installation before publishing copy-and-paste instructions.
 
@@ -259,15 +321,24 @@ The release and tap tests must cover:
 - Two users sharing a package with separate setup receipts and management preferences.
 - Package replacement and removal of the old keg, followed by saved `vp` and tool shim paths in existing Bash and Zsh sessions.
 - Managed and mixed per-tool settings across upgrades, reinstall, and interrupted setup.
-- `upgrade`, `upgrade --check`, `implode`, and doctor output for both core and tap receipts.
+- `upgrade`, `upgrade --check`, `implode`, and doctor output for both formula names, including incomplete receipts.
+- Formula discovery through the explicit repository URL, conflict handling, and core's existing `vp` alias.
 - Migration in both directions, script installation coexistence, package removal, and retained user data.
 
-Run tap checks on formula PRs and bundle checks on release candidates. In the
-Vite+ repository, allow maintainers to request the full Homebrew installation
-suite with the `test: install-e2e` label. Run untrusted PR code without publishing
-credentials. These checks need not run on every ordinary source PR.
+Run Homebrew checks on PRs that change `HomebrewFormula/vp.rb` or its packaging
+scripts, and bundle checks on release candidates. Allow maintainers to request
+the full Homebrew installation suite for other source changes with the
+`test: install-e2e` label. Run untrusted PR code without publishing credentials.
+These checks need not run on every ordinary source PR.
 
 ## Alternatives
+
+A separate repository such as `voidzero-dev/homebrew-tap` would provide a smaller
+checkout and direct installation without an initial custom-URL tap command. It
+would also need separate repository administration and release-update access.
+Keeping the formula in `vite-plus` puts code, packaging, and tests in one review
+process. A separate tap remains an option if checkout size becomes a problem;
+it is not required for the installation design.
 
 | Approach                                              | Benefit                                                                    | Cost or limitation                                                                                                  |
 | ----------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -275,7 +346,7 @@ credentials. These checks need not run on every ordinary source PR.
 | Existing native archive only                          | Small download and nearly identical to script bootstrap                    | Downloads JS on first use; current setup deploys a user-managed copy, so Homebrew no longer controls the active CLI |
 | Run `install.sh` from a formula                       | Reuses the installation entrypoint directly                                | Writes user state during package installation and separates installed version tracking from the active CLI          |
 | Maintain a source formula and publish our own bottles | Conventional Homebrew build and bottle flow                                | Retains source recipe complexity and adds a bottle build pipeline                                                   |
-| Continue with core only                               | No new repository or distribution channel                                  | Packaging updates follow core's process and source build constraints                                                |
+| Continue with core only                               | No additional formula or distribution channel                              | Packaging updates follow core's process and source build constraints                                                |
 | macOS cask                                            | Suitable for a prebuilt macOS distribution                                 | Requires a separate Linux solution and different installation detection                                             |
 
 An upstream tap can distribute prebuilt archives; the
@@ -288,7 +359,7 @@ available through the project and core.
 ## Decisions requested
 
 1. Should Homebrew retain ownership of the active CLI, with complete bundles as proposed, or should the tap only bootstrap a script-managed install?
-2. Is `voidzero-dev/homebrew-tap` the right repository name, and who owns release updates and support?
+2. Who owns formula updates and Homebrew support within the Vite+ project?
 3. Should the initial tap cover all four proposed targets, or start with macOS while Linux tests mature?
 4. Is the existing Node.js runtime resolver sufficient, or should the tap require Homebrew Node.js or ship a private runtime?
 5. Should tap updates require maintainer review initially, and what packaging-repair version scheme should we use?
