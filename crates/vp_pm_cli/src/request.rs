@@ -175,8 +175,7 @@ impl HttpClient {
             && !is_ci
         {
             let pb = ProgressBar::new_spinner();
-            pb.set_style(vp_shared::download_progress::spinner_style());
-            pb.set_message(message.to_string());
+            pb.set_style(vp_shared::download_progress::download_style(message));
             pb.enable_steady_tick(Duration::from_millis(100));
             Some(pb)
         } else {
@@ -198,7 +197,6 @@ impl HttpClient {
                 pb.set_position(0);
                 if let Some(size) = response.content_length() {
                     pb.set_length(size);
-                    pb.set_style(vp_shared::download_progress::bar_style());
                 }
             }
             Self::write_response_to_file(response, target_path, progress.as_ref()).await

@@ -50,8 +50,7 @@ pub async fn download_file(
     let is_ci = vp_shared::EnvConfig::get().is_ci;
     let progress = if vp_shared::is_stderr_terminal() && !is_ci {
         let pb = ProgressBar::new_spinner();
-        pb.set_style(vp_shared::download_progress::spinner_style());
-        pb.set_message(message.to_string());
+        pb.set_style(vp_shared::download_progress::download_style(message));
         pb.enable_steady_tick(Duration::from_millis(100));
         Some(pb)
     } else {
@@ -126,7 +125,6 @@ pub async fn download_file(
             pb.set_position(if is_resumed { resume_from } else { 0 });
             if let Some(size) = total_size {
                 pb.set_length(size);
-                pb.set_style(vp_shared::download_progress::bar_style());
             }
         }
 
