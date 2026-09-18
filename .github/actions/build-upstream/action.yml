@@ -220,7 +220,7 @@ runs:
       run: |
         pnpm --filter=vite-plus build-ts
       env:
-        # Reuse metadata from the Linux native build so Windows does not
+        # Reuse metadata from the native build so consumer jobs do not
         # download a Rust toolchain and dependency sources to generate versions.
         VP_BUILD_CARGO_METADATA: ${{ inputs.skip-native == 'true' && format('{0}/packages/cli/binding/vite-plus.cargo-metadata.json', github.workspace) || '' }}
 

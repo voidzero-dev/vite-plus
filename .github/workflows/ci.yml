@@ -905,21 +905,15 @@ jobs:
           pnpm bootstrap-cli:ci
           vp --version
 
-  # Runs the PTY snapshot suite (crates/vp_cli_snapshots) with BOTH vp
-  # flavors on Linux and macOS: the local flavor uses the packages/cli build
-  # from this job, the global flavor reuses the installed release binary via
-  # VP_SNAP_GLOBAL_VP (no vp_global_cli compile; build-upstream builds or
-  # cache-restores it). Three shards per OS split the trials across runners.
-  # Windows runs in cli-snapshot-test-windows via the cross-compiled archive.
-  cli-snapshot-test:
-    name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
+  # Build the native CLI and snapshot runner once per platform, then share
+  # them across all three shards. Tar preserves executable permissions.
+  build-cli-snapshot-binaries:
+    name: Build CLI snapshot binaries (${{ matrix.target }})
     needs:
       - download-previous-rolldown-binaries
     strategy:
       fail-fast: false
       matrix:
-        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
-        shard: [1, 2, 3]
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
@@ -947,6 +941,85 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
+
+      - name: Build snapshot test binaries
+        run: cargo test -p vp_cli_snapshots --no-run --message-format=json > "$RUNNER_TEMP/snapshot-test-build.json"
+
+      - name: Package snapshot binaries
+        run: |
+          artifact_dir="$(mktemp -d)"
+          trap 'rm -rf "$artifact_dir"' EXIT
+          mkdir -p "$artifact_dir/packages/cli/binding" \
+            "$artifact_dir/target/$BUILD_TARGET/release" \
+            "$artifact_dir/target/snapshot-tests"
+          cp packages/cli/binding/*.node packages/cli/binding/vite-plus.build-time \
+            "$artifact_dir/packages/cli/binding/"
+          cargo metadata --locked --format-version 1 \
+            | jq '{packages: [.packages[] | {name, version, source}]}' \
+            > "$artifact_dir/packages/cli/binding/vite-plus.cargo-metadata.json"
+          cp "${CARGO_TARGET_DIR:-target}/$BUILD_TARGET/release/vp" \
+            "$artifact_dir/target/$BUILD_TARGET/release/vp"
+          for binary in cli_snapshots vpt; do
+            binary_path="$(jq -er --arg name "$binary" \
+              'select(.reason == "compiler-artifact" and .target.name == $name and .executable != null) | .executable' \
+              "$RUNNER_TEMP/snapshot-test-build.json")"
+            cp "$binary_path" "$artifact_dir/target/snapshot-tests/$binary"
+          done
+          tar -czf "$RUNNER_TEMP/cli-snapshot-binaries.tar.gz" -C "$artifact_dir" .
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-snapshot-binaries-${{ matrix.target }}
+          path: ${{ runner.temp }}/cli-snapshot-binaries.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  # Each shard reuses the native CLI and test binaries from the platform's
+  # build job. Only the TypeScript packages are built here for local-flavor
+  # cases. Windows uses its cross-compiled artifacts in the separate job.
+  cli-snapshot-test:
+    name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
+    needs:
+      - build-cli-snapshot-binaries
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
+        shard: [1, 2, 3]
+        include:
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      - name: Download prebuilt snapshot binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-snapshot-binaries-${{ matrix.target }}
+          path: ${{ runner.temp }}
+
+      - name: Extract snapshot binaries
+        run: tar -xzf "$RUNNER_TEMP/cli-snapshot-binaries.tar.gz"
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: ${{ matrix.target }}
+          skip-native: true
 
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
@@ -1004,9 +1077,13 @@ jobs:
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
           VP_SNAP_FISH_BIN="$(command -v fish)" \
           VP_SNAP_NU_BIN="$(command -v nu)" \
-          cargo test -p vp_cli_snapshots
+          ./target/snapshot-tests/cli_snapshots
         env:
           RUST_BACKTRACE: '1'
+          # Relocate fixture and helper paths while keeping the same test
+          # process and VP_SNAP_SHARD partitioning as cargo test.
+          CARGO_MANIFEST_DIR: ${{ github.workspace }}/crates/vp_cli_snapshots
+          CARGO_BIN_EXE_vpt: ${{ github.workspace }}/target/snapshot-tests/vpt
           VP_SNAP_SHARD: ${{ matrix.shard }}/3
 
   # Runs the PTY snapshot suite (crates/vp_cli_snapshots) on Windows with
@@ -1516,6 +1593,7 @@ jobs:
       - cli-e2e-test
       - cli-e2e-test-musl
       - certless-image-test
+      - build-cli-snapshot-binaries
       - cli-snapshot-test
       - cli-snapshot-test-windows
       # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.
