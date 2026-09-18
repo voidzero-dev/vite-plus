@@ -65,9 +65,7 @@ Package-manager selection uses this priority:
 4. `devEngines.packageManager`
 5. Lockfile or manager-specific configuration
 6. The named package manager's global default version
-7. The named shim's latest release
-
-For npm, `package-lock.json` selects the package manager but does not select a separate npm version. Without an explicit npm version or a configured npm default, `vp` commands and the npm/npx shims use the npm bundled with the selected Node.js runtime.
+7. The named shim's latest release (Node.js' bundled version version for `npm`)
 
 `VP_PACKAGE_MANAGER` selects the manager and version for commands such as `vp install`. Direct package-manager shims ignore this variable and use independent version overrides:
 
@@ -91,7 +89,7 @@ VP_PNPM_VERSION=10.20.0 pnpm --version
 
 The overrides apply in managed mode. A package manager can also perform its own version switching after Vite+ launches it; for example, pnpm's `managePackageManagerVersions` setting may switch back to the version in `package.json`.
 
-A project selection applies only to its matching shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The npm shim falls back to Node's bundled npm, which is also reported by `vp env current npm`. Explicit npm installation commands such as `vp env install npm` use standalone npm's latest release when no version is configured.
+A project selection applies only to its matching shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The npm shim falls back to Node's bundled npm. `vp env use npm` selects standalone npm's latest release for the current shell when no project version or global default is configured.
 
 ::: details Latest-version caching
 When a named shim falls back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached.
