@@ -102,9 +102,11 @@ Summarize the migration at the end and report any manual follow-up still require
 
 ### Vitest
 
-Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@4.x` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
+Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@5.0.1` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
 
-Browser mode is more nuanced. `vite-plus` bundles the base browser runtime (`@vitest/browser`) and the preview provider (`@vitest/browser-preview`), but the **Playwright** and **WebdriverIO** providers stay opt-in: `@vitest/browser-playwright` (with its `playwright` peer) and `@vitest/browser-webdriverio` (with its `webdriverio` peer) are **not** shipped with `vite-plus`, so non-browser projects never pull them in. `vp migrate` detects the provider you actually use and adds it — pinned to the bundled vitest version — together with its framework. If you migrate manually and use one of these providers, install the provider package and its framework yourself so `vite-plus/test/browser-playwright` / `vite-plus/test/browser-webdriverio` can resolve.
+For browser mode, you can use the base browser runtime (`@vitest/browser`) and Preview provider (`@vitest/browser-preview`) included in `vite-plus`. To use Playwright or WebDriverIO, you also need the opt-in provider (`@vitest/browser-playwright` or `@vitest/browser-webdriverio`) and its framework peer (`playwright` or `webdriverio`).
+
+`vp migrate` detects your provider and adds it with its framework. The Playwright provider uses the bundled Vitest version. The community-maintained WebDriverIO provider uses a compatible version range because its releases follow a separate schedule. For manual migration, install the provider and framework so `vite-plus/test/browser-playwright` or `vite-plus/test/browser-webdriverio` can resolve. See [package version guidance](./vitest-v5.md#entry-points-and-packages).
 
 If you are migrating manually, update all the imports to `vite-plus/test*` instead:
 
