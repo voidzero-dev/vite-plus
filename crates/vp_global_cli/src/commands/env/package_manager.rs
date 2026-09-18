@@ -76,7 +76,7 @@ pub(crate) async fn resolve_current_for(
     cwd: &AbsolutePath,
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let specs = current_specs(expected).await?;
+    let specs = current_specs(cwd, expected).await?;
     let mut resolution = resolve_environment_package_manager(
         cwd,
         specs.override_spec(),
@@ -102,7 +102,7 @@ pub(crate) async fn resolve_current_or_fallback_for(
 pub(crate) async fn resolve_current_spec(
     cwd: &AbsolutePath,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let specs = current_specs(None).await?;
+    let specs = current_specs(cwd, None).await?;
 
     let mut resolution =
         resolve_environment_package_manager_spec(cwd, specs.override_spec(), specs.default_spec())
@@ -141,7 +141,10 @@ impl CurrentSpecs {
     }
 }
 
-async fn current_specs(expected: Option<PackageManagerType>) -> Result<CurrentSpecs, Error> {
+async fn current_specs(
+    cwd: &AbsolutePath,
+    expected: Option<PackageManagerType>,
+) -> Result<CurrentSpecs, Error> {
     let env = vp_shared::EnvConfig::get();
     let selected = env
         .package_manager
@@ -151,6 +154,14 @@ async fn current_specs(expected: Option<PackageManagerType>) -> Result<CurrentSp
         .map(parse_package_manager_spec_with_hash)
         .transpose()?;
     let config = config::load_config().await?;
+    // npm lockfiles select the family without overriding its configured default version.
+    let expected = match expected {
+        Some(expected) => Some(expected),
+        None if selected.is_none() => resolve_environment_package_manager_spec(cwd, None, None)?
+            .filter(|resolution| resolution.package_manager_type == PackageManagerType::Npm)
+            .map(|resolution| resolution.package_manager_type),
+        None => None,
+    };
     let default = expected
         .map(|package_manager| configured_default_for(&config, package_manager))
         .transpose()?

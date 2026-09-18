@@ -228,8 +228,18 @@ impl PackageManagerBuilder {
     /// Detect the package manager from the current working directory.
     pub async fn build(&self) -> Result<PackageManager, Error> {
         let (workspace_root, _) = find_workspace_root(&self.cwd)?;
-        let (package_manager_type, version_or_req, hash, _) =
+        let (package_manager_type, version_or_req, hash, source) =
             get_package_manager_type_and_version(&workspace_root, self.client_override)?;
+
+        // A lockfile selects npm, but does not request a version separate from Node's npm.
+        if package_manager_type == PackageManagerType::Npm
+            && matches!(
+                source,
+                PackageManagerSource::LockfileOrConfig | PackageManagerSource::Default
+            )
+        {
+            return Ok(crate::helpers::default_npm_package_manager(&self.cwd));
+        }
 
         // only download the package manager if it's not already downloaded
         let (install_dir, _package_name, version) =
@@ -315,7 +325,7 @@ impl PackageManager {
 /// from the workspace root.
 ///
 /// The returned version is exact when detected from the `packageManager` field,
-/// `"latest"` when detected from lockfiles/config files/default, and may be a
+/// `"bundled"` for unpinned npm, `"latest"` for other lockfile/config/default selections, and may be a
 /// semver range (or `"*"` for an absent version) when detected from
 /// `devEngines.packageManager` (see rfcs/dev-engines.md).
 pub fn get_package_manager_type_and_version(
@@ -367,10 +377,10 @@ pub fn get_package_manager_type_and_version(
         return Ok((PackageManagerType::Yarn, version, None, source));
     }
 
-    // if package-lock.json exists, use npm@latest
+    // A package-lock.json selects npm without requiring a separate installation.
     let package_lock_json_path = workspace_root.path.join("package-lock.json");
     if is_exists_file(&package_lock_json_path)? {
-        return Ok((PackageManagerType::Npm, version, None, source));
+        return Ok((PackageManagerType::Npm, "bundled".into(), None, source));
     }
 
     // if bun.lock (text format) or bun.lockb (binary format) exists, use bun@latest
@@ -409,6 +419,7 @@ pub fn get_package_manager_type_and_version(
 
     // if default is specified, use it
     if let Some(default) = default {
+        let version = if default == PackageManagerType::Npm { "bundled".into() } else { version };
         return Ok((default, version, None, PackageManagerSource::Default));
     }
 
@@ -565,6 +576,15 @@ pub async fn resolve_environment_package_manager(
     {
         resolution = default_spec
             .filter(|(package_manager, _, _)| *package_manager == expected)
+            .map(environment_package_manager_default);
+    }
+    // Let npm shims use the selected Node runtime unless an npm version was configured.
+    if resolution.as_ref().is_some_and(|resolution| {
+        resolution.package_manager_type == PackageManagerType::Npm
+            && resolution.source == PackageManagerSource::LockfileOrConfig.description()
+    }) {
+        resolution = default_spec
+            .filter(|(package_manager, _, _)| *package_manager == PackageManagerType::Npm)
             .map(environment_package_manager_default);
     }
     let Some(mut resolution) = resolution else {
@@ -2871,71 +2891,6 @@ mod tests {
 
     #[tokio::test]
     #[cfg(not(windows))] // FIXME
-    async fn test_detect_package_manager_with_package_lock_json() {
-        let vp_home = shared_vp_home();
-        vp_shared::EnvConfig::with_vars_async(
-            [(env_vars::VP_HOME, vp_home.as_os_str())],
-            |_| async move {
-                use std::process::Command;
-
-                let temp_dir = create_temp_dir();
-                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-                let package_content = r#"{"name": "test-package"}"#;
-                create_package_json(&temp_dir_path, package_content);
-
-                // Create package-lock.json
-                fs::write(temp_dir_path.join("package-lock.json"), r#"{"lockfileVersion": 2}"#)
-                    .expect("Failed to write package-lock.json");
-
-                let result = PackageManager::builder(temp_dir_path)
-                    .build()
-                    .await
-                    .expect("Should detect npm");
-                assert_eq!(result.client.to_string(), "npm");
-
-                // check shim files
-                let bin_prefix = result.get_bin_prefix();
-                assert!(is_exists_file(bin_prefix.join("npm")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npm.cmd")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npm.ps1")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npx")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npx.cmd")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npx.ps1")).unwrap());
-
-                // run npm --version
-                let mut paths =
-                    env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
-                paths.insert(0, bin_prefix.into_path_buf());
-                let output = Command::new("npm")
-                    .arg("--version")
-                    .env("PATH", env::join_paths(&paths).unwrap())
-                    .output()
-                    .expect("Failed to run npm");
-                assert!(
-                    output.status.success(),
-                    "stderr: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
-                // println!("npm --version: {:?}", String::from_utf8_lossy(&output.stdout));
-
-                // run npx --version
-                let output = Command::new("npx")
-                    .arg("--version")
-                    .env("PATH", env::join_paths(&paths).unwrap())
-                    .output()
-                    .expect("Failed to run npx");
-                assert!(
-                    output.status.success(),
-                    "stderr: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
-            },
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[cfg(not(windows))] // FIXME
     async fn test_detect_package_manager_with_package_manager_field() {
         let vp_home = shared_vp_home();
         vp_shared::EnvConfig::with_vars_async(
@@ -4315,7 +4270,7 @@ mod tests {
             PackageManagerType::Npm,
             "package-lock.json should take precedence over pnpmfile.cjs and yarn.config.cjs"
         );
-        assert_eq!(version, "latest");
+        assert_eq!(version, "bundled");
         assert_eq!(hash, None);
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }

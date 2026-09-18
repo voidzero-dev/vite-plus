@@ -1,0 +1,12 @@
+[[case]]
+name = "npm_lockfile_uses_bundled_version"
+vp = "global"
+steps = [
+  { argv = ["node", "assert-npm.cjs"], comment = "A Node-only devEngines declaration and npm lockfile use bundled npm without querying the registry", envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]] },
+  { argv = ["vp", "env", "default", "npm@10.5.0"], snapshot = false },
+  { argv = ["node", "assert-npm.cjs", "10.5.0"], comment = "An npm default overrides the bundled version even when a lockfile exists" },
+  { argv = ["vpt", "json-edit", "package.json", "devEngines.packageManager", "{\"name\":\"npm\",\"version\":\"10.9.4\"}"], snapshot = false },
+  { argv = ["node", "assert-npm.cjs", "10.9.4"], comment = "A devEngines npm version overrides the default" },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.8.2"], snapshot = false },
+  { argv = ["node", "assert-npm.cjs", "10.8.2"], comment = "A top-level npm pin still has priority" },
+]

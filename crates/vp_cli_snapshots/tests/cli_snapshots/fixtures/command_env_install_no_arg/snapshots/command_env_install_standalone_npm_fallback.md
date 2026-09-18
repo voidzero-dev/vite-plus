@@ -1,6 +1,6 @@
 # command_env_install_standalone_npm_fallback
 
-Explicit npm family scopes use standalone registry npm; only the directly invoked npm shim keeps Node.js' bundled npm fallback.
+Explicit npm installation uses standalone registry npm without installing Node.js.
 
 ## `vp env use npm --no-install`
 
@@ -22,22 +22,20 @@ Installing npm <version>...
 Installed npm <version>
 ```
 
-## `vp env current npm --json`
+## `vp env list npm --json`
 
 the standalone npm fallback is installed
 
 ```
 {
-  "package_manager": {
-    "name": "npm",
-    "version": "<version>",
-    "source": "registry fallback",
-    "bin_paths": {
-      "npm": "<home>/.vite-plus/package_manager/npm/<version>/npm/bin/npm",
-      "npx": "<home>/.vite-plus/package_manager/npm/<version>/npm/bin/npx"
-    },
-    "installed": true,
-    "mode": "managed"
+  "package_managers": {
+    "npm": [
+      {
+        "version": "12.0.2",
+        "current": true,
+        "default": false
+      }
+    ]
   }
 }
 ```
