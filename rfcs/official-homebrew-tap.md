@@ -375,19 +375,20 @@ Homebrew ownership; downloading the native binary alone does not provide them.
 Registry authentication must also cover those dependency downloads if this
 option is selected.
 
-Use a nonempty `HOMEBREW_VP_NPM_REGISTRY` as a tap-specific default registry override.
+Use a nonempty `HOMEBREW_NPM_CONFIG_REGISTRY` as the default registry override.
 Otherwise, read `registry` from `~/.npmrc`, then fall back to
 `https://registry.npmjs.org`. Honor scoped registry settings such as
 `@voidzero-dev:registry` for the corresponding packages, as npm does. These scoped
 settings take precedence over the default registry. Do not read a project's
 `.npmrc` based on the directory from which the user runs `brew`.
+The tap implements this setting; it is not a built-in Homebrew setting.
 
 Homebrew's [launcher](https://github.com/Homebrew/brew/blob/main/bin/brew) removes
 `NPM_CONFIG_REGISTRY` and ordinary token variables before formula evaluation.
 It preserves `HOMEBREW_*` variables. Users could forward an existing setting:
 
 ```sh
-HOMEBREW_VP_NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-}" \
+HOMEBREW_NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-}" \
   brew install voidzero-dev/vite-plus/vp
 ```
 
@@ -433,7 +434,7 @@ Linux. This is a proposed download design, not existing tap functionality.
 3. Should the initial tap cover all four proposed targets, or start with macOS while Linux tests mature?
 4. Is the existing Node.js runtime resolver sufficient, or should the tap require Homebrew Node.js or ship a private runtime?
 5. Should tap updates require maintainer review initially, and what packaging-repair version scheme should we use?
-6. Should the tap use GitHub bundles, or existing npm packages with `HOMEBREW_VP_NPM_REGISTRY` and authenticated `~/.npmrc` support? The npm option also needs a dependency installation design.
+6. Should the tap use GitHub bundles, or existing npm packages with `HOMEBREW_NPM_CONFIG_REGISTRY` and authenticated `~/.npmrc` support? The npm option also needs a dependency installation design.
 
 After agreement, split implementation into bundle assembly, CLI ownership
 metadata, the tap and its tests, and release publication. Keep product
