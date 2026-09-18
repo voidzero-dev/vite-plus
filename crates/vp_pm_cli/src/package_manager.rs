@@ -476,14 +476,13 @@ pub fn resolve_package_manager_from_package_json(
     }))
 }
 
-/// Read the package manager selected by an explicit/session override, project files, or default.
+/// Read the package manager selected by an explicit/session override or project files.
 ///
 /// The returned version is the declared requirement. It is intentionally not resolved against the
 /// registry or managed installs, so callers can inspect the selection without network access.
 pub fn resolve_environment_package_manager_spec(
     cwd: impl AsRef<AbsolutePath>,
     override_spec: Option<(PackageManagerType, &str, Option<&str>)>,
-    default_spec: Option<(PackageManagerType, &str, Option<&str>)>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
     if let Some((package_manager_type, version, hash)) = override_spec {
         return Ok(Some(EnvironmentPackageManagerResolution {
@@ -499,7 +498,7 @@ pub fn resolve_environment_package_manager_spec(
     let (workspace_root, _) = match find_workspace_root(cwd.as_ref()) {
         Ok(result) => result,
         Err(vt_workspace::Error::PackageJsonNotFound(_)) => {
-            return Ok(default_spec.map(environment_package_manager_default));
+            return Ok(None);
         }
         Err(error) => return Err(error.into()),
     };
@@ -540,9 +539,7 @@ pub fn resolve_environment_package_manager_spec(
                 project_root: Some(workspace_root.path.to_absolute_path_buf()),
             }))
         }
-        Err(Error::UnrecognizedPackageManager) => {
-            Ok(default_spec.map(environment_package_manager_default))
-        }
+        Err(Error::UnrecognizedPackageManager) => Ok(None),
         Err(error) => Err(error),
     }
 }
@@ -564,29 +561,23 @@ fn environment_package_manager_default(
 /// operations such as `vp env install` and package-manager shims. When `expected` is set, a
 /// different selected family falls back to the matching configured default before registry lookup.
 pub async fn resolve_environment_package_manager(
-    cwd: impl AsRef<AbsolutePath>,
-    override_spec: Option<(PackageManagerType, &str, Option<&str>)>,
+    resolution: Option<EnvironmentPackageManagerResolution>,
     default_spec: Option<(PackageManagerType, &str, Option<&str>)>,
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let mut resolution =
-        resolve_environment_package_manager_spec(cwd, override_spec, default_spec)?;
-    if let Some(expected) = expected
-        && resolution.as_ref().is_some_and(|resolution| resolution.package_manager_type != expected)
-    {
-        resolution = default_spec
-            .filter(|(package_manager, _, _)| *package_manager == expected)
-            .map(environment_package_manager_default);
-    }
-    // Let npm shims use the selected Node runtime unless an npm version was configured.
-    if resolution.as_ref().is_some_and(|resolution| {
-        resolution.package_manager_type == PackageManagerType::Npm
-            && resolution.source == PackageManagerSource::LockfileOrConfig.description()
-    }) {
-        resolution = default_spec
-            .filter(|(package_manager, _, _)| *package_manager == PackageManagerType::Npm)
-            .map(environment_package_manager_default);
-    }
+    let kind =
+        expected.or_else(|| resolution.as_ref().map(|resolution| resolution.package_manager_type));
+    // A matching project version wins; an npm lockfile only selects the family.
+    let resolution = resolution.filter(|resolution| {
+        Some(resolution.package_manager_type) == kind
+            && !(resolution.package_manager_type == PackageManagerType::Npm
+                && resolution.source == PackageManagerSource::LockfileOrConfig.description())
+    });
+    let resolution = resolution.or_else(|| {
+        default_spec
+            .filter(|(package_manager, _, _)| kind.is_none_or(|kind| *package_manager == kind))
+            .map(environment_package_manager_default)
+    });
     let Some(mut resolution) = resolution else {
         return Ok(None);
     };
@@ -2191,9 +2182,13 @@ mod tests {
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         create_package_json(&cwd, r#"{"packageManager":"pnpm@10.18.0"}"#);
 
-        let resolution = resolve_environment_package_manager(
+        let selected = resolve_environment_package_manager_spec(
             &cwd,
             Some((PackageManagerType::Yarn, "1.22.22", Some("sha512.example"))),
+        )
+        .unwrap();
+        let resolution = resolve_environment_package_manager(
+            selected,
             Some((PackageManagerType::Bun, "1.2.0", None)),
             None,
         )
@@ -2213,9 +2208,9 @@ mod tests {
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         create_package_json(&cwd, r#"{"name":"example"}"#);
 
+        let selected = resolve_environment_package_manager_spec(&cwd, None).unwrap();
         let resolution = resolve_environment_package_manager(
-            &cwd,
-            None,
+            selected,
             Some((PackageManagerType::Bun, "1.2.0", None)),
             None,
         )
@@ -2234,9 +2229,9 @@ mod tests {
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         create_package_json(&cwd, r#"{"packageManager":"bun@1.2.0"}"#);
 
+        let selected = resolve_environment_package_manager_spec(&cwd, None).unwrap();
         let resolution = resolve_environment_package_manager(
-            &cwd,
-            None,
+            selected,
             Some((PackageManagerType::Pnpm, "10.18.0", None)),
             Some(PackageManagerType::Pnpm),
         )
@@ -2258,8 +2253,7 @@ mod tests {
             r#"{"devEngines":{"packageManager":{"name":"pnpm","version":"^10.0.0"}}}"#,
         );
 
-        let resolution =
-            resolve_environment_package_manager_spec(&cwd, None, None).unwrap().unwrap();
+        let resolution = resolve_environment_package_manager_spec(&cwd, None).unwrap().unwrap();
 
         assert_eq!(resolution.package_manager_type, PackageManagerType::Pnpm);
         assert_eq!(resolution.version, "^10.0.0");

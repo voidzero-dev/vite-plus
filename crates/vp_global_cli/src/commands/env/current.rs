@@ -189,7 +189,7 @@ async fn resolve_package_manager_info(
         {
             let selected = if scope.package_manager().is_some() {
                 // Project provenance is optional when the executable comes from PATH.
-                vp_pm_cli::resolve_environment_package_manager_spec(cwd, None, None)
+                vp_pm_cli::resolve_environment_package_manager_spec(cwd, None)
                     .ok()
                     .flatten()
                     .filter(|resolution| resolution.package_manager_type == selected_type)

@@ -30,16 +30,13 @@ pub(crate) async fn resolve_shim_for(
     let override_spec = version
         .map(|version| parse_package_manager_spec_with_hash(&format!("{expected}@{version}")))
         .transpose()?;
-    let default = configured_default_for(&config::load_config().await?, expected)?;
-    let mut resolution = resolve_environment_package_manager(
+    let resolution = resolve_environment_package_manager_spec(
         cwd,
         override_spec
             .as_ref()
             .map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
-        default.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
-        Some(expected),
-    )
-    .await?;
+    )?;
+    let mut resolution = resolve_selection(resolution, Some(expected)).await?;
     if override_spec.is_some()
         && let Some(resolution) = &mut resolution
     {
@@ -76,16 +73,8 @@ pub(crate) async fn resolve_current_for(
     cwd: &AbsolutePath,
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let specs = current_specs(cwd, expected).await?;
-    let mut resolution = resolve_environment_package_manager(
-        cwd,
-        specs.override_spec(),
-        specs.default_spec(),
-        expected,
-    )
-    .await?;
-    specs.apply_override_source(&mut resolution);
-    Ok(resolution)
+    let resolution = resolve_current_spec(cwd).await?;
+    resolve_selection(resolution, expected).await
 }
 
 pub(crate) async fn resolve_current_or_fallback_for(
@@ -102,49 +91,6 @@ pub(crate) async fn resolve_current_or_fallback_for(
 pub(crate) async fn resolve_current_spec(
     cwd: &AbsolutePath,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let specs = current_specs(cwd, None).await?;
-
-    let mut resolution =
-        resolve_environment_package_manager_spec(cwd, specs.override_spec(), specs.default_spec())
-            .map_err(Error::from)?;
-    specs.apply_override_source(&mut resolution);
-    Ok(resolution)
-}
-
-pub(crate) type PackageManagerSpec = (PackageManagerType, String, Option<String>);
-
-struct CurrentSpecs {
-    selected: Option<PackageManagerSpec>,
-    default: Option<PackageManagerSpec>,
-}
-
-impl CurrentSpecs {
-    fn override_spec(&self) -> Option<(PackageManagerType, &str, Option<&str>)> {
-        self.selected
-            .as_ref()
-            .map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref()))
-    }
-
-    fn default_spec(&self) -> Option<(PackageManagerType, &str, Option<&str>)> {
-        self.default
-            .as_ref()
-            .map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref()))
-    }
-
-    fn apply_override_source(&self, resolution: &mut Option<EnvironmentPackageManagerResolution>) {
-        if self.selected.is_some()
-            && let Some(resolution) = resolution
-        {
-            resolution.source = config::PACKAGE_MANAGER_ENV_VAR.into();
-            resolution.source_path = None;
-        }
-    }
-}
-
-async fn current_specs(
-    cwd: &AbsolutePath,
-    expected: Option<PackageManagerType>,
-) -> Result<CurrentSpecs, Error> {
     let env = vp_shared::EnvConfig::get();
     let selected = env
         .package_manager
@@ -153,20 +99,36 @@ async fn current_specs(
         .filter(|spec| !spec.is_empty())
         .map(parse_package_manager_spec_with_hash)
         .transpose()?;
+    let mut resolution = resolve_environment_package_manager_spec(
+        cwd,
+        selected.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
+    )?;
+    if selected.is_some()
+        && let Some(resolution) = &mut resolution
+    {
+        resolution.source = config::PACKAGE_MANAGER_ENV_VAR.into();
+    }
+    Ok(resolution)
+}
+
+pub(crate) type PackageManagerSpec = (PackageManagerType, String, Option<String>);
+
+/// Both entry points select a family before looking up its default version.
+async fn resolve_selection(
+    resolution: Option<EnvironmentPackageManagerResolution>,
+    expected: Option<PackageManagerType>,
+) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
+    let kind =
+        expected.or_else(|| resolution.as_ref().map(|resolution| resolution.package_manager_type));
     let config = config::load_config().await?;
-    // npm lockfiles select the family without overriding its configured default version.
-    let expected = match expected {
-        Some(expected) => Some(expected),
-        None if selected.is_none() => resolve_environment_package_manager_spec(cwd, None, None)?
-            .filter(|resolution| resolution.package_manager_type == PackageManagerType::Npm)
-            .map(|resolution| resolution.package_manager_type),
-        None => None,
-    };
-    let default = expected
-        .map(|package_manager| configured_default_for(&config, package_manager))
-        .transpose()?
-        .flatten();
-    Ok(CurrentSpecs { selected, default })
+    let default = kind.map(|kind| configured_default_for(&config, kind)).transpose()?.flatten();
+    resolve_environment_package_manager(
+        resolution,
+        default.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
+        expected,
+    )
+    .await
+    .map_err(Error::from)
 }
 
 pub(crate) fn configured_default_for(
@@ -185,19 +147,8 @@ pub(crate) async fn resolve_from_files_for(
     cwd: &AbsolutePath,
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let config = config::load_config().await?;
-    let default = expected
-        .map(|package_manager| configured_default_for(&config, package_manager))
-        .transpose()?
-        .flatten();
-    resolve_environment_package_manager(
-        cwd,
-        None,
-        default.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
-        expected,
-    )
-    .await
-    .map_err(Error::from)
+    let resolution = resolve_environment_package_manager_spec(cwd, None)?;
+    resolve_selection(resolution, expected).await
 }
 
 pub(crate) async fn resolve_from_files_or_fallback_for(
