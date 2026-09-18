@@ -393,11 +393,11 @@ HOMEBREW_NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-}" \
 ```
 
 Support registry-scoped `_authToken` entries in `~/.npmrc`. For example, a user
-could configure the following and export `HOMEBREW_NPM_CONFIG_TOKEN` in their shell:
+could configure the following and export `HOMEBREW_NPM_TOKEN` in their shell:
 
 ```ini
 registry=https://registry.example.com/repository/npm/
-//registry.example.com/repository/npm/:_authToken=${HOMEBREW_NPM_CONFIG_TOKEN}
+//registry.example.com/repository/npm/:_authToken=${HOMEBREW_NPM_TOKEN}
 ```
 
 Literal tokens in the file are also supported by this design. Existing entries
