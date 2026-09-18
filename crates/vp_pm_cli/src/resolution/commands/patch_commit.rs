@@ -24,12 +24,17 @@ impl Resolve<PatchCommitArgs> for Pnpm {
 }
 
 impl Resolve<PatchCommitArgs> for Npm {
-    fn resolve(&self, _args: &PatchCommitArgs, diag: &mut Diagnostics) -> CommandResolution {
-        diag.warn(
-            DiagnosticKind::UnsupportedCommandNoop,
-            "npm does not have a 'patch-commit' command.",
-        );
-        CommandResolution::Noop
+    fn resolve(&self, args: &PatchCommitArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.is_npm_12_or_newer() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "npm does not have a 'patch-commit' command.",
+            );
+            return CommandResolution::Noop;
+        }
+        let mut cmd = CommandBuilder::new("npm");
+        cmd.arg("patch").arg("commit").arg(&args.patch_dir).extend(args.pass_through_args.iter());
+        cmd.into()
     }
 }
 
@@ -73,6 +78,37 @@ mod tests {
     }
 
     #[test]
+    fn test_npm_patch_commit() {
+        for manager in [npm("12.0.0"), npm("12.0.2"), Npm::unknown_version()] {
+            let result = resolve(
+                &manager,
+                PatchCommitArgs {
+                    patch_dir: "patches/left pad".to_string(),
+                    pass_through_args: vec![
+                        "--patches-dir".to_string(),
+                        ".patches".to_string(),
+                        "--keep-edit-dir".to_string(),
+                    ],
+                },
+            );
+            assert!(result.diagnostics.is_empty());
+            let command = expect_run(result.outcome);
+            assert_eq!(command.program, "npm");
+            assert_eq!(
+                command.args,
+                vec![
+                    "patch",
+                    "commit",
+                    "patches/left pad",
+                    "--patches-dir",
+                    ".patches",
+                    "--keep-edit-dir"
+                ]
+            );
+        }
+    }
+
+    #[test]
     fn test_pnpm_patch_commit() {
         let command =
             expect_run(resolve(&pnpm("10.0.0"), patch_commit_args("patches/left-pad")).outcome);
@@ -101,12 +137,17 @@ mod tests {
 
     #[test]
     fn test_npm_patch_commit_not_supported() {
-        let result = resolve(&npm("11.0.0"), patch_commit_args("patches/left-pad"));
+        for version in ["10.0.0", "11.0.0", "12.0.0-beta.1"] {
+            let result = resolve(&npm(version), patch_commit_args("patches/left-pad"));
 
-        assert_eq!(result.outcome, CommandResolution::Noop);
-        assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.diagnostics[0].kind, DiagnosticKind::UnsupportedCommandNoop);
-        assert_eq!(result.diagnostics[0].message, "npm does not have a 'patch-commit' command.");
+            assert_eq!(result.outcome, CommandResolution::Noop);
+            assert_eq!(result.diagnostics.len(), 1);
+            assert_eq!(result.diagnostics[0].kind, DiagnosticKind::UnsupportedCommandNoop);
+            assert_eq!(
+                result.diagnostics[0].message,
+                "npm does not have a 'patch-commit' command."
+            );
+        }
     }
 
     #[test]
