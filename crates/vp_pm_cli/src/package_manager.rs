@@ -238,7 +238,18 @@ impl PackageManagerBuilder {
                 PackageManagerSource::LockfileOrConfig | PackageManagerSource::Default
             )
         {
-            return Ok(crate::helpers::default_npm_package_manager(&self.cwd));
+            let mut manager = crate::helpers::default_npm_package_manager(&self.cwd);
+            // Version gates must describe the npm on PATH, not the latest registry release.
+            let npm = vp_command::resolve_bin("npm", None, &self.cwd)?;
+            let output = tokio::process::Command::new(npm.as_path())
+                .arg("--version")
+                .current_dir(&self.cwd)
+                .output()
+                .await?;
+            if output.status.success() {
+                manager.version = String::from_utf8_lossy(&output.stdout).trim().into();
+            }
+            return Ok(manager);
         }
 
         // only download the package manager if it's not already downloaded

@@ -54,6 +54,12 @@ pub async fn execute(
     };
     let current_pm = if scope.includes_package_managers() {
         match scope.package_manager() {
+            Some(PackageManagerType::Npm) => {
+                package_manager::resolve_shim_for(&cwd, PackageManagerType::Npm)
+                    .await
+                    .ok()
+                    .flatten()
+            }
             Some(package_manager) => {
                 package_manager::resolve_current_or_fallback_for(&cwd, package_manager).await.ok()
             }

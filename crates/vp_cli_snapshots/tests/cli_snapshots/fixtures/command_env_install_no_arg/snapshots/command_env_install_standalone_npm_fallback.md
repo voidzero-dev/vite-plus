@@ -22,24 +22,6 @@ Installing npm <version>...
 Installed npm <version>
 ```
 
-## `vp env list npm --json`
-
-the standalone npm fallback is installed
-
-```
-{
-  "package_managers": {
-    "npm": [
-      {
-        "version": "12.0.2",
-        "current": true,
-        "default": false
-      }
-    ]
-  }
-}
-```
-
 ## `vpt stat-file $VP_HOME/js_runtime/node --assert missing`
 
 installing standalone npm does not install Node.js
@@ -50,6 +32,14 @@ installing standalone npm does not install Node.js
 
 ## `vp env install 22.18.0`
 
+
+## `VP_NODE_VERSION=22.18.0 node assert-installed-npm.cjs`
+
+the standalone npm fallback is installed but is not selected
+
+```
+Standalone npm is installed but is not current
+```
 
 ## `VP_NODE_VERSION=22.18.0 vp env current npm --json`
 

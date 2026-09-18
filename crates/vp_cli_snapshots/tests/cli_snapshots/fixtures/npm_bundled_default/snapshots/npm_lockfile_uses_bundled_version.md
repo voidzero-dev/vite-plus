@@ -8,6 +8,22 @@ A Node-only devEngines declaration and npm lockfile use bundled npm without quer
 npm/npx and vp use Node bundled npm
 ```
 
+## `vp pm patch example`
+
+Bundled npm retains its version gates for unsupported commands
+
+```
+warn: npm does not have a 'patch' command.
+```
+
+## `vp pm approve-builds`
+
+Bundled npm does not invoke approval commands added in later npm releases
+
+```
+warn: npm runs lifecycle scripts by default. Upgrade to npm >= 11.16.0 for `npm approve-scripts`/`deny-scripts`, or set `ignore-scripts=true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.
+```
+
 ## `vp env default npm@10.5.0`
 
 

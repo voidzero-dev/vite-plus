@@ -1301,19 +1301,7 @@ fn resolve_bundled_tool(
         return Ok((node_path.clone(), node_path));
     }
     if external_node {
-        // A version-manager shim may resolve to the manager binary rather than Node.
-        let output = std::process::Command::new(node_path.as_path())
-            .args(["-p", "process.execPath"])
-            // User preloads belong to the actual command, not this runtime probe.
-            .env_remove("NODE_OPTIONS")
-            .output()
-            .map_err(|error| format!("Failed to query Node executable: {error}"))?;
-        if !output.status.success() {
-            return Err(format!("Failed to query Node executable: {}", output.status));
-        }
-        let executable = String::from_utf8(output.stdout).map_err(|error| error.to_string())?;
-        node_path = AbsolutePathBuf::new(executable.trim().into())
-            .ok_or_else(|| format!("Invalid Node executable path: {}", executable.trim()))?;
+        node_path = resolve_external_node_executable(node_path)?;
     }
     // The resolved directory enters PATH and must also work with Windows .cmd scripts.
     let node_path = dunce::canonicalize(node_path).map_err(|error| error.to_string())?;
@@ -1331,6 +1319,25 @@ fn resolve_bundled_tool(
     }
 
     Ok((node_path, tool_path))
+}
+
+/// Query external shims for the Node executable they actually select.
+pub(crate) fn resolve_external_node_executable(
+    node_path: AbsolutePathBuf,
+) -> Result<AbsolutePathBuf, String> {
+    // A version-manager shim may resolve to the manager binary rather than Node.
+    let output = std::process::Command::new(node_path.as_path())
+        .args(["-p", "process.execPath"])
+        // User preloads belong to the actual command, not this runtime probe.
+        .env_remove("NODE_OPTIONS")
+        .output()
+        .map_err(|error| format!("Failed to query Node executable: {error}"))?;
+    if !output.status.success() {
+        return Err(format!("Failed to query Node executable: {}", output.status));
+    }
+    let executable = String::from_utf8(output.stdout).map_err(|error| error.to_string())?;
+    AbsolutePathBuf::new(executable.trim().into())
+        .ok_or_else(|| format!("Invalid Node executable path: {}", executable.trim()))
 }
 
 /// Load shim mode from config.

@@ -225,7 +225,18 @@ async fn resolve_package_manager_info(
     };
     let Some(resolution) = resolution else {
         // A detected npm project without a version pin runs Node's bundled npm.
-        let bin_dir = super::resolve_node_bin_dir(cwd, config).await?;
+        let bin_dir = if config.node_shim_mode == ShimMode::SystemFirst
+            && let Some(node_path) = crate::shim::dispatch::find_system_tool("node")
+        {
+            let node_path = crate::shim::dispatch::resolve_external_node_executable(node_path)
+                .map_err(|error| Error::Other(error.into()))?;
+            node_path
+                .parent()
+                .ok_or_else(|| Error::Other("Node has no bin directory".into()))?
+                .to_absolute_path_buf()
+        } else {
+            super::resolve_node_bin_dir(cwd, config).await?
+        };
         let bin_paths = selected_type
             .bin_names()
             .iter()
