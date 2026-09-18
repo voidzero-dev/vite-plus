@@ -18,7 +18,6 @@ export const VITE_CONFIG_FILES = [
 export const VITEST_VERSION = '5.0.1';
 
 // Community-maintained provider: its releases do not track the official runner.
-export const VITEST_WEBDRIVERIO_VERSION = '5.0.0-rc.1';
 export const VITEST_WEBDRIVERIO_RANGE = '^5.0.0-beta.5 || >=5.0.0';
 
 // Exact action release used by generated workflows and the @v1 migration.

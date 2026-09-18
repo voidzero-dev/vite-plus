@@ -114,7 +114,7 @@ Packages that are **not** aligned:
 - `@vitest/coverage-c8` stopped at an older release and has no Vitest 4 version; and
 - third-party `vitest-*` integrations keep their own compatible versions, though their required Vitest peer may still trigger [direct provisioning](#when-vitest-is-directly-required).
 
-For browser mode, the base `@vitest/browser` runtime and `@vitest/browser-preview` are bundled by Vite+ and are removed as direct dependencies. The Playwright and WebdriverIO providers stay opt-in: a kept or injected provider is referenced through the preferred toolchain catalog at the bundled Vitest version (or written concretely when catalogs are unsupported), and its `playwright` or `webdriverio` peer is installed alongside.
+For browser mode, Vite+ bundles the base `@vitest/browser` runtime and `@vitest/browser-preview`; migration removes their direct dependency entries. The Playwright and WebDriverIO providers stay opt-in. Migration uses the bundled Vitest version for `@vitest/browser-playwright` and a compatible version range for the community-maintained `@vitest/browser-webdriverio`. It writes the version or range through the preferred toolchain catalog, or into the dependency entry for package managers without catalogs, and installs the provider's `playwright` or `webdriverio` peer alongside.
 
 Providers are detected before imports are rewritten. This covers legacy projects that aliased `vitest` to `@voidzero-dev/vite-plus-test` and import from `vitest/browser-<provider>`, `vitest/browser/providers/<provider>`, or `vitest/plugins/browser-<provider>`: those imports still install the corresponding `@vitest/browser-playwright` or `@vitest/browser-webdriverio` dependency and its framework peer.
 
