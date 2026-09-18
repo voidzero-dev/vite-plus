@@ -1,6 +1,7 @@
 # RFC: Vite+-managed Homebrew tap
 
 - Status: Draft for discussion. This RFC does not create a tap or change installation behavior.
+- Original requirement: [Distributing and Installing with Homebrew (#1171)](https://github.com/voidzero-dev/vite-plus/issues/1171).
 - Related: [Homebrew first-run failure (#2719)](https://github.com/voidzero-dev/vite-plus/issues/2719), [external installation support (#2729)](https://github.com/voidzero-dev/vite-plus/pull/2729).
 
 ## Proposal
@@ -25,6 +26,14 @@ downloads its JavaScript on first use. The alternatives below remain open for
 discussion.
 
 ## Motivation and current behavior
+
+Issue [#1171](https://github.com/voidzero-dev/vite-plus/issues/1171) requested
+Homebrew distribution for Bluefin Dx and other Universal Blue / Atomic Fedora
+systems. It also identified enterprise management through WorkBrew as a use
+case. These requirements motivate Linux support and Homebrew ownership of
+installation, upgrades, and removal. Issue
+[#2719](https://github.com/voidzero-dev/vite-plus/issues/2719) later exposed a
+first-run setup failure with the core formula on macOS.
 
 The [core formula](https://github.com/Homebrew/homebrew-core/blob/main/Formula/v/vite-plus.rb)
 builds from source when a bottle is unavailable or a user requests a source
