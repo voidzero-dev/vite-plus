@@ -949,25 +949,25 @@ jobs:
       - name: Build snapshot test binaries
         run: cargo test -p vp_cli_snapshots --no-run --message-format=json > "$RUNNER_TEMP/snapshot-test-build.json"
 
-      - name: Package snapshot binaries
+      - name: Package CLI test binaries
         run: |
           artifact_dir="$(mktemp -d)"
           trap 'rm -rf "$artifact_dir"' EXIT
-          mkdir -p "$artifact_dir/packages/cli/binding" \
-            "$artifact_dir/target/$BUILD_TARGET/release" \
-            "$artifact_dir/target/snapshot-tests"
-          cp packages/cli/binding/*.node packages/cli/binding/vite-plus.build-time \
-            "$artifact_dir/packages/cli/binding/"
+          binding_dir="$artifact_dir/packages/cli/binding"
+          cli_dir="$artifact_dir/target/$BUILD_TARGET/release"
+          snapshot_dir="$artifact_dir/target/snapshot-tests"
+          mkdir -p "$binding_dir" "$cli_dir" "$snapshot_dir"
+
+          cp packages/cli/binding/*.node packages/cli/binding/vite-plus.build-time "$binding_dir/"
           cargo metadata --locked --format-version 1 \
             | jq '{packages: [.packages[] | {name, version, source}]}' \
-            > "$artifact_dir/packages/cli/binding/vite-plus.cargo-metadata.json"
-          cp "${CARGO_TARGET_DIR:-target}/$BUILD_TARGET/release/vp" \
-            "$artifact_dir/target/$BUILD_TARGET/release/vp"
+            > "$binding_dir/vite-plus.cargo-metadata.json"
+          cp "${CARGO_TARGET_DIR:-target}/$BUILD_TARGET/release/vp" "$cli_dir/"
           for binary in cli_snapshots vpt; do
             binary_path="$(jq -er --arg name "$binary" \
               'select(.reason == "compiler-artifact" and .target.name == $name and .executable != null) | .executable' \
               "$RUNNER_TEMP/snapshot-test-build.json")"
-            cp "$binary_path" "$artifact_dir/target/snapshot-tests/$binary"
+            cp "$binary_path" "$snapshot_dir/$binary"
           done
           tar -czf "$RUNNER_TEMP/cli-test-binaries.tar.gz" -C "$artifact_dir" .
         env:
@@ -1010,13 +1010,13 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
-      - name: Download prebuilt snapshot binaries
+      - name: Download prebuilt CLI test binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cli-test-binaries-${{ matrix.target }}
           path: ${{ runner.temp }}
 
-      - name: Extract snapshot binaries
+      - name: Extract CLI test binaries
         run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
 
       - name: Build with upstream
