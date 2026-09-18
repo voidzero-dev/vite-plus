@@ -39,6 +39,8 @@ steps = [
 
 [[case]]
 name = "core_module_identity_npm"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "global"
 local-registry = true
 steps = [
@@ -110,6 +112,8 @@ steps = [
 
 [[case]]
 name = "core_module_identity_npm_cli_only_no_override"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "global"
 local-registry = true
 steps = [
@@ -129,6 +133,8 @@ steps = [
 
 [[case]]
 name = "core_module_identity_npm_matching_alias_no_override"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "global"
 local-registry = true
 steps = [

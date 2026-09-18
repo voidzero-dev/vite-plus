@@ -1,5 +1,7 @@
 [[case]]
 name = "command_dedupe_npm10"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "global"
 serial = true
 steps = [

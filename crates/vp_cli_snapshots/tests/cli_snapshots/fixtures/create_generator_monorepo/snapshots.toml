@@ -1,5 +1,7 @@
 [[case]]
 name = "create_generator_monorepo"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "local"
 local-registry = true
 unset-env = ["VP_SKIP_INSTALL", "CI"]
