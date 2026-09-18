@@ -8,8 +8,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-// Small, valid archives keep this test offline. The installed files are never run.
-function archive(files) {
+/**
+ * Small, valid archives keep this test offline. The installed files are never run.
+ * @param {Record<string, string>} files
+ * @returns {Buffer}
+ */
+function createArchive(files) {
   const blocks = [];
   for (const [name, contents] of Object.entries(files)) {
     const body = Buffer.from(contents);
@@ -30,8 +34,8 @@ const version = '99.0.0';
 const musl = process.platform === 'linux' && !process.report.getReport().header.glibcVersionRuntime;
 const platform = `${process.platform}-${process.arch}${musl ? '-musl' : ''}`;
 const nodeRoot = `node-v${version}-${platform}`;
-const nodeArchive = archive({ [`${nodeRoot}/bin/node`]: '#!/bin/sh\nexit 0\n' });
-const npmArchive = archive({
+const nodeArchive = createArchive({ [`${nodeRoot}/bin/node`]: '#!/bin/sh\nexit 0\n' });
+const npmArchive = createArchive({
   'package/package.json': JSON.stringify({
     name: 'npm',
     version,
@@ -41,7 +45,7 @@ const npmArchive = archive({
   'package/bin/npx-cli.js': '// fixture\n',
 });
 let downloads = 0;
-const server = createServer((request, response) => {
+const server = createServer(function handleRequest(request, response) {
   if (request.url.endsWith('/SHASUMS256.txt.asc')) {
     response.writeHead(404).end();
     return;
@@ -50,25 +54,30 @@ const server = createServer((request, response) => {
     response.end(`${createHash('sha256').update(nodeArchive).digest('hex')}  ${nodeRoot}.tar.gz\n`);
     return;
   }
-  const body = request.url.endsWith(`/${nodeRoot}.tar.gz`)
-    ? nodeArchive
-    : request.url === `/npm/-/npm-${version}.tgz`
-      ? npmArchive
-      : undefined;
-  if (!body) {
+  let body;
+  if (request.url.endsWith(`/${nodeRoot}.tar.gz`)) {
+    body = nodeArchive;
+  } else if (request.url === `/npm/-/npm-${version}.tgz`) {
+    body = npmArchive;
+  } else {
     response.writeHead(404).end();
     return;
   }
   downloads++;
-  if (process.argv[2] === 'known') response.setHeader('Content-Length', body.length);
+  if (process.argv[2] === 'known') {
+    response.setHeader('Content-Length', body.length);
+  }
   response.flushHeaders();
   // Exercise multiple progress redraws; only the completed screen is snapshotted.
+  const chunkSize = Math.ceil(body.length / 8);
   let offset = 0;
-  const timer = setInterval(() => {
-    const end = Math.min(offset + Math.ceil(body.length / 8), body.length);
+  const timer = setInterval(function sendChunk() {
+    const end = Math.min(offset + chunkSize, body.length);
     response.write(body.subarray(offset, end));
     offset = end;
-    if (offset === body.length) response.end();
+    if (offset === body.length) {
+      response.end();
+    }
   }, 50);
   response.on('close', () => clearInterval(timer));
 });

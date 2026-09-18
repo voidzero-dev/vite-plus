@@ -30,48 +30,50 @@ fn style_with_width(
 }
 
 fn download_row(state: &ProgressState, message: &str, available: usize) -> Str {
+    let has_total = state.len().is_some();
+    let message_width = measure_text_width(message);
     let bytes = HumanBytes(state.pos());
-    let counts = match state.len() {
+    let mut compact_stats = match state.len() {
         Some(total) => format!("{bytes}/{}", HumanBytes(total)),
         None => format!("{bytes}"),
     };
     let speed = HumanBytes(state.per_sec() as u64);
-    let details = match state.len() {
-        Some(_) => format!("{counts} ({speed}/s, {:#})", HumanDuration(state.eta())),
-        None => format!("{counts} ({speed}/s)"),
+    let detailed_stats = if has_total {
+        format!("{compact_stats} ({speed}/s, {:#})", HumanDuration(state.eta()))
+    } else {
+        format!("{compact_stats} ({speed}/s)")
     };
-    let fixed_width = measure_text_width(message) + measure_text_width(&details) + 2;
-    if state.len().is_some() {
-        // Keep a useful bar only when the full message and statistics fit.
-        // The leading space, brackets, and trailing space use three columns
-        // in addition to the two spaces included in `fixed_width`.
-        let bar_width = available.saturating_sub(fixed_width + 3);
+    let text_width = message_width + measure_text_width(&detailed_stats);
+    if has_total {
+        // Reserve three spaces and two brackets, plus at least four bar columns.
+        let bar_width = available.saturating_sub(text_width + 5);
         if bar_width >= 4 {
             let filled = (state.fraction() * bar_width as f32) as usize;
             let remaining = bar_width - filled;
             let bar = format!("{}{}", "#".repeat(filled), if remaining > 0 { ">" } else { "" });
             return format!(
-                " {message} [{}{}] {details}",
+                " {message} [{}{}] {detailed_stats}",
                 style(bar).blue(),
                 style("-".repeat(remaining.saturating_sub(1))).white(),
             );
         }
-    } else if fixed_width <= available {
-        return format!(" {message} {details}");
+    } else if text_width + 2 <= available {
+        return format!(" {message} {detailed_stats}");
     }
 
     // On narrow terminals, omit the bar, speed, and ETA before shortening the
     // message. For very small panes, prefer a percentage to two byte counts.
-    let counts = if state.len().is_some()
-        && measure_text_width(&counts) + 2 + measure_text_width(message).min(8) > available
-    {
-        format!("{:.0}%", state.fraction() * 100.0)
+    let compact_width = measure_text_width(&compact_stats) + 2 + message_width.min(8);
+    if has_total && compact_width > available {
+        compact_stats = format!("{:.0}%", state.fraction() * 100.0);
+    }
+    let available_message_width = available.saturating_sub(measure_text_width(&compact_stats) + 2);
+    let message = truncate_str(message, available_message_width, "");
+    if message.is_empty() {
+        format!(" {compact_stats}")
     } else {
-        counts
-    };
-    let message_width = available.saturating_sub(measure_text_width(&counts) + 2);
-    let message = truncate_str(message, message_width, "");
-    if message.is_empty() { format!(" {counts}") } else { format!(" {message} {counts}") }
+        format!(" {message} {compact_stats}")
+    }
 }
 
 #[cfg(test)]
@@ -114,19 +116,9 @@ mod tests {
                         for position in [0, 5 * 1024 * 1024, 25 * 1024 * 1024, total] {
                             progress.set_elapsed(Duration::from_secs(2));
                             progress.set_position(position);
-                            for reset_speed in [false, true] {
-                                if reset_speed {
-                                    progress.reset_eta();
-                                }
-                                progress.force_draw();
-                                let screen = term.contents();
-                                let lines: Vec<_> = screen.lines().collect();
-                                assert_eq!(lines.len(), 2, "width {width}: {screen}");
-                                assert_eq!(lines[0], earlier);
-                                assert!(measure_text_width(lines[1]) <= usize::from(width));
-                                let moves = term.moves_since_last_check();
-                                assert!(!moves.contains("Up("), "width {width}: {moves}");
-                            }
+                            assert_progress_row(&progress, &term, earlier);
+                            progress.reset_eta();
+                            assert_progress_row(&progress, &term, earlier);
                         }
                     }
 
@@ -138,6 +130,18 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn assert_progress_row(progress: &ProgressBar, term: &InMemoryTerm, earlier: &str) {
+        progress.force_draw();
+        let width = term.width();
+        let screen = term.contents();
+        let lines: Vec<_> = screen.lines().collect();
+        assert_eq!(lines.len(), 2, "width {width}: {screen}");
+        assert_eq!(lines[0], earlier);
+        assert!(measure_text_width(lines[1]) <= usize::from(width));
+        let moves = term.moves_since_last_check();
+        assert!(!moves.contains("Up("), "width {width}: {moves}");
     }
 
     #[test]
