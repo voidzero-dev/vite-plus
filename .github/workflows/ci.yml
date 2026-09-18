@@ -71,10 +71,10 @@ jobs:
 
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
-          # Shares the cargo cache with the Linux leg of cli-e2e-test, which
+          # Shares the Cargo cache with the Linux CLI test build job, which
           # builds the same target. Only that job saves it.
           save-cache: false
-          cache-key: cli-e2e-test-x86_64-unknown-linux-gnu
+          cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu
 
       - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
@@ -368,6 +368,7 @@ jobs:
     needs:
       - download-previous-rolldown-binaries
       - build-windows-cli
+      - build-cli-test-binaries
     strategy:
       fail-fast: false
       matrix:
@@ -382,14 +383,6 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
-
-      # Windows runs against the prebuilt binaries from build-windows-cli,
-      # so it needs no Rust toolchain or dev drive here.
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-        if: runner.os != 'Windows'
-        with:
-          save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: cli-e2e-test-${{ matrix.target }}
 
       - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
 
@@ -413,11 +406,22 @@ jobs:
         with:
           name: windows-cli-binaries
 
+      - name: Download prebuilt CLI test binaries
+        if: runner.os != 'Windows'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-test-binaries-${{ matrix.target }}
+          path: ${{ runner.temp }}
+
+      - name: Extract CLI test binaries
+        if: runner.os != 'Windows'
+        run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
-          skip-native: ${{ runner.os == 'Windows' }}
+          skip-native: true
 
       - name: Ensure no unexpected file changes after build
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
@@ -906,9 +910,9 @@ jobs:
           vp --version
 
   # Build the native CLI and snapshot runner once per platform, then share
-  # them across all three shards. Tar preserves executable permissions.
-  build-cli-snapshot-binaries:
-    name: Build CLI snapshot binaries (${{ matrix.target }})
+  # them across the E2E job and snapshot shards. Tar preserves permissions.
+  build-cli-test-binaries:
+    name: Build CLI test binaries (${{ matrix.target }})
     needs:
       - download-previous-rolldown-binaries
     strategy:
@@ -965,14 +969,14 @@ jobs:
               "$RUNNER_TEMP/snapshot-test-build.json")"
             cp "$binary_path" "$artifact_dir/target/snapshot-tests/$binary"
           done
-          tar -czf "$RUNNER_TEMP/cli-snapshot-binaries.tar.gz" -C "$artifact_dir" .
+          tar -czf "$RUNNER_TEMP/cli-test-binaries.tar.gz" -C "$artifact_dir" .
         env:
           BUILD_TARGET: ${{ matrix.target }}
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: cli-snapshot-binaries-${{ matrix.target }}
-          path: ${{ runner.temp }}/cli-snapshot-binaries.tar.gz
+          name: cli-test-binaries-${{ matrix.target }}
+          path: ${{ runner.temp }}/cli-test-binaries.tar.gz
           if-no-files-found: error
           retention-days: 7
 
@@ -982,7 +986,7 @@ jobs:
   cli-snapshot-test:
     name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
     needs:
-      - build-cli-snapshot-binaries
+      - build-cli-test-binaries
     strategy:
       fail-fast: false
       matrix:
@@ -1009,11 +1013,11 @@ jobs:
       - name: Download prebuilt snapshot binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: cli-snapshot-binaries-${{ matrix.target }}
+          name: cli-test-binaries-${{ matrix.target }}
           path: ${{ runner.temp }}
 
       - name: Extract snapshot binaries
-        run: tar -xzf "$RUNNER_TEMP/cli-snapshot-binaries.tar.gz"
+        run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
@@ -1593,7 +1597,7 @@ jobs:
       - cli-e2e-test
       - cli-e2e-test-musl
       - certless-image-test
-      - build-cli-snapshot-binaries
+      - build-cli-test-binaries
       - cli-snapshot-test
       - cli-snapshot-test-windows
       # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.
