@@ -11,8 +11,9 @@ inputs:
   skip-native:
     description: >-
       Skip the NAPI binding cache and all native cargo/napi build steps; the
-      native binaries must already be in place (e.g. downloaded from the
-      windows-cli-binaries artifact produced by the build-windows-cli job).
+      native binaries and Cargo metadata must already be in place (e.g.
+      downloaded from the windows-cli-binaries artifact produced by the
+      build-windows-cli job).
     required: false
     default: 'false'
 
@@ -86,7 +87,13 @@ runs:
         pnpm --filter rolldown build-node
         pnpm --filter vite build-types
         pnpm --filter "@voidzero-dev/*" build
-        pnpm --filter vite-plus build-ts
+
+    # Native binding formatting imports the repo config, which needs the
+    # built CLI. Prebuilt bindings do not need this preliminary build.
+    - name: Build vite-plus TypeScript for native binding formatting
+      if: steps.native.outputs.build == 'true'
+      shell: bash
+      run: pnpm --filter vite-plus build-ts
 
     # Install zig + cargo-zigbuild for musl cross-compilation (napi-cross only supports gnu)
     - name: Add musl Rust target
@@ -212,6 +219,10 @@ runs:
       shell: bash
       run: |
         pnpm --filter=vite-plus build-ts
+      env:
+        # Reuse metadata from the Linux native build so Windows does not
+        # download a Rust toolchain and dependency sources to generate versions.
+        VP_BUILD_CARGO_METADATA: ${{ inputs.skip-native == 'true' && format('{0}/packages/cli/binding/vite-plus.cargo-metadata.json', github.workspace) || '' }}
 
     - name: Print output after build
       shell: bash

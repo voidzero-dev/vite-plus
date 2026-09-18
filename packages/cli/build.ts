@@ -655,7 +655,11 @@ async function readPackageVersion(packageJsonPath: string, label: string): Promi
   return pkg.version;
 }
 
-function readCargoMetadata(): CargoMetadata {
+async function readCargoMetadata(): Promise<CargoMetadata> {
+  const metadataPath = process.env.VP_BUILD_CARGO_METADATA;
+  if (metadataPath) {
+    return JSON.parse(await readFile(metadataPath, 'utf8')) as CargoMetadata;
+  }
   const repoDir = join(projectDir, '..', '..');
   const stdout = execFileSync('cargo', ['metadata', '--locked', '--format-version', '1'], {
     cwd: repoDir,
@@ -825,7 +829,7 @@ async function syncToolchainExports() {
   validateToolchainConfig(config);
 
   const cliVersion = await readPackageVersion(join(projectDir, 'package.json'), 'vite-plus');
-  const cargoMetadata = readCargoMetadata();
+  const cargoMetadata = await readCargoMetadata();
   const buildTime = await resolveNativeBuildTime();
   const nodes = await Promise.all(
     config.nodes.map((node) => resolveToolchainNode(node, cargoMetadata, cliVersion, buildTime)),
