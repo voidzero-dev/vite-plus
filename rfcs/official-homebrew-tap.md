@@ -212,12 +212,13 @@ Consequently, a first JavaScript command can still download Node.js. Choosing
 system-first mode does not guarantee offline operation when no usable Node.js
 exists. This runtime choice needs agreement before implementation.
 
-The tap removes npm access from CLI payload installation. It does not remove
-network access from every command. Users still need access to GitHub release
+The GitHub bundle proposal removes npm access from CLI payload installation.
+It does not remove network access from every command. Users still need access to GitHub release
 assets and any required Homebrew downloads. Runtime downloads and project
 dependencies have their own network requirements. Existing registry settings
 continue to govern npm operations where supported; they do not select the
-bundle URL. No new registry variable is needed for the proposed formula.
+bundle URL. No new registry variable is needed for GitHub bundles. The npm
+download alternative below has separate registry and authentication requirements.
 
 ## Commands and diagnostics
 
@@ -365,6 +366,66 @@ in core. The proposed binary formula would not offer a source-build mode;
 `--build-from-source` would not recreate the upstream build. Source builds remain
 available through the project and core.
 
+### npm registry downloads and authentication
+
+The tap could download the existing `@voidzero-dev/vite-plus-cli-<platform>`
+package from an npm registry. This option keeps the npm package format unchanged.
+It still needs a decision about how to install the JavaScript dependencies under
+Homebrew ownership; downloading the native binary alone does not provide them.
+Registry authentication must also cover those dependency downloads if this
+option is selected.
+
+Use a nonempty `HOMEBREW_VP_NPM_REGISTRY` as a tap-specific default registry override.
+Otherwise, read `registry` from `~/.npmrc`, then fall back to
+`https://registry.npmjs.org`. Honor scoped registry settings such as
+`@voidzero-dev:registry` for the corresponding packages, as npm does. These scoped
+settings take precedence over the default registry. Do not read a project's
+`.npmrc` based on the directory from which the user runs `brew`.
+
+Homebrew's [launcher](https://github.com/Homebrew/brew/blob/main/bin/brew) removes
+`NPM_CONFIG_REGISTRY` and ordinary token variables before formula evaluation.
+It preserves `HOMEBREW_*` variables. Users could forward an existing setting:
+
+```sh
+HOMEBREW_VP_NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-}" \
+  brew install voidzero-dev/vite-plus/vp
+```
+
+Support registry-scoped `_authToken` entries in `~/.npmrc`. For example, a user
+could configure the following and export `HOMEBREW_VP_NPM_TOKEN` in their shell:
+
+```ini
+registry=https://registry.example.com/repository/npm/
+//registry.example.com/repository/npm/:_authToken=${HOMEBREW_VP_NPM_TOKEN}
+```
+
+Literal tokens in the file are also supported by this design. Existing entries
+that reference `${NPM_TOKEN}` need an explicit forwarding mechanism or a change
+to the placeholder; that variable does not survive Homebrew's launcher. Do not
+silently substitute a different token or send an unresolved placeholder.
+
+Resolve user configuration and credentials at download time in a tap-owned
+download strategy. Do not read credentials during formula evaluation or from
+`install`: Homebrew's [build sandbox](https://github.com/Homebrew/brew/blob/main/Library/Homebrew/sandbox.rb)
+restricts access to the user's home, including `.npmrc`. Keep registry tokens
+out of formula metadata, receipts, downloaded artifacts, and diagnostic output.
+The install step should consume downloaded files without user credentials.
+
+Use the pinned package version's metadata to obtain `dist.tarball`; private
+registries can use different tarball paths. Match credentials to each request's
+host and path, including tarball requests and redirects. A registry override must
+not send another registry's token to the new URL. Retain the formula's SHA-256
+check, and report authentication failures without falling back to the public
+registry. Follow npm's [configuration and authentication rules](https://docs.npmjs.com/cli/v11/configuring-npm/npmrc/).
+This initial option covers bearer tokens; other enterprise requirements such as
+client certificates need separate design and validation.
+
+Before selecting this option, use an isolated registry and synthetic `.npmrc`
+files to check registry precedence, scoped tokens, token substitution, custom
+tarball paths, redirects, authentication failures, checksum failures, and secret
+redaction. Test `brew fetch`, installation, reinstall, and upgrade on macOS and
+Linux. This is a proposed download design, not existing tap functionality.
+
 ## Decisions requested
 
 1. Should Homebrew retain ownership of the active CLI, with complete bundles as proposed, or should the tap only bootstrap a script-managed install?
@@ -372,6 +433,7 @@ available through the project and core.
 3. Should the initial tap cover all four proposed targets, or start with macOS while Linux tests mature?
 4. Is the existing Node.js runtime resolver sufficient, or should the tap require Homebrew Node.js or ship a private runtime?
 5. Should tap updates require maintainer review initially, and what packaging-repair version scheme should we use?
+6. Should the tap use GitHub bundles, or existing npm packages with `HOMEBREW_VP_NPM_REGISTRY` and authenticated `~/.npmrc` support? The npm option also needs a dependency installation design.
 
 After agreement, split implementation into bundle assembly, CLI ownership
 metadata, the tap and its tests, and release publication. Keep product
