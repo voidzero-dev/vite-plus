@@ -47,3 +47,26 @@ installing standalone npm does not install Node.js
 ```
 <home>/.vite-plus/js_runtime/node: missing
 ```
+
+## `vp env install 22.18.0`
+
+
+## `VP_NODE_VERSION=22.18.0 vp env current npm --json`
+
+installing standalone npm does not select it: current reports Node's bundled npm until a version is configured
+
+```
+{
+  "package_manager": {
+    "name": "npm",
+    "version": "<version>",
+    "source": "Node.js bundled npm",
+    "bin_paths": {
+      "npm": "<home>/.vite-plus/js_runtime/node/<version>/bin/npm",
+      "npx": "<home>/.vite-plus/js_runtime/node/<version>/bin/npx"
+    },
+    "installed": true,
+    "mode": "managed"
+  }
+}
+```

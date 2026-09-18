@@ -23,4 +23,6 @@ steps = [
   { argv = ["vp", "env", "install", "npm"], comment = "an explicit npm scope installs the standalone registry fallback" },
   { argv = ["vp", "env", "list", "npm", "--json"], comment = "the standalone npm fallback is installed" },
   { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node", "--assert", "missing"], comment = "installing standalone npm does not install Node.js" },
+  { argv = ["vp", "env", "install", "22.18.0"], snapshot = false, timeout = 120000 },
+  { argv = ["vp", "env", "current", "npm", "--json"], envs = [["VP_NODE_VERSION", "22.18.0"]], comment = "installing standalone npm does not select it: current reports Node's bundled npm until a version is configured" },
 ]
