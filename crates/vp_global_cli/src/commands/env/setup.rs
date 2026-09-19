@@ -840,7 +840,10 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS__$__vp_bin = '__VP_BIN_WIN__'
-$env:PATH = (@($__vp_bin) + @($env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -ne $__vp_bin })) -join [IO.Path]::PathSeparator
+$env:PATH = @(
+    $__vp_bin
+    $env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -ne $__vp_bin }
+) -join [IO.Path]::PathSeparator
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -1132,11 +1135,12 @@ async fn create_env_files() -> Result<(), Error> {
 
 /// Inspect the explicitly selected shell without changing its profiles.
 /// Bash only checks non-login startup; the printed advice must keep that qualification.
+/// Zsh login startup can reorder PATH after `.zshenv`, so require `.zshrc`.
 fn has_configured_profile(config: &vp_shared::EnvConfig) -> bool {
     let shell = config.vp_shell.as_deref().map(str::to_ascii_lowercase);
     for profile in ALL_SHELL_PROFILES {
         let relevant = match shell.as_deref() {
-            Some("zsh") => matches!(profile.root, ShellProfileRoot::Zsh),
+            Some("zsh") => profile.path == ".zshrc",
             Some("bash") => profile.path == ".bashrc",
             Some("sh") => profile.path == ".profile",
             Some("fish") => matches!(profile.root, ShellProfileRoot::Fish),
@@ -1208,9 +1212,8 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
         (Shell::PowerShell, "PowerShell", EnvShell::Powershell),
     ];
     if shell == Some(Shell::Cmd) {
-        // cmd has no sourceable environment file. A new terminal inherits the
-        // persistent PATH written by setup.
-        output::raw("  In cmd.exe, open a new terminal to load the updated PATH.");
+        let command = super::format_path_snippet(Shell::Cmd, &[env.dirs.bin.to_string()]);
+        output::raw(&format!("  {command}"));
     } else {
         for (kind, label, env_shell) in commands {
             if shell.is_some_and(|s| s != kind) {
@@ -1225,49 +1228,40 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
         }
     }
     output::raw("");
-    match shell {
-        Some(Shell::Cmd) => {}
-        None => {
-            output::raw(
-                "  If your shell profile does not already load Vite+, add the command for your shell.",
-            );
-            output::raw(
-                "  For PowerShell, add its command to $PROFILE if it is not already there.",
-            );
-            output::raw("");
-        }
-        Some(Shell::PowerShell) => {
-            output::raw(
-                "  Add this command to $PROFILE if it is not already there, for future PowerShell sessions.",
-            );
-            output::raw("");
-        }
-        _ if env.vp_shell.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("bash")) => {
+    let profile_instructions: &[&str] = match shell {
+        Some(Shell::Cmd) => &[
+            "  For future cmd.exe sessions, add this directory to your user PATH if it is missing:",
+            &format!("  {}", env.dirs.bin.as_path().display()),
+            "  System Properties -> Environment Variables -> User variables -> Path",
+            "  Open a new terminal after updating PATH.",
+        ],
+        None => &[
+            "  If your shell profile does not already load Vite+, add the command for your shell.",
+            "  For PowerShell, add its command to $PROFILE if it is not already there.",
+        ],
+        Some(Shell::PowerShell) => &[
+            "  Add this command to $PROFILE if it is not already there, for future PowerShell sessions.",
+        ],
+        _ if env.vp_shell.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("bash")) => &[
             if has_configured_profile(&env) {
-                output::raw(
-                    "  Or start an interactive non-login Bash shell to load your configured ~/.bashrc.",
-                );
+                "  Or start an interactive non-login Bash shell to load your configured ~/.bashrc."
             } else {
-                output::raw(
-                    "  Add the command to ~/.bashrc for interactive non-login Bash sessions.",
-                );
-            }
-            output::raw(
-                "  Login Bash shells must also load the command through their login profile.",
-            );
-            output::raw("");
+                "  Add the command to ~/.bashrc for interactive non-login Bash sessions."
+            },
+            "  Login Bash shells must also load the command through their login profile.",
+        ],
+        _ if has_configured_profile(&env) => {
+            &["  Or open a new terminal to load your configured shell profile."]
         }
-        _ => {
-            if has_configured_profile(&env) {
-                output::raw("  Or open a new terminal to load your configured shell profile.");
-            } else {
-                output::raw(
-                    "  Add the command for your shell to its profile to activate future terminals.",
-                );
-            }
-            output::raw("");
+        _ if env.vp_shell.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("zsh")) => {
+            &["  Add the command to your .zshrc file to activate future Zsh terminals."]
         }
+        _ => &["  Add the command for your shell to its profile to activate future terminals."],
+    };
+    for instruction in profile_instructions {
+        output::raw(instruction);
     }
+    output::raw("");
     output::raw(&format!(
         "  Restart an already-running IDE to load its environment. Run {} to verify.",
         help::accent_command("vp env doctor")
@@ -1323,6 +1317,8 @@ mod tests {
                 assert!(!has_configured_profile(&config));
                 std::fs::write(home.join(".bashrc"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
                 assert!(!has_configured_profile(&config), "Bash does not configure Zsh");
+                std::fs::write(zsh.join(".zshenv"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+                assert!(!has_configured_profile(&config), ".zshenv runs before login PATH setup");
                 let profile = zsh.join(".zshrc");
                 for line in [
                     "# . \"$HOME/.vite-plus/env\"",

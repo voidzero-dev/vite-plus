@@ -246,7 +246,10 @@ PowerShell wrapper and vpr completion keep global -C before env use/run
 # Vite+ environment setup (https://viteplus.dev)
 $env:VP_HOME = '<workspace>/home'
 $__vp_bin = '<workspace>/home/bin'
-$env:PATH = (@($__vp_bin) + @($env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -ne $__vp_bin })) -join [IO.Path]::PathSeparator
+$env:PATH = @(
+    $__vp_bin
+    $env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -ne $__vp_bin }
+) -join [IO.Path]::PathSeparator
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.

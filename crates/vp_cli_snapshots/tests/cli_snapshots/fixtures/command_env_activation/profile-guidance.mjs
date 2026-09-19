@@ -62,6 +62,85 @@ if (mode === 'powershell') {
     assert.doesNotMatch(output, /Or open a new terminal/);
     console.log(output.split('\n').find((line) => line.includes('$PROFILE')));
   }
+} else if (mode.startsWith('cmd')) {
+  if (mode === 'cmd') delete env.VP_SELF_SETUP_NO_MODIFY_PATH;
+  console.log(`VP_SELF_SETUP_NO_MODIFY_PATH=${env.VP_SELF_SETUP_NO_MODIFY_PATH ?? '<unset>'}:`);
+  const output = setup('cmd');
+  const activation = output
+    .split('\n')
+    .find((line) => line.trimStart().startsWith('set "PATH='))
+    ?.trim();
+  assert.equal(activation, `set "PATH=${dirs.bin};%PATH%"`);
+  assert.match(output, /user PATH if it is missing/);
+  assert.match(output, /System Properties -> Environment Variables -> User variables -> Path/);
+  assert.doesNotMatch(output, /open a new terminal to load/i);
+  console.log(output);
+
+  if (process.platform === 'win32') {
+    const system = path.resolve('profiles/system');
+    fs.mkdirSync(system, { recursive: true });
+    fs.copyFileSync(process.execPath, path.join(system, 'node.exe'));
+    const staleEnv = {
+      ...env,
+      PATH: [system, path.join(process.env.SystemRoot, 'System32')].join(';'),
+    };
+    for (const [command, expected] of [
+      ['where.exe node', path.join(system, 'node.exe')],
+      [`${activation} & where.exe node`, path.join(dirs.bin, 'node.exe')],
+    ]) {
+      const result = spawnSync(process.env.ComSpec, ['/d', '/v:off', '/s', '/c', `"${command}"`], {
+        env: staleEnv,
+        windowsVerbatimArguments: true,
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+      assert.equal(result.status, 0, result.error?.message ?? result.stdout + result.stderr);
+      assert.equal(result.stdout.trim().split(/\r?\n/)[0].toLowerCase(), expected.toLowerCase());
+    }
+  }
+} else if (mode.startsWith('zsh-')) {
+  captureVp(['env', 'on', 'node']);
+  const zsh = process.env.PATH.split(path.delimiter)
+    .map((dir) => path.join(dir, 'zsh'))
+    .find((file) => fs.existsSync(file));
+  assert.ok(zsh);
+  const system = path.resolve('profiles/system');
+  fs.mkdirSync(system, { recursive: true });
+  fs.writeFileSync(path.join(system, 'node'), '#!/bin/sh\necho system-node\n', { mode: 0o755 });
+  env.PATH = [system, '/usr/bin', '/bin'].join(path.delimiter);
+  const envPath = path.join(dirs.config, 'env').replace(/[\\$`"]/g, '\\$&');
+  const source = `. "${envPath}"\n`;
+  fs.mkdirSync(env.ZDOTDIR, { recursive: true });
+  fs.writeFileSync(path.join(env.ZDOTDIR, '.zshenv'), source);
+  // Model PATH changes made by login startup after .zshenv, such as macOS path_helper.
+  const systemPath = system.replace(/[\\$`"]/g, '\\$&');
+  fs.writeFileSync(path.join(env.ZDOTDIR, '.zprofile'), `export PATH="${systemPath}:$PATH"\n`);
+  const configured = mode === 'zsh-interactive';
+  if (configured) fs.writeFileSync(path.join(env.ZDOTDIR, '.zshrc'), source);
+  console.log(configured ? 'Zsh .zshrc is configured:' : 'Only Zsh .zshenv is configured:');
+  const output = setup('zsh');
+  if (configured) {
+    assert.doesNotMatch(output, /Add the command/);
+    assert.match(output, /Or open a new terminal/);
+  } else {
+    assert.match(output, /Add the command to your \.zshrc/);
+    assert.doesNotMatch(output, /Or open a new terminal/);
+  }
+  console.log(output);
+  console.log("$ zsh -lic 'command -v node; node --version'");
+  const result = spawnSync(
+    zsh,
+    [
+      '-lic',
+      'command -v node; test "$(command -v node)" = "$EXPECTED_NODE" || exit 1; node --version',
+    ],
+    {
+      env: { ...env, EXPECTED_NODE: path.join(configured ? dirs.bin : system, 'node') },
+      stdio: 'inherit',
+      timeout: 30000,
+    },
+  );
+  assert.equal(result.status, 0, result.error?.message);
 } else {
   // Suppress Ubuntu's sudo hint while still loading the normal Bash startup files.
   fs.writeFileSync(path.join(home, '.hushlogin'), '');
