@@ -122,7 +122,7 @@ Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage pro
 | `vitest/internal/module-runner`          | Redesign the integration; no public replacement exists.                     |
 | `@vitest/ws-client`                      | Retain if needed; upstream no longer adds v5 features.                      |
 
-Vite+ retains `vite-plus/test/coverage`, `/reporters`, `/environments`, `/snapshot`, and `/mocker` aliases through the Vite+ 1.x line. It does not provide partial runner or expect plugin shims.
+Vite+ 1.0 removes `vite-plus/test/coverage`, `/reporters`, `/environments`, and `/snapshot`. Run `vp migrate` to rewrite these existing Vite+ imports to the same `node` or `runtime` entries shown above. Vite+ retains `vite-plus/test/mocker` for the standalone `@vitest/mocker` API. It does not provide partial runner or expect plugin shims.
 
 ## Community WebDriverIO provider
 

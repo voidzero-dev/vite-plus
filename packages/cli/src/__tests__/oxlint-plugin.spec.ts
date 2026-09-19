@@ -81,6 +81,18 @@ describe('oxlint plugin config defaults', () => {
 });
 
 describe('rewriteVitePlusImportSpecifier', () => {
+  it.each([
+    ['coverage', 'node'],
+    ['reporters', 'node'],
+    ['environments', 'runtime'],
+    ['snapshot', 'runtime'],
+  ])('migrates the legacy Vite+ %s alias to %s', (from, to) => {
+    const target = `vite-plus/test/${to}`;
+    expect(rewriteVitePlusImportSpecifier(`vite-plus/test/${from}`)).toBe(target);
+    expect(rewriteVitePlusImportSpecifier(target)).toBeNull();
+    expect(rewriteVitePlusImportSpecifier('vite-plus/test/mocker')).toBeNull();
+  });
+
   it('rewrites supported vite and vitest specifiers', () => {
     expect(rewriteVitePlusImportSpecifier('vite')).toBe('vite-plus');
     expect(rewriteVitePlusImportSpecifier('vite/client')).toBe('vite-plus/client');

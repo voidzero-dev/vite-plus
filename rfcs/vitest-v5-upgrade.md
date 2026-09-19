@@ -38,7 +38,7 @@ Vitest v5 changes the package graph and project configuration model. A version-o
 - Keep `vp test`, `vite-plus/test*`, browser mode, coverage, and config helpers on one compatible Vitest v5 graph.
 - Preserve v4 test execution behavior in existing configs when a v5 option provides an exact compatibility setting.
 - Give a file and an action for each change that cannot be automated safely.
-- Keep useful Vite+ legacy aliases through the Vite+ 1.x line when they have an exact v5 target.
+- Migrate legacy Vite+ entry points to canonical v5 paths; retain the standalone mocker, browser, and supported plugin shims.
 - Test Node, package manager, project, browser, coverage, reporter, and programmatic API boundaries before release.
 
 ## Non-goals
@@ -119,17 +119,18 @@ Keep public `engines.node` contracts unchanged. Do not report an engine range wi
 
 ### 3. Public `vite-plus/test*` exports
 
-Continue to generate the main test surface from the v5 `vitest` export map, then add a reviewed compatibility map. Snapshot the final export keys in a test so an upstream export change cannot alter the Vite+ package by accident.
+Continue to generate the main test surface from the v5 `vitest` export map, with extra entries for the standalone mocker API and supported browser and plugin paths. Snapshot the final export keys in a test so an upstream export change cannot alter the Vite+ package by accident.
 
-Keep these aliases through the Vite+ 1.x line because each has an exact public target:
+Remove these legacy Vite+ aliases in 1.0. Migrate both `vitest/*` and `vite-plus/test/*` imports to the canonical Vite+ entries:
 
-| Vite+ compatibility path      | v5 target        |
-| ----------------------------- | ---------------- |
-| `vite-plus/test/coverage`     | `vitest/node`    |
-| `vite-plus/test/reporters`    | `vitest/node`    |
-| `vite-plus/test/environments` | `vitest/runtime` |
-| `vite-plus/test/snapshot`     | `vitest/runtime` |
-| `vite-plus/test/mocker`       | `@vitest/mocker` |
+| Removed Vite+ path            | Migration target         |
+| ----------------------------- | ------------------------ |
+| `vite-plus/test/coverage`     | `vite-plus/test/node`    |
+| `vite-plus/test/reporters`    | `vite-plus/test/node`    |
+| `vite-plus/test/environments` | `vite-plus/test/runtime` |
+| `vite-plus/test/snapshot`     | `vite-plus/test/runtime` |
+
+Retain `vite-plus/test/mocker` as the migration target for `vitest/mocker`. It re-exports the standalone `@vitest/mocker` API, which has no corresponding v5 `vitest` entry. Keep migration and lint autofixes on the shared entry-point map.
 
 Do not create partial shims for `vite-plus/test/runners`, `vite-plus/test/suite`, `vite-plus/test/plugins/runner`, `vite-plus/test/plugins/expect`, or `vite-plus/test/internal/module-runner`. Their old symbols do not have a complete one-to-one v5 implementation with the required shared state. The migration reports them and directs users to `expect`, `TestRunner`, and its static methods from `vite-plus/test` where possible.
 
@@ -365,7 +366,7 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 | Worker-start failures are reported gracefully                | Wrappers that match the old thrown error or localStorage warning can observe different diagnostics.                                                     | Snapshot the Vite+ failure path and preserve Vitest's exit status; no project source migration is needed.                                       |
 | `resolveConfig` returns resolved Vite config                 | Destructuring returns `undefined`; consumers miss `.test`.                                                                                              | Apply a targeted AST rewrite and add a programmatic API fixture.                                                                                |
 | Runner, expect, WebSocket, and WebDriverIO package migration | Removed runner publication, split expect state, and community provider ownership can cause resolution or state failures; WebSocket APIs are deprecated. | Migrate supported APIs, report unsupported uses, route assertions through root `vitest`, and decouple WebDriverIO; no deprecation-only warning. |
-| Deprecated entry points are removed                          | Generated Vite+ shims and current generic migration output can become invalid.                                                                          | Keep exact compatibility aliases, rewrite to canonical paths, and block unsupported internals.                                                  |
+| Deprecated entry points are removed                          | Generated Vite+ shims and current generic migration output can become invalid.                                                                          | Rewrite upstream and legacy Vite+ imports to canonical paths, retain the standalone mocker shim, and block unsupported internals.               |
 
 ## Rollout
 
@@ -392,7 +393,7 @@ This matrix tracks every v5 migration-guide item and the extra breaking entries 
 
 ### Phase 4: stable release
 
-Release only after the gates below pass. State the Node requirement and the `vp migrate` command in the release notes. Do not remove the exact legacy aliases listed in this RFC during the Vite+ 1.x line.
+Release only after the gates below pass. State the Node requirement, removed entry points, and the `vp migrate` command in the release notes.
 
 ## Validation and release gates
 

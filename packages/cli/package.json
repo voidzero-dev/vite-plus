@@ -155,22 +155,6 @@
       "types": "./dist/test/worker.d.ts",
       "default": "./dist/test/worker.js"
     },
-    "./test/coverage": {
-      "types": "./dist/test/coverage.d.ts",
-      "default": "./dist/test/coverage.js"
-    },
-    "./test/reporters": {
-      "types": "./dist/test/reporters.d.ts",
-      "default": "./dist/test/reporters.js"
-    },
-    "./test/environments": {
-      "types": "./dist/test/environments.d.ts",
-      "default": "./dist/test/environments.js"
-    },
-    "./test/snapshot": {
-      "types": "./dist/test/snapshot.d.ts",
-      "default": "./dist/test/snapshot.js"
-    },
     "./test/mocker": {
       "types": "./dist/test/mocker.d.ts",
       "default": "./dist/test/mocker.js"

@@ -1,0 +1,9 @@
+{
+  "name": "migration-vitest-v5-entry-points",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "devDependencies": {
+    "vitest": "4.1.11"
+  }
+}

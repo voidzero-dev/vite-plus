@@ -173,15 +173,25 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
     }
   });
 
-  it.each([
-    ['coverage', 'vitest/node'],
-    ['reporters', 'vitest/node'],
-    ['environments', 'vitest/runtime'],
-    ['snapshot', 'vitest/runtime'],
-    ['mocker', '@vitest/mocker'],
-  ])('keeps the complete %s compatibility target', (name, upstream) => {
-    const source = fs.readFileSync(path.join(cliPkgDir, 'dist/test', `${name}.js`), 'utf8');
-    expect(source).toBe(`export * from '${upstream}';\n`);
+  it.each(['coverage', 'reporters', 'environments', 'snapshot'])(
+    'does not publish the removed %s alias',
+    (name) => {
+      const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
+      expect(pkg.exports).not.toHaveProperty(`./test/${name}`);
+      expect(() => requireFromHere.resolve(`vite-plus/test/${name}`)).toThrow(
+        expect.objectContaining({ code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' }),
+      );
+      for (const extension of ['js', 'd.ts']) {
+        expect(fs.existsSync(path.join(cliPkgDir, 'dist/test', `${name}.${extension}`))).toBe(
+          false,
+        );
+      }
+    },
+  );
+
+  it('keeps the standalone mocker migration target', () => {
+    const source = fs.readFileSync(path.join(cliPkgDir, 'dist/test/mocker.js'), 'utf8');
+    expect(source).toBe("export * from '@vitest/mocker';\n");
   });
 
   it('every dual-condition entry emits `require` before `default`', () => {

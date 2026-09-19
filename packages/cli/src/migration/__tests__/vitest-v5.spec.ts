@@ -55,6 +55,32 @@ function source(input: string, options = v4) {
 }
 
 describe('Vitest v5 diagnostic scope', () => {
+  it.each(['4.1.11', '5.0.1'])('migrates legacy Vite+ entry points from %s', (version) => {
+    const input = `import { BaseCoverageProvider } from 'vite-plus/test/coverage';
+export { DefaultReporter } from 'vite-plus/test/reporters';
+import { populateGlobal } from 'vite-plus/test/environments';
+export { VitestSnapshotEnvironment } from 'vite-plus/test/snapshot';
+import * as mocker from 'vite-plus/test/mocker';`;
+    const expected = input
+      .replace("'vite-plus/test/coverage'", '"vite-plus/test/node"')
+      .replace("'vite-plus/test/reporters'", '"vite-plus/test/node"')
+      .replace("'vite-plus/test/environments'", '"vite-plus/test/runtime"')
+      .replace("'vite-plus/test/snapshot'", '"vite-plus/test/runtime"');
+    const root = project({
+      'package.json': JSON.stringify({ devDependencies: { vitest: version } }),
+      'support.ts': input,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    expect(plan.changes).toContainEqual(
+      expect.objectContaining({ file: path.join(root, 'support.ts'), after: expected }),
+    );
+    applyVitestV5Migration(plan);
+    expect(fs.readFileSync(path.join(root, 'support.ts'), 'utf8')).toBe(expected);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+    expect(planProject(root).changes).toEqual([]);
+  });
+
   it.each(['4.1.11', '5.0.1'])('restores a legacy WebDriverIO import from %s', (version) => {
     const root = project({
       'package.json': JSON.stringify({ devDependencies: { vitest: version } }),

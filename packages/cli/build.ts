@@ -85,16 +85,6 @@ const PLUGIN_SHIM_ENTRIES: ReadonlyArray<readonly [importSpecifier: string, plug
   ['@vitest/browser-preview', 'browser-preview'],
 ];
 
-// Public Vite+ 1.x contracts with complete v5 targets. Removed runner and
-// expect entry points deliberately have no partial compatibility shim.
-const TEST_COMPATIBILITY_EXPORTS: ReadonlyArray<readonly [string, string]> = [
-  ['coverage', 'vitest/node'],
-  ['reporters', 'vitest/node'],
-  ['environments', 'vitest/runtime'],
-  ['snapshot', 'vitest/runtime'],
-  ['mocker', '@vitest/mocker'],
-];
-
 /**
  * Vitest-related bare specifiers that appear in `@vitest/browser-*` d.ts files
  * and the sub-path under `dist/test/` whose shim re-exports the same module.
@@ -403,14 +393,14 @@ async function syncTestPackageExports() {
     }
   }
 
-  for (const [name, specifier] of TEST_COMPATIBILITY_EXPORTS) {
-    generatedExports[`./test/${name}`] = await createShimForExport(
-      name,
-      { types: './index.d.ts', default: './index.js' },
-      specifier,
-      testDistDir,
-    );
-  }
+  // Vitest v5 no longer re-exports the standalone mocker package. Keep this
+  // public migration target; the other removed entry points use node/runtime.
+  generatedExports['./test/mocker'] = await createShimForExport(
+    'mocker',
+    { types: './index.d.ts', default: './index.js' },
+    '@vitest/mocker',
+    testDistDir,
+  );
 
   // Private shims for `@vitest/browser` and `@vitest/browser/context`. These
   // are referenced as relative paths from the inlined browser-provider d.ts
