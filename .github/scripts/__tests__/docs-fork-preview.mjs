@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
+import { resolveDocsSiteOrigin } from '../../../docs/.vitepress/site-origin.ts';
 import {
   authorizePreview,
   commentPreview,
@@ -241,12 +242,75 @@ await test('reuses the PR origin across commits, builds, and reruns while pinnin
   assert.match(deploy, /--preview-alias "\$PREVIEW_ALIAS"/);
 });
 
-await test('uses each PR origin for shell and PowerShell installer links', async (t) => {
+await test('resolves Workers branch origins without an explicit docs origin', () => {
+  for (const branch of ['rfc/vitest-v5-upgrade', '--RFC//Vitest_V5-Upgrade--']) {
+    assert.equal(
+      resolveDocsSiteOrigin({ WORKERS_CI: '1', WORKERS_CI_BRANCH: branch }),
+      'https://rfc-vitest-v5-upgrade-viteplus-dev.voidzero-docs.workers.dev',
+    );
+  }
+});
+
+await test('preserves explicit origins and production defaults', () => {
+  assert.equal(
+    resolveDocsSiteOrigin({
+      DOCS_SITE_ORIGIN: 'https://viteplus-staging.void.app/',
+      WORKERS_CI: '1',
+      WORKERS_CI_BRANCH: 'rfc/vitest-v5-upgrade',
+    }),
+    'https://viteplus-staging.void.app',
+  );
+  for (const env of [
+    {},
+    { DOCS_SITE_ORIGIN: '' },
+    { WORKERS_CI_BRANCH: 'rfc/vitest-v5-upgrade' },
+    { WORKERS_CI: '1' },
+    { WORKERS_CI: '1', WORKERS_CI_BRANCH: 'main' },
+  ]) {
+    assert.equal(resolveDocsSiteOrigin(env), undefined);
+  }
+});
+
+await test('matches Wrangler long-branch aliases without collisions after truncation', () => {
+  for (const [branch, hash] of [
+    [`feature/${'a'.repeat(80)}`, '288d'],
+    [`feature/${'a'.repeat(79)}b`, 'ee30'],
+  ]) {
+    const origin = resolveDocsSiteOrigin({ WORKERS_CI: '1', WORKERS_CI_BRANCH: branch });
+    assert.equal(
+      origin,
+      `https://feature-${'a'.repeat(37)}-${hash}-viteplus-dev.voidzero-docs.workers.dev`,
+    );
+    assert.equal(new URL(origin).hostname.split('.')[0].length, 63);
+  }
+});
+
+await test('requires an explicit origin when Wrangler cannot create a branch alias', () => {
+  for (const branch of ['123-fix', '___']) {
+    const env = { WORKERS_CI: '1', WORKERS_CI_BRANCH: branch };
+    assert.throws(() => resolveDocsSiteOrigin(env), /Set DOCS_SITE_ORIGIN/);
+    assert.equal(
+      resolveDocsSiteOrigin({ ...env, DOCS_SITE_ORIGIN: previewUrl(2684) }),
+      previewUrl(2684),
+    );
+  }
+});
+
+await test('uses each deploy origin for shell and PowerShell installer links', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'docs-preview-installers-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const snapshots = [];
-  for (const number of [2684, 2685]) {
-    const root = join(directory, String(number));
+  const cases = [
+    { env: { DOCS_SITE_ORIGIN: previewUrl(2684) }, origin: previewUrl(2684) },
+    { env: { DOCS_SITE_ORIGIN: previewUrl(2685) }, origin: previewUrl(2685) },
+    {
+      env: { WORKERS_CI: '1', WORKERS_CI_BRANCH: 'rfc/vitest-v5-upgrade' },
+      origin: 'https://rfc-vitest-v5-upgrade-viteplus-dev.voidzero-docs.workers.dev',
+    },
+    { env: {}, origin: 'https://viteplus.dev' },
+  ];
+  for (const [index, { env, origin }] of cases.entries()) {
+    const root = join(directory, String(index));
     const scripts = join(root, 'docs', '.vitepress', 'scripts');
     const output = join(root, 'docs', 'public');
     const installers = join(root, 'packages', 'cli');
@@ -258,21 +322,32 @@ await test('uses each PR origin for shell and PowerShell installer links', async
       new URL('../../../docs/.vitepress/scripts/copy-installers.mjs', import.meta.url),
       script,
     );
+    await copyFile(
+      new URL('../../../docs/.vitepress/site-origin.ts', import.meta.url),
+      join(scripts, '..', 'site-origin.ts'),
+    );
     for (const name of ['install.sh', 'install.ps1', 'install-legacy.sh', 'install-legacy.ps1']) {
       await copyFile(
         new URL(`../../../packages/cli/${name}`, import.meta.url),
         join(installers, name),
       );
     }
-    const origin = previewUrl(number);
-    execFileSync(process.execPath, [script], { env: { ...process.env, DOCS_SITE_ORIGIN: origin } });
+    execFileSync(process.execPath, [script], {
+      env: {
+        ...process.env,
+        DOCS_SITE_ORIGIN: '',
+        WORKERS_CI: '',
+        WORKERS_CI_BRANCH: '',
+        ...env,
+      },
+    });
     const shell = await readFile(join(output, 'install.sh'), 'utf8');
     const powershell = await readFile(join(output, 'install.ps1'), 'utf8');
     assert.ok(shell.includes(`${origin}/install-legacy.sh`));
     assert.ok(powershell.includes(`${origin}/install-legacy.ps1`));
     snapshots.push({ origin, shell, powershell });
   }
-  assert.equal(new Set(snapshots.map((snapshot) => snapshot.origin)).size, 2);
+  assert.equal(new Set(snapshots.map((snapshot) => snapshot.origin)).size, cases.length);
   for (const snapshot of snapshots) {
     for (const other of snapshots) {
       if (other.origin !== snapshot.origin) {
