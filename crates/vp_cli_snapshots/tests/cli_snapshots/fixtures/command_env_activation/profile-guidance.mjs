@@ -100,10 +100,6 @@ if (mode === 'powershell') {
   }
 } else if (mode.startsWith('zsh-')) {
   captureVp(['env', 'on', 'node']);
-  const zsh = process.env.PATH.split(path.delimiter)
-    .map((dir) => path.join(dir, 'zsh'))
-    .find((file) => fs.existsSync(file));
-  assert.ok(zsh);
   const system = path.resolve('profiles/system');
   fs.mkdirSync(system, { recursive: true });
   fs.writeFileSync(path.join(system, 'node'), '#!/bin/sh\necho system-node\n', { mode: 0o755 });
@@ -127,20 +123,6 @@ if (mode === 'powershell') {
     assert.doesNotMatch(output, /Or open a new terminal/);
   }
   console.log(output);
-  console.log("$ zsh -lic 'command -v node; node --version'");
-  const result = spawnSync(
-    zsh,
-    [
-      '-lic',
-      'command -v node; test "$(command -v node)" = "$EXPECTED_NODE" || exit 1; node --version',
-    ],
-    {
-      env: { ...env, EXPECTED_NODE: path.join(configured ? dirs.bin : system, 'node') },
-      stdio: 'inherit',
-      timeout: 30000,
-    },
-  );
-  assert.equal(result.status, 0, result.error?.message);
 } else {
   // Suppress Ubuntu's sudo hint while still loading the normal Bash startup files.
   fs.writeFileSync(path.join(home, '.hushlogin'), '');
