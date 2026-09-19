@@ -7,7 +7,7 @@ import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
 import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
 import { ecosystemCiDir, tgzDir, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
-import { finalizeWebdriverioProject, prepareWebdriverioProject } from './webdriverio.ts';
+import { prepareWebdriverioProject } from './webdriverio.ts';
 
 const projects = Object.keys(repos);
 
@@ -430,8 +430,6 @@ if (project === 'tiptap') {
   }
   await writeFile(viteConfigPath, patched, 'utf-8');
 }
-
-await finalizeWebdriverioProject(project, repoRoot);
 
 // Install through the local registry. `vp migrate` already pinned
 // `vite-plus@<version>` in package.json exactly like a real migration, so no

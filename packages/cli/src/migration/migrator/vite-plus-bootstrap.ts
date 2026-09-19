@@ -50,6 +50,7 @@ import {
   vitestEcosystemCatalogReferencesPending,
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
+  workspaceUsesWebdriverioProvider,
   yarnrcSatisfiesVitePlus,
 } from '../migrator.ts';
 import { type DependencyVersionChange, type MigrationReport } from '../report.ts';
@@ -120,6 +121,9 @@ function isSemanticVitePlusOverrideSpec(dependencyName: string, spec: string | u
   if (spec === VITE_PLUS_OVERRIDE_PACKAGES[dependencyName]) {
     return true;
   }
+  if (dependencyName === '@vitest/browser' && spec === VITEST_VERSION) {
+    return true;
+  }
   return false;
 }
 
@@ -148,8 +152,9 @@ export function overridesSatisfyVitePlus(
   usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
+  usesWebdriverioProvider = false,
 ): boolean {
-  const managed = managedOverridePackages(usesVitest);
+  const managed = managedOverridePackages(usesVitest, usesWebdriverioProvider);
   // Common case: a lingering managed `vitest` override is not satisfied. It
   // must be removed, so the bootstrap stays pending until then. Both key
   // spellings count. A pnpm sink migrated before #2309 still holds the bare
@@ -723,10 +728,11 @@ export function detectVitePlusBootstrapPending(
   // Shared override/catalog sinks must keep vitest managed when any package in
   // the workspace needs it. The direct dependency itself is localized above.
   const usesVitest = workspaceUsesVitestDirectly(projectPath, packages, true);
+  const usesWebdriverio = workspaceUsesWebdriverioProvider(projectPath, packages);
 
   if (packageManager === PackageManager.yarn) {
     return (
-      !overridesSatisfyVitePlus(pkg.resolutions, usesVitest) ||
+      !overridesSatisfyVitePlus(pkg.resolutions, usesVitest, undefined, 'bare', usesWebdriverio) ||
       !yarnrcSatisfiesVitePlus(projectPath, usesVitest, supportCatalog) ||
       yarnWorkspaceHoistingOptOutPending(projectPath, packageManager, packages)
     );
@@ -734,7 +740,7 @@ export function detectVitePlusBootstrapPending(
   if (packageManager === PackageManager.npm) {
     return (
       vitePlusDependencyNeedsConcreteVersion(pkg) ||
-      !overridesSatisfyVitePlus(pkg.overrides, usesVitest) ||
+      !overridesSatisfyVitePlus(pkg.overrides, usesVitest, undefined, 'bare', usesWebdriverio) ||
       npmVitePlusManagedDependenciesPending(pkg, usesVitest)
     );
   }
@@ -747,6 +753,8 @@ export function detectVitePlusBootstrapPending(
       pkg.overrides,
       usesVitest,
       supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined,
+      'bare',
+      usesWebdriverio,
     );
   }
   if (packageManager === PackageManager.pnpm) {
@@ -767,13 +775,20 @@ export function detectVitePlusBootstrapPending(
             usesVitest,
             catalogDependencyResolver,
             'pnpm-ranged',
+            usesWebdriverio,
           ) ||
           !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
         );
       }
       return (
         vitePlusDependencyNeedsConcreteVersion(pkg) ||
-        !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest, undefined, 'pnpm-ranged') ||
+        !overridesSatisfyVitePlus(
+          pkg.pnpm?.overrides,
+          usesVitest,
+          undefined,
+          'pnpm-ranged',
+          usesWebdriverio,
+        ) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
       );
     }
@@ -785,6 +800,7 @@ export function detectVitePlusBootstrapPending(
         usesVitest,
         resolver,
         'pnpm-ranged',
+        usesWebdriverio,
       ) ||
       !pnpmPeerDependencyRulesSatisfyVitePlus(
         readPnpmWorkspacePeerDependencyRules(projectPath),
@@ -880,6 +896,7 @@ function ensureOverrideEntries(
   usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
+  usesWebdriverioProvider = false,
 ): { overrides: Record<string, string>; changed: boolean } {
   const next = { ...overrides };
   let changed = false;
@@ -888,7 +905,7 @@ function ensureOverrideEntries(
     changed = true;
   }
   for (const [dependencyName, overrideSpec] of Object.entries(
-    managedOverridePackages(usesVitest),
+    managedOverridePackages(usesVitest, usesWebdriverioProvider),
   )) {
     const overrideKey = managedOverrideKey(dependencyName, keyStyle);
     // Move a pre-#2309 bare key's value to the range-qualified key, so the
@@ -962,6 +979,7 @@ export function ensureVitePlusBootstrap(
   // when any package needs it. Each package's direct vitest dependency is
   // reconciled independently below.
   const usesVitest = workspaceUsesVitestDirectly(projectPath, workspaceInfo.packages, true);
+  const usesWebdriverio = workspaceUsesWebdriverioProvider(projectPath, workspaceInfo.packages);
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   const shouldAllowBrowserBuilds = workspaceUsesWebdriverio(projectPath, workspaceInfo.packages);
   const usePnpmWorkspaceYaml =
@@ -1031,6 +1049,7 @@ export function ensureVitePlusBootstrap(
         vitestEcosystemPackages,
         false,
         providerCatalogAdditions,
+        usesWebdriverio,
       );
     }
   }
@@ -1054,13 +1073,25 @@ export function ensureVitePlusBootstrap(
     );
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
-      const ensured = ensureOverrideEntries(pkg.resolutions, usesVitest);
+      const ensured = ensureOverrideEntries(
+        pkg.resolutions,
+        usesVitest,
+        undefined,
+        'bare',
+        usesWebdriverio,
+      );
       if (ensured.changed) {
         pkg.resolutions = ensured.overrides;
         packageJsonChanged = true;
       }
     } else if (workspaceInfo.packageManager === PackageManager.npm) {
-      const ensured = ensureOverrideEntries(pkg.overrides, usesVitest);
+      const ensured = ensureOverrideEntries(
+        pkg.overrides,
+        usesVitest,
+        undefined,
+        'bare',
+        usesWebdriverio,
+      );
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;
         packageJsonChanged = true;
@@ -1074,6 +1105,8 @@ export function ensureVitePlusBootstrap(
         pkg.overrides,
         usesVitest,
         supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined,
+        'bare',
+        usesWebdriverio,
       );
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;
@@ -1089,6 +1122,7 @@ export function ensureVitePlusBootstrap(
         usesVitest,
         supportCatalog ? readPnpmWorkspaceCatalogDependencyResolver(projectPath) : undefined,
         'pnpm-ranged',
+        usesWebdriverio,
       );
       if (ensured.changed) {
         pkg.pnpm.overrides = ensured.overrides;
@@ -1189,6 +1223,7 @@ export function ensureVitePlusBootstrap(
           usesVitest,
           catalogDependencyResolver,
           'pnpm-ranged',
+          usesWebdriverio,
         ) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(
           readPnpmWorkspacePeerDependencyRules(projectPath),
@@ -1203,6 +1238,7 @@ export function ensureVitePlusBootstrap(
           vitestEcosystemPackages,
           true,
           providerCatalogAdditions,
+          usesWebdriverio,
         );
       }
       if (fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -1238,7 +1274,7 @@ export function ensureVitePlusBootstrap(
     // rewriteBunCatalog runs only on monorepo roots). A standalone bun project
     // keeps the concrete overrides set by `ensureOverrideEntries` above.
     const before = fs.readFileSync(packageJsonPath, 'utf-8');
-    rewriteBunCatalog(projectPath, usesVitest, vitestEcosystemPackages);
+    rewriteBunCatalog(projectPath, usesVitest, vitestEcosystemPackages, usesWebdriverio);
     const after = fs.readFileSync(packageJsonPath, 'utf-8');
     result.packageJson = result.packageJson || before !== after;
   }

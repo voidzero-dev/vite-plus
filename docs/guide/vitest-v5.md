@@ -130,6 +130,8 @@ Vite+ 1.0 removes the `vite-plus/test/browser-webdriverio` exports. Use `@vitest
 
 `vp migrate` changes legacy provider imports to `@vitest/browser-webdriverio` and ensures a provider version of at least `5.0.0`. It adds `^5.0.0` when the provider is missing, upgrades older versions, and narrows ranges that still allow v4. It also updates referenced catalog entries and removes overrides that force an older provider. Versions and ranges already above this minimum stay unchanged. The migration ensures the required `webdriverio` peer is installed without upgrading an existing framework version.
 
+For projects that use this provider, `vp migrate` adds an `@vitest/browser` override that matches the bundled Vitest version. Yarn uses `resolutions`. This prevents the provider's version range from retaining an older browser package in the lockfile.
+
 You manage provider upgrades after this migration; Vite+ does not synchronize community releases with Vitest. Existing imports from the community package stay unchanged. For custom dependencies that the migrator cannot verify, resolve the diagnostic before retrying migration. See the [upstream package migration guide](https://vitest.dev/guide/migration/#package-migration).
 
 Legacy Vite+ WebDriverIO `/context` imports move to `vite-plus/test/browser/context`. Keep runtime browser APIs on this shared entry; the community provider's `/context` entry contains types only.
