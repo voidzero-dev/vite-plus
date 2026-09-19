@@ -13,10 +13,6 @@ cloned starter-template to my-app
 
 Monorepo integration...
 
-lint config already present in packages/my-app/vite.config.ts — removed redundant packages/my-app/.oxlintrc.json
-
-fmt config already present in packages/my-app/vite.config.ts — removed redundant packages/my-app/.oxfmtrc.json
-
 Formatting code...
 
 Code formatted
@@ -44,18 +40,18 @@ export default defineConfig(({ mode }) => {
 });
 ```
 
-## `vpt stat-file packages/my-app/.oxlintrc.json --assert-not file`
+## `vpt stat-file packages/my-app/.oxlintrc.json --assert file`
 
-standalone lint config merge-skipped and removed
-
-```
-packages/my-app/.oxlintrc.json: missing
-```
-
-## `vpt stat-file packages/my-app/.oxfmtrc.json --assert-not file`
-
-standalone fmt config merge-skipped and removed
+standalone lint config preserved
 
 ```
-packages/my-app/.oxfmtrc.json: missing
+packages/my-app/.oxlintrc.json: file
+```
+
+## `vpt stat-file packages/my-app/.oxfmtrc.json --assert file`
+
+standalone fmt config preserved
+
+```
+packages/my-app/.oxfmtrc.json: file
 ```

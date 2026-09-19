@@ -1,0 +1,36 @@
+[[case]]
+name = "migration_custom_lint_config_root"
+vp = "global"
+steps = [
+  ["vp", "run", "lint:custom"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", "config/lint.json"],
+  { argv = ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"], comment = "the unrelated formatter config still merges" },
+  { argv = ["vp", "run", "lint:custom"], comment = "the custom entrypoint must still load its inherited JSON config" },
+  ["vp", "fmt", "--check", "src/index.js"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "run", "lint:custom"],
+  { argv = ["vpt", "write-file", "src/index.js", "console.log('hello')\n"], snapshot = false },
+  { argv = ["vp", "run", "lint:custom"], comment = "the inherited no-console rule remains active after two migrations", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_shared_vite_config_module"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"migration-shared-vite-config\",\"devDependencies\":{\"vite-plus\":\"latest\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import shared from './config/shared.js';\nexport default { ...shared };\n"], snapshot = false },
+  ["vp", "fmt", "--check", "src/index.js"],
+  ["vp", "lint", "src/index.js"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxfmtrc.json"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", "vite.config.ts"],
+  { argv = ["vp", "fmt", "--check", "src/index.js"], comment = "the shared TypeScript module must still import its JSON configs" },
+  ["vp", "lint", "src/index.js"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "fmt", "--check", "src/index.js"],
+  { argv = ["vpt", "write-file", "src/index.js", "console.log('hello')\n"], snapshot = false },
+  { argv = ["vp", "lint", "src/index.js"], comment = "the indirectly imported lint rule remains active after two migrations", continue-on-failure = true },
+]

@@ -1,0 +1,16 @@
+[[case]]
+name = "migration_oxc_ecosystem_delta_comic"
+vp = "global"
+comment = "Reproduces the typed JSON imports in https://github.com/vite-plus-ecosystem-ci/delta-comic/pull/9."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", ".oxfmtrc.json"],
+  ["vp", "fmt", "packages/app/src"],
+  ["vpt", "print-file", "packages/app/src/index.ts"],
+  ["vp", "run", "check"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "repeat migration without invalidating either JSON import" },
+  ["vp", "run", "check"],
+  { argv = ["vpt", "write-file", "packages/app/src/index.ts", "console.log('hello')\n"], snapshot = false },
+  { argv = ["vp", "run", "check"], comment = "vp check must still apply the imported lint rule", continue-on-failure = true },
+]
