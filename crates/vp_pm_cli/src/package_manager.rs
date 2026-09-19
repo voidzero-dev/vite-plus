@@ -337,6 +337,11 @@ impl PackageManager {
     }
 
     #[must_use]
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
         self.bin_prefix.clone()
     }
