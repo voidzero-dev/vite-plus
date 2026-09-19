@@ -90,50 +90,9 @@ Lower-priority config files that indicate a package manager:
 
 If a caller provides a default package manager type (used internally by some code paths), that default is used with version `"latest"`.
 
-### Priority 6: Interactive selection
+Package-manager commands provide pnpm as the default, including outside a project, without prompting or creating a manifest. Without a caller-provided default, Rust detection returns an error when no manager is recognized.
 
-If no signals are detected and no default is provided, the behavior depends on the environment:
-
-#### CI environment
-
-Checks for common CI environment variables:
-
-- `CI`, `CONTINUOUS_INTEGRATION`, `GITHUB_ACTIONS`, `GITLAB_CI`, `CIRCLECI`, `TRAVIS`, `JENKINS_URL`, `BUILDKITE`, `DRONE`, `CODEBUILD_BUILD_ID` (AWS CodeBuild), `TF_BUILD` (Azure Pipelines)
-
-**Result**: Auto-selects `pnpm` without prompting.
-
-#### Non-interactive terminal
-
-If stdin is not a TTY (piped input, non-interactive shell):
-
-**Result**: Auto-selects `pnpm` without prompting.
-
-#### Interactive terminal
-
-Displays a keyboard-navigable menu:
-
-```
-No package manager detected. Please select one:
-   Use ↑↓ arrows to navigate, Enter to select, 1-4 for quick selection
-
-  ▶ [1] pnpm (recommended) ←
-    [2] npm
-    [3] yarn
-    [4] bun
-```
-
-If the interactive menu fails (terminal compatibility issues), falls back to a simple text prompt:
-
-```
-No package manager detected. Please select one:
-────────────────────────────────────────────────
-  [1] pnpm (recommended)
-  [2] npm
-  [3] yarn
-  [4] bun
-
-Enter your choice (1-4) [default: 1]:
-```
+`vp create` and `vp migrate` retain their TypeScript package-manager selector when no manager is detected. In non-interactive mode, it defaults to pnpm.
 
 ## CLI Flag: `--package-manager`
 
@@ -154,7 +113,7 @@ This ensures monorepo consistency while allowing standalone projects to override
 
 ## Non-Mutating Resolution
 
-Detection and download never rewrite `package.json`. A `devEngines.packageManager` range remains the source of truth, while lockfile, config, and interactive detection resolve a managed package manager for the current command without adding a manifest field.
+Detection and download never rewrite `package.json`. A `devEngines.packageManager` range remains the source of truth, while lockfile, config, and default detection resolve a managed package manager for the current command without adding a manifest field.
 
 Projects that require a deterministic declaration can pin it explicitly with `vp env pin <package-manager>@<version>`. Commands that modify dependencies, including `vp install` and `vp add`, require an existing `package.json` instead of creating one automatically.
 
@@ -246,7 +205,6 @@ Each package manager has specific files that trigger cache invalidation when cha
 
 - **File**: `crates/vp_pm_cli/src/package_manager.rs`
 - **Function**: `get_package_manager_type_and_version()` — priority-ordered detection
-- **Function**: `prompt_package_manager_selection()` — CI/TTY/interactive fallback
 - **Function**: `download_package_manager()` — download, hash, and record the verified pin
 - **Function**: `ensure_package_manager_bin()` — resolve the executable, shared with the global shim
 - **Function**: `verify_cached_cli_hash()` — compare a pin against the recorded pin
@@ -255,7 +213,7 @@ Each package manager has specific files that trigger cache invalidation when cha
 ### TypeScript (CLI integration)
 
 - **File**: `packages/cli/src/utils/workspace.ts` — `detectWorkspace()` wraps NAPI binding
-- **File**: `packages/cli/src/utils/prompts.ts` — `selectPackageManager()` for non-interactive default
+- **File**: `packages/cli/src/utils/prompts.ts` — `selectPackageManager()` for create/migrate prompts and the non-interactive default
 - **File**: `packages/cli/src/create/bin.ts` — `--package-manager` flag handling
 
 ### NAPI binding (bridge)

@@ -250,13 +250,10 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 
     match result {
         Ok(exit_status) => Ok(exit_status.0.into()),
-        Err(e) => match e {
-            vp_error::Error::UserCancelled => Ok(130),
-            _ => {
-                tracing::error!("Rust error: {:?}", e);
-                Err(napi::Error::from_reason(format_error_message(&e)))
-            }
-        },
+        Err(e) => {
+            tracing::error!("Rust error: {:?}", e);
+            Err(napi::Error::from_reason(format_error_message(&e)))
+        }
     }
 }
 

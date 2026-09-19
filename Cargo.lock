@@ -8856,7 +8856,6 @@ dependencies = [
  "base64-simd",
  "clap",
  "cow-utils",
- "crossterm",
  "flate2",
  "futures-util",
  "hex",
