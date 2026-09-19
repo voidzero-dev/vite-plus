@@ -238,28 +238,7 @@ impl PackageManagerBuilder {
                 PackageManagerSource::LockfileOrConfig | PackageManagerSource::Default
             )
         {
-            // Version gates must describe the npm on PATH, not the latest registry release.
-            let npm = vp_command::resolve_bin("npm", None, &self.cwd)?;
-            let output = tokio::process::Command::new(npm.as_path())
-                .arg("--version")
-                .current_dir(&self.cwd)
-                // User preloads can print to stdout; only the actual command should run them.
-                .env_remove("NODE_OPTIONS")
-                .output()
-                .await?;
-            if !output.status.success() {
-                return Err(io::Error::other("failed to read npm version").into());
-            }
-            let version = Version::parse(String::from_utf8_lossy(&output.stdout).trim())?;
-            let bin_prefix = npm
-                .parent()
-                .ok_or_else(|| Error::CannotFindBinaryPath("npm".into()))?
-                .to_absolute_path_buf();
-            return Ok(PackageManager {
-                client: package_manager_type,
-                version: version.to_string().into(),
-                bin_prefix,
-            });
+            return resolve_npm_from_path(&self.cwd).await;
         }
 
         // only download the package manager if it's not already downloaded
@@ -288,6 +267,31 @@ impl PackageManagerBuilder {
         };
         Ok(package_manager)
     }
+}
+
+// Version gates and migration must use the npm on PATH, not the latest registry release.
+async fn resolve_npm_from_path(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
+    let npm = vp_command::resolve_bin("npm", None, cwd)?;
+    let output = tokio::process::Command::new(npm.as_path())
+        .arg("--version")
+        .current_dir(cwd)
+        // User preloads can print to stdout; only the actual command should run them.
+        .env_remove("NODE_OPTIONS")
+        .output()
+        .await?;
+    if !output.status.success() {
+        return Err(io::Error::other("failed to read npm version").into());
+    }
+    let version = Version::parse(String::from_utf8_lossy(&output.stdout).trim())?;
+    let bin_prefix = npm
+        .parent()
+        .ok_or_else(|| Error::CannotFindBinaryPath("npm".into()))?
+        .to_absolute_path_buf();
+    Ok(PackageManager {
+        client: PackageManagerType::Npm,
+        version: version.to_string().into(),
+        bin_prefix,
+    })
 }
 
 impl PackageManager {
@@ -346,7 +350,7 @@ impl PackageManager {
 /// from the workspace root.
 ///
 /// The returned version is exact when detected from the `packageManager` field,
-/// `"bundled"` for unpinned npm, `"latest"` for other lockfile/config/default selections, and may be a
+/// `"default"` when inferred from lockfiles/config files/default, and may be a
 /// semver range (or `"*"` for an absent version) when detected from
 /// `devEngines.packageManager` (see rfcs/dev-engines.md).
 pub fn get_package_manager_type_and_version(
@@ -378,33 +382,33 @@ pub fn get_package_manager_type_and_version(
         ));
     }
 
-    let version = Str::from("latest");
+    let version = Str::from("default");
     let source = PackageManagerSource::LockfileOrConfig;
-    // if pnpm-workspace.yaml exists, use pnpm@latest
+    // if pnpm-workspace.yaml exists, select pnpm
     if matches!(workspace_root.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)) {
         return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
-    // if pnpm-lock.yaml exists, use pnpm@latest
+    // if pnpm-lock.yaml exists, select pnpm
     let pnpm_lock_yaml_path = workspace_root.path.join("pnpm-lock.yaml");
     if is_exists_file(&pnpm_lock_yaml_path)? {
         return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
-    // if yarn.lock or .yarnrc.yml exists, use yarn@latest
+    // if yarn.lock or .yarnrc.yml exists, select yarn
     let yarn_lock_path = workspace_root.path.join("yarn.lock");
     let yarnrc_yml_path = workspace_root.path.join(".yarnrc.yml");
     if is_exists_file(&yarn_lock_path)? || is_exists_file(&yarnrc_yml_path)? {
         return Ok((PackageManagerType::Yarn, version, None, source));
     }
 
-    // A package-lock.json selects npm without requiring a separate installation.
+    // if package-lock.json exists, select npm
     let package_lock_json_path = workspace_root.path.join("package-lock.json");
     if is_exists_file(&package_lock_json_path)? {
-        return Ok((PackageManagerType::Npm, "bundled".into(), None, source));
+        return Ok((PackageManagerType::Npm, version, None, source));
     }
 
-    // if bun.lock (text format) or bun.lockb (binary format) exists, use bun@latest
+    // if bun.lock (text format) or bun.lockb (binary format) exists, select bun
     let bun_lock_path = workspace_root.path.join("bun.lock");
     if is_exists_file(&bun_lock_path)? {
         return Ok((PackageManagerType::Bun, version, None, source));
@@ -414,25 +418,25 @@ pub fn get_package_manager_type_and_version(
         return Ok((PackageManagerType::Bun, version, None, source));
     }
 
-    // if .pnpmfile.cjs exists, use pnpm@latest
+    // if .pnpmfile.cjs exists, select pnpm
     let pnpmfile_cjs_path = workspace_root.path.join(".pnpmfile.cjs");
     if is_exists_file(&pnpmfile_cjs_path)? {
         return Ok((PackageManagerType::Pnpm, version, None, source));
     }
-    // if legacy pnpmfile.cjs exists, use pnpm@latest
+    // if legacy pnpmfile.cjs exists, select pnpm
     // https://newreleases.io/project/npm/pnpm/release/6.0.0
     let legacy_pnpmfile_cjs_path = workspace_root.path.join("pnpmfile.cjs");
     if is_exists_file(&legacy_pnpmfile_cjs_path)? {
         return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
-    // if bunfig.toml exists, use bun@latest
+    // if bunfig.toml exists, select bun
     let bunfig_toml_path = workspace_root.path.join("bunfig.toml");
     if is_exists_file(&bunfig_toml_path)? {
         return Ok((PackageManagerType::Bun, version, None, source));
     }
 
-    // if yarn.config.cjs exists, use yarn@latest (yarn 2.0+)
+    // if yarn.config.cjs exists, select yarn (yarn 2.0+)
     let yarn_config_cjs_path = workspace_root.path.join("yarn.config.cjs");
     if is_exists_file(&yarn_config_cjs_path)? {
         return Ok((PackageManagerType::Yarn, version, None, source));
@@ -440,7 +444,6 @@ pub fn get_package_manager_type_and_version(
 
     // if default is specified, use it
     if let Some(default) = default {
-        let version = if default == PackageManagerType::Npm { "bundled".into() } else { version };
         return Ok((default, version, None, PackageManagerSource::Default));
     }
 
@@ -975,17 +978,23 @@ async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<
     }
 }
 
-/// Resolve an exact, range, or `latest` package-manager version without downloading it.
+/// Resolve an exact, range, `latest`, or manager-specific `default` version without downloading it.
 pub async fn resolve_package_manager_version(
     package_manager_type: PackageManagerType,
     version: &str,
 ) -> Result<Str, Error> {
-    if version == "latest" {
-        get_latest_version(package_manager_type).await
-    } else if Version::parse(version).is_ok() {
-        Ok(version.into())
-    } else {
-        resolve_package_manager_range(package_manager_type, version).await
+    match version {
+        "default" => match package_manager_type {
+            PackageManagerType::Npm => {
+                Ok(resolve_npm_from_path(&vt_path::current_dir()?).await?.version)
+            }
+            PackageManagerType::Pnpm | PackageManagerType::Yarn | PackageManagerType::Bun => {
+                get_latest_version(package_manager_type).await
+            }
+        },
+        "latest" => get_latest_version(package_manager_type).await,
+        _ if Version::parse(version).is_ok() => Ok(version.into()),
+        _ => resolve_package_manager_range(package_manager_type, version).await,
     }
 }
 
@@ -3174,7 +3183,7 @@ mod tests {
 
         // onFail: ignore continues down the detection chain to the lockfile
         assert_eq!(pm_type, PackageManagerType::Pnpm);
-        assert_eq!(version, "latest");
+        assert_eq!(version, "default");
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
 
@@ -3196,7 +3205,7 @@ mod tests {
 
         // an empty array imposes nothing: detection falls through to the lockfile
         assert_eq!(pm_type, PackageManagerType::Pnpm);
-        assert_eq!(version, "latest");
+        assert_eq!(version, "default");
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
 
@@ -3245,7 +3254,7 @@ mod tests {
 
         // onFail: warn on the last entry warns and continues down the chain
         assert_eq!(pm_type, PackageManagerType::Pnpm);
-        assert_eq!(version, "latest");
+        assert_eq!(version, "default");
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
 
@@ -4285,7 +4294,7 @@ mod tests {
             PackageManagerType::Npm,
             "package-lock.json should take precedence over pnpmfile.cjs and yarn.config.cjs"
         );
-        assert_eq!(version, "bundled");
+        assert_eq!(version, "default");
         assert_eq!(hash, None);
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
@@ -4342,7 +4351,7 @@ mod tests {
         let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
-        assert_eq!(version.as_str(), "latest");
+        assert_eq!(version.as_str(), "default");
         assert!(hash.is_none());
     }
 
@@ -4362,7 +4371,7 @@ mod tests {
         let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
-        assert_eq!(version.as_str(), "latest");
+        assert_eq!(version.as_str(), "default");
         assert!(hash.is_none());
     }
 
@@ -4382,7 +4391,7 @@ mod tests {
         let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
-        assert_eq!(version.as_str(), "latest");
+        assert_eq!(version.as_str(), "default");
         assert!(hash.is_none());
     }
 
