@@ -28,11 +28,10 @@ import { parseArgs } from 'node:util';
 
 import { createBuildCommand, NapiCli } from '@napi-rs/cli';
 import { format } from 'oxfmt';
-import { satisfies } from 'semver';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import corePkg from '../core/package.json' with { type: 'json' };
-import { VITEST_WEBDRIVERIO_RANGE, VITEST_VERSION } from './src/utils/constants.ts';
+import { VITEST_VERSION } from './src/utils/constants.ts';
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = 'vitest';
@@ -48,7 +47,6 @@ const UTC_BUILD_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const BROWSER_PROVIDER_PACKAGES: ReadonlyArray<{ pkg: string; short: string }> = [
   { pkg: '@vitest/browser-playwright', short: 'playwright' },
   { pkg: '@vitest/browser-preview', short: 'preview' },
-  { pkg: '@vitest/browser-webdriverio', short: 'webdriverio' },
 ];
 
 // Plugin shim entries: each `@vitest/*` package/subpath projected under
@@ -84,7 +82,6 @@ const PLUGIN_SHIM_ENTRIES: ReadonlyArray<readonly [importSpecifier: string, plug
   ['@vitest/browser/client', 'browser-client'],
   ['@vitest/browser/locators', 'browser-locators'],
   ['@vitest/browser-playwright', 'browser-playwright'],
-  ['@vitest/browser-webdriverio', 'browser-webdriverio'],
   ['@vitest/browser-preview', 'browser-preview'],
 ];
 
@@ -435,15 +432,6 @@ async function syncTestPackageExports() {
       continue;
     }
     const providerPkg = JSON.parse(await readFile(providerPkgPath, 'utf-8'));
-    if (
-      short === 'webdriverio' &&
-      (!satisfies(providerPkg.version, VITEST_WEBDRIVERIO_RANGE) ||
-        !satisfies(testPkg.version, providerPkg.peerDependencies?.vitest ?? ''))
-    ) {
-      throw new Error(
-        `${pkg}@${providerPkg.version} is incompatible with vitest@${testPkg.version}`,
-      );
-    }
     const providerPkgRoot = dirname(providerPkgPath);
     const providerExports = (providerPkg.exports ?? {}) as Record<string, unknown>;
 

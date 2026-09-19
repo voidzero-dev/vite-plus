@@ -1075,228 +1075,6 @@ transform:
       by: "vite-plus/test/browser/providers/preview"
 fix: $NEW_IMPORT
 ---
-id: rewrite-vitest-browser-webdriverio-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio['"]$
-  inside:
-    kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio"
-      by: "vite-plus/test/browser-webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-export
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio['"]$
-  inside:
-    kind: export_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio"
-      by: "vite-plus/test/browser-webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-require
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        regex: ^require$
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio"
-      by: "vite-plus/test/browser-webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-dynamic-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        kind: import
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio"
-      by: "vite-plus/test/browser-webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-context-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/context['"]$
-  inside:
-    kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/context"
-      by: "vite-plus/test/browser/context"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-context-export
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/context['"]$
-  inside:
-    kind: export_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/context"
-      by: "vite-plus/test/browser/context"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-context-require
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/context['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        regex: ^require$
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/context"
-      by: "vite-plus/test/browser/context"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-context-dynamic-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/context['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        kind: import
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/context"
-      by: "vite-plus/test/browser/context"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-provider-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
-  inside:
-    kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/provider"
-      by: "vite-plus/test/browser/providers/webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-provider-export
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
-  inside:
-    kind: export_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/provider"
-      by: "vite-plus/test/browser/providers/webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-provider-require
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        regex: ^require$
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/provider"
-      by: "vite-plus/test/browser/providers/webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-provider-dynamic-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        kind: import
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/provider"
-      by: "vite-plus/test/browser/providers/webdriverio"
-fix: $NEW_IMPORT
----
 id: rewrite-vitest-subpath-import
 language: TypeScript
 rule:
@@ -1809,13 +1587,21 @@ fn vitest_rewrite_rules() -> String {
             &template
                 .replace(
                     "rewrite-vitest-subpath-",
-                    &format!("rewrite-vitest-subpath-{}-", source.replace('/', "-")),
+                    &format!(
+                        "{}{}-",
+                        if source.starts_with("vitest/") {
+                            "rewrite-vitest-subpath-"
+                        } else {
+                            "rewrite-legacy-test-entry-"
+                        },
+                        source.replace('/', "-")
+                    ),
                 )
                 .replace(
                     r#"regex: ^['"]vitest/.+['"]$"#,
                     &format!(r#"regex: ^['"]{}['"]$"#, regex::escape(source)),
                 )
-                .replace("replace: vitest/", &format!("replace: {source}"))
+                .replace("replace: vitest/", &format!("replace: \"{source}\""))
                 .replace("by: \"vite-plus/test/\"", &format!("by: \"{target}\"")),
         );
         rules.push('\n');
@@ -1885,6 +1671,11 @@ static RE_REF_VITEST_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/(.+?)(["']\s*/>)"#).unwrap()
 });
 
+// Exact legacy entry points also include removed Vite+ provider exports.
+static RE_REF_TEST_ENTRY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])([^"']+)(["']\s*/>)"#).unwrap()
+});
+
 /// `@vitest/browser[/{subpath}]` references that map onto the *nested*
 /// `vite-plus/test/browser[/{subpath}]` surface (a plain `@vitest/` → `vite-plus/test/`
 /// swap is correct here):
@@ -1912,7 +1703,7 @@ static RE_REF_VITEST_SCOPED_BROWSER_FLAT: LazyLock<Regex> = LazyLock::new(|| {
 /// `vite-plus/test/browser-{provider}` — a plain `@vitest/` → `vite-plus/test/` swap.
 static RE_REF_VITEST_SCOPED_PROVIDER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/(browser-playwright|browser-preview|browser-webdriverio)(["']\s*/>)"#,
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/(browser-playwright|browser-preview)(["']\s*/>)"#,
     )
     .unwrap()
 });
@@ -1922,7 +1713,7 @@ static RE_REF_VITEST_SCOPED_PROVIDER: LazyLock<Regex> = LazyLock::new(|| {
 /// provider segment is dropped: → `vite-plus/test/browser/context`.
 static RE_REF_VITEST_SCOPED_PROVIDER_CONTEXT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview|webdriverio)/context(["']\s*/>)"#,
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview)/context(["']\s*/>)"#,
     )
     .unwrap()
 });
@@ -1932,7 +1723,7 @@ static RE_REF_VITEST_SCOPED_PROVIDER_CONTEXT: LazyLock<Regex> = LazyLock::new(||
 /// rewritten accordingly: → `vite-plus/test/browser/providers/{provider}`.
 static RE_REF_VITEST_SCOPED_PROVIDER_ENTRY: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview|webdriverio)/provider(["']\s*/>)"#,
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview)/provider(["']\s*/>)"#,
     )
     .unwrap()
 });
@@ -2105,6 +1896,19 @@ fn rewrite_reference_types(
                     || RE_REF_VITEST.is_match(line))
             {
                 *preserved_vitest = true;
+                continue;
+            }
+            if let Some(captures) = RE_REF_TEST_ENTRY.captures(line)
+                && let Some(target) = VITEST_V5_ENTRY_POINTS.get(&captures[2])
+            {
+                *line = format!(
+                    "{}{}{}{}",
+                    &captures[1],
+                    target,
+                    &captures[3],
+                    &line[captures[0].len()..]
+                );
+                changed = true;
                 continue;
             }
             if apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}") {
@@ -3125,19 +2929,37 @@ export default preview;"#
     }
 
     #[test]
+    fn test_restore_legacy_webdriverio_entries() {
+        for (source, target) in
+            VITEST_V5_ENTRY_POINTS.iter().filter(|(source, _)| source.contains("webdriverio"))
+        {
+            for template in [
+                "import { webdriverio } from 'ENTRY';",
+                "export { webdriverio } from 'ENTRY';",
+                "export * from 'ENTRY';",
+                "const provider = require('ENTRY');",
+                "const provider = await import('ENTRY');",
+                "/// <reference types='ENTRY' />",
+            ] {
+                let content = template.replace("ENTRY", source);
+                let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+                assert_eq!(result.content, template.replace("ENTRY", target), "{source}");
+                let repeated =
+                    rewrite_import_content(&result.content, &SkipPackages::default()).unwrap();
+                assert!(!repeated.updated, "{target}");
+            }
+        }
+    }
+
+    #[test]
     fn test_rewrite_import_content_vitest_browser_webdriverio() {
         let vite_config = r#"import { webdriverio } from '@vitest/browser-webdriverio';
 
 export default webdriverio;"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { webdriverio } from 'vite-plus/test/browser-webdriverio';
-
-export default webdriverio;"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
@@ -3147,13 +2969,8 @@ export default webdriverio;"#
 export default something;"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { something } from "vite-plus/test/browser/context";
-
-export default something;"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
@@ -3163,13 +2980,8 @@ export default something;"#
 export default webdriverio;"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { webdriverio } from 'vite-plus/test/browser/providers/webdriverio';
-
-export default webdriverio;"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
@@ -5365,27 +5177,24 @@ export default defineConfig({});"#
     fn test_rewrite_require_vitest_browser_webdriverio() {
         let content = r#"const x = require('@vitest/browser-webdriverio');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser-webdriverio');"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_require_vitest_browser_webdriverio_context() {
         let content = r#"const x = require('@vitest/browser-webdriverio/context');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser/context');"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_require_vitest_browser_webdriverio_provider() {
         let content = r#"const x = require('@vitest/browser-webdriverio/provider');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"const x = require('vite-plus/test/browser/providers/webdriverio');"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -5598,17 +5407,14 @@ const { defineConfig } = require('vite-plus');"#
         let content = r#"/// <reference types="@vitest/browser/providers/webdriverio" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"/// <reference types="vite-plus/test/browser/providers/webdriverio" />"#
-        );
+        assert_eq!(result.content, r#"/// <reference types="@vitest/browser-webdriverio" />"#);
     }
 
     #[test]
     fn test_rewrite_reference_types_vitest_scoped_provider_context() {
         // `@vitest/browser-{provider}/context` references map onto the shared
         // `vite-plus/test/browser/context` export (the provider segment is dropped).
-        for provider in ["playwright", "preview", "webdriverio"] {
+        for provider in ["playwright", "preview"] {
             let content =
                 format!(r#"/// <reference types="@vitest/browser-{provider}/context" />"#);
             let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
@@ -5624,7 +5430,7 @@ const { defineConfig } = require('vite-plus');"#
     fn test_rewrite_reference_types_vitest_scoped_provider_entry() {
         // `@vitest/browser-{provider}/provider` references map to the provider
         // entry point under `vite-plus/test/browser/providers/{provider}`.
-        for provider in ["playwright", "preview", "webdriverio"] {
+        for provider in ["playwright", "preview"] {
             let content =
                 format!(r#"/// <reference types="@vitest/browser-{provider}/provider" />"#);
             let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
@@ -6098,11 +5904,8 @@ export default defineConfig({});"#
         // `vite-plus/test/browser/providers/{provider}` entry point.
         let content = r#"export * from '@vitest/browser-webdriverio/provider';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"export * from 'vite-plus/test/browser/providers/webdriverio';"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -6250,11 +6053,8 @@ export default defineConfig({});"#
     fn test_rewrite_dynamic_import_vitest_browser_webdriverio_provider() {
         let content = r#"const p = await import('@vitest/browser-webdriverio/provider');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"const p = await import('vite-plus/test/browser/providers/webdriverio');"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]

@@ -2,17 +2,20 @@ import assert from 'node:assert/strict';
 import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { isAbsolute, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { inspect } from 'node:util';
 import { defineConfig } from 'vite-plus';
 import { createVitest } from 'vite-plus/test/node';
-import { webdriverio } from 'vite-plus/test/browser-webdriverio';
-import { webdriverio as legacyWebdriverio } from 'vite-plus/test/browser/providers/webdriverio';
-import { webdriverio as pluginWebdriverio } from 'vite-plus/test/plugins/browser-webdriverio';
 import { installedChromium } from './chromium.mjs';
 
-const require = createRequire(import.meta.resolve('vite-plus/package.json'));
 const packed = process.argv.includes('--packed');
+// Unpacked cases only link vite-plus. Packed cases use the project's own
+// community-provider dependency, without a Vite+ shim or resolver redirect.
+const require = createRequire(packed ? import.meta.url : import.meta.resolve('vite-plus/package.json'));
+const { webdriverio } = await import(packed
+  ? '@vitest/browser-webdriverio'
+  : pathToFileURL(require.resolve('@vitest/browser-webdriverio')).href);
+const vitestRequire = createRequire(import.meta.resolve('vite-plus/package.json'));
 if (packed) {
   for (const file of [fileURLToPath(import.meta.resolve('vite-plus/package.json')), require.resolve('@vitest/browser-webdriverio/package.json')]) {
     const installed = relative(realpathSync(process.cwd()), realpathSync(file));
@@ -24,9 +27,7 @@ const { executablePath, browserVersion } = packed
   : await installedChromium();
 assert.equal(require('@vitest/browser-webdriverio/package.json').version, '5.0.0');
 const providerRequire = createRequire(require.resolve('@vitest/browser-webdriverio/package.json'));
-assert.equal(providerRequire('@vitest/browser/package.json').version, require('vitest/package.json').version);
-assert.equal(webdriverio, legacyWebdriverio);
-assert.equal(webdriverio, pluginWebdriverio);
+assert.equal(providerRequire('@vitest/browser/package.json').version, vitestRequire('vitest/package.json').version);
 const provider = webdriverio({ capabilities: {
   browserVersion,
   'goog:chromeOptions': {

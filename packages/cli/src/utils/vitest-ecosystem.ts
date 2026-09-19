@@ -1,5 +1,3 @@
-import { VITEST_VERSION, VITEST_WEBDRIVERIO_RANGE } from './constants.ts';
-
 /** Official packages that share the bundled runner's release version. */
 export const VITEST_EXACT_VERSION_PACKAGES: ReadonlySet<string> = new Set([
   '@vitest/browser',
@@ -20,13 +18,8 @@ export const VITEST_EXACT_VERSION_PACKAGES: ReadonlySet<string> = new Set([
 export const VITEST_RESOLVER_PACKAGES: ReadonlySet<string> = new Set([
   'vitest',
   ...VITEST_EXACT_VERSION_PACKAGES,
-  '@vitest/browser-webdriverio',
 ]);
 
 export function isAlignableVitestEcosystemPackage(name: string): boolean {
-  return VITEST_EXACT_VERSION_PACKAGES.has(name) || name === '@vitest/browser-webdriverio';
-}
-
-export function vitestEcosystemVersion(name: string): string {
-  return name === '@vitest/browser-webdriverio' ? VITEST_WEBDRIVERIO_RANGE : VITEST_VERSION;
+  return VITEST_EXACT_VERSION_PACKAGES.has(name);
 }

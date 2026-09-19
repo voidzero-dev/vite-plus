@@ -8,7 +8,7 @@ import { isScalar, parseDocument, visit } from 'yaml';
 import cliPackage from '../../../package.json' with { type: 'json' };
 import { PackageManager, type WorkspaceInfoOptional } from '../../types/index.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
-import { createCatalogDependencyResolver } from '../migrator.ts';
+import { createCatalogDependencyResolver, usesWebdriverioProvider } from '../migrator.ts';
 import type { RewriteResult, SourceOptions, VitestV5Finding } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
 import {
@@ -730,6 +730,26 @@ export function planVitestV5Migration(
         ),
       ),
     };
+    // The community provider is user-managed. Do not invent a version when
+    // restoring a removed Vite+ shim to a direct provider import.
+    if (
+      active &&
+      !dependency(pkg, '@vitest/browser-webdriverio') &&
+      !dependency(
+        readJson(path.join(workspace.rootDir, 'package.json')),
+        '@vitest/browser-webdriverio',
+      ) &&
+      usesWebdriverioProvider(directory)
+    ) {
+      findings.push(
+        finding(
+          path.join(directory, 'package.json'),
+          'browser-provider',
+          'Add @vitest/browser-webdriverio and its required peers using versions compatible with your tests. Vite+ no longer exports or manages this community provider.',
+          'review',
+        ),
+      );
+    }
     if (active && !version) {
       findings.push(
         finding(

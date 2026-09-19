@@ -7,7 +7,7 @@ record the original runner version without adding a direct dependency
 
 ## `vp migrate --no-interactive`
 
-source-only WebdriverIO provider should be restored
+restore the community import and request a user-selected provider version
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -17,12 +17,19 @@ VITE+ - The Unified Toolchain for the Web
 • Dependencies:
     vite-plus  latest → <version>
     vite              → <version>
+• 1 file had imports rewritten
 • Package manager settings configured
+! Warnings:
+  - Vitest v5: 1 review item
+
+package.json
+  1:1 REVIEW [browser-provider] Add @vitest/browser-webdriverio and its required peers using versions compatible with your tests. Vite+ no longer exports or manages this community provider.
+    Docs: https://viteplus.dev/guide/vitest-v5#community-webdriverio-provider
 ```
 
 ## `vpt print-file package.json`
 
-provider, webdriverio, and local vitest should be present
+do not inject a community provider or framework version
 
 ```
 {
@@ -30,8 +37,6 @@ provider, webdriverio, and local vitest should be present
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "@vitest/browser-webdriverio": "catalog:",
-    "webdriverio": "*",
     "vitest": "catalog:"
   },
   "devEngines": {
@@ -44,6 +49,24 @@ provider, webdriverio, and local vitest should be present
 }
 ```
 
+## `vpt print-file vite.config.ts`
+
+legacy Vite+ provider import points to the community package
+
+```
+import { defineConfig } from 'vite-plus';
+import { webdriverio } from '@vitest/browser-webdriverio';
+
+export default defineConfig({
+  test: {
+    browser: {
+      enabled: true,
+      provider: webdriverio(),
+    },
+  },
+});
+```
+
 ## `vpt print-file pnpm-workspace.yaml`
 
 driver builds and shared vitest should be enabled
@@ -53,7 +76,6 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
   vitest: <version>
-  '@vitest/browser-webdriverio': ^5.0.0-beta.5 || >=5.0.0
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'

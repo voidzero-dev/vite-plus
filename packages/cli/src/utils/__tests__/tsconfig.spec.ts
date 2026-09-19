@@ -240,6 +240,31 @@ describe('rewriteTypesInTsconfig', () => {
     `);
   });
 
+  it('restores removed WebDriverIO type entries and preserves community entries', () => {
+    const filePath = path.join(tmpDir, 'tsconfig.json');
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        compilerOptions: {
+          types: [
+            'vite-plus/test/browser-webdriverio',
+            'vite-plus/test/browser-webdriverio/context',
+            '@vitest/browser-webdriverio/context',
+            '@vitest/browser-webdriverio/future',
+          ],
+        },
+      }),
+    );
+    expect(rewriteTypesInTsconfig(filePath)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(filePath, 'utf8')).compilerOptions.types).toEqual([
+      '@vitest/browser-webdriverio',
+      'vite-plus/test/browser/context',
+      '@vitest/browser-webdriverio/context',
+      '@vitest/browser-webdriverio/future',
+    ]);
+    expect(rewriteTypesInTsconfig(filePath)).toBe(false);
+  });
+
   it('preserves vite/client (issue #2004: vite refs stay outside config files)', () => {
     const filePath = path.join(tmpDir, 'tsconfig.json');
     const original = `{

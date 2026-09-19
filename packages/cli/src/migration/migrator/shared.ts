@@ -46,20 +46,15 @@ export const REMOVE_PACKAGES = [
   '@vitest/browser-preview',
 ] as const;
 
-// The opt-in browser providers. Unlike `@vitest/browser`/preview these are NOT
-// bundled by vite-plus or stripped from users (so they stay out of
-// REMOVE_PACKAGES); each drags a heavy non-optional framework peer
-// (`playwright` / `webdriverio`) that non-browser consumers must not be forced
-// to install. The migration keeps a provider the user actually targets in their
-// own deps, pinned to the bundled vitest version.
+// WebDriverIO is community-maintained. Detect its browser usage, but leave its
+// dependency, framework peer, catalogs, and overrides under the user's control.
 export const WEBDRIVERIO_PROVIDER = '@vitest/browser-webdriverio';
 
 export const PLAYWRIGHT_PROVIDER = '@vitest/browser-playwright';
 
-// All opt-in browser providers handled identically by the migration: kept in
-// the user's deps (pinned to the bundled vitest), framework peer ensured, stale
-// forcing pins dropped, while their catalog entries are PRESERVED.
-export const OPT_IN_BROWSER_PROVIDERS = [WEBDRIVERIO_PROVIDER, PLAYWRIGHT_PROVIDER] as const;
+// Official opt-in providers track the bundled Vitest version. Keep them in the
+// user's dependencies, ensure their framework peers, and remove stale overrides.
+export const OPT_IN_BROWSER_PROVIDERS = [PLAYWRIGHT_PROVIDER] as const;
 
 // Provider names whose stale pnpm overrides / resolutions are dropped during
 // migration: everything vite-plus owns (REMOVE_PACKAGES) plus the user-owned
@@ -79,18 +74,11 @@ export const PROVIDER_OVERRIDE_DROP_NAMES = [
 // must be preserved in devDependencies so browser tests continue to work.
 export const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
   '@vitest/browser-playwright': 'playwright',
-  '@vitest/browser-webdriverio': 'webdriverio',
 };
 
 // Packages that include runtime peer as a dependency.
 const RUNTIME_PEER_INCLUDED_BY: Record<string, readonly string[]> = {
   playwright: ['@playwright/test'],
-};
-
-// Lockstep sibling packages whose declared version a browser provider's runtime
-// framework peer should reuse (they publish together). Keyed by the peer name.
-export const PROVIDER_PEER_VERSION_SIBLINGS: Record<string, readonly string[]> = {
-  webdriverio: ['@wdio/cli', '@wdio/globals'],
 };
 
 // A package's declared spec across all four dependency fields, or undefined.
@@ -114,32 +102,15 @@ export function hasProviderPeerDependency(pkg: DependencyBag, runtimePeer: strin
   );
 }
 
-// A deterministic spec for a browser provider's framework peer instead of `*`:
-// reference the catalog when it already owns the peer, otherwise reuse a declared
-// lockstep sibling's version (concrete, or a catalog reference resolved to its
-// concrete value), falling back to `*` only when there is no sibling. See
-// npmx.dev #27.
+// Reuse an existing framework catalog entry without changing its version.
 export function resolveProviderPeerSpec(
-  pkg: DependencyBag,
   peer: string,
   supportCatalog: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): string {
-  if (supportCatalog && catalogDependencyResolver?.('catalog:', peer) !== undefined) {
-    return 'catalog:';
-  }
-  for (const sibling of PROVIDER_PEER_VERSION_SIBLINGS[peer] ?? []) {
-    const spec = findDeclaredSpec(pkg, sibling);
-    const resolved = spec?.startsWith('catalog:')
-      ? catalogDependencyResolver?.(spec, sibling)
-      : spec;
-    // Only reuse a concrete version: a `catalog:` entry may itself alias another
-    // protocol, and npm:/workspace:/file: specs aren't versions to copy.
-    if (resolved && !resolved.includes(':')) {
-      return resolved;
-    }
-  }
-  return '*';
+  return supportCatalog && catalogDependencyResolver?.('catalog:', peer) !== undefined
+    ? 'catalog:'
+    : '*';
 }
 
 // Browser-provider package names that, when present in the user's deps

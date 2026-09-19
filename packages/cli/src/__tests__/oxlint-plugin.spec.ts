@@ -107,8 +107,19 @@ describe('rewriteVitePlusImportSpecifier', () => {
     expect(rewriteVitePlusImportSpecifier('@vitest/browser-preview/provider')).toBe(
       'vite-plus/test/browser/providers/preview',
     );
-    expect(rewriteVitePlusImportSpecifier('@vitest/browser-webdriverio/provider')).toBe(
+    for (const suffix of ['', '/provider', '/context', '/future']) {
+      expect(rewriteVitePlusImportSpecifier(`@vitest/browser-webdriverio${suffix}`)).toBeNull();
+    }
+    for (const source of [
+      'vite-plus/test/browser-webdriverio',
       'vite-plus/test/browser/providers/webdriverio',
+      'vite-plus/test/plugins/browser-webdriverio',
+      'vitest/browser-webdriverio',
+    ]) {
+      expect(rewriteVitePlusImportSpecifier(source)).toBe('@vitest/browser-webdriverio');
+    }
+    expect(rewriteVitePlusImportSpecifier('vite-plus/test/browser-webdriverio/context')).toBe(
+      'vite-plus/test/browser/context',
     );
     expect(rewriteVitePlusImportSpecifier('@vitest/browser-playwright/locators')).toBeNull();
     // `vitest/package.json` must NOT be rewritten — `vite-plus` does not export

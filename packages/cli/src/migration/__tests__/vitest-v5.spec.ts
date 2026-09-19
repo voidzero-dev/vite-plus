@@ -55,6 +55,30 @@ function source(input: string, options = v4) {
 }
 
 describe('Vitest v5 diagnostic scope', () => {
+  it.each(['4.1.11', '5.0.1'])('restores a legacy WebDriverIO import from %s', (version) => {
+    const root = project({
+      'package.json': JSON.stringify({ devDependencies: { vitest: version } }),
+      'vite.config.ts':
+        "import { webdriverio } from 'vite-plus/test/browser-webdriverio';\nexport default {};",
+    });
+    const plan = planProject(root);
+    expect(plan.findings.map(({ code, severity }) => ({ code, severity }))).toEqual([
+      { code: 'browser-provider', severity: 'review' },
+    ]);
+    applyVitestV5Migration(plan);
+    expect(fs.readFileSync(path.join(root, 'vite.config.ts'), 'utf8')).toContain(
+      'from "@vitest/browser-webdriverio"',
+    );
+    expect(finishVitestV5Migration(plan).map(({ code }) => code)).toEqual(['browser-provider']);
+    fs.writeFileSync(
+      path.join(root, 'package.json'),
+      JSON.stringify({
+        devDependencies: { vitest: version, '@vitest/browser-webdriverio': '^6.0.0' },
+      }),
+    );
+    expect(planProject(root).findings).toEqual([]);
+  });
+
   it.each(['4.1.11', '5.0.1'])(
     'ignores output-only changes and dependency advisories from %s',
     (version) => {

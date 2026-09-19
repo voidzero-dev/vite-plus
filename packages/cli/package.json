@@ -207,22 +207,6 @@
       "types": "./dist/test/browser/providers/preview/context.d.ts",
       "default": "./dist/test/browser/providers/preview/context.js"
     },
-    "./test/browser-webdriverio": {
-      "types": "./dist/test/browser-webdriverio.d.ts",
-      "default": "./dist/test/browser-webdriverio.js"
-    },
-    "./test/browser/providers/webdriverio": {
-      "types": "./dist/test/browser/providers/webdriverio.d.ts",
-      "default": "./dist/test/browser/providers/webdriverio.js"
-    },
-    "./test/browser-webdriverio/context": {
-      "types": "./dist/test/browser-webdriverio/context.d.ts",
-      "default": "./dist/test/browser-webdriverio/context.js"
-    },
-    "./test/browser/providers/webdriverio/context": {
-      "types": "./dist/test/browser/providers/webdriverio/context.d.ts",
-      "default": "./dist/test/browser/providers/webdriverio/context.js"
-    },
     "./test/browser/context": {
       "types": "./dist/test/browser/context.d.ts",
       "default": "./dist/test/browser/context.js"
@@ -363,10 +347,6 @@
     "./test/plugins/browser-playwright": {
       "types": "./dist/test/plugins/browser-playwright.d.ts",
       "default": "./dist/test/plugins/browser-playwright.js"
-    },
-    "./test/plugins/browser-webdriverio": {
-      "types": "./dist/test/plugins/browser-webdriverio.d.ts",
-      "default": "./dist/test/plugins/browser-webdriverio.js"
     },
     "./test/plugins/browser-preview": {
       "types": "./dist/test/plugins/browser-preview.d.ts",

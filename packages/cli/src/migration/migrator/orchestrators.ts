@@ -147,13 +147,8 @@ export function rewriteStandaloneProject(
     pruneLegacyWrapperAliases(pkg.resolutions);
     pruneLegacyWrapperAliases(pkg.overrides);
     pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
-    // Drop stale provider overrides/resolutions (REMOVE_PACKAGES + the now
-    // user-owned opt-in providers, webdriverio/playwright) from the npm/bun
-    // `overrides` and yarn `resolutions` sinks before re-merging managed
-    // overrides. A leftover pin would conflict with the migrated direct
-    // `@vitest/browser-webdriverio` / `@vitest/browser-playwright` dep — npm
-    // hard-fails with EOVERRIDE, and yarn/bun would force the stale version over
-    // the bundled-vitest-aligned 4.1.9. (The pnpm sinks are pruned below.)
+    // Remove stale overrides for bundled and official opt-in providers before
+    // aligning them with Vitest. Preserve community-provider overrides.
     dropRemovePackageOverrideKeys(pkg.resolutions);
     dropRemovePackageOverrideKeys(pkg.overrides);
     // Common case (no direct vitest): strip a lingering managed `vitest` from

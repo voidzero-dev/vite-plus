@@ -17,9 +17,6 @@ export const VITE_CONFIG_FILES = [
 
 export const VITEST_VERSION = '5.0.1';
 
-// Community-maintained provider: its releases do not track the official runner.
-export const VITEST_WEBDRIVERIO_RANGE = '^5.0.0-beta.5 || >=5.0.0';
-
 // Exact action release used by generated workflows and the @v1 migration.
 // The Renovate custom manager keeps this value current.
 export const SETUP_VP_VERSION = 'v1.21.0';

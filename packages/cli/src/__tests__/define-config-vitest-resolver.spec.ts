@@ -50,6 +50,8 @@ describe('isVitestFamilySpecifier', () => {
     '@vitest/istanbul-lib-coverage',
     '@vitest/istanbul-lib-instrument',
     '@vitest/future-package',
+    '@vitest/browser-webdriverio',
+    '@vitest/browser-webdriverio/context',
   ])('leaves %s on the project dependency edge', (name) => {
     expect(isVitestFamilySpecifier(name)).toBe(false);
   });

@@ -10,7 +10,6 @@ import {
   isForceOverrideMode,
 } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
-import { vitestEcosystemVersion } from '../../utils/vitest-ecosystem.ts';
 import { type NpmWorkspaces } from '../../utils/workspace.ts';
 import { editYamlFile, readYamlFile, type YamlDocument } from '../../utils/yaml.ts';
 import {
@@ -401,7 +400,7 @@ function reconcileVitePlusBootstrapPackage(
       pkg.devDependencies ??= {};
       pkg.devDependencies[provider] = getCatalogDependencySpec(
         undefined,
-        vitestEcosystemVersion(provider),
+        VITEST_VERSION,
         supportCatalog && packageManager !== PackageManager.bun,
         { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
       );
@@ -410,7 +409,6 @@ function reconcileVitePlusBootstrapPackage(
     if (!hasProviderPeerDependency(pkg, frameworkPeer)) {
       pkg.devDependencies ??= {};
       pkg.devDependencies[frameworkPeer] = resolveProviderPeerSpec(
-        pkg,
         frameworkPeer,
         supportCatalog,
         catalogDependencyResolver,
@@ -1411,7 +1409,7 @@ export async function collectToolchainVersionChanges(
     }
   }
   for (const name of [...scopedVitestNames].toSorted()) {
-    pushChange(name, vitestEcosystemVersion(name), fromFor(name));
+    pushChange(name, VITEST_VERSION, fromFor(name));
   }
 
   return changes;

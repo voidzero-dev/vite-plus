@@ -106,7 +106,9 @@ Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports up
 
 For browser mode, you can use the base browser runtime (`@vitest/browser`) and Preview provider (`@vitest/browser-preview`) included in `vite-plus`. To use Playwright or WebDriverIO, you also need the opt-in provider (`@vitest/browser-playwright` or `@vitest/browser-webdriverio`) and its framework peer (`playwright` or `webdriverio`).
 
-`vp migrate` detects your provider and adds it with its framework. The Playwright provider uses the bundled Vitest version. The community-maintained WebDriverIO provider uses a compatible version range because its releases follow a separate schedule. For manual migration, install the provider and framework so `vite-plus/test/browser-playwright` or `vite-plus/test/browser-webdriverio` can resolve. See [package version guidance](./vitest-v5.md#entry-points-and-packages).
+`vp migrate` adds the Playwright provider at the bundled Vitest version and ensures its framework peer. You can import it from `vite-plus/test/browser-playwright`.
+
+For WebDriverIO, import from the community-maintained `@vitest/browser-webdriverio` and manage its version and framework peers. Migration restores legacy Vite+ provider imports to this package and preserves your dependency versions. See [Community WebDriverIO provider](./vitest-v5.md#community-webdriverio-provider).
 
 If you are migrating manually, update all the imports to `vite-plus/test*` instead:
 

@@ -7,7 +7,6 @@ import {
   VITE_PLUS_VERSION,
   isForceOverrideMode,
 } from '../../utils/constants.ts';
-import { vitestEcosystemVersion } from '../../utils/vitest-ecosystem.ts';
 import {
   VITEST_DIRECT_USAGE_EXCLUDED,
   alignVitestEcosystemPackages,
@@ -52,8 +51,8 @@ export function rewritePackageJson(
   skipStagedMigration?: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
   vitestBrowserMode?: boolean,
-  // Source-scan signal per opt-in browser provider name (e.g.
-  // `@vitest/browser-webdriverio` → true). A provider with no dep declared but
+  // Source-scan signal per managed opt-in browser provider name (e.g.
+  // `@vitest/browser-playwright` → true). A provider with no dep declared but
   // imported in source still gets kept/injected.
   providerSourceModes?: Partial<Record<string, boolean>>,
   // Whether the project uses vitest DIRECTLY (a required-peer consumer, an
@@ -225,17 +224,9 @@ export function rewritePackageJson(
       needVitePlus = true;
     }
   }
-  // The browser providers (webdriverio, playwright) are opt-in: vite-plus no
-  // longer bundles them at runtime (each drags a heavy non-optional framework
-  // peer), so a user targeting a provider must own it themselves for the
-  // rewritten `vite-plus/test/browser-<provider>` import to resolve. Unlike the
-  // rest of the `@vitest/*` family they are deliberately NOT in
-  // VITE_PLUS_OVERRIDE_PACKAGES (so projects not using a provider stay
-  // untouched), which means the normalization loop above does not add them. We
-  // align each installed provider here using its existing catalog when present,
-  // or the concrete bundled version otherwise, and ensure its runtime framework
-  // peer (`webdriverio` / `playwright`). (`@vitest/browser`/preview stay bundled
-  // + stripped, handled in the REMOVE_PACKAGES loop above.)
+  // Official opt-in providers remain project dependencies. Align their versions
+  // with bundled Vitest and ensure the framework peer required by each shim.
+  // Community providers are excluded from this list.
   let usesAnyOptInProvider = false;
   for (const provider of OPT_IN_BROWSER_PROVIDERS) {
     const usesProvider =
@@ -275,16 +266,15 @@ export function rewritePackageJson(
       pkg.devDependencies ??= {};
       pkg.devDependencies[provider] = getCatalogDependencySpec(
         undefined,
-        vitestEcosystemVersion(provider),
+        VITEST_VERSION,
         supportCatalog && packageManager !== PackageManager.bun,
         { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
       );
     }
-    const peer = BROWSER_PROVIDER_PEER_DEPS[provider]; // 'webdriverio' / 'playwright'
+    const peer = BROWSER_PROVIDER_PEER_DEPS[provider];
     if (!hasProviderPeerDependency(pkg, peer)) {
       pkg.devDependencies ??= {};
       pkg.devDependencies[peer] = resolveProviderPeerSpec(
-        pkg,
         peer,
         supportCatalog,
         catalogDependencyResolver,

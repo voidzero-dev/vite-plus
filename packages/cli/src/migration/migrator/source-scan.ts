@@ -12,7 +12,6 @@ import {
   OXLINT_PLUGINS_PACKAGE,
   packageOwnsOxlintApi,
   PLAYWRIGHT_PROVIDER,
-  WEBDRIVERIO_PROVIDER,
   readPackageJsonIfExists,
   type DependencyBag,
 } from './shared.ts';
@@ -72,8 +71,7 @@ export function workspaceUsesVitestDirectly(
 //                               `plugins/browser`, `plugins/browser-context`,
 //                               `plugins/browser-client`, `plugins/browser-
 //                               locators`, `plugins/browser-playwright`,
-//                               `plugins/browser-preview`, `plugins/browser-
-//                               webdriverio`), which re-export `@vitest/browser*`
+//                               `plugins/browser-preview`), which re-export `@vitest/browser*`
 //                               under a `/plugins/` segment that the
 //                               `vite-plus/test/browser` hint does not match.
 //                               One prefix covers the whole family.
@@ -104,31 +102,8 @@ const VITEST_BROWSER_SPECIFIER_HINTS = [
   'vite-plus/test/utils',
 ] as const;
 
-// Specifier fragments that signal the WEBDRIVERIO provider specifically. Each
-// is a prefix, matched as a substring, so subpath imports (`/context`,
-// `/provider`, …) are covered too:
-//   - `vitest/browser-webdriverio`, `vitest/browser/providers/webdriverio`, and
-//     `vitest/plugins/browser-webdriverio` are legacy
-//     `@voidzero-dev/vite-plus-test` exports reached through the `vitest` alias
-//   - `@vitest/browser-webdriverio`            pre-migration (incl. `/provider`,
-//                                              `/context` subpaths)
-//   - `vite-plus/test/browser-webdriverio`     migrated (re-run); covers
-//                                              `…/context`
-//   - `vite-plus/test/browser/providers/webdriverio`  migrated provider-subpath
-//                                              form — the import rewriter maps
-//                                              `@vitest/browser-webdriverio/provider`
-//                                              here, so an already-migrated
-//                                              project can contain it. Without
-//                                              this hint a re-run would skip the
-//                                              provider injection and the import
-//                                              would break under pnpm strict /
-//                                              Yarn PnP once the provider is no
-//                                              longer a vite-plus runtime dep.
-//   - `vite-plus/test/plugins/browser-webdriverio`  generated plugin shim that
-//                                              re-exports `@vitest/browser-
-//                                              webdriverio` wholesale; importing
-//                                              it pulls in the (now opt-in)
-//                                              provider, so it signals usage too.
+// Detect the community package and legacy aliases for install guidance and
+// driver-build allowances. These signals do not authorize version changes.
 const WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS = [
   'vitest/browser-webdriverio',
   'vitest/browser/providers/webdriverio',
@@ -141,8 +116,8 @@ const WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS = [
 
 // Specifier fragments that signal the PLAYWRIGHT provider specifically — the
 // playwright analogue of WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS (same prefix /
-// substring matching for `/provider`, `/context` subpaths). Playwright is opt-in
-// just like webdriverio: vite-plus no longer bundles `@vitest/browser-playwright`
+// substring matching for `/provider`, `/context` subpaths). Playwright is opt-in:
+// vite-plus no longer bundles `@vitest/browser-playwright`
 // at runtime, so a source-only user (e.g. `vite.config.ts` importing the
 // provider via a `vite-plus/test/browser-playwright` shim with no declared dep)
 // must still have the provider kept/injected for the rewritten import to resolve.
@@ -161,7 +136,6 @@ const PLAYWRIGHT_PROVIDER_SPECIFIER_HINTS = [
 // Per-provider source-scan hint lists, used to build the `providerSourceModes`
 // map passed to `rewritePackageJson`.
 const BROWSER_PROVIDER_SPECIFIER_HINTS: Record<string, readonly string[]> = {
-  [WEBDRIVERIO_PROVIDER]: WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS,
   [PLAYWRIGHT_PROVIDER]: PLAYWRIGHT_PROVIDER_SPECIFIER_HINTS,
 };
 
