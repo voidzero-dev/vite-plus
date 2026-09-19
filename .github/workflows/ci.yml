@@ -58,8 +58,8 @@ jobs:
     name: Docs format check
     needs: detect-changes
     # Docs-only changes skip the full CI matrix, so nothing else format-checks
-    # them (code changes get `vp check` in cli-e2e-test). Non-blocking:
-    # intentionally not listed in the `done` job's needs.
+    # them (code changes get `vp check` in cli-e2e-test). The required `done`
+    # job waits for this check and propagates failures.
     if: needs.detect-changes.outputs.code-changed == 'false'
     runs-on: namespace-profile-linux-x64-default
     permissions:
@@ -1598,6 +1598,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - docs-fmt
       - test
       - build-windows-tests
       - test-windows
