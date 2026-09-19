@@ -25,7 +25,7 @@ Next Steps:
   Activate Vite+ in this terminal:
   . "<workspace>/activation/home/env"
 
-  Add the command for your shell to its profile to activate future terminals.
+  Add the command to your .zshrc file to activate future Zsh terminals.
 
   Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
 ✓ Vite+ setup complete.

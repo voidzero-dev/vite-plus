@@ -57,3 +57,22 @@ steps = [
 name = "activation_powershell_profile_guidance"
 vp = "global"
 steps = [["node", "profile-guidance.mjs", "powershell"]]
+
+[[case]]
+name = "activation_zsh_profile_guidance"
+vp = "global"
+comment = "Login startup reorders PATH after .zshenv; .zshrc must activate the shims afterward."
+skip-platforms = ["windows"]
+requires = ["zsh"]
+steps = [
+  ["node", "profile-guidance.mjs", "zsh-env"],
+  ["node", "profile-guidance.mjs", "zsh-interactive"],
+]
+
+[[case]]
+name = "activation_cmd_path_guidance"
+vp = "global"
+steps = [
+  ["node", "profile-guidance.mjs", "cmd"],
+  ["node", "profile-guidance.mjs", "cmd-no-modify-path"],
+]
