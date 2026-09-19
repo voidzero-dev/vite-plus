@@ -278,8 +278,9 @@ static YARN_TELEMETRY_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(?m)^\u{27A4} YN0065: [^\n]*\n(?:[ \t]*\n)*").unwrap());
 // `vp staged` reports the backup stash it created; the short hash covers a
 // commit of the working tree at run time, so it can never be stable.
-static STASH_HASH_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"(git stash \()[0-9a-f]+(\))").unwrap());
+static STASH_HASH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"((?:git stash|Done backing up original state) \()[0-9a-f]+(\))").unwrap()
+});
 // Package managers emit blank separator lines whose count races their own
 // progress rendering under a PTY; collapse runs so spacing is stable.
 static BLANK_RUN_RE: LazyLock<regex::Regex> =
