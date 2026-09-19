@@ -114,9 +114,11 @@ Packages that are **not** aligned:
 - `@vitest/coverage-c8` stopped at an older release and has no Vitest 4 version; and
 - third-party `vitest-*` integrations keep their own compatible versions, though their required Vitest peer may still trigger [direct provisioning](#when-vitest-is-directly-required).
 
-For browser mode, Vite+ bundles the base `@vitest/browser` runtime and `@vitest/browser-preview`; migration removes their direct dependency entries. The Playwright and WebDriverIO providers stay opt-in. Migration uses the bundled Vitest version for `@vitest/browser-playwright` and a compatible version range for the community-maintained `@vitest/browser-webdriverio`. It writes the version or range through the preferred toolchain catalog, or into the dependency entry for package managers without catalogs, and installs the provider's `playwright` or `webdriverio` peer alongside.
+For browser mode, Vite+ bundles the base `@vitest/browser` runtime and `@vitest/browser-preview`; migration removes their direct dependency entries. The Playwright provider stays opt-in. Migration uses the bundled Vitest version for `@vitest/browser-playwright`, through the preferred toolchain catalog or the dependency entry, and installs its `playwright` peer alongside.
 
-Providers are detected before imports are rewritten. This covers legacy projects that aliased `vitest` to `@voidzero-dev/vite-plus-test` and import from `vitest/browser-<provider>`, `vitest/browser/providers/<provider>`, or `vitest/plugins/browser-<provider>`: those imports still install the corresponding `@vitest/browser-playwright` or `@vitest/browser-webdriverio` dependency and its framework peer.
+Migration detects Playwright usage before it rewrites imports, including legacy `vitest/browser-playwright`, `vitest/browser/providers/playwright`, and `vitest/plugins/browser-playwright` aliases.
+
+The community WebDriverIO provider remains user-managed. Migration restores removed Vite+ WebDriverIO aliases to `@vitest/browser-webdriverio`, preserves existing versions and overrides, and asks you to install the provider if no dependency exists. See [Community WebDriverIO provider](./vitest-v5.md#community-webdriverio-provider).
 
 Object-valued nested npm and Bun overrides are preserved: they are user-defined scopes rather than scalar version pins.
 

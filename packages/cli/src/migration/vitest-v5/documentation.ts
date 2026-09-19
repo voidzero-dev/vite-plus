@@ -32,6 +32,7 @@ const sections: Record<string, string> = {
 };
 
 const localSections: Record<string, string> = {
+  'browser-provider': 'community-webdriverio-provider',
   'dynamic-config': 'resolve-migration-findings',
   'dynamic-project': 'resolve-migration-findings',
   'global-api-ownership': 'resolve-migration-findings',

@@ -105,10 +105,11 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     return null;
   }
 
+  if (specifier in vitestV5EntryPoints) {
+    return vitestV5EntryPoints[specifier as keyof typeof vitestV5EntryPoints];
+  }
+
   if (specifier.startsWith('vitest/')) {
-    if (specifier in vitestV5EntryPoints) {
-      return vitestV5EntryPoints[specifier as keyof typeof vitestV5EntryPoints];
-    }
     const subpath = `./test/${specifier.slice('vitest/'.length)}`;
     return subpath in cliPackage.exports ? `vite-plus${subpath.slice(1)}` : null;
   }
@@ -134,7 +135,6 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   for (const [prefix, provider] of [
     ['@vitest/browser-playwright', 'playwright'],
     ['@vitest/browser-preview', 'preview'],
-    ['@vitest/browser-webdriverio', 'webdriverio'],
   ] as const) {
     if (specifier === prefix) {
       return `vite-plus/test/${prefix.slice('@vitest/'.length)}`;

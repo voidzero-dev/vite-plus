@@ -133,10 +133,8 @@ expect(document.body).toHaveAttribute(123);
     'plugins/browser-context',
     'browser-playwright/context',
     'browser-preview/context',
-    'browser-webdriverio/context',
     'browser/providers/playwright/context',
     'browser/providers/preview/context',
-    'browser/providers/webdriverio/context',
   ])('preserves provider augmentations and role types through %s independently', (name) => {
     // Do not import the other aliases here: their augmentations can hide a
     // broken declaration. Provider options and roles must retain their types.
@@ -220,11 +218,19 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
     'plugins/browser-context',
     'browser-preview/context',
     'browser-playwright/context',
-    'browser-webdriverio/context',
   ])('routes the %s runtime alias to the v5 browser virtual module', (name) => {
     expect(fs.readFileSync(path.join(cliPkgDir, 'dist/test', `${name}.js`), 'utf8')).toBe(
       "export * from 'vitest/browser';\n",
     );
+  });
+
+  it('retains the upstream optional WebDriverIO peer without public shims', () => {
+    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
+    expect(pkg.peerDependencies['@vitest/browser-webdriverio']).toBe(
+      requireFromHere('vitest/package.json').peerDependencies['@vitest/browser-webdriverio'],
+    );
+    expect(pkg.peerDependenciesMeta['@vitest/browser-webdriverio']).toEqual({ optional: true });
+    expect(Object.keys(pkg.exports).filter((name) => name.includes('webdriverio'))).toEqual([]);
   });
 
   it('./test/config has both `require` and `default`, with `require` first', () => {

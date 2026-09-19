@@ -36,10 +36,8 @@ for (const alias of [
   'plugins/browser-context',
   'browser-playwright/context',
   'browser-preview/context',
-  'browser-webdriverio/context',
   'browser/providers/playwright/context',
   'browser/providers/preview/context',
-  'browser/providers/webdriverio/context',
 ]) {
   check(`
 import 'vite-plus/test/browser-playwright';

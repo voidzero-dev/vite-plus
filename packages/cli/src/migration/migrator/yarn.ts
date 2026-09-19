@@ -31,10 +31,8 @@ import {
 const WEBDRIVERIO_PEER_DEP = 'webdriverio';
 
 // Dependencies whose presence before migration signals the user will end up
-// with webdriverio after migration. `@vitest/browser-webdriverio` is the opt-in
-// provider vite-plus keeps in the user's deps (pinned to the bundled vitest)
-// and `webdriverio` is its runtime peer (added via `BROWSER_PROVIDER_PEER_DEPS`);
-// either one means the edgedriver/geckodriver postinstalls must be allowed.
+// with WebDriverIO. Both the community provider and its framework need driver
+// postinstalls, regardless of which one the project declares directly.
 const WEBDRIVERIO_ALLOW_SIGNAL_DEPS = [WEBDRIVERIO_PEER_DEP, WEBDRIVERIO_PROVIDER] as const;
 
 export function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
@@ -61,8 +59,7 @@ export function workspaceUsesWebdriverio(
   }
   // Source-only signal: a package may target the webdriverio provider purely
   // through imports (e.g. `vite-plus/test/browser-webdriverio`) without a
-  // declared dep yet. The migration injects the provider for those, so the
-  // driver postinstalls must be allowed too.
+  // declared dep yet. Allow driver builds when the user installs the provider.
   if (usesWebdriverioProvider(rootDir)) {
     return true;
   }

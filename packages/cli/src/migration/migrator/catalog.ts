@@ -14,7 +14,6 @@ import {
   isForceOverrideMode,
 } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
-import { vitestEcosystemVersion } from '../../utils/vitest-ecosystem.ts';
 import { type NpmWorkspaces } from '../../utils/workspace.ts';
 import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../../utils/yaml.ts';
 import {
@@ -1011,7 +1010,7 @@ function rewriteYamlCatalogAtPath(
       : catalogAdditions;
     for (const name of additions) {
       if (isAlignableVitestEcosystemPackage(name)) {
-        catalog.set(scalarString(name), scalarString(vitestEcosystemVersion(name)));
+        catalog.set(scalarString(name), scalarString(VITEST_VERSION));
       }
     }
   }
@@ -1037,7 +1036,7 @@ function rewriteVitestEcosystemYamlCatalog(
       vitestEcosystemPackages.has(name) &&
       isAlignableVitestEcosystemPackage(name)
     ) {
-      catalog.set(item.key, scalarString(vitestEcosystemVersion(name)));
+      catalog.set(item.key, scalarString(VITEST_VERSION));
     }
   }
 }
@@ -1069,7 +1068,7 @@ function rewriteCatalogObject(
   if (VITEST_IS_MANAGED_OVERRIDE) {
     for (const name of Object.keys(catalog)) {
       if (vitestEcosystemPackages.has(name) && isAlignableVitestEcosystemPackage(name)) {
-        catalog[name] = vitestEcosystemVersion(name);
+        catalog[name] = VITEST_VERSION;
       }
     }
   }
@@ -1218,13 +1217,8 @@ export function rewriteRootWorkspacePackageJson(
     pruneLegacyWrapperAliases(pkg.resolutions);
     pruneLegacyWrapperAliases(pkg.overrides);
     pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
-    // Drop stale provider overrides/resolutions (REMOVE_PACKAGES + the now
-    // user-owned opt-in providers, webdriverio/playwright) from the npm/bun
-    // `overrides` and yarn `resolutions` sinks before re-merging managed
-    // overrides. A leftover pin would conflict with the migrated direct
-    // `@vitest/browser-webdriverio` / `@vitest/browser-playwright` dep — npm
-    // hard-fails with EOVERRIDE, and yarn/bun would force the stale version over
-    // the bundled-vitest-aligned 4.1.9. (The pnpm sinks are pruned below.)
+    // Remove stale overrides for bundled and official opt-in providers before
+    // aligning them with Vitest. Preserve community-provider overrides.
     dropRemovePackageOverrideKeys(pkg.resolutions);
     dropRemovePackageOverrideKeys(pkg.overrides);
     // Common case (no workspace-wide direct vitest): strip a lingering managed

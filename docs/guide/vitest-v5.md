@@ -124,7 +124,15 @@ Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage pro
 
 Vite+ retains `vite-plus/test/coverage`, `/reporters`, `/environments`, `/snapshot`, and `/mocker` aliases through the Vite+ 1.x line. It does not provide partial runner or expect plugin shims.
 
-The community maintains `@vitest/browser-webdriverio` on its own release schedule. Install a compatible peer and check browser behavior; do not force its version to match the official package patch version. Use `5.0.0` as the compatibility test baseline.
+## Community WebDriverIO provider
+
+Vite+ 1.0 removes the `vite-plus/test/browser-webdriverio` exports. Use `@vitest/browser-webdriverio` and choose a provider version and framework peers that support your tests. The community maintains this package on its own release schedule.
+
+`vp migrate` changes legacy provider imports to `@vitest/browser-webdriverio` and preserves existing dependency versions, catalogs, and overrides. If your project has no provider dependency, migration asks you to add one. Existing imports from the community package stay unchanged.
+
+Legacy Vite+ WebDriverIO `/context` imports move to `vite-plus/test/browser/context`. Keep runtime browser APIs on this shared entry; the community provider's `/context` entry contains types only.
+
+The optional peer declaration still follows Vitest's dependency metadata. It does not provide a Vite+ export or manage the installed provider version.
 
 ## Reports and screenshots
 

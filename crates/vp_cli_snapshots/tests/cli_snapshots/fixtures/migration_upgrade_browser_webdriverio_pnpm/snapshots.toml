@@ -3,7 +3,20 @@ name = "migration_upgrade_browser_webdriverio_pnpm"
 vp = "global"
 steps = [
   { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"4.1.11\"}"], comment = "record the original runner version without adding a direct dependency", snapshot = false },
-  { argv = ["vp", "migrate", "--no-interactive"], comment = "source-only WebdriverIO provider should be restored", continue-on-failure = true },
-  { argv = ["vpt", "print-file", "package.json"], comment = "provider, webdriverio, and local vitest should be present", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "restore the community import and request a user-selected provider version", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "do not inject a community provider or framework version", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "legacy Vite+ provider import points to the community package", continue-on-failure = true },
   { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "driver builds and shared vitest should be enabled", continue-on-failure = true },
+]
+
+[[case]]
+name = "preserve_community_provider_version"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"4.1.11\"}"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.@vitest/browser-webdriverio", "^5.0.0"], snapshot = false },
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vp", "migrate", "--no-interactive"],
 ]

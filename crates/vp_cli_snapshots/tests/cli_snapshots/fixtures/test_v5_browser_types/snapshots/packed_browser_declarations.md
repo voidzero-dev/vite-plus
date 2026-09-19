@@ -15,8 +15,6 @@ browser/context: provider augmentations and role types preserved
 plugins/browser-context: provider augmentations and role types preserved
 browser-playwright/context: provider augmentations and role types preserved
 browser-preview/context: provider augmentations and role types preserved
-browser-webdriverio/context: provider augmentations and role types preserved
 browser/providers/playwright/context: provider augmentations and role types preserved
 browser/providers/preview/context: provider augmentations and role types preserved
-browser/providers/webdriverio/context: provider augmentations and role types preserved
 ```

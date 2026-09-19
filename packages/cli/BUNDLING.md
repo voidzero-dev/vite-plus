@@ -414,19 +414,20 @@ Every entry under vitest's own `exports` is shimmed under `./test/*` (wildcard e
 
 The full set is regenerated on every build from the upstream vitest `package.json`, so the exact list tracks vitest itself.
 
-In addition to vitest's own exports, the three `@vitest/browser-*` provider packages are projected under two parallel surfaces so existing user code keeps resolving after the deleted `@voidzero-dev/vite-plus-test` wrapper:
+In addition to vitest's own exports, the official browser providers have these aliases:
 
-| Provider Package              | CLI Package Exports                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------------ |
-| `@vitest/browser-playwright`  | `vite-plus/test/browser-playwright`, `vite-plus/test/browser/providers/playwright`   |
-| `@vitest/browser-preview`     | `vite-plus/test/browser-preview`, `vite-plus/test/browser/providers/preview`         |
-| `@vitest/browser-webdriverio` | `vite-plus/test/browser-webdriverio`, `vite-plus/test/browser/providers/webdriverio` |
+| Provider Package             | CLI Package Exports                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `@vitest/browser-playwright` | `vite-plus/test/browser-playwright`, `vite-plus/test/browser/providers/playwright` |
+| `@vitest/browser-preview`    | `vite-plus/test/browser-preview`, `vite-plus/test/browser/providers/preview`       |
 
 Each provider's own subpaths (e.g. `./context`) are mirrored under both alias prefixes.
 
 Browser-context runtime aliases re-export `vitest/browser`, the virtual entry used by Vitest v5. This applies to provider `/context` paths, `./test/browser/context`, `./test/context`, and `./test/plugins/browser-context`. Their declarations retain the upstream browser-context types and module augmentations. The upstream `@vitest/browser/context` JavaScript file is now an error stub, not the browser runtime.
 
-> **Note — webdriverio and playwright are opt-in.** `@vitest/browser` (base) and `@vitest/browser-preview` stay bundled **runtime dependencies** of `vite-plus` (and are stripped from users' manifests during migration) because neither carries a heavy non-optional peer. `@vitest/browser-webdriverio` and `@vitest/browser-playwright` are now vite-plus **devDependencies + optional peerDependencies** — each is kept as a devDependency so build-time shim generation can still emit the `./test/browser-webdriverio*` / `./test/browser-playwright*` exports (the export/shim surfaces above are unchanged), but neither is a bundled runtime dep. They are optional peers because each drags a non-optional framework peer (`webdriverio` / `playwright`) that non-browser consumers must not be forced to install. Users targeting a provider instead **keep** it in their **own** dependencies via `vp migrate` (pinned to the bundled vitest version, with its framework peer ensured), so their rewritten `vite-plus/test/browser-webdriverio` / `vite-plus/test/browser-playwright` imports resolve.
+`@vitest/browser` and `@vitest/browser-preview` are bundled runtime dependencies. Playwright stays an optional peer and a development dependency for shim generation. Migration keeps the Playwright provider in the user's dependencies, aligns it with bundled Vitest, and ensures its framework peer.
+
+Vite+ 1.0 has no WebDriverIO exports or shims. Users import from the community-maintained `@vitest/browser-webdriverio` and manage its versions and peers. The optional peer declaration remains synchronized with Vitest's dependency metadata; the development dependency supports compatibility tests only. Migration restores legacy provider aliases to the community package and moves legacy runtime `/context` aliases to the shared `vite-plus/test/browser/context` entry.
 
 #### Why provider d.ts shims are inlined
 

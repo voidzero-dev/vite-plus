@@ -12,7 +12,6 @@ import {
   SETUP_VP_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITEST_VERSION,
-  VITEST_WEBDRIVERIO_RANGE,
 } from '../../utils/constants.js';
 import { createMigrationReport } from '../report.js';
 
@@ -725,12 +724,7 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).toHaveProperty('vite', VITE_PLUS_OVERRIDE_PACKAGES.vite);
   });
 
-  it('keeps and normalizes @vitest/browser-webdriverio and ensures the webdriverio peer', async () => {
-    // Webdriverio is opt-in: vite-plus no longer bundles the provider, so the
-    // migration KEEPS the user's declared `@vitest/browser-webdriverio`
-    // (version-normalized to the bundled vitest version) and ensures its
-    // runtime framework peer `webdriverio`. `@vitest/browser` stays in
-    // REMOVE_PACKAGES and is still stripped.
+  it('preserves the community provider version without injecting its framework peer', async () => {
     const pkg = {
       devDependencies: {
         '@vitest/browser': '^4.0.0',
@@ -739,12 +733,8 @@ describe('rewritePackageJson', () => {
       },
     };
     rewritePackageJson(pkg, PackageManager.pnpm);
-    // Standalone (supportCatalog=false) → concrete pinned spec.
-    expect(pkg.devDependencies).toHaveProperty(
-      '@vitest/browser-webdriverio',
-      VITEST_WEBDRIVERIO_RANGE,
-    );
-    expect(pkg.devDependencies).toHaveProperty('webdriverio', '*');
+    expect(pkg.devDependencies).toHaveProperty('@vitest/browser-webdriverio', '^4.0.0');
+    expect(pkg.devDependencies).not.toHaveProperty('webdriverio');
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
   });
 
@@ -5855,12 +5845,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // A provider-as-TARGET selector scoped under a SPECIFIC non-vite-plus parent
     // only constrains that parent's subtree, so it is PRESERVED.
     expect(yaml.overrides['some-app>@vitest/browser-playwright']).toBe('4.0.0');
-    // Webdriverio is opt-in: vite-plus keeps it in the user's deps pinned to the
-    // bundled vitest version, but a stale override pinning an old version would
-    // win over that direct dep and misalign the provider against bundled vitest —
-    // so the stale override is dropped too (the dep stays installed, the pin
-    // does not).
-    expect(yaml.overrides).not.toHaveProperty('@vitest/browser-webdriverio');
+    // Community provider overrides remain user-owned.
+    expect(yaml.overrides['@vitest/browser-webdriverio']).toBe('4.0.0');
     expect(yaml.overrides['some-other-pkg']).toBe('1.0.0');
     expect(yaml.overrides['unrelated>some-other-pkg']).toBe('1.0.0');
   });
@@ -5999,46 +5985,37 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     });
   }
 
-  it('injects the webdriverio provider + peer from a source-only vitest config and allows driver builds', () => {
-    // Opt-in provider: vite-plus no longer bundles `@vitest/browser-webdriverio`.
-    // A project that imports it in source with NO declared dep must have the
-    // provider injected into its own deps (pinned to the bundled vitest version)
-    // plus the `webdriverio` framework peer, and the edgedriver/geckodriver
-    // postinstalls allowed.
+  it.each([
+    '@vitest/browser-webdriverio',
+    'vite-plus/test/browser-webdriverio',
+    'vite-plus/test/browser/providers/webdriverio',
+    'vite-plus/test/plugins/browser-webdriverio',
+    'vitest/browser-webdriverio',
+    'vitest/browser/providers/webdriverio',
+    'vitest/plugins/browser-webdriverio',
+  ])('restores %s without selecting a community provider version', (specifier) => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
-      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+      }),
     );
     fs.writeFileSync(
-      path.join(tmpDir, 'vitest.config.ts'),
-      [
-        "import { webdriverio } from '@vitest/browser-webdriverio';",
-        "import { defineConfig } from 'vite-plus';",
-        'export default defineConfig({',
-        '  test: { browser: { enabled: true, provider: webdriverio() } },',
-        '});',
-        '',
-      ].join('\n'),
+      path.join(tmpDir, 'vite.config.ts'),
+      "import { webdriverio } from '" + specifier + "';\nexport default {};\n",
     );
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
-
-    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
-      string,
-      string
-    >;
-    // The injected provider follows the same catalog as the managed Vitest
-    // dependency, and the catalog owns its concrete bundled version.
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
-    expect(devDeps.webdriverio).toBe('*');
-    expect(devDeps.vitest).toBe('catalog:');
-
-    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      allowBuilds: Record<string, boolean>;
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser-webdriverio');
+    expect(pkg.devDependencies).not.toHaveProperty('webdriverio');
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      "from '@vitest/browser-webdriverio'",
+    );
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       catalog: Record<string, string>;
     };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
-    expect(yaml.allowBuilds.edgedriver).toBe(true);
-    expect(yaml.allowBuilds.geckodriver).toBe(true);
+    expect(workspace.catalog).not.toHaveProperty('@vitest/browser-webdriverio');
   });
 
   it('injects the playwright provider + peer from a source-only vitest config', () => {
@@ -6081,9 +6058,6 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     ['playwright', 'browser-playwright'],
     ['playwright', 'browser/providers/playwright'],
     ['playwright', 'plugins/browser-playwright'],
-    ['webdriverio', 'browser-webdriverio'],
-    ['webdriverio', 'browser/providers/webdriverio'],
-    ['webdriverio', 'plugins/browser-webdriverio'],
   ] as const)(
     'injects the %s provider before rewriting the legacy vitest/%s import',
     (provider, subpath) => {
@@ -6122,9 +6096,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
         catalog: Record<string, string>;
       };
-      expect(workspace.catalog[`@vitest/browser-${provider}`]).toBe(
-        provider === 'webdriverio' ? VITEST_WEBDRIVERIO_RANGE : VITEST_VERSION,
-      );
+      expect(workspace.catalog[`@vitest/browser-${provider}`]).toBe(VITEST_VERSION);
       expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
         `from 'vite-plus/test/${subpath}'`,
       );
@@ -6221,90 +6193,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
   });
 
-  it('injects the webdriverio provider on a re-run from the migrated provider-subpath import', () => {
-    // Re-running migration on an ALREADY-migrated project: the import rewriter
-    // maps `@vitest/browser-webdriverio/provider` to
-    // `vite-plus/test/browser/providers/webdriverio`, so an already-migrated
-    // source can contain that subpath form (not just `vite-plus/test/browser-
-    // webdriverio`). The webdriverio source scan must recognize it, or the re-run
-    // would skip injecting the (no-longer-bundled) provider and the import would
-    // break under pnpm strict / Yarn PnP.
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
-    );
-    fs.writeFileSync(
-      path.join(tmpDir, 'vitest.config.ts'),
-      [
-        "import { webdriverio } from 'vite-plus/test/browser/providers/webdriverio';",
-        "import { defineConfig } from 'vite-plus';",
-        'export default defineConfig({',
-        '  test: { browser: { enabled: true, provider: webdriverio() } },',
-        '});',
-        '',
-      ].join('\n'),
-    );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
-
-    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
-      string,
-      string
-    >;
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
-    expect(devDeps.webdriverio).toBe('*');
-    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      allowBuilds: Record<string, boolean>;
-      catalog: Record<string, string>;
-    };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
-    expect(yaml.allowBuilds.edgedriver).toBe(true);
-    expect(yaml.allowBuilds.geckodriver).toBe(true);
-  });
-
-  it('injects the webdriverio provider from a source-only import of the plugin shim', () => {
-    // `vite-plus/test/plugins/browser-webdriverio` is a generated shim that
-    // re-exports `@vitest/browser-webdriverio` wholesale, so importing it uses
-    // the (now opt-in, no-longer-bundled) provider. A source-only import of it
-    // must still trigger provider+peer injection and driver-build allowance.
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
-    );
-    fs.writeFileSync(
-      path.join(tmpDir, 'vitest.config.ts'),
-      [
-        "import { webdriverio } from 'vite-plus/test/plugins/browser-webdriverio';",
-        "import { defineConfig } from 'vite-plus';",
-        'export default defineConfig({',
-        '  test: { browser: { enabled: true, provider: webdriverio() } },',
-        '});',
-        '',
-      ].join('\n'),
-    );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
-
-    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
-      string,
-      string
-    >;
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
-    expect(devDeps.webdriverio).toBe('*');
-    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      allowBuilds: Record<string, boolean>;
-      catalog: Record<string, string>;
-    };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
-    expect(yaml.allowBuilds.edgedriver).toBe(true);
-    expect(yaml.allowBuilds.geckodriver).toBe(true);
-  });
-
   it('keeps a peer-only catalog webdriverio provider resolvable (no dangling catalog reference)', () => {
-    // A package declares the provider ONLY as a `peerDependencies` `catalog:`
-    // entry. The migration installs the provider into the user's own deps so the
-    // rewritten import resolves, but it must NOT delete the catalog entry the
-    // surviving peer still references — deleting it would dangle the `catalog:`
-    // spec and break the next install. (Catalog deletion uses REMOVE_PACKAGES,
-    // not the override-drop set, precisely so webdriverio entries are preserved.)
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -6327,12 +6216,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     const devDeps = pkg.devDependencies as Record<string, string>;
-    // Provider installed through the same catalog used by the managed Vitest
-    // dependency.
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
-    expect(devDeps.webdriverio).toBe('*');
-    // Peer-only declaration is left intact and its `catalog:` reference still
-    // resolves because the catalog entry is preserved (NOT deleted).
+    expect(devDeps).not.toHaveProperty('@vitest/browser-webdriverio');
+    expect(devDeps).not.toHaveProperty('webdriverio');
     expect((pkg.peerDependencies as Record<string, string>)['@vitest/browser-webdriverio']).toBe(
       'catalog:',
     );
@@ -6340,17 +6225,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalog: Record<string, string>;
       allowBuilds: Record<string, boolean>;
     };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe('4.0.0');
     expect(yaml.catalog.vitest).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 
-  it('drops a stale npm @vitest/browser-webdriverio override that would conflict with the injected provider', () => {
-    // npm hard-fails with EOVERRIDE when an override pins the provider to a
-    // version different from the migrated direct dep. Because webdriverio is now
-    // KEPT/injected as a direct dep (not stripped), the migration must prune the
-    // stale `overrides` entry before injecting the bundled provider version.
+  it('preserves community WebDriverIO dependency versions and overrides', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -6363,18 +6244,15 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     const overrides = pkg.overrides as Record<string, string>;
-    // Stale provider override dropped (it would EOVERRIDE-conflict with the dep).
-    expect(overrides).not.toHaveProperty('@vitest/browser-webdriverio');
-    // Unrelated overrides preserved.
+    expect(overrides['@vitest/browser-webdriverio']).toBe('4.0.0');
     expect(overrides['some-other-pkg']).toBe('1.0.0');
-    // Provider normalized to the bundled vitest version, peer ensured.
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
-    expect(devDeps.webdriverio).toBe('*');
+    expect(devDeps['@vitest/browser-webdriverio']).toBe('^4.0.0');
+    expect(devDeps).not.toHaveProperty('webdriverio');
   });
 
   it('drops a stale npm @vitest/browser-playwright override that would conflict with the kept provider', () => {
-    // Same hazard as webdriverio: playwright is now opt-in and KEPT as a direct
+    // Playwright is opt-in and KEPT as a direct
     // dep (not stripped), so a stale `overrides` pin to a different version would
     // EOVERRIDE-conflict with the migrated bundled provider version. The
     // migration must prune it before normalizing the provider dep.
@@ -6397,7 +6275,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps.playwright).toBe('*');
   });
 
-  it('drops a stale @vitest/browser-webdriverio override pinned with a COMPARATOR range', () => {
+  it('drops a stale @vitest/browser-playwright override pinned with a COMPARATOR range', () => {
     // A `name@range` override key may use a semver comparator (`@>=4`, `@>4`,
     // `@<5`). The `>` MUST NOT be mistaken for a pnpm `parent>child` selector
     // (pnpm's own delimiter rule excludes a `>` preceded by `@`), or the key's
@@ -6408,9 +6286,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         name: 'test',
-        devDependencies: { vite: '^7.0.0', '@vitest/browser-webdriverio': '^4.0.0' },
+        devDependencies: { vite: '^7.0.0', '@vitest/browser-playwright': '^4.0.0' },
         overrides: {
-          '@vitest/browser-webdriverio@>=4': '4.0.0',
+          '@vitest/browser-playwright@>=4': '4.0.0',
           'some-other-pkg@>=1': '1.0.0',
         },
       }),
@@ -6419,42 +6297,42 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     const overrides = pkg.overrides as Record<string, string>;
-    expect(overrides).not.toHaveProperty('@vitest/browser-webdriverio@>=4');
+    expect(overrides).not.toHaveProperty('@vitest/browser-playwright@>=4');
     // Unrelated comparator-range override preserved.
     expect(overrides['some-other-pkg@>=1']).toBe('1.0.0');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
-    expect(devDeps.webdriverio).toBe('*');
+    expect(devDeps['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(devDeps.playwright).toBe('*');
   });
 
-  it('drops a stale yarn @vitest/browser-webdriverio resolution that would force the wrong provider version', () => {
+  it('drops a stale yarn @vitest/browser-playwright resolution that would force the wrong provider version', () => {
     // Same hazard as npm, via yarn `resolutions`: a leftover pin would force the
     // stale provider over the migrated, bundled-vitest-aligned dep.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         name: 'test',
-        devDependencies: { vite: '^7.0.0', '@vitest/browser-webdriverio': '^4.0.0' },
-        resolutions: { '@vitest/browser-webdriverio': '4.0.0', 'some-other-pkg': '1.0.0' },
+        devDependencies: { vite: '^7.0.0', '@vitest/browser-playwright': '^4.0.0' },
+        resolutions: { '@vitest/browser-playwright': '4.0.0', 'some-other-pkg': '1.0.0' },
       }),
     );
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.yarn), true, true);
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     const resolutions = pkg.resolutions as Record<string, string>;
-    expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio');
+    expect(resolutions).not.toHaveProperty('@vitest/browser-playwright');
     expect(resolutions['some-other-pkg']).toBe('1.0.0');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');
-    expect(devDeps.webdriverio).toBe('*');
+    expect(devDeps['@vitest/browser-playwright']).toBe('catalog:');
+    expect(devDeps.playwright).toBe('*');
     // #2005: the catalog: ref is backed by a .yarnrc.yml catalog entry (not dangling).
     const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
       catalog?: Record<string, string>;
     };
-    expect(yarnrc.catalog?.['@vitest/browser-webdriverio']).toBe(VITEST_WEBDRIVERIO_RANGE);
+    expect(yarnrc.catalog?.['@vitest/browser-playwright']).toBe(VITEST_VERSION);
   });
 
-  it('drops only global/glob/vite-plus-parent yarn SELECTOR-shaped @vitest/browser-webdriverio resolutions', () => {
+  it('drops only global/glob/vite-plus-parent yarn SELECTOR-shaped @vitest/browser-playwright resolutions', () => {
     // Yarn resolutions commonly use selector shapes (glob `**/pkg`, nested
     // `parent/pkg`). A pin is pruned only when it would reach vite-plus's OWN
     // direct provider dep — i.e. a versioned global pin, a NAME glob that matches
@@ -6468,19 +6346,19 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         name: 'test',
-        devDependencies: { vite: '^7.0.0', '@vitest/browser-webdriverio': '^4.0.0' },
+        devDependencies: { vite: '^7.0.0', '@vitest/browser-playwright': '^4.0.0' },
         resolutions: {
-          '**/@vitest/browser-webdriverio': '4.0.0',
-          'vite-*/@vitest/browser-webdriverio': '4.0.0',
-          'vite-plus/@vitest/browser-webdriverio': '4.0.0',
-          '**/vite-plus/@vitest/browser-webdriverio': '4.0.0',
-          'some-parent/@vitest/browser-webdriverio': '4.0.0',
-          'react-*/@vitest/browser-webdriverio': '4.0.0',
-          'parent@*/@vitest/browser-webdriverio': '4.0.0',
-          'parent@workspace:*/@vitest/browser-webdriverio': '4.0.0',
-          'some-parent/**/@vitest/browser-webdriverio': '4.0.0',
-          'some-parent/vite-*/@vitest/browser-webdriverio': '4.0.0',
-          '@vitest/browser-webdriverio@4': '4.0.0',
+          '**/@vitest/browser-playwright': '4.0.0',
+          'vite-*/@vitest/browser-playwright': '4.0.0',
+          'vite-plus/@vitest/browser-playwright': '4.0.0',
+          '**/vite-plus/@vitest/browser-playwright': '4.0.0',
+          'some-parent/@vitest/browser-playwright': '4.0.0',
+          'react-*/@vitest/browser-playwright': '4.0.0',
+          'parent@*/@vitest/browser-playwright': '4.0.0',
+          'parent@workspace:*/@vitest/browser-playwright': '4.0.0',
+          'some-parent/**/@vitest/browser-playwright': '4.0.0',
+          'some-parent/vite-*/@vitest/browser-playwright': '4.0.0',
+          '@vitest/browser-playwright@4': '4.0.0',
           '**/some-other-pkg': '1.0.0',
         },
       }),
@@ -6490,41 +6368,41 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     const resolutions = pkg.resolutions as Record<string, string>;
     // Glob parent matches all parents (incl. vite-plus) — dropped.
-    expect(resolutions).not.toHaveProperty('**/@vitest/browser-webdriverio');
+    expect(resolutions).not.toHaveProperty('**/@vitest/browser-playwright');
     // Name glob that matches vite-plus — dropped.
-    expect(resolutions).not.toHaveProperty('vite-*/@vitest/browser-webdriverio');
+    expect(resolutions).not.toHaveProperty('vite-*/@vitest/browser-playwright');
     // Parent is literally vite-plus — dropped.
-    expect(resolutions).not.toHaveProperty('vite-plus/@vitest/browser-webdriverio');
+    expect(resolutions).not.toHaveProperty('vite-plus/@vitest/browser-playwright');
     // `**`-padded vite-plus reaches the root vite-plus edge — dropped.
-    expect(resolutions).not.toHaveProperty('**/vite-plus/@vitest/browser-webdriverio');
+    expect(resolutions).not.toHaveProperty('**/vite-plus/@vitest/browser-playwright');
     // Versioned global pin — dropped.
-    expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio@4');
+    expect(resolutions).not.toHaveProperty('@vitest/browser-playwright@4');
     // Scoped under a SPECIFIC non-vite-plus parent — PRESERVED (does not affect
     // vite-plus's own provider dep).
-    expect(resolutions['some-parent/@vitest/browser-webdriverio']).toBe('4.0.0');
+    expect(resolutions['some-parent/@vitest/browser-playwright']).toBe('4.0.0');
     // A name glob that does NOT match vite-plus — PRESERVED.
-    expect(resolutions['react-*/@vitest/browser-webdriverio']).toBe('4.0.0');
+    expect(resolutions['react-*/@vitest/browser-playwright']).toBe('4.0.0');
     // A wildcard RANGE on a specific parent is not a glob parent — PRESERVED.
-    expect(resolutions['parent@*/@vitest/browser-webdriverio']).toBe('4.0.0');
-    expect(resolutions['parent@workspace:*/@vitest/browser-webdriverio']).toBe('4.0.0');
+    expect(resolutions['parent@*/@vitest/browser-playwright']).toBe('4.0.0');
+    expect(resolutions['parent@workspace:*/@vitest/browser-playwright']).toBe('4.0.0');
     // A nested glob gated by a SPECIFIC non-vite-plus ancestor only constrains
     // that ancestor's subtree, NOT the root vite-plus edge — PRESERVED.
-    expect(resolutions['some-parent/**/@vitest/browser-webdriverio']).toBe('4.0.0');
-    expect(resolutions['some-parent/vite-*/@vitest/browser-webdriverio']).toBe('4.0.0');
+    expect(resolutions['some-parent/**/@vitest/browser-playwright']).toBe('4.0.0');
+    expect(resolutions['some-parent/vite-*/@vitest/browser-playwright']).toBe('4.0.0');
     // Unrelated selector resolutions survive.
     expect(resolutions['**/some-other-pkg']).toBe('1.0.0');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');
-    expect(devDeps.webdriverio).toBe('*');
+    expect(devDeps['@vitest/browser-playwright']).toBe('catalog:');
+    expect(devDeps.playwright).toBe('*');
   });
 
   it('preserves yarn from/target resolutions that do NOT target the provider (yarn-grammar faithful)', () => {
     // A yarn `from/target` resolution key forces the TRAILING descriptor, not
     // the parent. Verified against @yarnpkg/parsers parseResolution:
-    //   `@vitest/browser-webdriverio@4/some-transitive-dep`
-    //       -> from=@vitest/browser-webdriverio@4, descriptor=some-transitive-dep
-    //   `@vitest/browser-webdriverio@npm:@other/fork@1.2.3`
-    //       -> from=@vitest/browser-webdriverio@npm:@other, descriptor=fork@1.2.3
+    //   `@vitest/browser-playwright@4/some-transitive-dep`
+    //       -> from=@vitest/browser-playwright@4, descriptor=some-transitive-dep
+    //   `@vitest/browser-playwright@npm:@other/fork@1.2.3`
+    //       -> from=@vitest/browser-playwright@npm:@other, descriptor=fork@1.2.3
     // Neither targets the provider, so neither may be pruned — dropping them
     // would silently delete an unrelated user resolution. (Yarn rejects keys
     // whose range embeds a `/`, e.g. `pkg@patch:…/…` or git/URL ranges, so those
@@ -6534,11 +6412,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         name: 'test',
-        devDependencies: { vite: '^7.0.0', '@vitest/browser-webdriverio': '^4.0.0' },
+        devDependencies: { vite: '^7.0.0', '@vitest/browser-playwright': '^4.0.0' },
         resolutions: {
-          '@vitest/browser-webdriverio@4/some-transitive-dep': '1.0.0',
-          '@vitest/browser-webdriverio@npm:@other/fork@1.2.3': '2.0.0',
-          '@vitest/browser-webdriverio': '4.0.0',
+          '@vitest/browser-playwright@4/some-transitive-dep': '1.0.0',
+          '@vitest/browser-playwright@npm:@other/fork@1.2.3': '2.0.0',
+          '@vitest/browser-playwright': '4.0.0',
         },
       }),
     );
@@ -6547,15 +6425,15 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     const resolutions = pkg.resolutions as Record<string, string>;
     // Parent-through-provider key targets some-transitive-dep — preserved.
-    expect(resolutions['@vitest/browser-webdriverio@4/some-transitive-dep']).toBe('1.0.0');
+    expect(resolutions['@vitest/browser-playwright@4/some-transitive-dep']).toBe('1.0.0');
     // npm-alias key targets `fork` (the aliased descriptor), not the provider — preserved.
-    expect(resolutions['@vitest/browser-webdriverio@npm:@other/fork@1.2.3']).toBe('2.0.0');
+    expect(resolutions['@vitest/browser-playwright@npm:@other/fork@1.2.3']).toBe('2.0.0');
     // The bare key DOES target the provider — pruned so it can't force the
     // stale provider over the migrated bundled-version dep.
-    expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio');
+    expect(resolutions).not.toHaveProperty('@vitest/browser-playwright');
     const devDeps = pkg.devDependencies as Record<string, string>;
-    expect(devDeps['@vitest/browser-webdriverio']).toBe('catalog:');
-    expect(devDeps.webdriverio).toBe('*');
+    expect(devDeps['@vitest/browser-playwright']).toBe('catalog:');
+    expect(devDeps.playwright).toBe('*');
   });
 
   it('does not add vitest for a package without browser mode', () => {
