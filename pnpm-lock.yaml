@@ -34,11 +34,11 @@ catalogs:
       specifier: ^3.1.0
       version: 3.1.0
     '@oxc-node/cli':
-      specifier: ^0.1.2
-      version: 0.1.2
+      specifier: ^0.1.3
+      version: 0.1.3
     '@oxc-node/core':
-      specifier: ^0.1.2
-      version: 0.1.2
+      specifier: ^0.1.3
+      version: 0.1.3
     '@oxc-project/runtime':
       specifier: '=0.150.0'
       version: 0.150.0
@@ -193,8 +193,8 @@ catalogs:
       specifier: '=1.83.0'
       version: 1.83.0
     oxlint-tsgolint:
-      specifier: '=7.0.2001'
-      version: 7.0.2001
+      specifier: '=7.0.2002'
+      version: 7.0.2002
     pathe:
       specifier: ^2.0.3
       version: 2.0.3
@@ -295,7 +295,7 @@ importers:
         version: 3.10.3(@emnapi/core@2.0.0-alpha.5)(@emnapi/runtime@2.0.0-alpha.5)(@types/node@24.10.3)(emnapi@2.0.0-alpha.5(node-addon-api@7.1.1))(supports-color@8.1.1)
       '@oxc-node/cli':
         specifier: 'catalog:'
-        version: 0.1.2
+        version: 0.1.3
       '@types/node':
         specifier: 'catalog:'
         version: 24.10.3
@@ -361,10 +361,10 @@ importers:
         version: 0.68.0(vite-plus@packages+cli)
       oxlint:
         specifier: 'catalog:'
-        version: 1.83.0(oxlint-tsgolint@7.0.2001)(vite-plus@packages+cli)
+        version: 1.83.0(oxlint-tsgolint@7.0.2002)(vite-plus@packages+cli)
       oxlint-tsgolint:
         specifier: 'catalog:'
-        version: 7.0.2001
+        version: 7.0.2002
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: link:../core
@@ -534,7 +534,7 @@ importers:
         version: 3.10.3(@emnapi/core@2.0.0-alpha.5)(@emnapi/runtime@2.0.0-alpha.5)(@types/node@24.13.3)(emnapi@2.0.0-alpha.5(node-addon-api@7.1.1))(supports-color@8.1.1)
       '@oxc-node/cli':
         specifier: 'catalog:'
-        version: 0.1.2
+        version: 0.1.3
       '@tsdown/css':
         specifier: 'catalog:'
         version: 0.23.0(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.28))(postcss-modules@9.0.1(postcss@8.5.28))(postcss@8.5.28)(sass-embedded@1.104.0(source-map-js@1.2.1))(sass@1.104.0)(tsdown@0.23.0)(tsx@4.23.13)(yaml@2.9.0)
@@ -629,7 +629,7 @@ importers:
     devDependencies:
       '@oxc-node/core':
         specifier: 'catalog:'
-        version: 0.1.2
+        version: 0.1.3
       '@types/semver':
         specifier: 'catalog:'
         version: 7.8.0
@@ -647,7 +647,7 @@ importers:
     devDependencies:
       '@oxc-node/core':
         specifier: 'catalog:'
-        version: 0.1.2
+        version: 0.1.3
       '@oxc-project/runtime':
         specifier: 'catalog:'
         version: 0.150.0
@@ -705,7 +705,7 @@ importers:
         version: 7.29.7(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1)
       '@oxc-node/cli':
         specifier: 'catalog:'
-        version: 0.1.2
+        version: 0.1.3
       '@rollup/plugin-commonjs':
         specifier: 'catalog:'
         version: 29.0.0(rollup@4.63.1)
@@ -753,7 +753,7 @@ importers:
     devDependencies:
       '@oxc-node/cli':
         specifier: 'catalog:'
-        version: 0.1.2
+        version: 0.1.3
 
   rolldown/packages/rolldown:
     dependencies:
@@ -778,7 +778,7 @@ importers:
         version: 1.2.2(@emnapi/core@2.0.0-alpha.5)(@emnapi/runtime@2.0.0-alpha.5)
       '@oxc-node/cli':
         specifier: 'catalog:'
-        version: 0.1.2
+        version: 0.1.3
       cac:
         specifier: 'catalog:'
         version: 7.0.0
@@ -857,7 +857,7 @@ importers:
     devDependencies:
       '@oxc-node/cli':
         specifier: 'catalog:'
-        version: 0.1.2
+        version: 0.1.3
       tinyexec:
         specifier: 'catalog:'
         version: 1.2.4
@@ -866,7 +866,7 @@ importers:
     devDependencies:
       '@e18e/eslint-plugin':
         specifier: ^0.8.0
-        version: 0.8.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.83.0(oxlint-tsgolint@7.0.2001)(vite-plus@packages+cli))
+        version: 0.8.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.83.0(oxlint-tsgolint@7.0.2002)(vite-plus@packages+cli))
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
@@ -3108,98 +3108,98 @@ packages:
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
     engines: {node: '>=8.0.0'}
 
-  '@oxc-node/cli@0.1.2':
-    resolution: {integrity: sha512-Ko0NuRs2u14/JN2PVGd9RY3Jkpw64aVBR7r/7VMTb+4V/KQvbVndDs9cIii7r1Lo9p25tuhxnWF/mN5v0YWCFA==}
+  '@oxc-node/cli@0.1.3':
+    resolution: {integrity: sha512-7Zpv7FRjWubVrRPPfe0x82dXxqHWmuBBKSfqpay5f4/x4ZMtSiL45R+6ZhacUBfeek4n8GN2+IUxiOs9Q2pLLA==}
     hasBin: true
 
-  '@oxc-node/core-android-arm-eabi@0.1.2':
-    resolution: {integrity: sha512-PWXhvCWTccgIKWpNzGmQzrMNi2719sFI9nu2SsTAmDbIMOoGiAE4ca665r+gDhr9WoiJlmhDzXtXkE5eJxiw4A==}
+  '@oxc-node/core-android-arm-eabi@0.1.3':
+    resolution: {integrity: sha512-L2RzakqSsKx8w3EnIlpRToaVe9RDlZSX1H+imOcPd/PUuj5tCkP91L9eFQxh15kKWM1UXE8WaF0XMZY9UjjBew==}
     cpu: [arm]
     os: [android]
 
-  '@oxc-node/core-android-arm64@0.1.2':
-    resolution: {integrity: sha512-FWntWtG7Y45y3U5SpdCE1aruWzpUqXNSf3jM9TaY7WAsCbHsXi73Mymp7QWf3lXauNjth92nLl6OVYcaW6e+fA==}
+  '@oxc-node/core-android-arm64@0.1.3':
+    resolution: {integrity: sha512-aSu1aAZzXX7uVTFRkQwE1FVJfgn5YxnXUaQUWpm9Ocuzdp82M/r0QVj4K3lMzEzA3mgurtCCSVUhlfI6CFzJWA==}
     cpu: [arm64]
     os: [android]
 
-  '@oxc-node/core-darwin-arm64@0.1.2':
-    resolution: {integrity: sha512-E4qd/OHWvhgD+/h58f4pKXcU+lEw0TOUnfXuyJAbrrE3R2BfLfr7aRoRIja9s17MBXpxD2mkFqsnkcLsn1h5Ig==}
+  '@oxc-node/core-darwin-arm64@0.1.3':
+    resolution: {integrity: sha512-NRqLHkinofzKbKG7fzcx/FGy0k3A91ANqBUyeTIH3equqRzLqGRAVqwiNwDWMDfAXzGOaNTU0BzaOlCohNd3Jg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@oxc-node/core-darwin-x64@0.1.2':
-    resolution: {integrity: sha512-9JhePCHPFbpr5rR2QrMgsNvAhwTpzcfqAkquKqvdnms2yq7Vsyw8XlTQZMTi41/+JKzd+Mkw05qvpBxaLgfQ4g==}
+  '@oxc-node/core-darwin-x64@0.1.3':
+    resolution: {integrity: sha512-uWpB3J6e6N5GZ2mSrjBdQ8d9IsSCPT0IfuJA9jNSuyqq99RNXsdxFLnNQZsBo9t6HxSlUOM15DvrzU0D5LSpEQ==}
     cpu: [x64]
     os: [darwin]
 
-  '@oxc-node/core-freebsd-x64@0.1.2':
-    resolution: {integrity: sha512-JM3ZeqbWlW89GWThoBf7AAQ1mjp/XBgrrY1ecQED/2NmOjKF2FN5CJI1kiIb4iZy3EIQpkMDm8GxzNgwxksd2A==}
+  '@oxc-node/core-freebsd-x64@0.1.3':
+    resolution: {integrity: sha512-JFZio8q9r6HOaSsMNypT7GDux7usWPkPW+uMlnZN1wS+FHjAeSZKnZu2q8Q1aSRqB+ImWAzjnwhzBzHAtTV8EQ==}
     cpu: [x64]
     os: [freebsd]
 
-  '@oxc-node/core-linux-arm-gnueabihf@0.1.2':
-    resolution: {integrity: sha512-sSJKtyogw7/kuLHqNBTEVKN+ucNZQwA4zFgENjis6b8UMJb3hlK0sYkoOOBTBQzLN37yiUAU1VxyIICfofYsGw==}
+  '@oxc-node/core-linux-arm-gnueabihf@0.1.3':
+    resolution: {integrity: sha512-VfStNsiSCYhGyV9S2Y2GvB/eUHBMYg+O3URIyeD/WuxwA6eVCVq4uHz2Wsgxp7KaGAwNGDttg+OBUJa8iF/drA==}
     cpu: [arm]
     os: [linux]
 
-  '@oxc-node/core-linux-arm64-gnu@0.1.2':
-    resolution: {integrity: sha512-XhQSa5Ju9KSyLtI1SSTSyB1qr9ETpTCxyKVkHPmOx+WsezK6WujPU1vyQf9QcUyyXCYRJmbsXzZRGTldBnjRMQ==}
+  '@oxc-node/core-linux-arm64-gnu@0.1.3':
+    resolution: {integrity: sha512-WwnkTSlNYxWdM3r38vWuGZ4y2gKOJT+du6wTtHdjowQuVa4lOT2OLvgS15VCTZNYkaC86NhPC89nsKm5labefQ==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@oxc-node/core-linux-arm64-musl@0.1.2':
-    resolution: {integrity: sha512-29eLtDb19EB/uf4EP7ezhG6ezTejP8LzygyWMA7AdkO2woUT+B/tUFNHKWgsez+c3phLEYJMSe117DO3pwfT2Q==}
+  '@oxc-node/core-linux-arm64-musl@0.1.3':
+    resolution: {integrity: sha512-A6CUn1hqNsaTGb4+X1j1qvaXCkMyZfrOfnDdu2zbOdfzPlsh5SxTM2aQF7ske0FfxOqkPu+pFR15lPlACRYJoQ==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@oxc-node/core-linux-ppc64-gnu@0.1.2':
-    resolution: {integrity: sha512-wGhyW7FHW86RMYNADT3VYMVICa0jiqr+4HnUt/4E0mAsLuny5RHZl2A9XLmYSshTUgZ8iuAusP/l5EOSVGwlmg==}
+  '@oxc-node/core-linux-ppc64-gnu@0.1.3':
+    resolution: {integrity: sha512-1Vhc30f69wiXlRu4aqN5F3ggquwTakL5G2sP79L3fcdK7odE7OemTLFWD8eul9PfTWxDvXGofRRXpXRD0U0Gvg==}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@oxc-node/core-linux-s390x-gnu@0.1.2':
-    resolution: {integrity: sha512-rffVm7sBs+5U51oqnU3DpvcTFnY6U6WZNFZUXqP5iUqfmDkF+nN6GcmBCvZxuP3lQtcE6tl0JWLeegcERfZKzQ==}
+  '@oxc-node/core-linux-s390x-gnu@0.1.3':
+    resolution: {integrity: sha512-BfV7+/6UoBjzEvjnBCDsgnCy5ILJ3EtLcjwCGKmwQY64VKORG94mfwFSXqPmsqs8qvam4avRFCaDBwScHMPXWA==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@oxc-node/core-linux-x64-gnu@0.1.2':
-    resolution: {integrity: sha512-O+XE59o+43r7FdszRAZxj1VRpYXvBxkb+CqD1/NG7UVg7YtdOuWmgICLPB8SRGs97PpnpI1U8fe7wIJAc0Lmfg==}
+  '@oxc-node/core-linux-x64-gnu@0.1.3':
+    resolution: {integrity: sha512-qqdyc22rMdsa8f4F597XGRZGUkC1DMQ4tiEhUgjan4JbTXGreXrwHQL8szYNKUaQQqQHyg3FTecubBdSqdeNdQ==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@oxc-node/core-linux-x64-musl@0.1.2':
-    resolution: {integrity: sha512-IwfbhslTfXyGRW03YuEpM7+HOh/Drppa1gqqaJGh8Qev7h2McP7j+4paUQXErNkOpc1zZWJpvKDZriD5owIxgQ==}
+  '@oxc-node/core-linux-x64-musl@0.1.3':
+    resolution: {integrity: sha512-5FicpXzLIVgkqcnGIuLuHiLHQX7SksOar+A4RX33+YQxPFZGe6qnauF2rRDs93Xlil1q/DqgtIx1jWnJio0PzQ==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@oxc-node/core-openharmony-arm64@0.1.2':
-    resolution: {integrity: sha512-RK/cxJQNqEuaUXQSmISD/iOpzghTHcjoKAKL49vngaC6JKYOmewOsPxYjy2Hj6EpTHmV/5xK1BCrrFWtq7kg1Q==}
+  '@oxc-node/core-openharmony-arm64@0.1.3':
+    resolution: {integrity: sha512-t9T2Pof8tSQIu2YCBPiTfTeYwP8YQ2+DvGEjO/BOyfswt+JGQTkunn1J6wPS1bvMw2OF+0l4kXhAuoQ/E2/nhQ==}
     cpu: [arm64]
     os: [openharmony]
 
-  '@oxc-node/core-win32-arm64-msvc@0.1.2':
-    resolution: {integrity: sha512-3+p9WuJFvHcNrFBV2WBtNhUitxS7CZjouFLZxt9I0lFb0MBjfBYnp+iybrRqaQot8mis5y+eu1gM8pbvDzNRZA==}
+  '@oxc-node/core-win32-arm64-msvc@0.1.3':
+    resolution: {integrity: sha512-OmaNW3Wm1khr4Kp0EkYJuf9plgRbCCHjNjgQLHVZaTA1R4WMGROWyA7yiRGbK/Ke4DPq8/gf/w3XxufJr6PxXA==}
     cpu: [arm64]
     os: [win32]
 
-  '@oxc-node/core-win32-ia32-msvc@0.1.2':
-    resolution: {integrity: sha512-W7iSWdVIWb8tp7SMxRSipPeQVJGc71rbXGt2+/zUha6IeJpSd6p/zFa1kEGJXy7t2qJVBUv5k1b/XTE8HLv1nA==}
+  '@oxc-node/core-win32-ia32-msvc@0.1.3':
+    resolution: {integrity: sha512-7gnoRTPNoi/uizuS/PjC1FzVyek63yMGtDKq1vwfy/DCMAsmwDOhG/u3l10Ng82b5iOtq2ist2f5npA5AQmgaw==}
     cpu: [ia32]
     os: [win32]
 
-  '@oxc-node/core-win32-x64-msvc@0.1.2':
-    resolution: {integrity: sha512-YAVhJVhx5QM7FjeI4aKyxFJve3UL4T9JUDkOnlt09cpHkkKUpPqVLNZnXaU8SiE97UjH7CLnjoEGJgN5ikRyAw==}
+  '@oxc-node/core-win32-x64-msvc@0.1.3':
+    resolution: {integrity: sha512-vHvYMtrrXPkyOr95cBPMbjwFmEYDKShgyAcU7TH0QMKWNsj8s0nuGYn3jbOyFxhjGCahIcCZ3odcelp59UqfWA==}
     cpu: [x64]
     os: [win32]
 
-  '@oxc-node/core@0.1.2':
-    resolution: {integrity: sha512-sQQMNOvKmdmwxK/xUEnnt83uUftGmGMion/bMSQfxVQ54HOsEUV07hgFqjVe5dhH7Pvne+G6wki0g1R84IUTUA==}
+  '@oxc-node/core@0.1.3':
+    resolution: {integrity: sha512-zRartGrXZvDjNNu8PJeI5em0Rq4P+2OueEvRQ10ybd0y/f8Luzjb5UNFq8hb5Kq7JCE3Z/v5uU8xb3LUexpDzA==}
 
   '@oxc-parser/binding-android-arm-eabi@0.148.0':
     resolution: {integrity: sha512-pHASv9g5pASxb7akHERZNSkrEqPhFaUix98o7d9hbTpolnnFWl7UiRrcMhCsV1+iVO4/cJwKsbKRJTFNs2tdBQ==}
@@ -3802,33 +3802,33 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@oxlint-tsgolint/darwin-arm64@7.0.2001':
-    resolution: {integrity: sha512-CUJEdbSZ54+Xy9OXqOhWLTKZKV0BBiV7C2i/ygyVmXtkUNXx5YCzN8DpSSshTAKktoL7S+tnQ/ftFG/i7X896w==}
+  '@oxlint-tsgolint/darwin-arm64@7.0.2002':
+    resolution: {integrity: sha512-E3yYb/tI+5M3SqGgKwrwUD0nmjA2FMGD1xFbma46qi8Y7+nPTlGY6bZk/hqxijc9Vda/tdtUxQ2d5zGIEX9qlg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@oxlint-tsgolint/darwin-x64@7.0.2001':
-    resolution: {integrity: sha512-pXfBb5BqONCcgrXQNUZWXgiYmRSWJzd97S8i41VVOh6ut0tyo+cJ5FKFpczDHxiVNfj/3e7c9B4MtztNdpIVCw==}
+  '@oxlint-tsgolint/darwin-x64@7.0.2002':
+    resolution: {integrity: sha512-qEaMySdvzs8faaJwMO4dFtPFCa+degFCz+HbkFQ0REcIJqJ16KmC0smt30FAI9TeEHCoAtz6sU/6acJvi4uaxg==}
     cpu: [x64]
     os: [darwin]
 
-  '@oxlint-tsgolint/linux-arm64@7.0.2001':
-    resolution: {integrity: sha512-roP7zujb/QDPzDwEKsFFpzNHHy91/Y7oX9vQXk78ekyZtcQj1QXDIMH33gjDdHBfRl4K9pZ36xhRgrP4Zr+R8A==}
+  '@oxlint-tsgolint/linux-arm64@7.0.2002':
+    resolution: {integrity: sha512-bqPObCNIR6tDQSc0Xn9Nu7EfWRXFB+qFzADRl/q6YA8zT9YUg3pGUbmicV2hV91uLpiot74so9ocGjx35SaX6w==}
     cpu: [arm64]
     os: [linux]
 
-  '@oxlint-tsgolint/linux-x64@7.0.2001':
-    resolution: {integrity: sha512-UDezNqdECVmngu2TPnjaS1YoAmcTaBoI5lV9vk3VahBxoi+I5r9k3iJTT7qZoYWOXTD/7T7bNcwRgrocR6BscQ==}
+  '@oxlint-tsgolint/linux-x64@7.0.2002':
+    resolution: {integrity: sha512-E5CcRALAYdiQMbdYjEqlLOiYuEdt21RtXiyxIoD8bfypdfkpWppacijKOR4i0DtLXFRVwCGQggZBWk5bOIpU1A==}
     cpu: [x64]
     os: [linux]
 
-  '@oxlint-tsgolint/win32-arm64@7.0.2001':
-    resolution: {integrity: sha512-uJZhqB6pdXLuN+AD1F5082byyQti/NPmJA77GtcFlmT2HzRelqbNls3SaIqxpjdFgvSBF9g0yOKGBkGFg7kX8Q==}
+  '@oxlint-tsgolint/win32-arm64@7.0.2002':
+    resolution: {integrity: sha512-L+ul0ZFDiz/ZmTwCQ1J/qS7S6s45ktiaFqb+ZIzx+1sSdtdRxm8/H0+p4VDQYrCKBFzKNb6VjUlm48bNEe3BUg==}
     cpu: [arm64]
     os: [win32]
 
-  '@oxlint-tsgolint/win32-x64@7.0.2001':
-    resolution: {integrity: sha512-FkDRm8hx9OwzGQqyWG1tO5QrTLRApff9DzSgpz9QZau37BR8d1VYKOxMLGf6shPZntJFoTwIIJYT68VndYDCog==}
+  '@oxlint-tsgolint/win32-x64@7.0.2002':
+    resolution: {integrity: sha512-zkZeJfo4UmYiCzj77u85eCDpdxOiQiSAsV6j9Pvj5e7Vu5+MvwLtK1xmVutE77tJmUJ3eBOSXHR6WgY4AwHHGQ==}
     cpu: [x64]
     os: [win32]
 
@@ -7108,8 +7108,8 @@ packages:
       vite-plus:
         optional: true
 
-  oxlint-tsgolint@7.0.2001:
-    resolution: {integrity: sha512-KjK/XLcXr1DSyonKhsuFqJRiuKqcyG9j3LJ8nkOsrLzGvodBPqzHOKauy10asLMDI0sUpvb+1sxlzff3udZvfg==}
+  oxlint-tsgolint@7.0.2002:
+    resolution: {integrity: sha512-rQAj2RAQM57nCwTd3PhtnAkREGW2StqI47tzudNlJF8WwGommM7rVpeP4O1O8/ZiuDZ9f2GnTESzLHGTluwkvQ==}
     hasBin: true
 
   oxlint@1.83.0:
@@ -9619,14 +9619,14 @@ snapshots:
       '@devframes/hub-ui': 0.9.18(@devframes/hub@0.9.18(crossws@0.4.12(srvx@1.0.4))(devframe@0.9.18(cac@7.0.0)(srvx@1.0.4)))(@devframes/json-render@0.9.18(@devframes/hub@0.9.18(crossws@0.4.12(srvx@1.0.4))(devframe@0.9.18(cac@7.0.0)(srvx@1.0.4)))(devframe@0.9.18(cac@7.0.0)(srvx@1.0.4)))(devframe@0.9.18(cac@7.0.0)(srvx@1.0.4))
       vite: link:packages/core
 
-  '@e18e/eslint-plugin@0.8.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.83.0(oxlint-tsgolint@7.0.2001)(vite-plus@packages+cli))':
+  '@e18e/eslint-plugin@0.8.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.83.0(oxlint-tsgolint@7.0.2002)(vite-plus@packages+cli))':
     dependencies:
       empathic: 2.0.1
       module-replacements: 3.3.0
       semver: 7.8.5
     optionalDependencies:
       eslint: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
-      oxlint: 1.83.0(oxlint-tsgolint@7.0.2001)(vite-plus@packages+cli)
+      oxlint: 1.83.0(oxlint-tsgolint@7.0.2002)(vite-plus@packages+cli)
 
   '@edge-runtime/primitives@6.0.0':
     optional: true
@@ -10658,78 +10658,78 @@ snapshots:
   '@opentelemetry/api@1.9.0':
     optional: true
 
-  '@oxc-node/cli@0.1.2':
+  '@oxc-node/cli@0.1.3':
     dependencies:
-      '@oxc-node/core': 0.1.2
+      '@oxc-node/core': 0.1.3
 
-  '@oxc-node/core-android-arm-eabi@0.1.2':
+  '@oxc-node/core-android-arm-eabi@0.1.3':
     optional: true
 
-  '@oxc-node/core-android-arm64@0.1.2':
+  '@oxc-node/core-android-arm64@0.1.3':
     optional: true
 
-  '@oxc-node/core-darwin-arm64@0.1.2':
+  '@oxc-node/core-darwin-arm64@0.1.3':
     optional: true
 
-  '@oxc-node/core-darwin-x64@0.1.2':
+  '@oxc-node/core-darwin-x64@0.1.3':
     optional: true
 
-  '@oxc-node/core-freebsd-x64@0.1.2':
+  '@oxc-node/core-freebsd-x64@0.1.3':
     optional: true
 
-  '@oxc-node/core-linux-arm-gnueabihf@0.1.2':
+  '@oxc-node/core-linux-arm-gnueabihf@0.1.3':
     optional: true
 
-  '@oxc-node/core-linux-arm64-gnu@0.1.2':
+  '@oxc-node/core-linux-arm64-gnu@0.1.3':
     optional: true
 
-  '@oxc-node/core-linux-arm64-musl@0.1.2':
+  '@oxc-node/core-linux-arm64-musl@0.1.3':
     optional: true
 
-  '@oxc-node/core-linux-ppc64-gnu@0.1.2':
+  '@oxc-node/core-linux-ppc64-gnu@0.1.3':
     optional: true
 
-  '@oxc-node/core-linux-s390x-gnu@0.1.2':
+  '@oxc-node/core-linux-s390x-gnu@0.1.3':
     optional: true
 
-  '@oxc-node/core-linux-x64-gnu@0.1.2':
+  '@oxc-node/core-linux-x64-gnu@0.1.3':
     optional: true
 
-  '@oxc-node/core-linux-x64-musl@0.1.2':
+  '@oxc-node/core-linux-x64-musl@0.1.3':
     optional: true
 
-  '@oxc-node/core-openharmony-arm64@0.1.2':
+  '@oxc-node/core-openharmony-arm64@0.1.3':
     optional: true
 
-  '@oxc-node/core-win32-arm64-msvc@0.1.2':
+  '@oxc-node/core-win32-arm64-msvc@0.1.3':
     optional: true
 
-  '@oxc-node/core-win32-ia32-msvc@0.1.2':
+  '@oxc-node/core-win32-ia32-msvc@0.1.3':
     optional: true
 
-  '@oxc-node/core-win32-x64-msvc@0.1.2':
+  '@oxc-node/core-win32-x64-msvc@0.1.3':
     optional: true
 
-  '@oxc-node/core@0.1.2':
+  '@oxc-node/core@0.1.3':
     dependencies:
       pirates: 4.0.7
     optionalDependencies:
-      '@oxc-node/core-android-arm-eabi': 0.1.2
-      '@oxc-node/core-android-arm64': 0.1.2
-      '@oxc-node/core-darwin-arm64': 0.1.2
-      '@oxc-node/core-darwin-x64': 0.1.2
-      '@oxc-node/core-freebsd-x64': 0.1.2
-      '@oxc-node/core-linux-arm-gnueabihf': 0.1.2
-      '@oxc-node/core-linux-arm64-gnu': 0.1.2
-      '@oxc-node/core-linux-arm64-musl': 0.1.2
-      '@oxc-node/core-linux-ppc64-gnu': 0.1.2
-      '@oxc-node/core-linux-s390x-gnu': 0.1.2
-      '@oxc-node/core-linux-x64-gnu': 0.1.2
-      '@oxc-node/core-linux-x64-musl': 0.1.2
-      '@oxc-node/core-openharmony-arm64': 0.1.2
-      '@oxc-node/core-win32-arm64-msvc': 0.1.2
-      '@oxc-node/core-win32-ia32-msvc': 0.1.2
-      '@oxc-node/core-win32-x64-msvc': 0.1.2
+      '@oxc-node/core-android-arm-eabi': 0.1.3
+      '@oxc-node/core-android-arm64': 0.1.3
+      '@oxc-node/core-darwin-arm64': 0.1.3
+      '@oxc-node/core-darwin-x64': 0.1.3
+      '@oxc-node/core-freebsd-x64': 0.1.3
+      '@oxc-node/core-linux-arm-gnueabihf': 0.1.3
+      '@oxc-node/core-linux-arm64-gnu': 0.1.3
+      '@oxc-node/core-linux-arm64-musl': 0.1.3
+      '@oxc-node/core-linux-ppc64-gnu': 0.1.3
+      '@oxc-node/core-linux-s390x-gnu': 0.1.3
+      '@oxc-node/core-linux-x64-gnu': 0.1.3
+      '@oxc-node/core-linux-x64-musl': 0.1.3
+      '@oxc-node/core-openharmony-arm64': 0.1.3
+      '@oxc-node/core-win32-arm64-msvc': 0.1.3
+      '@oxc-node/core-win32-ia32-msvc': 0.1.3
+      '@oxc-node/core-win32-x64-msvc': 0.1.3
 
   '@oxc-parser/binding-android-arm-eabi@0.148.0':
     optional: true
@@ -11026,22 +11026,22 @@ snapshots:
   '@oxfmt/binding-win32-x64-msvc@0.68.0':
     optional: true
 
-  '@oxlint-tsgolint/darwin-arm64@7.0.2001':
+  '@oxlint-tsgolint/darwin-arm64@7.0.2002':
     optional: true
 
-  '@oxlint-tsgolint/darwin-x64@7.0.2001':
+  '@oxlint-tsgolint/darwin-x64@7.0.2002':
     optional: true
 
-  '@oxlint-tsgolint/linux-arm64@7.0.2001':
+  '@oxlint-tsgolint/linux-arm64@7.0.2002':
     optional: true
 
-  '@oxlint-tsgolint/linux-x64@7.0.2001':
+  '@oxlint-tsgolint/linux-x64@7.0.2002':
     optional: true
 
-  '@oxlint-tsgolint/win32-arm64@7.0.2001':
+  '@oxlint-tsgolint/win32-arm64@7.0.2002':
     optional: true
 
-  '@oxlint-tsgolint/win32-x64@7.0.2001':
+  '@oxlint-tsgolint/win32-x64@7.0.2002':
     optional: true
 
   '@oxlint/binding-android-arm-eabi@1.83.0':
@@ -14174,16 +14174,16 @@ snapshots:
       '@oxfmt/binding-win32-x64-msvc': 0.68.0
       vite-plus: link:packages/cli
 
-  oxlint-tsgolint@7.0.2001:
+  oxlint-tsgolint@7.0.2002:
     optionalDependencies:
-      '@oxlint-tsgolint/darwin-arm64': 7.0.2001
-      '@oxlint-tsgolint/darwin-x64': 7.0.2001
-      '@oxlint-tsgolint/linux-arm64': 7.0.2001
-      '@oxlint-tsgolint/linux-x64': 7.0.2001
-      '@oxlint-tsgolint/win32-arm64': 7.0.2001
-      '@oxlint-tsgolint/win32-x64': 7.0.2001
+      '@oxlint-tsgolint/darwin-arm64': 7.0.2002
+      '@oxlint-tsgolint/darwin-x64': 7.0.2002
+      '@oxlint-tsgolint/linux-arm64': 7.0.2002
+      '@oxlint-tsgolint/linux-x64': 7.0.2002
+      '@oxlint-tsgolint/win32-arm64': 7.0.2002
+      '@oxlint-tsgolint/win32-x64': 7.0.2002
 
-  oxlint@1.83.0(oxlint-tsgolint@7.0.2001)(vite-plus@packages+cli):
+  oxlint@1.83.0(oxlint-tsgolint@7.0.2002)(vite-plus@packages+cli):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.83.0
       '@oxlint/binding-android-arm64': 1.83.0
@@ -14204,7 +14204,7 @@ snapshots:
       '@oxlint/binding-win32-arm64-msvc': 1.83.0
       '@oxlint/binding-win32-ia32-msvc': 1.83.0
       '@oxlint/binding-win32-x64-msvc': 1.83.0
-      oxlint-tsgolint: 7.0.2001
+      oxlint-tsgolint: 7.0.2002
       vite-plus: link:packages/cli
 
   p-limit@3.1.0:
