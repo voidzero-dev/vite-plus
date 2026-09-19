@@ -252,7 +252,10 @@ pub fn nushell_path() -> Result<Option<PathBuf>, String> {
 /// Resolves an optional PowerShell binary for fixtures that exercise generated
 /// `env.ps1` files.
 pub fn powershell_path() -> Result<Option<PathBuf>, String> {
-    optional_tool_path("VP_SNAP_PWSH_BIN", "pwsh")
+    // Windows PowerShell 5.1 uses .NET Framework, which cannot load its
+    // configuration from the verbatim paths returned by std::fs::canonicalize.
+    Ok(optional_tool_path("VP_SNAP_PWSH_BIN", "pwsh")?
+        .map(|path| dunce::simplified(&path).to_path_buf()))
 }
 
 /// Resolves an optional cmd.exe for fixtures that exercise generated batch

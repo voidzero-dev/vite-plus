@@ -1236,6 +1236,11 @@ jobs:
             SystemTemp='${{ steps.snapshot-temp.outputs.directory }}' \
               cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast \
                 -E 'test(windows_case_sensitive_shims)' || test_exit=$?
+
+            # Exercise the same environment wrapper under Windows PowerShell 5.1.
+            VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v powershell.exe)")" \
+              cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast \
+                -E 'test(command_env_powershell)' || test_exit=$?
           fi
           exit "$test_exit"
         env:

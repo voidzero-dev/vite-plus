@@ -2,16 +2,42 @@
 $ErrorActionPreference = 'Stop'
 $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../packages/cli/install.ps1') -Raw
 . ([scriptblock]::Create(($source -replace '(?m)^    Main\r?$', '')))
-function Exit-Installer { param([int]$Code = 1); $script:ExitCode = $Code; throw $script:InstallStopSignal }
 function Assert($Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
+
+# Exercise the piped entry point without acquiring a payload.
+function Test-InstallerEntryPoint {
+    Assert ($ErrorActionPreference -eq 'Stop') 'Installer did not enable terminating errors'
+    if ($entryPointFails) { throw 'Expected installer failure' }
+}
+$entryPointSource = $source -replace '(?m)^    Main\r?$', '    Test-InstallerEntryPoint'
+try {
+    foreach ($preference in @('Continue', 'Stop')) {
+        foreach ($entryPointFails in @($false, $true)) {
+            $ErrorActionPreference = $preference
+            $caught = $false
+            try {
+                $entryPointSource | Invoke-Expression
+            } catch {
+                Assert ($_.Exception.Message -eq 'Expected installer failure') "Unexpected error: $_"
+                $caught = $true
+            }
+            Assert ($caught -eq $entryPointFails) 'Installer failure was lost'
+            Assert ($ErrorActionPreference -eq $preference) 'Installer changed the caller error preference'
+        }
+    }
+} finally {
+    $ErrorActionPreference = 'Stop'
+}
+function Exit-Installer { param([int]$Code = 1); $script:ExitCode = $Code; throw $script:InstallStopSignal }
 
 $testRoot = Join-Path $env:TEMP "vite-bootstrap-test-$(Get-Random)"
 $originalTemp = $env:TEMP
 $originalCheck = $env:VP_SELF_SETUP_SUPPORT_CHECK
 $originalPath = $env:Path
 $originalRegistry = $env:NPM_CONFIG_REGISTRY
+$originalVpShell = $env:VP_SHELL
 $fixtureSha = '0123456789012345678901234567890123456789'
 New-Item -ItemType Directory -Path "$testRoot/package", "$testRoot/tmp", "$testRoot/scripts" | Out-Null
 Set-Content -LiteralPath "$testRoot/package/vp.exe" -Value 'Payload fixture'
@@ -21,6 +47,8 @@ if ($args.Count -eq 0) {
     New-Item -ItemType File -Path "$testRoot/binary-invoked" | Out-Null
     if ($scenario -eq 'failure') { exit 42 }
     if ($env:VP_SELF_SETUP_SHELL -ne 'powershell') { exit 98 }
+    $expectedVpShell = if ($scenario -eq 'supported-pr') { 'fish' } else { 'powershell' }
+    if ($env:VP_SHELL -ne $expectedVpShell) { exit 96 }
     if ($scenario -eq 'supported-pr' -and $env:NPM_CONFIG_REGISTRY -ne 'https://registry-bridge.viteplus.dev/') { exit 97 }
     Write-Output ("`$script:InstallDir = '{0}'" -f "$testRoot/data")
     Write-Output ("`$script:ShimDir = '{0}'" -f "$testRoot/installed bin")
@@ -98,6 +126,8 @@ try {
     foreach ($scenario in @('supported', 'legacy', 'legacy-remote', 'legacy-failure', 'failure', 'pr', 'supported-pr')) {
         $env:Path = $originalPath
         $env:NPM_CONFIG_REGISTRY = 'https://custom.example'
+        $initialVpShell = if ($scenario -eq 'supported-pr') { 'fish' } else { $null }
+        $env:VP_SHELL = $initialVpShell
         $script:Requests = New-Object 'System.Collections.Generic.List[string]'
         $script:ExitCode = 0
         $script:PackageMetadata = $null
@@ -123,6 +153,7 @@ try {
         }
         $expectedExit = if ($scenario -in @('failure', 'legacy-failure')) { 42 } else { 0 }
         Assert ($script:ExitCode -eq $expectedExit) 'Binary exit code was lost'
+        Assert ($env:VP_SHELL -eq $initialVpShell) 'Setup changed the caller shell'
         if ($scenario -eq 'supported') {
             Assert (($env:Path -split ';')[0] -eq "$testRoot/installed bin") 'Installed bin directory was not added to the current PATH'
         } elseif ($scenario -eq 'failure') {
@@ -144,6 +175,7 @@ try {
     $env:VP_SELF_SETUP_SUPPORT_CHECK = $originalCheck
     $env:Path = $originalPath
     $env:NPM_CONFIG_REGISTRY = $originalRegistry
+    $env:VP_SHELL = $originalVpShell
     $env:TEMP = $originalTemp
     Remove-Item -LiteralPath $testRoot -Recurse -Force
     $global:LASTEXITCODE = 0
