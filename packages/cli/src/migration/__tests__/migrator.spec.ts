@@ -8793,6 +8793,7 @@ describe('existing Vite+ core migration finalization', () => {
     });
 
     expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true)).toEqual({
+      dependencies: false,
       scripts: true,
       tsconfigTypes: true,
       imports: true,
@@ -8869,6 +8870,7 @@ export default defineConfig({
 
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
     expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true)).toEqual({
+      dependencies: false,
       scripts: false,
       tsconfigTypes: false,
       imports: true,
@@ -8885,6 +8887,7 @@ export default defineConfig({
     );
 
     expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true)).toEqual({
+      dependencies: false,
       scripts: false,
       tsconfigTypes: false,
       imports: false,
@@ -8921,6 +8924,7 @@ export default defineConfig({ entry: 'src/index.ts' });
     );
 
     expect(result).toEqual({
+      dependencies: false,
       scripts: false,
       tsconfigTypes: false,
       imports: true,

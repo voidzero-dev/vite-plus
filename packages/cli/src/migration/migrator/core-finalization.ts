@@ -6,6 +6,7 @@ import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
 import {
+  dropDeadOxlintPluginsDependency,
   hasTsconfigTypesToRewrite,
   mergeTsdownConfigFile,
   rewriteAllImports,
@@ -78,6 +79,7 @@ export type PendingCoreMigration = {
 };
 
 export type CoreMigrationFinalizationResult = {
+  dependencies: boolean;
   scripts: boolean;
   tsconfigTypes: boolean;
   imports: boolean;
@@ -143,6 +145,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
 ): CoreMigrationFinalizationResult {
   const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
   const result: CoreMigrationFinalizationResult = {
+    dependencies: false,
     scripts: false,
     tsconfigTypes: false,
     imports: false,
@@ -163,6 +166,10 @@ export function finalizeCoreMigrationForExistingVitePlus(
   }
 
   result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, true);
+  result.dependencies = dropDeadOxlintPluginsDependency(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+  );
 
   // Partial migrations can already have a Vite+ dependency while leaving
   // tsdown.config.* undiscoverable by vp pack. Finalize those configs on the

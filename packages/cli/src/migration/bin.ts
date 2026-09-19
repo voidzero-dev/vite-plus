@@ -1112,6 +1112,7 @@ async function main() {
       pendingCoreMigration,
     );
     if (
+      coreMigrationResult.dependencies ||
       coreMigrationResult.scripts ||
       coreMigrationResult.tsconfigTypes ||
       coreMigrationResult.imports ||
@@ -1172,7 +1173,7 @@ async function main() {
         )
       : undefined;
 
-    let needsInstall = false;
+    let needsInstall = coreMigrationResult.dependencies;
     if (vitePlusBootstrapPending) {
       const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {

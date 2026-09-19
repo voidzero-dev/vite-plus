@@ -1,0 +1,3 @@
+autoInstallPeers: false
+hoist: false
+minimumReleaseAge: 0
