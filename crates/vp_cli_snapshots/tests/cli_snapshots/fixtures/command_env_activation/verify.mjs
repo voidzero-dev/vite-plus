@@ -61,6 +61,28 @@ function captured(args, extra = {}) {
   assert.equal(result.status, 0, result.error?.message ?? result.stdout + result.stderr);
   return result;
 }
+function terminal(args, extra = {}, status = 0, executable = binary, stdio = 'inherit') {
+  if (kind === 'external') {
+    const quote = (value) =>
+      /^[\w./=-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\\''") + "'";
+    const command =
+      executable === binary
+        ? 'vp'
+        : executable === path.join(bin, 'node')
+          ? 'node'
+          : path.basename(executable);
+    const overrides = Object.entries(extra).map(([key, value]) => `${key}=${quote(value)}`);
+    console.log('$ ' + [...overrides, command, ...args.map(quote)].join(' '));
+  }
+  const result = spawnSync(executable, args, {
+    env: { ...env, ...extra },
+    stdio,
+    encoding: 'utf8',
+    timeout: 30000,
+  });
+  assert.equal(result.status, status, result.error?.message);
+  return result;
+}
 const dirs = Object.fromEntries(
   captured([], { VP_DUMP_DIRS: '1' })
     .stdout.trim()
@@ -80,22 +102,31 @@ const system = path.join(root, 'system');
 fs.mkdirSync(system);
 fs.writeFileSync(path.join(system, 'node'), '#!/bin/sh\necho system-node\n', { mode: 0o755 });
 env.PATH = system;
-const first = captured(['env', 'list', 'node']);
-const setup = first.stderr.replace(/\u001b\[[0-9;]*m/g, '');
-assert.match(setup, /Vite\+ setup complete/);
-assert.doesNotMatch(setup, /not first on PATH/); // no duplicate reminder during handoff
-const activation = setup
-  .split('\n')
-  .find((line) => line.trim().startsWith(shell === 'fish' || shell === 'nu' ? 'source "' : '. "'))
-  ?.trim();
-assert.ok(activation, setup);
 console.log('First setup:');
-console.log(
-  setup
+let activation;
+if (kind === 'external') {
+  terminal(['env', 'list', 'node']);
+  // The full PTY snapshot records the printed command. Other cases also parse
+  // the guidance and execute it, so escaping remains covered independently.
+  const escaped = path.join(config, 'env').replace(/[\\$`"]/g, '\\$&');
+  activation = `. "${escaped}"`;
+} else {
+  const first = captured(['env', 'list', 'node']);
+  const setup = first.stderr.replace(/\u001b\[[0-9;]*m/g, '');
+  assert.match(setup, /Vite\+ setup complete/);
+  assert.doesNotMatch(setup, /not first on PATH/);
+  activation = setup
     .split('\n')
-    .filter((line) => /Activate Vite\+|^  \. |^  source |new terminal/.test(line))
-    .join('\n'),
-);
+    .find((line) => line.trim().startsWith(shell === 'fish' || shell === 'nu' ? 'source "' : '. "'))
+    ?.trim();
+  assert.ok(activation, setup);
+  console.log(
+    setup
+      .split('\n')
+      .filter((line) => /Activate Vite\+|^  \. |^  source |new terminal/.test(line))
+      .join('\n'),
+  );
+}
 const settingsFile = path.join(config, 'config.json');
 const settings = fs.readFileSync(settingsFile, 'utf8');
 const saved = JSON.parse(settings);
@@ -112,21 +143,12 @@ const shellBin = process.env.PATH.split(path.delimiter)
   .map((dir) => path.join(dir, shell))
   .find((file) => fs.existsSync(file));
 assert.ok(shellBin, shell);
-function terminal(args, extra = {}, status = 0, executable = binary, stdio = 'inherit') {
-  const result = spawnSync(executable, args, {
-    env: { ...env, ...extra },
-    stdio,
-    encoding: 'utf8',
-    timeout: 30000,
-  });
-  assert.equal(result.status, status, result.error?.message);
-  return result;
-}
 Object.assign(env, {
   ACTIVATION_VP: binary,
   ACTIVATION_BIN: bin,
   ACTIVATION_COMMAND: activation,
   ACTIVATION_SYSTEM: system,
+  ACTIVATION_SHOW_COMMANDS: kind === 'external' ? '1' : '',
 });
 console.log('Same terminal:');
 if (shell === 'fish') {
@@ -181,8 +203,16 @@ if (kind === 'external') {
     ['pipe', 'inherit', 'inherit'],
   ]) {
     const result = terminal(['env', 'list', 'node'], {}, 0, binary, stdio);
-    if (result.stderr !== null) assert.doesNotMatch(result.stderr, /Activate|not first on PATH/);
-    if (result.stdout !== null) assert.doesNotMatch(result.stdout, /Activate|not first on PATH/);
+    if (result.stderr !== null) {
+      assert.doesNotMatch(result.stderr, /Activate|not first on PATH/);
+      console.log('Redirected stderr:');
+      process.stdout.write(result.stderr);
+    }
+    if (result.stdout !== null) {
+      assert.doesNotMatch(result.stdout, /Activate|not first on PATH/);
+      console.log('Redirected stdout:');
+      process.stdout.write(result.stdout);
+    }
   }
   console.log('Direct node shim:');
   terminal(['--version'], {}, 0, path.join(bin, 'node'));
@@ -191,15 +221,7 @@ if (kind === 'external') {
   console.log('\nInstaller capability protocol:');
   terminal([], { VP_SELF_SETUP_SUPPORT_CHECK: '1' });
   console.log('Installer handoff:');
-  const handoff = captured([], { VP_SELF_SETUP_SHELL: 'sh' });
-  assert.doesNotMatch(handoff.stderr, /not first on PATH/);
-  assert.ok(
-    handoff.stdout
-      .trim()
-      .split('\n')
-      .every((line) => /^(INSTALL|SHIM|CACHE|CONFIG|STATE)_DIR=/.test(line)),
-  );
-  console.log('Shell assignments only; no duplicate activation reminder.');
+  terminal([], { VP_SELF_SETUP_SHELL: 'sh' });
   console.log('Internal background protocol:');
   terminal(['upgrade', '--background-check']);
   console.log('Quiet mode:');

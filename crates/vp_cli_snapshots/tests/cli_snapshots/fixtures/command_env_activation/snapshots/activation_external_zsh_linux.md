@@ -1,4 +1,4 @@
-# activation_external_zsh
+# activation_external_zsh_linux
 
 ## `node verify.mjs external zsh`
 
@@ -29,7 +29,7 @@ Next Steps:
   If setup already updated your profile, you can open a new terminal instead.
 
   For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:
-  - macOS: Add to ~/.profile or use launchd
+  - Linux: Add to ~/.profile for display manager integration
 
   Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
 ✓ Vite+ setup complete.
@@ -186,7 +186,7 @@ Next Steps:
   If setup already updated your profile, you can open a new terminal instead.
 
   For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:
-  - macOS: Add to ~/.profile or use launchd
+  - Linux: Add to ~/.profile for display manager integration
 
   Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
 ✓ Vite+ setup complete.

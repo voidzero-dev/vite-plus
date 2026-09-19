@@ -3,7 +3,7 @@
 use std::{ffi::OsStr, path::Path};
 
 use vp_pm_cli::PackageManagerType;
-use vp_shared::{EnvConfig, output};
+use vp_shared::{EnvConfig, env_vars, output};
 use vt_path::AbsolutePath;
 
 use super::{
@@ -132,6 +132,13 @@ pub(crate) async fn remind(args: &Args, raw: &[String], cwd: &AbsolutePath) {
         || !vp_shared::is_stderr_terminal()
         || !eligible(args, raw)
     {
+        return;
+    }
+    // vp run/exec and other delegated commands prepend selected runtime/PM
+    // directories. A Node directory also contains npm/npx, so checking only
+    // the recorded tool names would still mistake this child environment for
+    // an inactive terminal. Sourcing env in the parent cannot fix that PATH.
+    if std::env::var_os(env_vars::VP_PATH_INJECTED_TOOLS).is_some_and(|tools| !tools.is_empty()) {
         return;
     }
     let Ok(config) = config::load_config().await else { return };
