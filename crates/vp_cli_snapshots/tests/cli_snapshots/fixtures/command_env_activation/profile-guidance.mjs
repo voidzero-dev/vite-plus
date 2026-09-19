@@ -63,6 +63,8 @@ if (mode === 'powershell') {
     console.log(output.split('\n').find((line) => line.includes('$PROFILE')));
   }
 } else {
+  // Suppress Ubuntu's sudo hint while still loading the normal Bash startup files.
+  fs.writeFileSync(path.join(home, '.hushlogin'), '');
   captureVp(['env', 'on', 'node']);
   const bash = process.env.PATH.split(path.delimiter)
     .map((dir) => path.join(dir, 'bash'))
