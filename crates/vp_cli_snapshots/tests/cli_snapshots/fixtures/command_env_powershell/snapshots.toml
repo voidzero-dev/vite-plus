@@ -1,7 +1,6 @@
 [[case]]
 name = "command_env_powershell"
 vp = "global"
-skip-platforms = ["linux", "macos"]
 requires = ["pwsh"]
 steps = [
   { argv = ["vp", "env", "setup", "--refresh"], snapshot = false },

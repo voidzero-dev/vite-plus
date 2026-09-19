@@ -2,10 +2,35 @@
 $ErrorActionPreference = 'Stop'
 $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../packages/cli/install.ps1') -Raw
 . ([scriptblock]::Create(($source -replace '(?m)^    Main\r?$', '')))
-function Exit-Installer { param([int]$Code = 1); $script:ExitCode = $Code; throw $script:InstallStopSignal }
 function Assert($Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
+
+# Exercise the piped entry point without acquiring a payload.
+function Test-InstallerEntryPoint {
+    Assert ($ErrorActionPreference -eq 'Stop') 'Installer did not enable terminating errors'
+    if ($entryPointFails) { throw 'Expected installer failure' }
+}
+$entryPointSource = $source -replace '(?m)^    Main\r?$', '    Test-InstallerEntryPoint'
+try {
+    foreach ($preference in @('Continue', 'Stop')) {
+        foreach ($entryPointFails in @($false, $true)) {
+            $ErrorActionPreference = $preference
+            $caught = $false
+            try {
+                $entryPointSource | Invoke-Expression
+            } catch {
+                Assert ($_.Exception.Message -eq 'Expected installer failure') "Unexpected error: $_"
+                $caught = $true
+            }
+            Assert ($caught -eq $entryPointFails) 'Installer failure was lost'
+            Assert ($ErrorActionPreference -eq $preference) 'Installer changed the caller error preference'
+        }
+    }
+} finally {
+    $ErrorActionPreference = 'Stop'
+}
+function Exit-Installer { param([int]$Code = 1); $script:ExitCode = $Code; throw $script:InstallStopSignal }
 
 $testRoot = Join-Path $env:TEMP "vite-bootstrap-test-$(Get-Random)"
 $originalTemp = $env:TEMP
