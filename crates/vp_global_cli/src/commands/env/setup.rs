@@ -55,6 +55,16 @@ impl EnvShell {
             EnvShell::Powershell => "env.ps1",
         }
     }
+
+    fn source_command(self, env_dir: &vt_path::AbsolutePath) -> String {
+        let path = env_dir.join(self.env_file_name()).to_string();
+        match self {
+            Self::Posix => format!(". \"{}\"", escape_posix_double_quoted_string(&path)),
+            Self::Fish => format!("source \"{}\"", escape_fish_double_quoted_string(&path)),
+            Self::Nu => format!("source \"{}\"", escape_nu_double_quoted_string(&path)),
+            Self::Powershell => format!(". '{}'", escape_powershell_single_quoted_string(&path)),
+        }
+    }
 }
 
 /// Execute the setup command.
@@ -1195,7 +1205,7 @@ async fn create_env_files() -> Result<(), Error> {
 /// Inspect the profiles setup writes, without changing them or using a saved flag.
 fn has_configured_profile(config: &vp_shared::EnvConfig) -> bool {
     let shell = config.vp_shell.as_deref().map(str::to_ascii_lowercase);
-    ALL_SHELL_PROFILES.iter().any(|profile| {
+    for profile in ALL_SHELL_PROFILES {
         let relevant = match shell.as_deref() {
             Some("zsh") => matches!(profile.root, ShellProfileRoot::Zsh),
             Some("bash") => matches!(profile.root, ShellProfileRoot::Home),
@@ -1205,51 +1215,54 @@ fn has_configured_profile(config: &vp_shared::EnvConfig) -> bool {
             _ => true,
         };
         if !relevant {
-            return false;
+            continue;
         }
         let path = resolve_profile_path(profile, &config.user_home);
-        let Ok(content) = std::fs::read_to_string(path) else { return false };
+        let Ok(content) = std::fs::read_to_string(path) else { continue };
         let env_file = config.dirs.config.join(profile.env_file);
         let absolute = env_file.to_string();
-        let relative = render_home_relative_path(env_file.as_path(), config.user_home.as_path());
+        let home_relative =
+            render_home_relative_path(env_file.as_path(), config.user_home.as_path());
         let escape = match profile.env_file {
             "env.fish" => escape_fish_double_quoted_string,
             "env.nu" => escape_nu_double_quoted_string,
             _ => escape_posix_double_quoted_string,
         };
-        let relative = if profile.env_file == "env.nu" {
-            escape(&render_nu_path_ref(&relative))
+        let escaped_relative = if profile.env_file == "env.nu" {
+            escape(&render_nu_path_ref(&home_relative))
         } else {
-            escape_home_relative_double_quoted_path(&relative, escape)
+            escape_home_relative_double_quoted_path(&home_relative, escape)
         };
         let mut arguments = vec![
             format!("\"{}\"", escape(&absolute)),
             format!("'{absolute}'"),
             absolute,
-            format!("\"{relative}\""),
-            format!("\"{}\"", relative.replacen("$HOME", "${HOME}", 1)),
-            render_nu_path_ref(&relative),
+            format!("\"{escaped_relative}\""),
+            format!("\"{}\"", escaped_relative.replacen("$HOME", "${HOME}", 1)),
+            render_nu_path_ref(&escaped_relative),
         ];
         if profile.env_file == "env.nu" {
-            let relative =
-                render_home_relative_path(env_file.as_path(), config.user_home.as_path());
-            arguments.push(format!("'{}'", render_nu_path_ref(&relative)));
+            arguments.push(format!("'{}'", render_nu_path_ref(&home_relative)));
         }
-        content.lines().any(|line| {
+        for line in content.lines() {
             let line = line.trim_start();
             let Some(argument) = line.strip_prefix(". ").or_else(|| line.strip_prefix("source "))
             else {
-                return false;
+                continue;
             };
-            arguments.iter().any(|expected| {
-                argument.trim_start().strip_prefix(expected).is_some_and(|rest| {
+            let argument = argument.trim_start();
+            if arguments.iter().any(|expected| {
+                argument.strip_prefix(expected).is_some_and(|rest| {
                     rest.is_empty()
                         || rest.starts_with(char::is_whitespace)
                         || rest.starts_with(';')
                 })
-            })
-        })
-    })
+            }) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Print instructions for sourcing the environment files and adding bin to `PATH`.
@@ -1260,36 +1273,21 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
     // SHELL describes the login shell, which may differ from this terminal.
     let shell = env.vp_shell.as_deref().and_then(|s| s.parse().ok());
     let commands = [
-        (Shell::Posix, "Bash/Zsh", "env"),
-        (Shell::Fish, "Fish", "env.fish"),
-        (Shell::NuShell, "Nushell", "env.nu"),
-        (Shell::PowerShell, "PowerShell", "env.ps1"),
+        (Shell::Posix, "Bash/Zsh", EnvShell::Posix),
+        (Shell::Fish, "Fish", EnvShell::Fish),
+        (Shell::NuShell, "Nushell", EnvShell::Nu),
+        (Shell::PowerShell, "PowerShell", EnvShell::Powershell),
     ];
     if shell == Some(Shell::Cmd) {
         // cmd has no sourceable environment file. A new terminal inherits the
         // persistent PATH written by setup.
         output::raw("  In cmd.exe, open a new terminal to load the updated PATH.");
     } else {
-        for (kind, label, file) in commands {
+        for (kind, label, env_shell) in commands {
             if shell.is_some_and(|s| s != kind) {
                 continue;
             }
-            let path = env_dir.join(file).to_string();
-            let command = match kind {
-                Shell::Posix => {
-                    format!(". \"{}\"", escape_posix_double_quoted_string(&path))
-                }
-                Shell::Fish => {
-                    format!("source \"{}\"", escape_fish_double_quoted_string(&path))
-                }
-                Shell::NuShell => {
-                    format!("source \"{}\"", escape_nu_double_quoted_string(&path))
-                }
-                Shell::PowerShell => {
-                    format!(". '{}'", escape_powershell_single_quoted_string(&path))
-                }
-                Shell::Cmd => unreachable!(),
-            };
+            let command = env_shell.source_command(env_dir);
             if shell.is_some() {
                 output::raw(&format!("  {command}"));
             } else {
@@ -1298,9 +1296,12 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
         }
     }
     output::raw("");
-    if (!cfg!(windows) || shell == Some(Shell::NuShell))
-        && !matches!(shell, Some(Shell::Cmd | Shell::PowerShell))
-    {
+    let supports_profile_check = match shell {
+        Some(Shell::Cmd | Shell::PowerShell) => false,
+        Some(Shell::NuShell) => true,
+        _ => !cfg!(windows),
+    };
+    if supports_profile_check {
         if has_configured_profile(&env) {
             output::raw("  Or open a new terminal to load your configured shell profile.");
         } else {
