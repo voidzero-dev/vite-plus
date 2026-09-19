@@ -5,7 +5,5 @@ serial = true
 local-registry = true
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vpx", "-s", "cowsay", "hello"], comment = "default to pnpm without prompting outside a project", continue-on-failure = true },
-  { argv = ["vp", "info", "vite@2.0.0", "version"], comment = "registry queries also run without prompting", continue-on-failure = true },
-  ["vpt", "stat-file", "package.json", "--assert", "missing"],
+  { argv = ["vpx", "-s", "cowsay", "hello"], comment = "should work without package.json", continue-on-failure = true },
 ]

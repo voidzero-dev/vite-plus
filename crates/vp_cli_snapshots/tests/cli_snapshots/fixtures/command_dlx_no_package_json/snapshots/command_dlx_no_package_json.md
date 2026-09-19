@@ -1,6 +1,6 @@
-# command_vpx_no_package_json
+# command_dlx_no_package_json
 
-## `vpx -s cowsay hello`
+## `vp dlx -s cowsay hello`
 
 should work without package.json
 

@@ -195,34 +195,6 @@ pub enum ManagedGlobalCommand<'a> {
 }
 
 impl PackageManagerCommand {
-    /// Ask before choosing a manager for operations that modify a project or publish it.
-    pub(crate) fn should_select_package_manager(&self) -> bool {
-        match self {
-            Self::Install(_)
-            | Self::Add(_)
-            | Self::Remove(_)
-            | Self::Update(_)
-            | Self::Dedupe(_)
-            | Self::Link(_)
-            | Self::Unlink(_) => true,
-            Self::Pm(command) => match command {
-                PmCommand::Ci(_)
-                | PmCommand::ApproveBuilds(_)
-                | PmCommand::Prune(_)
-                | PmCommand::Patch(_)
-                | PmCommand::PatchCommit(_)
-                | PmCommand::Pack(_)
-                | PmCommand::Publish(_)
-                | PmCommand::Rebuild(_)
-                | PmCommand::Stage(StageCommand::Publish { .. }) => true,
-                PmCommand::Audit(args) => args.fix,
-                PmCommand::Version(args) => args.new_version.is_some(),
-                _ => false,
-            },
-            _ => false,
-        }
-    }
-
     /// Build a `dlx` command for callers that do not use the clap parser.
     #[must_use]
     pub fn dlx(package: Vec<String>, shell_mode: bool, silent: bool, args: Vec<String>) -> Self {

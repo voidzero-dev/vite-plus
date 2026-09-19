@@ -62,12 +62,10 @@ async fn dispatch_with_manager(
     let render_diagnostics = command.should_render_diagnostics();
     let manager = match source {
         ManagerSource::Detect => {
-            let builder = PackageManager::builder(cwd);
-            if command.should_select_package_manager() {
-                builder.build_with_default().await?
-            } else {
-                builder.package_manager_type(PackageManagerType::Pnpm).build().await?
-            }
+            PackageManager::builder(cwd)
+                .package_manager_type(PackageManagerType::Pnpm)
+                .build()
+                .await?
         }
         ManagerSource::Environment(package_manager) => {
             build_selected_package_manager(package_manager).await?
