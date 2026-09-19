@@ -11,7 +11,6 @@ mod cli;
 mod config;
 mod dispatch;
 mod error;
-mod helpers;
 mod package_manager;
 mod request;
 pub(crate) mod resolution;

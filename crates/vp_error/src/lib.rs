@@ -74,9 +74,6 @@ pub enum Error {
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
 
-    #[error("User cancelled by Ctrl+C")]
-    UserCancelled,
-
     #[error("Hash mismatch: expected {expected}, got {actual}")]
     HashMismatch { expected: Str, actual: Str },
 
