@@ -3,9 +3,11 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
+import { supportsCatalog } from '../../migration/migrator.ts';
 import type { WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import { templatesDir } from '../../utils/path.ts';
+import { readYamlFile } from '../../utils/yaml.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { copyDir } from '../utils.ts';
 import type { BuiltinTemplateInfo } from './types.ts';
@@ -40,6 +42,25 @@ export async function executeGeneratorScaffold(
   fs.chmodSync(path.join(fullPath, 'bin/index.ts'), '755');
   editJsonFile(path.join(fullPath, 'package.json'), (pkg) => {
     pkg.name = templateInfo.packageName;
+    if (
+      !supportsCatalog(
+        workspaceInfo.packageManager,
+        workspaceInfo.downloadPackageManager.version,
+        workspaceInfo.isMonorepo,
+      )
+    ) {
+      // The bundled generator uses the monorepo template's catalog. Managers
+      // without catalog support need the same dependency ranges inlined.
+      const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml')) as {
+        catalog: Record<string, string>;
+      };
+      const devDependencies = pkg.devDependencies as Record<string, string>;
+      for (const [name, spec] of Object.entries(devDependencies)) {
+        if (spec === 'catalog:' && catalog[name]) {
+          devDependencies[name] = catalog[name];
+        }
+      }
+    }
     if (description) {
       pkg.description = description;
     }
