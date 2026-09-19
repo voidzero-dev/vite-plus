@@ -383,13 +383,26 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
  * A substring scan conservatively retains references the rewriter leaves alone,
  * including require calls, type references, and strings.
  */
-export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): boolean {
+export function sourceTreeReferencesOxlintPluginsPackage(
+  projectPath: string,
+  peerDependencyNames: ReadonlyMap<string, ReadonlySet<string>> = collectOxlintPeerDependencyNames(
+    projectPath,
+  ),
+): boolean {
   return sourceTreeMatches(projectPath, (content) => content.includes(OXLINT_PLUGINS_PACKAGE), {
     crossPackageBoundaries: true,
     includePackageReferences: true,
     // Node can execute these scripts without a shebang or executable bit.
     includeExtensionless: true,
-    matchesPackage: projectListsRequiredOxlintPluginsPeer,
+    // Nested fixtures and templates can declare dependencies that this workspace
+    // never installs. Their source still counts, but unknown peers do not.
+    matchesPackage: (dir, pkg) =>
+      projectListsRequiredOxlintPluginsPeer(
+        dir,
+        pkg,
+        peerDependencyNames.has(dir),
+        peerDependencyNames.get(dir),
+      ),
     skipDirs: OXLINT_RETENTION_SKIP_DIRS,
   });
 }
@@ -399,6 +412,8 @@ export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): b
 export function projectListsRequiredOxlintPluginsPeer(
   projectPath: string,
   pkg: DependencyBag,
+  retainUnknownPeers = true,
+  originalDependencyNames?: ReadonlySet<string>,
 ): boolean {
   const dependencyNames = new Set([
     ...Object.keys(pkg.dependencies ?? {}),
@@ -410,9 +425,15 @@ export function projectListsRequiredOxlintPluginsPeer(
   dependencyNames.delete(VITE_PLUS_NAME);
   dependencyNames.delete('vite');
   for (const name of dependencyNames) {
+    if (originalDependencyNames && !originalDependencyNames.has(name)) {
+      continue;
+    }
     const metadata = detectPackageMetadata(projectPath, name);
     if (!metadata) {
-      return true;
+      if (retainUnknownPeers) {
+        return true;
+      }
+      continue;
     }
     try {
       const installedPkg = readJsonFile(path.join(metadata.path, 'package.json')) as {
@@ -427,10 +448,34 @@ export function projectListsRequiredOxlintPluginsPeer(
       }
     } catch {
       // An unknown peer contract is not evidence that the provider is unused.
-      return true;
+      if (retainUnknownPeers) {
+        return true;
+      }
     }
   }
   return false;
+}
+
+// Capture the original dependency names before migration injects new toolchain
+// packages. Check peers only for original dependencies that survive migration;
+// newly injected packages are not installed until after source cleanup.
+export function collectOxlintPeerDependencyNames(
+  rootDir: string,
+  packages?: readonly { path: string }[],
+): Map<string, ReadonlySet<string>> {
+  const names = new Map<string, ReadonlySet<string>>();
+  for (const dir of [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))]) {
+    const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
+    names.set(
+      dir,
+      new Set([
+        ...Object.keys(pkg?.dependencies ?? {}),
+        ...Object.keys(pkg?.devDependencies ?? {}),
+        ...Object.keys(pkg?.optionalDependencies ?? {}),
+      ]),
+    );
+  }
+  return names;
 }
 
 /**
@@ -443,6 +488,10 @@ export function projectListsRequiredOxlintPluginsPeer(
 export function dropDeadOxlintPluginsDependency(
   rootDir: string,
   packages?: readonly { path: string }[],
+  peerDependencyNames: ReadonlyMap<string, ReadonlySet<string>> = collectOxlintPeerDependencyNames(
+    rootDir,
+    packages,
+  ),
 ): boolean {
   let changed = false;
   const dirs = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
@@ -452,7 +501,10 @@ export function dropDeadOxlintPluginsDependency(
     if (pkg?.devDependencies?.[OXLINT_PLUGINS_PACKAGE] === undefined) {
       continue;
     }
-    if (packageOwnsOxlintApi(pkg) || sourceTreeReferencesOxlintPluginsPackage(dir)) {
+    if (
+      packageOwnsOxlintApi(pkg) ||
+      sourceTreeReferencesOxlintPluginsPackage(dir, peerDependencyNames)
+    ) {
       continue;
     }
     editJsonFile<{

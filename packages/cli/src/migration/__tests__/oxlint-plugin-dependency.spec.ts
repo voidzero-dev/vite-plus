@@ -4,13 +4,15 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { PackageManager } from '../../types/index.ts';
+import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import {
   collectOxlintOwnerDirs,
   dropDeadOxlintPluginsDependency,
   finalizeCoreMigrationForExistingVitePlus,
   packageOwnsOxlintApi,
   rewritePackageJson,
+  rewriteMonorepo,
+  rewriteStandaloneProject,
   sourceTreeReferencesOxlintPluginsPackage,
   usesVitestBrowserMode,
 } from '../migrator.ts';
@@ -61,6 +63,70 @@ describe('Oxlint plugin dependency cleanup', () => {
         });
       }
       expect(finalizeCoreMigrationForExistingVitePlus(workspace, true).dependencies).toBe(false);
+    },
+  );
+
+  it.each([false, true])(
+    'cleans up before newly injected browser packages are installed (monorepo: %s)',
+    (isMonorepo) => {
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      fs.writeFileSync(
+        packageJsonPath,
+        JSON.stringify({
+          name: 'project',
+          devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
+        }),
+      );
+      const browserProjectPath = isMonorepo
+        ? path.join(projectPath, 'packages', 'app')
+        : projectPath;
+      if (isMonorepo) {
+        fs.mkdirSync(browserProjectPath, { recursive: true });
+        fs.writeFileSync(path.join(browserProjectPath, 'package.json'), '{"name":"app"}');
+        fs.writeFileSync(
+          path.join(projectPath, 'pnpm-workspace.yaml'),
+          'packages:\n  - packages/*\n',
+        );
+      }
+      fs.writeFileSync(
+        path.join(browserProjectPath, 'browser.ts'),
+        "import { playwright } from '@vitest/browser-playwright';",
+      );
+      fs.writeFileSync(
+        path.join(projectPath, 'plugin.ts'),
+        "import { defineRule } from '@oxlint/plugins';",
+      );
+      const workspace: WorkspaceInfo = {
+        rootDir: projectPath,
+        isMonorepo,
+        monorepoScope: '',
+        workspacePatterns: isMonorepo ? ['packages/*'] : [],
+        parentDirs: [],
+        packages: isMonorepo ? [{ name: 'app', path: 'packages/app' }] : [],
+        packageManager: PackageManager.pnpm,
+        packageManagerVersion: '10.33.0',
+        downloadPackageManager: {
+          name: PackageManager.pnpm,
+          packageName: 'pnpm',
+          version: '10.33.0',
+          installDir: projectPath,
+          binPrefix: projectPath,
+        },
+      };
+
+      if (isMonorepo) {
+        rewriteMonorepo(workspace, true, true);
+      } else {
+        rewriteStandaloneProject(projectPath, workspace, true, true);
+      }
+
+      expect(
+        JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).devDependencies,
+      ).not.toHaveProperty('@oxlint/plugins');
+      expect(
+        JSON.parse(fs.readFileSync(path.join(browserProjectPath, 'package.json'), 'utf8'))
+          .devDependencies,
+      ).toHaveProperty('@vitest/browser-playwright');
     },
   );
 
@@ -186,34 +252,103 @@ describe('Oxlint plugin dependency cleanup', () => {
     },
   );
 
-  it('retains a root peer provider for a plugin used by a nested package', () => {
-    const pkg = { devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' } };
-    const packageJsonPath = path.join(projectPath, 'package.json');
-    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
-    const appPath = path.join(projectPath, 'packages', 'app');
-    fs.mkdirSync(appPath, { recursive: true });
-    fs.writeFileSync(
-      path.join(appPath, 'package.json'),
-      JSON.stringify({ dependencies: { 'review-oxlint-plugin': '1.0.0' } }),
-    );
-    const pluginPath = path.join(appPath, 'node_modules', 'review-oxlint-plugin');
-    fs.mkdirSync(pluginPath, { recursive: true });
-    fs.writeFileSync(
-      path.join(pluginPath, 'package.json'),
-      JSON.stringify({
-        name: 'review-oxlint-plugin',
-        peerDependencies: { '@oxlint/plugins': '^1.79.0' },
-      }),
-    );
+  it.each([false, true])(
+    'retains a root peer provider for a nested plugin (workspace: %s)',
+    (isWorkspacePackage) => {
+      const pkg = { devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' } };
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+      const appPath = path.join(projectPath, 'packages', 'app');
+      fs.mkdirSync(appPath, { recursive: true });
+      fs.writeFileSync(
+        path.join(appPath, 'package.json'),
+        JSON.stringify({ dependencies: { 'review-oxlint-plugin': '1.0.0' } }),
+      );
+      const pluginPath = path.join(appPath, 'node_modules', 'review-oxlint-plugin');
+      fs.mkdirSync(pluginPath, { recursive: true });
+      fs.writeFileSync(
+        path.join(pluginPath, 'package.json'),
+        JSON.stringify({
+          name: 'review-oxlint-plugin',
+          peerDependencies: { '@oxlint/plugins': '^1.79.0' },
+        }),
+      );
 
-    const result = finalizeCoreMigrationForExistingVitePlus(
-      { rootDir: projectPath, packages: [{ name: 'app', path: 'packages/app' }] },
-      true,
-    );
+      const result = finalizeCoreMigrationForExistingVitePlus(
+        {
+          rootDir: projectPath,
+          packages: isWorkspacePackage ? [{ name: 'app', path: 'packages/app' }] : undefined,
+        },
+        true,
+      );
 
-    expect(result.dependencies).toBe(false);
-    expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
-  });
+      expect(result.dependencies).toBe(false);
+      expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+    },
+  );
+
+  it.each([{ '.': { import: './index.js' } }, { '.': './dist/index.js' }])(
+    'reads installed peer metadata despite inaccessible exports %j',
+    (exports) => {
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      fs.writeFileSync(
+        packageJsonPath,
+        JSON.stringify({
+          devDependencies: {
+            'vite-plus': 'latest',
+            '@oxlint/plugins': '^1.79.0',
+            'review-oxlint-plugin': '1.0.0',
+          },
+        }),
+      );
+      const pluginPath = path.join(projectPath, 'node_modules', 'review-oxlint-plugin');
+      fs.mkdirSync(pluginPath, { recursive: true });
+      fs.writeFileSync(
+        path.join(pluginPath, 'package.json'),
+        JSON.stringify({ name: 'review-oxlint-plugin', version: '1.0.0', exports }),
+      );
+      fs.writeFileSync(path.join(pluginPath, 'index.js'), 'export default {};');
+
+      const result = finalizeCoreMigrationForExistingVitePlus({ rootDir: projectPath }, true);
+
+      expect(result.dependencies).toBe(true);
+      expect(
+        JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).devDependencies['@oxlint/plugins'],
+      ).toBeUndefined();
+    },
+  );
+
+  it.each([false, true])(
+    'only retains unknown nested peer contracts for workspace packages (workspace: %s)',
+    (isWorkspacePackage) => {
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      fs.writeFileSync(
+        packageJsonPath,
+        JSON.stringify({
+          devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
+        }),
+      );
+      const nestedPath = path.join(projectPath, 'nested');
+      fs.mkdirSync(nestedPath);
+      fs.writeFileSync(
+        path.join(nestedPath, 'package.json'),
+        JSON.stringify({ name: 'nested', devDependencies: { 'uninstalled-plugin': '1.0.0' } }),
+      );
+
+      const result = finalizeCoreMigrationForExistingVitePlus(
+        {
+          rootDir: projectPath,
+          packages: isWorkspacePackage ? [{ name: 'nested', path: 'nested' }] : undefined,
+        },
+        true,
+      );
+
+      expect(result.dependencies).toBe(!isWorkspacePackage);
+      expect(
+        JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).devDependencies['@oxlint/plugins'],
+      ).toBe(isWorkspacePackage ? '^1.79.0' : undefined);
+    },
+  );
 
   it.each(['#!/usr/bin/env node\n', ''])(
     'retains an extensionless Node script with prefix %j',
