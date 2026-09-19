@@ -16,7 +16,7 @@ import {
   vitestV5NeedsMigration,
 } from '../migrator.ts';
 import { parseSource } from '../vitest-v5/ast.ts';
-import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
+import { literalTestCommands, migrateVitestV5Command } from '../vitest-v5/commands.ts';
 import { migrateVitestV5Config } from '../vitest-v5/config.ts';
 import { migrateVitestV5Source } from '../vitest-v5/source.ts';
 
@@ -55,6 +55,253 @@ function source(input: string, options = v4) {
 }
 
 describe('Vitest v5 diagnostic scope', () => {
+  it.each(['export default { plugins: [] };', 'export default { test: { clearMocks: false } };'])(
+    'resolves Vue-style globals with base %s',
+    (baseConfig) => {
+      const root = project({
+        'package.json': JSON.stringify({
+          devDependencies: { vitest: '4.1.11' },
+          scripts: {
+            test: 'vp test',
+            unit: 'vp test --project unit*',
+            browser: 'node build.js && VAPOR_E2E=1 vp test --project browser',
+          },
+        }),
+        'vite.config.ts': `import { configDefaults, defineConfig } from 'vite-plus';
+export default defineConfig({ test: {
+  globals: true,
+  setupFiles: 'scripts/setup.ts',
+  onConsoleLog(log) { return !log.includes('quiet'); },
+  projects: [
+    { extends: true, test: { name: 'unit', include: ['unit/*.test.ts'], exclude: [...configDefaults.exclude] } },
+    ...(process.env.VAPOR_E2E ? [{ extends: './browser/vite.config.ts', root: './browser', test: { name: 'browser', globals: true } }] : []),
+  ],
+} });`,
+        'browser/vite.config.ts': baseConfig,
+        'unit/works.test.ts': `test.sequential('works', () => {});`,
+        'scripts/setup.ts': `beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });`,
+        'other/runner.test.ts': `expect(() => {}).toThrow('');`,
+      });
+      const plan = planProject(root);
+      expect(plan.findings.filter(({ code }) => code === 'global-api-ownership')).toEqual([]);
+      applyVitestV5Migration(plan);
+      expect(fs.readFileSync(path.join(root, 'unit/works.test.ts'), 'utf8')).toContain(
+        'concurrent: false',
+      );
+      expect(fs.readFileSync(path.join(root, 'scripts/setup.ts'), 'utf8')).toContain(
+        'beforeEach(async () => { await expect',
+      );
+      expect(fs.readFileSync(path.join(root, 'other/runner.test.ts'), 'utf8')).toBe(
+        `expect(() => {}).toThrow('');`,
+      );
+      expect(fs.readFileSync(path.join(root, 'vite.config.ts'), 'utf8')).toContain(
+        'clearMocks: false',
+      );
+      expect(
+        finishVitestV5Migration(plan).filter(({ code }) => code === 'global-api-ownership'),
+      ).toEqual([]);
+    },
+  );
+
+  it('does not inherit implicit include patterns into an explicit project include', () => {
+    const input = `expect(() => {}).toThrow('');`;
+    const root = project({
+      'vitest.config.mjs': `export default { test: { globals: true, projects: [{ extends: true, test: { include: ['unit/*.test.js'] } }] } };`,
+      'unit/right.test.js': input,
+      'other/wrong.test.js': input,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    expect(plan.changes.find(({ file }) => file.endsWith('right.test.js'))?.after).toContain(
+      'toThrow(/^$/)',
+    );
+    expect(plan.changes.some(({ file }) => file.endsWith('wrong.test.js'))).toBe(false);
+  });
+
+  it('reports unresolved ownership only when it prevents a source migration', () => {
+    const ordinary = `test('works', () => { expect(1).toBe(1); });`;
+    const root = project({
+      'vitest.config.mjs': 'export default configAtRuntime;',
+      'ordinary.test.js': ordinary,
+      'affected.test.js': `test.sequential('one', () => {}); test.sequential('two', () => {});`,
+      'imported.test.js': `import { test } from 'vitest'; test.sequential('works', () => {});`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings.filter(({ code }) => code === 'global-api-ownership')).toEqual([
+      expect.objectContaining({ file: path.join(root, 'affected.test.js') }),
+    ]);
+    expect(
+      plan.changes.some(
+        ({ file }) => file.endsWith('ordinary.test.js') || file.endsWith('affected.test.js'),
+      ),
+    ).toBe(false);
+    expect(plan.changes.find(({ file }) => file.endsWith('imported.test.js'))?.after).toContain(
+      'concurrent: false',
+    );
+  });
+
+  it('limits project-filtered ownership to the selected projects', () => {
+    const input = `test.sequential('works', () => {});`;
+    const root = project({
+      'package.json': JSON.stringify({
+        devDependencies: { vitest: '4.1.11' },
+        scripts: { test: 'vp test --project UNIT* --project=!unit-skip' },
+      }),
+      'vitest.config.mjs': `export default { test: { globals: true, projects: [
+        { extends: true, test: { name: 'unit', include: ['unit/*.test.js'] } },
+        { extends: true, test: { name: 'unit-skip', include: ['skip/*.test.js'] } },
+        { extends: false, test: { name: 'other', globals: false, include: ['unit/*.test.js', 'other/*.test.js'] } },
+      ] } };`,
+      'unit/right.test.js': input,
+      'skip/wrong.test.js': input,
+      'other/wrong.test.js': input,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    expect(plan.changes.find(({ file }) => file.endsWith('right.test.js'))?.after).toContain(
+      'concurrent: false',
+    );
+    expect(plan.changes.some(({ file }) => file.endsWith('wrong.test.js'))).toBe(false);
+  });
+
+  it.each([
+    'cd child && vitest',
+    'source env.sh && vitest',
+    'export MODE=unit; vitest',
+    'vitest --config "$CONFIG"',
+    'MODE=$(node env.js) vitest',
+    'vitest | tee result.txt',
+    'echo done # comment && vitest',
+  ])('keeps stateful or dynamic shell commands unresolved: %s', (command) => {
+    expect(literalTestCommands(command)).toBeUndefined();
+  });
+
+  it('reads literal command lists without treating quoted operators as separators', () => {
+    expect(
+      literalTestCommands(
+        `node build.js && MODE='unit && extra' pnpm exec vitest --project 'unit*'; vp test --project other`,
+      ),
+    ).toEqual([
+      ['node', 'build.js'],
+      ['pnpm', 'exec', 'vitest', '--project', 'unit*'],
+      ['vp', 'test', '--project', 'other'],
+    ]);
+  });
+
+  it.each([
+    [`import { configDefaults as defaults } from 'vitest/config';`, 'defaults'],
+    [`import * as config from 'vite-plus';`, 'config.configDefaults'],
+  ])('recognizes imported config defaults: %s', (imports, defaults) => {
+    const root = project({
+      'vitest.config.mjs': `${imports} export default { test: { globals: true, include: ${defaults}.include, exclude: [...${defaults}.exclude] } };`,
+      'unit.test.js': `test.sequential('works', () => {});`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toEqual([]);
+    expect(plan.changes.find(({ file }) => file.endsWith('unit.test.js'))?.after).toContain(
+      'concurrent: false',
+    );
+  });
+
+  it('does not treat a local configDefaults lookalike as imported defaults', () => {
+    const root = project({
+      'vitest.config.mjs': `const configDefaults = getConfig(); export default { test: { globals: true, exclude: [...configDefaults.exclude] } };`,
+      'unit.test.js': `test.sequential('works', () => {});`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({
+        file: path.join(root, 'unit.test.js'),
+        code: 'global-api-ownership',
+      }),
+    );
+    expect(plan.changes.some(({ file }) => file.endsWith('unit.test.js'))).toBe(false);
+  });
+
+  it.each([`get globals() { return true; }`, `...runtimeOptions`])(
+    'does not evaluate dynamic test properties: %s',
+    (property) => {
+      const root = project({
+        'vitest.config.mjs': `export default { test: { ${property} } };`,
+        'unit.test.js': `test.sequential('works', () => {});`,
+      });
+      const plan = planProject(root);
+      expect(plan.findings).toContainEqual(
+        expect.objectContaining({
+          file: path.join(root, 'unit.test.js'),
+          code: 'global-api-ownership',
+        }),
+      );
+      expect(plan.changes.some(({ file }) => file.endsWith('unit.test.js'))).toBe(false);
+    },
+  );
+
+  it('preserves conflicts between both branches of a conditional project list', () => {
+    const root = project({
+      'vitest.config.mjs': `export default { test: { projects: [...(process.env.UNIT ? [{ test: { globals: true } }] : [{ test: { globals: false } }])] } };`,
+      'unit.test.js': `test.sequential('works', () => {});`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings.filter(({ code }) => code === 'global-api-ownership')).toEqual([
+      expect.objectContaining({ file: path.join(root, 'unit.test.js') }),
+    ]);
+    expect(plan.changes.some(({ file }) => file.endsWith('unit.test.js'))).toBe(false);
+  });
+
+  it('retains review for external inheritance that can reach outside the inline root', () => {
+    const root = project({
+      'vitest.config.mjs': `export default { test: { projects: [
+        { test: { globals: true, setupFiles: './setup.js' } },
+        { extends: './base.mjs', root: './browser', test: { name: 'browser' } },
+      ] } };`,
+      'base.mjs': `export default { test: { globals: false, setupFiles: '../setup.js' } };`,
+      'setup.js': `beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({ file: path.join(root, 'setup.js'), code: 'global-api-ownership' }),
+    );
+    expect(plan.changes.some(({ file }) => file.endsWith('setup.js'))).toBe(false);
+  });
+
+  it('does not silently skip selection by a browser instance name', () => {
+    const root = project({
+      'package.json': JSON.stringify({
+        devDependencies: { vitest: '4.1.11' },
+        scripts: { test: 'vitest --project "browser (chromium)"' },
+      }),
+      'vitest.config.mjs': `export default { test: { projects: [{ test: { name: 'browser', globals: true, browser: { enabled: true, instances: [{ browser: 'chromium' }] } } }] } };`,
+      'unit.test.js': `test.sequential('works', () => {});`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({
+        file: path.join(root, 'unit.test.js'),
+        code: 'global-api-ownership',
+      }),
+    );
+    expect(plan.changes.some(({ file }) => file.endsWith('unit.test.js'))).toBe(false);
+  });
+
+  it.each([
+    ['scripts/setup.js', { scripts: '^1.0.0' }],
+    ['scripts/setup', {}],
+  ])('does not guess a local setup path for %s', (setup, dependencies) => {
+    const root = project({
+      'package.json': JSON.stringify({ devDependencies: { vitest: '4.1.11', ...dependencies } }),
+      'vitest.config.mjs': `export default { test: { globals: true, setupFiles: '${setup}' } };`,
+      'scripts/setup.js': `beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });`,
+    });
+    const plan = planProject(root);
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({
+        file: path.join(root, 'vitest.config.mjs'),
+        code: 'global-api-ownership',
+      }),
+    );
+    expect(plan.changes.some(({ file }) => file.endsWith('setup.js'))).toBe(false);
+  });
+
   it.each(['4.1.11', '5.0.1'])('migrates legacy Vite+ entry points from %s', (version) => {
     const input = `import { BaseCoverageProvider } from 'vite-plus/test/coverage';
 export { DefaultReporter } from 'vite-plus/test/reporters';

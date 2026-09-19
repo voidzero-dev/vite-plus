@@ -11,11 +11,13 @@ import {
   isModuleExports,
   isString,
   objectProperty,
+  memberName,
+  projectElements,
   staticObject,
   type SourceOptions,
   type VitestV5Finding,
 } from './ast.ts';
-import { literalArgv, vitestCommandArgsStart } from './commands.ts';
+import { literalTestCommands, vitestCommandArgsStart } from './commands.ts';
 
 interface ConfigEntry {
   file?: string;
@@ -24,6 +26,7 @@ interface ConfigEntry {
   rootOverride?: string;
   dirOverride?: string;
   cwd?: string;
+  projects?: string[];
 }
 
 interface TestScope {
@@ -48,8 +51,10 @@ export type VitestV5TestMode = Pick<SourceOptions, 'browser' | 'globals' | 'revi
 };
 
 const DEFAULT_TEST_INCLUDE = ['**/*.{test,spec}.?(c|m)[jt]s?(x)'];
+const DEFAULT_TEST_EXCLUDE = ['**/node_modules/**', '**/.git/**'];
 const DEFAULT_BENCHMARK_INCLUDE = ['**/*.{bench,benchmark}.?(c|m)[jt]s?(x)'];
 const DEFAULT_BENCHMARK_EXCLUDE = ['**/node_modules/**', '**/.git/**'];
+const TEST_CONFIG_SOURCES = new Set(['vitest/config', 'vite-plus/test/config', 'vite-plus']);
 // Match Vitest's discovery order, including precedence across extensions.
 const CONFIG_NAMES = ['vitest.config', 'vite.config'].flatMap((name) =>
   ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'].map((extension) => name + extension),
@@ -79,59 +84,91 @@ export function findVitestV5ConfigEntries(
       continue;
     }
     for (const command of commands) {
-      const argv = literalArgv(command)?.map((token) => token.value);
-      const start = argv ? vitestCommandArgsStart(argv) : -1;
-      if (!argv || start < 0) {
+      const invocations = literalTestCommands(command)?.filter(
+        (argv) => vitestCommandArgsStart(argv) >= 0,
+      );
+      if (!invocations?.length) {
         entries.push({ root, uncertain: true });
         continue;
       }
-      let config: string | undefined;
-      let rootOverride: string | undefined;
-      let dirOverride: string | undefined;
-      let uncertain = false;
-      for (let index = start; index < argv.length && argv[index] !== '--'; index++) {
-        const arg = argv[index];
-        const option = arg.split('=')[0];
-        if (['--config', '-c', '--root', '-r', '--dir'].includes(option)) {
-          const value = arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : argv[++index];
-          if (!value || value.startsWith('-')) {
+      for (const argv of invocations) {
+        const start = vitestCommandArgsStart(argv);
+        let config: string | undefined;
+        let rootOverride: string | undefined;
+        let dirOverride: string | undefined;
+        let uncertain = false;
+        const projects: string[] = [];
+        for (let index = start; index < argv.length && argv[index] !== '--'; index++) {
+          const arg = argv[index];
+          const option = arg.split('=')[0];
+          if (['--config', '-c', '--root', '-r', '--dir', '--project', '-p'].includes(option)) {
+            const value = arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : argv[++index];
+            if (!value || value.startsWith('-')) {
+              uncertain = true;
+            } else if (option === '--project' || option === '-p') {
+              projects.push(value);
+            } else if (option === '--config' || option === '-c') {
+              config = value;
+            } else if (option === '--dir') {
+              dirOverride = path.resolve(root, value);
+            } else {
+              rootOverride = path.resolve(root, value);
+            }
+          } else if (
+            /^--(?:no-)?(?:globals|include|exclude|workspace|setupFiles|benchmark\.(?:include|exclude|includeSource))(?:[.=]|$)/.test(
+              arg,
+            )
+          ) {
+            // These flags change ownership. Preserve globals until the command's
+            // effective project options can be determined, rather than guessing.
             uncertain = true;
-          } else if (option === '--config' || option === '-c') {
-            config = value;
-          } else if (option === '--dir') {
-            dirOverride = path.resolve(root, value);
-          } else {
-            rootOverride = path.resolve(root, value);
           }
-        } else if (
-          /^--(?:no-)?(?:globals|include|exclude|project|workspace|setupFiles|benchmark\.(?:include|exclude|includeSource))(?:[.=]|$)/.test(
-            arg,
-          )
-        ) {
-          // These flags change ownership. Preserve globals until the command's
-          // effective project options can be determined, rather than guessing.
-          uncertain = true;
         }
+        const configRoot = rootOverride ?? root;
+        const file = config ? path.resolve(configRoot, config) : defaultConfig(sources, configRoot);
+        entries.push({
+          root,
+          file,
+          rootOverride,
+          dirOverride,
+          projects,
+          uncertain: uncertain || (!!config && !sources.has(file!)),
+        });
       }
-      const configRoot = rootOverride ?? root;
-      const file = config ? path.resolve(configRoot, config) : defaultConfig(sources, configRoot);
-      entries.push({
-        root,
-        file,
-        rootOverride,
-        dirOverride,
-        uncertain: uncertain || (!!config && !sources.has(file!)),
-      });
     }
   }
   return entries;
 }
 
-function staticPatterns(node: t.Node | undefined): string[] | undefined {
-  if (node?.type !== 'ArrayExpression' || !node.elements.every(isString)) {
+function staticPatterns(node: t.Node | undefined, editor: SourceEditor): string[] | undefined {
+  if (
+    node?.type === 'MemberExpression' &&
+    importedName(editor, node.object, TEST_CONFIG_SOURCES) === 'configDefaults'
+  ) {
+    if (memberName(node) === 'include') {
+      return DEFAULT_TEST_INCLUDE;
+    }
+    if (memberName(node) === 'exclude') {
+      return DEFAULT_TEST_EXCLUDE;
+    }
+  }
+  if (node?.type !== 'ArrayExpression') {
     return undefined;
   }
-  const patterns = node.elements.map((entry) => entry.value);
+  const patterns: string[] = [];
+  for (const entry of node.elements) {
+    if (isString(entry)) {
+      patterns.push(entry.value);
+    } else if (entry?.type === 'SpreadElement') {
+      const values = staticPatterns(entry.argument, editor);
+      if (!values) {
+        return undefined;
+      }
+      patterns.push(...values);
+    } else {
+      return undefined;
+    }
+  }
   return patterns.some((pattern) => pattern.startsWith('!')) ? undefined : patterns;
 }
 
@@ -148,6 +185,7 @@ function booleanOption(
 function benchmarkPatterns(
   node: t.Node | undefined,
   inherited: TestScope['benchmark'],
+  editor: SourceEditor,
 ): TestScope['benchmark'] {
   if (!inherited || (node && !staticObject(node))) {
     return undefined;
@@ -156,7 +194,7 @@ function benchmarkPatterns(
   for (const key of ['include', 'exclude', 'includeSource'] as const) {
     const value = node && objectProperty(node, key)?.value;
     if (value) {
-      const resolved = staticPatterns(value);
+      const resolved = staticPatterns(value, editor);
       if (!resolved) {
         return undefined;
       }
@@ -177,6 +215,95 @@ function insideDirectory(file: string, directory: string): boolean {
   return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
+function matchesProject(name: string, pattern: string): boolean {
+  // Vitest supports only '*', case-insensitively; other glob syntax is literal.
+  const expression = pattern
+    .split('*')
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${expression}$`, 'i').test(name);
+}
+
+function projectSelected(
+  test: t.ObjectExpression | undefined,
+  filters: string[],
+  inheritedBrowser: boolean | undefined,
+): boolean | undefined {
+  if (!filters.length) {
+    return true;
+  }
+  const name = test && objectProperty(test, 'name')?.value;
+  if (!isString(name)) {
+    return undefined;
+  }
+  const positives = filters.filter((pattern) => !pattern.startsWith('!'));
+  const excluded = (name: string) =>
+    filters.some((pattern) => pattern.startsWith('!') && matchesProject(name, pattern.slice(1)));
+  if (excluded(name.value)) {
+    return false;
+  }
+  if (!positives.length || positives.some((pattern) => matchesProject(name.value, pattern))) {
+    return true;
+  }
+  const browser = test && objectProperty(test, 'browser')?.value;
+  if (!browser) {
+    return inheritedBrowser === false ? false : undefined;
+  }
+  if (!staticObject(browser)) {
+    return undefined;
+  }
+  const enabled = objectProperty(browser, 'enabled')?.value;
+  if (isBoolean(enabled) && !enabled.value) {
+    return false;
+  }
+  const instances = objectProperty(browser, 'instances')?.value;
+  if (instances?.type !== 'ArrayExpression') {
+    return undefined;
+  }
+  for (const instance of instances.elements) {
+    if (!staticObject(instance)) {
+      return undefined;
+    }
+    const explicitName = objectProperty(instance, 'name')?.value;
+    const browserName = objectProperty(instance, 'browser')?.value;
+    const instanceName = isString(explicitName)
+      ? explicitName.value
+      : !explicitName && isString(browserName)
+        ? name.value
+          ? `${name.value} (${browserName.value})`
+          : browserName.value
+        : undefined;
+    // Instance-specific overrides need review; never silently skip an instance
+    // selected by its name rather than by its parent project name.
+    if (
+      !instanceName ||
+      (!excluded(instanceName) &&
+        positives.some((pattern) => matchesProject(instanceName, pattern)))
+    ) {
+      return undefined;
+    }
+  }
+  return false;
+}
+
+function exportedConfig(editor: SourceEditor, node: t.Node | undefined): t.Node | undefined {
+  if (node?.type === 'Identifier') {
+    const binding = editor.binding(node);
+    node =
+      binding?.constant && binding.declaration.type === 'VariableDeclarator'
+        ? (binding.declaration.init ?? undefined)
+        : undefined;
+  }
+  if (node?.type === 'CallExpression') {
+    node = ['defineConfig', 'defineProject'].includes(
+      importedName(editor, node.callee, CONFIG_SOURCES) ?? '',
+    )
+      ? node.arguments[0]
+      : undefined;
+  }
+  return node;
+}
+
 /** Vitest resolves local setup entries through local-pkg/mlly with import
  * conditions, then falls back to the literal path. Do not guess TypeScript
  * extensions or package exports that cannot be resolved from scanned files. */
@@ -185,10 +312,34 @@ function resolveSetupFile(
   root: string,
   reference: string,
 ): string | undefined {
-  if (!/^\.\.?(?:[/\\]|$)/.test(reference) && !path.isAbsolute(reference)) {
-    return undefined;
-  }
   const target = path.resolve(root, reference);
+  if (!/^\.\.?(?:[/\\]|$)/.test(reference) && !path.isAbsolute(reference)) {
+    // A bare-looking path may be a root-relative file, but do not confuse a
+    // declared package with a same-named local path.
+    const packageName = reference
+      .split('/')
+      .slice(0, reference.startsWith('@') ? 2 : 1)
+      .join('/');
+    for (const parent of sources.keys()) {
+      if (
+        path.basename(parent) !== 'package.json' ||
+        !insideDirectory(root, path.dirname(parent))
+      ) {
+        continue;
+      }
+      const manifest = JSON.parse(sources.get(parent)!.replace(/^\uFEFF/, ''));
+      if (
+        ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'].some(
+          (key) => manifest[key]?.[packageName],
+        )
+      ) {
+        return undefined;
+      }
+    }
+    // After package resolution fails, Vitest falls back to the literal path,
+    // without trying local extensions or directory indexes for a bare entry.
+    return sources.has(target) ? target : undefined;
+  }
   const extensions = ['.mjs', '.cjs', '.js', '.json'];
   return [
     target,
@@ -235,7 +386,7 @@ export function resolveVitestV5TestModes(
       inline = false,
     ) => {
       found = true;
-      if (!staticObject(object)) {
+      if (!staticObject(object, true)) {
         unknown();
         return;
       }
@@ -244,7 +395,7 @@ export function resolveVitestV5TestModes(
       }
       visited.add(object);
       const test = objectProperty(object, 'test')?.value;
-      if (test && !staticObject(test)) {
+      if (test && !staticObject(test, true)) {
         unknown();
         return;
       }
@@ -259,6 +410,13 @@ export function resolveVitestV5TestModes(
       const resolvedRoot =
         (!inline && entry.rootOverride) ||
         path.resolve(directory, isString(root) ? root.value : '.');
+      const projects = test && objectProperty(test, 'projects')?.value;
+      const selected = projects
+        ? true
+        : projectSelected(test, entry.projects ?? [], base ? base.browser : false);
+      if (selected === false) {
+        return;
+      }
       const dirValue = test && objectProperty(test, 'dir')?.value;
       let dir = base ? base.dir : '';
       if (dirValue) {
@@ -268,7 +426,10 @@ export function resolveVitestV5TestModes(
       const effectiveDir = (!inline ? entry.dirOverride : undefined) ?? dir;
       const include = test && objectProperty(test, 'include')?.value;
       const exclude = test && objectProperty(test, 'exclude')?.value;
-      if ((include && !staticPatterns(include)) || (exclude && !staticPatterns(exclude))) {
+      if (
+        (include && !staticPatterns(include, editor)) ||
+        (exclude && !staticPatterns(exclude, editor))
+      ) {
         unknown();
         return;
       }
@@ -283,7 +444,7 @@ export function resolveVitestV5TestModes(
       const setup = test && objectProperty(test, 'setupFiles')?.value;
       let setupFiles: string[] | undefined = [];
       if (setup) {
-        setupFiles = isString(setup) ? [setup.value] : staticPatterns(setup);
+        setupFiles = isString(setup) ? [setup.value] : staticPatterns(setup, editor);
       }
       // Vitest passes dir to the globber as cwd, independently of root.
       // Relative values use the command's cwd, including in project configs.
@@ -298,18 +459,21 @@ export function resolveVitestV5TestModes(
         dir,
         discoveryRoot,
         include: include
-          ? [...(base?.include ?? []), ...staticPatterns(include)!]
-          : (base?.include ?? DEFAULT_TEST_INCLUDE),
-        exclude: exclude ? [...(base?.exclude ?? []), ...staticPatterns(exclude)!] : base?.exclude,
+          ? [...(base?.include ?? []), ...staticPatterns(include, editor)!]
+          : base?.include,
+        exclude: exclude
+          ? [...(base?.exclude ?? []), ...staticPatterns(exclude, editor)!]
+          : base?.exclude,
         // Apply defaults only when matching: implicit parent defaults must not
         // be appended to an inline project's explicit benchmark patterns.
-        benchmark: benchmarkPatterns(benchmark, base ? base.benchmark : {}),
+        benchmark: benchmarkPatterns(benchmark, base ? base.benchmark : {}, editor),
         setupFiles:
           setupFiles && (!base || base.setupFiles)
             ? [...(base?.setupFiles ?? []), ...setupFiles]
             : undefined,
         browser: browserMode,
-        globals: booleanOption(globals, base ? base.globals : false),
+        globals:
+          selected === undefined ? undefined : booleanOption(globals, base ? base.globals : false),
       };
       const addScope = () => {
         const resolvedSetup = scope.setupFiles?.map((reference) =>
@@ -343,7 +507,6 @@ export function resolveVitestV5TestModes(
           unresolvedSetup,
         });
       };
-      const projects = test && objectProperty(test, 'projects')?.value;
       if (!projects) {
         addScope();
         return;
@@ -352,12 +515,13 @@ export function resolveVitestV5TestModes(
         unknown();
         return;
       }
-      const excluded = projects.elements
+      const elements = projectElements(projects);
+      const excluded = elements
         .filter(isString)
         .map((node) => node.value)
         .filter((value) => value.startsWith('!'))
         .map((value) => value.slice(1));
-      for (const project of projects.elements) {
+      for (const project of elements) {
         if (isString(project)) {
           if (project.value.startsWith('!')) {
             continue;
@@ -398,7 +562,12 @@ export function resolveVitestV5TestModes(
             if (file === entry.file) {
               addScope();
             } else {
-              queue.push({ file, root: path.dirname(file), cwd: entry.cwd ?? entry.root });
+              queue.push({
+                file,
+                root: path.dirname(file),
+                cwd: entry.cwd ?? entry.root,
+                projects: entry.projects,
+              });
             }
           }
           continue;
@@ -409,6 +578,43 @@ export function resolveVitestV5TestModes(
         }
         const extendsValue = objectProperty(project, 'extends')?.value;
         if (extendsValue && !isBoolean(extendsValue)) {
+          // A build-only base has no scope options to inherit. Otherwise its
+          // dir or setupFiles may reach outside the inline root: retain review
+          // instead of guessing that all inherited files live beneath it.
+          const baseFile = isString(extendsValue) && path.resolve(scope.root, extendsValue.value);
+          const baseSource = baseFile && sources.get(baseFile);
+          if (baseSource) {
+            const baseEditor = new SourceEditor(baseFile, baseSource);
+            const declaration = baseEditor.ast.body.find(
+              (node) => node.type === 'ExportDefaultDeclaration',
+            );
+            const baseObject = exportedConfig(baseEditor, declaration?.declaration);
+            if (staticObject(baseObject, true)) {
+              const baseTest = objectProperty(baseObject, 'test')?.value;
+              // Compatibility defaults such as clearMocks do not change file
+              // ownership. Accept them on later migration passes as well.
+              if (
+                !baseTest ||
+                (staticObject(baseTest, true) &&
+                  ![
+                    'root',
+                    'dir',
+                    'include',
+                    'exclude',
+                    'includeSource',
+                    'setupFiles',
+                    'globals',
+                    'browser',
+                    'benchmark',
+                    'projects',
+                    'name',
+                  ].some((key) => objectProperty(baseTest, key)))
+              ) {
+                walk(project, scope.root, undefined, true);
+                continue;
+              }
+            }
+          }
           unknown();
           continue;
         }
@@ -418,30 +624,13 @@ export function resolveVitestV5TestModes(
     };
     try {
       editor = new SourceEditor(entry.file, sources.get(entry.file)!);
-      const exported = (node: t.Node | undefined) => {
-        if (node?.type === 'Identifier') {
-          const binding = editor.binding(node);
-          node =
-            binding?.constant && binding.declaration.type === 'VariableDeclarator'
-              ? (binding.declaration.init ?? undefined)
-              : undefined;
-        }
-        if (node?.type === 'CallExpression') {
-          node = ['defineConfig', 'defineProject'].includes(
-            importedName(editor, node.callee, CONFIG_SOURCES) ?? '',
-          )
-            ? node.arguments[0]
-            : undefined;
-        }
-        walk(node);
-      };
       editor.visit({
         ExportDefaultDeclaration(node) {
-          exported(node.declaration);
+          walk(exportedConfig(editor, node.declaration));
         },
         AssignmentExpression(node) {
           if (isModuleExports(editor, node.left)) {
-            exported(node.right);
+            walk(exportedConfig(editor, node.right));
           }
         },
       });
@@ -465,9 +654,12 @@ export function resolveVitestV5TestModes(
         const test =
           discoveryRoot &&
           insideDirectory(file, discoveryRoot) &&
-          (!scope.include ||
-            scope.include.some((pattern) => matches(file, discoveryRoot, pattern))) &&
-          !scope.exclude?.some((pattern) => matches(file, discoveryRoot, pattern));
+          (scope.include ?? DEFAULT_TEST_INCLUDE).some((pattern) =>
+            matches(file, discoveryRoot, pattern),
+          ) &&
+          !(scope.exclude ?? DEFAULT_TEST_EXCLUDE).some((pattern) =>
+            matches(file, discoveryRoot, pattern),
+          );
         const benchmark =
           discoveryRoot &&
           insideDirectory(file, discoveryRoot) &&
@@ -484,7 +676,7 @@ export function resolveVitestV5TestModes(
               sources.get(file)?.includes('import.meta.vitest')));
         benchmarkFile ||= !!benchmark;
         if (setup || test || benchmark) {
-          matching.push({ scope, certain: !!setup || !!benchmark || !!(test && scope.include) });
+          matching.push({ scope, certain: true });
         } else if (
           ((!discoveryRoot || !scope.setupFiles || scope.unresolvedSetup) && inside) ||
           (!scope.benchmark && discoveryRoot && insideDirectory(file, discoveryRoot))

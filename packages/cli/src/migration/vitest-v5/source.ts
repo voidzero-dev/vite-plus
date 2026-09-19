@@ -282,6 +282,39 @@ export function migrateVitestV5Source(
   source: string,
   options: SourceOptions,
 ): RewriteResult {
+  const result = rewriteSource(file, source, options);
+  if (options.reviewGlobals && !options.globals) {
+    // Probe without applying edits: unknown ownership matters only when it
+    // prevents a compatibility edit or diagnostic, not for every test/expect.
+    const withGlobals = rewriteSource(file, source, { ...options, globals: true });
+    if (
+      result.content !== withGlobals.content ||
+      withGlobals.findings.some(
+        (finding) =>
+          !result.findings.some(
+            (existing) =>
+              existing.code === finding.code &&
+              existing.line === finding.line &&
+              existing.column === finding.column &&
+              existing.message === finding.message,
+          ),
+      )
+    ) {
+      result.findings.push({
+        file,
+        line: 1,
+        column: 1,
+        severity: 'review',
+        code: 'global-api-ownership',
+        message:
+          'Resolve the Vitest project ownership of this file before migrating its affected global APIs. Global API edits were not applied because config selection, file scope, or globals settings are unresolved or conflicting.',
+      });
+    }
+  }
+  return result;
+}
+
+function rewriteSource(file: string, source: string, options: SourceOptions): RewriteResult {
   const editor = new SourceEditor(file, source);
   const reviewV4 = options.preserveV4 || options.reviewV4;
   const benchmarks = migrateBenchmarks(editor, options.globals);
@@ -290,35 +323,10 @@ export function migrateVitestV5Source(
   // Import edits are offset-based, so bindings still refer to the old module
   // while this traversal visits the assertions that must migrate with them.
   function apiName(node: t.Node): string | undefined {
-    const name =
+    return (
       testApiName(editor, node, options.globals) ??
-      (importedName(editor, node, EXPECT_SOURCES) === 'expect' ? 'expect' : undefined);
-    if (
-      !name &&
-      options.reviewGlobals &&
-      node.type === 'Identifier' &&
-      !editor.binding(node) &&
-      [
-        'test',
-        'it',
-        'describe',
-        'suite',
-        'bench',
-        'expect',
-        'vi',
-        'beforeEach',
-        'afterEach',
-        'beforeAll',
-        'afterAll',
-      ].includes(node.name)
-    ) {
-      editor.report(
-        node,
-        'global-api-ownership',
-        'Determine which Vitest project owns this global API before migrating it. Config selection, file scope, or globals settings are unresolved or conflicting; the global call was left unchanged.',
-      );
-    }
-    return name;
+      (importedName(editor, node, EXPECT_SOURCES) === 'expect' ? 'expect' : undefined)
+    );
   }
   function canAwait(node: t.Node): boolean {
     const fn = editor.functionParent(node);

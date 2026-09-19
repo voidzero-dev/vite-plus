@@ -102,20 +102,27 @@ export function objectProperty(
   return object.properties.find(
     (prop): prop is t.ObjectProperty =>
       prop.type === 'Property' &&
-      !prop.method &&
       prop.kind === 'init' &&
       !prop.computed &&
       propertyName(prop.key) === key,
   );
 }
 
-export function staticObject(node: t.Node | null | undefined): node is t.ObjectExpression {
+export function staticObject(
+  node: t.Node | null | undefined,
+  allowMethods = false,
+): node is t.ObjectExpression {
   if (node?.type !== 'ObjectExpression') {
     return false;
   }
   const names = new Set<string>();
   return node.properties.every((prop) => {
-    if (prop.type !== 'Property' || prop.method || prop.kind !== 'init' || prop.computed) {
+    if (
+      prop.type !== 'Property' ||
+      (prop.method && !allowMethods) ||
+      prop.kind !== 'init' ||
+      prop.computed
+    ) {
       return false;
     }
     const name = propertyName(prop.key);
@@ -125,6 +132,35 @@ export function staticObject(node: t.Node | null | undefined): node is t.ObjectE
     names.add(name);
     return true;
   });
+}
+
+/** Consider both possible project lists without evaluating environment-dependent
+ * config code. Unknown spreads stay in the list for a localized review. */
+export function projectElements(node: t.ArrayExpression): Array<t.Node | null> {
+  const expand = (value: t.Node): Array<t.Node | null> | undefined => {
+    if (value.type === 'ArrayExpression') {
+      return projectElements(value);
+    }
+    if (value.type === 'ConditionalExpression') {
+      const consequent = expand(value.consequent);
+      const alternate = expand(value.alternate);
+      // Conditional exclusions affect sibling string projects. Flattening them
+      // would incorrectly exclude files when that branch is inactive.
+      if (
+        consequent &&
+        alternate &&
+        ![...consequent, ...alternate].some(
+          (entry) => isString(entry) && entry.value.startsWith('!'),
+        )
+      ) {
+        return [...consequent, ...alternate];
+      }
+    }
+    return undefined;
+  };
+  return node.elements.flatMap((entry) =>
+    entry?.type === 'SpreadElement' ? (expand(entry.argument) ?? [entry]) : [entry],
+  );
 }
 
 /** Compare data literals without evaluating config code or invoking getters.
