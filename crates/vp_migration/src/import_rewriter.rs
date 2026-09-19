@@ -6294,7 +6294,9 @@ console.log(pkg.version);"#;
         for (source, target) in VITEST_V5_ENTRY_POINTS.iter() {
             for template in [
                 "import { value } from 'SOURCE';",
+                "import * as values from 'SOURCE';",
                 "export { value } from 'SOURCE';",
+                "export * from 'SOURCE';",
                 "const value = require('SOURCE');",
                 "const value = import('SOURCE');",
                 "type Value = typeof import('SOURCE');",
@@ -6303,6 +6305,10 @@ console.log(pkg.version);"#;
                 let content = template.replace("SOURCE", source);
                 let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
                 assert_eq!(result.content, template.replace("SOURCE", target), "{content}");
+                let repeated =
+                    rewrite_import_content(&result.content, &SkipPackages::default()).unwrap();
+                assert!(!repeated.updated, "{content}");
+                assert_eq!(repeated.content, result.content, "{content}");
             }
         }
     }

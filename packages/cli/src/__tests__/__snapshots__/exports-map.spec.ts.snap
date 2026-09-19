@@ -17,8 +17,6 @@ exports[`package.json exports map > keeps the reviewed Vitest v5 export surface 
   "./test/client",
   "./test/config",
   "./test/context",
-  "./test/coverage",
-  "./test/environments",
   "./test/globals",
   "./test/import-meta",
   "./test/importMeta",
@@ -61,9 +59,7 @@ exports[`package.json exports map > keeps the reviewed Vitest v5 export surface 
   "./test/plugins/utils-source-map",
   "./test/plugins/utils-source-map-node",
   "./test/plugins/utils-timers",
-  "./test/reporters",
   "./test/runtime",
-  "./test/snapshot",
   "./test/utils",
   "./test/worker",
 ]

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   findTsconfigFiles,
+  hasTypesToRewriteInTsconfig,
   removeDeprecatedTsconfigFalseOption,
   rewriteTypesInTsconfig,
 } from '../tsconfig.js';
@@ -238,6 +239,37 @@ describe('rewriteTypesInTsconfig', () => {
         }
       }"
     `);
+  });
+
+  it('migrates removed Vite+ test type entries without changing retained entries', () => {
+    const filePath = path.join(tmpDir, 'tsconfig.json');
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        compilerOptions: {
+          types: [
+            'vite-plus/test/coverage',
+            'vite-plus/test/reporters',
+            'vite-plus/test/environments',
+            'vite-plus/test/snapshot',
+            'vite-plus/test/mocker',
+            'vite-plus/test/globals',
+          ],
+        },
+      }),
+    );
+    expect(hasTypesToRewriteInTsconfig(filePath)).toBe(true);
+    expect(rewriteTypesInTsconfig(filePath)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(filePath, 'utf8')).compilerOptions.types).toEqual([
+      'vite-plus/test/node',
+      'vite-plus/test/node',
+      'vite-plus/test/runtime',
+      'vite-plus/test/runtime',
+      'vite-plus/test/mocker',
+      'vite-plus/test/globals',
+    ]);
+    expect(hasTypesToRewriteInTsconfig(filePath)).toBe(false);
+    expect(rewriteTypesInTsconfig(filePath)).toBe(false);
   });
 
   it('restores removed WebDriverIO type entries and preserves community entries', () => {

@@ -111,23 +111,28 @@ export type * from 'vite/types/importMeta.d.ts';
 
 ### Step 4: Test Package Export Sync (`syncTestPackageExports`)
 
-Reads vitest's exports plus the three `@vitest/browser-*` provider packages and creates shim files that re-export everything under `./test/*`:
+Reads Vitest's exports plus the Playwright and Preview provider packages and creates re-export shims under `./test/*`.
 
 Ship `vite` as a dependency alias for the same `@voidzero-dev/vite-plus-core` version. Vitest v5 requires a `vite` peer. Yarn users must be able to install `vite-plus` without adding `vite` or `vitest` to their project. Keep the alias in `dependencies`, not `devDependencies`.
 
 The main surface mirrors Vitest `5.0.1`, except for package metadata and wildcard
-exports. The final export keys are snapshotted in the export tests. The following
-paths are Vite+ compatibility contracts through the `1.x` release line:
+exports. Export tests snapshot the final keys. Vite+ 1.0 removes the legacy
+`coverage`, `reporters`, `environments`, and `snapshot` aliases under
+`vite-plus/test/`. Run `vp migrate` to replace imports from either `vitest/*`
+or `vite-plus/test/*` with the `node` or `runtime` entry:
 
-| Compatibility path                                       | Public upstream target |
-| -------------------------------------------------------- | ---------------------- |
-| `vite-plus/test/coverage`, `vite-plus/test/reporters`    | `vitest/node`          |
-| `vite-plus/test/environments`, `vite-plus/test/snapshot` | `vitest/runtime`       |
-| `vite-plus/test/mocker`                                  | `@vitest/mocker`       |
+| Removed path suffix        | Replacement              |
+| -------------------------- | ------------------------ |
+| `coverage`, `reporters`    | `vite-plus/test/node`    |
+| `environments`, `snapshot` | `vite-plus/test/runtime` |
 
-Provider paths and `browser/providers/*` aliases remain available. WebDriverIO
-is a community-maintained optional peer with its own compatible range; the
-build checks the selected provider's Vitest peer before generating its shims.
+The `vite-plus/test/mocker` shim re-exports `@vitest/mocker`; migration still
+uses this path because Vitest v5 has no corresponding entry.
+
+Playwright and Preview provider paths and `browser/providers/*` aliases remain
+available. WebDriverIO has no Vite+ shims. Migration restores its legacy aliases
+to the community-maintained `@vitest/browser-webdriverio` package. Keep the
+optional peer declaration synchronized with Vitest's dependency metadata.
 The `plugins/*` compatibility paths mirror public exports of their named
 standalone packages and retain upstream type declarations.
 
@@ -404,13 +409,13 @@ Instead of copying vitest's dist files, we create thin shim files that re-export
 
 Every entry under vitest's own `exports` is shimmed under `./test/*` (wildcard exports and `./package.json` are skipped). The shim is purely a re-export — `vite-plus/test` and friends are aliases for the matching subpath of upstream `vitest`. Examples:
 
-| Vitest Export      | CLI Package Export         |
-| ------------------ | -------------------------- |
-| `vitest`           | `vite-plus/test`           |
-| `vitest/browser`   | `vite-plus/test/browser`   |
-| `vitest/node`      | `vite-plus/test/node`      |
-| `vitest/config`    | `vite-plus/test/config`    |
-| `vitest/reporters` | `vite-plus/test/reporters` |
+| Vitest Export    | CLI Package Export       |
+| ---------------- | ------------------------ |
+| `vitest`         | `vite-plus/test`         |
+| `vitest/browser` | `vite-plus/test/browser` |
+| `vitest/node`    | `vite-plus/test/node`    |
+| `vitest/config`  | `vite-plus/test/config`  |
+| `vitest/runtime` | `vite-plus/test/runtime` |
 
 The full set is regenerated on every build from the upstream vitest `package.json`, so the exact list tracks vitest itself.
 
