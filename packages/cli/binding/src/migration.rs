@@ -9,6 +9,13 @@ pub fn analyze_migration_source(filename: String, source: String) -> Result<Stri
     vp_migration::analyze_migration_source(&filename, &source).map_err(Error::from_reason)
 }
 
+/// Check inherited `.gitignore` rules without requiring the directory to exist.
+#[napi]
+pub fn is_directory_gitignored(root: String, directory: String) -> Result<bool> {
+    Ok(vp_migration::is_directory_gitignored(Path::new(&root), Path::new(&directory))
+        .map_err(anyhow::Error::from)?)
+}
+
 /// Rewrite scripts json content using rules from rules_yaml
 ///
 /// # Arguments

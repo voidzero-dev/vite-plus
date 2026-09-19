@@ -33,6 +33,18 @@ VITE+ - The Unified Toolchain for the Web
 packages/unit/vite.config.ts: missing
 ```
 
+## `vpt stat-file packages/unit/.gitignore --assert missing`
+
+```
+packages/unit/.gitignore: missing
+```
+
+## `vpt print-file .gitignore`
+
+```
+.vitest/
+```
+
 ## `vpt print-file packages/unit/example.test.ts`
 
 ```

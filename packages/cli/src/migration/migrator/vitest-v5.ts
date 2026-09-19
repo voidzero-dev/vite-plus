@@ -5,8 +5,10 @@ import { applyEdits, findNodeAtLocation, parse as parseJsonc, parseTree } from '
 import semver from 'semver';
 import { isScalar, parseDocument, visit } from 'yaml';
 
+import { isDirectoryGitignored } from '../../../binding/index.js';
 import cliPackage from '../../../package.json' with { type: 'json' };
 import { PackageManager, type WorkspaceInfoOptional } from '../../types/index.ts';
+import { findGitRoot } from '../../utils/git.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { createCatalogDependencyResolver } from '../migrator.ts';
 import type { RewriteResult, SourceOptions, VitestV5Finding } from '../vitest-v5/ast.ts';
@@ -959,9 +961,17 @@ export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Fi
         findings.push(finding(file, 'source-parse', `Review this config: ${String(error)}`));
       }
     }
-    const ignore = path.join(project.directory, '.gitignore');
-    const ignored = fs.existsSync(ignore) ? fs.readFileSync(ignore, 'utf8') : '';
-    if (!ignored.split(/\r?\n/).some((line) => /^\/?\.vitest\/?$/.test(line.trim()))) {
+    // An unanchored root rule already covers workspace packages. Stop at the
+    // nearest Git root (including nested repositories), or the workspace root
+    // for projects that do not use Git yet.
+    if (
+      !isDirectoryGitignored(
+        findGitRoot(project.directory) ?? plan.rootDir,
+        path.join(project.directory, '.vitest'),
+      )
+    ) {
+      const ignore = path.join(project.directory, '.gitignore');
+      const ignored = fs.existsSync(ignore) ? fs.readFileSync(ignore, 'utf8') : '';
       fs.writeFileSync(
         ignore,
         `${ignored}${ignored && !ignored.endsWith('\n') ? '\n' : ''}.vitest/\n`,

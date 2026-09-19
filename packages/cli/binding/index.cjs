@@ -1048,6 +1048,7 @@ module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
 module.exports.ensureBlockingStdio = nativeBinding.ensureBlockingStdio;
 module.exports.getVpDirs = nativeBinding.getVpDirs;
 module.exports.hasConfigKey = nativeBinding.hasConfigKey;
+module.exports.isDirectoryGitignored = nativeBinding.isDirectoryGitignored;
 module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;
 module.exports.parseConfigArgs = nativeBinding.parseConfigArgs;

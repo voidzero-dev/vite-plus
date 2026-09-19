@@ -17,7 +17,7 @@ mod script_rewrite;
 mod source_analysis;
 mod vite_config;
 
-pub use file_walker::{WalkResult, find_ts_files};
+pub use file_walker::{WalkResult, find_ts_files, is_directory_gitignored};
 pub use import_rewriter::{
     BatchRewriteResult, RewriteImportsOptions, rewrite_imports_in_directory,
     rewrite_imports_in_directory_with_options,

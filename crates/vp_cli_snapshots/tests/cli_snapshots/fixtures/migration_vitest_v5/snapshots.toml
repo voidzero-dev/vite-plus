@@ -66,8 +66,28 @@ steps = [
   { argv = ["vpt", "rm", "example.test.ts"], snapshot = false },
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
   ["vpt", "stat-file", "packages/unit/vite.config.ts", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/unit/.gitignore", "--assert", "missing"],
+  ["vpt", "print-file", ".gitignore"],
   ["vpt", "print-file", "packages/unit/example.test.ts"],
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "workspace_gitignore"
+vp = "global"
+comment = "Reuse the root .vitest/ rule without creating or changing workspace package ignore files."
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - packages/*\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".gitignore", "node_modules/\n.vitest/\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/a/package.json", "{\"name\":\"a\",\"private\":true,\"devDependencies\":{\"vitest\":\"4.1.11\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/b/package.json", "{\"name\":\"b\",\"private\":true,\"devDependencies\":{\"vitest\":\"4.1.11\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/b/.gitignore", "dist/\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".gitignore", "packages/b/.gitignore"],
+  ["vpt", "stat-file", "packages/a/.gitignore", "--assert", "missing"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".gitignore", "packages/b/.gitignore"],
+  ["vpt", "stat-file", "packages/a/.gitignore", "--assert", "missing"],
 ]
 
 [[case]]

@@ -2620,6 +2620,87 @@ export default defineConfig(CONFIG);`,
     },
   );
 
+  it.each(['.vitest/\n', '**/.vitest/\n', '/packages/*/.vitest/\n'])(
+    'reuses the workspace ignore rule %j without changing package ignore files',
+    (ignore) => {
+      const root = project({
+        'package.json': '{}',
+        '.gitignore': ignore,
+        'packages/a/package.json': JSON.stringify({ devDependencies: { vitest: '4.1.11' } }),
+        'packages/b/package.json': JSON.stringify({ devDependencies: { vitest: '4.1.11' } }),
+        'packages/b/.gitignore': 'dist/\n',
+      });
+      const plan = planVitestV5Migration({
+        rootDir: root,
+        packageManager: PackageManager.pnpm,
+        packages: ['a', 'b'].map((name) => ({ name, path: `packages/${name}` })),
+      });
+      applyVitestV5Migration(plan);
+      for (let run = 0; run < 2; run++) {
+        expect(finishVitestV5Migration(plan)).toEqual([]);
+        expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe(ignore);
+        expect(fs.existsSync(path.join(root, 'packages/a/.gitignore'))).toBe(false);
+        expect(fs.readFileSync(path.join(root, 'packages/b/.gitignore'), 'utf8')).toBe('dist/\n');
+      }
+    },
+  );
+
+  it('reuses an ignore rule added to the root during the same migration', () => {
+    const root = project({
+      'packages/unit/package.json': JSON.stringify({ devDependencies: { vitest: '4.1.11' } }),
+    });
+    const plan = planVitestV5Migration({
+      rootDir: root,
+      packageManager: PackageManager.pnpm,
+      packages: [{ name: 'unit', path: 'packages/unit' }],
+    });
+    applyVitestV5Migration(plan);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+    expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe('.vitest/\n');
+    expect(fs.existsSync(path.join(root, 'packages/unit/.gitignore'))).toBe(false);
+  });
+
+  it.each(['/.vitest/\n', '.vitest/\n!packages/unit/.vitest/\n'])(
+    'adds a package ignore when the root rule %j does not cover it',
+    (ignore) => {
+      const root = project({
+        'package.json': '{}',
+        '.gitignore': ignore,
+        'packages/unit/package.json': JSON.stringify({ devDependencies: { vitest: '4.1.11' } }),
+        'packages/unit/.gitignore': 'dist/',
+      });
+      const plan = planVitestV5Migration({
+        rootDir: root,
+        packageManager: PackageManager.pnpm,
+        packages: [{ name: 'unit', path: 'packages/unit' }],
+      });
+      applyVitestV5Migration(plan);
+      expect(finishVitestV5Migration(plan)).toEqual([]);
+      expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe(ignore);
+      expect(fs.readFileSync(path.join(root, 'packages/unit/.gitignore'), 'utf8')).toBe(
+        'dist/\n.vitest/\n',
+      );
+    },
+  );
+
+  it.each([false, true])('respects repository boundaries (nested repository: %s)', (nested) => {
+    const root = project({
+      'package.json': '{}',
+      '.git': 'gitdir: external',
+      '.gitignore': '.vitest/\n',
+      'packages/unit/package.json': JSON.stringify({ devDependencies: { vitest: '4.1.11' } }),
+      ...(nested ? { 'packages/unit/.git': 'gitdir: nested' } : {}),
+    });
+    const directory = path.join(root, 'packages/unit');
+    const plan = planProject(directory);
+    applyVitestV5Migration(plan);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+    expect(fs.existsSync(path.join(directory, '.gitignore'))).toBe(nested);
+    if (nested) {
+      expect(fs.readFileSync(path.join(directory, '.gitignore'), 'utf8')).toBe('.vitest/\n');
+    }
+  });
+
   it('preserves defaults in a config created by another migration step', () => {
     const root = project();
     const plan = planProject(root);
