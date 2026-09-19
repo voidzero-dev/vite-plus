@@ -8,8 +8,8 @@ use std::process::ExitStatus;
 use vt_path::AbsolutePath;
 
 use crate::{
-    EnvironmentPackageManagerResolution, PackageManager, cli::PackageManagerCommand,
-    download_package_manager, error::Error, resolution::run_resolution,
+    EnvironmentPackageManagerResolution, PackageManager, PackageManagerType,
+    cli::PackageManagerCommand, download_package_manager, error::Error, resolution::run_resolution,
 };
 
 #[derive(Debug)]
@@ -61,7 +61,14 @@ async fn dispatch_with_manager(
 ) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
     let manager = match source {
-        ManagerSource::Detect => PackageManager::builder(cwd).build_with_default().await?,
+        ManagerSource::Detect => {
+            let builder = PackageManager::builder(cwd);
+            if command.should_select_package_manager() {
+                builder.build_with_default().await?
+            } else {
+                builder.package_manager_type(PackageManagerType::Pnpm).build().await?
+            }
+        }
         ManagerSource::Environment(package_manager) => {
             build_selected_package_manager(package_manager).await?
         }
