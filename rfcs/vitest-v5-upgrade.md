@@ -430,7 +430,7 @@ Several removed runner and suite APIs do not have a complete v5 target. Partial 
 
 ### Drop WebDriverIO support
 
-The community maintains the provider under its existing package name. Support direct imports and retain Vitest's optional peer metadata. During migration, ensure a provider version of at least `5.0.0`, add missing framework peers, and update referenced catalogs and stale overrides. Preserve versions and ranges above the minimum without restoring the Vite+ shim or synchronizing future releases.
+The community maintains the provider under its existing package name. Support direct imports and retain Vitest's optional peer metadata. During migration, ensure a provider version of at least `5.0.0`, add missing framework peers, and update referenced catalogs and stale overrides. For projects that use the provider, add an `@vitest/browser` override matching the bundled runner, or a Yarn resolution. Preserve provider versions and ranges above the minimum without restoring the Vite+ shim or synchronizing future releases.
 
 ## Known upstream limitation: Preview real timers
 

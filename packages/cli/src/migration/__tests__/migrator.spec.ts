@@ -1838,6 +1838,121 @@ function readYamlObject(filePath: string): Record<string, unknown> {
   return parseYaml(readYaml(filePath)) as Record<string, unknown>;
 }
 
+describe('WebDriverIO browser overrides', () => {
+  let tmpDir: string;
+  const provider = '@vitest/browser-webdriverio';
+  const browser = '@vitest/browser';
+  const managers = [
+    [PackageManager.pnpm, '10.33.0'],
+    [PackageManager.pnpm, '10.5.0'],
+    [PackageManager.pnpm, '9.4.0'],
+    [PackageManager.npm, '11.0.0'],
+    [PackageManager.yarn, '4.11.0'],
+    [PackageManager.bun, '1.3.11'],
+  ] as const;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-browser-override-'));
+  });
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function overrideFile(manager: PackageManager, version: string) {
+    return manager === PackageManager.pnpm && pnpmSupportsWorkspaceSettings(version)
+      ? 'pnpm-workspace.yaml'
+      : 'package.json';
+  }
+  function overrideMap(pkg: Record<string, unknown>, manager: PackageManager, version: string) {
+    if (manager === PackageManager.pnpm && !pnpmSupportsWorkspaceSettings(version)) {
+      return (pkg.pnpm as { overrides: Record<string, string> }).overrides;
+    }
+    return pkg[manager === PackageManager.yarn ? 'resolutions' : 'overrides'] as Record<
+      string,
+      string
+    >;
+  }
+  function readOverrides(manager: PackageManager, version: string) {
+    const file = overrideFile(manager, version);
+    const pkg = file.endsWith('.yaml')
+      ? readYamlObject(path.join(tmpDir, file))
+      : readJson(path.join(tmpDir, file));
+    return overrideMap(pkg, manager, version);
+  }
+
+  it.each(managers)('adds and repairs the override on %s %s', (manager, version) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { [provider]: '^5.2.0', [browser]: '5.0.0' },
+      }),
+    );
+    const workspace = makeWorkspaceInfo(tmpDir, manager, version);
+    rewriteStandaloneProject(tmpDir, workspace, true, true);
+    const key = manager === PackageManager.pnpm ? pnpmOverrideKey(browser) : browser;
+    expect(readOverrides(manager, version)[key]).toBe(VITEST_VERSION);
+    expect(
+      (readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<string, string>)[
+        provider
+      ],
+    ).toBe('^5.2.0');
+    expect(detectVitePlusBootstrapPending(tmpDir, manager, [], version)).toBe(false);
+
+    // Only this override is stale: it must trigger existing-Vite+ reconciliation.
+    const file = path.join(tmpDir, overrideFile(manager, version));
+    const pkg = file.endsWith('.yaml') ? readYamlObject(file) : readJson(file);
+    overrideMap(pkg, manager, version)[key] = '5.0.0';
+    fs.writeFileSync(file, JSON.stringify(pkg));
+    expect(detectVitePlusBootstrapPending(tmpDir, manager, [], version)).toBe(true);
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(true);
+    expect(readOverrides(manager, version)[key]).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, manager, [], version)).toBe(false);
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+  });
+
+  it.each(managers)('detects the provider in a workspace member on %s %s', (manager, version) => {
+    fs.mkdirSync(path.join(tmpDir, 'packages/browser'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', workspaces: ['packages/*'] }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'packages/browser/package.json'),
+      JSON.stringify({ name: 'browser', devDependencies: { [provider]: '5.0.0' } }),
+    );
+    const workspace = {
+      ...makeWorkspaceInfo(tmpDir, manager, version),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'browser', path: 'packages/browser' }],
+    };
+    rewriteMonorepo(workspace, true, true);
+    const key = manager === PackageManager.pnpm ? pnpmOverrideKey(browser) : browser;
+    expect(readOverrides(manager, version)[key]).toBe(VITEST_VERSION);
+    // Reconcile workspace package-manager fields, then check repeat-run stability.
+    ensureVitePlusBootstrap(workspace);
+    expect(readOverrides(manager, version)[key]).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, manager, workspace.packages, version)).toBe(
+      false,
+    );
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+  });
+
+  it.each(managers)(
+    'does not add the override for standalone webdriverio on %s %s',
+    (manager, version) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'test', devDependencies: { webdriverio: '^9' } }),
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, manager, version), true, true);
+      expect(readOverrides(manager, version)).not.toHaveProperty(browser);
+      expect(readOverrides(manager, version)).not.toHaveProperty(pnpmOverrideKey(browser));
+    },
+  );
+});
+
 describe('ensureVitePlusBootstrap', () => {
   let tmpDir: string;
 

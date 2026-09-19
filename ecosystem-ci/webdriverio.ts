@@ -2,8 +2,6 @@ import { execSync } from 'node:child_process';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
-
 async function replaceOnce(file: string, original: string, replacement: string): Promise<void> {
   const source = await readFile(file, 'utf8');
   if (source.split(original).length !== 2) {
@@ -129,26 +127,6 @@ export const bench = (name: string, callback: () => void | Promise<void>): void 
       join(root, 'package.json'),
       '"bench": "vp test bench --run"',
       '"bench": "vp test run --mode benchmark"',
-    );
-  }
-}
-
-export async function finalizeWebdriverioProject(project: string, root: string): Promise<void> {
-  if (!['10ten-ja-reader', 'sqlocal', 'brazilian-utils'].includes(project)) {
-    return;
-  }
-  // Its @vitest/browser dependency permits a range. Align that package with
-  // the packed runner instead of retaining an older version from the lockfile.
-  if (project === 'brazilian-utils') {
-    const packagePath = join(root, 'package.json');
-    const pkg = JSON.parse(await readFile(packagePath, 'utf8'));
-    pkg.overrides['@vitest/browser'] = VITEST_VERSION;
-    await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
-  } else {
-    await replaceOnce(
-      join(root, 'pnpm-workspace.yaml'),
-      'overrides:\n',
-      `overrides:\n  '@vitest/browser': ${VITEST_VERSION}\n`,
     );
   }
 }

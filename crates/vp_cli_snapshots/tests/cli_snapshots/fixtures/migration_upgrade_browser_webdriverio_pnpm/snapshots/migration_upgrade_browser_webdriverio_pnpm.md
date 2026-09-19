@@ -75,6 +75,7 @@ catalog:
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'
+  '@vitest/browser@*': 5.0.1
 peerDependencyRules:
   allowAny:
     - vite

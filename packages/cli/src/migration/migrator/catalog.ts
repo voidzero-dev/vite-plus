@@ -29,6 +29,7 @@ import {
   removeYamlMapVitestEntry,
   rewriteMonorepoProject,
   shouldDropProviderOverrideKey,
+  workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
 import {
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
@@ -262,12 +263,13 @@ export function rewritePnpmWorkspaceYaml(
   vitestEcosystemPackages: ReadonlySet<string>,
   writeWorkspaceSettings = true,
   catalogAdditions: ReadonlySet<string> = new Set(),
+  usesWebdriverioProvider = false,
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
     fs.writeFileSync(pnpmWorkspaceYamlPath, '');
   }
-  const managed = managedOverridePackages(usesVitest);
+  const managed = managedOverridePackages(usesVitest, usesWebdriverioProvider);
 
   editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
     // catalog
@@ -323,9 +325,14 @@ export function rewritePnpmWorkspaceYaml(
       const currentVersion =
         getYamlMapScalarStringValue(overrides, overrideKey) ??
         getYamlMapScalarStringValue(overrides, key);
-      const version = getCatalogDependencySpec(currentVersion, managed[key], true, {
-        preferredCatalogSpec,
-      });
+      // @vitest/browser is an override-only entry: migration removes its direct
+      // dependency and catalog entry because Vite+ already supplies it.
+      const version =
+        key === '@vitest/browser'
+          ? managed[key]
+          : getCatalogDependencySpec(currentVersion, managed[key], true, {
+              preferredCatalogSpec,
+            });
       if (overrides instanceof YAMLMap) {
         overrides.delete(key);
       }
@@ -366,7 +373,7 @@ export function rewritePnpmWorkspaceYaml(
       allowAny.items = allowAny.items.filter((n) => n.value !== 'vitest');
     }
     const existing = new Set(allowAny.items.map((n) => n.value));
-    for (const key of Object.keys(managed)) {
+    for (const key of Object.keys(managedOverridePackages(usesVitest))) {
       if (!existing.has(key)) {
         allowAny.add(scalarString(key));
       }
@@ -387,7 +394,7 @@ export function rewritePnpmWorkspaceYaml(
     if (!usesVitest) {
       removeYamlMapVitestEntry(allowedVersions);
     }
-    for (const key of Object.keys(managed)) {
+    for (const key of Object.keys(managedOverridePackages(usesVitest))) {
       // - vite: '*'
       allowedVersions.set(scalarString(key), scalarString('*'));
     }
@@ -1094,12 +1101,13 @@ export function rewriteBunCatalog(
   projectPath: string,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  usesWebdriverioProvider = false,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
   }
-  const managed = managedOverridePackages(usesVitest);
+  const managed = managedOverridePackages(usesVitest, usesWebdriverioProvider);
 
   editJsonFile<{
     workspaces?: NpmWorkspaces;
@@ -1163,7 +1171,8 @@ export function rewriteBunCatalog(
       if (current !== undefined && typeof current !== 'string') {
         continue;
       }
-      overrides[key] = getCatalogDependencySpec(current, value, true);
+      overrides[key] =
+        key === '@vitest/browser' ? value : getCatalogDependencySpec(current, value, true);
     }
     pkg.overrides = overrides;
 
@@ -1200,7 +1209,10 @@ export function rewriteRootWorkspacePackageJson(
   if (!fs.existsSync(packageJsonPath)) {
     return;
   }
-  const managed = managedOverridePackages(workspaceUsesVitest);
+  const managed = managedOverridePackages(
+    workspaceUsesVitest,
+    workspaceUsesWebdriverioProvider(projectPath, packages),
+  );
 
   let movedPnpmSettings: Record<string, unknown> | undefined;
   editJsonFile<{
@@ -1241,6 +1253,11 @@ export function rewriteRootWorkspacePackageJson(
       };
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
+      // The browser override has no catalog entry and was pruned above with
+      // stale bundled-package pins. Restore its current concrete version.
+      if (managed['@vitest/browser']) {
+        pkg.overrides = { ...pkg.overrides, '@vitest/browser': managed['@vitest/browser'] };
+      }
       // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.9
       // declares peer `vite ^6 || ^7 || ^8` and aborts unless `vite` is a direct
       // dep at the workspace root. Mirror the override as a devDep; the override
@@ -1249,7 +1266,7 @@ export function rewriteRootWorkspacePackageJson(
       // to a `catalog:` reference. See https://github.com/oven-sh/bun/issues/8406.
       setDirectViteEdge(pkg, true, catalogDependencyResolver);
     } else if (packageManager === PackageManager.pnpm) {
-      const overrideKeys = Object.keys(managed);
+      const overrideKeys = Object.keys(managedOverridePackages(workspaceUsesVitest));
       const usePnpmWorkspaceSettings = pnpmSupportsWorkspaceSettings(pnpmVersion ?? '');
       if (!usePnpmWorkspaceSettings) {
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)

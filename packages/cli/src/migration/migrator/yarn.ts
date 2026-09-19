@@ -22,6 +22,7 @@ import {
 import { type MigrationReport } from '../report.ts';
 import {
   WEBDRIVERIO_PROVIDER,
+  findDeclaredSpec,
   readPackageJsonIfExists,
   warnMigration,
   type DependencyBag,
@@ -34,6 +35,20 @@ const WEBDRIVERIO_PEER_DEP = 'webdriverio';
 // with WebDriverIO. Both the community provider and its framework need driver
 // postinstalls, regardless of which one the project declares directly.
 const WEBDRIVERIO_ALLOW_SIGNAL_DEPS = [WEBDRIVERIO_PEER_DEP, WEBDRIVERIO_PROVIDER] as const;
+
+// A standalone WebDriverIO installation does not use Vitest's browser package.
+// Only the provider (or its legacy imports) needs the shared browser override.
+export function workspaceUsesWebdriverioProvider(
+  rootDir: string,
+  packages?: WorkspacePackage[],
+): boolean {
+  return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))].some((dir) => {
+    const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
+    return Boolean(
+      (pkg && findDeclaredSpec(pkg, WEBDRIVERIO_PROVIDER)) || usesWebdriverioProvider(dir),
+    );
+  });
+}
 
 export function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
   for (const name of WEBDRIVERIO_ALLOW_SIGNAL_DEPS) {
