@@ -1,8 +1,7 @@
 use vp_pm_cli_macros::pm_args;
 
 use crate::resolution::{
-    Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm, Resolution,
-    Resolve, Yarn,
+    Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm, Resolve, Yarn,
 };
 
 #[pm_args]
@@ -115,10 +114,6 @@ impl Resolve<DlxArgs> for Bun {
 }
 
 impl DlxArgs {
-    pub(crate) fn resolve_npx_fallback(&self) -> Resolution {
-        Resolution { outcome: resolve_npx(self), diagnostics: Diagnostics::default() }
-    }
-
     fn split_command(&self) -> Option<(&str, &[String])> {
         self.args.split_first().map(|(package_spec, args)| (package_spec.as_str(), args))
     }
@@ -391,20 +386,6 @@ mod tests {
         assert_eq!(command.program, "npx");
         assert_eq!(command.args, vec!["--yes", "create-vue", "my-app"]);
         assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::FallbackCommand);
-        assert_eq!(
-            command.env.get("npm_config_update_notifier").map(String::as_str),
-            Some("false")
-        );
-    }
-
-    #[test]
-    fn no_project_fallback_uses_npx_without_a_diagnostic() {
-        let resolution = dlx_args("create-vue", &["my-app"]).resolve_npx_fallback();
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "npx");
-        assert_eq!(command.args, vec!["--yes", "create-vue", "my-app"]);
-        assert!(resolution.diagnostics.is_empty());
         assert_eq!(
             command.env.get("npm_config_update_notifier").map(String::as_str),
             Some("false")

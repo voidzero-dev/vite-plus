@@ -1,0 +1,27 @@
+[[case]]
+name = "install_package_manager_selection"
+vp = ["local", "global"]
+comment = "An unconfigured project offers a package manager selector and installs with the selected manager without pinning it."
+steps = [
+  { argv = ["vp", "install"], interactions = [
+    { expect-milestone = "select:package-manager:0" },
+    { write-key = "down" },
+    { expect-milestone = "select:package-manager:1" },
+    { write-key = "enter" },
+  ] },
+  ["vpt", "stat-file", "package-lock.json", "--assert", "file"],
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "install_package_manager_noninteractive"
+vp = "global"
+comment = "CI and piped commands use the selector's pnpm default without prompting or pinning the manager."
+steps = [
+  { argv = ["vp", "install", "--lockfile-only"], envs = [["CI", "true"]] },
+  ["vpt", "stat-file", "pnpm-lock.yaml", "--assert", "file"],
+  ["vpt", "rm", "pnpm-lock.yaml"],
+  { argv = ["vp", "install", "--lockfile-only"], tty = false },
+  ["vpt", "stat-file", "pnpm-lock.yaml", "--assert", "file"],
+  ["vpt", "print-file", "package.json"],
+]

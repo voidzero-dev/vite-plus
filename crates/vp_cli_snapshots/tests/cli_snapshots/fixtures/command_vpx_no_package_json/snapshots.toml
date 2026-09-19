@@ -5,5 +5,9 @@ serial = true
 local-registry = true
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vpx", "-s", "cowsay", "hello"], comment = "should work without package.json", continue-on-failure = true },
+  { argv = ["vpx", "-s", "cowsay", "hello"], comment = "select a manager without package.json", continue-on-failure = true, interactions = [
+    { expect-milestone = "select:package-manager:0" },
+    { write = "2" },
+  ] },
+  ["vpt", "stat-file", "package.json", "--assert", "missing"],
 ]

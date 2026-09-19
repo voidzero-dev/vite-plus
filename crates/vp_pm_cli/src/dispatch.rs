@@ -8,12 +8,8 @@ use std::process::ExitStatus;
 use vt_path::AbsolutePath;
 
 use crate::{
-    EnvironmentPackageManagerResolution, PackageManager,
-    cli::PackageManagerCommand,
-    download_package_manager,
-    error::Error,
-    helpers::build_package_manager_or_npm_default,
-    resolution::{DlxArgs, run_resolution},
+    EnvironmentPackageManagerResolution, PackageManager, cli::PackageManagerCommand,
+    download_package_manager, error::Error, resolution::run_resolution,
 };
 
 #[derive(Debug)]
@@ -64,24 +60,8 @@ async fn dispatch_with_manager(
     source: ManagerSource<'_>,
 ) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
-    let command = match command {
-        PackageManagerCommand::Dlx(args) => {
-            let manager = match source {
-                ManagerSource::Detect => return dispatch_dlx(cwd, args, render_diagnostics).await,
-                ManagerSource::Environment(package_manager) => {
-                    build_selected_package_manager(package_manager).await?
-                }
-                ManagerSource::Resolved(manager) => manager,
-            };
-            let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
-            let status = run_resolution(cwd, resolution, render_diagnostics).await?;
-            return Ok(DispatchResult { status, why_hint_packages: None });
-        }
-        command => command,
-    };
-
     let manager = match source {
-        ManagerSource::Detect => build_package_manager_or_npm_default(cwd).await?,
+        ManagerSource::Detect => PackageManager::builder(cwd).build_with_default().await?,
         ManagerSource::Environment(package_manager) => {
             build_selected_package_manager(package_manager).await?
         }
@@ -105,24 +85,4 @@ async fn build_selected_package_manager(
     .await
     .map_err(Error::Install)?;
     Ok(PackageManager::from_install_dir(package_manager.package_manager_type, version, install_dir))
-}
-
-async fn dispatch_dlx(
-    cwd: &AbsolutePath,
-    args: DlxArgs,
-    render_diagnostics: bool,
-) -> Result<DispatchResult, Error> {
-    match PackageManager::builder(cwd).build_with_default().await {
-        Ok(manager) => {
-            let resolution = PackageManagerCommand::Dlx(args).resolve_for_manager(&manager)?;
-            let status = run_resolution(cwd, resolution, render_diagnostics).await?;
-            Ok(DispatchResult { status, why_hint_packages: None })
-        }
-        Err(vp_error::Error::WorkspaceError(vt_workspace::Error::PackageJsonNotFound(_))) => {
-            let status =
-                run_resolution(cwd, args.resolve_npx_fallback(), render_diagnostics).await?;
-            Ok(DispatchResult { status, why_hint_packages: None })
-        }
-        Err(error) => Err(Error::Install(error)),
-    }
 }

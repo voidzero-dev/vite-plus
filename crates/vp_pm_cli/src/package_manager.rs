@@ -227,9 +227,17 @@ impl PackageManagerBuilder {
     /// Build the package manager.
     /// Detect the package manager from the current working directory.
     pub async fn build(&self) -> Result<PackageManager, Error> {
-        let (workspace_root, _) = find_workspace_root(&self.cwd)?;
         let (package_manager_type, version_or_req, hash, source) =
-            get_package_manager_type_and_version(&workspace_root, self.client_override)?;
+            match (find_workspace_root(&self.cwd), self.client_override) {
+                (Ok((workspace_root, _)), default) => {
+                    get_package_manager_type_and_version(&workspace_root, default)?
+                }
+                (Err(vt_workspace::Error::PackageJsonNotFound(_)), Some(package_manager_type)) => {
+                    // A selection also works outside a project, without creating a manifest.
+                    (package_manager_type, "latest".into(), None, PackageManagerSource::Default)
+                }
+                (Err(error), _) => return Err(error.into()),
+            };
 
         // A lockfile selects npm, but does not request a version separate from Node's npm.
         if package_manager_type == PackageManagerType::Npm
@@ -253,12 +261,12 @@ impl PackageManagerBuilder {
         })
     }
 
-    /// Build the package manager with default package manager.
-    /// If the package manager is not specified, prompt the user to select a package manager.
+    /// Prompt for a package manager when detection finds no project or manager.
     pub async fn build_with_default(&self) -> Result<PackageManager, Error> {
         let package_manager = match self.build().await {
             Ok(pm) => pm,
-            Err(Error::UnrecognizedPackageManager) => {
+            Err(Error::UnrecognizedPackageManager)
+            | Err(Error::WorkspaceError(vt_workspace::Error::PackageJsonNotFound(_))) => {
                 // Prompt user to select a package manager
                 let selected_type = prompt_package_manager_selection()?;
                 Self::new(&self.cwd).package_manager_type(selected_type).build().await?
@@ -1931,6 +1939,19 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
         // Move cursor back up for next iteration
         if options.len() > 1 {
             execute!(io::stdout(), cursor::MoveUp((options.len() - 1) as u16))?;
+        }
+
+        if std::env::var_os(vp_shared::env_vars::VP_EMIT_MILESTONES)
+            .is_some_and(|value| value == "1")
+        {
+            // Emit after rendering so PTY tests can synchronize keystrokes with the menu.
+            static MILESTONE_ID: std::sync::atomic::AtomicUsize =
+                std::sync::atomic::AtomicUsize::new(0);
+            let id = MILESTONE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let name = format!("select:package-manager:{selected_index}");
+            let encoded = base64_simd::URL_SAFE_NO_PAD.encode_to_string(name.as_bytes());
+            write!(io::stdout(), "\x1b]2;pty-terminal-test:{id:032x}:{encoded}\x1b\\")?;
+            io::stdout().flush()?;
         }
 
         // Read keyboard input, skipping non-Press events (e.g. Release on Windows)
