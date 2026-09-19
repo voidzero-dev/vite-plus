@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { type WorkspacePackage } from '../../types/index.ts';
-import { editJsonFile } from '../../utils/json.ts';
+import { VITE_PLUS_NAME } from '../../utils/constants.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
+import { detectPackageMetadata } from '../../utils/package.ts';
 import { hasVitestTypesInTsconfig } from '../../utils/tsconfig.ts';
 import { projectUsesVitestDirectly } from '../migrator.ts';
 import {
@@ -191,8 +193,8 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
   '.cache',
 ]);
 
-// Built plugins can still load the original API after migration. Only installed
-// dependencies and version-control metadata are irrelevant to retention.
+// Built plugins can still load the original API after migration. Skip installed
+// source and VCS metadata; dependency peer contracts are checked separately.
 const OXLINT_RETENTION_SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn']);
 
 /**
@@ -227,6 +229,8 @@ function sourceTreeMatches(
     // package imports/scripts, even when they are not workspace members.
     crossPackageBoundaries?: boolean;
     includePackageReferences?: boolean;
+    includeExtensionless?: boolean;
+    matchesPackage?: (projectPath: string, pkg: DependencyBag) => boolean;
     skipDirs?: ReadonlySet<string>;
   } = {},
 ): boolean {
@@ -259,6 +263,7 @@ function sourceTreeMatches(
       } else if (
         entry.isFile() &&
         (VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name)) ||
+          (options.includeExtensionless && path.extname(entry.name) === '') ||
           (options.includePackageReferences && entry.name === 'package.json'))
       ) {
         try {
@@ -266,7 +271,13 @@ function sourceTreeMatches(
           if (entry.name === 'package.json') {
             // Check alias targets and inline scripts without counting dependency
             // declarations as uses. Serialization includes conditional targets.
-            const pkg = JSON.parse(content) as { imports?: unknown; scripts?: unknown };
+            const pkg = JSON.parse(content) as DependencyBag & {
+              imports?: unknown;
+              scripts?: unknown;
+            };
+            if (options.matchesPackage?.(dir, pkg)) {
+              return true;
+            }
             content = JSON.stringify({ imports: pkg.imports, scripts: pkg.scripts });
           }
           if (matchesContent(content)) {
@@ -368,7 +379,7 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
 }
 
 /**
- * Check final source, build output, package import aliases, and package scripts.
+ * Check final source, build output, aliases, scripts, and dependency peers.
  * A substring scan conservatively retains references the rewriter leaves alone,
  * including require calls, type references, and strings.
  */
@@ -376,8 +387,50 @@ export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): b
   return sourceTreeMatches(projectPath, (content) => content.includes(OXLINT_PLUGINS_PACKAGE), {
     crossPackageBoundaries: true,
     includePackageReferences: true,
+    // Node can execute these scripts without a shebang or executable bit.
+    includeExtensionless: true,
+    matchesPackage: projectListsRequiredOxlintPluginsPeer,
     skipDirs: OXLINT_RETENTION_SKIP_DIRS,
   });
+}
+
+// Keep the explicit peer provider in strict package-manager layouts. A copy
+// installed transitively through vite-plus cannot satisfy another plugin's peer.
+export function projectListsRequiredOxlintPluginsPeer(
+  projectPath: string,
+  pkg: DependencyBag,
+): boolean {
+  const dependencyNames = new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.devDependencies ?? {}),
+    ...Object.keys(pkg.optionalDependencies ?? {}),
+  ]);
+  dependencyNames.delete(OXLINT_PLUGINS_PACKAGE);
+  // These toolchain packages do not require an @oxlint/plugins peer.
+  dependencyNames.delete(VITE_PLUS_NAME);
+  dependencyNames.delete('vite');
+  for (const name of dependencyNames) {
+    const metadata = detectPackageMetadata(projectPath, name);
+    if (!metadata) {
+      return true;
+    }
+    try {
+      const installedPkg = readJsonFile(path.join(metadata.path, 'package.json')) as {
+        peerDependencies?: Record<string, string>;
+        peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+      };
+      if (
+        typeof installedPkg.peerDependencies?.[OXLINT_PLUGINS_PACKAGE] === 'string' &&
+        installedPkg.peerDependenciesMeta?.[OXLINT_PLUGINS_PACKAGE]?.optional !== true
+      ) {
+        return true;
+      }
+    } catch {
+      // An unknown peer contract is not evidence that the provider is unused.
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -385,7 +438,7 @@ export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): b
  *
  * Runs AFTER the import rewrite, so the scan sees final source. Skips a package
  * that owns the API as a runtime or peer dependency, and skips any package
- * whose source or build output still names it.
+ * whose source, build output, or installed dependencies still require it.
  */
 export function dropDeadOxlintPluginsDependency(
   rootDir: string,

@@ -1,0 +1,17 @@
+[[case]]
+name = "migration_oxlint_required_peer"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "pm", "pack", "--pack-destination", "../artifacts"], cwd = "plugin", snapshot = false },
+  { argv = ["vpt", "rm", "-rf", "plugin"], comment = "Only the installed dependency contains a reference to the required peer.", snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "check-plugin"], comment = "The installed plugin can load its required peer before migration." },
+  { argv = ["node", "-e", "const { createRequire } = require('node:module'); console.log(typeof createRequire(require.resolve('vite-plus/package.json'))('@oxlint/plugins').defineRule);"], comment = "Vite+ also has its own transitive copy of the plugin API." },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vpt", "print-file", "package.json"], comment = "Keep the direct provider even though application source never names the peer." },
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "check-plugin"], comment = "The plugin still loads after reinstall with automatic peers and hoisting disabled." },
+]
