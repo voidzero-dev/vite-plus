@@ -3660,6 +3660,9 @@ export interface HooksArgs {
   hooksDir?: string;
 }
 
+/** Check inherited `.gitignore` rules without requiring the directory to exist. */
+export declare function isDirectoryGitignored(root: string, directory: string): boolean;
+
 /** Execution context after command dispatch selects the working directory. */
 export interface JsCommandContext {
   cwd: string;
