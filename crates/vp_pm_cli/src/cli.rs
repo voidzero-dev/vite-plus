@@ -207,10 +207,7 @@ impl PackageManagerCommand {
     /// only command whose typed clap shape selects between two resolvers.
     pub(crate) fn resolve_for_manager(self, manager: &PackageManager) -> Result<Resolution, Error> {
         match self {
-            Self::Install(args) if !args.packages.is_empty() => {
-                resolve_args_for_manager(manager, args.into_add_args())
-            }
-            Self::Install(args) => resolve_args_for_manager(manager, args),
+            Self::Install(args) => args.resolve_args_for_manager(manager),
             Self::Add(args) => resolve_args_for_manager(manager, args),
             Self::Remove(args) => resolve_args_for_manager(manager, args),
             Self::Update(args) => resolve_args_for_manager(manager, args),
@@ -283,6 +280,7 @@ impl PackageManagerCommand {
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::Install(args) => args.silent,
+            Self::Add(args) => args.silent,
             Self::Dlx(args) => args.silent,
             Self::Outdated(args) => {
                 matches!(args.format, Some(OutdatedFormat::Json | OutdatedFormat::List))
@@ -301,6 +299,7 @@ impl PackageManagerCommand {
     pub(crate) fn should_render_diagnostics(&self) -> bool {
         match self {
             Self::Install(args) => !args.silent,
+            Self::Add(args) => !args.silent,
             Self::Dlx(args) => !args.silent,
             _ => true,
         }
@@ -667,6 +666,7 @@ mod tests {
     fn classifies_quiet_and_machine_readable_commands() {
         for args in [
             &["install", "--silent"][..],
+            &["add", "react", "--silent"][..],
             &["dlx", "--silent", "tsx"][..],
             &["outdated", "--format", "json"][..],
             &["why", "react", "--parseable"][..],
@@ -689,6 +689,7 @@ mod tests {
             assert!(!parse(args).unwrap().is_quiet_or_machine_readable(), "{args:?}");
         }
         assert!(!parse(&["install"]).unwrap().is_quiet_or_machine_readable());
+        assert!(!parse(&["add", "react"]).unwrap().is_quiet_or_machine_readable());
     }
 
     #[test]
@@ -760,6 +761,7 @@ mod tests {
     #[test]
     fn suppresses_diagnostics_only_for_explicit_silent_modes() {
         for args in [
+            &["add", "react"][..],
             &["outdated", "--format", "json"][..],
             &["why", "react", "--parseable"][..],
             &["info", "react", "--json"][..],
@@ -768,7 +770,11 @@ mod tests {
             assert!(parse(args).unwrap().should_render_diagnostics(), "{args:?}");
         }
 
-        for args in [&["install", "--silent"][..], &["dlx", "--silent", "tsx"][..]] {
+        for args in [
+            &["install", "--silent"][..],
+            &["add", "react", "--silent"][..],
+            &["dlx", "--silent", "tsx"][..],
+        ] {
             assert!(!parse(args).unwrap().should_render_diagnostics(), "{args:?}");
         }
     }

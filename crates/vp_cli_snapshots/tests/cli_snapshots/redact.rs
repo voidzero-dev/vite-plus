@@ -276,6 +276,12 @@ static YARN1_STEP_EMOJI_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // depends on what ran earlier in the environment; strip it entirely.
 static YARN_TELEMETRY_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(?m)^\u{27A4} YN0065: [^\n]*\n(?:[ \t]*\n)*").unwrap());
+// Yarn's file archive hashes and lockfile checksums differ across platforms.
+static YARN_FILE_HASH_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(::hash=)[0-9a-f]+(&locator=)").unwrap());
+static YARN_LOCKFILE_CHECKSUM_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^(\x{27A4} YN0028: [^\n]*checksum: )[0-9a-f]+/[0-9a-f]+").unwrap()
+});
 // `vp staged` reports the backup stash it created; the short hash covers a
 // commit of the working tree at run time, so it can never be stable.
 static STASH_HASH_RE: LazyLock<regex::Regex> =
@@ -591,6 +597,8 @@ pub fn redact_output(
     // notice, and the stash hash `vp staged` reports for its backup
     output = YARN1_STEP_EMOJI_RE.replace_all(&output, "${1} ").into_owned();
     output = YARN_TELEMETRY_RE.replace_all(&output, "").into_owned();
+    output = YARN_FILE_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
+    output = YARN_LOCKFILE_CHECKSUM_RE.replace_all(&output, "${1}<hash>").into_owned();
     output = STASH_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
 
     // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
