@@ -1193,32 +1193,18 @@ async fn create_env_files() -> Result<(), Error> {
 
 /// Print instructions for sourcing the environment files and adding bin to `PATH`.
 fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
-    // Use paths relative to $HOME. POSIX and Fish use $HOME. Nushell cannot
-    // expand $HOME in the parse-time `source` keyword, so use ~.
-    let env_path = env_dir.as_path().display().to_string();
-    let home = vp_shared::EnvConfig::get().user_home.as_path().display().to_string();
-    let (env_path, nu_env_path) = if let Some(suffix) = env_path.strip_prefix(&home) {
-        (format!("$HOME{suffix}"), format!("~{suffix}"))
-    } else {
-        (env_path.clone(), env_path)
-    };
-
     output::raw(&help::render_heading("Next Steps"));
-    output::raw("  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
+    output::raw("  Activate Vite+ in this terminal:");
+    let env = vp_shared::EnvConfig::get();
+    for line in super::activation::instructions(
+        env_dir,
+        env.vp_shell.as_deref().and_then(|s| s.parse().ok()),
+    ) {
+        output::raw(&line);
+    }
     output::raw("");
-    output::raw(&format!("  . \"{env_path}/env\""));
-    output::raw("");
-    output::raw("  For fish shell, add to ~/.config/fish/config.fish:");
-    output::raw("");
-    output::raw(&format!("  source \"{env_path}/env.fish\""));
-    output::raw("");
-    output::raw("  For Nushell, add to ~/.config/nushell/config.nu:");
-    output::raw("");
-    output::raw(&format!("  source '{nu_env_path}/env.nu'"));
-    output::raw("");
-    output::raw("  For PowerShell, add to your $PROFILE:");
-    output::raw("");
-    output::raw(&format!("  . \"{env_path}/env.ps1\""));
+    output::raw("  Add the command for your shell to its profile to activate future terminals.");
+    output::raw("  If setup already updated your profile, you can open a new terminal instead.");
     output::raw("");
     output::raw("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
 
@@ -1239,7 +1225,7 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
 
     output::raw("");
     output::raw(&format!(
-        "  Restart your terminal and IDE, then run {} to verify.",
+        "  Restart an already-running IDE to load its environment. Run {} to verify.",
         help::accent_command("vp env doctor")
     ));
 }

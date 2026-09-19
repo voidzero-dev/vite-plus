@@ -1,0 +1,41 @@
+[[case]]
+name = "activation_managed_bash"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [["node", "verify.mjs", "managed", "bash"]]
+
+[[case]]
+name = "activation_external_zsh"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["zsh"]
+steps = [["node", "verify.mjs", "external", "zsh"]]
+
+[[case]]
+name = "activation_xdg_bash"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [["node", "verify.mjs", "xdg", "bash"]]
+
+[[case]]
+name = "activation_legacy_bash"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [["node", "verify.mjs", "legacy", "bash"]]
+
+[[case]]
+name = "activation_fish"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["fish"]
+steps = [["node", "verify.mjs", "managed", "fish"]]
+
+[[case]]
+name = "activation_nushell"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["nu"]
+steps = [["node", "verify.mjs", "managed", "nu"]]
