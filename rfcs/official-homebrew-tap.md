@@ -46,45 +46,136 @@ x64. Launch each target only after its installation tests pass.
 Installation assumes network access: GitHub for the tap and binary, and the
 configured npm registry and runtime sources for first-run setup.
 
-## First-run setup
+## Installation flow
 
-Add a setup mode for a Homebrew-owned binary without bundled JavaScript:
+The snapshots show a fresh installation, then an upgrade from version `A` to
+`B`. `<BREW>` is Homebrew's prefix, such as `/opt/homebrew`. User directories
+`<DATA>`, `<BIN>`, `<CONFIG>`, and `<STATE>` come from `VpDirs` and respect the
+user's directory overrides. Dependency paths and receipt names are illustrative.
+Each stage shows relevant additions or changes; other files are omitted.
 
-1. Keep the executable in Homebrew's Cellar. Reuse the shared Node.js and pinned
-   pnpm bootstrap, then install `vite-plus` at the executable's exact version.
-2. Store dependencies in a dedicated directory under `VpDirs.data`, keyed by
-   CLI version and platform, separate from the script installer's `current` link.
-3. Record successful dependency installation in user-owned state. Reuse existing
-   per-user setup for shims and management preferences.
-4. Execute commands through the Homebrew binary using the matching dependency
-   directory. Later invocations reuse that installation.
+### 1. Register the tap
 
-For example:
+`brew tap` clones the repository. At this point, Homebrew has the formula but
+has not installed the CLI.
 
 ```text
-Homebrew: <Cellar>/vp/<version>/bin/vp
-User:     <DATA>/cli-packages/<version>/<platform>/node_modules/vite-plus
+<Homebrew tap checkout>/
+└── HomebrewFormula/vp.rb
 ```
 
-The user path is illustrative; resolve it through `VpDirs`. Shims must use a
-stable Homebrew entrypoint and keep working after the old Cellar version is
-removed. Setup must not copy the executable or write into the Cellar.
+### 2. Install the native CLI
 
-After a Homebrew upgrade, the new binary prepares its dependencies on first use.
-This is once per user, version, and platform, not once for the machine. Preserve
-saved management choices. Serialize concurrent setup attempts and record
-completion only after a successful install, so interrupted downloads can retry.
+`brew install` downloads the GitHub archive, installs the CLI into the Cellar,
+and links the public commands. It creates no per-user Vite+ installation.
 
-The current [self-setup code](../crates/vp_global_cli/src/self_setup.rs) copies
-bare external binaries into a managed installation. The
-[JavaScript resolver](../crates/vp_global_cli/src/js_executor.rs) expects
-JavaScript beside the executable. Both need changes for this mode. Existing
-script installations and core installations with bundled JavaScript must retain
-their behavior. Automatic setup needs no new public `vp setup` command.
+```text
+<BREW>/
+├── Cellar/vp/A/
+│   ├── bin/
+│   │   ├── vp
+│   │   ├── vpr -> vp
+│   │   └── vpx -> vp
+│   └── INSTALL_RECEIPT.json
+└── bin/
+    ├── vp  -> ../Cellar/vp/A/bin/vp
+    ├── vpr -> ../Cellar/vp/A/bin/vpr
+    └── vpx -> ../Cellar/vp/A/bin/vpx
+```
 
-Runtime Node.js selection keeps the existing system-first and managed modes.
-Bootstrapping the tools needed for dependency installation must not change the
-user's saved runtime preferences.
+### 3. Prepare dependencies on first use
+
+The first `vp` invocation reuses the shared Node.js and pinned pnpm bootstrap.
+It installs `vite-plus@A` and production dependencies in the user's data
+directory, keyed by CLI version and platform. The Homebrew files stay unchanged.
+
+```text
+<DATA>/
+├── js_runtime/node/<node-version>/
+├── package_manager/pnpm/<pnpm-version>/
+└── cli-packages/A/<platform>/
+    ├── package.json
+    ├── pnpm-lock.yaml
+    └── node_modules/
+        ├── vite-plus/
+        └── ...                     # production dependencies
+```
+
+### 4. Complete user setup
+
+Setup creates preferences, shell environment files, and shims. It records
+completion in user-owned state only after installation succeeds. Example shims
+link through Homebrew's stable public command, not a versioned Cellar path.
+
+```text
+<CONFIG>/
+├── config.json
+└── env                             # Bash/Zsh; other shell files omitted
+
+<BIN>/
+├── vp   -> <BREW>/bin/vp
+├── node -> <BREW>/bin/vp
+├── npm  -> <BREW>/bin/vp
+└── ...                             # other tool shims
+
+<STATE>/self-setup/
+└── <receipt-for-A>.json
+```
+
+The executable remains at `<BREW>/Cellar/vp/A/bin/vp` and loads JavaScript from
+`<DATA>/cli-packages/A/<platform>/node_modules/vite-plus`. Later invocations
+reuse these files. Runtime selection retains the user's system-first or managed
+preferences, independently of the tools used to install dependencies.
+
+### 5. Upgrade through Homebrew
+
+`brew upgrade` installs version `B` and replaces its public links. User shims
+continue to point through those links, even after Homebrew removes version `A`.
+
+```text
+<BREW>/Cellar/vp/B/
+├── bin/                            # new vp, vpr, vpx
+└── INSTALL_RECEIPT.json
+
+<BREW>/bin/
+├── vp  -> ../Cellar/vp/B/bin/vp
+├── vpr -> ../Cellar/vp/B/bin/vpr
+└── vpx -> ../Cellar/vp/B/bin/vpx
+```
+
+The first invocation of `B` adds its matching dependencies and completion record.
+It preserves the user's preferences and reuses existing bootstrap tools when
+applicable.
+
+```text
+<DATA>/cli-packages/B/<platform>/
+├── package.json
+├── pnpm-lock.yaml
+└── node_modules/
+    ├── vite-plus/
+    └── ...
+
+<STATE>/self-setup/
+└── <receipt-for-B>.json
+```
+
+Dependency setup runs once per user, version, and platform. Serialize concurrent
+attempts and allow interrupted installs to retry without repeating preference
+prompts. Keep these directories separate from the script installer's `current`
+link.
+
+## Required CLI changes
+
+Add a mode for Homebrew-owned binaries without bundled JavaScript. The current
+[self-setup code](../crates/vp_global_cli/src/self_setup.rs) copies bare external
+binaries into a managed installation; this mode must retain the Homebrew binary.
+The [JavaScript resolver](../crates/vp_global_cli/src/js_executor.rs) must find
+its matching per-user dependency directory instead of expecting JavaScript
+beside the executable.
+
+Existing script installations and core installations with bundled JavaScript
+must retain their behavior. Automatic setup needs no new public `vp setup`
+command. Setup must not write into the Cellar.
 
 ## Registry configuration
 
