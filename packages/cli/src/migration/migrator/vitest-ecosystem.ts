@@ -145,7 +145,7 @@ function parentChainReachesVitePlus(segments: string[]): boolean {
 //     (scoped) segments; the remaining leading `/`-segments are the `from` chain,
 //     with scoped ancestors (`@scope/name`) rejoined.
 //   - bare/versioned names (`pkg`, `@scope/pkg`, `pkg@4`) have NO parent → `null`.
-function extractOverrideParentSegments(key: string): string[] | null {
+export function extractOverrideParentSegments(key: string): string[] | null {
   let rest = key.trim();
   // Peel every pnpm `>` parent level. pnpm splits at a `>` whose preceding char
   // is NOT space, `|`, or `@` (its DELIMITER_REGEX), so semver comparators like

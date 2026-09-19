@@ -46,8 +46,8 @@ export const REMOVE_PACKAGES = [
   '@vitest/browser-preview',
 ] as const;
 
-// WebDriverIO is community-maintained. Detect its browser usage, but leave its
-// dependency, framework peer, catalogs, and overrides under the user's control.
+// WebDriverIO is community-maintained. The versioned v5 preflight ensures its
+// minimum version and framework peer; generic reconciliation must not repin it.
 export const WEBDRIVERIO_PROVIDER = '@vitest/browser-webdriverio';
 
 export const PLAYWRIGHT_PROVIDER = '@vitest/browser-playwright';

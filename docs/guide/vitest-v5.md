@@ -128,11 +128,13 @@ Vite+ retains `vite-plus/test/coverage`, `/reporters`, `/environments`, `/snapsh
 
 Vite+ 1.0 removes the `vite-plus/test/browser-webdriverio` exports. Use `@vitest/browser-webdriverio` and choose a provider version and framework peers that support your tests. The community maintains this package on its own release schedule.
 
-`vp migrate` changes legacy provider imports to `@vitest/browser-webdriverio` and preserves existing dependency versions, catalogs, and overrides. If your project has no provider dependency, migration asks you to add one. Existing imports from the community package stay unchanged.
+`vp migrate` changes legacy provider imports to `@vitest/browser-webdriverio` and ensures a provider version of at least `5.0.0`. It adds `^5.0.0` when the provider is missing, upgrades older versions, and narrows ranges that still allow v4. It also updates referenced catalog entries and removes overrides that force an older provider. Versions and ranges already above this minimum stay unchanged. The migration ensures the required `webdriverio` peer is installed without upgrading an existing framework version.
+
+You manage provider upgrades after this migration; Vite+ does not synchronize community releases with Vitest. Existing imports from the community package stay unchanged. For custom dependencies that the migrator cannot verify, resolve the diagnostic before retrying migration. See the [upstream package migration guide](https://vitest.dev/guide/migration/#package-migration).
 
 Legacy Vite+ WebDriverIO `/context` imports move to `vite-plus/test/browser/context`. Keep runtime browser APIs on this shared entry; the community provider's `/context` entry contains types only.
 
-The optional peer declaration still follows Vitest's dependency metadata. It does not provide a Vite+ export or manage the installed provider version.
+The optional peer declaration still follows Vitest's dependency metadata. It does not provide a Vite+ export or synchronize provider releases.
 
 ## Reports and screenshots
 

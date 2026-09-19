@@ -62,14 +62,12 @@ describe('Vitest v5 diagnostic scope', () => {
         "import { webdriverio } from 'vite-plus/test/browser-webdriverio';\nexport default {};",
     });
     const plan = planProject(root);
-    expect(plan.findings.map(({ code, severity }) => ({ code, severity }))).toEqual([
-      { code: 'browser-provider', severity: 'review' },
-    ]);
+    expect(plan.findings).toEqual([]);
     applyVitestV5Migration(plan);
     expect(fs.readFileSync(path.join(root, 'vite.config.ts'), 'utf8')).toContain(
       'from "@vitest/browser-webdriverio"',
     );
-    expect(finishVitestV5Migration(plan).map(({ code }) => code)).toEqual(['browser-provider']);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
     fs.writeFileSync(
       path.join(root, 'package.json'),
       JSON.stringify({

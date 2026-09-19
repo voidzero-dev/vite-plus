@@ -8,7 +8,7 @@ import { isScalar, parseDocument, visit } from 'yaml';
 import cliPackage from '../../../package.json' with { type: 'json' };
 import { PackageManager, type WorkspaceInfoOptional } from '../../types/index.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
-import { createCatalogDependencyResolver, usesWebdriverioProvider } from '../migrator.ts';
+import { createCatalogDependencyResolver } from '../migrator.ts';
 import type { RewriteResult, SourceOptions, VitestV5Finding } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
 import {
@@ -24,6 +24,7 @@ import {
   type VitestV5TestMode,
 } from '../vitest-v5/scopes.ts';
 import { hasVitestV5SourceUsage, migrateVitestV5Source } from '../vitest-v5/source.ts';
+import { migrateWebdriverioDependencies } from '../vitest-v5/webdriverio.ts';
 
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -32,6 +33,7 @@ const SKIP_DIRS = new Set([
   '.vitest',
   '.vite-plus',
   '.cache',
+  '.yarn',
   'dist',
   'build',
   'out',
@@ -126,6 +128,7 @@ function filesInProject(directory: string): string[] {
         walk(file);
       } else if (
         entry.isFile() &&
+        !['.pnp.cjs', '.pnp.loader.mjs'].includes(entry.name) &&
         (CODE_FILE.test(file) ||
           /\.(?:json|ya?ml|sh)$/.test(file) ||
           /^Dockerfile(?:\.|$)|^Containerfile(?:\.|$)/.test(entry.name) ||
@@ -730,26 +733,6 @@ export function planVitestV5Migration(
         ),
       ),
     };
-    // The community provider is user-managed. Do not invent a version when
-    // restoring a removed Vite+ shim to a direct provider import.
-    if (
-      active &&
-      !dependency(pkg, '@vitest/browser-webdriverio') &&
-      !dependency(
-        readJson(path.join(workspace.rootDir, 'package.json')),
-        '@vitest/browser-webdriverio',
-      ) &&
-      usesWebdriverioProvider(directory)
-    ) {
-      findings.push(
-        finding(
-          path.join(directory, 'package.json'),
-          'browser-provider',
-          'Add @vitest/browser-webdriverio and its required peers using versions compatible with your tests. Vite+ no longer exports or manages this community provider.',
-          'review',
-        ),
-      );
-    }
     if (active && !version) {
       findings.push(
         finding(
@@ -809,12 +792,22 @@ export function planVitestV5Migration(
       }
     }
   }
+  // Compose manifest edits with script/Node edits before producing one atomic
+  // preflight plan. This also runs for existing Vite+ projects and stateless reruns.
+  const rewrittenSources = new Map(allSources);
+  for (const change of changes) {
+    rewrittenSources.set(change.file, change.after);
+  }
+  findings.push(...migrateWebdriverioDependencies(workspace, rewrittenSources, inputs));
   return {
     rootDir: workspace.rootDir,
     packageManager: workspace.packageManager,
     projects,
     findings,
-    changes,
+    changes: [...rewrittenSources].flatMap(([file, after]) => {
+      const before = allSources.get(file)!;
+      return before !== after ? [{ file, before, after }] : [];
+    }),
     inputs,
   };
 }

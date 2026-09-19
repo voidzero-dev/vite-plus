@@ -102,8 +102,8 @@ const VITEST_BROWSER_SPECIFIER_HINTS = [
   'vite-plus/test/utils',
 ] as const;
 
-// Detect the community package and legacy aliases for install guidance and
-// driver-build allowances. These signals do not authorize version changes.
+// Detect the community package and legacy aliases for the versioned migration
+// and driver-build allowances. Generic reconciliation must not repin the provider.
 const WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS = [
   'vitest/browser-webdriverio',
   'vitest/browser/providers/webdriverio',
@@ -165,6 +165,7 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
   '.svelte-kit',
   '.vite',
   '.cache',
+  '.yarn',
 ]);
 
 // Built plugins can still load the original API after migration. Skip installed
@@ -236,6 +237,7 @@ function sourceTreeMatches(
         }
       } else if (
         entry.isFile() &&
+        !['.pnp.cjs', '.pnp.loader.mjs'].includes(entry.name) &&
         (VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name)) ||
           (options.includeExtensionless && path.extname(entry.name) === '') ||
           (options.includePackageReferences && entry.name === 'package.json'))
