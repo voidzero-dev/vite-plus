@@ -90,6 +90,19 @@ fn execute_installed(
     // Re-enter through the marked installation, inheriting cwd, environment and stdio.
     let mut command = std::process::Command::new(binary.as_path());
     command.args(args);
+    if just_installed {
+        // Setup already printed activation guidance. Activate only the re-executed
+        // command's PATH; the parent terminal still needs to source its env file.
+        // This also avoids repeating guidance during the setup handoff, without
+        // persisting a suppression flag that could hide it in another terminal.
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let bin = EnvConfig::get().dirs.bin.as_path().to_path_buf();
+        let paths = std::iter::once(bin).chain(std::env::split_paths(&path));
+        command.env(
+            "PATH",
+            std::env::join_paths(paths).map_err(|error| Error::Other(error.to_string().into()))?,
+        );
+    }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;

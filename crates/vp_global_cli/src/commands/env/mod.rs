@@ -3,6 +3,7 @@
 //! This module provides the `vp env` command for managing Node.js environments
 //! through shim-based version management.
 
+pub(crate) mod activation;
 pub mod bin_config;
 mod clean;
 pub mod config;
