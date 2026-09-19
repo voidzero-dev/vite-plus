@@ -1,0 +1,5 @@
+{
+  "name": "oxc-config-extensions",
+  "private": true,
+  "type": "module"
+}

@@ -118,7 +118,6 @@ async fn execute_direct_subcommand(
                 resolve_and_execute_with_filter(
                     &resolver,
                     other,
-                    None,
                     &envs,
                     cwd,
                     FilterStream::Stdout,
@@ -129,7 +128,6 @@ async fn execute_direct_subcommand(
                 resolve_and_execute_with_filter(
                     &resolver,
                     other,
-                    None,
                     &envs,
                     cwd,
                     FilterStream::Stderr,
@@ -137,7 +135,7 @@ async fn execute_direct_subcommand(
                 )
                 .await?
             } else {
-                resolve_and_execute(&resolver, other, None, &envs, cwd).await?
+                resolve_and_execute(&resolver, other, &envs, cwd).await?
             }
         }
     };
