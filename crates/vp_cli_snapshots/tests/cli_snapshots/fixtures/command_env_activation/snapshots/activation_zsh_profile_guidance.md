@@ -14,7 +14,11 @@ Next Steps:
   Add the command to your .zshrc file to activate future Zsh terminals.
 
   Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
-$ zsh -lic 'command -v node; node --version'
+```
+
+## `HOME=${workspace}/profiles/user ZDOTDIR=${workspace}/profiles/user/zsh EXPECTED_NODE=${workspace}/profiles/system/node zsh -lic 'command -v node; test "$(command -v node)" = "$EXPECTED_NODE" || exit 1; node --version'`
+
+```
 <workspace>/profiles/system/node
 system-node
 ```
@@ -31,7 +35,11 @@ Next Steps:
   Or open a new terminal to load your configured shell profile.
 
   Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
-$ zsh -lic 'command -v node; node --version'
+```
+
+## `HOME=${workspace}/profiles/user ZDOTDIR=${workspace}/profiles/user/zsh EXPECTED_NODE=${VP_HOME}/bin/node zsh -lic 'command -v node; test "$(command -v node)" = "$EXPECTED_NODE" || exit 1; node --version'`
+
+```
 <home>/.vite-plus/bin/node
 <version>
 ```
