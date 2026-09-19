@@ -9,6 +9,7 @@ import {
   importedName,
   objectProperty,
   propertyName,
+  projectElements,
   staticObject,
   sameStaticValue,
   isString,
@@ -137,7 +138,7 @@ export function findVitestV5ConfigFiles(
         if (projects?.type !== 'ArrayExpression') {
           return;
         }
-        for (const project of projects.elements) {
+        for (const project of projectElements(projects)) {
           if (isString(project)) {
             addReference(project.value);
           } else {
@@ -470,7 +471,7 @@ function migrateConfig(
     if (hasInline && preserveDefaults) {
       addCompatibility(test, 'sharedViteServer');
     }
-    for (const project of projects.value.elements) {
+    for (const project of projectElements(projects.value)) {
       if (!project || isString(project)) {
         continue;
       }
@@ -517,7 +518,7 @@ function migrateConfig(
         }
         editor.add(object, 'test', properties);
       }
-    } else if (staticObject(test.value)) {
+    } else if (staticObject(test.value, true)) {
       testOptions(test.value, inherits, parentTest);
     } else if (reviewV4) {
       editor.report(

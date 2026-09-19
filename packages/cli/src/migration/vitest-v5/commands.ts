@@ -60,6 +60,60 @@ export function literalArgv(command: string): CommandToken[] | undefined {
   return tokens;
 }
 
+/** Read command lists without executing a shell. Directory-changing builtins,
+ * expansions, pipelines, and shell programs remain unresolved. */
+export function literalTestCommands(command: string): string[][] | undefined {
+  const commands: string[][] = [];
+  let quote = '';
+  let start = 0;
+  const append = (end: number) => {
+    const tokens = literalArgv(command.slice(start, end));
+    if (!tokens?.length) {
+      return false;
+    }
+    const values = tokens.map(({ value }) => value);
+    while (/^[A-Za-z_]\w*=/.test(values[0] ?? '')) {
+      values.shift();
+    }
+    if (
+      !values.length ||
+      ['cd', 'pushd', 'popd', '.', 'source', 'eval', 'export', 'set', 'unset'].includes(values[0])
+    ) {
+      return false;
+    }
+    commands.push(values);
+    return true;
+  };
+  for (let index = 0; index < command.length; index++) {
+    const char = command[index];
+    if (char === '\\') {
+      return undefined;
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = '';
+      }
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === '#') {
+      return undefined;
+    } else if (
+      char === ';' ||
+      command.slice(index, index + 2) === '&&' ||
+      command.slice(index, index + 2) === '||'
+    ) {
+      if (!append(index)) {
+        return undefined;
+      }
+      if (char !== ';') {
+        index++;
+      }
+      start = index + 1;
+    }
+  }
+  return !quote && append(command.length) ? commands : undefined;
+}
+
 /** Locate the runner's arguments after a supported package-manager wrapper. */
 export function vitestCommandArgsStart(values: readonly string[]): number {
   let start = 0;

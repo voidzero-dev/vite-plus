@@ -298,12 +298,29 @@ steps = [
 ]
 
 [[case]]
+name = "vue_style_global_scopes"
+vp = "global"
+comment = "Resolve inherited globals through callbacks, imported config defaults, conditional projects, literal command lists, and root-relative setup paths. Preserve unrelated suites."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.test", "node build.js && MODE=unit vitest run --project unit*"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { configDefaults, defineConfig } from 'vite-plus';\nexport default defineConfig({ test: { globals: true, setupFiles: 'scripts/setup.ts', onConsoleLog(log) { return !log.includes('quiet'); }, projects: [\n  { extends: true, test: { name: 'unit', include: ['unit/*.test.ts'], exclude: [...configDefaults.exclude] } },\n  ...(process.env.EXTRA ? [{ extends: true, test: { name: 'extra', include: ['extra/*.test.ts'] } }] : []),\n] } });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "scripts/setup.ts", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit/right.test.ts", "test.sequential('works', () => { expect(1).toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "other/wrong.test.ts", "test('other runner', () => { expect(() => { throw Error('boom'); }).toThrow(''); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "unit/right.test.ts", "scripts/setup.ts", "other/wrong.test.ts"],
+  ["node", "verify-review.mjs", "--scopes"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "conflicting_setup_globals"
 vp = "global"
 comment = "Preserve a setup file shared by projects with conflicting globals settings and retain its ownership review on repeated migration."
 steps = [
   { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { projects: [{ test: { globals: true, setupFiles: './setup.js' } }, { test: { globals: false, setupFiles: './setup.js' } }] } };\n"], snapshot = false },
   { argv = ["vpt", "write-file", "setup.js", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "ordinary.test.js", "test('works', () => { expect(1).toBe(1); expect(2).toBe(2); });\n"], snapshot = false },
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
   ["vpt", "print-file", "setup.js"],
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
