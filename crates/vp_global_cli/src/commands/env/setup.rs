@@ -25,6 +25,7 @@ use crate::{
     commands::{
         env::{bin_config::BinConfig, package_metadata::PackageMetadata},
         global::{LEGACY_PACKAGE_MANAGER_PACKAGES, install::uninstall},
+        shell::Shell,
     },
     error::Error,
     help,
@@ -1196,11 +1197,45 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
     output::raw(&help::render_heading("Next Steps"));
     output::raw("  Activate Vite+ in this terminal:");
     let env = vp_shared::EnvConfig::get();
-    for line in super::activation::instructions(
-        env_dir,
-        env.vp_shell.as_deref().and_then(|s| s.parse().ok()),
-    ) {
-        output::raw(&line);
+    // SHELL describes the login shell, which may differ from this terminal.
+    let shell = env.vp_shell.as_deref().and_then(|s| s.parse().ok());
+    let commands = [
+        (Shell::Posix, "Bash/Zsh", "env"),
+        (Shell::Fish, "Fish", "env.fish"),
+        (Shell::NuShell, "Nushell", "env.nu"),
+        (Shell::PowerShell, "PowerShell", "env.ps1"),
+    ];
+    if shell == Some(Shell::Cmd) {
+        // cmd has no sourceable environment file. A new terminal inherits the
+        // persistent PATH written by setup.
+        output::raw("  In cmd.exe, open a new terminal to load the updated PATH.");
+    } else {
+        for (kind, label, file) in commands {
+            if shell.is_some_and(|s| s != kind) {
+                continue;
+            }
+            let path = env_dir.join(file).to_string();
+            let command = match kind {
+                Shell::Posix => {
+                    format!(". \"{}\"", escape_posix_double_quoted_string(&path))
+                }
+                Shell::Fish => {
+                    format!("source \"{}\"", escape_fish_double_quoted_string(&path))
+                }
+                Shell::NuShell => {
+                    format!("source \"{}\"", escape_nu_double_quoted_string(&path))
+                }
+                Shell::PowerShell => {
+                    format!(". '{}'", escape_powershell_single_quoted_string(&path))
+                }
+                Shell::Cmd => unreachable!(),
+            };
+            if shell.is_some() {
+                output::raw(&format!("  {command}"));
+            } else {
+                output::raw(&format!("  {label}: {command}"));
+            }
+        }
     }
     output::raw("");
     output::raw("  Add the command for your shell to its profile to activate future terminals.");

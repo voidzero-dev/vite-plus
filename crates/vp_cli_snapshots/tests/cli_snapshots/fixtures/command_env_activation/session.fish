@@ -1,14 +1,13 @@
+printf '$ command -v node\n'
 command -v node
-node
-$ACTIVATION_VP env list node; or exit 1
+printf '$ node --version\n'
+node --version
+printf '$ %s\n' "$ACTIVATION_COMMAND"
 eval $ACTIVATION_COMMAND; or exit 1
+printf '$ command -v node\n'
+command -v node
 test (command -v node) = "$ACTIVATION_BIN/node"; or exit 1
+printf '$ node --version\n'
 node --version; or exit 1
-vp env list node; or exit 1
-set -gx PATH $ACTIVATION_SYSTEM $ACTIVATION_BIN
-node
-vp env list node; or exit 1
-eval $ACTIVATION_COMMAND; or exit 1
-test (command -v node) = "$ACTIVATION_BIN/node"; or exit 1
-node --version; or exit 1
+printf '$ vp env list node\n'
 vp env list node; or exit 1

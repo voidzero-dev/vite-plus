@@ -8,50 +8,16 @@ First setup:
   . "<workspace>/activation/user/.vite-plus/env"
   If setup already updated your profile, you can open a new terminal instead.
 Same terminal:
+$ command -v node
 <workspace>/activation/system/node
+$ node --version
 system-node
-Vite+ managed tools are not first on PATH. Activate in this terminal:
-  . "<workspace>/activation/user/.vite-plus/env"
-VITE+ - The Unified Toolchain for the Web
-
-Node.js
-  * <version> current
-
-note: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
+$ . "<workspace>/activation/user/.vite-plus/env"
+$ command -v node
+<workspace>/activation/user/.vite-plus/bin/node
+$ node --version
 <version>
-VITE+ - The Unified Toolchain for the Web
-
-Node.js
-  * <version> current
-
-note: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
-system-node
-Vite+ managed tools are not first on PATH. Activate in this terminal:
-  . "<workspace>/activation/user/.vite-plus/env"
-VITE+ - The Unified Toolchain for the Web
-
-Node.js
-  * <version> current
-
-note: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
-<version>
-VITE+ - The Unified Toolchain for the Web
-
-Node.js
-  * <version> current
-
-note: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
-Another unactivated terminal:
-Vite+ managed tools are not first on PATH. Activate in this terminal:
-  . "<workspace>/activation/user/.vite-plus/env"
-VITE+ - The Unified Toolchain for the Web
-
-Node.js
-  * <version> current
-
-note: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
-Preferences, setup state, and installation ownership unchanged.
-Equivalent shim directory on PATH:
+$ vp env list node
 VITE+ - The Unified Toolchain for the Web
 
 Node.js
