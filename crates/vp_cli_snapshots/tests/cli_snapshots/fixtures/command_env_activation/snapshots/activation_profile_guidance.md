@@ -1,6 +1,6 @@
 # activation_profile_guidance
 
-## `node profile-guidance.mjs bash`
+## `node profile-guidance.mjs unset`
 
 ```
 Only Fish is configured:
@@ -19,6 +19,12 @@ Next Steps:
 $ bash --noprofile -ic 'command -v node; node --version'
 <workspace>/profiles/system/node
 system-node
+```
+
+## `node profile-guidance.mjs unrecognized`
+
+```
+Only Fish is configured:
 VP_SHELL=unrecognized:
 Next Steps:
   Activate Vite+ in this terminal:
@@ -34,6 +40,11 @@ Next Steps:
 $ bash --noprofile -ic 'command -v node; node --version'
 <workspace>/profiles/system/node
 system-node
+```
+
+## `node profile-guidance.mjs bash-login`
+
+```
 Only the Bash login profile is configured:
 VP_SHELL=bash:
 Next Steps:
@@ -47,6 +58,11 @@ Next Steps:
 $ bash --noprofile -ic 'command -v node; node --version'
 <workspace>/profiles/system/node
 system-node
+```
+
+## `node profile-guidance.mjs bash-interactive`
+
+```
 Bash .bashrc is configured:
 VP_SHELL=bash:
 Next Steps:

@@ -45,7 +45,13 @@ name = "activation_profile_guidance"
 vp = "global"
 skip-platforms = ["windows"]
 requires = ["bash"]
-steps = [["node", "profile-guidance.mjs", "bash"]]
+# Give each interactive Bash its own PTY so job control cannot affect the next shell.
+steps = [
+  ["node", "profile-guidance.mjs", "unset"],
+  ["node", "profile-guidance.mjs", "unrecognized"],
+  ["node", "profile-guidance.mjs", "bash-login"],
+  ["node", "profile-guidance.mjs", "bash-interactive"],
+]
 
 [[case]]
 name = "activation_powershell_profile_guidance"

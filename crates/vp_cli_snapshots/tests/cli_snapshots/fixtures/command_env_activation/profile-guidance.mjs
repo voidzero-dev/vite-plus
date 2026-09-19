@@ -70,9 +70,10 @@ if (mode === 'powershell') {
   assert.ok(bash);
   env.SHELL = '/bin/bash';
   const system = path.resolve('profiles/system');
-  fs.mkdirSync(system);
+  fs.mkdirSync(system, { recursive: true });
   fs.writeFileSync(path.join(system, 'node'), '#!/bin/sh\necho system-node\n', { mode: 0o755 });
-  env.PATH = system;
+  // Keep system startup helpers available, with the fake Node first on PATH.
+  env.PATH = [system, '/usr/bin', '/bin'].join(path.delimiter);
   const envPath = path.join(dirs.config, 'env').replace(/[\\$`"]/g, '\\$&');
   const source = `. "${envPath}"\n`;
   const fish = path.join(env.XDG_CONFIG_HOME, 'fish/config.fish');
@@ -94,28 +95,29 @@ if (mode === 'powershell') {
     assert.equal(result.status, 0, result.error?.message);
   }
 
-  console.log('Only Fish is configured:');
-  for (const shell of [undefined, 'unrecognized']) {
-    const output = setup(shell);
+  if (mode === 'unset' || mode === 'unrecognized') {
+    console.log('Only Fish is configured:');
+    const output = setup(mode === 'unset' ? undefined : mode);
     assert.match(output, /If your shell profile does not already load Vite\+/);
     assert.doesNotMatch(output, /Or open a new terminal/);
     console.log(output);
     freshBash(path.join(system, 'node'));
+  } else if (mode === 'bash-login') {
+    console.log('Only the Bash login profile is configured:');
+    fs.writeFileSync(path.join(home, '.bash_profile'), source);
+    const output = setup('bash');
+    assert.match(output, /Add the command to ~\/\.bashrc/);
+    assert.doesNotMatch(output, /Or open a new terminal/);
+    console.log(output);
+    freshBash(path.join(system, 'node'));
+  } else {
+    assert.equal(mode, 'bash-interactive');
+    console.log('Bash .bashrc is configured:');
+    fs.writeFileSync(path.join(home, '.bashrc'), source);
+    const output = setup('bash');
+    assert.doesNotMatch(output, /Add the command/);
+    assert.match(output, /Or start an interactive non-login Bash shell/);
+    console.log(output);
+    freshBash(path.join(dirs.bin, 'node'));
   }
-
-  console.log('Only the Bash login profile is configured:');
-  fs.writeFileSync(path.join(home, '.bash_profile'), source);
-  const loginOnly = setup('bash');
-  assert.match(loginOnly, /Add the command to ~\/\.bashrc/);
-  assert.doesNotMatch(loginOnly, /Or open a new terminal/);
-  console.log(loginOnly);
-  freshBash(path.join(system, 'node'));
-
-  console.log('Bash .bashrc is configured:');
-  fs.writeFileSync(path.join(home, '.bashrc'), source);
-  const interactive = setup('bash');
-  assert.doesNotMatch(interactive, /Add the command/);
-  assert.match(interactive, /Or start an interactive non-login Bash shell/);
-  console.log(interactive);
-  freshBash(path.join(dirs.bin, 'node'));
 }
