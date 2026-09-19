@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
+
 const { mockRunCommand } = vi.hoisted(() => ({
   mockRunCommand: vi.fn(),
 }));
@@ -12,7 +14,7 @@ vi.mock('../../../binding/index.js', () => ({
   runCommand: mockRunCommand,
 }));
 
-const { runCommandAndDetectProjectDir } = await import('../command.js');
+const { formatDlxCommand, runCommandAndDetectProjectDir } = await import('../command.js');
 
 const tempDirs: string[] = [];
 
@@ -95,6 +97,33 @@ describe('runCommandAndDetectProjectDir', () => {
       args: ['create.js'],
       envs: {},
       cwd: path.join(cwd, 'apps'),
+    });
+  });
+});
+
+describe('formatDlxCommand', () => {
+  it.each([
+    ['1.22.22', 'npx', ['--yes']],
+    ['2.4.3', 'yarn', ['dlx']],
+    ['4.9.2', 'yarn', ['dlx']],
+  ])('runs templates with Yarn %s', (version, command, runnerArgs) => {
+    const workspace: WorkspaceInfo = {
+      rootDir: '/project',
+      isMonorepo: false,
+      monorepoScope: '',
+      workspacePatterns: [],
+      parentDirs: [],
+      packageManager: PackageManager.yarn,
+      // Ambient metadata can differ from the selected system version.
+      packageManagerVersion: '4.9.2',
+      downloadPackageManager: { name: 'yarn', version, binPrefix: '/system/bin' },
+      packages: [],
+    };
+    expect(
+      formatDlxCommand('@example/create-app@1.0.0', ['app', '--template', 'vanilla'], workspace),
+    ).toEqual({
+      command,
+      args: [...runnerArgs, '@example/create-app@1.0.0', 'app', '--template', 'vanilla'],
     });
   });
 });

@@ -15,7 +15,7 @@ import { isPlainRecord, warnMigration } from './shared.ts';
 
 export function setPackageManager(
   projectDir: string,
-  downloadPackageManager: DownloadPackageManagerResult,
+  downloadPackageManager: Pick<DownloadPackageManagerResult, 'name' | 'version'>,
 ) {
   // Set the package manager pin. Compatibility-first rule (rfcs/dev-engines.md):
   // an existing `packageManager` field or `devEngines.packageManager` declaration
