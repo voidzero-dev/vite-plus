@@ -3477,6 +3477,9 @@ export interface ViteImportGlobMeta {
   isSubImportsPattern?: boolean;
 }
 
+/** Parse source and resolve lexical bindings for the TypeScript migration rules. */
+export declare function analyzeMigrationSource(filename: string, source: string): string;
+
 /** Error from batch import rewriting */
 export interface BatchRewriteError {
   /** The file path that had an error */
@@ -3656,6 +3659,9 @@ export interface HooksArgs {
   command: 'enable' | 'disable' | 'status';
   hooksDir?: string;
 }
+
+/** Check inherited `.gitignore` rules without requiring the directory to exist. */
+export declare function isDirectoryGitignored(root: string, directory: string): boolean;
 
 /** Execution context after command dispatch selects the working directory. */
 export interface JsCommandContext {

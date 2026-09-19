@@ -17,7 +17,7 @@ VITE+ - The Unified Toolchain for the Web
 ➤ YN0000: ┌ Link step
 ➤ YN0073: │ Skipped due to mode=update-lockfile
 ➤ YN0000: └ Completed
-➤ YN0000: · Done with warnings in <duration> <duration>
+➤ YN0000: · Done with warnings in <duration>
 ```
 
 ## `vp why testnpm2`

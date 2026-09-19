@@ -1,5 +1,10 @@
 # migration_monorepo_root_vitest_adjacent
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
 root with a vitest-adjacent dep but no direct vitest still gets a direct vitest pin

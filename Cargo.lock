@@ -8841,6 +8841,7 @@ dependencies = [
  "ast-grep-language",
  "brush-parser 0.3.0",
  "ignore",
+ "oxc",
  "rayon",
  "regex",
  "serde_json",

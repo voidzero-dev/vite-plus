@@ -7,6 +7,7 @@ import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
 import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
 import { ecosystemCiDir, tgzDir, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
+import { prepareWebdriverioProject } from './webdriverio.ts';
 
 const projects = Object.keys(repos);
 
@@ -83,6 +84,8 @@ if (process.env.GITHUB_ENV) {
 } else {
   process.on('exit', () => registryServer.kill());
 }
+
+await prepareWebdriverioProject(project, repoRoot, cli);
 
 if (project === 'rollipop') {
   const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf-8');
@@ -248,14 +251,14 @@ if (project === 'nuxt-devtools') {
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
 
-// Mirror VITE_PLUS_OVERRIDE_PACKAGES: pin `vitest` only. The `@vitest/*` family
-// are exact deps of `vitest`, so a single `vitest` override cascades them.
+// Mirror VITE_PLUS_OVERRIDE_PACKAGES: pin `vitest` only. Vitest pins its
+// internal dependencies; the migration aligns first-party browser providers.
 //
 // Coverage providers are intentionally NOT in the shipped override map (the
 // product leaves them user-owned; the runtime guard fail-fasts on a skew). But
 // this rig FORCE-INSTALLS the locally built vitest, and many ecosystem projects
 // pin an older `@vitest/coverage-*` in their lockfile. Without alignment, the
-// forced runner (4.1.9) skews from the project's pinned provider and the guard
+// forced runner skews from the project's pinned provider and the guard
 // aborts `vp test --coverage` — testing an incoherent combo no real install has.
 // Pin the providers here so the E2E coverage step runs against a consistent
 // runner+provider pair, exactly as a user who followed the guard's advice would.
@@ -308,6 +311,110 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
   env: migrateEnv,
 });
 
+if (project === 'vue-mini') {
+  // Apply the assertion-types review item without changing matcher behavior.
+  // Remove when the pinned setup declares both Vitest 5 type parameters.
+  // https://vitest.dev/guide/migration/#assertion-types-expose-return-and-received-types
+  const setupPath = join(repoRoot, 'vitest.setup.ts');
+  const setup = await readFile(setupPath, 'utf-8');
+  const legacyAssertion = 'interface Assertion<T = any> extends CustomMatchers<T> {}';
+  if (setup.split(legacyAssertion).length !== 2) {
+    throw new Error('vue-mini patch: expected the pinned custom matcher declaration');
+  }
+  await writeFile(
+    setupPath,
+    setup.replace(legacyAssertion, 'interface Assertion<R, T> extends CustomMatchers<R> {}'),
+    'utf-8',
+  );
+}
+
+if (project === 'dify') {
+  // The happy-dom setup registers jest-dom matchers, but omits their Vitest
+  // types. Its jest-dom 6 adapter still augments the old Assertion<T> interface;
+  // use the v5 extension point so browser declarations cannot take precedence.
+  // Remove when the pinned project provides a v5-compatible matcher augmentation.
+  // https://vitest.dev/guide/migration/#assertion-types-expose-return-and-received-types
+  const setupPath = join(repoRoot, 'web', 'vitest.setup.ts');
+  const setup = await readFile(setupPath, 'utf-8');
+  const registration = "if (typeof expect.extend === 'function') {";
+  if (
+    setup.split(registration).length !== 2 ||
+    setup.includes('interface Matchers<') ||
+    !setup.includes('expect.extend(jestDomMatchers)')
+  ) {
+    throw new Error('dify patch: expected the pinned Jest DOM setup');
+  }
+  await writeFile(
+    setupPath,
+    setup.replace(
+      registration,
+      `// Match the jest-dom implementations registered below, not browser-mode matchers.
+declare module 'vite-plus/test' {
+  interface Matchers<R, T> extends jestDomMatchers.TestingLibraryMatchers<T, R> {}
+}
+
+${registration}`,
+    ),
+    'utf-8',
+  );
+}
+
+if (project === 'npmx.dev') {
+  // Vitest 5 adds browser optimizer dependencies after Nuxt's config hook has
+  // filtered its exclusions. Reapply that filter only in the Nuxt test project.
+  // Remove when an upstream fix preserves those exclusions after the merge.
+  // https://github.com/why-reproductions-are-required/vitest-browser-optimizer-config-order
+  const viteConfigPath = join(repoRoot, 'vite.config.ts');
+  const viteConfig = await readFile(viteConfigPath, 'utf-8');
+  const nuxtProject = /defineVitestProject\(\{\s*test:\s*\{/g;
+  if ([...viteConfig.matchAll(nuxtProject)].length !== 1) {
+    throw new Error('npmx.dev patch: expected the pinned Nuxt test project configuration');
+  }
+  await writeFile(
+    viteConfigPath,
+    viteConfig.replace(
+      nuxtProject,
+      `defineVitestProject({
+          plugins: [{
+            // Temporary Vitest 5 workaround: preserve Nuxt's optimizer exclusions.
+            // https://github.com/why-reproductions-are-required/vitest-browser-optimizer-config-order
+            name: 'npmx:test:preserve-optimizer-exclusions',
+            configureServer(server) {
+              for (const options of [
+                server.config.optimizeDeps,
+                server.environments.client.config.optimizeDeps,
+              ]) {
+                const excluded = new Set(options.exclude ?? [])
+                options.include = options.include?.filter(dep => !excluded.has(dep))
+              }
+            },
+          }],
+          test: {`,
+    ),
+    'utf-8',
+  );
+}
+
+if (project === 'bun-vite-template') {
+  // The pinned template runs Vitest only. Its JS setup file loads jest-dom's
+  // Vitest runtime, but allowJs: false excludes that file from type checking.
+  // Apply the migration report's manual type-entry repair for this fixture.
+  const tsconfigPath = join(repoRoot, 'tsconfig.json');
+  const tsconfig = JSON.parse(await readFile(tsconfigPath, 'utf-8'));
+  const types = tsconfig.compilerOptions?.types;
+  if (
+    !Array.isArray(types) ||
+    !types.includes('vitest/globals') ||
+    !types.includes('@testing-library/jest-dom')
+  ) {
+    throw new Error('bun-vite-template patch: expected the pinned Jest DOM type configuration');
+  }
+  tsconfig.compilerOptions.types = types.map((type) =>
+    type === '@testing-library/jest-dom' ? '@testing-library/jest-dom/vitest' : type,
+  );
+  await writeFile(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`);
+}
+
 if (project === 'tiptap') {
   // Keep Tiptap's upstream lint semantics. Migration enables type-aware type
   // checking, which reports TypeScript diagnostics that upstream CI does not check.
@@ -326,7 +433,7 @@ if (project === 'tiptap') {
 
 // Install through the local registry. `vp migrate` already pinned
 // `vite-plus@<version>` in package.json exactly like a real migration, so no
-// manual package.json rewrite is needed.
+// manual rewrite of the Vite+ version is needed.
 execSync(`${cli} install --no-frozen-lockfile`, {
   cwd: repoRoot,
   stdio: 'inherit',

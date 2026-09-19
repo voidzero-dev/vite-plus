@@ -1,0 +1,13 @@
+[[case]]
+name = "headless_paths_and_dimensions"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+steps = [{ argv = ["node", "verify.mjs"], timeout = 120000 }]
+
+[[case]]
+name = "headed_paths_and_dimensions"
+vp = "local"
+skip-platforms = ["linux", "windows"]
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+comment = "Headed coverage runs on macOS; the Linux and Windows snapshot workers have no desktop display. All platforms run the headless case."
+steps = [{ argv = ["node", "verify.mjs", "--headed"], timeout = 120000 }]

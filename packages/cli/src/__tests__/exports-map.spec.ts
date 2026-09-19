@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import url from 'node:url';
 
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');
@@ -34,7 +35,165 @@ function namedValueExports(mod: Record<string, unknown>): string[] {
   return Object.keys(mod).filter((key) => key !== 'default');
 }
 
+function typeDiagnostics(source: string, separator: string = path.sep): string[] {
+  const filename = path.join(cliPkgDir, '__test_exports__.mts').replaceAll(/[\\/]/g, separator);
+  const options: ts.CompilerOptions = {
+    noEmit: true,
+    strict: true,
+    skipLibCheck: true,
+    types: [],
+    module: ts.ModuleKind.NodeNext,
+    target: ts.ScriptTarget.ESNext,
+  };
+  const host = ts.createCompilerHost(options);
+  const getSourceFile = host.getSourceFile.bind(host);
+  host.getSourceFile = (file, ...args) =>
+    file.replaceAll('\\', '/') === filename.replaceAll('\\', '/')
+      ? ts.createSourceFile(file, source, ts.ScriptTarget.ESNext, true)
+      : getSourceFile(file, ...args);
+  const program = ts.createProgram([filename], options, host);
+  return ts
+    .getPreEmitDiagnostics(program)
+    .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+}
+
 describe('package.json exports map', () => {
+  it('provides the bundled Vitest Vite peer without relying on project dependencies', () => {
+    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
+    expect(pkg.dependencies.vite).toBe('workspace:@voidzero-dev/vite-plus-core@*');
+    expect(pkg.devDependencies.vite).toBeUndefined();
+  });
+
+  it('keeps the reviewed Vitest v5 export surface', () => {
+    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
+    expect(
+      Object.keys(pkg.exports)
+        .filter((key) => key === './test' || key.startsWith('./test/'))
+        .toSorted(),
+    ).toMatchSnapshot();
+  });
+
+  it('resolves every runtime test export under Node ESM conditions', () => {
+    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
+    for (const [key, value] of Object.entries(pkg.exports as Record<string, ExportConditions>)) {
+      if (!(key === './test' || key.startsWith('./test/')) || (!value.default && !value.import)) {
+        continue;
+      }
+      const resolved = import.meta.resolve(`vite-plus${key.slice(1)}`);
+      expect(fs.existsSync(url.fileURLToPath(resolved)), key).toBe(true);
+    }
+  });
+
+  it.each(['/', '\\'])('compiles all typed test exports with %s path separators', (separator) => {
+    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
+    const entries = Object.entries(pkg.exports as Record<string, ExportConditions>).filter(
+      ([key, entry]) =>
+        (key === './test' || key.startsWith('./test/')) &&
+        (entry.types || (isConditionObject(entry.import) && entry.import.types)),
+    );
+    const source =
+      entries
+        .map(([key], index) => `import type * as E${index} from 'vite-plus${key.slice(1)}';`)
+        .join('\n') +
+      `
+import { expect } from 'vite-plus/test';
+declare module 'vite-plus/test' {
+  interface Matchers<R extends void | Promise<void> = void | Promise<void>, T = unknown> {
+    toMatchReceived(expected: T): R;
+  }
+}
+const synchronous: void = expect(42).toMatchReceived(42);
+const asynchronous: Promise<void> = expect(Promise.resolve(42)).resolves.toMatchReceived(42);
+// @ts-expect-error The received type is number, not string.
+expect(42).toMatchReceived('42');
+// @ts-expect-error An asynchronous matcher does not return void.
+const invalidReturn: void = expect(Promise.resolve(42)).resolves.toMatchReceived(42);
+`;
+    expect(typeDiagnostics(source, separator)).toEqual([]);
+  });
+
+  it('loads browser matchers without another browser entry masking missing declarations', () => {
+    expect(
+      typeDiagnostics(`
+import 'vite-plus/test/matchers';
+import { expect } from 'vite-plus/test';
+expect(document.body).toBeInTheDocument();
+expect(document.body).toHaveFocus();
+expect(document.body).toHaveAttribute('id', 'app');
+// @ts-expect-error Attribute names must be strings.
+expect(document.body).toHaveAttribute(123);
+`),
+    ).toEqual([]);
+  });
+
+  it.each([
+    'browser',
+    'context',
+    'browser/context',
+    'plugins/browser-context',
+    'browser-playwright/context',
+    'browser-preview/context',
+    'browser/providers/playwright/context',
+    'browser/providers/preview/context',
+  ])('preserves provider augmentations and role types through %s independently', (name) => {
+    // Do not import the other aliases here: their augmentations can hide a
+    // broken declaration. Provider options and roles must retain their types.
+    expect(
+      typeDiagnostics(`
+import 'vite-plus/test/browser-playwright';
+import { page, type UserEventClickOptions } from 'vite-plus/test/${name}';
+declare const click: UserEventClickOptions;
+const force: boolean | undefined = click.force;
+await page.getByRole('button').screenshot({ caret: 'hide' });
+// @ts-expect-error Roles accept strings, not numbers.
+page.getByRole(123);
+// @ts-expect-error Playwright's force option must remain a boolean.
+const invalidClick: UserEventClickOptions = { force: 'yes' };
+`),
+    ).toEqual([]);
+  });
+
+  it('resolves every relative import in generated test declarations', () => {
+    const directory = path.join(cliPkgDir, 'dist/test');
+    const options = { module: ts.ModuleKind.NodeNext };
+    for (const name of fs.readdirSync(directory, { recursive: true, encoding: 'utf8' })) {
+      if (!/\.d\.(?:ts|mts|cts)$/.test(name)) {
+        continue;
+      }
+      const file = path.join(directory, name);
+      const source = fs.readFileSync(file, 'utf8');
+      for (const { fileName: specifier } of ts.preProcessFile(source).importedFiles) {
+        if (specifier.startsWith('.')) {
+          expect(
+            ts.resolveModuleName(specifier, file, options, ts.sys).resolvedModule,
+            `${name}: ${specifier}`,
+          ).toBeDefined();
+        }
+      }
+    }
+  });
+
+  it.each(['coverage', 'reporters', 'environments', 'snapshot'])(
+    'does not publish the removed %s alias',
+    (name) => {
+      const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
+      expect(pkg.exports).not.toHaveProperty(`./test/${name}`);
+      expect(() => requireFromHere.resolve(`vite-plus/test/${name}`)).toThrow(
+        expect.objectContaining({ code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' }),
+      );
+      for (const extension of ['js', 'd.ts']) {
+        expect(fs.existsSync(path.join(cliPkgDir, 'dist/test', `${name}.${extension}`))).toBe(
+          false,
+        );
+      }
+    },
+  );
+
+  it('keeps the standalone mocker migration target', () => {
+    const source = fs.readFileSync(path.join(cliPkgDir, 'dist/test/mocker.js'), 'utf8');
+    expect(source).toBe("export * from '@vitest/mocker';\n");
+  });
+
   it('every dual-condition entry emits `require` before `default`', () => {
     const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
     const exports = pkg.exports as Record<string, unknown>;
@@ -61,6 +220,27 @@ describe('package.json exports map', () => {
     }
 
     expect(offenders, 'entries with require ordered after default').toEqual([]);
+  });
+
+  it.each([
+    'browser/context',
+    'context',
+    'plugins/browser-context',
+    'browser-preview/context',
+    'browser-playwright/context',
+  ])('routes the %s runtime alias to the v5 browser virtual module', (name) => {
+    expect(fs.readFileSync(path.join(cliPkgDir, 'dist/test', `${name}.js`), 'utf8')).toBe(
+      "export * from 'vitest/browser';\n",
+    );
+  });
+
+  it('retains the upstream optional WebDriverIO peer without public shims', () => {
+    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
+    expect(pkg.peerDependencies['@vitest/browser-webdriverio']).toBe(
+      requireFromHere('vitest/package.json').peerDependencies['@vitest/browser-webdriverio'],
+    );
+    expect(pkg.peerDependenciesMeta['@vitest/browser-webdriverio']).toEqual({ optional: true });
+    expect(Object.keys(pkg.exports).filter((name) => name.includes('webdriverio'))).toEqual([]);
   });
 
   it('./test/config has both `require` and `default`, with `require` first', () => {

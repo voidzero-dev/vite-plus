@@ -1,5 +1,10 @@
 # migration_upgrade_browser_source_only_pnpm
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
 source-only browser provider should be restored

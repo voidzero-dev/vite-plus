@@ -15,7 +15,7 @@ export const VITE_CONFIG_FILES = [
   'vite.config.cts',
 ] as const;
 
-export const VITEST_VERSION = '4.1.11';
+export const VITEST_VERSION = '5.0.1';
 
 // Exact action release used by generated workflows and the @v1 migration.
 // The Renovate custom manager keeps this value current.
@@ -28,10 +28,9 @@ export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.V
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
       vite: `npm:@voidzero-dev/vite-plus-core@${VITE_PLUS_VERSION}`,
-      // Pin `vitest` only. The `@vitest/*` family (expect, runner, snapshot, spy,
-      // utils, mocker, pretty-format) are EXACT (`4.1.9`) dependencies of `vitest`
-      // itself, so a single `vitest` override cascades one consistent version to
-      // the whole tree — overriding the indirect deps individually is redundant.
+      // The runner inlines its assertion and runner state. Its remaining
+      // official dependencies use exact versions; community providers and
+      // Istanbul internals have their own version ranges.
       // Coverage providers (`@vitest/coverage-v8` / `-istanbul`) are vitest PEER
       // deps the project installs and versions itself — vite-plus never adds,
       // pins, or overrides them. The runtime guard in `define-config.ts` only

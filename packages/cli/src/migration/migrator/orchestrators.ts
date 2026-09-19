@@ -54,6 +54,7 @@ import {
   usesWebdriverioProvider,
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
+  workspaceUsesWebdriverioProvider,
   wrapLazyPluginsInViteConfig,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
@@ -92,6 +93,7 @@ export function rewriteStandaloneProject(
   // package.json contents and no scanned source files are mutated before they
   // are consumed, so the values match the previous lazy per-call scans exactly.
   const providerSourceModes = collectProviderSourceModes(projectPath);
+  const usesWebdriverio = workspaceUsesWebdriverioProvider(projectPath);
   const browserMode = usesVitestBrowserMode(projectPath);
   const retainedVitestModule = sourceTreeReferencesRetainedVitestModule(projectPath);
   const providerCatalogAdditions = collectInjectedProviderNames(
@@ -141,19 +143,14 @@ export function rewriteStandaloneProject(
       browserMode,
       retainedModule: retainedVitestModule,
     });
-    const managed = managedOverridePackages(usesVitest);
+    const managed = managedOverridePackages(usesVitest, usesWebdriverio);
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
     // so the deleted wrapper doesn't survive migration in any sink.
     pruneLegacyWrapperAliases(pkg.resolutions);
     pruneLegacyWrapperAliases(pkg.overrides);
     pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
-    // Drop stale provider overrides/resolutions (REMOVE_PACKAGES + the now
-    // user-owned opt-in providers, webdriverio/playwright) from the npm/bun
-    // `overrides` and yarn `resolutions` sinks before re-merging managed
-    // overrides. A leftover pin would conflict with the migrated direct
-    // `@vitest/browser-webdriverio` / `@vitest/browser-playwright` dep — npm
-    // hard-fails with EOVERRIDE, and yarn/bun would force the stale version over
-    // the bundled-vitest-aligned 4.1.9. (The pnpm sinks are pruned below.)
+    // Remove stale overrides for bundled and official opt-in providers before
+    // aligning them with Vitest. Preserve community-provider overrides.
     dropRemovePackageOverrideKeys(pkg.resolutions);
     dropRemovePackageOverrideKeys(pkg.overrides);
     // Common case (no direct vitest): strip a lingering managed `vitest` from
@@ -187,7 +184,7 @@ export function rewriteStandaloneProject(
       if (usePnpmWorkspaceYaml) {
         shouldAddPnpmWorkspaceVitePlusOverride = isForceOverrideMode();
       }
-      const overrideKeys = Object.keys(managed);
+      const overrideKeys = Object.keys(managedOverridePackages(usesVitest));
       if (!usePnpmWorkspaceYaml) {
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
         // whose target is a removed package, before re-merging the user's
@@ -303,6 +300,7 @@ export function rewriteStandaloneProject(
       vitestEcosystemPackages,
       usePnpmWorkspaceYaml,
       providerCatalogAdditions,
+      usesWebdriverio,
     );
   }
 
@@ -379,6 +377,10 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
+  const usesWebdriverio = workspaceUsesWebdriverioProvider(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+  );
   // The SHARED workspace sinks (catalog / overrides / peer rules) keep `vitest`
   // managed iff ANY package in the workspace uses vitest directly.
   const workspaceUsesVitest = workspaceUsesVitestDirectly(
@@ -411,7 +413,12 @@ export function rewriteMonorepo(
       supportCatalog,
     );
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
-    rewriteBunCatalog(workspaceInfo.rootDir, workspaceUsesVitest, vitestEcosystemPackages);
+    rewriteBunCatalog(
+      workspaceInfo.rootDir,
+      workspaceUsesVitest,
+      vitestEcosystemPackages,
+      usesWebdriverio,
+    );
   }
   rewriteRootWorkspacePackageJson(
     workspaceInfo.rootDir,
@@ -434,6 +441,7 @@ export function rewriteMonorepo(
       vitestEcosystemPackages,
       usePnpmWorkspaceSettings,
       providerCatalogAdditions,
+      usesWebdriverio,
     );
     if (usePnpmWorkspaceSettings && isForceOverrideMode()) {
       migratePnpmOverridesToWorkspaceYaml(workspaceInfo.rootDir, {

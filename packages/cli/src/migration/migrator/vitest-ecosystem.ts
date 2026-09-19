@@ -145,7 +145,7 @@ function parentChainReachesVitePlus(segments: string[]): boolean {
 //     (scoped) segments; the remaining leading `/`-segments are the `from` chain,
 //     with scoped ancestors (`@scope/name`) rejoined.
 //   - bare/versioned names (`pkg`, `@scope/pkg`, `pkg@4`) have NO parent → `null`.
-function extractOverrideParentSegments(key: string): string[] | null {
+export function extractOverrideParentSegments(key: string): string[] | null {
   let rest = key.trim();
   // Peel every pnpm `>` parent level. pnpm splits at a `>` whose preceding char
   // is NOT space, `|`, or `@` (its DELIMITER_REGEX), so semver comparators like
@@ -334,15 +334,23 @@ export function dropRemovePackageOverrideKeys(
 // vite-plus and must NOT carry a managed `vitest` pin (which would drift on a
 // future `vp update vite-plus`). When `usesVitest` is false the common-case
 // removal logic ACTIVELY strips any lingering `vitest` entry.
-export function managedOverridePackages(usesVitest: boolean): Record<string, string> {
-  if (usesVitest) {
-    return VITE_PLUS_OVERRIDE_PACKAGES;
-  }
+export function managedOverridePackages(
+  usesVitest: boolean,
+  usesWebdriverioProvider = false,
+): Record<string, string> {
   // Drop only `vitest`; every other managed key (e.g. `vite`, and in
   // force-override/CI mode the `@voidzero-dev/vite-plus-core` file: alias) stays.
-  return Object.fromEntries(
-    Object.entries(VITE_PLUS_OVERRIDE_PACKAGES).filter(([key]) => key !== 'vitest'),
-  );
+  const managed = usesVitest
+    ? VITE_PLUS_OVERRIDE_PACKAGES
+    : Object.fromEntries(
+        Object.entries(VITE_PLUS_OVERRIDE_PACKAGES).filter(([key]) => key !== 'vitest'),
+      );
+  // The community provider uses a range for @vitest/browser. An old lockfile
+  // can retain a different browser version than the bundled runner. Align the
+  // official browser package without synchronizing the community provider.
+  return usesWebdriverioProvider && VITEST_IS_MANAGED_OVERRIDE
+    ? { ...managed, '@vitest/browser': VITEST_VERSION }
+    : managed;
 }
 
 // True iff a dependency field lists a vitest ecosystem package — any name that
