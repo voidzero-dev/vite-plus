@@ -12,3 +12,45 @@ steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.8.2"], snapshot = false },
   { argv = ["node", "assert-npm.cjs", "10.8.2"], comment = "A top-level npm pin still has priority" },
 ]
+
+[[case]]
+name = "npm_current_does_not_install_node"
+vp = "global"
+seed-runtime = false
+env = { VP_NODE_VERSION = "22.18.0", VP_NODE_DIST_MIRROR = "http://127.0.0.1:9" }
+steps = [
+  { argv = ["vp", "env", "current", "--json"], comment = "An absent Node runtime and bundled npm are reported without downloading" },
+  { argv = ["vp", "env", "current", "npm", "--json"], comment = "The explicit npm scope also reports an unknown, uninstalled version" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.18.0", "--assert", "missing"], comment = "Reporting the environment leaves the runtime uninstalled" },
+]
+
+[[case]]
+name = "npm_bundled_ignores_project_bin"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "bin/npm", "#!/bin/sh\necho project npm must not run\nexit 1\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "bin/npm"], snapshot = false },
+  { argv = ["node", "assert-npm.cjs"], comment = "The version probe and actual command both use bundled npm despite an executable project bin/npm" },
+]
+
+[[case]]
+name = "npm_bundled_env_print"
+vp = "global"
+env = { VP_SHELL = "bash", NPM_CONFIG_REGISTRY = "http://127.0.0.1:9" }
+steps = [
+  { argv = ["vp", "env", "print", "pm"], comment = "The selected package manager uses Node's bundled npm directory" },
+  { argv = ["vp", "env", "print", "npm"], comment = "The explicit npm scope uses the same bundled directory" },
+  { argv = ["vp", "env", "print"], comment = "The combined scope includes the shared directory only once" },
+]
+
+[[case]]
+name = "npm_bundled_version_probe_ignores_preloads"
+vp = "global"
+env = { NODE_OPTIONS = "--require ./preload.cjs" }
+steps = [
+  { argv = ["vpt", "write-file", "preload.cjs", "console.log('preload start');\n"], snapshot = false },
+  { argv = ["vp", "pm", "patch", "example"], comment = "A noisy preload cannot bypass npm's patch version gate" },
+  { argv = ["vp", "pm", "approve-builds"], comment = "A noisy preload cannot bypass npm's approval version gate" },
+  { argv = ["vp", "pm", "version", "--json"], comment = "The actual npm command still executes the user's preload" },
+]

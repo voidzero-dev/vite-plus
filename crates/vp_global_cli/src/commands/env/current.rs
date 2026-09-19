@@ -235,7 +235,15 @@ async fn resolve_package_manager_info(
                 .ok_or_else(|| Error::Other("Node has no bin directory".into()))?
                 .to_absolute_path_buf()
         } else {
-            super::resolve_node_bin_dir(cwd, config).await?
+            // Inspect the selected runtime without installing it just to report its state.
+            let resolution = resolve_version(cwd).await?;
+            let home = vp_shared::EnvConfig::get()
+                .dirs
+                .data
+                .join("js_runtime")
+                .join("node")
+                .join(&resolution.version);
+            if cfg!(windows) { home } else { home.join("bin") }
         };
         let bin_paths = selected_type
             .bin_names()

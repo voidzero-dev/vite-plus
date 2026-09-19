@@ -238,18 +238,28 @@ impl PackageManagerBuilder {
                 PackageManagerSource::LockfileOrConfig | PackageManagerSource::Default
             )
         {
-            let mut manager = crate::helpers::default_npm_package_manager(&self.cwd);
             // Version gates must describe the npm on PATH, not the latest registry release.
             let npm = vp_command::resolve_bin("npm", None, &self.cwd)?;
             let output = tokio::process::Command::new(npm.as_path())
                 .arg("--version")
                 .current_dir(&self.cwd)
+                // User preloads can print to stdout; only the actual command should run them.
+                .env_remove("NODE_OPTIONS")
                 .output()
                 .await?;
-            if output.status.success() {
-                manager.version = String::from_utf8_lossy(&output.stdout).trim().into();
+            if !output.status.success() {
+                return Err(io::Error::other("failed to read npm version").into());
             }
-            return Ok(manager);
+            let version = Version::parse(String::from_utf8_lossy(&output.stdout).trim())?;
+            let bin_prefix = npm
+                .parent()
+                .ok_or_else(|| Error::CannotFindBinaryPath("npm".into()))?
+                .to_absolute_path_buf();
+            return Ok(PackageManager {
+                client: package_manager_type,
+                version: version.to_string().into(),
+                bin_prefix,
+            });
         }
 
         // only download the package manager if it's not already downloaded

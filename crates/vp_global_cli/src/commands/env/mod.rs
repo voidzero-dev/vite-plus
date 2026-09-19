@@ -179,6 +179,10 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
             bin_dirs.insert(0, bin_dir.as_path().display().to_string());
         } else {
             let resolution = match scope.package_manager() {
+                Some(vp_pm_cli::PackageManagerType::Npm) => {
+                    package_manager::resolve_shim_for(&cwd, vp_pm_cli::PackageManagerType::Npm)
+                        .await?
+                }
                 Some(package_manager) => Some(
                     package_manager::resolve_current_or_fallback_for(&cwd, package_manager).await?,
                 ),
@@ -192,6 +196,13 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
                 )
                 .await?;
                 bin_dirs.insert(0, install_dir.join("bin").as_path().display().to_string());
+            } else if selected_type == Some(vp_pm_cli::PackageManagerType::Npm)
+                && !scope.includes_node()
+            {
+                // Unpinned npm shares Node's bin directory, including in the pm-only scope.
+                bin_dirs.push(
+                    resolve_node_bin_dir(&cwd, &modes).await?.as_path().display().to_string(),
+                );
             }
         }
     }
