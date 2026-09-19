@@ -1,7 +1,7 @@
 use napi::{Error, anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 use vp_error::Error::{UnrecognizedPackageManager, UnsupportedPackageManager};
-use vp_pm_cli::{PackageManager, PackageManagerType, get_package_manager_type_and_version};
+use vp_pm_cli::{PackageManagerType, get_package_manager_type_and_version};
 use vt_path::AbsolutePathBuf;
 use vt_workspace::{Error::PackageJsonNotFound, WorkspaceFile, find_workspace_root};
 
@@ -145,26 +145,12 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
     let workspace_root_path = workspace_root.path.as_path().to_string_lossy().to_string();
 
     match get_package_manager_type_and_version(&workspace_root, None) {
-        Ok((package_manager_type, version, _, _)) => {
-            // Migration needs a concrete version to install and persist in devEngines.
-            let version = if package_manager_type == PackageManagerType::Npm && version == "bundled"
-            {
-                PackageManager::builder(&cwd)
-                    .build()
-                    .await
-                    .map_err(anyhow::Error::from)?
-                    .version()
-                    .to_string()
-            } else {
-                version.to_string()
-            };
-            Ok(DetectWorkspaceResult {
-                package_manager_name: Some(package_manager_type.to_string()),
-                package_manager_version: Some(version),
-                is_monorepo,
-                root: Some(workspace_root_path),
-            })
-        }
+        Ok((package_manager_type, version, _, _)) => Ok(DetectWorkspaceResult {
+            package_manager_name: Some(package_manager_type.to_string()),
+            package_manager_version: Some(version.to_string()),
+            is_monorepo,
+            root: Some(workspace_root_path),
+        }),
         Err(UnsupportedPackageManager(_) | UnrecognizedPackageManager) => {
             Ok(DetectWorkspaceResult {
                 package_manager_name: None,

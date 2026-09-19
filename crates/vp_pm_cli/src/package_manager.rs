@@ -238,28 +238,7 @@ impl PackageManagerBuilder {
                 PackageManagerSource::LockfileOrConfig | PackageManagerSource::Default
             )
         {
-            // Version gates must describe the npm on PATH, not the latest registry release.
-            let npm = vp_command::resolve_bin("npm", None, &self.cwd)?;
-            let output = tokio::process::Command::new(npm.as_path())
-                .arg("--version")
-                .current_dir(&self.cwd)
-                // User preloads can print to stdout; only the actual command should run them.
-                .env_remove("NODE_OPTIONS")
-                .output()
-                .await?;
-            if !output.status.success() {
-                return Err(io::Error::other("failed to read npm version").into());
-            }
-            let version = Version::parse(String::from_utf8_lossy(&output.stdout).trim())?;
-            let bin_prefix = npm
-                .parent()
-                .ok_or_else(|| Error::CannotFindBinaryPath("npm".into()))?
-                .to_absolute_path_buf();
-            return Ok(PackageManager {
-                client: package_manager_type,
-                version: version.to_string().into(),
-                bin_prefix,
-            });
+            return resolve_npm_from_path(&self.cwd).await;
         }
 
         // only download the package manager if it's not already downloaded
@@ -288,6 +267,31 @@ impl PackageManagerBuilder {
         };
         Ok(package_manager)
     }
+}
+
+// Version gates and migration must use the npm on PATH, not the latest registry release.
+async fn resolve_npm_from_path(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
+    let npm = vp_command::resolve_bin("npm", None, cwd)?;
+    let output = tokio::process::Command::new(npm.as_path())
+        .arg("--version")
+        .current_dir(cwd)
+        // User preloads can print to stdout; only the actual command should run them.
+        .env_remove("NODE_OPTIONS")
+        .output()
+        .await?;
+    if !output.status.success() {
+        return Err(io::Error::other("failed to read npm version").into());
+    }
+    let version = Version::parse(String::from_utf8_lossy(&output.stdout).trim())?;
+    let bin_prefix = npm
+        .parent()
+        .ok_or_else(|| Error::CannotFindBinaryPath("npm".into()))?
+        .to_absolute_path_buf();
+    Ok(PackageManager {
+        client: PackageManagerType::Npm,
+        version: version.to_string().into(),
+        bin_prefix,
+    })
 }
 
 impl PackageManager {
@@ -337,11 +341,6 @@ impl PackageManager {
     }
 
     #[must_use]
-    pub fn version(&self) -> &str {
-        &self.version
-    }
-
-    #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
         self.bin_prefix.clone()
     }
@@ -351,7 +350,7 @@ impl PackageManager {
 /// from the workspace root.
 ///
 /// The returned version is exact when detected from the `packageManager` field,
-/// `"bundled"` for unpinned npm, `"latest"` for other lockfile/config/default selections, and may be a
+/// `"default"` for unpinned npm, `"latest"` for other lockfile/config/default selections, and may be a
 /// semver range (or `"*"` for an absent version) when detected from
 /// `devEngines.packageManager` (see rfcs/dev-engines.md).
 pub fn get_package_manager_type_and_version(
@@ -406,7 +405,7 @@ pub fn get_package_manager_type_and_version(
     // A package-lock.json selects npm without requiring a separate installation.
     let package_lock_json_path = workspace_root.path.join("package-lock.json");
     if is_exists_file(&package_lock_json_path)? {
-        return Ok((PackageManagerType::Npm, "bundled".into(), None, source));
+        return Ok((PackageManagerType::Npm, "default".into(), None, source));
     }
 
     // if bun.lock (text format) or bun.lockb (binary format) exists, use bun@latest
@@ -445,7 +444,7 @@ pub fn get_package_manager_type_and_version(
 
     // if default is specified, use it
     if let Some(default) = default {
-        let version = if default == PackageManagerType::Npm { "bundled".into() } else { version };
+        let version = if default == PackageManagerType::Npm { "default".into() } else { version };
         return Ok((default, version, None, PackageManagerSource::Default));
     }
 
@@ -980,12 +979,14 @@ async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<
     }
 }
 
-/// Resolve an exact, range, or `latest` package-manager version without downloading it.
+/// Resolve an exact, range, `latest`, or Node-bundled npm `default` version without downloading it.
 pub async fn resolve_package_manager_version(
     package_manager_type: PackageManagerType,
     version: &str,
 ) -> Result<Str, Error> {
-    if version == "latest" {
+    if package_manager_type == PackageManagerType::Npm && version == "default" {
+        Ok(resolve_npm_from_path(&vt_path::current_dir()?).await?.version)
+    } else if version == "latest" {
         get_latest_version(package_manager_type).await
     } else if Version::parse(version).is_ok() {
         Ok(version.into())
@@ -4290,7 +4291,7 @@ mod tests {
             PackageManagerType::Npm,
             "package-lock.json should take precedence over pnpmfile.cjs and yarn.config.cjs"
         );
-        assert_eq!(version, "bundled");
+        assert_eq!(version, "default");
         assert_eq!(hash, None);
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
