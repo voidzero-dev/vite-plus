@@ -1,3 +1,28 @@
+<script setup lang="ts">
+const upgradePrompt = `Upgrade this project from Vite+ 0.3.x to Vite+ 1.0 while preserving its test behavior.
+
+Read these guides before making changes:
+
+- ${__DOCS_ORIGIN__}/guide/migrate
+- ${__DOCS_ORIGIN__}/guide/vitest-v5
+- https://vitest.dev/guide/migration/
+
+Inspect the worktree and preserve unrelated changes. Keep the original manifests, lockfile, and installed packages available so migration can identify the original Vitest version. Do not update the project's vite-plus or Vitest dependencies before running migration.
+
+Use the CLI from the target Vite+ 1.0 release or its preview build. A global installation is optional. Use a supported Node.js runtime from the Vite+ compatibility guide.
+
+- With a global vp installation, follow ${__DOCS_ORIGIN__}/guide/upgrade to upgrade it and check \`vp toolchain --global\`. Run \`vp help migrate\`, then \`vp migrate --no-interactive\` from the workspace root.
+- Without a global installation, run the target CLI through the package manager from the workspace root. For the 1.0.0 release, use \`pnpm dlx --package=vite-plus@1.0.0 vp migrate --no-interactive\` or \`npx --package=vite-plus@1.0.0 vp migrate --no-interactive\`. First run the same command with \`help migrate\` instead of \`migrate --no-interactive\` to read its help. These commands fetch the target CLI without replacing the old project dependencies first.
+
+Replace 1.0.0 with the intended release version. For a preview, use the version from its PR and pass \`--registry=https://registry-bridge.viteplus.dev\` to pnpm or npx before the vp command. Do not run migration with the old project's node_modules/.bin/vp. Keep the existing project setup; do not use --full unless I request it.
+
+Resolve BLOCK findings and rerun migration. Review each REVIEW finding using its documentation link, even if migration exits with success. Preserve test intent and keep the generated v4 compatibility settings and comments until the affected tests support the v5 behavior.
+
+Check workspace manifests, catalogs, overrides, and import changes against the Vite+ guide. Keep test APIs on supported vite-plus/test entries; use @vitest/browser-webdriverio for the community WebDriverIO provider.
+
+Run \`vp install\`, \`vp check\`, and \`vp test\`, plus the project's browser, coverage, and benchmark suites where configured. Run \`vp build\` or \`vp pack\` as appropriate. Without a global CLI, finish installation with the project's package manager, then invoke the updated local CLI through it, such as \`pnpm exec vp check\` or \`npm exec -- vp check\`. Fix migration failures without weakening assertions or dropping test coverage. Report the changes, validation results, and unresolved findings. Do not commit or push unless I ask.`;
+</script>
+
 # Migrate to Vite+
 
 `vp migrate` helps move existing projects onto Vite+.
@@ -55,13 +80,13 @@ See [Migration Rules](./migrate-rules.md) for the exact dependency, source rewri
 
 Most projects will require further manual adjustments after running `vp migrate`.
 
-For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
+For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md) and the [upstream Vitest migration guide](https://vitest.dev/guide/migration/). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
 
 ## Recommended Workflow
 
 Before running the migration:
 
-- Upgrade to Vite 8+ and Vitest 4.1+ first
+- For projects that do not use Vite+ yet, upgrade to Vite 8+ and Vitest 4.1+ first
 - Make sure you understand any existing lint, format, or test setup that should be preserved
 
 After running the migration:
@@ -81,7 +106,7 @@ Migrate this project to Vite+. Vite+ replaces the current split tooling around r
 After the migration:
 
 - Confirm `vite` imports were rewritten to `vite-plus` where needed
-- Confirm `vitest` imports were rewritten to `vite-plus/test` (and `@vitest/browser*` to `vite-plus/test/browser*`) where needed
+- Confirm Vitest and browser imports use supported `vite-plus/test*` entries; keep community WebDriverIO provider imports on `@vitest/browser-webdriverio`
 - On pnpm, keep the `vite`, `vitest` dependency entries configured by `vp migrate` so the workspace aliases and overrides stay effective; with other package managers, you can remove them once those rewrites are confirmed
 - Move remaining tool-specific config into the appropriate blocks in `vite.config.ts`
 
@@ -98,6 +123,66 @@ Finally, verify the migration by running: `vp install`, `vp check`, `vp test`, a
 Summarize the migration at the end and report any manual follow-up still required.
 ```
 
+## Upgrade from Vite+ 0.3 to 1.0
+
+Vite+ 1.0 includes the breaking changes in Vitest 5. Read the [Vite+ compatibility guide](./vitest-v5.md) alongside the [upstream migration guide](https://vitest.dev/guide/migration/).
+
+Keep your project's original dependencies and lockfile until migration identifies the old runner. Updating the project dependencies first can prevent the migration from preserving v4 behavior. Use one of the following paths from the workspace root.
+
+### With the Global CLI
+
+Upgrade the [global CLI](./upgrade.md#global-vp) to your target 1.0 release, then run `vp migrate --no-interactive`. For a preview, follow the [preview installation instructions](./upgrade.md#global-vp-preview).
+
+### Without the Global CLI
+
+Use an existing Node.js runtime that satisfies `^22.18.0 || ^24.11.0 || >=26.0.0`. Run the target migrator through your package manager without adding it to the project first. For the `1.0.0` release:
+
+::: code-group
+
+```bash [pnpm]
+pnpm dlx --package=vite-plus@1.0.0 vp migrate --no-interactive
+```
+
+```bash [npm]
+npx --package=vite-plus@1.0.0 vp migrate --no-interactive
+```
+
+:::
+
+Replace `1.0.0` with your target release. For a preview, use the version from the PR and pass `--registry=https://registry-bridge.viteplus.dev` to `pnpm` or `npx` before the `vp` command. Keep the version in `--package` explicit so you run the target migrator rather than the old local CLI.
+
+After migration, finish dependency installation and validate with the updated local CLI:
+
+::: code-group
+
+```bash [pnpm]
+pnpm install
+pnpm exec vp check
+pnpm exec vp test
+pnpm exec vp build
+```
+
+```bash [npm]
+npm install
+npm exec -- vp check
+npm exec -- vp test
+npm exec -- vp build
+```
+
+:::
+
+Use `vp pack` in place of `vp build` for a library that uses the pack command. Run configured browser, coverage, and benchmark suites as well.
+
+### Review the Upgrade
+
+On an existing Vite+ project, use the default upgrade flow. Add `--full` if you also want to repeat project setup. Resolve blockers and review the file-specific report before committing. See [Upgrade vs. Full Setup](./migrate-rules.md#upgrade-vs-full-setup) for the scope of each mode.
+
+### Copy Prompt
+
+View and copy this prompt into your coding agent to upgrade an existing Vite+ 0.3 project:
+
+<CopyPrompt :prompt="upgradePrompt" label="View Upgrade Prompt" />
+
 ## Tool-Specific Migrations
 
 ### Vitest
@@ -108,7 +193,7 @@ For browser mode, you can use the base browser runtime (`@vitest/browser`) and P
 
 `vp migrate` adds the Playwright provider at the bundled Vitest version and ensures its framework peer. You can import it from `vite-plus/test/browser-playwright`.
 
-For WebDriverIO, import from the community-maintained `@vitest/browser-webdriverio` and manage its version and framework peers. Migration restores legacy Vite+ provider imports to this package and preserves your dependency versions. See [Community WebDriverIO provider](./vitest-v5.md#community-webdriverio-provider).
+For WebDriverIO, import from the community-maintained `@vitest/browser-webdriverio`. Migration restores legacy Vite+ provider imports, ensures a provider version of at least `5.0.0`, and adds an `@vitest/browser` override that matches the bundled runner. Manage later provider upgrades and framework peers yourself. See [Community WebDriverIO provider](./vitest-v5.md#community-webdriverio-provider).
 
 If you are migrating manually, update all the imports to `vite-plus/test*` instead:
 
