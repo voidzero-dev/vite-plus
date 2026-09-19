@@ -901,7 +901,7 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS__$__vp_bin = '__VP_BIN_WIN__'
 $__vp_fallback = '__VP_FALLBACK_BIN_WIN__'
-$__vp_paths = @($env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -and $_ -ine $__vp_bin -and $_ -ine $__vp_fallback })
+$__vp_paths = @($env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -and $_ -ne $__vp_bin -and $_ -ne $__vp_fallback })
 $env:PATH = (@($__vp_bin) + $__vp_paths + @($__vp_fallback)) -join [IO.Path]::PathSeparator
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
