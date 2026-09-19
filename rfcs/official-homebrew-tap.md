@@ -43,6 +43,9 @@ manages each user's dependencies. Published package formats stay unchanged.
 The initial scope is stable releases on macOS and glibc Linux, for ARM64 and
 x64. Launch each target only after its installation tests pass.
 
+Installation assumes network access: GitHub for the tap and binary, and the
+configured npm registry and runtime sources for first-run setup.
+
 ## First-run setup
 
 Add a setup mode for a Homebrew-owned binary without bundled JavaScript:
@@ -107,10 +110,6 @@ bootstrap path before claiming support for authenticated private registries.
 Keep credentials out of logs and receipts, and do not fall back to the public
 registry after authentication fails.
 
-First use requires access to the configured npm registry and any uncached
-Node.js/bootstrap downloads. GitHub access alone is sufficient for the tap's
-package download, but does not make the full CLI ready for offline use.
-
 ## Commands and migration
 
 Extend [Homebrew detection](../crates/vp_global_cli/src/homebrew.rs) to identify
@@ -154,8 +153,8 @@ merge must not trigger another product release.
 
 Test with isolated homes and synthetic credentials:
 
-- `brew install` succeeds with npm access blocked and no preinstalled Node.js or
-  pnpm. The formula does not trigger user setup.
+- `brew install` downloads the release and creates the commands without
+  preinstalled Node.js or pnpm. The formula does not run npm or user setup.
 - First use on a fresh home bootstraps dependencies through public and
   authenticated private registries, including pnpm's own download.
 - Later invocations reuse dependencies; failed and concurrent setup attempts
@@ -172,9 +171,8 @@ migration guides when the tap is ready.
 ## Tradeoffs and open decisions
 
 The formula stays small and dependency installation shares the script installer's
-code. Each user downloads dependencies, and the first invocation after an upgrade
-may need network access. Homebrew manages the executable rather than the complete
-JavaScript installation.
+code. Each user downloads and stores their own dependencies. Homebrew manages
+the executable; Vite+ manages the per-user JavaScript installation.
 
 Installing dependencies into the Cellar would make them available to all users,
 but requires npm configuration handling during Homebrew installation. A complete
