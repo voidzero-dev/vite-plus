@@ -1123,17 +1123,18 @@ async fn create_env_files() -> Result<(), Error> {
     Ok(())
 }
 
-/// Inspect the profiles setup writes, without changing them or using a saved flag.
+/// Inspect the explicitly selected shell without changing its profiles.
+/// Bash only checks non-login startup; the printed advice must keep that qualification.
 fn has_configured_profile(config: &vp_shared::EnvConfig) -> bool {
     let shell = config.vp_shell.as_deref().map(str::to_ascii_lowercase);
     for profile in ALL_SHELL_PROFILES {
         let relevant = match shell.as_deref() {
             Some("zsh") => matches!(profile.root, ShellProfileRoot::Zsh),
-            Some("bash") => matches!(profile.root, ShellProfileRoot::Home),
+            Some("bash") => profile.path == ".bashrc",
             Some("sh") => profile.path == ".profile",
             Some("fish") => matches!(profile.root, ShellProfileRoot::Fish),
             Some("nu" | "nushell") => profile.env_file == "env.nu",
-            _ => true,
+            _ => false,
         };
         if !relevant {
             continue;
@@ -1217,20 +1218,48 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
         }
     }
     output::raw("");
-    let supports_profile_check = match shell {
-        Some(Shell::Cmd | Shell::PowerShell) => false,
-        Some(Shell::NuShell) => true,
-        _ => !cfg!(windows),
-    };
-    if supports_profile_check {
-        if has_configured_profile(&env) {
-            output::raw("  Or open a new terminal to load your configured shell profile.");
-        } else {
+    match shell {
+        Some(Shell::Cmd) => {}
+        None => {
             output::raw(
-                "  Add the command for your shell to its profile to activate future terminals.",
+                "  If your shell profile does not already load Vite+, add the command for your shell.",
             );
+            output::raw(
+                "  For PowerShell, add its command to $PROFILE if it is not already there.",
+            );
+            output::raw("");
         }
-        output::raw("");
+        Some(Shell::PowerShell) => {
+            output::raw(
+                "  Add this command to $PROFILE if it is not already there, for future PowerShell sessions.",
+            );
+            output::raw("");
+        }
+        _ if env.vp_shell.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("bash")) => {
+            if has_configured_profile(&env) {
+                output::raw(
+                    "  Or start an interactive non-login Bash shell to load your configured ~/.bashrc.",
+                );
+            } else {
+                output::raw(
+                    "  Add the command to ~/.bashrc for interactive non-login Bash sessions.",
+                );
+            }
+            output::raw(
+                "  Login Bash shells must also load the command through their login profile.",
+            );
+            output::raw("");
+        }
+        _ => {
+            if has_configured_profile(&env) {
+                output::raw("  Or open a new terminal to load your configured shell profile.");
+            } else {
+                output::raw(
+                    "  Add the command for your shell to its profile to activate future terminals.",
+                );
+            }
+            output::raw("");
+        }
     }
     output::raw(&format!(
         "  Restart an already-running IDE to load its environment. Run {} to verify.",
@@ -1308,6 +1337,34 @@ mod tests {
                 assert!(!has_configured_profile(&config), "Do not cache profile state");
             },
         );
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_profile_check_does_not_infer_unknown_shell_or_bash_startup_mode() {
+        let temp = TempDir::new().unwrap();
+        let home = temp.path().join("user");
+        let vp_home = home.join(".vite-plus");
+        let xdg = home.join(".config");
+        std::fs::create_dir_all(xdg.join("fish")).unwrap();
+        std::fs::write(xdg.join("fish/config.fish"), "source \"$HOME/.vite-plus/env.fish\"\n")
+            .unwrap();
+        std::fs::write(home.join(".bash_profile"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+        for shell in [None, Some("unknown"), Some("bash")] {
+            vp_shared::EnvConfig::with_vars(
+                [
+                    ("HOME", Some(home.as_os_str())),
+                    ("USERPROFILE", Some(home.as_os_str())),
+                    ("VP_HOME", Some(vp_home.as_os_str())),
+                    ("XDG_CONFIG_HOME", Some(xdg.as_os_str())),
+                    ("VP_SHELL", shell.map(std::ffi::OsStr::new)),
+                    ("SHELL", Some(std::ffi::OsStr::new("/bin/bash"))),
+                ],
+                |config| {
+                    assert!(!has_configured_profile(&config), "{shell:?}");
+                },
+            );
+        }
     }
 
     #[test]

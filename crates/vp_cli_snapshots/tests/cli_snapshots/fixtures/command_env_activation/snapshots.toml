@@ -39,3 +39,15 @@ vp = "global"
 skip-platforms = ["windows"]
 requires = ["nu"]
 steps = [["node", "verify.mjs", "managed", "nu"]]
+
+[[case]]
+name = "activation_profile_guidance"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [["node", "profile-guidance.mjs", "bash"]]
+
+[[case]]
+name = "activation_powershell_profile_guidance"
+vp = "global"
+steps = [["node", "profile-guidance.mjs", "powershell"]]

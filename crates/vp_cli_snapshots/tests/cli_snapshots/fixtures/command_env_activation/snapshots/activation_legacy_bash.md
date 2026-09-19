@@ -6,9 +6,10 @@
 First setup:
   Activate Vite+ in this terminal:
   . "<workspace>/activation/user/.vite-plus/env"
-  Add the command for your shell to its profile to activate future terminals.
+  Add the command to ~/.bashrc for interactive non-login Bash sessions.
+  Login Bash shells must also load the command through their login profile.
 Setup with an existing profile entry:
-  Or open a new terminal to load your configured shell profile.
+  Or start an interactive non-login Bash shell to load your configured ~/.bashrc.
 Same terminal:
 $ command -v node
 <workspace>/activation/system/node
