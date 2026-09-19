@@ -137,20 +137,13 @@ export async function finalizeWebdriverioProject(project: string, root: string):
   if (!['10ten-ja-reader', 'sqlocal', 'brazilian-utils'].includes(project)) {
     return;
   }
-  // The community provider is user-managed, not upgraded by vp migrate. Apply
-  // its v5 upgrade only to these pinned CI fixtures, after v4 preflight finishes.
-  const packagePath = join(root, 'package.json');
-  const pkg = JSON.parse(await readFile(packagePath, 'utf8'));
-  const expected =
-    project === '10ten-ja-reader' ? '5.0.0' : project === 'sqlocal' ? '^4.1.11' : '4.1.11';
-  if (pkg.devDependencies['@vitest/browser-webdriverio'] !== expected) {
-    throw new Error(`${project} patch: expected the pinned WebDriverIO provider ${expected}`);
-  }
-  pkg.devDependencies['@vitest/browser-webdriverio'] = '5.0.0';
   // Its @vitest/browser dependency permits a range. Align that package with
   // the packed runner instead of retaining an older version from the lockfile.
   if (project === 'brazilian-utils') {
+    const packagePath = join(root, 'package.json');
+    const pkg = JSON.parse(await readFile(packagePath, 'utf8'));
     pkg.overrides['@vitest/browser'] = VITEST_VERSION;
+    await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
   } else {
     await replaceOnce(
       join(root, 'pnpm-workspace.yaml'),
@@ -158,5 +151,4 @@ export async function finalizeWebdriverioProject(project: string, root: string):
       `overrides:\n  '@vitest/browser': ${VITEST_VERSION}\n`,
     );
   }
-  await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
 }

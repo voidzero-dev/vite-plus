@@ -1414,6 +1414,11 @@ async function main() {
 
     // As in the full migration, defer Vitest writes until tool migration gates pass.
     vitestV5Plan = applyRefreshedVitestV5Migration(vitestV5Plan);
+    // A versioned dependency migration can be needed even when the generic
+    // Vite+ bootstrap is already satisfied (for example a v4 community provider).
+    needsInstall ||= vitestV5Plan.changes.some(({ file }) =>
+      ['package.json', 'pnpm-workspace.yaml', '.yarnrc.yml'].includes(path.basename(file)),
+    );
 
     // Merge configs and reinstall once if any tool or bootstrap migration happened
     if (eslintMigrated || prettierMigrated || tsupMigrated) {

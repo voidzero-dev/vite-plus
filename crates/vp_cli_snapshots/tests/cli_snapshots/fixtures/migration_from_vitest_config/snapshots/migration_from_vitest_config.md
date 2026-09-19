@@ -11,11 +11,7 @@ VITE+ - The Unified Toolchain for the Web
 • Node <version>  pnpm <version>
 • 2 config updates applied, 1 file had imports rewritten
 ! Warnings:
-  - Vitest v5: 2 review items
-
-package.json
-  1:1 REVIEW [browser-provider] Add @vitest/browser-webdriverio and its required peers using versions compatible with your tests. Vite+ no longer exports or manages this community provider.
-    Docs: https://viteplus.dev/guide/vitest-v5#community-webdriverio-provider
+  - Vitest v5: 1 review item
 
 vitest.config.ts
   18:10 REVIEW [global-api-ownership] Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.
@@ -82,6 +78,8 @@ check package.json
     "@vitest/coverage-v8": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
+    "@vitest/browser-webdriverio": "^5.0.0",
+    "webdriverio": "*",
     "playwright": "*",
     "vite-plus": "catalog:"
   },
