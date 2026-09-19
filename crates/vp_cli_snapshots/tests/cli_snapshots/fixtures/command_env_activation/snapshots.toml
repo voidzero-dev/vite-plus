@@ -54,6 +54,18 @@ steps = [
 ]
 
 [[case]]
+name = "activation_login_shell_hint"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "shell-guidance.mjs", "hints"]]
+
+[[case]]
+name = "activation_available_shells"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "shell-guidance.mjs", "available"]]
+
+[[case]]
 name = "activation_powershell_profile_guidance"
 vp = "global"
 steps = [["node", "profile-guidance.mjs", "powershell"]]

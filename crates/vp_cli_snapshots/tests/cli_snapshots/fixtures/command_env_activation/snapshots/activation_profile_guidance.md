@@ -6,14 +6,11 @@
 Only Fish is configured:
 VP_SHELL=<unset>:
 Next Steps:
-  Activate Vite+ in this terminal:
-  Bash/Zsh: . "<home>/.vite-plus/env"
-  Fish: source "<home>/.vite-plus/env.fish"
-  Nushell: source "<home>/.vite-plus/env.nu"
-  PowerShell: . '<home>/.vite-plus/env.ps1'
+  For Bash, run:
+  . "<home>/.vite-plus/env"
 
-  If your shell profile does not already load Vite+, add the command for your shell.
-  For PowerShell, add its command to $PROFILE if it is not already there.
+  If your ~/.bashrc does not already load Vite+, add this command for interactive non-login Bash sessions.
+  Login Bash shells must also load the command through their login profile.
 
   Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
 $ bash --noprofile -ic 'command -v node; node --version'
@@ -27,14 +24,11 @@ system-node
 Only Fish is configured:
 VP_SHELL=unrecognized:
 Next Steps:
-  Activate Vite+ in this terminal:
-  Bash/Zsh: . "<home>/.vite-plus/env"
-  Fish: source "<home>/.vite-plus/env.fish"
-  Nushell: source "<home>/.vite-plus/env.nu"
-  PowerShell: . '<home>/.vite-plus/env.ps1'
+  For Bash, run:
+  . "<home>/.vite-plus/env"
 
-  If your shell profile does not already load Vite+, add the command for your shell.
-  For PowerShell, add its command to $PROFILE if it is not already there.
+  If your ~/.bashrc does not already load Vite+, add this command for interactive non-login Bash sessions.
+  Login Bash shells must also load the command through their login profile.
 
   Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
 $ bash --noprofile -ic 'command -v node; node --version'

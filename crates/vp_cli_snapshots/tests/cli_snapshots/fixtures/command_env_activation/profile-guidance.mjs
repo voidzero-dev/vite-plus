@@ -55,11 +55,24 @@ function setup(shell) {
 }
 
 if (mode === 'powershell') {
+  // Control executable discovery independently of the shells installed on the runner.
+  const shellBin = path.resolve('profiles/shell-bin');
+  fs.mkdirSync(shellBin, { recursive: true });
+  fs.writeFileSync(
+    path.join(shellBin, process.platform === 'win32' ? 'powershell.exe' : 'pwsh'),
+    '',
+    {
+      mode: 0o755,
+    },
+  );
+  env.PATH = shellBin;
+  delete env.SHELL;
   for (const shell of ['pwsh', undefined]) {
     const output = setup(shell);
     assert.match(output, /\. '[^\n]*env\.ps1'/);
     assert.match(output, /\$PROFILE if it is not already there/);
     assert.doesNotMatch(output, /Or open a new terminal/);
+    assert.doesNotMatch(output, /Fish:|Nushell:/);
     console.log(output.split('\n').find((line) => line.includes('$PROFILE')));
   }
 } else if (mode.startsWith('cmd')) {
@@ -163,7 +176,8 @@ if (mode === 'powershell') {
   if (mode === 'unset' || mode === 'unrecognized') {
     console.log('Only Fish is configured:');
     const output = setup(mode === 'unset' ? undefined : mode);
-    assert.match(output, /If your shell profile does not already load Vite\+/);
+    assert.match(output, /For Bash, run:/);
+    assert.match(output, /If your ~\/\.bashrc does not already load Vite\+/);
     assert.doesNotMatch(output, /Or open a new terminal/);
     console.log(output);
     freshBash(path.join(system, 'node'));
