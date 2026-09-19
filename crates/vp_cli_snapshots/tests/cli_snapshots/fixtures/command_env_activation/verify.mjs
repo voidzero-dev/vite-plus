@@ -50,7 +50,7 @@ if (kind === 'xdg') {
   fs.mkdirSync(legacy, { recursive: true });
   fs.symlinkSync('activation-test', path.join(legacy, 'current'));
 } else {
-  env.VP_HOME = path.join(root, 'home ' + special);
+  env.VP_HOME = path.join(root, kind === 'external' ? 'home' : 'home ' + special);
 }
 function captured(args, extra = {}) {
   const result = spawnSync(binary, args, {
@@ -61,27 +61,9 @@ function captured(args, extra = {}) {
   assert.equal(result.status, 0, result.error?.message ?? result.stdout + result.stderr);
   return result;
 }
-function terminal(args, extra = {}, status = 0, executable = binary, stdio = 'inherit') {
-  if (kind === 'external') {
-    const quote = (value) =>
-      /^[\w./=-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\\''") + "'";
-    const command =
-      executable === binary
-        ? 'vp'
-        : executable === path.join(bin, 'node')
-          ? 'node'
-          : path.basename(executable);
-    const overrides = Object.entries(extra).map(([key, value]) => `${key}=${quote(value)}`);
-    console.log('$ ' + [...overrides, command, ...args.map(quote)].join(' '));
-  }
-  const result = spawnSync(executable, args, {
-    env: { ...env, ...extra },
-    stdio,
-    encoding: 'utf8',
-    timeout: 30000,
-  });
-  assert.equal(result.status, status, result.error?.message);
-  return result;
+function terminal(executable, args) {
+  const result = spawnSync(executable, args, { env, stdio: 'inherit', timeout: 30000 });
+  assert.equal(result.status, 0, result.error?.message);
 }
 const dirs = Object.fromEntries(
   captured([], { VP_DUMP_DIRS: '1' })
@@ -105,7 +87,8 @@ env.PATH = system;
 console.log('First setup:');
 let activation;
 if (kind === 'external') {
-  terminal(['env', 'list', 'node']);
+  console.log('$ vp env list node');
+  terminal(binary, ['env', 'list', 'node']);
   // The full PTY snapshot records the printed command. Other cases also parse
   // the guidance and execute it, so escaping remains covered independently.
   const escaped = path.join(config, 'env').replace(/[\\$`"]/g, '\\$&');
@@ -114,7 +97,6 @@ if (kind === 'external') {
   const first = captured(['env', 'list', 'node']);
   const setup = first.stderr.replace(/\u001b\[[0-9;]*m/g, '');
   assert.match(setup, /Vite\+ setup complete/);
-  assert.doesNotMatch(setup, /not first on PATH/);
   activation = setup
     .split('\n')
     .find((line) => line.trim().startsWith(shell === 'fish' || shell === 'nu' ? 'source "' : '. "'))
@@ -127,119 +109,28 @@ if (kind === 'external') {
       .join('\n'),
   );
 }
-const settingsFile = path.join(config, 'config.json');
-const settings = fs.readFileSync(settingsFile, 'utf8');
-const saved = JSON.parse(settings);
-assert.equal(saved.nodeShimMode ?? 'managed', 'managed');
-assert.deepEqual(Object.values(saved.packageManagerShimModes), Array(4).fill('system_first'));
-const setupState = path.join(dirs.state, 'self-setup');
-const receipts = fs
-  .readdirSync(setupState)
-  .map((name) => [name, fs.readFileSync(path.join(setupState, name), 'utf8')]);
-const prefixFiles = fs.readdirSync(path.dirname(binary));
-
 // Resolve the shell using the runner PATH before switching to the stale PATH.
 const shellBin = process.env.PATH.split(path.delimiter)
   .map((dir) => path.join(dir, shell))
   .find((file) => fs.existsSync(file));
 assert.ok(shellBin, shell);
 Object.assign(env, {
-  ACTIVATION_VP: binary,
   ACTIVATION_BIN: bin,
   ACTIVATION_COMMAND: activation,
-  ACTIVATION_SYSTEM: system,
-  ACTIVATION_SHOW_COMMANDS: kind === 'external' ? '1' : '',
 });
 console.log('Same terminal:');
 if (shell === 'fish') {
-  terminal(['--no-config', 'session.fish'], {}, 0, shellBin);
+  terminal(shellBin, ['--no-config', 'session.fish']);
 } else if (shell === 'nu') {
   fs.writeFileSync(
     'activate.nu',
     fs.readFileSync('session.nu', 'utf8').replaceAll('__ACTIVATION_COMMAND__', activation),
   );
-  terminal(['--no-config-file', 'activate.nu'], {}, 0, shellBin);
+  terminal(shellBin, ['--no-config-file', 'activate.nu']);
 } else {
-  terminal(
-    [
-      shell === 'bash' ? '--noprofile' : '-f',
-      ...(shell === 'bash' ? ['--norc'] : []),
-      'session.sh',
-    ],
-    {},
-    0,
-    shellBin,
-  );
-}
-console.log('Another unactivated terminal:');
-terminal(['env', 'list', 'node']);
-assert.equal(fs.readFileSync(settingsFile, 'utf8'), settings);
-for (const [name, receipt] of receipts)
-  assert.equal(fs.readFileSync(path.join(setupState, name), 'utf8'), receipt);
-assert.deepEqual(fs.readdirSync(path.dirname(binary)), prefixFiles);
-assert.ok(!fs.existsSync(path.join(root, 'prefix/bin/.vp-setup-complete')));
-if (kind === 'external' || kind === 'xdg') {
-  assert.ok(!fs.existsSync(path.join(data, 'current')));
-  assert.equal(fs.realpathSync(path.join(bin, 'node')), fs.realpathSync(binary));
-} else {
-  assert.ok(fs.existsSync(path.join(data, 'current/bin/.vp-setup-complete')));
-}
-console.log('Preferences, setup state, and installation ownership unchanged.');
-fs.symlinkSync(bin, path.join(root, 'bin-alias'));
-console.log('Equivalent shim directory on PATH:');
-terminal(['env', 'list', 'node'], { PATH: path.join(root, 'bin-alias') + path.delimiter + system });
-
-if (kind === 'external') {
-  console.log('JSON output:');
-  terminal(['env', 'list', 'node', '--json']);
-  console.log('Shell-evaluated output:');
-  terminal(['env', 'use', version, '--no-install'], { VP_ENV_USE_EVAL_ENABLE: '1' });
-  console.log('CI with a TTY:');
-  terminal(['env', 'list', 'node'], { CI: '1' });
-  console.log('Redirected stdout, stderr, and stdin:');
-  for (const stdio of [
-    ['inherit', 'pipe', 'inherit'],
-    ['inherit', 'inherit', 'pipe'],
-    ['pipe', 'inherit', 'inherit'],
-  ]) {
-    const result = terminal(['env', 'list', 'node'], {}, 0, binary, stdio);
-    if (result.stderr !== null) {
-      assert.doesNotMatch(result.stderr, /Activate|not first on PATH/);
-      console.log('Redirected stderr:');
-      process.stdout.write(result.stderr);
-    }
-    if (result.stdout !== null) {
-      assert.doesNotMatch(result.stdout, /Activate|not first on PATH/);
-      console.log('Redirected stdout:');
-      process.stdout.write(result.stdout);
-    }
-  }
-  console.log('Direct node shim:');
-  terminal(['--version'], {}, 0, path.join(bin, 'node'));
-  console.log('Completion protocol:');
-  terminal(['--', 'vp', 'env', 'li'], { VP_COMPLETE: 'bash', _CLAP_COMPLETE_INDEX: '2' });
-  console.log('\nInstaller capability protocol:');
-  terminal([], { VP_SELF_SETUP_SUPPORT_CHECK: '1' });
-  console.log('Installer handoff:');
-  terminal([], { VP_SELF_SETUP_SHELL: 'sh' });
-  console.log('Internal background protocol:');
-  terminal(['upgrade', '--background-check']);
-  console.log('Quiet mode:');
-  terminal(['upgrade', '--silent'], {}, 1);
-  console.log('Failing eligible command keeps exit status:');
-  terminal(['env', 'clean', 'invalid-scope'], {}, 1);
-  console.log('System-first mode:');
-  terminal(['env', 'off']);
-  terminal(['env', 'list', 'node']);
-  fs.writeFileSync(settingsFile, settings);
-  console.log('Unknown current shell gets labeled commands despite SHELL=fish:');
-  terminal(['env', 'list', 'node'], { VP_SHELL: '' });
-  console.log('Missing environment file needs repair:');
-  const envFile = path.join(config, 'env');
-  fs.renameSync(envFile, envFile + '.saved');
-  terminal(['env', 'list', 'node']);
-  fs.renameSync(envFile + '.saved', envFile);
-  console.log('Missing shim needs repair:');
-  fs.unlinkSync(path.join(bin, 'node'));
-  terminal(['env', 'list', 'node']);
+  terminal(shellBin, [
+    shell === 'bash' ? '--noprofile' : '-f',
+    ...(shell === 'bash' ? ['--norc'] : []),
+    'session.sh',
+  ]);
 }

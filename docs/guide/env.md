@@ -128,11 +128,11 @@ Using `pm` records the selected mode for all currently supported package manager
 
 ### Setup
 
-After setup, run the activation command printed for your shell in the current terminal. It sources the generated environment file from your resolved config directory and puts the shims first on `PATH`. Bash and Zsh use `. "<config-dir>/env"`; Fish uses `source "<config-dir>/env.fish"`; Nushell uses `source "<config-dir>/env.nu"`; PowerShell uses `. '<config-dir>/env.ps1'`. Use the actual path printed by setup, including any escaping.
+After setup, source the generated environment file with the command printed for your shell. This puts the shims first on `PATH` in the current terminal. Executing the file as a separate process cannot update the terminal environment.
+
+Bash and Zsh use `. "<config-dir>/env"`; Fish uses `source "<config-dir>/env.fish"`; Nushell uses `source "<config-dir>/env.nu"`; PowerShell uses `. '<config-dir>/env.ps1'`. Use the actual path printed by setup, including any escaping.
 
 You can also open a new terminal after setup updates your shell profile. An already-running IDE needs a restart to load its environment.
-
-Interactive `vp` commands show a reminder when managed tools do not resolve through the installed shims. Each invocation checks its inherited `PATH`, so activating one terminal does not dismiss reminders in other terminals. System-first tools do not trigger the reminder. This check cannot inspect shell aliases, functions, or cached command paths; use `command -v node` in Bash or Zsh to inspect your shell's lookup.
 
 `vp env print` prints concrete tool directories. It does not replace sourcing the generated environment file, which also installs the shell wrapper and completions.
 

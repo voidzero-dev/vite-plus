@@ -495,10 +495,6 @@ async fn main() -> ExitCode {
     // Parse CLI arguments (using custom help formatting)
     let parse_result = try_parse_args_from(normalized_args);
 
-    if let Ok(parsed) = &parse_result {
-        commands::env::activation::remind(parsed, &raw_args, &cwd).await;
-    }
-
     let should_run_upgrade_check =
         parse_result.as_ref().is_ok_and(upgrade_check::should_run_for_command);
     let spawned_upgrade_check =
