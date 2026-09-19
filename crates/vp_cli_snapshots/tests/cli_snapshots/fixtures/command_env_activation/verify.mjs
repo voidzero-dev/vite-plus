@@ -125,7 +125,9 @@ if (kind === 'external') {
   console.log(
     setup
       .split('\n')
-      .filter((line) => /Activate Vite\+|^  \. |^  source |new terminal|Add the command/.test(line))
+      .filter((line) =>
+        /Activate Vite\+|^  \. |^  source |new terminal|Add the command|Bash shell/.test(line),
+      )
       .join('\n'),
   );
 }
@@ -156,8 +158,10 @@ if (kind === 'external') {
 } else {
   const repeated = captureVp(['env', 'setup']).stdout.replace(/\u001b\[[0-9;]*m/g, '');
   assert.doesNotMatch(repeated, /Add the command/);
-  assert.match(repeated, /open a new terminal/);
-  console.log(repeated.split('\n').find((line) => line.includes('open a new terminal')));
+  const configuredAdvice =
+    shell === 'bash' ? 'interactive non-login Bash shell' : 'open a new terminal';
+  assert.ok(repeated.includes(configuredAdvice), repeated);
+  console.log(repeated.split('\n').find((line) => line.includes(configuredAdvice)));
 }
 Object.assign(env, {
   ACTIVATION_BIN: bin,
