@@ -1,0 +1,24 @@
+[[case]]
+name = "download_progress_known_length"
+vp = "global"
+# The mock Node distribution uses Unix tar archives.
+skip-platforms = ["windows"]
+steps = [["node", "download.mjs", "known"]]
+
+[[case]]
+name = "download_progress_unknown_length"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "download.mjs", "unknown"]]
+
+[[case]]
+name = "download_progress_non_tty"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "download.mjs", "known"], tty = false }]
+
+[[case]]
+name = "download_progress_ci"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "download.mjs", "known"], envs = [["CI", "1"]] }]

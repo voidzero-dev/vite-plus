@@ -3182,6 +3182,7 @@ dependencies = [
  "portable-atomic",
  "unicode-width 0.2.2",
  "unit-prefix",
+ "vt100",
  "web-time",
 ]
 
@@ -8926,6 +8927,7 @@ dependencies = [
  "console",
  "cow-utils",
  "directories",
+ "indicatif",
  "nix 0.30.1",
  "reqwest",
  "rustls",

@@ -8,6 +8,7 @@
 )]
 
 mod dirs;
+pub mod download_progress;
 mod env_config;
 pub mod env_vars;
 mod error;

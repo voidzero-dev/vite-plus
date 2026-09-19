@@ -7,7 +7,7 @@ use std::{fs::File, time::Duration};
 
 use backon::{ExponentialBuilder, Retryable};
 use futures_util::StreamExt;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use tokio::{
@@ -50,13 +50,8 @@ pub async fn download_file(
     let is_ci = vp_shared::EnvConfig::get().is_ci;
     let progress = if vp_shared::is_stderr_terminal() && !is_ci {
         let pb = ProgressBar::new_spinner();
-        pb.set_style(
-            ProgressStyle::default_spinner()
-                .template("{msg}\n{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})")
-                .expect("valid spinner template"),
-        );
+        pb.set_style(vp_shared::download_progress::download_style(message));
         pb.enable_steady_tick(Duration::from_millis(100));
-        pb.set_message(message.to_string());
         Some(pb)
     } else {
         None
@@ -130,15 +125,6 @@ pub async fn download_file(
             pb.set_position(if is_resumed { resume_from } else { 0 });
             if let Some(size) = total_size {
                 pb.set_length(size);
-                pb.set_style(
-                    ProgressStyle::default_bar()
-                        .template(
-                            "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.blue/white}] \
-                             {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
-                        )
-                        .expect("valid progress bar template")
-                        .progress_chars("#>-"),
-                );
             }
         }
 
