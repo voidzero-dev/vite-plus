@@ -107,7 +107,9 @@ if (mode === 'powershell') {
   const envPath = path.join(dirs.config, 'env').replace(/[\\$`"]/g, '\\$&');
   const source = `. "${envPath}"\n`;
   fs.mkdirSync(env.ZDOTDIR, { recursive: true });
-  fs.writeFileSync(path.join(env.ZDOTDIR, '.zshenv'), source);
+  // Ubuntu's global compinit can prompt about the runner's completion directories.
+  // Keep normal profile loading, but skip completion setup in this PATH test.
+  fs.writeFileSync(path.join(env.ZDOTDIR, '.zshenv'), `skip_global_compinit=1\n${source}`);
   // Model PATH changes made by login startup after .zshenv, such as macOS path_helper.
   const systemPath = system.replace(/[\\$`"]/g, '\\$&');
   fs.writeFileSync(path.join(env.ZDOTDIR, '.zprofile'), `export PATH="${systemPath}:$PATH"\n`);
