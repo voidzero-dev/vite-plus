@@ -6,7 +6,9 @@
 First setup:
   Activate Vite+ in this terminal:
   source "<workspace>/activation/home space 'quote' $cash `tick` \"double\" \\slash/env.nu"
-  If setup already updated your profile, you can open a new terminal instead.
+  Add the command for your shell to its profile to activate future terminals.
+Setup with an existing profile entry:
+  Or open a new terminal to load your configured shell profile.
 Same terminal:
 $ which node
 <workspace>/activation/system/node

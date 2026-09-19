@@ -26,10 +26,6 @@ Next Steps:
   . "<workspace>/activation/home/env"
 
   Add the command for your shell to its profile to activate future terminals.
-  If setup already updated your profile, you can open a new terminal instead.
-
-  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:
-  - macOS: Add to ~/.profile or use launchd
 
   Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
 ✓ Vite+ setup complete.
@@ -39,6 +35,35 @@ Node.js
   * <version> current
 
 note: Run `vp env clean` to free disk space from unused managed runtimes and package manager caches.
+Setup with an existing profile entry:
+$ vp env setup
+VITE+ - The Unified Toolchain for the Web
+
+Setup:
+  Preparing vite-plus environment.
+
+Skipped Shims:
+  <workspace>/activation/home/bin/node
+  <workspace>/activation/home/bin/npm
+  <workspace>/activation/home/bin/npx
+  <workspace>/activation/home/bin/pnpm
+  <workspace>/activation/home/bin/pnpx
+  <workspace>/activation/home/bin/yarn
+  <workspace>/activation/home/bin/yarnpkg
+  <workspace>/activation/home/bin/bun
+  <workspace>/activation/home/bin/bunx
+  <workspace>/activation/home/bin/vpx
+  <workspace>/activation/home/bin/vpr
+
+  Use --refresh to update existing shims.
+
+Next Steps:
+  Activate Vite+ in this terminal:
+  . "<workspace>/activation/home/env"
+
+  Or open a new terminal to load your configured shell profile.
+
+  Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
 Same terminal:
 $ command -v node
 <workspace>/activation/system/node

@@ -132,7 +132,7 @@ After setup, source the generated environment file with the command printed for 
 
 Bash and Zsh use `. "<config-dir>/env"`; Fish uses `source "<config-dir>/env.fish"`; Nushell uses `source "<config-dir>/env.nu"`; PowerShell uses `. '<config-dir>/env.ps1'`. Use the actual path printed by setup, including any escaping.
 
-You can also open a new terminal after setup updates your shell profile. An already-running IDE needs a restart to load its environment.
+Setup asks you to add the command to your shell profile only when it does not find an existing entry. If the profile is configured, you can open a new terminal instead. An already-running IDE needs a restart to load its environment.
 
 `vp env print` prints concrete tool directories. It does not replace sourcing the generated environment file, which also installs the shell wrapper and completions.
 
