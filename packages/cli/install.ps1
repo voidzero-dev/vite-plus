@@ -20,8 +20,6 @@
 
 # When dot-sourced, returns script-scoped InstallDir, ShimDir, CacheDir, ConfigDir, and StateDir.
 # These are resolved paths, not VP_* overrides for subsequent commands.
-$ErrorActionPreference = "Stop"
-
 $ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
@@ -446,7 +444,9 @@ function Invoke-InstallHandoff {
     }
 }
 
+$previousErrorActionPreference = $ErrorActionPreference
 try {
+    $ErrorActionPreference = "Stop"
     Main
 } catch {
     if (Test-IsInstallStopException $_) {
@@ -456,4 +456,6 @@ try {
         exit $global:LASTEXITCODE
     }
     throw
+} finally {
+    $ErrorActionPreference = $previousErrorActionPreference
 }
