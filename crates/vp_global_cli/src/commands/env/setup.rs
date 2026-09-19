@@ -1201,46 +1201,79 @@ fn has_configured_profile(config: &vp_shared::EnvConfig) -> bool {
 /// Print instructions for sourcing the environment files and adding bin to `PATH`.
 fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
     output::raw(&help::render_heading("Next Steps"));
-    output::raw("  Activate Vite+ in this terminal:");
     let env = vp_shared::EnvConfig::get();
-    // SHELL describes the login shell, which may differ from this terminal.
-    let shell = env.vp_shell.as_deref().and_then(|s| s.parse().ok());
-    let commands = [
-        (Shell::Posix, "Bash/Zsh", EnvShell::Posix),
-        (Shell::Fish, "Fish", EnvShell::Fish),
-        (Shell::NuShell, "Nushell", EnvShell::Nu),
-        (Shell::PowerShell, "PowerShell", EnvShell::Powershell),
+    let explicit_shell = env.vp_shell.as_deref().and_then(|s| s.parse::<Shell>().ok());
+    // SHELL is a login-shell hint, not proof of the current shell or its startup mode.
+    let login_shell = if cfg!(unix) { std::env::var("SHELL").ok() } else { None };
+    let shell_name = env
+        .vp_shell
+        .as_deref()
+        .filter(|_| explicit_shell.is_some())
+        .or_else(|| login_shell.as_deref().and_then(|path| path.rsplit('/').next()));
+    let shell = shell_name.and_then(|s| s.parse::<Shell>().ok());
+    let is_hint = explicit_shell.is_none() && shell.is_some();
+    let commands: &[(Shell, &str, Option<EnvShell>, &[&str])] = &[
+        (Shell::Posix, "Bash/Zsh", Some(EnvShell::Posix), &["sh", "bash", "zsh"]),
+        (Shell::Fish, "Fish", Some(EnvShell::Fish), &["fish"]),
+        (Shell::NuShell, "Nushell", Some(EnvShell::Nu), &["nu"]),
+        (Shell::PowerShell, "PowerShell", Some(EnvShell::Powershell), &["pwsh", "powershell"]),
+        (Shell::Cmd, "cmd.exe", None, &["cmd"]),
     ];
-    if shell == Some(Shell::Cmd) {
-        let command = super::format_path_snippet(Shell::Cmd, &[env.dirs.bin.to_string()]);
-        output::raw(&format!("  {command}"));
-    } else {
-        for (kind, label, env_shell) in commands {
-            if shell.is_some_and(|s| s != kind) {
-                continue;
+    let cwd = vt_path::current_dir().ok();
+    let default_shell = if cfg!(windows) { Shell::Cmd } else { Shell::Posix };
+    let mut shown = Vec::new();
+    if !is_hint {
+        output::raw("  Activate Vite+ in this terminal:");
+    }
+    for &(kind, label, env_shell, binaries) in commands {
+        let show = match shell {
+            Some(selected) => selected == kind,
+            None => {
+                kind == default_shell
+                    || binaries.iter().any(|bin| {
+                        cwd.as_ref()
+                            .is_some_and(|cwd| vp_command::resolve_bin(bin, None, cwd).is_ok())
+                    })
             }
-            let command = env_shell.source_command(env_dir);
-            if shell.is_some() {
-                output::raw(&format!("  {command}"));
-            } else {
-                output::raw(&format!("  {label}: {command}"));
-            }
+        };
+        if !show {
+            continue;
+        }
+        shown.push(kind);
+        let command = match env_shell {
+            Some(env_shell) => env_shell.source_command(env_dir),
+            None => super::format_path_snippet(Shell::Cmd, &[env.dirs.bin.to_string()]),
+        };
+        if is_hint {
+            let label = match shell_name {
+                Some(name) if name.eq_ignore_ascii_case("zsh") => "Zsh",
+                Some(name) if name.eq_ignore_ascii_case("bash") => "Bash",
+                Some(name) if name.eq_ignore_ascii_case("sh") => "sh",
+                _ => label,
+            };
+            output::raw(&format!("  For {label}, run:"));
+        }
+        if shell.is_some() {
+            output::raw(&format!("  {command}"));
+        } else {
+            output::raw(&format!("  {label}: {command}"));
         }
     }
     output::raw("");
     let profile_instructions: &[&str] = match shell {
-        Some(Shell::Cmd) => &[
-            "  For future cmd.exe sessions, add this directory to your user PATH if it is missing:",
-            &format!("  {}", env.dirs.bin.as_path().display()),
-            "  System Properties -> Environment Variables -> User variables -> Path",
-            "  Open a new terminal after updating PATH.",
+        Some(Shell::Cmd | Shell::PowerShell) => &[],
+        None if !shown.iter().any(|s| matches!(s, Shell::Posix | Shell::Fish | Shell::NuShell)) => {
+            &[]
+        }
+        _ if is_hint && shell_name.is_some_and(|s| s.eq_ignore_ascii_case("zsh")) => {
+            &["  If your .zshrc does not already load Vite+, add this command."]
+        }
+        _ if is_hint && shell_name.is_some_and(|s| s.eq_ignore_ascii_case("bash")) => &[
+            "  If your ~/.bashrc does not already load Vite+, add this command for interactive non-login Bash sessions.",
+            "  Login Bash shells must also load the command through their login profile.",
         ],
-        None => &[
+        _ if is_hint || shell.is_none() => &[
             "  If your shell profile does not already load Vite+, add the command for your shell.",
-            "  For PowerShell, add its command to $PROFILE if it is not already there.",
-        ],
-        Some(Shell::PowerShell) => &[
-            "  Add this command to $PROFILE if it is not already there, for future PowerShell sessions.",
         ],
         _ if env.vp_shell.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("bash")) => &[
             if has_configured_profile(&env) {
@@ -1260,6 +1293,21 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
     };
     for instruction in profile_instructions {
         output::raw(instruction);
+    }
+    if shown.contains(&Shell::PowerShell) {
+        output::raw(if shell == Some(Shell::PowerShell) {
+            "  Add this command to $PROFILE if it is not already there, for future PowerShell sessions."
+        } else {
+            "  For PowerShell, add its command to $PROFILE if it is not already there."
+        });
+    }
+    if shown.contains(&Shell::Cmd) {
+        output::raw(
+            "  For future cmd.exe sessions, add this directory to your user PATH if it is missing:",
+        );
+        output::raw(&format!("  {}", env.dirs.bin.as_path().display()));
+        output::raw("  System Properties -> Environment Variables -> User variables -> Path");
+        output::raw("  Open a new terminal after updating PATH.");
     }
     output::raw("");
     output::raw(&format!(

@@ -420,10 +420,12 @@ function Invoke-InstallHandoff {
     param([string]$BinarySource)
     $previous = $env:VP_SELF_SETUP_SUPPORT_CHECK
     $previousShell = $env:VP_SELF_SETUP_SHELL
+    $previousVpShell = $env:VP_SHELL
     $previousRegistry = $env:NPM_CONFIG_REGISTRY
     try {
         Remove-Item Env:VP_SELF_SETUP_SUPPORT_CHECK -ErrorAction SilentlyContinue
         $env:VP_SELF_SETUP_SHELL = 'powershell'
+        if (-not $env:VP_SHELL) { $env:VP_SHELL = 'powershell' }
         # Preview dependencies must use the same registry as the downloaded binary.
         if ($PrVersion) {
             $env:NPM_CONFIG_REGISTRY = $BridgeRegistry
@@ -439,6 +441,7 @@ function Invoke-InstallHandoff {
         }
     } finally {
         $env:VP_SELF_SETUP_SHELL = $previousShell
+        $env:VP_SHELL = $previousVpShell
         $env:NPM_CONFIG_REGISTRY = $previousRegistry
         $env:VP_SELF_SETUP_SUPPORT_CHECK = $previous
     }
