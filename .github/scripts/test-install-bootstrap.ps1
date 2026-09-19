@@ -50,9 +50,24 @@ Assert ($LASTEXITCODE -eq 0) 'Could not create fixture'
 $env:TEMP = "$testRoot/tmp"
 
 function Invoke-RestMethod {
-    param($Uri)
+    param($Uri, $Headers)
     $script:Requests.Add("GET $Uri")
-    return @{ version = '0.2.9' }
+    if ($Uri -eq 'https://custom.example/vite-plus/latest') {
+        return @{ version = '0.2.9' }
+    }
+    if ([System.Uri]::UnescapeDataString($Uri) -like 'https://custom.example/@voidzero-dev/vite-plus-cli-*/0.2.9') {
+        # Release payloads must pass the real provenance gate before handoff.
+        return @{
+            version = '0.2.9'
+            dist = @{
+                tarball = 'https://custom.example/platform.tgz'
+                attestations = @{
+                    provenance = @{ predicateType = 'https://slsa.dev/provenance/v1' }
+                }
+            }
+        }
+    }
+    throw "Unexpected metadata request: $Uri"
 }
 function Invoke-WebRequest {
     param($Uri, $Method, $OutFile, [switch]$UseBasicParsing, $ErrorAction)

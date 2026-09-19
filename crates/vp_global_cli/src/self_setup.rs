@@ -7,7 +7,7 @@ use std::{path::Path, process::ExitCode};
 
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use vp_pm_cli::PackageManagerType;
-use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install};
+use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install, is_commit_preview_version};
 use vp_shared::{EnvConfig, env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -187,8 +187,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         .ok()
         .filter(|value| !value.is_empty())
         .or_else(|| {
-            version
-                .starts_with("0.0.0-commit.")
+            is_commit_preview_version(version)
                 .then(|| "https://registry-bridge.viteplus.dev/".to_string())
         });
     let registry = registry.as_deref();

@@ -265,6 +265,8 @@ const localPackuments = new Map<string, Packument>(); // package name -> local-o
 // Far in the past so package-manager minimum-release-age gates never
 // quarantine the locally served versions.
 const LOCAL_PACKAGE_TIME = '2020-01-01T00:00:00.000Z';
+const VITE_PLUS_PLATFORM_PACKAGE_PREFIX = '@voidzero-dev/vite-plus-cli-';
+const SLSA_PROVENANCE_V1 = 'https://slsa.dev/provenance/v1';
 if (packagesDir) {
   for (const basename of readdirSync(packagesDir)) {
     if (!basename.endsWith('.tgz')) {
@@ -286,6 +288,15 @@ if (packagesDir) {
             // that verifies it (npm, pnpm, yarn, bun) gets a match.
             integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}`,
             shasum: createHash('sha1').update(bytes).digest('hex'),
+            // Supply the provenance metadata that npm adds to published platform
+            // packages so local test tarballs pass the installer check.
+            ...(pkg.name.startsWith(VITE_PLUS_PLATFORM_PACKAGE_PREFIX) && {
+              attestations: {
+                provenance: {
+                  predicateType: SLSA_PROVENANCE_V1,
+                },
+              },
+            }),
           },
         },
       },
