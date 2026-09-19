@@ -1,0 +1,16 @@
+[[case]]
+name = "migration_oxlint_existing_vite_plus"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json"], comment = "Migration removes unused plugin API dependencies from the root and workspace package." },
+  { argv = ["vpt", "print-file", "plugin.ts", "packages/app/plugin.ts"], comment = "Imports and exports use the bundled plugin API." },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.@oxlint/plugins", "1.79.0"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["node", "--input-type=module", "-e", "import fs from 'node:fs'; import assert from 'node:assert/strict'; const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8')); assert.equal(lock.packages[''].devDependencies['@oxlint/plugins'], '1.79.0');"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "An already migrated project still cleans up a leftover dependency and updates its lockfile." },
+  { argv = ["node", "--input-type=module", "-e", "import fs from 'node:fs'; import assert from 'node:assert/strict'; for (const file of ['package.json', 'packages/app/package.json']) { const pkg = JSON.parse(fs.readFileSync(file, 'utf8')); assert.equal(pkg.devDependencies['@oxlint/plugins'], undefined); } const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8')); for (const name of ['', 'packages/app']) { assert.equal(lock.packages[name].devDependencies['@oxlint/plugins'], undefined); } console.log('No direct @oxlint/plugins dependencies remain in manifests or lockfile.');"], comment = "The cleanup must run an install even when it changes no imports or toolchain versions." },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "A further migration leaves the project unchanged." },
+]

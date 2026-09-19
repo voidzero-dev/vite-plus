@@ -390,7 +390,8 @@ export function sourceTreeReferencesOxlintPluginsPackage(projectPath: string): b
 export function dropDeadOxlintPluginsDependency(
   rootDir: string,
   packages?: readonly { path: string }[],
-): void {
+): boolean {
+  let changed = false;
   const dirs = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
   for (const dir of dirs) {
     const packageJsonPath = path.join(dir, 'package.json');
@@ -408,7 +409,9 @@ export function dropDeadOxlintPluginsDependency(
         return undefined;
       }
       delete json.devDependencies[OXLINT_PLUGINS_PACKAGE];
+      changed = true;
       return json;
     });
   }
+  return changed;
 }

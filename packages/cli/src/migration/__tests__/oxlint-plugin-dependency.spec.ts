@@ -8,6 +8,7 @@ import { PackageManager } from '../../types/index.ts';
 import {
   collectOxlintOwnerDirs,
   dropDeadOxlintPluginsDependency,
+  finalizeCoreMigrationForExistingVitePlus,
   packageOwnsOxlintApi,
   rewritePackageJson,
   sourceTreeReferencesOxlintPluginsPackage,
@@ -23,6 +24,91 @@ describe('Oxlint plugin dependency cleanup', () => {
 
   afterEach(() => {
     fs.rmSync(projectPath, { recursive: true, force: true });
+  });
+
+  it.each(['@oxlint/plugins', 'vite-plus/lint/plugins'])(
+    'cleans up an existing Vite+ workspace with imports from %s',
+    (specifier) => {
+      const appPath = path.join(projectPath, 'packages', 'app');
+      fs.mkdirSync(appPath, { recursive: true });
+      for (const dir of [projectPath, appPath]) {
+        fs.writeFileSync(
+          path.join(dir, 'package.json'),
+          JSON.stringify({
+            devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
+          }),
+        );
+        fs.writeFileSync(
+          path.join(dir, 'plugin.ts'),
+          `import { definePlugin, defineRule, type Context, type ESTree } from '${specifier}';`,
+        );
+      }
+      const workspace = {
+        rootDir: projectPath,
+        packages: [{ name: 'app', path: 'packages/app' }],
+      };
+
+      const result = finalizeCoreMigrationForExistingVitePlus(workspace, true);
+
+      expect(result.imports).toBe(specifier === '@oxlint/plugins');
+      expect(result.dependencies).toBe(true);
+      for (const dir of [projectPath, appPath]) {
+        expect(fs.readFileSync(path.join(dir, 'plugin.ts'), 'utf8')).toContain(
+          "from 'vite-plus/lint/plugins'",
+        );
+        expect(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))).toEqual({
+          devDependencies: { 'vite-plus': 'latest' },
+        });
+      }
+      expect(finalizeCoreMigrationForExistingVitePlus(workspace, true).dependencies).toBe(false);
+    },
+  );
+
+  it.each([
+    { scripts: { 'check-plugin': `node -e "require('@oxlint/plugins')"` } },
+    { imports: { '#plugin-api': '@oxlint/plugins' } },
+    { dependencies: { '@oxlint/plugins': '^1.79.0' } },
+    { peerDependencies: { '@oxlint/plugins': '^1.79.0' } },
+    { optionalDependencies: { '@oxlint/plugins': '^1.79.0' } },
+  ])('retains an existing Vite+ dependency required by %j', (references) => {
+    const pkg = {
+      ...references,
+      devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
+    };
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+    fs.writeFileSync(
+      path.join(projectPath, 'plugin.ts'),
+      "import { defineRule } from '@oxlint/plugins';",
+    );
+
+    const result = finalizeCoreMigrationForExistingVitePlus({ rootDir: projectPath }, true);
+
+    expect(result.dependencies).toBe(false);
+    expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+    expect(result.imports).toBe(!packageOwnsOxlintApi(pkg));
+  });
+
+  it('retains a root dependency used by an ignored nested plugin after finalization', () => {
+    const pkg = { devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' } };
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+    fs.writeFileSync(path.join(projectPath, '.gitignore'), 'dist/\n');
+    const outputPath = path.join(projectPath, 'packages', 'app', 'dist');
+    fs.mkdirSync(outputPath, { recursive: true });
+    fs.writeFileSync(path.join(outputPath, '..', 'package.json'), '{"name":"app"}');
+    fs.writeFileSync(
+      path.join(outputPath, 'plugin.cjs'),
+      "const { defineRule } = require('@oxlint/plugins');",
+    );
+
+    const result = finalizeCoreMigrationForExistingVitePlus(
+      { rootDir: projectPath, packages: [{ name: 'app', path: 'packages/app' }] },
+      true,
+    );
+
+    expect(result.dependencies).toBe(false);
+    expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
   });
 
   it.each([`node -e "require('@oxlint/plugins')"`, `node -e "import('@oxlint/plugins')"`])(
