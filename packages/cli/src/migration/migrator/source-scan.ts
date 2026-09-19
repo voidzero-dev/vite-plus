@@ -385,7 +385,7 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
  */
 export function sourceTreeReferencesOxlintPluginsPackage(
   projectPath: string,
-  peerDependencyNames: ReadonlyMap<string, ReadonlySet<string>> = collectOxlintPeerDependencyNames(
+  originalDependencies: ReadonlyMap<string, ReadonlySet<string>> = collectOxlintDependencyNames(
     projectPath,
   ),
 ): boolean {
@@ -397,12 +397,10 @@ export function sourceTreeReferencesOxlintPluginsPackage(
     // Nested fixtures and templates can declare dependencies that this workspace
     // never installs. Their source still counts, but unknown peers do not.
     matchesPackage: (dir, pkg) =>
-      projectListsRequiredOxlintPluginsPeer(
-        dir,
-        pkg,
-        peerDependencyNames.has(dir),
-        peerDependencyNames.get(dir),
-      ),
+      projectListsRequiredOxlintPluginsPeer(dir, pkg, {
+        retainUnknownPeers: originalDependencies.has(dir),
+        originalDependencyNames: originalDependencies.get(dir),
+      }),
     skipDirs: OXLINT_RETENTION_SKIP_DIRS,
   });
 }
@@ -412,14 +410,15 @@ export function sourceTreeReferencesOxlintPluginsPackage(
 export function projectListsRequiredOxlintPluginsPeer(
   projectPath: string,
   pkg: DependencyBag,
-  retainUnknownPeers = true,
-  originalDependencyNames?: ReadonlySet<string>,
+  {
+    retainUnknownPeers = true,
+    originalDependencyNames,
+  }: {
+    retainUnknownPeers?: boolean;
+    originalDependencyNames?: ReadonlySet<string>;
+  } = {},
 ): boolean {
-  const dependencyNames = new Set([
-    ...Object.keys(pkg.dependencies ?? {}),
-    ...Object.keys(pkg.devDependencies ?? {}),
-    ...Object.keys(pkg.optionalDependencies ?? {}),
-  ]);
+  const dependencyNames = collectInstallDependencyNames(pkg);
   dependencyNames.delete(OXLINT_PLUGINS_PACKAGE);
   // These toolchain packages do not require an @oxlint/plugins peer.
   dependencyNames.delete(VITE_PLUS_NAME);
@@ -456,24 +455,25 @@ export function projectListsRequiredOxlintPluginsPeer(
   return false;
 }
 
+export function collectInstallDependencyNames(pkg?: DependencyBag): Set<string> {
+  return new Set([
+    ...Object.keys(pkg?.dependencies ?? {}),
+    ...Object.keys(pkg?.devDependencies ?? {}),
+    ...Object.keys(pkg?.optionalDependencies ?? {}),
+  ]);
+}
+
 // Capture the original dependency names before migration injects new toolchain
 // packages. Check peers only for original dependencies that survive migration;
 // newly injected packages are not installed until after source cleanup.
-export function collectOxlintPeerDependencyNames(
+export function collectOxlintDependencyNames(
   rootDir: string,
   packages?: readonly { path: string }[],
 ): Map<string, ReadonlySet<string>> {
   const names = new Map<string, ReadonlySet<string>>();
   for (const dir of [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))]) {
     const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
-    names.set(
-      dir,
-      new Set([
-        ...Object.keys(pkg?.dependencies ?? {}),
-        ...Object.keys(pkg?.devDependencies ?? {}),
-        ...Object.keys(pkg?.optionalDependencies ?? {}),
-      ]),
-    );
+    names.set(dir, collectInstallDependencyNames(pkg));
   }
   return names;
 }
@@ -488,7 +488,7 @@ export function collectOxlintPeerDependencyNames(
 export function dropDeadOxlintPluginsDependency(
   rootDir: string,
   packages?: readonly { path: string }[],
-  peerDependencyNames: ReadonlyMap<string, ReadonlySet<string>> = collectOxlintPeerDependencyNames(
+  originalDependencies: ReadonlyMap<string, ReadonlySet<string>> = collectOxlintDependencyNames(
     rootDir,
     packages,
   ),
@@ -503,7 +503,7 @@ export function dropDeadOxlintPluginsDependency(
     }
     if (
       packageOwnsOxlintApi(pkg) ||
-      sourceTreeReferencesOxlintPluginsPackage(dir, peerDependencyNames)
+      sourceTreeReferencesOxlintPluginsPackage(dir, originalDependencies)
     ) {
       continue;
     }

@@ -9,12 +9,12 @@ import {
   applyYarnWorkspaceHoistingFix,
   cleanupDeprecatedTsconfigOptions,
   collectInjectedProviderNames,
+  collectOxlintDependencyNames,
   collectOxlintOwnerDirs,
-  collectOxlintPeerDependencyNames,
-  dropDeadOxlintPluginsDependency,
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
+  dropDeadOxlintPluginsDependency,
   dropRemovePackageOverrideKeys,
   ensureDirectViteForPnpm,
   ensurePnpmWorkspaceExoticSubdepsSetting,
@@ -82,7 +82,7 @@ export function rewriteStandaloneProject(
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
   // reads the manifests afterwards and would no longer see the signal.
   const oxlintOwnerDirs = collectOxlintOwnerDirs(projectPath, workspaceInfo.packages);
-  const oxlintPeerDependencyNames = collectOxlintPeerDependencyNames(
+  const originalOxlintDependencies = collectOxlintDependencyNames(
     projectPath,
     workspaceInfo.packages,
   );
@@ -344,7 +344,7 @@ export function rewriteStandaloneProject(
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
   rewriteAllImports(projectPath, silent, report, true, oxlintOwnerDirs);
-  dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages, oxlintPeerDependencyNames);
+  dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages, originalOxlintDependencies);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
@@ -367,7 +367,7 @@ export function rewriteMonorepo(
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
   // reads the manifests afterwards and would no longer see the signal.
   const oxlintOwnerDirs = collectOxlintOwnerDirs(workspaceInfo.rootDir, workspaceInfo.packages);
-  const oxlintPeerDependencyNames = collectOxlintPeerDependencyNames(
+  const originalOxlintDependencies = collectOxlintDependencyNames(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
@@ -485,7 +485,7 @@ export function rewriteMonorepo(
   dropDeadOxlintPluginsDependency(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
-    oxlintPeerDependencyNames,
+    originalOxlintDependencies,
   );
   wrapLazyPluginsInViteConfig(workspaceInfo.rootDir, silent, report);
   for (const pkg of workspaceInfo.packages) {

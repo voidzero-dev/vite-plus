@@ -5,16 +5,18 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
+import { readJsonFile, writeJsonFile } from '../../utils/json.ts';
 import {
   collectOxlintOwnerDirs,
   dropDeadOxlintPluginsDependency,
   finalizeCoreMigrationForExistingVitePlus,
   packageOwnsOxlintApi,
-  rewritePackageJson,
   rewriteMonorepo,
+  rewritePackageJson,
   rewriteStandaloneProject,
   sourceTreeReferencesOxlintPluginsPackage,
   usesVitestBrowserMode,
+  type DependencyBag,
 } from '../migrator.ts';
 
 describe('Oxlint plugin dependency cleanup', () => {
@@ -34,12 +36,9 @@ describe('Oxlint plugin dependency cleanup', () => {
       const appPath = path.join(projectPath, 'packages', 'app');
       fs.mkdirSync(appPath, { recursive: true });
       for (const dir of [projectPath, appPath]) {
-        fs.writeFileSync(
-          path.join(dir, 'package.json'),
-          JSON.stringify({
-            devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
-          }),
-        );
+        writeJsonFile(path.join(dir, 'package.json'), {
+          devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
+        });
         fs.writeFileSync(
           path.join(dir, 'plugin.ts'),
           `import { definePlugin, defineRule, type Context, type ESTree } from '${specifier}';`,
@@ -58,7 +57,7 @@ describe('Oxlint plugin dependency cleanup', () => {
         expect(fs.readFileSync(path.join(dir, 'plugin.ts'), 'utf8')).toContain(
           "from 'vite-plus/lint/plugins'",
         );
-        expect(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))).toEqual({
+        expect(readJsonFile(path.join(dir, 'package.json'))).toEqual({
           devDependencies: { 'vite-plus': 'latest' },
         });
       }
@@ -70,13 +69,10 @@ describe('Oxlint plugin dependency cleanup', () => {
     'cleans up before newly injected browser packages are installed (monorepo: %s)',
     (isMonorepo) => {
       const packageJsonPath = path.join(projectPath, 'package.json');
-      fs.writeFileSync(
-        packageJsonPath,
-        JSON.stringify({
-          name: 'project',
-          devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
-        }),
-      );
+      writeJsonFile(packageJsonPath, {
+        name: 'project',
+        devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
+      });
       const browserProjectPath = isMonorepo
         ? path.join(projectPath, 'packages', 'app')
         : projectPath;
@@ -120,12 +116,9 @@ describe('Oxlint plugin dependency cleanup', () => {
         rewriteStandaloneProject(projectPath, workspace, true, true);
       }
 
+      expect(readJsonFile(packageJsonPath).devDependencies).not.toHaveProperty('@oxlint/plugins');
       expect(
-        JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).devDependencies,
-      ).not.toHaveProperty('@oxlint/plugins');
-      expect(
-        JSON.parse(fs.readFileSync(path.join(browserProjectPath, 'package.json'), 'utf8'))
-          .devDependencies,
+        readJsonFile(path.join(browserProjectPath, 'package.json')).devDependencies,
       ).toHaveProperty('@vitest/browser-playwright');
     },
   );
@@ -142,7 +135,7 @@ describe('Oxlint plugin dependency cleanup', () => {
       devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
     };
     const packageJsonPath = path.join(projectPath, 'package.json');
-    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+    writeJsonFile(packageJsonPath, pkg);
     fs.writeFileSync(
       path.join(projectPath, 'plugin.ts'),
       "import { defineRule } from '@oxlint/plugins';",
@@ -151,14 +144,14 @@ describe('Oxlint plugin dependency cleanup', () => {
     const result = finalizeCoreMigrationForExistingVitePlus({ rootDir: projectPath }, true);
 
     expect(result.dependencies).toBe(false);
-    expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+    expect(readJsonFile(packageJsonPath)).toEqual(pkg);
     expect(result.imports).toBe(!packageOwnsOxlintApi(pkg));
   });
 
   it('retains a root dependency used by an ignored nested plugin after finalization', () => {
     const pkg = { devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' } };
     const packageJsonPath = path.join(projectPath, 'package.json');
-    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+    writeJsonFile(packageJsonPath, pkg);
     fs.writeFileSync(path.join(projectPath, '.gitignore'), 'dist/\n');
     const outputPath = path.join(projectPath, 'packages', 'app', 'dist');
     fs.mkdirSync(outputPath, { recursive: true });
@@ -174,41 +167,33 @@ describe('Oxlint plugin dependency cleanup', () => {
     );
 
     expect(result.dependencies).toBe(false);
-    expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+    expect(readJsonFile(packageJsonPath)).toEqual(pkg);
   });
 
   it.each(['dependencies', 'devDependencies', 'optionalDependencies'] as const)(
     'retains the provider of an installed %s plugin required peer',
     (field) => {
-      const pkg = {
+      const pkg: DependencyBag = {
         devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
-        [field]: {
-          ...(field === 'devDependencies'
-            ? { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' }
-            : {}),
-          'review-oxlint-plugin': '1.0.0',
-        },
       };
+      pkg[field] = { ...pkg[field], 'review-oxlint-plugin': '1.0.0' };
       const packageJsonPath = path.join(projectPath, 'package.json');
-      fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+      writeJsonFile(packageJsonPath, pkg);
       const pluginPath = path.join(projectPath, 'node_modules', 'review-oxlint-plugin');
       fs.mkdirSync(pluginPath, { recursive: true });
-      fs.writeFileSync(
-        path.join(pluginPath, 'package.json'),
-        JSON.stringify({
-          name: 'review-oxlint-plugin',
-          version: '1.0.0',
-          exports: './index.cjs',
-          peerDependencies: { '@oxlint/plugins': '^1.79.0' },
-        }),
-      );
+      writeJsonFile(path.join(pluginPath, 'package.json'), {
+        name: 'review-oxlint-plugin',
+        version: '1.0.0',
+        exports: './index.cjs',
+        peerDependencies: { '@oxlint/plugins': '^1.79.0' },
+      });
       fs.writeFileSync(path.join(pluginPath, 'index.cjs'), "require('@oxlint/plugins');");
       fs.writeFileSync(path.join(projectPath, 'check.cjs'), "require('review-oxlint-plugin');");
 
       const result = finalizeCoreMigrationForExistingVitePlus({ rootDir: projectPath }, true);
 
       expect(result.dependencies).toBe(false);
-      expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+      expect(readJsonFile(packageJsonPath)).toEqual(pkg);
     },
   );
 
@@ -223,7 +208,7 @@ describe('Oxlint plugin dependency cleanup', () => {
         },
       };
       const packageJsonPath = path.join(projectPath, 'package.json');
-      fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+      writeJsonFile(packageJsonPath, pkg);
       if (metadata !== 'missing') {
         const pluginPath = path.join(projectPath, 'node_modules', 'review-oxlint-plugin');
         fs.mkdirSync(pluginPath, { recursive: true });
@@ -257,22 +242,18 @@ describe('Oxlint plugin dependency cleanup', () => {
     (isWorkspacePackage) => {
       const pkg = { devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' } };
       const packageJsonPath = path.join(projectPath, 'package.json');
-      fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+      writeJsonFile(packageJsonPath, pkg);
       const appPath = path.join(projectPath, 'packages', 'app');
       fs.mkdirSync(appPath, { recursive: true });
-      fs.writeFileSync(
-        path.join(appPath, 'package.json'),
-        JSON.stringify({ dependencies: { 'review-oxlint-plugin': '1.0.0' } }),
-      );
+      writeJsonFile(path.join(appPath, 'package.json'), {
+        dependencies: { 'review-oxlint-plugin': '1.0.0' },
+      });
       const pluginPath = path.join(appPath, 'node_modules', 'review-oxlint-plugin');
       fs.mkdirSync(pluginPath, { recursive: true });
-      fs.writeFileSync(
-        path.join(pluginPath, 'package.json'),
-        JSON.stringify({
-          name: 'review-oxlint-plugin',
-          peerDependencies: { '@oxlint/plugins': '^1.79.0' },
-        }),
-      );
+      writeJsonFile(path.join(pluginPath, 'package.json'), {
+        name: 'review-oxlint-plugin',
+        peerDependencies: { '@oxlint/plugins': '^1.79.0' },
+      });
 
       const result = finalizeCoreMigrationForExistingVitePlus(
         {
@@ -283,7 +264,7 @@ describe('Oxlint plugin dependency cleanup', () => {
       );
 
       expect(result.dependencies).toBe(false);
-      expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+      expect(readJsonFile(packageJsonPath)).toEqual(pkg);
     },
   );
 
@@ -291,22 +272,20 @@ describe('Oxlint plugin dependency cleanup', () => {
     'reads installed peer metadata despite inaccessible exports %j',
     (exports) => {
       const packageJsonPath = path.join(projectPath, 'package.json');
-      fs.writeFileSync(
-        packageJsonPath,
-        JSON.stringify({
-          devDependencies: {
-            'vite-plus': 'latest',
-            '@oxlint/plugins': '^1.79.0',
-            'review-oxlint-plugin': '1.0.0',
-          },
-        }),
-      );
+      writeJsonFile(packageJsonPath, {
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@oxlint/plugins': '^1.79.0',
+          'review-oxlint-plugin': '1.0.0',
+        },
+      });
       const pluginPath = path.join(projectPath, 'node_modules', 'review-oxlint-plugin');
       fs.mkdirSync(pluginPath, { recursive: true });
-      fs.writeFileSync(
-        path.join(pluginPath, 'package.json'),
-        JSON.stringify({ name: 'review-oxlint-plugin', version: '1.0.0', exports }),
-      );
+      writeJsonFile(path.join(pluginPath, 'package.json'), {
+        name: 'review-oxlint-plugin',
+        version: '1.0.0',
+        exports,
+      });
       fs.writeFileSync(path.join(pluginPath, 'index.js'), 'export default {};');
 
       const result = finalizeCoreMigrationForExistingVitePlus({ rootDir: projectPath }, true);
@@ -322,18 +301,15 @@ describe('Oxlint plugin dependency cleanup', () => {
     'only retains unknown nested peer contracts for workspace packages (workspace: %s)',
     (isWorkspacePackage) => {
       const packageJsonPath = path.join(projectPath, 'package.json');
-      fs.writeFileSync(
-        packageJsonPath,
-        JSON.stringify({
-          devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
-        }),
-      );
+      writeJsonFile(packageJsonPath, {
+        devDependencies: { 'vite-plus': 'latest', '@oxlint/plugins': '^1.79.0' },
+      });
       const nestedPath = path.join(projectPath, 'nested');
       fs.mkdirSync(nestedPath);
-      fs.writeFileSync(
-        path.join(nestedPath, 'package.json'),
-        JSON.stringify({ name: 'nested', devDependencies: { 'uninstalled-plugin': '1.0.0' } }),
-      );
+      writeJsonFile(path.join(nestedPath, 'package.json'), {
+        name: 'nested',
+        devDependencies: { 'uninstalled-plugin': '1.0.0' },
+      });
 
       const result = finalizeCoreMigrationForExistingVitePlus(
         {
@@ -358,7 +334,7 @@ describe('Oxlint plugin dependency cleanup', () => {
         scripts: { 'check-plugin': 'node bin/check-plugin' },
       };
       const packageJsonPath = path.join(projectPath, 'package.json');
-      fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+      writeJsonFile(packageJsonPath, pkg);
       fs.mkdirSync(path.join(projectPath, 'bin'));
       const scriptPath = path.join(projectPath, 'bin', 'check-plugin');
       const script = `${prefix}console.log(typeof require('@oxlint/plugins').defineRule);`;
@@ -368,7 +344,7 @@ describe('Oxlint plugin dependency cleanup', () => {
 
       expect(result.dependencies).toBe(false);
       expect(fs.readFileSync(scriptPath, 'utf8')).toBe(script);
-      expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+      expect(readJsonFile(packageJsonPath)).toEqual(pkg);
     },
   );
 
