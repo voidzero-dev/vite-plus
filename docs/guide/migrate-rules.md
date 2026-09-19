@@ -118,7 +118,7 @@ For browser mode, Vite+ bundles the base `@vitest/browser` runtime and `@vitest/
 
 Migration detects Playwright usage before it rewrites imports, including legacy `vitest/browser-playwright`, `vitest/browser/providers/playwright`, and `vitest/plugins/browser-playwright` aliases.
 
-The community WebDriverIO provider remains user-managed. Migration restores removed Vite+ WebDriverIO aliases to `@vitest/browser-webdriverio`, preserves existing versions and overrides, and asks you to install the provider if no dependency exists. See [Community WebDriverIO provider](./vitest-v5.md#community-webdriverio-provider).
+`vp migrate` restores removed Vite+ WebDriverIO aliases to `@vitest/browser-webdriverio` and adds `^5.0.0` if the provider is missing. It upgrades older versions, narrows ranges that allow versions below `5.0.0`, updates referenced catalog entries, and removes overrides that force an older provider. Versions and ranges that meet the minimum stay unchanged. Migration ensures the required `webdriverio` peer and adds an `@vitest/browser` override matching bundled Vitest (`resolutions` for Yarn). You manage later community provider upgrades. See [Community WebDriverIO provider](./vitest-v5.md#community-webdriverio-provider).
 
 Object-valued nested npm and Bun overrides are preserved: they are user-defined scopes rather than scalar version pins.
 
