@@ -18,6 +18,7 @@ test-utils = ["dep:temp-env", "dep:tempfile"]
 directories = { workspace = true }
 nix = { workspace = true, features = ["fs", "poll", "term"] }
 console = { workspace = true }
+indicatif = { workspace = true }
 cow-utils = { workspace = true }
 serde = { workspace = true }
 # use `preserve_order` feature to preserve the order of the fields in `package.json`
@@ -41,6 +42,7 @@ rustls = { workspace = true }
 webpki-root-certs = { workspace = true }
 
 [dev-dependencies]
+indicatif = { workspace = true, features = ["in_memory"] }
 serial_test = { workspace = true }
 tempfile = { workspace = true }
 # Enables the `test-utils` feature for this crate's own tests and doctests

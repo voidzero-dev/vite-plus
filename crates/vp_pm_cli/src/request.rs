@@ -6,7 +6,7 @@ use std::{
 use backon::{ExponentialBuilder, Retryable};
 use flate2::read::GzDecoder;
 use futures_util::stream::StreamExt;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
 use reqwest::{Response, StatusCode};
 use serde::de::DeserializeOwned;
 use sha1::Sha1;
@@ -140,7 +140,7 @@ impl HttpClient {
 
     /// Download a file to a specified path
     ///
-    /// The optional `message` is displayed above a progress bar (e.g. "Downloading
+    /// The optional `message` is displayed alongside a progress bar (e.g. "Downloading
     /// pnpm v10.0.0..."), shown only on a TTY and outside CI so piped/non-interactive
     /// output stays clean. Pass `None` for downloads that shouldn't surface progress
     /// (e.g. small metadata probes).
@@ -149,7 +149,7 @@ impl HttpClient {
     ///
     /// * `url` - The URL of the file to download
     /// * `target_path` - The path where the file will be saved
-    /// * `message` - Optional message shown above the progress bar
+    /// * `message` - Optional message shown alongside the progress bar
     ///
     /// # Returns
     ///
@@ -175,15 +175,8 @@ impl HttpClient {
             && !is_ci
         {
             let pb = ProgressBar::new_spinner();
-            pb.set_style(
-                ProgressStyle::default_spinner()
-                    .template(
-                        "{msg}\n{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})",
-                    )
-                    .expect("valid spinner template"),
-            );
+            pb.set_style(vp_shared::download_progress::download_style(message));
             pb.enable_steady_tick(Duration::from_millis(100));
-            pb.set_message(message.to_string());
             Some(pb)
         } else {
             None
@@ -204,15 +197,6 @@ impl HttpClient {
                 pb.set_position(0);
                 if let Some(size) = response.content_length() {
                     pb.set_length(size);
-                    pb.set_style(
-                        ProgressStyle::default_bar()
-                            .template(
-                                "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.blue/white}] \
-                                 {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
-                            )
-                            .expect("valid progress bar template")
-                            .progress_chars("#>-"),
-                    );
                 }
             }
             Self::write_response_to_file(response, target_path, progress.as_ref()).await
