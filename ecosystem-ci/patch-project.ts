@@ -7,6 +7,7 @@ import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
 import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
 import { ecosystemCiDir, tgzDir, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
+import { finalizeWebdriverioProject, prepareWebdriverioProject } from './webdriverio.ts';
 
 const projects = Object.keys(repos);
 
@@ -83,6 +84,8 @@ if (process.env.GITHUB_ENV) {
 } else {
   process.on('exit', () => registryServer.kill());
 }
+
+await prepareWebdriverioProject(project, repoRoot, cli);
 
 if (project === 'rollipop') {
   const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf-8');
@@ -249,7 +252,7 @@ if (project === 'nuxt-devtools') {
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
 
 // Mirror VITE_PLUS_OVERRIDE_PACKAGES: pin `vitest` only. Vitest pins its
-// internal dependencies; the migration aligns optional browser providers.
+// internal dependencies; the migration aligns first-party browser providers.
 //
 // Coverage providers are intentionally NOT in the shipped override map (the
 // product leaves them user-owned; the runtime guard fail-fasts on a skew). But
@@ -428,9 +431,11 @@ if (project === 'tiptap') {
   await writeFile(viteConfigPath, patched, 'utf-8');
 }
 
+await finalizeWebdriverioProject(project, repoRoot);
+
 // Install through the local registry. `vp migrate` already pinned
 // `vite-plus@<version>` in package.json exactly like a real migration, so no
-// manual package.json rewrite is needed.
+// manual rewrite of the Vite+ version is needed.
 execSync(`${cli} install --no-frozen-lockfile`, {
   cwd: repoRoot,
   stdio: 'inherit',

@@ -166,6 +166,22 @@
     "hash": "f434577e6bb2010b321653cb132a57bda18764fa",
     "forceFreshMigration": true
   },
+  "10ten-ja-reader": {
+    "repository": "https://github.com/birchill/10ten-ja-reader.git",
+    "branch": "main",
+    "hash": "7eabad2d5075ce278c580a59c4deb6b2d794383f"
+  },
+  "sqlocal": {
+    "repository": "https://github.com/DallasHoff/sqlocal.git",
+    "branch": "main",
+    "hash": "ef38d4d76d7e09da5ffc3b3ab0ba98ea78c18000"
+  },
+  "brazilian-utils": {
+    "repository": "https://github.com/brazilian-utils/javascript.git",
+    "branch": "main",
+    "hash": "2b2c73518fbfdad820e4760b19fee99c4d836c94",
+    "forceFreshMigration": true
+  },
   "solid-vite-plugin": {
     "repository": "https://github.com/solidjs/solid-vite-plugin.git",
     "branch": "next",
