@@ -62,7 +62,14 @@ static BUN_BUILD_HASH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // spelling used by the shared snapshots.
 static WINDOWS_MANAGED_NODE_BIN_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r"(<home>/.vite-plus/js_runtime/node/(?:<version>|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?))/node\.exe\b",
+        r"(<home>/.vite-plus/js_runtime/node/(?:<version>|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?))/(node|npm|npx)\.(?:exe|cmd)\b",
+    )
+    .unwrap()
+});
+// Bash PATH output uses the runtime root on Windows and its bin directory on Unix.
+static WINDOWS_MANAGED_NODE_PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(export PATH="<home>/.vite-plus/js_runtime/node/(?:<version>|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?))(:\$PATH")"#,
     )
     .unwrap()
 });
@@ -447,7 +454,8 @@ pub fn redact_output(
 
     // Normalize platform-specific managed executable paths and missing-command
     // diagnostics before applying the general version redactions below.
-    output = WINDOWS_MANAGED_NODE_BIN_RE.replace_all(&output, "${1}/bin/node").into_owned();
+    output = WINDOWS_MANAGED_NODE_BIN_RE.replace_all(&output, "${1}/bin/${2}").into_owned();
+    output = WINDOWS_MANAGED_NODE_PATH_RE.replace_all(&output, "${1}/bin${2}").into_owned();
     output = WINDOWS_MANAGED_PM_BIN_RE.replace_all(&output, "${1}").into_owned();
     output = COMMAND_NOT_FOUND_RE.replace_all(&output, "${1}program not found").into_owned();
 

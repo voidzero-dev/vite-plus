@@ -94,6 +94,12 @@ fn normalizes_managed_executable_paths_and_missing_commands() {
         "\n",
         r#""pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm.cmd""#,
         "\n",
+        r#""npm": "<home>/.vite-plus/js_runtime/node/22.18.0/npm.cmd""#,
+        "\n",
+        r#""npx": "<home>/.vite-plus/js_runtime/node/22.18.0/npx.cmd""#,
+        "\n",
+        r#"export PATH="<home>/.vite-plus/js_runtime/node/22.18.0:$PATH""#,
+        "\n",
         "error: Command execution failed: No such file or directory (os error 2)\n",
     )
     .to_owned();
@@ -103,6 +109,12 @@ fn normalizes_managed_executable_paths_and_missing_commands() {
             r#""bin_path": "<home>/.vite-plus/js_runtime/node/<version>/bin/node""#,
             "\n",
             r#""pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm""#,
+            "\n",
+            r#""npm": "<home>/.vite-plus/js_runtime/node/<version>/bin/npm""#,
+            "\n",
+            r#""npx": "<home>/.vite-plus/js_runtime/node/<version>/bin/npx""#,
+            "\n",
+            r#"export PATH="<home>/.vite-plus/js_runtime/node/<version>/bin:$PATH""#,
             "\n",
             "error: Command execution failed: program not found\n",
         )
