@@ -8,7 +8,7 @@ steps = [["node", "verify.mjs", "managed", "bash"]]
 [[case]]
 name = "activation_external_zsh"
 vp = "global"
-skip-platforms = ["windows", "linux"]
+skip-platforms = ["windows"]
 requires = ["zsh"]
 steps = [["node", "verify.mjs", "external", "zsh"]]
 
@@ -39,11 +39,3 @@ vp = "global"
 skip-platforms = ["windows"]
 requires = ["nu"]
 steps = [["node", "verify.mjs", "managed", "nu"]]
-
-# Setup includes platform-specific IDE instructions; keep both full transcripts.
-[[case]]
-name = "activation_external_zsh_linux"
-vp = "global"
-skip-platforms = ["windows", "macos"]
-requires = ["zsh"]
-steps = [["node", "verify.mjs", "external", "zsh"]]

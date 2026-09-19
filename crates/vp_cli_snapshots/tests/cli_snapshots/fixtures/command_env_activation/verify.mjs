@@ -16,6 +16,9 @@ for (const key of Object.keys(env)) {
 }
 Object.assign(env, {
   HOME: path.join(root, 'user'),
+  ZDOTDIR: path.join(root, 'user/zsh'),
+  XDG_CONFIG_HOME: path.join(root, 'user/.config'),
+  XDG_DATA_HOME: path.join(root, 'user/.local/share'),
   VP_CLI_TEST: '1',
   VP_NO_UPDATE_CHECK: '1',
   VP_SELF_SETUP_NO_MODIFY_PATH: '1',
@@ -83,6 +86,17 @@ fs.writeFileSync('.node-version', version);
 const system = path.join(root, 'system');
 fs.mkdirSync(system);
 fs.writeFileSync(path.join(system, 'node'), '#!/bin/sh\necho system-node\n', { mode: 0o755 });
+// Resolve the shell using the runner PATH before switching to the stale PATH.
+const shellBin = process.env.PATH.split(path.delimiter)
+  .map((dir) => path.join(dir, shell))
+  .find((file) => fs.existsSync(file));
+assert.ok(shellBin, shell);
+const automaticProfile = kind === 'managed' && shell === 'bash';
+if (automaticProfile) {
+  delete env.VP_SELF_SETUP_NO_MODIFY_PATH;
+  fs.writeFileSync(path.join(env.HOME, '.bashrc'), '# Existing shell configuration\n');
+  fs.symlinkSync(shellBin, path.join(system, 'bash'));
+}
 env.PATH = system;
 console.log('First setup:');
 let activation;
@@ -97,6 +111,8 @@ if (kind === 'external') {
   const first = captured(['env', 'list', 'node']);
   const setup = first.stderr.replace(/\u001b\[[0-9;]*m/g, '');
   assert.match(setup, /Vite\+ setup complete/);
+  if (automaticProfile) assert.doesNotMatch(setup, /Add the command/);
+  else assert.match(setup, /Add the command/);
   activation = setup
     .split('\n')
     .find((line) => line.trim().startsWith(shell === 'fish' || shell === 'nu' ? 'source "' : '. "'))
@@ -105,15 +121,34 @@ if (kind === 'external') {
   console.log(
     setup
       .split('\n')
-      .filter((line) => /Activate Vite\+|^  \. |^  source |new terminal/.test(line))
+      .filter((line) => /Activate Vite\+|^  \. |^  source |new terminal|Add the command/.test(line))
       .join('\n'),
   );
 }
-// Resolve the shell using the runner PATH before switching to the stale PATH.
-const shellBin = process.env.PATH.split(path.delimiter)
-  .map((dir) => path.join(dir, shell))
-  .find((file) => fs.existsSync(file));
-assert.ok(shellBin, shell);
+const profile =
+  shell === 'zsh'
+    ? path.join(env.ZDOTDIR, '.zshrc')
+    : shell === 'fish'
+      ? path.join(env.XDG_CONFIG_HOME, 'fish/config.fish')
+      : shell === 'nu'
+        ? path.join(env.XDG_CONFIG_HOME, 'nushell/config.nu')
+        : path.join(env.HOME, '.bashrc');
+if (automaticProfile) {
+  assert.ok(fs.readFileSync(profile, 'utf8').includes(activation));
+} else {
+  fs.mkdirSync(path.dirname(profile), { recursive: true });
+  fs.writeFileSync(profile, activation + '\n');
+}
+console.log('Setup with an existing profile entry:');
+if (kind === 'external') {
+  console.log('$ vp env setup');
+  terminal(binary, ['env', 'setup']);
+} else {
+  const repeated = captured(['env', 'setup']).stdout.replace(/\u001b\[[0-9;]*m/g, '');
+  assert.doesNotMatch(repeated, /Add the command/);
+  assert.match(repeated, /open a new terminal/);
+  console.log(repeated.split('\n').find((line) => line.includes('open a new terminal')));
+}
 Object.assign(env, {
   ACTIVATION_BIN: bin,
   ACTIVATION_COMMAND: activation,

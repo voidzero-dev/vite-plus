@@ -25,7 +25,7 @@ use crate::{
     commands::{
         env::{bin_config::BinConfig, package_metadata::PackageMetadata},
         global::{LEGACY_PACKAGE_MANAGER_PACKAGES, install::uninstall},
-        shell::Shell,
+        shell::{ALL_SHELL_PROFILES, Shell, ShellProfileRoot, resolve_profile_path},
     },
     error::Error,
     help,
@@ -1192,6 +1192,66 @@ async fn create_env_files() -> Result<(), Error> {
     Ok(())
 }
 
+/// Inspect the profiles setup writes, without changing them or using a saved flag.
+fn has_configured_profile(config: &vp_shared::EnvConfig) -> bool {
+    let shell = config.vp_shell.as_deref().map(str::to_ascii_lowercase);
+    ALL_SHELL_PROFILES.iter().any(|profile| {
+        let relevant = match shell.as_deref() {
+            Some("zsh") => matches!(profile.root, ShellProfileRoot::Zsh),
+            Some("bash") => matches!(profile.root, ShellProfileRoot::Home),
+            Some("sh") => profile.path == ".profile",
+            Some("fish") => matches!(profile.root, ShellProfileRoot::Fish),
+            Some("nu" | "nushell") => profile.env_file == "env.nu",
+            _ => true,
+        };
+        if !relevant {
+            return false;
+        }
+        let path = resolve_profile_path(profile, &config.user_home);
+        let Ok(content) = std::fs::read_to_string(path) else { return false };
+        let env_file = config.dirs.config.join(profile.env_file);
+        let absolute = env_file.to_string();
+        let relative = render_home_relative_path(env_file.as_path(), config.user_home.as_path());
+        let escape = match profile.env_file {
+            "env.fish" => escape_fish_double_quoted_string,
+            "env.nu" => escape_nu_double_quoted_string,
+            _ => escape_posix_double_quoted_string,
+        };
+        let relative = if profile.env_file == "env.nu" {
+            escape(&render_nu_path_ref(&relative))
+        } else {
+            escape_home_relative_double_quoted_path(&relative, escape)
+        };
+        let mut arguments = vec![
+            format!("\"{}\"", escape(&absolute)),
+            format!("'{absolute}'"),
+            absolute,
+            format!("\"{relative}\""),
+            format!("\"{}\"", relative.replacen("$HOME", "${HOME}", 1)),
+            render_nu_path_ref(&relative),
+        ];
+        if profile.env_file == "env.nu" {
+            let relative =
+                render_home_relative_path(env_file.as_path(), config.user_home.as_path());
+            arguments.push(format!("'{}'", render_nu_path_ref(&relative)));
+        }
+        content.lines().any(|line| {
+            let line = line.trim_start();
+            let Some(argument) = line.strip_prefix(". ").or_else(|| line.strip_prefix("source "))
+            else {
+                return false;
+            };
+            arguments.iter().any(|expected| {
+                argument.trim_start().strip_prefix(expected).is_some_and(|rest| {
+                    rest.is_empty()
+                        || rest.starts_with(char::is_whitespace)
+                        || rest.starts_with(';')
+                })
+            })
+        })
+    })
+}
+
 /// Print instructions for sourcing the environment files and adding bin to `PATH`.
 fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
     output::raw(&help::render_heading("Next Steps"));
@@ -1238,27 +1298,18 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
         }
     }
     output::raw("");
-    output::raw("  Add the command for your shell to its profile to activate future terminals.");
-    output::raw("  If setup already updated your profile, you can open a new terminal instead.");
-    output::raw("");
-    output::raw("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
-
-    #[cfg(target_os = "macos")]
+    if (!cfg!(windows) || shell == Some(Shell::NuShell))
+        && !matches!(shell, Some(Shell::Cmd | Shell::PowerShell))
     {
-        output::raw("  - macOS: Add to ~/.profile or use launchd");
+        if has_configured_profile(&env) {
+            output::raw("  Or open a new terminal to load your configured shell profile.");
+        } else {
+            output::raw(
+                "  Add the command for your shell to its profile to activate future terminals.",
+            );
+        }
+        output::raw("");
     }
-
-    #[cfg(target_os = "linux")]
-    {
-        output::raw("  - Linux: Add to ~/.profile for display manager integration");
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        output::raw("  - Windows: System Properties -> Environment Variables -> Path");
-    }
-
-    output::raw("");
     output::raw(&format!(
         "  Restart an already-running IDE to load its environment. Run {} to verify.",
         help::accent_command("vp env doctor")
@@ -1291,6 +1342,50 @@ mod tests {
         let trampoline = dir.join("vp-shim.exe");
         std::fs::write(&trampoline, b"fake-trampoline").unwrap();
         trampoline
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_configured_profile_checks_the_selected_shell_and_current_install() {
+        let temp = TempDir::new().unwrap();
+        let home = temp.path().join("user");
+        let vp_home = home.join(".vite-plus");
+        let zsh = temp.path().join("zsh");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&zsh).unwrap();
+        vp_shared::EnvConfig::with_vars(
+            [
+                ("HOME", home.as_os_str()),
+                ("USERPROFILE", home.as_os_str()),
+                ("VP_HOME", vp_home.as_os_str()),
+                ("VP_SHELL", std::ffi::OsStr::new("zsh")),
+                ("ZDOTDIR", zsh.as_os_str()),
+            ],
+            |config| {
+                assert!(!has_configured_profile(&config));
+                std::fs::write(home.join(".bashrc"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+                assert!(!has_configured_profile(&config), "Bash does not configure Zsh");
+                let profile = zsh.join(".zshrc");
+                for line in [
+                    "# . \"$HOME/.vite-plus/env\"",
+                    ". \"$HOME/other-install/env\"",
+                    ". \"$HOME/.vite-plus/env.fish\"",
+                ] {
+                    std::fs::write(&profile, line).unwrap();
+                    assert!(!has_configured_profile(&config), "{line}");
+                }
+                for line in [
+                    ". \"$HOME/.vite-plus/env\"",
+                    "source \"${HOME}/.vite-plus/env\" # existing setup",
+                    ". ~/.vite-plus/env",
+                ] {
+                    std::fs::write(&profile, line).unwrap();
+                    assert!(has_configured_profile(&config), "{line}");
+                }
+                std::fs::remove_file(&profile).unwrap();
+                assert!(!has_configured_profile(&config), "Do not cache profile state");
+            },
+        );
     }
 
     #[test]
