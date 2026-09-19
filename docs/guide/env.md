@@ -128,14 +128,6 @@ Using `pm` records the selected mode for all currently supported package manager
 
 ### Setup
 
-After setup, source the generated environment file with the command printed for your shell. This puts the shims first on `PATH` in the current terminal. Executing the file as a separate process cannot update the terminal environment.
-
-Bash and Zsh use `. "<config-dir>/env"`; Fish uses `source "<config-dir>/env.fish"`; Nushell uses `source "<config-dir>/env.nu"`; PowerShell uses `. '<config-dir>/env.ps1'`. Use the actual path printed by setup, including any escaping.
-
-Setup asks you to add the command to your shell profile only when it does not find an existing entry. If the profile is configured, you can open a new terminal instead. An already-running IDE needs a restart to load its environment.
-
-`vp env print` prints concrete tool directories. It does not replace sourcing the generated environment file, which also installs the shell wrapper and completions.
-
 - `vp env setup` creates or updates the `node`, `npm`, `npx`, `pnpm`, `pnpx`, `yarn`, `yarnpkg`, `bun`, `bunx`, `vpx`, and `vpr` shims in the resolved bin directory. It writes shell setup scripts in the config directory.
 - `vp env on` / `vp env off` changes both modes; append `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the change
 - `vp env print` prints PATH setup for both components; append a selector to print one
