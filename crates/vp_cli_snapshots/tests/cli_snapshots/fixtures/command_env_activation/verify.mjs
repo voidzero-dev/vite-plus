@@ -55,7 +55,8 @@ if (kind === 'xdg') {
 } else {
   env.VP_HOME = path.join(root, kind === 'external' ? 'home' : 'home ' + special);
 }
-function captured(args, extra = {}) {
+/** @returns {import('node:child_process').SpawnSyncReturns<string>} */
+function captureVp(args, extra = {}) {
   const result = spawnSync(binary, args, {
     env: { ...env, ...extra },
     encoding: 'utf8',
@@ -64,20 +65,19 @@ function captured(args, extra = {}) {
   assert.equal(result.status, 0, result.error?.message ?? result.stdout + result.stderr);
   return result;
 }
-function terminal(executable, args) {
+/** @returns {void} */
+function runInTerminal(executable, args) {
   const result = spawnSync(executable, args, { env, stdio: 'inherit', timeout: 30000 });
   assert.equal(result.status, 0, result.error?.message);
 }
 const dirs = Object.fromEntries(
-  captured([], { VP_DUMP_DIRS: '1' })
+  captureVp([], { VP_DUMP_DIRS: '1' })
     .stdout.trim()
     .split('\n')
     .map((line) => line.split('\t')),
 );
 // Query the authoritative resolver instead of assuming a platform's directory layout.
-const bin = dirs.bin;
-const config = dirs.config;
-const data = dirs.data;
+const { bin, config, data } = dirs;
 assert.ok(bin && config && data, JSON.stringify(dirs));
 const runtime = path.join(data, 'js_runtime/node', version, 'bin');
 fs.mkdirSync(runtime, { recursive: true });
@@ -102,20 +102,24 @@ console.log('First setup:');
 let activation;
 if (kind === 'external') {
   console.log('$ vp env list node');
-  terminal(binary, ['env', 'list', 'node']);
+  runInTerminal(binary, ['env', 'list', 'node']);
   // The full PTY snapshot records the printed command. Other cases also parse
   // the guidance and execute it, so escaping remains covered independently.
   const escaped = path.join(config, 'env').replace(/[\\$`"]/g, '\\$&');
   activation = `. "${escaped}"`;
 } else {
-  const first = captured(['env', 'list', 'node']);
+  const first = captureVp(['env', 'list', 'node']);
   const setup = first.stderr.replace(/\u001b\[[0-9;]*m/g, '');
   assert.match(setup, /Vite\+ setup complete/);
-  if (automaticProfile) assert.doesNotMatch(setup, /Add the command/);
-  else assert.match(setup, /Add the command/);
+  if (automaticProfile) {
+    assert.doesNotMatch(setup, /Add the command/);
+  } else {
+    assert.match(setup, /Add the command/);
+  }
+  const sourcePrefix = shell === 'fish' || shell === 'nu' ? 'source "' : '. "';
   activation = setup
     .split('\n')
-    .find((line) => line.trim().startsWith(shell === 'fish' || shell === 'nu' ? 'source "' : '. "'))
+    .find((line) => line.trim().startsWith(sourcePrefix))
     ?.trim();
   assert.ok(activation, setup);
   console.log(
@@ -125,14 +129,20 @@ if (kind === 'external') {
       .join('\n'),
   );
 }
-const profile =
-  shell === 'zsh'
-    ? path.join(env.ZDOTDIR, '.zshrc')
-    : shell === 'fish'
-      ? path.join(env.XDG_CONFIG_HOME, 'fish/config.fish')
-      : shell === 'nu'
-        ? path.join(env.XDG_CONFIG_HOME, 'nushell/config.nu')
-        : path.join(env.HOME, '.bashrc');
+let profile;
+switch (shell) {
+  case 'zsh':
+    profile = path.join(env.ZDOTDIR, '.zshrc');
+    break;
+  case 'fish':
+    profile = path.join(env.XDG_CONFIG_HOME, 'fish/config.fish');
+    break;
+  case 'nu':
+    profile = path.join(env.XDG_CONFIG_HOME, 'nushell/config.nu');
+    break;
+  default:
+    profile = path.join(env.HOME, '.bashrc');
+}
 if (automaticProfile) {
   assert.ok(fs.readFileSync(profile, 'utf8').includes(activation));
 } else {
@@ -142,9 +152,9 @@ if (automaticProfile) {
 console.log('Setup with an existing profile entry:');
 if (kind === 'external') {
   console.log('$ vp env setup');
-  terminal(binary, ['env', 'setup']);
+  runInTerminal(binary, ['env', 'setup']);
 } else {
-  const repeated = captured(['env', 'setup']).stdout.replace(/\u001b\[[0-9;]*m/g, '');
+  const repeated = captureVp(['env', 'setup']).stdout.replace(/\u001b\[[0-9;]*m/g, '');
   assert.doesNotMatch(repeated, /Add the command/);
   assert.match(repeated, /open a new terminal/);
   console.log(repeated.split('\n').find((line) => line.includes('open a new terminal')));
@@ -155,17 +165,15 @@ Object.assign(env, {
 });
 console.log('Same terminal:');
 if (shell === 'fish') {
-  terminal(shellBin, ['--no-config', 'session.fish']);
+  runInTerminal(shellBin, ['--no-config', 'session.fish']);
 } else if (shell === 'nu') {
   fs.writeFileSync(
     'activate.nu',
     fs.readFileSync('session.nu', 'utf8').replaceAll('__ACTIVATION_COMMAND__', activation),
   );
-  terminal(shellBin, ['--no-config-file', 'activate.nu']);
+  runInTerminal(shellBin, ['--no-config-file', 'activate.nu']);
+} else if (shell === 'bash') {
+  runInTerminal(shellBin, ['--noprofile', '--norc', 'session.sh']);
 } else {
-  terminal(shellBin, [
-    shell === 'bash' ? '--noprofile' : '-f',
-    ...(shell === 'bash' ? ['--norc'] : []),
-    'session.sh',
-  ]);
+  runInTerminal(shellBin, ['-f', 'session.sh']);
 }
