@@ -129,7 +129,7 @@ jobs:
         if: matrix.settings.builder == 'upstream'
         run: rustup target add ${{ matrix.settings.target }}
 
-      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
         if: matrix.settings.builder == 'upstream'
 
       - name: Build final artifacts
