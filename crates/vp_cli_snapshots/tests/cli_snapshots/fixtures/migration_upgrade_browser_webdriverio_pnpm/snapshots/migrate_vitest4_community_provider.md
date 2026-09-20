@@ -22,7 +22,7 @@ VITE+ - The Unified Toolchain for the Web
 ## `vpt print-file package.json`
 
 ```
-{"name":"vitest4-browser","private":true,"type":"module","packageManager":"pnpm@10.33.0","devDependencies":{"vite":"catalog:","vitest":"catalog:","@vitest/browser-webdriverio":"^5.0.0","webdriverio":"^9.20.0","vite-plus":"catalog:"}}
+{"name":"vitest4-browser","private":true,"type":"module","packageManager":"pnpm@10.33.0","devDependencies":{"vitest":"catalog:","@vitest/browser-webdriverio":"^5.0.0","webdriverio":"^9.20.0","vite-plus":"catalog:"}}
 ```
 
 ## `vpt print-file vite.config.ts`

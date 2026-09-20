@@ -365,27 +365,22 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies.vitest).toBe('catalog:');
   });
 
-  // Under pnpm, a package that depends on vite-plus needs a direct `vite` so
-  // vitest's required `vite` peer binds to the override (@voidzero-dev/vite-plus-core);
-  // otherwise pnpm's autoInstallPeers installs a second upstream vite and splits
-  // vite-plus / vite / vitest into duplicate instances.
-  describe('pnpm direct-vite dedupe (#1932)', () => {
-    it('adds a direct `vite` devDep when a package depends on vite-plus under pnpm', () => {
-      // monorepo sub-package -> catalog: (catalog.vite is written by rewriteCatalog)
+  // Vite+ now supplies its own Vite alias. The #1932 install-layout and cache
+  // regression is covered by the migration_pnpm_vite_identity CLI fixture.
+  describe('pnpm Vite dependencies', () => {
+    it('does not add `vite` just because a package depends on vite-plus', () => {
       const sub: { devDependencies: Record<string, string> } = {
         devDependencies: { 'vite-plus': 'catalog:' },
       };
       rewritePackageJson(sub, PackageManager.pnpm, true);
-      expect(sub.devDependencies.vite).toBe('catalog:');
-      // inserted in sorted position (oxfmt sorts package.json), not appended
-      expect(Object.keys(sub.devDependencies)).toEqual(['vite', 'vite-plus']);
+      expect(sub.devDependencies).toEqual({ 'vite-plus': 'catalog:' });
 
-      // standalone (no catalog) -> mirror the override target directly
+      // Standalone consumers do not need a project-level alias either.
       const standalone: { devDependencies: Record<string, string> } = {
         devDependencies: { 'vite-plus': 'latest' },
       };
       rewritePackageJson(standalone, PackageManager.pnpm);
-      expect(standalone.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+      expect(standalone.devDependencies).toEqual({ 'vite-plus': 'latest' });
     });
 
     it('does not add a direct `vite` for npm/yarn/bun (they dedupe via overrides/resolutions)', () => {
@@ -685,11 +680,7 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).not.toHaveProperty('vite');
   });
 
-  it('injects a direct vite devDependency for pnpm projects depending on vite-plus, but not yarn/bun', async () => {
-    // pnpm needs a direct `vite` so vitest's `vite` peer binds to the override
-    // instead of pnpm auto-installing a separate upstream vite. yarn/bun redirect
-    // the transitive/peer vite via resolutions/overrides, so they do not get a
-    // direct `vite` here (the bun workspace root is handled separately).
+  it('does not inject a direct vite for pnpm/yarn/bun browser projects', async () => {
     for (const pm of [PackageManager.pnpm, PackageManager.yarn, PackageManager.bun]) {
       const pkg: { devDependencies: Record<string, string> } = {
         devDependencies: {
@@ -699,11 +690,7 @@ describe('rewritePackageJson', () => {
         },
       };
       rewritePackageJson(pkg, pm);
-      if (pm === PackageManager.pnpm) {
-        expect(pkg.devDependencies).toHaveProperty('vite', VITE_PLUS_OVERRIDE_PACKAGES.vite);
-      } else {
-        expect(pkg.devDependencies).not.toHaveProperty('vite');
-      }
+      expect(pkg.devDependencies).not.toHaveProperty('vite');
     }
   });
 
@@ -2015,7 +2002,7 @@ describe('ensureVitePlusBootstrap', () => {
       devDependencies: Record<string, string>;
     };
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
-    expect(pkg.devDependencies.vite).toBe('catalog:');
+    expect(pkg.devDependencies.vite).toBeUndefined();
     const workspaceYaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
     expect(workspaceYaml).toContain('vite-plus:');
     expect(workspaceYaml).toContain('@voidzero-dev/vite-plus-core');
@@ -2248,14 +2235,7 @@ describe('ensureVitePlusBootstrap', () => {
     expect(devKeys.indexOf('vite')).toBeLessThan(devKeys.indexOf('vite-plus'));
   });
 
-  it('adds a direct `vite: catalog:` to an already-Vite+ pnpm root on upgrade (#1932)', () => {
-    // Upgrade scenario: the project is already on Vite+ via a pnpm catalog and
-    // depends on `vite-plus` (which bundles the vitest browser ecosystem whose
-    // packages declare a `vite ^8` peer), but the root has NO direct `vite`
-    // edge. Without it, pnpm's autoInstallPeers fabricates a separate upstream
-    // `vite` to satisfy that peer, splitting vite-plus / vite / vitest. The
-    // full-migration path injects a direct vite via ensureDirectViteForPnpm; the
-    // bootstrap/re-pin (upgrade) path must do the same.
+  it('does not add a direct Vite dependency to an already-Vite+ pnpm root on upgrade', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2272,9 +2252,7 @@ describe('ensureVitePlusBootstrap', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
     };
-    expect(pkg.devDependencies.vite).toBe('catalog:');
-    // inserted in sorted position (oxfmt sorts package.json), not appended
-    expect(Object.keys(pkg.devDependencies)).toEqual(['vite', 'vite-plus']);
+    expect(pkg.devDependencies).toEqual({ 'vite-plus': 'catalog:' });
   });
 
   it('removes the stale vitest wrapper override for a non-vitest npm project', () => {
@@ -2891,10 +2869,9 @@ describe('ensureVitePlusBootstrap', () => {
     expect(workspace.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
   });
 
-  it('keeps vite-plus catalog: and adds the direct vite as catalog: for a vite-plus consumer (varlet-cli #10)', () => {
+  it('keeps vite-plus catalog: without adding vite for a vite-plus consumer (varlet-cli #10)', () => {
     // packages/varlet-cli lists `vite-plus: catalog:` in dependencies and has no
-    // vite; under pnpm the migration must add a direct vite, and BOTH edges should
-    // reference the catalog rather than inline the concrete toolchain version.
+    // vite; retain its catalog reference without adding an unused dependency.
     const cliDir = path.join(tmpDir, 'packages/cli');
     fs.mkdirSync(cliDir, { recursive: true });
     fs.writeFileSync(
@@ -2939,10 +2916,9 @@ describe('ensureVitePlusBootstrap', () => {
       dependencies: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
-    // vite-plus stays catalog: (not inlined to the concrete toolchain version)...
+    // vite-plus stays catalog: (not inlined to the concrete toolchain version).
     expect(cliPkg.dependencies['vite-plus']).toBe('catalog:');
-    // ...and the required direct vite is added as a catalog: ref, not a concrete pin.
-    expect(cliPkg.devDependencies?.vite).toBe('catalog:');
+    expect(cliPkg.devDependencies?.vite).toBeUndefined();
   });
 
   it('keeps toolchain catalog: refs on a pnpm 9.5-10.6.1 catalog project (varlet-import-resolver #10)', () => {
@@ -2997,7 +2973,7 @@ describe('ensureVitePlusBootstrap', () => {
     // pnpm 9.15.9 supports catalogs (>= 9.5.0), so the reconciled toolchain edges
     // stay catalog: rather than being inlined to the concrete toolchain version.
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
-    expect(pkg.devDependencies.vite).toBe('catalog:');
+    expect(pkg.devDependencies.vite).toBeUndefined();
     expect(pkg.devDependencies['@types/node']).toBe('catalog:');
   });
 
@@ -3052,9 +3028,9 @@ describe('ensureVitePlusBootstrap', () => {
     const pkg = readJson(path.join(pkgDir, 'package.json')) as {
       devDependencies: Record<string, string>;
     };
-    // 9.4.0 < 9.5.0: toolchain edges are concrete (the direct vite is the core alias).
+    // 9.4.0 < 9.5.0: the existing toolchain edge is concrete.
     expect(pkg.devDependencies['vite-plus']).not.toBe('catalog:');
-    expect(pkg.devDependencies.vite).toContain('@voidzero-dev/vite-plus-core@');
+    expect(pkg.devDependencies.vite).toBeUndefined();
     // Untouched non-toolchain catalog refs are left as-is.
     expect(pkg.devDependencies['@types/node']).toBe('catalog:');
   });

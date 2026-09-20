@@ -80,7 +80,6 @@ check package.json
 {
   "name": "migration-lintstagedrc",
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

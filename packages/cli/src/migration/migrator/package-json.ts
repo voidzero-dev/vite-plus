@@ -10,7 +10,6 @@ import {
 import {
   VITEST_DIRECT_USAGE_EXCLUDED,
   alignVitestEcosystemPackages,
-  ensureDirectViteForPnpm,
   getAlignedVitestEcosystemDependencySpec,
   getCatalogDependencySpec,
   getScriptRulesYaml,
@@ -394,7 +393,9 @@ export function rewritePackageJson(
       [VITE_PLUS_NAME]: canonicalVitePlusSpec,
     };
   }
-  ensureDirectViteForPnpm(pkg, packageManager, supportCatalog, catalogDependencyResolver);
+  // Vite+ supplies its own `vite` alias for Vitest's peer dependency. Unlike
+  // the pre-#2617 package layout, pnpm consumers do not need an extra direct
+  // Vite dependency just to use Vite+. Keep existing declarations above.
   // Add `vitest` as a direct devDependency when:
   //  - a remaining dependency likely peer-depends on vitest (e.g.
   //    vitest-browser-svelte), OR

@@ -41,7 +41,6 @@ VITE+ - The Unified Toolchain for the Web
 {
   "devDependencies": {
     "@vitest/browser-webdriverio": "catalog:browser",
-    "vite": "catalog:",
     "vite-plus": "catalog:",
     "webdriverio": "^9.20.0",
     "vitest": "catalog:"

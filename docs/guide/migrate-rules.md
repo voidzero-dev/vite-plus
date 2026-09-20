@@ -54,13 +54,13 @@ The transform does not evaluate configuration code. Objects with spreads, comput
 
 What happens to each toolchain dependency, at a glance:
 
-| Dependency                     | What happens                                                                                                                                                            |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vite-plus`                    | Added where the package is migrated; plain ranges re-pinned to the concrete target, directly or through a catalog.                                                      |
-| `vite`                         | Existing declarations kept and pointed at the core alias. Under pnpm, added as a direct dev dependency wherever needed (see [Vite and Overrides](#vite-and-overrides)). |
-| `vitest`                       | Removed in the common node-mode case because `vite-plus` provides it transitively. Kept or added only when [directly required](#when-vitest-is-directly-required).      |
-| `@vitest/*`                    | Directly installed lockstep packages aligned to the bundled Vitest version (see [Vitest Ecosystem Packages](#vitest-ecosystem-packages)).                               |
-| `@voidzero-dev/vite-plus-test` | Removed everywhere: dependencies, overrides, resolutions, and catalog aliases. Imports are rewritten to the current `vite-plus/test*` surface.                          |
+| Dependency                     | What happens                                                                                                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vite-plus`                    | Added where the package is migrated; plain ranges re-pinned to the concrete target, directly or through a catalog.                                                          |
+| `vite`                         | Existing declarations kept and pointed at the core alias. pnpm packages that use only `vite-plus` need no new `vite` entry (see [Vite and Overrides](#vite-and-overrides)). |
+| `vitest`                       | Removed in the common node-mode case because `vite-plus` provides it transitively. Kept or added only when [directly required](#when-vitest-is-directly-required).          |
+| `@vitest/*`                    | Directly installed lockstep packages aligned to the bundled Vitest version (see [Vitest Ecosystem Packages](#vitest-ecosystem-packages)).                                   |
+| `@voidzero-dev/vite-plus-test` | Removed everywhere: dependencies, overrides, resolutions, and catalog aliases. Imports are rewritten to the current `vite-plus/test*` surface.                              |
 
 ### Version Selection
 
@@ -72,14 +72,14 @@ What happens to each toolchain dependency, at a glance:
 
 ### Vite and Overrides
 
-Package-manager overrides do not create dependency edges by themselves. Under pnpm, a package that lists `vite-plus` in `dependencies` or `devDependencies` but has no `vite` entry anywhere (`dependencies`, `devDependencies`, `optionalDependencies`, or `peerDependencies`) lets pnpm auto-install upstream Vite to satisfy Vitest's required `vite` peer, splitting the project across separate Vite+, Vite, and Vitest instances. To prevent this, `vp migrate` adds the missing `vite` entry to `devDependencies` of every such package; the workspace override then redirects it to Vite+ core.
+You can use `vite-plus` in a pnpm package without declaring `vite`. The `vite-plus` package includes a `vite` dependency aliased to its core, which provides Vitest's required peer. Migration keeps the workspace override for other Vite consumers but does not add `vite` to a package solely because it uses `vite-plus`.
 
 Related rules:
 
 - A direct `vite` declaration is never removed merely because a root override exists.
 - Plain or stale aliases are normalized; named catalog references are kept.
 - Under pnpm the managed override keys use an explicit `@*` range (`vite@*`, `vitest@*`). pnpm applies an override by replacing the declared spec on every manifest, importer manifests included. A bare key matches any spec, including `catalog:`, and `vp up` then rewrites that reference to a concrete version. The `@*` range keeps the override on the semver ranges that transitive and peer declarations use. It leaves `catalog:` references to the catalog, which already resolves them to Vite+ core. Migration re-keys a project that still holds the bare key, and keeps its named-catalog choice.
-- The direct-entry rule above is pnpm-specific. Bun mirrors its core alias as a direct dependency for its peer resolver, and npm browser-provider layouts may need a top-level `vite` edge so nested Vitest packages can resolve `vite`.
+- Bun mirrors its core alias as a direct dependency for its peer resolver, and npm browser-provider layouts may need a top-level `vite` edge so nested Vitest packages can resolve `vite`.
 
 ### When Vitest Is Directly Required
 
@@ -227,7 +227,7 @@ Migration converts legacy Node.js version-manager files to `.node-version`, the 
 
 **Other rules.**
 
-- Each package that declares `vite-plus` also gets a direct `vite` dev dependency (see [Vite and Overrides](#vite-and-overrides)).
+- Packages that use `vite-plus` without a direct `vite` declaration keep that layout (see [Vite and Overrides](#vite-and-overrides)).
 - Unrelated selector-shaped and object-valued overrides are preserved.
 
 ### npm

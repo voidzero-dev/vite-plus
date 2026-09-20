@@ -31,9 +31,6 @@ vite-plus stays in dependencies (normalized to catalog:); no duplicate devDepend
       "version": "<version>",
       "onFail": "download"
     }
-  },
-  "devDependencies": {
-    "vite": "catalog:"
   }
 }
 ```

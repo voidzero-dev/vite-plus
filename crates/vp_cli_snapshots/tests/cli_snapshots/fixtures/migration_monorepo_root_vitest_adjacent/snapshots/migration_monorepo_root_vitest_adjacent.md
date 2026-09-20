@@ -29,7 +29,6 @@ vitest pinned at the root even though vite-plus is injected first
     "prepare": "vp config"
   },
   "devDependencies": {
-    "vite": "catalog:",
     "vitest-browser-svelte": "^2.1.0",
     "vite-plus": "catalog:",
     "vitest": "catalog:"

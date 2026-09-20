@@ -29,7 +29,6 @@ ensure the provider and its framework peer are declared
 {
   "name": "migration-upgrade-browser-webdriverio-pnpm",
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:",
     "@vitest/browser-webdriverio": "^5.0.0",

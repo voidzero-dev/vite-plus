@@ -16,7 +16,6 @@ import {
   createCatalogDependencyResolver,
   dropDeadOxlintPluginsDependency,
   dropRemovePackageOverrideKeys,
-  ensureDirectViteForPnpm,
   ensurePnpmWorkspaceExoticSubdepsSetting,
   findYarnWorkspaceHoisting,
   hasDirectVitePlusInstallEntry,
@@ -277,9 +276,6 @@ export function rewriteStandaloneProject(
         [VITE_PLUS_NAME]: version,
       };
     }
-    // This caller injects vite-plus after rewritePackageJson returned, so the
-    // direct-`vite` pass must run here too.
-    ensureDirectViteForPnpm(pkg, packageManager, supportCatalog, catalogDependencyResolver);
     return pkg;
   });
 

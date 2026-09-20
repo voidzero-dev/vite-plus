@@ -59,7 +59,6 @@ check Husky prepare and dependencies are preserved
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

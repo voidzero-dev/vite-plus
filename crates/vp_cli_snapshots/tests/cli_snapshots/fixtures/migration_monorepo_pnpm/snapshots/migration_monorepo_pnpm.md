@@ -215,7 +215,6 @@ check only-oxlint package.json
     "lint": "vp lint --fix"
   },
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }

@@ -61,7 +61,6 @@ check package.json
 {
   "name": "migration-rewrite-declare-module",
   "devDependencies": {
-    "vite": "catalog:",
     "vitest": "catalog:",
     "vite-plus": "catalog:"
   },

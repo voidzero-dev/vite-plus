@@ -29,7 +29,6 @@ provider, framework peer, and local vitest should be present
 {
   "name": "migration-upgrade-browser-source-only-pnpm",
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "playwright": "*",

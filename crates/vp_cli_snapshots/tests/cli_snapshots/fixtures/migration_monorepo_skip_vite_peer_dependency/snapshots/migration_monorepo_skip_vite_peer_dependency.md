@@ -53,7 +53,6 @@ check root package.json (no peerDependencies)
 {
   "name": "migration-monorepo-skip-vite-peer-dependency",
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

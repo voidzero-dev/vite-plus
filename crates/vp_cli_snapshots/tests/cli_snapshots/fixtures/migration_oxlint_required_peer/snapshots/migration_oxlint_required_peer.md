@@ -47,7 +47,6 @@ Keep the direct provider even though application source never names the peer.
   "devDependencies": {
     "@oxlint/plugins": "1.79.0",
     "review-oxlint-plugin": "file:artifacts/review-oxlint-plugin-1.0.0.tgz",
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@11.24.0"

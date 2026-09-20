@@ -19,7 +19,6 @@ import {
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
-  ensureDirectViteForPnpm,
   ensurePnpmWorkspacePackages,
   findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
@@ -509,13 +508,6 @@ function reconcileVitePlusBootstrapPackage(
       removeManagedVitestEntry(dependencies);
     }
   }
-
-  // #1932: the full-migration path injects a direct pnpm `vite` edge via
-  // rewriteRootWorkspacePackageJson / rewriteMonorepoProject; the existing-Vite+
-  // upgrade (bootstrap/re-pin) path reaches package.json only through here, so it
-  // must add the same edge (the npm-opt-in and bun branches above cover those).
-  // See ensureDirectViteForPnpm for why the direct edge is required under pnpm.
-  ensureDirectViteForPnpm(pkg, packageManager, supportCatalog, catalogDependencyResolver);
 
   return before !== JSON.stringify(pkg);
 }
