@@ -8747,6 +8747,7 @@ dependencies = [
 name = "vp_global_cli"
 version = "0.3.3"
 dependencies = [
+ "base64-simd",
  "chrono",
  "clap",
  "clap_complete",

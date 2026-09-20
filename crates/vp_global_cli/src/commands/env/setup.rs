@@ -163,7 +163,7 @@ pub(super) fn shim_dir(settings: &super::config::Config, tool: &str) -> vt_path:
 }
 
 /// Reconcile both shim directories from effective preferences; setup and mode changes share this path.
-pub(super) async fn refresh_shims(
+pub(crate) async fn refresh_shims(
     current_exe: &std::path::Path,
     settings: &super::config::Config,
     refresh: bool,
