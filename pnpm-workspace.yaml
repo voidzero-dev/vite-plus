@@ -89,7 +89,7 @@ catalog:
   jsonc-parser: ^3.3.1
   # Kept in lockstep with the bundled @tsdown/css by .github/scripts/upgrade-deps.ts
   lightningcss: ^1.33.0
-  lint-staged: ^16.2.6
+  lint-staged: ^17.5.1
   lodash-es: ^4.17.21
   micromatch: ^4.0.9
   minimatch: ^10.0.3

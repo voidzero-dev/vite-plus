@@ -95,6 +95,24 @@ fn masks_bun_build_hash_only_in_bun_banners() {
 }
 
 #[test]
+fn masks_lint_staged_backup_hashes() {
+    let input = concat!(
+        "✔ Backed up original state in git stash (a1b2c3d)\n",
+        "✔ Done backing up original state (d4e5f6a)!\n",
+        "commit (deadbeef1) applied\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "✔ Backed up original state in git stash (<hash>)\n",
+            "✔ Done backing up original state (<hash>)!\n",
+            "commit (deadbeef1) applied\n",
+        )
+    );
+}
+
+#[test]
 fn normalizes_managed_executable_paths_and_missing_commands() {
     let input = concat!(
         r#""bin_path": "<home>/.vite-plus/js_runtime/node/24.18.1/node.exe""#,
