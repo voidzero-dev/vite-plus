@@ -1397,6 +1397,8 @@ mod legacy {
     //! Fresh installations record these preferences during setup. Keep the prompt,
     //! shim relocation, and one-time system dispatch together for older installations.
 
+    // TODO: Consider moving first-use consent to `vp upgrade` so the legacy PATH lookup can be removed.
+
     use dialoguer::{Select, theme::ColorfulTheme};
     use vp_pm_cli::PackageManagerType;
     use vp_shared::{PrependOptions, ToolPathEnv, env_vars, output};
