@@ -220,8 +220,9 @@ mod tests {
                 assert_eq!(
                     contents,
                     format!(
-                        "{SHIM_POINTER_HEADER}\nlayout={}\ndata={data}\ncache={cache}\n",
-                        config.dirs.layout().as_str()
+                        "{SHIM_POINTER_HEADER}\nlayout={}\ndata={data}\ncache={cache}\nbin={}\n",
+                        config.dirs.layout().as_str(),
+                        config.dirs.bin.as_path().display()
                     )
                 );
             }

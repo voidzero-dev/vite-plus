@@ -1511,20 +1511,20 @@ mod tests {
     }
 
     #[test]
-    fn test_find_system_tool_works_without_bypass() {
+    fn test_find_external_tool_works_without_bypass() {
         let temp = TempDir::new().unwrap();
         let dir = temp.path().join("bin_a");
         std::fs::create_dir_all(&dir).unwrap();
         create_fake_executable(&dir, "mytesttool");
         temp_env::with_vars([("PATH", Some(dir.as_os_str())), (env_vars::VP_BYPASS, None)], || {
-            let result = find_system_tool("mytesttool");
+            let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
             assert!(result.is_some(), "Should find tool when no bypass is set");
             assert!(result.unwrap().as_path().starts_with(&dir));
         });
     }
 
     #[test]
-    fn test_find_system_tool_skips_other_installation_trampolines() {
+    fn test_find_external_tool_skips_other_installation_trampolines() {
         let temp = TempDir::new().unwrap();
         let dirs = ["install_a", "install_b", "real"].map(|name| temp.path().join(name));
         for (index, dir) in dirs.iter().enumerate() {
@@ -1546,19 +1546,24 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
             || {
-                assert!(find_system_tool("node").unwrap().as_path().starts_with(&dirs[2]));
+                assert!(
+                    find_external_tool_in("node", &current_dir().unwrap())
+                        .unwrap()
+                        .as_path()
+                        .starts_with(&dirs[2])
+                );
             },
         );
         let path = std::env::join_paths(&dirs[..2]).unwrap();
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
-            || assert!(find_system_tool("node").is_none()),
+            || assert!(find_external_tool_in("node", &current_dir().unwrap()).is_none()),
         );
     }
 
     #[test]
     #[cfg(unix)]
-    fn test_find_system_tool_distinguishes_vp_from_shared_manager_shims() {
+    fn test_find_external_tool_distinguishes_vp_from_shared_manager_shims() {
         let temp = TempDir::new().unwrap();
         let dirs = ["install", "aliases", "real"].map(|name| temp.path().join(name));
         for dir in &dirs {
@@ -1570,7 +1575,14 @@ mod tests {
         let path = std::env::join_paths([&dirs[1], &dirs[2]]).unwrap();
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
-            || assert!(find_system_tool("node").unwrap().as_path().starts_with(&dirs[2])),
+            || {
+                assert!(
+                    find_external_tool_in("node", &current_dir().unwrap())
+                        .unwrap()
+                        .as_path()
+                        .starts_with(&dirs[2])
+                )
+            },
         );
 
         let manager = create_fake_executable(&dirs[0], "tool-manager");
@@ -1580,12 +1592,17 @@ mod tests {
         let path = std::env::join_paths([&dirs[0], &dirs[2]]).unwrap();
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
-            || assert_eq!(find_system_tool("node").unwrap().as_path(), dirs[0].join("node")),
+            || {
+                assert_eq!(
+                    find_external_tool_in("node", &current_dir().unwrap()).unwrap().as_path(),
+                    dirs[0].join("node")
+                )
+            },
         );
     }
 
     #[test]
-    fn test_find_system_tool_skips_single_bypass_path() {
+    fn test_find_external_tool_skips_single_bypass_path() {
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         let dir_b = temp.path().join("bin_b");
@@ -1598,7 +1615,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(dir_a.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_some(), "Should find tool in non-bypassed directory");
                 assert!(
                     result.unwrap().as_path().starts_with(&dir_b),
@@ -1629,7 +1646,7 @@ mod tests {
     /// search continues to the real tool later in PATH.
     #[cfg(unix)]
     #[test]
-    fn test_find_system_tool_skips_self_symlink_and_keeps_searching() {
+    fn test_find_external_tool_skips_self_symlink_and_keeps_searching() {
         let temp = TempDir::new().unwrap();
         let (dir_a, dir_b) = setup_self_symlink_dirs(&temp);
 
@@ -1637,7 +1654,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_some(), "Should skip the self symlink and keep searching");
                 assert!(
                     result.unwrap().as_path().starts_with(&dir_b),
@@ -1653,7 +1670,7 @@ mod tests {
     /// instead of reaching dir_b.
     #[cfg(unix)]
     #[test]
-    fn test_find_system_tool_skips_self_symlink_in_relative_path_entry() {
+    fn test_find_external_tool_skips_self_symlink_in_relative_path_entry() {
         let temp = TempDir::new().unwrap();
         let (_dir_a, dir_b) = setup_self_symlink_dirs(&temp);
 
@@ -1662,7 +1679,7 @@ mod tests {
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
             || {
                 let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-                let result = find_system_tool_in("mytesttool", &cwd);
+                let result = find_external_tool_in("mytesttool", &cwd);
                 assert!(
                     result.is_some(),
                     "Should skip the relative self-symlink entry and keep searching"
@@ -1676,7 +1693,7 @@ mod tests {
     }
 
     #[test]
-    fn test_find_system_tool_filters_multiple_bypass_paths() {
+    fn test_find_external_tool_filters_multiple_bypass_paths() {
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         let dir_b = temp.path().join("bin_b");
@@ -1694,7 +1711,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(bypass.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_some(), "Should find tool in dir_c");
                 assert!(
                     result.unwrap().as_path().starts_with(&dir_c),
@@ -1705,7 +1722,7 @@ mod tests {
     }
 
     #[test]
-    fn test_find_system_tool_returns_none_when_all_paths_bypassed() {
+    fn test_find_external_tool_returns_none_when_all_paths_bypassed() {
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         std::fs::create_dir_all(&dir_a).unwrap();
@@ -1713,7 +1730,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(dir_a.as_os_str())), (env_vars::VP_BYPASS, Some(dir_a.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_none(), "Should return None when all paths are bypassed");
             },
         );
@@ -1724,7 +1741,7 @@ mod tests {
     /// both A's dir (from bypass) and its own dir (from get_bin_dir), finding the real tool
     /// in a third directory or returning None.
     #[test]
-    fn test_find_system_tool_cumulative_bypass_prevents_loop() {
+    fn test_find_external_tool_cumulative_bypass_prevents_loop() {
         let temp = TempDir::new().unwrap();
         let install_a_bin = temp.path().join("install_a_bin");
         let install_b_bin = temp.path().join("install_b_bin");
@@ -1753,7 +1770,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(bypass.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_some(), "Should find tool in real_system directory");
                 assert!(
                     result.unwrap().as_path().starts_with(&real_system_bin),
@@ -1765,7 +1782,7 @@ mod tests {
 
     /// When both installations are bypassed and no real system tool exists, should return None.
     #[test]
-    fn test_find_system_tool_returns_none_with_no_real_system_tool() {
+    fn test_find_external_tool_returns_none_with_no_real_system_tool() {
         let temp = TempDir::new().unwrap();
         let install_a_bin = temp.path().join("install_a_bin");
         let install_b_bin = temp.path().join("install_b_bin");
@@ -1781,7 +1798,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(bypass.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(
                     result.is_none(),
                     "Should return None when all dirs are bypassed and no real system tool exists"

@@ -1651,12 +1651,13 @@ mod tests {
                     "env file should contain a PATH cleanup loop"
                 );
                 assert!(
-                    env_content.contains("*\":${__vp_bin}:\"*)"),
+                    env_content.contains("*\":${__vp_dir}:\"*)"),
                     "env file should check for existing bin in PATH"
                 );
                 // Verify it re-prepends exactly once after cleanup.
                 assert!(
-                    env_content.contains("export PATH=\"${__vp_bin}${PATH:+:${PATH}}\""),
+                    env_content
+                        .contains("export PATH=\"${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}\""),
                     "env file should prepend bin to PATH after removing duplicates"
                 );
             },

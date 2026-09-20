@@ -178,6 +178,32 @@ mod portable {
         }
 
         #[test]
+        fn fallback_pointer_preserves_main_bin_root() {
+            let root = env::temp_dir().join(format!("vp-trampoline-fallback-{}", process::id()));
+            let _ = fs::remove_dir_all(&root);
+            let data = root.join("data");
+            let bin = root.join("shared-bin");
+            let fallback = data.join("fallback-bin");
+            std::fs::create_dir_all(&fallback).unwrap();
+            write_exe(&data.join("current/bin/vp.exe"));
+            std::fs::write(
+                fallback.join("node.shim"),
+                format!(
+                    "{}bin={}\n",
+                    versioned_pointer("split", &data, &root.join("cache")),
+                    bin.display()
+                ),
+            )
+            .unwrap();
+            let location = resolve_vp_exe(&fallback.join("node.exe")).unwrap();
+            assert_eq!(location.exe, data.join("current/bin/vp.exe"));
+            assert!(
+                matches!(location.pointer.layout, ShimLayout::Split { bin: actual, .. } if actual == bin)
+            );
+            let _ = fs::remove_dir_all(root);
+        }
+
+        #[test]
         #[cfg(unix)]
         fn preserves_signal_exit_code() {
             let status = Command::new("/bin/sh").arg("-c").arg("kill -ILL $$").status().unwrap();
@@ -307,7 +333,7 @@ mod portable {
             let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
             assert!(matches!(
                 location.pointer.layout,
-                ShimLayout::Split { cache: value } if value == cache
+                ShimLayout::Split { cache: value, .. } if value == cache
             ));
             let _ = fs::remove_dir_all(&root);
         }

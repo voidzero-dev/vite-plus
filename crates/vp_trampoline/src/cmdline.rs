@@ -294,7 +294,7 @@ mod tests {
             ),
             Some(ShimPointer {
                 data: r"D:\data",
-                layout: ShimLayout::Split { cache: r"C:\cache" },
+                layout: ShimLayout::Split { cache: r"C:\cache", bin: None },
             })
         );
     }
