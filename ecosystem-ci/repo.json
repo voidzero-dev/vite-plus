@@ -104,7 +104,7 @@
   "npmx.dev": {
     "repository": "https://github.com/npmx-dev/npmx.dev.git",
     "branch": "main",
-    "hash": "035776c96cf8f089c44e6011264b534b0bcde53c",
+    "hash": "0e44738831077879c7ab00469fc50f5dbcf18650",
     "forceFreshMigration": true,
     "playwright": true
   },

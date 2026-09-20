@@ -352,9 +352,7 @@ jobs:
             node-version: 24
             command: |
               vp fmt
-              # FIXME: oxlint 1.59.0 vitest/require-mock-type-parameters errors
-              # on vi.fn() calls — migration sets rule as "error" in config, --allow can't override
-              vp run lint || true
+              vp run lint
               vp run test:types
               vp test --project nuxt
               vp test --project unit
