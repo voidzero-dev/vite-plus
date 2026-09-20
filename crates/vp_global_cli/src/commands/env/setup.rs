@@ -103,35 +103,9 @@ pub(crate) async fn execute_for_binary(
     // Create wrapper script in bin/
     setup_vp_wrapper(current_exe, bin_dir, refresh_entrypoints).await?;
 
-    // Create default tool shims
-    let mut created = Vec::new();
-    let mut skipped = Vec::new();
-
-    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
-        let refresh_tool =
-            if matches!(*tool, "vpx" | "vpr") { refresh_entrypoints } else { refresh };
-        let result = create_shim(current_exe, bin_dir, tool, refresh_tool).await?;
-        if result {
-            created.push(*tool);
-        } else {
-            skipped.push(*tool);
-        }
-
-        // Remove legacy .cmd/.ps1/extensionless launchers that would shadow
-        // an existing trampoline .exe in PowerShell/Git Bash (create_shim
-        // skips existing shims without cleaning siblings).
-        #[cfg(windows)]
-        cleanup_legacy_windows_shim(bin_dir, tool).await;
-
-        // Drop stale `npm install -g` link configs for default shim names. The
-        // link itself is replaced by the shim above, and a leftover Npm-sourced
-        // BinConfig would let a later `npm uninstall -g` delete the default shim.
-        if let Ok(Some(config)) = super::bin_config::BinConfig::load(tool).await
-            && config.source == super::bin_config::BinSource::Npm
-        {
-            let _ = super::bin_config::BinConfig::delete(tool).await;
-        }
-    }
+    let settings = super::config::load_config().await?;
+    let (created, skipped) =
+        refresh_shims(current_exe, &settings, refresh, refresh_entrypoints).await?;
 
     #[cfg(windows)]
     if refresh {
@@ -149,8 +123,7 @@ pub(crate) async fn execute_for_binary(
     // Print results
     if !created.is_empty() {
         output::raw(&help::render_heading("Created Shims"));
-        for tool in &created {
-            let shim_path = bin_dir.join(shim_filename(tool));
+        for shim_path in &created {
             output::raw(&format!("  {}", shim_path.as_path().display()));
         }
     }
@@ -160,8 +133,7 @@ pub(crate) async fn execute_for_binary(
             output::raw("");
         }
         output::raw(&help::render_heading("Skipped Shims"));
-        for tool in &skipped {
-            let shim_path = bin_dir.join(shim_filename(tool));
+        for shim_path in &skipped {
             output::raw(&format!("  {}", shim_path.as_path().display()));
         }
         output::raw("");
@@ -172,6 +144,85 @@ pub(crate) async fn execute_for_binary(
     print_path_instructions(&dirs.config);
 
     Ok(ExitStatus::default())
+}
+
+/// Resolve placement independently for Node.js and each package-manager family.
+pub(super) fn shim_dir(settings: &super::config::Config, tool: &str) -> vt_path::AbsolutePathBuf {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    let mode = if tool == "node" {
+        settings.node_shim_mode
+    } else if let Some(kind) = vp_pm_cli::PackageManagerType::from_tool(tool) {
+        settings.package_manager_shim_mode_for(kind)
+    } else {
+        super::config::ShimMode::Managed
+    };
+    match mode {
+        super::config::ShimMode::Managed => dirs.bin.clone(),
+        super::config::ShimMode::SystemFirst => dirs.fallback_bin(),
+    }
+}
+
+/// Reconcile both shim directories from effective preferences; setup and mode changes share this path.
+pub(super) async fn refresh_shims(
+    current_exe: &std::path::Path,
+    settings: &super::config::Config,
+    refresh: bool,
+    refresh_entrypoints: bool,
+) -> Result<(Vec<vt_path::AbsolutePathBuf>, Vec<vt_path::AbsolutePathBuf>), Error> {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    let fallback_bin = dirs.fallback_bin();
+    tokio::fs::create_dir_all(&dirs.bin).await?;
+    tokio::fs::create_dir_all(&fallback_bin).await?;
+    let owns_shim = |path: &vt_path::AbsolutePath| {
+        crate::commands::global::install::is_vp_shim_target(path)
+            || (std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
+                && std::fs::canonicalize(path).is_ok_and(|target| {
+                    std::fs::canonicalize(current_exe).is_ok_and(|source| source == target)
+                }))
+    };
+    let mut created = Vec::new();
+    let mut skipped = Vec::new();
+    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
+        let bin_dir = shim_dir(settings, tool);
+        let other_dir = if bin_dir == dirs.bin { &fallback_bin } else { &dirs.bin };
+        let shim_path = bin_dir.join(shim_filename(tool));
+        let refresh_tool =
+            if matches!(*tool, "vpx" | "vpr") { refresh_entrypoints } else { refresh };
+        let exists = tokio::fs::symlink_metadata(&shim_path).await.is_ok();
+        // A configured bin directory can contain foreign tools. Never replace them to change modes.
+        let foreign = exists && crate::shim::is_core_shim_tool(tool) && !owns_shim(&shim_path);
+        if !foreign && create_shim(current_exe, &bin_dir, tool, refresh_tool).await? {
+            created.push(shim_path);
+        } else {
+            skipped.push(shim_path);
+        }
+
+        let stale = other_dir.join(shim_filename(tool));
+        if owns_shim(&stale) {
+            #[cfg(unix)]
+            tokio::fs::remove_file(&stale).await?;
+            #[cfg(windows)]
+            {
+                remove_or_rename_to_old(&stale).await;
+                let pointer = stale.as_path().with_extension(vp_shared::SHIM_POINTER_EXTENSION);
+                tokio::fs::remove_file(pointer).await?;
+                cleanup_legacy_windows_shim(other_dir, tool).await;
+            }
+        }
+        #[cfg(windows)]
+        if !foreign {
+            cleanup_legacy_windows_shim(&bin_dir, tool).await;
+        }
+        // Old npm-global metadata must not let uninstall remove a default shim.
+        if let Ok(Some(config)) = BinConfig::load(tool).await
+            && config.source == super::bin_config::BinSource::Npm
+        {
+            BinConfig::delete(tool).await?;
+        }
+    }
+    #[cfg(windows)]
+    cleanup_old_files(&fallback_bin).await;
+    Ok((created, skipped))
 }
 
 /// Remove legacy managed installs left by versions that did not expose package-manager shims.
@@ -610,16 +661,20 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS____vp_bin="__VP_BIN__"
-while case ":${PATH}:" in *":${__vp_bin}:"*) true ;; *) false ;; esac; do
-    __vp_tmp=":${PATH}:"
-    __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
-    __vp_before="${__vp_before#:}"
-    __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
-    __vp_after="${__vp_after%:}"
-    PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+__vp_fallback="__VP_FALLBACK_BIN__"
+for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
+    while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
+        __vp_tmp=":${PATH}:"
+        __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
+        __vp_before="${__vp_before#:}"
+        __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
+        __vp_after="${__vp_after%:}"
+        PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+    done
 done
-export PATH="${__vp_bin}${PATH:+:${PATH}}"
-unset __vp_bin __vp_tmp __vp_before __vp_after
+export PATH="${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}"
+unset __vp_bin __vp_fallback __vp_dir __vp_tmp __vp_before __vp_after
+hash -r 2>/dev/null || true
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -646,7 +701,9 @@ vp() {
         eval "$__vp_out"
     else
         unset __vp_env_use
-        command vp "$@"
+        command vp "$@" || return $?
+        # Mode changes move executables between directories; discard cached command paths.
+        hash -r 2>/dev/null || true
     fi
 }
 
@@ -693,7 +750,10 @@ const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.d
 __ENV_EXPORTS__while set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
     set -e PATH[$__vp_idx]
 end
-set -gx PATH "__VP_BIN__" $PATH
+while set -l __vp_idx (contains -i -- "__VP_FALLBACK_BIN__" $PATH)
+    set -e PATH[$__vp_idx]
+end
+set -gx PATH "__VP_BIN__" $PATH "__VP_FALLBACK_BIN__"
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -753,7 +813,7 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
+__ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" and $in != "__VP_FALLBACK_BIN__" } | prepend "__VP_BIN__" | append "__VP_FALLBACK_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -829,9 +889,9 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS__$__vp_bin = '__VP_BIN_WIN__'
-if ($env:Path -split ';' -notcontains $__vp_bin) {
-    $env:Path = "$__vp_bin;$env:Path"
-}
+$__vp_fallback = '__VP_FALLBACK_BIN_WIN__'
+$__vp_paths = @($env:Path -split ';' | Where-Object { $_ -and $_ -ne $__vp_bin -and $_ -ne $__vp_fallback })
+$env:Path = (@($__vp_bin) + $__vp_paths + @($__vp_fallback)) -join ';'
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -1048,6 +1108,7 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
     let dirs = &config.dirs;
     let home_dir = config.user_home.as_path();
     let bin_path_ref = render_home_relative_path(dirs.bin.as_path(), home_dir);
+    let fallback_path_ref = render_home_relative_path(dirs.fallback_bin().as_path(), home_dir);
     let dir_envs = render_dir_envs(shell, config);
 
     match shell {
@@ -1056,7 +1117,12 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
                 &bin_path_ref,
                 escape_posix_double_quoted_string,
             );
+            let fallback_path_ref = escape_home_relative_double_quoted_path(
+                &fallback_path_ref,
+                escape_posix_double_quoted_string,
+            );
             ENV_TEMPLATE_POSIX
+                .replace("__VP_FALLBACK_BIN__", &fallback_path_ref)
                 .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN__", &bin_path_ref)
         }
@@ -1065,7 +1131,12 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
                 &bin_path_ref,
                 escape_fish_double_quoted_string,
             );
+            let fallback_path_ref = escape_home_relative_double_quoted_path(
+                &fallback_path_ref,
+                escape_fish_double_quoted_string,
+            );
             ENV_TEMPLATE_FISH
+                .replace("__VP_FALLBACK_BIN__", &fallback_path_ref)
                 .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN__", &bin_path_ref)
         }
@@ -1075,6 +1146,10 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
             let bin_path_ref_nu =
                 escape_nu_double_quoted_string(&render_nu_path_ref(&bin_path_ref));
             ENV_TEMPLATE_NU
+                .replace(
+                    "__VP_FALLBACK_BIN__",
+                    &escape_nu_double_quoted_string(&render_nu_path_ref(&fallback_path_ref)),
+                )
                 .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN__", &bin_path_ref_nu)
         }
@@ -1083,6 +1158,10 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
             let bin_path_win =
                 escape_powershell_single_quoted_string(&dirs.bin.as_path().display().to_string());
             ENV_TEMPLATE_PS1
+                .replace(
+                    "__VP_FALLBACK_BIN_WIN__",
+                    &escape_powershell_single_quoted_string(&dirs.fallback_bin().to_string()),
+                )
                 .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN_WIN__", &bin_path_win)
         }

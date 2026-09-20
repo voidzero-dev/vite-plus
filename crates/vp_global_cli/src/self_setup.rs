@@ -297,6 +297,12 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         config::save_config(&settings).await?;
     }
 
+    // Existing Windows installs also need the fallback directory in their persistent PATH.
+    #[cfg(windows)]
+    if in_place && std::env::var(env_vars::VP_SELF_SETUP_NO_MODIFY_PATH).as_deref() != Ok("1") {
+        shell::configure().await?;
+    }
+
     // 2. Activate a standalone download; an upgrade hook must not overwrite rollback history.
     if deploy {
         install::save_previous_version(&dirs.data).await?;
@@ -310,9 +316,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
 
     // 3. Run setup in this process. Spawning the unmarked binary here would reenter self-setup.
     tokio::fs::create_dir_all(&dirs.bin).await?;
-    // Always create and refresh shims, even in system-first mode; `vp env off` and per-tool preferences control runtime dispatch.
-    // VpDirs::bin is private by default, so replacing its shims leaves system-first tools elsewhere on PATH intact.
-    // Users explicitly pointing VpDirs::bin at a shared directory accept replacement of conflicting entries there.
+    // Setup places each tool according to its effective management mode.
     setup::execute_for_binary(binary.as_path(), true, true, false).await?;
     if deploy {
         let name = version_dir
