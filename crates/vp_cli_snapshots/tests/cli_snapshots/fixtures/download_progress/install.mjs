@@ -39,7 +39,10 @@ const pnpmArchive = createArchive({
 
 // The request is made after the CLI draws each phase. Hold its response until
 // the runner captures the milestone, without sleeps or polling terminal text.
+const phases = [];
+/** @returns {Promise<void>} */
 async function checkpoint(phase) {
+  phases.push(phase);
   if (!interactive) return;
   const nextInput = once(process.stdin, 'data');
   process.stdin.resume();
@@ -50,25 +53,24 @@ async function checkpoint(phase) {
   process.stdin.pause();
 }
 
-const phases = [];
-const server = createServer(async (request, response) => {
+/** @returns {Promise<void>} */
+async function handleRequest(request, response) {
   if (request.url === '/index.json') {
-    phases.push('prepare');
     await checkpoint('prepare');
     response.end(JSON.stringify([{ version: 'v99.0.0', lts: 'Fixture' }]));
   } else if (/^\/pnpm\/-\/pnpm-[\d.]+\.tgz$/.test(request.url)) {
-    phases.push('download');
     await checkpoint('download');
     response.setHeader('Content-Length', pnpmArchive.length);
     response.end(pnpmArchive);
   } else if (request.url === '/install') {
-    phases.push('dependencies');
     await checkpoint('dependencies');
     response.writeHead(failure ? 500 : 200).end();
   } else {
     response.writeHead(404).end();
   }
-});
+}
+
+const server = createServer(handleRequest);
 server.listen(0, '127.0.0.1');
 await once(server, 'listening');
 const mirror = `http://127.0.0.1:${server.address().port}`;

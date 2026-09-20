@@ -1291,7 +1291,8 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
         .as_deref()
         .filter(|_| explicit_shell.is_some())
         .or_else(|| login_shell.as_deref().and_then(|path| path.rsplit('/').next()));
-    let shell = shell_name.and_then(|s| s.parse::<Shell>().ok());
+    let shell = explicit_shell.or_else(|| shell_name.and_then(|s| s.parse::<Shell>().ok()));
+    let shell_name = shell_name.map(str::to_ascii_lowercase);
     let is_hint = explicit_shell.is_none() && shell.is_some();
     let commands: &[(Shell, &str, Option<EnvShell>, &[&str])] = &[
         (Shell::Posix, "Bash/Zsh", Some(EnvShell::Posix), &["sh", "bash", "zsh"]),
@@ -1326,10 +1327,10 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
             None => super::format_path_snippet(Shell::Cmd, &[env.dirs.bin.to_string()]),
         };
         if is_hint {
-            let label = match shell_name {
-                Some(name) if name.eq_ignore_ascii_case("zsh") => "Zsh",
-                Some(name) if name.eq_ignore_ascii_case("bash") => "Bash",
-                Some(name) if name.eq_ignore_ascii_case("sh") => "sh",
+            let label = match shell_name.as_deref() {
+                Some("zsh") => "Zsh",
+                Some("bash") => "Bash",
+                Some("sh") => "sh",
                 _ => label,
             };
             output::raw(&format!("  For {label}, run:"));
@@ -1341,39 +1342,37 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
         }
     }
     output::raw("");
-    let profile_instructions: &[&str] = match shell {
-        Some(Shell::Cmd | Shell::PowerShell) => &[],
-        None if !shown.iter().any(|s| matches!(s, Shell::Posix | Shell::Fish | Shell::NuShell)) => {
-            &[]
-        }
-        _ if is_hint && shell_name.is_some_and(|s| s.eq_ignore_ascii_case("zsh")) => {
-            &["  If your .zshrc does not already load Vite+, add this command."]
-        }
-        _ if is_hint && shell_name.is_some_and(|s| s.eq_ignore_ascii_case("bash")) => &[
-            "  If your ~/.bashrc does not already load Vite+, add this command for interactive non-login Bash sessions.",
-            "  Login Bash shells must also load the command through their login profile.",
-        ],
-        _ if is_hint || shell.is_none() => &[
-            "  If your shell profile does not already load Vite+, add the command for your shell.",
-        ],
-        _ if env.vp_shell.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("bash")) => &[
-            if has_configured_profile(&env) {
+    if shown.iter().any(|s| matches!(s, Shell::Posix | Shell::Fish | Shell::NuShell)) {
+        let conditional = is_hint || shell.is_none();
+        let configured = !conditional && has_configured_profile(&env);
+        if shell_name.as_deref() == Some("bash") {
+            output::raw(if conditional {
+                "  If your ~/.bashrc does not already load Vite+, add this command for interactive non-login Bash sessions."
+            } else if configured {
                 "  Or start an interactive non-login Bash shell to load your configured ~/.bashrc."
             } else {
                 "  Add the command to ~/.bashrc for interactive non-login Bash sessions."
-            },
-            "  Login Bash shells must also load the command through their login profile.",
-        ],
-        _ if has_configured_profile(&env) => {
-            &["  Or open a new terminal to load your configured shell profile."]
+            });
+            output::raw(
+                "  Login Bash shells must also load the command through their login profile.",
+            );
+        } else {
+            output::raw(match (shell_name.as_deref(), conditional, configured) {
+                (Some("zsh"), true, _) => {
+                    "  If your .zshrc does not already load Vite+, add this command."
+                }
+                (_, true, _) => {
+                    "  If your shell profile does not already load Vite+, add the command for your shell."
+                }
+                (_, _, true) => "  Or open a new terminal to load your configured shell profile.",
+                (Some("zsh"), _, _) => {
+                    "  Add the command to your .zshrc file to activate future Zsh terminals."
+                }
+                _ => {
+                    "  Add the command for your shell to its profile to activate future terminals."
+                }
+            });
         }
-        _ if env.vp_shell.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("zsh")) => {
-            &["  Add the command to your .zshrc file to activate future Zsh terminals."]
-        }
-        _ => &["  Add the command for your shell to its profile to activate future terminals."],
-    };
-    for instruction in profile_instructions {
-        output::raw(instruction);
     }
     if shown.contains(&Shell::PowerShell) {
         output::raw(if shell == Some(Shell::PowerShell) {

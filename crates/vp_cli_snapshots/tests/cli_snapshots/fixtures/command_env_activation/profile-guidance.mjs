@@ -54,6 +54,18 @@ function setup(shell) {
   return output.slice(heading).trimEnd();
 }
 
+/** @returns {{ system: string, source: string }} */
+function prepareSystemNode() {
+  captureVp(['env', 'on', 'node']);
+  const system = path.resolve('profiles/system');
+  fs.mkdirSync(system, { recursive: true });
+  fs.writeFileSync(path.join(system, 'node'), '#!/bin/sh\necho system-node\n', { mode: 0o755 });
+  // Keep system startup helpers available, with the fake Node first on PATH.
+  env.PATH = [system, '/usr/bin', '/bin'].join(path.delimiter);
+  const envPath = path.join(dirs.config, 'env').replace(/[\\$`"]/g, '\\$&');
+  return { system, source: `. "${envPath}"\n` };
+}
+
 if (mode === 'powershell') {
   // Control executable discovery independently of the shells installed on the runner.
   const shellBin = path.resolve('profiles/shell-bin');
@@ -112,13 +124,7 @@ if (mode === 'powershell') {
     }
   }
 } else if (mode.startsWith('zsh-')) {
-  captureVp(['env', 'on', 'node']);
-  const system = path.resolve('profiles/system');
-  fs.mkdirSync(system, { recursive: true });
-  fs.writeFileSync(path.join(system, 'node'), '#!/bin/sh\necho system-node\n', { mode: 0o755 });
-  env.PATH = [system, '/usr/bin', '/bin'].join(path.delimiter);
-  const envPath = path.join(dirs.config, 'env').replace(/[\\$`"]/g, '\\$&');
-  const source = `. "${envPath}"\n`;
+  const { system, source } = prepareSystemNode();
   fs.mkdirSync(env.ZDOTDIR, { recursive: true });
   // Ubuntu's global compinit can prompt about the runner's completion directories.
   // Keep normal profile loading, but skip completion setup in this PATH test.
@@ -141,19 +147,12 @@ if (mode === 'powershell') {
 } else {
   // Suppress Ubuntu's sudo hint while still loading the normal Bash startup files.
   fs.writeFileSync(path.join(home, '.hushlogin'), '');
-  captureVp(['env', 'on', 'node']);
+  const { system, source } = prepareSystemNode();
   const bash = process.env.PATH.split(path.delimiter)
     .map((dir) => path.join(dir, 'bash'))
     .find((file) => fs.existsSync(file));
   assert.ok(bash);
   env.SHELL = '/bin/bash';
-  const system = path.resolve('profiles/system');
-  fs.mkdirSync(system, { recursive: true });
-  fs.writeFileSync(path.join(system, 'node'), '#!/bin/sh\necho system-node\n', { mode: 0o755 });
-  // Keep system startup helpers available, with the fake Node first on PATH.
-  env.PATH = [system, '/usr/bin', '/bin'].join(path.delimiter);
-  const envPath = path.join(dirs.config, 'env').replace(/[\\$`"]/g, '\\$&');
-  const source = `. "${envPath}"\n`;
   const fish = path.join(env.XDG_CONFIG_HOME, 'fish/config.fish');
   fs.mkdirSync(path.dirname(fish), { recursive: true });
   fs.writeFileSync(fish, `source "${path.join(dirs.config, 'env.fish')}"\n`);

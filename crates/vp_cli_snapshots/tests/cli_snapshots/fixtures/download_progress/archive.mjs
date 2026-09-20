@@ -1,6 +1,10 @@
 import { gzipSync } from 'node:zlib';
 
-/** Create a small, valid archive to keep download tests offline. */
+/**
+ * Create a small, valid archive to keep download tests offline.
+ * @param {Record<string, string>} files
+ * @returns {Buffer}
+ */
 export function createArchive(files) {
   const blocks = [];
   for (const [name, contents] of Object.entries(files)) {
