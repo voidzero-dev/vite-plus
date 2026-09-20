@@ -1,0 +1,26 @@
+[[case]]
+name = "placement_and_path_precedence"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [
+  { argv = ["bash", "placement.sh"], comment = "Scoped changes move tool families together; refreshing preserves choices and PATH selects the first matching tool." },
+]
+
+[[case]]
+name = "foreign_manager_falls_back_without_recursion"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["sh"]
+steps = [
+  { argv = ["sh", "recursion.sh"], comment = "A foreign manager falling back to Vite+ reaches managed Node even with an inherited tool marker." },
+]
+
+[[case]]
+name = "split_layout_preserves_foreign_tools"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["sh"]
+steps = [
+  { argv = ["sh", "split.sh"], comment = "Fallback shims stay in the data root when the main bin directory is shared, and refresh preserves foreign executables." },
+]
