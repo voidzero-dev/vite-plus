@@ -24,6 +24,13 @@ fn masks_bare_version_block_only_for_version_probe_steps() {
 }
 
 #[test]
+fn normalizes_piped_windows_line_endings() {
+    // Non-TTY Node version probes must share snapshots with Unix and PTY output.
+    let input = "```\nv22.18.0\r\n\n```\n".to_owned();
+    assert_eq!(redact_output(input, &[], true), "```\n<version>\n\n```\n");
+}
+
+#[test]
 fn trims_trailing_row_padding_on_every_platform() {
     // ConPTY repaints rows padded to the grid width with explicit spaces.
     let input = "Tip: run this directly\u{20}\u{20}\u{20}\u{20}\n$ vp build\n".to_owned();

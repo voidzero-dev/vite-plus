@@ -12,16 +12,20 @@ POSIX wrapper and zsh vpr completion keep global -C before env use/run
 # Vite+ environment setup (https://viteplus.dev)
 export VP_HOME="<workspace>/home"
 __vp_bin="<workspace>/home/bin"
-while case ":${PATH}:" in *":${__vp_bin}:"*) true ;; *) false ;; esac; do
-    __vp_tmp=":${PATH}:"
-    __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
-    __vp_before="${__vp_before#:}"
-    __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
-    __vp_after="${__vp_after%:}"
-    PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+__vp_fallback="<workspace>/home/fallback-bin"
+for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
+    while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
+        __vp_tmp=":${PATH}:"
+        __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
+        __vp_before="${__vp_before#:}"
+        __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
+        __vp_after="${__vp_after%:}"
+        PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+    done
 done
-export PATH="${__vp_bin}${PATH:+:${PATH}}"
-unset __vp_bin __vp_tmp __vp_before __vp_after
+export PATH="${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}"
+unset __vp_bin __vp_fallback __vp_dir __vp_tmp __vp_before __vp_after
+hash -r 2>/dev/null || true
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -48,7 +52,9 @@ vp() {
         eval "$__vp_out"
     else
         unset __vp_env_use
-        command vp "$@"
+        command vp "$@" || return $?
+        # Mode changes move executables between directories; discard cached command paths.
+        hash -r 2>/dev/null || true
     fi
 }
 
@@ -101,7 +107,10 @@ set -gx VP_HOME "<workspace>/home"
 while set -l __vp_idx (contains -i -- "<workspace>/home/bin" $PATH)
     set -e PATH[$__vp_idx]
 end
-set -gx PATH "<workspace>/home/bin" $PATH
+while set -l __vp_idx (contains -i -- "<workspace>/home/fallback-bin" $PATH)
+    set -e PATH[$__vp_idx]
+end
+set -gx PATH "<workspace>/home/bin" $PATH "<workspace>/home/fallback-bin"
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -164,7 +173,7 @@ Nushell wrapper and vpr completion keep global -C before env use/run
 ```
 # Vite+ environment setup (https://viteplus.dev)
 $env.VP_HOME = ("<workspace>/home" | path expand --no-symlink)
-$env.PATH = ($env.PATH | where { $in != "<workspace>/home/bin" } | prepend "<workspace>/home/bin")
+$env.PATH = ($env.PATH | where { $in != "<workspace>/home/bin" and $in != "<workspace>/home/fallback-bin" } | prepend "<workspace>/home/bin" | append "<workspace>/home/fallback-bin")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -246,9 +255,9 @@ PowerShell wrapper and vpr completion keep global -C before env use/run
 # Vite+ environment setup (https://viteplus.dev)
 $env:VP_HOME = '<workspace>/home'
 $__vp_bin = '<workspace>/home/bin'
-if ($env:Path -split ';' -notcontains $__vp_bin) {
-    $env:Path = "$__vp_bin;$env:Path"
-}
+$__vp_fallback = '<workspace>/home/fallback-bin'
+$__vp_paths = @($env:Path -split ';' | Where-Object { $_ -and $_ -ne $__vp_bin -and $_ -ne $__vp_fallback })
+$env:Path = (@($__vp_bin) + $__vp_paths + @($__vp_fallback)) -join ';'
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
