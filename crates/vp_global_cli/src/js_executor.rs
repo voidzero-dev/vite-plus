@@ -501,7 +501,7 @@ async fn has_valid_version_source(project_path: &AbsolutePath) -> Result<bool, E
 ///
 /// Returns `Some(JsRuntime)` when both conditions are met:
 /// 1. Config has `node_shim_mode == SystemFirst`
-/// 2. A system `node` binary is found in PATH (excluding the vite-plus bin directory)
+/// 2. The first `node` binary on PATH is not a Vite+ shim
 ///
 /// Returns `None` if mode is `Managed` or no system Node.js is found,
 /// allowing the caller to fall through to managed runtime resolution.
