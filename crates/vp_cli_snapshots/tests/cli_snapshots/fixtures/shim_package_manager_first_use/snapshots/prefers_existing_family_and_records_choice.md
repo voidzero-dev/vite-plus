@@ -9,7 +9,7 @@
 ## `vpt chmod +x system-bin/yarn`
 
 
-## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} pnpm --version`
+## `vp env off pnpm`
 
 
 ## `vpt print-file $VP_HOME/config.json`
@@ -26,13 +26,13 @@ the explicit system choice records only pnpm
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} pnpm --version`
 
-later pnpm invocations use the recorded choice without prompting
+PATH selects the system pnpm directly
 
 ```
 system-pnpm
 ```
 
-## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} yarn --version`
+## `vp env off yarn`
 
 
 ## `vpt print-file $VP_HOME/config.json`

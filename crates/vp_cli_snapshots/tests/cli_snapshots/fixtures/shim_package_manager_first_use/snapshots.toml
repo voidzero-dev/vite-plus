@@ -6,18 +6,10 @@ steps = [
   { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system-bin/yarn"], snapshot = false },
-  { argv = ["pnpm", "--version"], snapshot = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], interactions = [
-    { "expect-milestone" = "pm-shim-choice:pnpm" },
-    { "write-key" = "down" },
-    { "write-key" = "enter" },
-  ] },
+  { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "the explicit system choice records only pnpm" },
-  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "later pnpm invocations use the recorded choice without prompting" },
-  { argv = ["yarn", "--version"], snapshot = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], interactions = [
-    { "expect-milestone" = "pm-shim-choice:yarn" },
-    { "write-key" = "down" },
-    { "write-key" = "enter" },
-  ] },
+  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "PATH selects the system pnpm directly" },
+  { argv = ["vp", "env", "off", "yarn"], snapshot = false },
   { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "Yarn records its own decision without changing pnpm" },
 ]
 
