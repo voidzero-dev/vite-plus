@@ -128,10 +128,12 @@ Using `pm` records the selected mode for all currently supported package manager
 
 ### Setup
 
-- `vp env setup` creates or updates the `node`, `npm`, `npx`, `pnpm`, `pnpx`, `yarn`, `yarnpkg`, `bun`, `bunx`, `vpx`, and `vpr` shims. Managed tool shims live in the resolved bin directory; system-first tool shims live in `fallback-bin` under the data directory. `vp`, `vpx`, `vpr`, and global package commands remain in the main bin directory. Shell setup scripts prepend the main bin directory and append the fallback directory to PATH.
-- `vp env setup --refresh` recreates owned shims according to the saved modes and regenerates shell setup scripts. Upgrades run this automatically. Reload the setup script or start a new terminal to activate the new PATH layout in an existing installation.
-- `vp env on` / `vp env off` changes both modes and moves the affected shims; append `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the change
-- `vp env print` prints PATH setup for both components; append a selector to print one
+- `vp env setup` creates tool shims and writes shell setup scripts.
+- `vp env setup --refresh` recreates Vite+ shims and regenerates shell setup scripts using your saved preferences.
+- `vp env on` / `vp env off` switches between Vite+-managed and system-first modes; append `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the change.
+- `vp env print` prints PATH setup for both components; append a selector to print one.
+
+Upgrades refresh the setup automatically. Open a new terminal or reload your shell setup script afterward.
 
 PowerShell needs to dot-source the generated setup script in the current shell before `vp env use` can affect only that shell session:
 
