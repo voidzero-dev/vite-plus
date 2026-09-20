@@ -49,7 +49,7 @@ test: {
 | [Glob threshold `perFile: true`](https://vitest.dev/guide/migration/#glob-coverage-thresholds-no-longer-inherit-perfile)    | Keep for per-file coverage enforcement. Remove to check matching files as a group.                                                      |
 | [`fakeTimers.toNotFake: ['Temporal']`](https://vitest.dev/guide/migration/#fake-timers-and-setsystemtime-now-mock-temporal) | Check tests that use the global Temporal polyfill with fake timers. Remove only `Temporal` to use mocked time; retain other exclusions. |
 
-New projects use v5 defaults. To adopt those defaults in an existing project, change one setting at a time and run the affected tests. Check CI and report consumers for output changes. Remove the accompanying comment after you accept the new behavior, or replace it with your project's reason for keeping the setting. These options remain supported in v5; you do not need to remove them all.
+New projects use v5 defaults. You may be able to remove some generated compatibility settings with no code changes or small, localized fixes. Follow the checks below before removing them. These options remain supported in v5; keep compatibility for now if removal requires extensive test changes.
 
 The migration leaves your existing settings and comments untouched. It does not add comments to settings from an earlier migration, since it cannot distinguish those settings from your own choices. Repeated runs do not duplicate comments or restore comments you removed.
 
@@ -58,6 +58,20 @@ If your project has no test config, you can use the v5 defaults without a review
 After upgrading to v5, you can rerun `vp migrate` without reapplying v4 compatibility defaults, including in projects without a config. Finish the dependency installation before rerunning migration.
 
 Resolve or save the first run's review report before discarding the original dependencies. Later runs use the current Vitest version and files, so they might not repeat reviews that depended on the original v4 behavior.
+
+### Remove unneeded compatibility settings
+
+First, validate the migrated project with its compatibility settings intact. Then use the migration diff and the `Vitest v4 compatibility` comments to identify additions in root, workspace, and inline project configs. Leave pre-existing user settings and settings with an unclear origin unchanged.
+
+Remove one added setting at a time. Check which value the project uses after removal, including inherited options, plugins, and setup files. First run the affected suites without code changes. Include browser and coverage runs where relevant; a passing Node suite does not validate browser locators. For `fakeTimers.toNotFake`, remove only the added `Temporal` entry and retain other exclusions.
+
+You can make small, localized application, test, or setup fixes that preserve test intent, such as correcting a locator or adjusting mock setup in a few tests. Keep assertions and test coverage intact, and review any snapshot changes. If removal requires widespread test edits or shared setup refactoring, keep compatibility for now and record the follow-up work.
+
+Keep a removal if the affected tests pass, run the same test set without new skips, and support the resulting behavior. Remove its generated comment too. Restore the setting and comment if validation still fails, required suites cannot run, or the result remains uncertain. Undo only cleanup-specific trial edits; preserve completed migration fixes and unrelated work. Distinguish a deferred rewrite from a setting you could not validate.
+
+Passing tests do not prove that coverage enforcement is unchanged. Keep generated glob-threshold `perFile: true` settings unless you intend to switch from per-file thresholds to aggregate checking. An agent should request your approval for that change. See [Vitest's coverage threshold migration](https://vitest.dev/guide/migration/#glob-coverage-thresholds-no-longer-inherit-perfile).
+
+After the individual checks, run the full validation suite with the accepted removals together. Report the config path, removal decision, code changes, validation commands and results, and any remaining work for each candidate. If you retain an option as a project choice, replace its compatibility comment with that reason.
 
 ## Source changes
 
