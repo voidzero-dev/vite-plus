@@ -58,7 +58,7 @@ mod portable {
 
     enum ShimLayout {
         SingleRoot,
-        Split { cache: PathBuf },
+        Split { cache: PathBuf, bin: PathBuf },
     }
 
     struct ShimPointer {
@@ -95,7 +95,13 @@ mod portable {
         let parsed = cmdline::parse_shim_pointer(&bytes)?;
         let layout = match parsed.layout {
             ParsedShimLayout::SingleRoot => ShimLayout::SingleRoot,
-            ParsedShimLayout::Split { cache } => ShimLayout::Split { cache: PathBuf::from(cache) },
+            ParsedShimLayout::Split { cache, bin } => ShimLayout::Split {
+                cache: PathBuf::from(cache),
+                // Old sidecars only occur beside the main bin entrypoints.
+                bin: bin
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| exe_path.parent().unwrap().to_path_buf()),
+            },
         };
         Some(ShimPointer { data: PathBuf::from(parsed.data), layout })
     }
@@ -107,7 +113,6 @@ mod portable {
             exe_path.file_stem().and_then(|s| s.to_str()).unwrap_or_else(|| process::exit(1));
 
         // 2. Locate vp.exe via `<name>.shim` (written next to every trampoline).
-        let bin_dir = exe_path.parent().unwrap_or_else(|| process::exit(1));
         let Some(location) = resolve_vp_exe(&exe_path) else {
             use std::io::Write;
             let stderr = std::io::stderr();
@@ -123,10 +128,10 @@ mod portable {
             ShimLayout::SingleRoot => {
                 cmd.env("VP_HOME", &location.pointer.data);
             }
-            ShimLayout::Split { cache } => {
+            ShimLayout::Split { cache, bin } => {
                 cmd.env_remove("VP_HOME");
                 cmd.env("VP_DATA_DIR", &location.pointer.data);
-                cmd.env("VP_BIN_DIR", bin_dir);
+                cmd.env("VP_BIN_DIR", bin);
                 cmd.env("VP_CACHE_DIR", cache);
             }
         }

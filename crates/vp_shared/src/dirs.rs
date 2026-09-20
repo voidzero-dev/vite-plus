@@ -29,7 +29,7 @@ pub const VP_BINARY_NAME: &str = if cfg!(windows) { "vp.exe" } else { "vp" };
 pub const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
 
 /// Extension for a Windows trampoline sidecar. The sidecar records the layout,
-/// data root, and cache root. It is next to its executable
+/// data, bin, and cache roots. It is next to its executable
 /// (`<BIN>/<name>.shim`).
 ///
 /// The complete `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group can put
@@ -118,6 +118,12 @@ impl VpDirs {
         })
     }
 
+    /// Low-priority managed shims live under the owned data root, even when bin is shared.
+    #[must_use]
+    pub fn fallback_bin(&self) -> AbsolutePathBuf {
+        self.data.join("fallback-bin")
+    }
+
     /// Return the resolution mode that selected these roots.
     #[must_use]
     pub const fn layout(&self) -> VpDirsLayout {
@@ -147,10 +153,11 @@ impl VpDirs {
             std::fs::create_dir_all(parent)?;
         }
         let contents = format!(
-            "{SHIM_POINTER_HEADER}\nlayout={}\ndata={}\ncache={}\n",
+            "{SHIM_POINTER_HEADER}\nlayout={}\ndata={}\ncache={}\nbin={}\n",
             self.layout.as_str(),
             self.data.as_path().to_string_lossy(),
-            self.cache.as_path().to_string_lossy()
+            self.cache.as_path().to_string_lossy(),
+            self.bin.as_path().to_string_lossy()
         );
         std::fs::write(exe_path.with_extension(SHIM_POINTER_EXTENSION), contents)
     }
