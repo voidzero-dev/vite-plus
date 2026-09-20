@@ -20,6 +20,7 @@ pub mod output;
 mod package_json;
 mod path_env;
 mod process;
+pub mod progress;
 mod stdio;
 pub mod string_similarity;
 mod tls;

@@ -22,3 +22,41 @@ name = "download_progress_ci"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [{ argv = ["node", "download.mjs", "known"], envs = [["CI", "1"]] }]
+
+[[case]]
+name = "installation_progress_interactive"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "interactive"], interactions = [
+  { expect-milestone = "install:prepare:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:download:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:dependencies:ready" },
+  { write-key = "enter" },
+] }]
+
+[[case]]
+name = "installation_progress_failure"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "interactive", "failure"], interactions = [
+  { expect-milestone = "install:prepare:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:download:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:dependencies:ready" },
+  { write-key = "enter" },
+] }]
+
+[[case]]
+name = "installation_progress_non_tty"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs"], tty = false }]
+
+[[case]]
+name = "installation_progress_ci"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs"], envs = [["CI", "1"]] }]

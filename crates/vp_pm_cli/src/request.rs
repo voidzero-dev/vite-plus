@@ -14,6 +14,7 @@ use sha2::{Digest, Sha224, Sha256, Sha512};
 use tar::Archive;
 use tokio::{fs, io::AsyncWriteExt};
 use vp_error::Error;
+use vp_shared::progress::Progress;
 
 /// HTTP client with built-in retry support
 #[derive(Clone)]
@@ -169,18 +170,7 @@ impl HttpClient {
         // Progress bar (only in TTY and not in CI). Built once and reused across
         // retry attempts; its position is reset at the start of every attempt so
         // a retried download doesn't double-count bytes.
-        let is_ci = vp_shared::EnvConfig::get().is_ci;
-        let progress = if let Some(message) = message
-            && vp_shared::is_stderr_terminal()
-            && !is_ci
-        {
-            let pb = ProgressBar::new_spinner();
-            pb.set_style(vp_shared::download_progress::download_style(message));
-            pb.enable_steady_tick(Duration::from_millis(100));
-            Some(pb)
-        } else {
-            None
-        };
+        let progress = message.and_then(Progress::download);
 
         // Make the request *and* the body stream a single retried unit. Doing
         // the request inline (instead of calling `self.get`) avoids a double
@@ -194,12 +184,18 @@ impl HttpClient {
         let result = (|| async {
             let response = client.get(url).timeout(timeout).send().await?.error_for_status()?;
             if let Some(ref pb) = progress {
+                let pb = pb.bar();
                 pb.set_position(0);
                 if let Some(size) = response.content_length() {
                     pb.set_length(size);
                 }
             }
-            Self::write_response_to_file(response, target_path, progress.as_ref()).await
+            Self::write_response_to_file(
+                response,
+                target_path,
+                progress.as_ref().map(Progress::bar),
+            )
+            .await
         })
         .retry(
             ExponentialBuilder::default()
@@ -209,9 +205,7 @@ impl HttpClient {
         )
         .await;
 
-        if let Some(pb) = progress {
-            pb.finish_and_clear();
-        }
+        drop(progress);
         result?;
 
         tracing::debug!("Download completed: {:?}", target_path);

@@ -6,29 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gzipSync } from 'node:zlib';
-
-/**
- * Small, valid archives keep this test offline. The installed files are never run.
- * @param {Record<string, string>} files
- * @returns {Buffer}
- */
-function createArchive(files) {
-  const blocks = [];
-  for (const [name, contents] of Object.entries(files)) {
-    const body = Buffer.from(contents);
-    const header = Buffer.alloc(512);
-    header.write(name);
-    header.write('0000755\0', 100);
-    header.write(body.length.toString(8).padStart(11, '0') + '\0', 124);
-    header.fill(' ', 148, 156);
-    header.write('0', 156);
-    const checksum = header.reduce((sum, byte) => sum + byte, 0);
-    header.write(checksum.toString(8).padStart(6, '0') + '\0 ', 148);
-    blocks.push(header, body, Buffer.alloc((512 - (body.length % 512)) % 512));
-  }
-  return gzipSync(Buffer.concat([...blocks, Buffer.alloc(1024)]));
-}
+import { createArchive } from './archive.mjs';
 
 const version = '99.0.0';
 const musl = process.platform === 'linux' && !process.report.getReport().header.glibcVersionRuntime;
@@ -91,7 +69,12 @@ try {
     console.log(`Before ${tool} download: preserve this output.`);
     const child = spawn('vp', ['env', 'install', `${tool}@${version}`], {
       stdio: 'inherit',
-      env: { ...process.env, VP_HOME: home, VP_NODE_DIST_MIRROR: mirror, npm_config_registry: mirror },
+      env: {
+        ...process.env,
+        VP_HOME: home,
+        VP_NODE_DIST_MIRROR: mirror,
+        npm_config_registry: mirror,
+      },
     });
     const [code, signal] = await once(child, 'exit');
     assert.equal(signal, null);

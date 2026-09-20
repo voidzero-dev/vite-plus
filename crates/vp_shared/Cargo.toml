@@ -27,6 +27,7 @@ supports-color = "3"
 temp-env = { workspace = true, optional = true, features = ["async_closure"] }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vt_path = { workspace = true }
@@ -45,6 +46,7 @@ webpki-root-certs = { workspace = true }
 indicatif = { workspace = true, features = ["in_memory"] }
 serial_test = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 # Enables the `test-utils` feature for this crate's own tests and doctests
 # (a package's dev-dependencies are active when it is the tested target).
 vp_shared = { path = ".", features = ["test-utils"] }

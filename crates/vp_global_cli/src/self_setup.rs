@@ -238,7 +238,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
         if !skip_deps {
-            install::install_production_deps(&version_dir, registry).await?;
+            install::install_production_deps(&version_dir, registry, true).await?;
         }
     }
     #[cfg(windows)]

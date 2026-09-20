@@ -7,13 +7,13 @@ use std::{fs::File, time::Duration};
 
 use backon::{ExponentialBuilder, Retryable};
 use futures_util::StreamExt;
-use indicatif::ProgressBar;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use tokio::{
     fs,
     io::{AsyncSeekExt, AsyncWriteExt},
 };
+use vp_shared::progress::Progress;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
 
@@ -47,15 +47,7 @@ pub async fn download_file(
     // Create progress bar (only in TTY and not in CI). Built once and reused
     // across retry attempts; its position is reset at the start of every
     // attempt so a retried download doesn't double-count bytes.
-    let is_ci = vp_shared::EnvConfig::get().is_ci;
-    let progress = if vp_shared::is_stderr_terminal() && !is_ci {
-        let pb = ProgressBar::new_spinner();
-        pb.set_style(vp_shared::download_progress::download_style(message));
-        pb.enable_steady_tick(Duration::from_millis(100));
-        Some(pb)
-    } else {
-        None
-    };
+    let progress = Progress::download(message);
 
     // Make the request *and* the body stream a single retried unit, so a
     // truncated download (bytes written != advertised Content-Length) triggers
@@ -122,6 +114,7 @@ pub async fn download_file(
         };
 
         if let Some(ref pb) = progress {
+            let pb = pb.bar();
             pb.set_position(if is_resumed { resume_from } else { 0 });
             if let Some(size) = total_size {
                 pb.set_length(size);
@@ -149,7 +142,7 @@ pub async fn download_file(
             let chunk = chunk_result?;
             bytes_written += chunk.len() as u64;
             if let Some(ref pb) = progress {
-                pb.inc(chunk.len() as u64);
+                pb.bar().inc(chunk.len() as u64);
             }
             file.write_all(&chunk).await?;
         }
@@ -183,9 +176,7 @@ pub async fn download_file(
         reason: vp_shared::format_error_chain(&e).into(),
     });
 
-    if let Some(pb) = progress {
-        pb.finish_and_clear();
-    }
+    drop(progress);
 
     result?;
 
