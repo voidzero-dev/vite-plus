@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
 import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
+import { patchNpmxVitestConfig } from './npmx.ts';
 import { ecosystemCiDir, tgzDir, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 import { prepareWebdriverioProject } from './webdriverio.ts';
@@ -366,33 +367,7 @@ if (project === 'npmx.dev') {
   // https://github.com/why-reproductions-are-required/vitest-browser-optimizer-config-order
   const viteConfigPath = join(repoRoot, 'vite.config.ts');
   const viteConfig = await readFile(viteConfigPath, 'utf-8');
-  const nuxtProject = /defineVitestProject\(\{\s*test:\s*\{/g;
-  if ([...viteConfig.matchAll(nuxtProject)].length !== 1) {
-    throw new Error('npmx.dev patch: expected the pinned Nuxt test project configuration');
-  }
-  await writeFile(
-    viteConfigPath,
-    viteConfig.replace(
-      nuxtProject,
-      `defineVitestProject({
-          plugins: [{
-            // Temporary Vitest 5 workaround: preserve Nuxt's optimizer exclusions.
-            // https://github.com/why-reproductions-are-required/vitest-browser-optimizer-config-order
-            name: 'npmx:test:preserve-optimizer-exclusions',
-            configureServer(server) {
-              for (const options of [
-                server.config.optimizeDeps,
-                server.environments.client.config.optimizeDeps,
-              ]) {
-                const excluded = new Set(options.exclude ?? [])
-                options.include = options.include?.filter(dep => !excluded.has(dep))
-              }
-            },
-          }],
-          test: {`,
-    ),
-    'utf-8',
-  );
+  await writeFile(viteConfigPath, patchNpmxVitestConfig(viteConfig), 'utf-8');
 }
 
 if (project === 'bun-vite-template') {
