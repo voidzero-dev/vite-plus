@@ -1,304 +1,91 @@
 [[case]]
 name = "placement_and_path_precedence"
 vp = "global"
+steps = [
+  # Start with all tools managed; system-bin provides an alternative Node.
+  { argv = ["node", "setup-system-node.cjs"], snapshot = false },
+  { argv = ["vp", "env", "on"], snapshot = false },
+  # Keep inspection steps on case-owned Node even when Windows PATH includes a host installation.
+  { argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode keeps all tool families in the main bin; fallback can be empty." },
 
-# Prepare a system Node and start with every tool managed by Vite+.
-[[case.steps]]
-argv = ["node", "setup-system-node.cjs"]
-snapshot = false
+  # Move Node to fallback and verify that the external tool takes precedence.
+  ["vp", "env", "off", "node"],
+  { argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "Only Node moves to fallback." },
+  { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "The shell selects system Node before fallback." },
+  { argv = ["node", "assert-node-resolution.cjs"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Internal Node resolution agrees with PATH." },
 
-[[case.steps]]
-argv = ["vp", "env", "on"]
-snapshot = false
+  # Move the pnpm family together; refresh must preserve both preferences.
+  ["vp", "env", "off", "pnpm"],
+  { argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "pnpm and pnpx move together; other families and vpx/vpr stay managed." },
+  { argv = ["vp", "env", "setup", "--refresh"], snapshot = false },
+  { argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "Refresh preserves saved choices." },
 
-# Inspection commands put both Vite+ directories first so Windows cannot pick a host Node.
-[[case.steps]]
-comment = "Managed mode keeps all tool families in the main bin; fallback can be empty."
-argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"]
-envs = [
-  ["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"],
-]
+  # Reverse PATH: reaching the Vite+ shim first must select managed Node.
+  { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "A fallback shim before system Node selects managed Node." },
+  { argv = ["node", "assert-node-resolution.cjs"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Internal resolution must also stop at the first Vite+ shim." },
 
-# Turn off only Node: system Node wins, and env which must agree with execution.
-[[case.steps]]
-argv = ["vp", "env", "off", "node"]
-
-[[case.steps]]
-comment = "Only Node moves to fallback."
-argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"]
-envs = [
-  ["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-[[case.steps]]
-comment = "The shell selects system Node before fallback."
-argv = ["node", "-p", "process.execPath.includes('system-bin')"]
-envs = [
-  ["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-[[case.steps]]
-comment = "Internal Node resolution agrees with PATH."
-argv = ["node", "assert-node-resolution.cjs"]
-envs = [
-  ["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-# Turn off pnpm as a family, then refresh without resetting either preference.
-[[case.steps]]
-argv = ["vp", "env", "off", "pnpm"]
-
-[[case.steps]]
-comment = "pnpm and pnpx move together; other families and vpx/vpr stay managed."
-argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"]
-envs = [
-  ["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-[[case.steps]]
-argv = ["vp", "env", "setup", "--refresh"]
-snapshot = false
-
-[[case.steps]]
-comment = "Refresh preserves saved choices."
-argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"]
-envs = [
-  ["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-# Reverse PATH deliberately: reaching the fallback shim must select managed Node.
-[[case.steps]]
-comment = "A fallback shim before system Node selects managed Node."
-argv = ["node", "-p", "process.execPath.includes('system-bin')"]
-envs = [
-  ["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-[[case.steps]]
-comment = "Internal resolution must also stop at the first Vite+ shim."
-argv = ["node", "assert-node-resolution.cjs"]
-envs = [
-  ["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-# Restore Node first, then pnpm; each change must leave the other preference intact.
-[[case.steps]]
-argv = ["vp", "env", "on", "node"]
-
-[[case.steps]]
-comment = "Restoring Node leaves the pnpm preference intact and removes its old fallback entry."
-argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"]
-envs = [
-  ["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-[[case.steps]]
-comment = "Managed Node takes precedence again."
-argv = ["node", "-p", "process.execPath.includes('system-bin')"]
-envs = [
-  ["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-[[case.steps]]
-argv = ["vp", "env", "on", "pnpm"]
-
-[[case.steps]]
-comment = "Restoring pnpm empties fallback again."
-argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"]
-envs = [
-  ["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"],
+  # Restore each family independently; fallback should end up empty.
+  ["vp", "env", "on", "node"],
+  { argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "Restoring Node leaves the pnpm preference intact and removes its old fallback entry." },
+  { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed Node takes precedence again." },
+  ["vp", "env", "on", "pnpm"],
+  { argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "Restoring pnpm empties fallback again." },
 ]
 
 [[case]]
 name = "foreign_manager_falls_back_without_recursion"
 vp = "global"
-
-# Create an external manager that forwards to the Vite+ fallback without changing PATH.
-[[case.steps]]
-argv = ["node", "setup-foreign-manager.cjs"]
-snapshot = false
-
-[[case.steps]]
-argv = ["vp", "env", "off", "node"]
-
-# Piped execution supports the Windows .cmd manager, which ConPTY cannot launch directly.
-[[case.steps]]
-comment = "The external manager forwards to the managed fallback without re-entering itself."
-argv = ["node", "--version"]
-envs = [
-  ["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"],
-]
-tty = false
-
-# Repeat with a retained injection marker, the condition that previously risked recursion.
-[[case.steps]]
-comment = "An inherited injection marker must not cause recursion either."
-argv = ["node", "--version"]
-envs = [
-  ["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"],
-  ["VP_PATH_INJECTED_TOOLS", "node"],
-]
-tty = false
-
-[[case.steps]]
-comment = "env exec still runs managed Node when the inherited PATH contains the external manager."
-argv = ["vp", "env", "exec", "node", "--version"]
-envs = [
-  ["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"],
+steps = [
+  # The external manager forwards to Vite+ without removing itself from PATH.
+  { argv = ["node", "setup-foreign-manager.cjs"], snapshot = false },
+  ["vp", "env", "off", "node"],
+  # Piped std::process execution handles the Windows .cmd manager; ConPTY cannot launch it directly.
+  { argv = ["node", "--version"], tty = false, envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "The external manager forwards to the managed fallback without re-entering itself." },
+  { argv = ["node", "--version"], tty = false, envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"], ["VP_PATH_INJECTED_TOOLS", "node"]], comment = "An inherited injection marker must not cause recursion either." },
+  { argv = ["vp", "env", "exec", "node", "--version"], envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "env exec still runs managed Node when the inherited PATH contains the external manager." },
 ]
 
 [[case]]
 name = "split_layout_preserves_foreign_tools"
 vp = "global"
-# Windows known-folder config paths cannot be isolated by HOME/APPDATA overrides.
+# Windows resolves config through OS known folders, which HOME/APPDATA overrides do not isolate.
 skip-platforms = ["windows"]
 requires = ["sh"]
+steps = [
+  # Prepare isolated roots and an existing foreign Node in shared-bin.
+  { argv = ["vpt", "mkdir", "-p", "data/current"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "$VP_HOME/current/bin", "data/current/bin"], comment = "Copy the installed CLI and its setup marker into the split data root.", snapshot = false },
+  { argv = ["node", "setup-split-layout.cjs"], snapshot = false },
 
-# Prepare separate bin/data/cache roots and a real foreign Node in shared-bin.
-[[case.steps]]
-argv = ["vpt", "mkdir", "-p", "data/current"]
-snapshot = false
+  # Setup must preserve the foreign Node and generate the split shell PATH.
+  { argv = ["vp", "env", "setup", "--refresh"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"], ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"]], snapshot = false },
+  { argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"], comment = "Setup preserves the existing executable in the shared bin." },
+  { argv = ["sh", "split.sh"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"]], comment = "The generated shell script puts shared bin first and data-root fallback last." },
+  { argv = ["node", "-p", "process.execPath.includes('shared-bin')"], envs = [["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"]], comment = "The foreign Node remains executable." },
 
-[[case.steps]]
-comment = "Copy the installed CLI and its setup marker into the split data root."
-argv = ["vpt", "cp", "-r", "$VP_HOME/current/bin", "data/current/bin"]
-snapshot = false
+  # System-first adds a fallback under data while keeping the foreign Node intact.
+  { argv = ["vp", "env", "off", "node"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"], ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"]], snapshot = false },
+  { argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"], comment = "System-first Node lives under the data root." },
+  { argv = ["node", "-p", "process.execPath.includes('shared-bin')"], envs = [["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"]], comment = "The foreign Node remains executable." },
+  { argv = ["node", "-p", "process.env.VP_BIN_DIR === require('node:path').resolve('shared-bin')"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["PATH", "${workspace}/data/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "The split fallback executes managed Node with the configured main bin root." },
 
-[[case.steps]]
-argv = ["node", "setup-split-layout.cjs"]
-snapshot = false
+  # Refresh must retain the saved placement and the foreign executable.
+  { argv = ["vp", "env", "setup", "--refresh"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"], ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"]], snapshot = false },
+  { argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"], comment = "Refresh preserves both placement and the foreign Node." },
+  { argv = ["node", "-p", "process.execPath.includes('shared-bin')"], envs = [["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"]], comment = "The foreign Node remains executable." },
 
-# Install into the split layout. Isolate HOME/config and bypass the original bin wrapper.
-[[case.steps]]
-argv = ["vp", "env", "setup", "--refresh"]
-envs = [
-  ["HOME", "${workspace}/user"],
-  ["VP_HOME", ""],
-  ["VP_BIN_DIR", "${workspace}/shared-bin"],
-  ["VP_DATA_DIR", "${workspace}/data"],
-  ["VP_CACHE_DIR", "${workspace}/cache"],
-  ["XDG_CONFIG_HOME", "${workspace}/config"],
-  ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"],
-]
-snapshot = false
-
-[[case.steps]]
-comment = "Setup preserves the existing executable in the shared bin."
-argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"]
-
-[[case.steps]]
-comment = "The generated shell script puts shared bin first and data-root fallback last."
-argv = ["sh", "split.sh"]
-envs = [
-  ["HOME", "${workspace}/user"],
-  ["VP_HOME", ""],
-  ["VP_BIN_DIR", "${workspace}/shared-bin"],
-  ["VP_DATA_DIR", "${workspace}/data"],
-  ["VP_CACHE_DIR", "${workspace}/cache"],
-  ["XDG_CONFIG_HOME", "${workspace}/config"],
+  # Switching back removes the fallback without overwriting the foreign Node.
+  { argv = ["vp", "env", "on", "node"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"], ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"]], snapshot = false },
+  { argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"], comment = "Managed mode must not overwrite a foreign executable either." },
+  { argv = ["node", "-p", "process.execPath.includes('shared-bin')"], envs = [["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"]], comment = "The foreign Node remains executable." },
 ]
 
-[[case.steps]]
-comment = "The foreign Node remains executable."
-argv = ["node", "-p", "process.execPath.includes('shared-bin')"]
-envs = [
-  ["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-# Switch Node to system-first: preserve the foreign executable and add a data-root fallback.
-[[case.steps]]
-argv = ["vp", "env", "off", "node"]
-envs = [
-  ["HOME", "${workspace}/user"],
-  ["VP_HOME", ""],
-  ["VP_BIN_DIR", "${workspace}/shared-bin"],
-  ["VP_DATA_DIR", "${workspace}/data"],
-  ["VP_CACHE_DIR", "${workspace}/cache"],
-  ["XDG_CONFIG_HOME", "${workspace}/config"],
-  ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"],
-]
-snapshot = false
-
-[[case.steps]]
-comment = "System-first Node lives under the data root."
-argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"]
-
-[[case.steps]]
-comment = "The foreign Node remains executable."
-argv = ["node", "-p", "process.execPath.includes('shared-bin')"]
-envs = [
-  ["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-[[case.steps]]
-comment = "The split fallback executes managed Node with the configured main bin root."
-argv = ["node", "-p", "process.env.VP_BIN_DIR === require('node:path').resolve('shared-bin')"]
-envs = [
-  ["HOME", "${workspace}/user"],
-  ["VP_HOME", ""],
-  ["VP_BIN_DIR", "${workspace}/shared-bin"],
-  ["VP_DATA_DIR", "${workspace}/data"],
-  ["VP_CACHE_DIR", "${workspace}/cache"],
-  ["PATH", "${workspace}/data/fallback-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-# Refresh must retain the saved placement and the foreign executable.
-[[case.steps]]
-argv = ["vp", "env", "setup", "--refresh"]
-envs = [
-  ["HOME", "${workspace}/user"],
-  ["VP_HOME", ""],
-  ["VP_BIN_DIR", "${workspace}/shared-bin"],
-  ["VP_DATA_DIR", "${workspace}/data"],
-  ["VP_CACHE_DIR", "${workspace}/cache"],
-  ["XDG_CONFIG_HOME", "${workspace}/config"],
-  ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"],
-]
-snapshot = false
-
-[[case.steps]]
-comment = "Refresh preserves both placement and the foreign Node."
-argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"]
-
-[[case.steps]]
-comment = "The foreign Node remains executable."
-argv = ["node", "-p", "process.execPath.includes('shared-bin')"]
-envs = [
-  ["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"],
-]
-
-# Switch back to managed mode: remove the fallback without replacing foreign Node.
-[[case.steps]]
-argv = ["vp", "env", "on", "node"]
-envs = [
-  ["HOME", "${workspace}/user"],
-  ["VP_HOME", ""],
-  ["VP_BIN_DIR", "${workspace}/shared-bin"],
-  ["VP_DATA_DIR", "${workspace}/data"],
-  ["VP_CACHE_DIR", "${workspace}/cache"],
-  ["XDG_CONFIG_HOME", "${workspace}/config"],
-  ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"],
-]
-snapshot = false
-
-[[case.steps]]
-comment = "Managed mode must not overwrite a foreign executable either."
-argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"]
-
-[[case.steps]]
-comment = "The foreign Node remains executable."
-argv = ["node", "-p", "process.execPath.includes('shared-bin')"]
-envs = [
-  ["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"],
-]
-
+# Bash command-cache behavior needs a persistent Unix shell; placement and recursion run on all platforms.
 [[case]]
 name = "bash_path_precedence_and_cache"
 vp = "global"
 skip-platforms = ["windows"]
 requires = ["bash"]
-
-# Keep same-shell checks here: separate process steps cannot exercise the Bash command cache.
-[[case.steps]]
-comment = "Reloading env is idempotent; mode changes invalidate Bash command paths."
-argv = ["bash", "placement.sh"]
+steps = [
+  { argv = ["bash", "placement.sh"], comment = "Reloading env is idempotent; mode changes invalidate Bash command paths." },
+]
