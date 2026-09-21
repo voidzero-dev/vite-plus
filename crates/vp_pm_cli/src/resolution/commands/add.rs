@@ -54,7 +54,7 @@ pub struct AddArgs {
     pub(crate) no_frozen_lockfile: bool,
 
     /// Only update lockfile, don't install
-    #[arg(long, conflicts_with = "global", not_supported(yarn < "2"))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn < "3"))]
     pub(crate) lockfile_only: bool,
 
     /// Use cached packages when available

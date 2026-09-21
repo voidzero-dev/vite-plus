@@ -65,6 +65,38 @@ steps = [
 ]
 
 [[case]]
+name = "yarn_2_drops_lockfile_only"
+vp = "global"
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0", YARN_NODE_LINKER = "node-modules" }
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@2.4.2"], snapshot = false },
+  { argv = ["vp", "add", "./dep", "--lockfile-only"], comment = "Yarn 2 warns and installs normally because add does not support --mode" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["node", "-p", "require('./node_modules/install-option-dep/package.json').version"],
+  { argv = ["vpt", "rm", "-rf", "node_modules", "yarn.lock", ".yarn"], snapshot = false },
+  { argv = ["vp", "install", "./dep-v2", "--lockfile-only"], comment = "positional install uses the same warning-and-drop policy" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["node", "-p", "require('./node_modules/install-option-dep/package.json').version"],
+]
+
+[[case]]
+name = "yarn_3_lockfile_only"
+vp = "global"
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0", YARN_NODE_LINKER = "node-modules" }
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@3.0.0"], snapshot = false },
+  { argv = ["vp", "add", "./dep", "--lockfile-only"], comment = "Yarn 3 supports update-lockfile without installing packages" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-rf", "yarn.lock", ".yarn"], snapshot = false },
+  { argv = ["vp", "install", "./dep-v2", "--lockfile-only"], comment = "positional install preserves lockfile-only at the first supported Yarn release" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+]
+
+[[case]]
 name = "yarn_berry_lockfile_only"
 vp = "global"
 env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
