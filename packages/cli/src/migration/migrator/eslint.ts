@@ -9,6 +9,7 @@ import { rewriteEslint } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
+import { fetchNpmResource, getNpmRegistry } from '../../utils/npm-config.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
@@ -104,6 +105,41 @@ function extractSkippedRules(output: Buffer): string | undefined {
 }
 
 /**
+ * Resolve the `@oxlint/migrate` version to dlx. The pin tracks the bundled
+ * oxlint version, but upstream does not publish `@oxlint/migrate` for every
+ * oxlint release — when the exact pin is missing from the registry, fall back
+ * to its `latest` dist-tag. Any registry failure keeps the pin so `vp dlx`
+ * surfaces its own resolution error.
+ */
+export async function resolveOxlintMigrateVersion(pinnedVersion: string): Promise<string> {
+  try {
+    // npm's registry URLs keep `@` and `/` unencoded; see org-manifest.ts.
+    const url = `${getNpmRegistry('@oxlint')}/@oxlint/migrate`;
+    const response = await fetchNpmResource(url, {
+      headers: { accept: 'application/json' },
+      timeoutMs: 5000,
+    });
+    if (!response.ok) {
+      return pinnedVersion;
+    }
+    const packument = (await response.json()) as {
+      'dist-tags'?: { latest?: unknown };
+      versions?: Record<string, unknown>;
+    };
+    if (packument.versions && pinnedVersion in packument.versions) {
+      return pinnedVersion;
+    }
+    const latest = packument['dist-tags']?.latest;
+    if (typeof latest === 'string' && latest) {
+      return latest;
+    }
+  } catch {
+    // Offline or registry hiccup — keep the pin; `vp dlx` reports the failure.
+  }
+  return pinnedVersion;
+}
+
+/**
  * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
  * Returns true on success, false on failure (spawn error or non-zero exit).
  */
@@ -152,10 +188,12 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
-    // Pin @oxlint/migrate to the bundled oxlint version.
+    // Pin @oxlint/migrate to the bundled oxlint version when upstream
+    // published it; otherwise use the latest published @oxlint/migrate.
     // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
     const { versions } = await import('../versions.js');
-    const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
+    const migrateVersion = await resolveOxlintMigrateVersion(versions.oxlint);
+    const migratePackage = `@oxlint/migrate@${migrateVersion}`;
     const migrateArgs = [
       '--merge',
       ...(!hasBaseUrlInTsconfig(projectPath) ? ['--type-aware'] : []),
