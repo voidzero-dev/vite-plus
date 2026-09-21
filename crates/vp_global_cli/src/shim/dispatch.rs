@@ -733,8 +733,10 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
 
     // Preserve an already selected managed executable, including direct calls to a shim from its children.
     // External manager shims must not be re-entered here: they may have fallen back to us.
-    if env.contains(tool)
-        && let Some(path) = find_system_tool(tool)
+    let inherited_tool =
+        PackageManagerType::from_tool(tool).map_or(tool, |kind| kind.bin_name_for_tool(tool));
+    if env.contains(inherited_tool)
+        && let Some(path) = find_system_tool(inherited_tool)
         && let Ok(target) = path.as_path().canonicalize()
         && ["js_runtime", "package_manager"].iter().any(|directory| {
             vp_shared::EnvConfig::get()

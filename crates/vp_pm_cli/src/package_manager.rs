@@ -57,13 +57,13 @@ impl fmt::Display for PackageManagerType {
 }
 
 impl PackageManagerType {
-    /// Map an invoked shim tool name (including aliases like `npx`, `pnpx`,
+    /// Map an invoked shim tool name (including aliases like `npx`, `pn`, `pnpx`, `pnx`,
     /// `yarnpkg`, `bunx`) to the package-manager family that provides it.
     #[must_use]
     pub fn from_tool(tool: &str) -> Option<Self> {
         match tool {
             "npm" | "npx" => Some(Self::Npm),
-            "pnpm" | "pnpx" => Some(Self::Pnpm),
+            "pnpm" | "pn" | "pnpx" | "pnx" => Some(Self::Pnpm),
             "yarn" | "yarnpkg" => Some(Self::Yarn),
             "bun" | "bunx" => Some(Self::Bun),
             _ => None,
@@ -86,12 +86,13 @@ impl PackageManagerType {
     }
 
     /// Resolve the bin file name for an invoked tool, preserving alias names
-    /// that the managed PM installs alongside its primary binary.
+    /// that the managed PM installs alongside its primary binary. The short pnpm
+    /// aliases use the existing binaries so cached and pre-v11 installations work.
     #[must_use]
     pub fn bin_name_for_tool(self, tool: &str) -> &'static str {
         match (tool, self) {
             ("npx", Self::Npm) => "npx",
-            ("pnpx", Self::Pnpm) => "pnpx",
+            ("pnpx" | "pnx", Self::Pnpm) => "pnpx",
             ("yarnpkg", Self::Yarn) => "yarnpkg",
             ("bunx", Self::Bun) => "bunx",
             (_, Self::Npm) => "npm",
@@ -1968,6 +1969,8 @@ mod tests {
         assert_eq!(PackageManagerType::from_tool("npx"), Some(PackageManagerType::Npm));
         assert_eq!(PackageManagerType::from_tool("pnpm"), Some(PackageManagerType::Pnpm));
         assert_eq!(PackageManagerType::from_tool("pnpx"), Some(PackageManagerType::Pnpm));
+        assert_eq!(PackageManagerType::from_tool("pn"), Some(PackageManagerType::Pnpm));
+        assert_eq!(PackageManagerType::from_tool("pnx"), Some(PackageManagerType::Pnpm));
         assert_eq!(PackageManagerType::from_tool("yarn"), Some(PackageManagerType::Yarn));
         assert_eq!(PackageManagerType::from_tool("yarnpkg"), Some(PackageManagerType::Yarn));
         assert_eq!(PackageManagerType::from_tool("bun"), Some(PackageManagerType::Bun));
@@ -2247,6 +2250,8 @@ mod tests {
         assert_eq!(PackageManagerType::Npm.bin_name_for_tool("npx"), "npx");
         assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnpm"), "pnpm");
         assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnpx"), "pnpx");
+        assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pn"), "pnpm");
+        assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnx"), "pnpx");
         assert_eq!(PackageManagerType::Yarn.bin_name_for_tool("yarn"), "yarn");
         assert_eq!(PackageManagerType::Yarn.bin_name_for_tool("yarnpkg"), "yarnpkg");
         assert_eq!(PackageManagerType::Bun.bin_name_for_tool("bun"), "bun");

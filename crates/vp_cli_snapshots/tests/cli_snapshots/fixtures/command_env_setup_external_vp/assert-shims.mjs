@@ -9,6 +9,8 @@ const shims = [
   'npx',
   'pnpm',
   'pnpx',
+  'pn',
+  'pnx',
   'yarn',
   'yarnpkg',
   'bun',

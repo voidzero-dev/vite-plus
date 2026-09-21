@@ -45,6 +45,8 @@ Created Shims:
   <workspace>/home/bin/npx
   <workspace>/home/bin/pnpm
   <workspace>/home/bin/pnpx
+  <workspace>/home/bin/pn
+  <workspace>/home/bin/pnx
   <workspace>/home/bin/yarn
   <workspace>/home/bin/yarnpkg
   <workspace>/home/bin/bun
