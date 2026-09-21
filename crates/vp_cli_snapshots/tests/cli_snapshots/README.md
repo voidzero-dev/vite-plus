@@ -61,6 +61,15 @@ CI runs three shards per platform. Linux and macOS use `VP_SNAP_SHARD=1/3`
 happens before name filtering, so filtered runs keep the same assignment.
 Leave the variable unset to run the whole suite. Windows uses the existing
 nextest runner with `--partition hash:1/3` (then `2/3` and `3/3`).
+Each CI shard uses eight workers so process and network waits can overlap.
+Local runs retain libtest's default worker count; override it with
+`--test-threads <count>`.
+
+Within each shard, the in-process runner executes parallel cases before isolated
+cases. This keeps workers available for ready work instead of blocking them on
+the execution gate. Shard membership and test listing order stay unchanged.
+The existing gate still protects `serial = true` and Ctrl-C cases, including
+against other runner processes.
 
 Environment overrides, mainly for CI:
 
@@ -79,6 +88,17 @@ Environment overrides, mainly for CI:
 | `VP_SNAP_SKIP_FLAVORS`      | Comma-separated flavors to skip registering (e.g. `local`)                    |
 | `VP_SNAP_PACKAGES_DIR`      | Run-scoped directory for sharing packed packages across test processes        |
 | `VP_SNAP_ARTIFACTS_DIR`     | Directory for phase timings and failure diagnostics; unset disables artifacts |
+| `VP_SNAP_NEXTEST_CONFIG`    | With `--list`, write nextest overrides for the discovered isolated cases      |
+
+Windows CI generates its nextest configuration from the same case definitions.
+The overrides reserve all test workers for an isolated case and schedule these
+cases last. The file lock remains a fallback when running without the generated
+configuration. To use these overrides locally:
+
+```bash
+VP_SNAP_NEXTEST_CONFIG=target/snapshot-nextest.toml cargo nextest list -p vp_cli_snapshots
+cargo nextest run -p vp_cli_snapshots --config-file target/snapshot-nextest.toml
+```
 
 `VP_SNAP_PACKAGES_DIR` packs the checkout on the first registry case, under a
 cross-process file lock. Later cases reuse the completed tarballs. Use a fresh
@@ -97,6 +117,10 @@ rendering, comparison, and cleanup. `registry-pack` appears only in the process
 that actually packs; it is nested inside `registry-pack-or-reuse`. Phase
 durations are milliseconds; nested phases must not be added together. The
 existing console timings still exclude gate waiting.
+
+`workspace-cleanup` removes the case workspace after comparison, while other
+workers can still run tests. The final `run-cleanup` removes shared run files and
+any case files left by a panic or an unsuccessful earlier cleanup attempt.
 
 Failed cases also write `error.txt`, `expected.md` (when present), `actual.md`
 (when a complete or partial snapshot was rendered), and `output.txt`. The output

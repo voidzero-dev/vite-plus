@@ -20,10 +20,11 @@ mod flavor;
 mod redact;
 mod registry_pack;
 mod report;
+mod schedule;
 mod shard;
 
 use std::{
-    collections::{BTreeMap, hash_map::DefaultHasher},
+    collections::{BTreeMap, BTreeSet, hash_map::DefaultHasher},
     ffi::OsString,
     fs::{File, OpenOptions},
     hash::{Hash, Hasher},
@@ -1187,9 +1188,8 @@ fn start_local_registry(
 )]
 fn run_case(
     tmpdir: &Path,
+    case_root: &Path,
     fixture_path: &Path,
-    fixture_name: &str,
-    case_index: usize,
     case: &Case,
     flavor: Flavor,
     runtime: &FlavorRuntime,
@@ -1202,7 +1202,6 @@ fn run_case(
     // Copy the fixture to a per-case staging directory so the test runs in
     // isolation and workspace-root discovery doesn't walk past the fixture.
     let staging_phase = report.phase("fixture-staging");
-    let case_root = tmpdir.join(format!("{fixture_name}_case_{case_index}_{}", flavor.as_str()));
     let stage = case_root.join("workspace");
     std::fs::create_dir_all(&stage).unwrap();
     if case.link_node_modules {
@@ -1217,7 +1216,7 @@ fn run_case(
 
     drop(staging_phase);
     let setup_phase = report.phase("case-setup");
-    let case_home = CaseHome::provision(&case_root, case.seed_runtime);
+    let case_home = CaseHome::provision(case_root, case.seed_runtime);
     let case_install = case_home.provision_vite_plus(flavor, runtime)?;
     drop(setup_phase);
 
@@ -1785,6 +1784,7 @@ fn main() {
     let local_build_present = flavor::repo_root().join("packages/cli/dist/bin.js").is_file();
 
     let mut tests: Vec<libtest_mimic::Trial> = Vec::new();
+    let mut isolated_trials = BTreeSet::new();
     for fixture_path in fixture_paths {
         let fixture_path: Arc<Path> = Arc::from(fixture_path.as_path());
         let fixture_name: Arc<str> = Arc::from(fixture_path.file_name().unwrap().to_str().unwrap());
@@ -1821,6 +1821,9 @@ fn main() {
                     || required_tool_missing
                     || (case.local_registry && !local_build_present);
                 let isolated = case_needs_isolation(&case);
+                if isolated {
+                    isolated_trials.insert(trial_name.clone());
+                }
                 let timings = Arc::clone(&timings);
                 let timing_name = trial_name.clone();
                 let artifact_dir = artifacts
@@ -1846,18 +1849,29 @@ fn main() {
                                 None
                             };
                             drop(pack_phase);
-                            run_case(
+                            let case_root = tmp_dir_path.join(format!(
+                                "{fixture_name}_case_{case_index}_{}",
+                                flavor.as_str()
+                            ));
+                            let result = run_case(
                                 &tmp_dir_path,
+                                &case_root,
                                 &fixture_path,
-                                &fixture_name,
-                                case_index,
                                 &case,
                                 flavor,
                                 runtime,
                                 &snapshot_name,
                                 local_registry_pack.as_deref(),
                                 &report,
-                            )
+                            );
+                            // Reclaim each workspace while other workers can
+                            // still make progress, instead of deleting every
+                            // installed dependency in one serial tail. The run
+                            // TempDir remains a fallback after panics or files
+                            // that are still open during this first attempt.
+                            let _cleanup_phase = report.phase("workspace-cleanup");
+                            let _ = std::fs::remove_dir_all(&case_root);
+                            result
                         })();
                         timings.lock().unwrap().push((timing_name, started.elapsed()));
                         let artifact_result = report.finish(
@@ -1872,9 +1886,25 @@ fn main() {
         }
     }
 
+    if args.list
+        && let Some(path) = std::env::var_os("VP_SNAP_NEXTEST_CONFIG")
+    {
+        std::fs::write(&path, schedule::nextest_config(isolated_trials.iter().map(String::as_str)))
+            .unwrap_or_else(|error| {
+                panic!("failed to write nextest config {}: {error}", Path::new(&path).display())
+            });
+    }
+
     if let Some(shard) = std::env::var_os("VP_SNAP_SHARD") {
         let shard = shard.to_str().expect("VP_SNAP_SHARD must be valid UTF-8");
         tests = shard::select(tests, shard).unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    if !args.list {
+        // A worker waiting for exclusive access cannot run another ready case.
+        // Finish parallel work first, then take the existing exclusive leases.
+        // Keep discovery and shard membership independent of execution order.
+        tests.sort_by_key(|trial| isolated_trials.contains(trial.name()));
     }
 
     drop(discovery_phase);
