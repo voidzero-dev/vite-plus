@@ -104,6 +104,10 @@ pub(crate) async fn execute_for_binary(
     // Ensure bin directory exists
     tokio::fs::create_dir_all(bin_dir).await?;
 
+    // Inspect the old layout before cleanup or shim creation changes ownership.
+    let mut settings = super::config::load_config().await?;
+    initialize_package_manager_shim_modes(current_exe, &mut settings).await?;
+
     if refresh {
         cleanup_legacy_package_manager_installs(&bin_dir).await;
     }
@@ -114,7 +118,6 @@ pub(crate) async fn execute_for_binary(
     // Create wrapper script in bin/
     setup_vp_wrapper(current_exe, bin_dir, refresh_entrypoints).await?;
 
-    let settings = super::config::load_config().await?;
     let (created, skipped) =
         refresh_shims(current_exe, &settings, refresh, refresh_entrypoints).await?;
 
@@ -157,6 +160,53 @@ pub(crate) async fn execute_for_binary(
     Ok(ExitStatus::default())
 }
 
+/// Complete preferences once, while the pre-upgrade shim layout is still available.
+/// Existing main-bin shims must stay there: a parent shell can have cached them.
+async fn initialize_package_manager_shim_modes(
+    current_exe: &std::path::Path,
+    settings: &mut super::config::Config,
+) -> Result<(), Error> {
+    use super::{config::ShimMode, package_manager::ALL_PACKAGE_MANAGERS};
+
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    let mut changed = false;
+    for kind in ALL_PACKAGE_MANAGERS {
+        if settings.configured_package_manager_shim_mode_for(kind).is_some() {
+            continue;
+        }
+
+        let mut managed = false;
+        let mut system_first = false;
+        for tool in kind.bin_names() {
+            let main_shim = dirs.bin.join(shim_filename(tool));
+            // Older global installs can use direct package links rather than vp shims.
+            let legacy_install = tokio::fs::symlink_metadata(&main_shim).await.is_ok()
+                && BinConfig::load(tool).await?.is_some_and(|config| {
+                    LEGACY_PACKAGE_MANAGER_PACKAGES.contains(&config.package.as_str())
+                });
+            managed |= is_owned_shim(&main_shim, current_exe) || legacy_install;
+            system_first |=
+                is_owned_shim(&dirs.fallback_bin().join(shim_filename(tool)), current_exe)
+                    || crate::shim::dispatch::find_system_tool(tool).is_some();
+        }
+        let mode = if managed || !system_first { ShimMode::Managed } else { ShimMode::SystemFirst };
+        settings.set_package_manager_shim_mode(kind, mode);
+        changed = true;
+    }
+    if changed {
+        super::config::save_config(settings).await?;
+    }
+    Ok(())
+}
+
+fn is_owned_shim(path: &vt_path::AbsolutePath, current_exe: &std::path::Path) -> bool {
+    crate::commands::global::install::is_vp_shim_target(path)
+        || (std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
+            && std::fs::canonicalize(path).is_ok_and(|target| {
+                std::fs::canonicalize(current_exe).is_ok_and(|source| source == target)
+            }))
+}
+
 /// Resolve placement independently for Node.js and each package-manager family.
 pub(super) fn shim_dir(settings: &super::config::Config, tool: &str) -> vt_path::AbsolutePathBuf {
     let dirs = &vp_shared::EnvConfig::get().dirs;
@@ -184,13 +234,7 @@ pub(crate) async fn refresh_shims(
     let fallback_bin = dirs.fallback_bin();
     tokio::fs::create_dir_all(&dirs.bin).await?;
     tokio::fs::create_dir_all(&fallback_bin).await?;
-    let owns_shim = |path: &vt_path::AbsolutePath| {
-        crate::commands::global::install::is_vp_shim_target(path)
-            || (std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
-                && std::fs::canonicalize(path).is_ok_and(|target| {
-                    std::fs::canonicalize(current_exe).is_ok_and(|source| source == target)
-                }))
-    };
+    let owns_shim = |path: &vt_path::AbsolutePath| is_owned_shim(path, current_exe);
     let mut created = Vec::new();
     let mut skipped = Vec::new();
     for tool in crate::shim::DEFAULT_SHIM_TOOLS {
@@ -2209,6 +2253,11 @@ mod tests {
                 let trampoline = write_fake_trampoline(temp_dir.path());
 
                 tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+                // This test covers cleanup; make placement independent of the host PATH.
+                let mut settings = super::super::config::Config::default();
+                settings
+                    .set_all_package_manager_shim_modes(super::super::config::ShimMode::Managed);
+                super::super::config::save_config(&settings).await.unwrap();
                 let mut package_dirs = Vec::new();
                 for package_name in LEGACY_PACKAGE_MANAGER_PACKAGES {
                     let mut metadata = PackageMetadata::new(

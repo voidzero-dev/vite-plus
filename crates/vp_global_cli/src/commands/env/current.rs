@@ -180,7 +180,7 @@ async fn resolve_package_manager_info(
             .bin_names()
             .iter()
             .filter_map(|name| {
-                crate::shim::dispatch::find_system_first_tool(name)
+                crate::shim::dispatch::find_system_tool(name)
                     .map(|path| ((*name).to_string(), path.as_path().display().to_string()))
             })
             .collect::<BTreeMap<_, _>>();

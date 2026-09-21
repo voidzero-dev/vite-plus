@@ -370,8 +370,7 @@ async fn check_package_manager_resolution(
     };
 
     if config.package_manager_shim_mode_for(selected_type) == ShimMode::SystemFirst
-        && let Some(system_binary) =
-            shim::dispatch::find_system_first_tool(&selected_type.to_string())
+        && let Some(system_binary) = shim::find_system_tool(&selected_type.to_string())
     {
         let Some(version) = try_get_tool_version(&system_binary).await else {
             print_check(" ", "Source", "system PATH");

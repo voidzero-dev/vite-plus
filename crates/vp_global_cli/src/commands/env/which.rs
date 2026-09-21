@@ -40,7 +40,7 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
         config.node_shim_mode
     };
     if mode == ShimMode::SystemFirst
-        && let Some(path) = shim::dispatch::find_system_first_tool(tool)
+        && let Some(path) = shim::dispatch::find_system_tool(tool)
     {
         println!("{}", path.as_path().display());
         return Ok(ExitStatus::default());
