@@ -67,7 +67,8 @@ Local runs retain libtest's default worker count; override it with
 
 Within each shard, the in-process runner executes parallel cases before isolated
 cases. This keeps workers available for ready work instead of blocking them on
-the execution gate. Shard membership and test listing order stay unchanged.
+the execution gate. Scheduling happens after partitioning and does not change
+shard membership or test listing order.
 The existing gate still protects `serial = true` and Ctrl-C cases, including
 against other runner processes.
 
@@ -99,7 +100,7 @@ cases last. The file lock remains a fallback when running without the generated
 configuration. To use these overrides locally:
 
 ```bash
-VP_SNAP_NEXTEST_CONFIG=target/snapshot-nextest.toml cargo nextest list -p vp_cli_snapshots
+VP_SNAP_NEXTEST_CONFIG="$PWD/target/snapshot-nextest.toml" cargo nextest list -p vp_cli_snapshots
 cargo nextest run -p vp_cli_snapshots --config-file target/snapshot-nextest.toml
 ```
 
