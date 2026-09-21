@@ -1,4 +1,38 @@
 [[case]]
+name = "system_choice_preserves_bash_command_cache"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["bash", "--noprofile", "--norc", "bash-cache.sh"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "The first-use choice must leave Bash's cached pnpm executable usable for the next direct call.", interactions = [
+    { "expect-milestone" = "pm-shim-choice:pnpm" },
+    { "write-key" = "down" },
+    { "write-key" = "enter" },
+  ] },
+]
+
+[[case]]
+name = "all_system_choices_preserve_bash_command_cache"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/config.json"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpx"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/yarn"], snapshot = false },
+  { argv = ["bash", "--noprofile", "--norc", "bash-cache.sh", "all"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Choosing system tools for all families must also preserve cached aliases and other managers.", interactions = [
+    { "expect-milestone" = "pm-shim-choice:pnpm" },
+    { "write-key" = "down" },
+    { "write-key" = "down" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "The choice applies to every package-manager family." },
+]
+
+[[case]]
 name = "prefers_existing_family_and_records_choice"
 vp = "global"
 skip-platforms = ["windows"]
@@ -11,8 +45,8 @@ steps = [
     { "write-key" = "down" },
     { "write-key" = "enter" },
   ] },
-  { argv = ["vpt", "stat-file", "$VP_HOME/bin/pnpm", "--assert", "missing"], snapshot = false },
-  { argv = ["vpt", "stat-file", "$VP_HOME/fallback-bin/pnpm", "--assert", "symlink"], snapshot = false },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/pnpm", "--assert", "symlink"], snapshot = false },
+  { argv = ["vpt", "stat-file", "$VP_HOME/fallback-bin/pnpm", "--assert", "missing"], snapshot = false },
   { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "the explicit system choice records only pnpm" },
   { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "later pnpm invocations use the recorded choice without prompting" },
   { argv = ["yarn", "--version"], snapshot = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], interactions = [
@@ -21,6 +55,20 @@ steps = [
     { "write-key" = "enter" },
   ] },
   { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "Yarn records its own decision without changing pnpm" },
+  { argv = ["pnpm", "--version"], tty = false, envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "The retained shim also honors the saved choice without a terminal." },
+  { argv = ["vp", "env", "which", "pnpm"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Internal resolution agrees with the retained shim." },
+  { argv = ["vpt", "cp", "system-dispatch-bin/pnpm", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "write-file", "package.json", "{\"name\":\"legacy-system-choice\",\"private\":true,\"packageManager\":\"pnpm@10.18.0\"}\n"], snapshot = false },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "Package-manager commands use the saved system choice before shim relocation." },
+  { argv = ["vp", "env", "exec", "--node", "20.18.0", "pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "Explicit Node execution also uses the system package manager." },
+  { argv = ["vp", "env", "print", "pnpm"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Shell activation selects the same system directory." },
+  { argv = ["vp", "env", "setup", "--refresh"], snapshot = false },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/pnpm", "--assert", "missing"], snapshot = false },
+  { argv = ["vpt", "stat-file", "$VP_HOME/fallback-bin/pnpm", "--assert", "symlink"], comment = "Explicit setup reconciles the saved choice into fallback-bin." },
+  { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\nprintf 'managed-pnpm\\n'\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm"], snapshot = false },
+  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "A reconciled fallback shim before the system manager still selects managed execution." },
 ]
 
 [[case]]

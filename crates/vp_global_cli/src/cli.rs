@@ -697,8 +697,9 @@ async fn run_package_manager_command(
             .await?
             .package_manager_shim_mode_for(selected.package_manager_type)
             == commands::env::config::ShimMode::SystemFirst
-        && let Some(system_path) =
-            crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())
+        && let Some(system_path) = crate::shim::dispatch::find_system_first_tool(
+            &selected.package_manager_type.to_string(),
+        )
         && let Some(manager) =
             system_package_manager(selected.package_manager_type, &system_path).await
     {

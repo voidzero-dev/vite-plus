@@ -759,7 +759,7 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         return exit_code;
     }
 
-    // After the first-use decision, PATH placement selects system-first precedence.
+    // Reconciled installations select system-first precedence through PATH placement.
 
     // Package binaries use their install-time Node.js version; core shims use
     // the project-resolved runtime below.
@@ -1302,6 +1302,12 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     find_system_tool_in(tool, &cwd)
 }
 
+/// Resolve a system-first preference, including legacy shims awaiting relocation.
+/// Callers must check the configured mode before using this instead of PATH-only resolution.
+pub(crate) fn find_system_first_tool(tool: &str) -> Option<AbsolutePathBuf> {
+    find_system_tool(tool).or_else(|| legacy::find_system_package_manager(tool))
+}
+
 /// `cwd` only resolves relative PATH entries; it is a parameter so tests can
 /// exercise them without mutating the process-wide working directory.
 fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
@@ -1394,8 +1400,9 @@ fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathB
 mod legacy {
     //! Legacy first-use consent for upgrades without saved package-manager preferences.
     //!
-    //! Fresh installations record these preferences during setup. Keep the prompt,
-    //! shim relocation, and one-time system dispatch together for older installations.
+    //! Fresh installations record these preferences during setup. Older installations
+    //! keep their main-bin shims until explicit setup or mode changes relocate them,
+    //! so a first-use decision cannot invalidate the calling shell's command cache.
 
     // TODO: Consider moving first-use consent to `vp upgrade` so the legacy PATH lookup can be removed.
 
@@ -1411,6 +1418,23 @@ mod legacy {
         commands::env::config::{self, ShimMode},
         error::Error,
     };
+
+    /// Only main-bin package-manager shims need compatibility dispatch. Reaching
+    /// a reconciled fallback shim must still select managed execution.
+    pub(super) fn find_system_package_manager(tool: &str) -> Option<AbsolutePathBuf> {
+        PackageManagerType::from_tool(tool)?;
+        let cwd = current_dir().ok()?;
+        let path = std::env::var_os("PATH")?;
+        let resolved = vp_command::resolve_bin(tool, Some(&path), &cwd).ok()?;
+        let bin = &vp_shared::EnvConfig::get().dirs.bin;
+        if resolved.parent() == Some(bin.as_absolute_path())
+            && crate::commands::global::install::is_vp_shim_target(&resolved)
+        {
+            find_external_tool_in(tool, &cwd)
+        } else {
+            None
+        }
+    }
 
     pub(super) async fn dispatch_package_manager(
         tool: &str,
@@ -1486,15 +1510,18 @@ mod legacy {
         Ok(env)
     }
 
-    // Return a system executable only for this first decision; saved modes use PATH placement.
+    // Honor saved system choices while legacy main-bin shims await explicit reconciliation.
     async fn resolve_package_manager_shim_choice(
         tool: &str,
         package_manager: PackageManagerType,
     ) -> Result<Option<AbsolutePathBuf>, Error> {
         let mut settings = config::load_config().await?;
-        if settings.configured_package_manager_shim_mode_for(package_manager).is_some()
-            || !vp_shared::is_interactive_terminal()
-        {
+        if let Some(mode) = settings.configured_package_manager_shim_mode_for(package_manager) {
+            return Ok((mode == ShimMode::SystemFirst)
+                .then(|| find_system_package_manager(tool))
+                .flatten());
+        }
+        if !vp_shared::is_interactive_terminal() {
             return Ok(None);
         }
         let Some(system_path) = find_external_tool_in(tool, &current_dir()?) else {
@@ -1513,9 +1540,8 @@ mod legacy {
         } else {
             settings.set_package_manager_shim_mode(package_manager, mode);
         }
-        // The running shim may be removed while relocating this family. Keep a stable source.
-        let current_exe = std::fs::canonicalize(std::env::current_exe()?)?;
-        crate::commands::env::setup::refresh_shims(&current_exe, &settings, false, false).await?;
+        // The parent shell may have cached any of these shim paths. Leave them in
+        // place until `vp env setup`, `vp env on/off`, or an upgrade reconciles them.
         config::save_config(&settings).await?;
         Ok((mode == ShimMode::SystemFirst).then_some(system_path))
     }

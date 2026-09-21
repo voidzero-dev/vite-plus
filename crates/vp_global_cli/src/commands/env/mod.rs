@@ -169,7 +169,7 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
         let system_bin_dir = selected_type.and_then(|package_manager| {
             if modes.package_manager_shim_mode_for(package_manager) == config::ShimMode::SystemFirst
             {
-                crate::shim::dispatch::find_system_tool(&package_manager.to_string())
+                crate::shim::dispatch::find_system_first_tool(&package_manager.to_string())
                     .and_then(|path| path.parent().map(vt_path::AbsolutePath::to_absolute_path_buf))
             } else {
                 None

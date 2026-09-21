@@ -1,0 +1,2 @@
+#!/bin/sh
+printf 'system-pnpx\n'

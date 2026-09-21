@@ -160,8 +160,9 @@ async fn execute_with_version(
         if let Some(selected) = selected
             && modes.package_manager_shim_mode_for(selected.package_manager_type)
                 == config::ShimMode::SystemFirst
-            && let Some(path) =
-                crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())
+            && let Some(path) = crate::shim::dispatch::find_system_first_tool(
+                &selected.package_manager_type.to_string(),
+            )
             && let Some(bin_dir) = path.parent()
         {
             let system_version =
@@ -195,7 +196,7 @@ async fn execute_with_version(
     } else if let Some((kind, version, hash)) = selected_package_manager {
         if !explicit_package_manager
             && modes.package_manager_shim_mode_for(kind) == config::ShimMode::SystemFirst
-            && let Some(path) = crate::shim::dispatch::find_system_tool(&kind.to_string())
+            && let Some(path) = crate::shim::dispatch::find_system_first_tool(&kind.to_string())
             && let Some(bin_dir) = path.parent()
         {
             let system_version = read_tool_version(&path).await.unwrap_or(version);
