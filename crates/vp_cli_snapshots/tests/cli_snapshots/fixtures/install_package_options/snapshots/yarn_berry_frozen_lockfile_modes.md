@@ -24,7 +24,7 @@ warn: yarn does not support --frozen-lockfile.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt cp yarn.lock before.lock`
@@ -97,10 +97,11 @@ VITE+ - The Unified Toolchain for the Web
 ➤ YN0085: │ - install-option-dep@file:./dep#./dep::hash=<hash>&locator=install-package-options%40workspace%3A.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
+➤ YN0013: │ A package was added to the project, and one was removed (+ <size> KiB).
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `node -p require('./node_modules/install-option-dep/package.json').version`
@@ -121,8 +122,9 @@ warn: yarn does not support --no-frozen-lockfile.
 ➤ YN0085: │ - install-option-dep@file:./dep-v2#./dep-v2::hash=<hash>&locator=install-package-options%40workspace%3A.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
+➤ YN0013: │ A package was added to the project, and one was removed (- <size> KiB).
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```

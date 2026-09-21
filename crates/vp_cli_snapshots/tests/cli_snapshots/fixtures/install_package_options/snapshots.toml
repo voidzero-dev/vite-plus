@@ -31,8 +31,11 @@ steps = [
 [[case]]
 name = "npm_offline"
 vp = "global"
+# Keep registry configuration out of PowerShell shim arguments and use a fresh cache on every platform.
+env = { npm_config_fetch_retries = "0", npm_config_cache = ".npm-cache" }
 steps = [
-  { argv = ["vp", "install", "vp-install-option-uncached-probe@1.0.0", "--offline", "--", "--registry=http://127.0.0.1:9", "--fetch-retries=0"], comment = "an uncached package fails in offline mode rather than attempting a connection", continue-on-failure = true },
+  { argv = ["npm", "--version"], comment = "provision npm before pointing its registry at an unreachable endpoint", snapshot = false },
+  { argv = ["vp", "install", "vp-install-option-uncached-probe@1.0.0", "--offline"], envs = [["npm_config_registry", "http://127.0.0.1:9"]], comment = "an uncached package fails in offline mode rather than attempting a connection", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "node_modules", "--assert", "missing"], continue-on-failure = true },
   ["vpt", "stat-file", "package-lock.json", "--assert", "missing"],
 ]
@@ -97,7 +100,7 @@ steps = [
 [[case]]
 name = "yarn_berry_frozen_lockfile_modes"
 vp = "global"
-env = { YARN_ENABLE_TELEMETRY = "0" }
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
   { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
