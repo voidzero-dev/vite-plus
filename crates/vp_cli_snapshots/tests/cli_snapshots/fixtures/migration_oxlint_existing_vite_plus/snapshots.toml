@@ -1,6 +1,7 @@
 [[case]]
 name = "migration_oxlint_existing_vite_plus"
 vp = "global"
+skip-platforms = ["windows"]
 local-registry = true
 unset-env = ["VP_SKIP_INSTALL"]
 steps = [

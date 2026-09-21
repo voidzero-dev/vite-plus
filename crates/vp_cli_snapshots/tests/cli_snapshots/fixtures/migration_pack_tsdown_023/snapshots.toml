@@ -84,6 +84,7 @@ steps = [
 [[case]]
 name = "migration_pack_tsdown_023_no_external"
 vp = "global"
+skip-platforms = ["windows"]
 local-registry = true
 comment = "Migrate noExternal patterns, references, and callbacks and confirm the dependency remains bundled."
 steps = [

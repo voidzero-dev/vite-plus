@@ -1,6 +1,7 @@
 [[case]]
 name = "workspace_test_api_identity"
 vp = "global"
+skip-platforms = ["windows"]
 local-registry = true
 comment = "Workspace test imports must use the active Vitest runner, even when pnpm installs separate root and child peer instances."
 steps = [

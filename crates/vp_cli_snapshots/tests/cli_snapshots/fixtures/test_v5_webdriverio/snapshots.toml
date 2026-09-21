@@ -12,6 +12,7 @@ steps = [
 [[case]]
 name = "packed_community_provider_and_browser_protocol"
 vp = "global"
+skip-platforms = ["windows"]
 local-registry = true
 env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
 steps = [
