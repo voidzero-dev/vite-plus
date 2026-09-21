@@ -61,8 +61,7 @@ CI runs three shards per platform. Linux and macOS use `VP_SNAP_SHARD=1/3`
 happens before name filtering, so filtered runs keep the same assignment.
 Leave the variable unset to run the whole suite. Windows uses the existing
 nextest runner with `--partition hash:1/3` (then `2/3` and `3/3`).
-Unix CI shards use eight workers so process and network waits can overlap.
-Windows uses four workers to limit CPU and filesystem contention.
+Each CI shard uses eight workers so process and network waits can overlap.
 Local runs retain libtest's default worker count; override it with
 `--test-threads <count>`.
 

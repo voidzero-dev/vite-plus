@@ -1257,7 +1257,7 @@ jobs:
           test_exit=0
           # This fixture requires case-sensitive directory support, which the
           # default temp directory on these runners does not provide.
-          cargo-nextest nextest run --test-threads 4 --config-file "$RUNNER_TEMP/snapshot-nextest.toml" \
+          cargo-nextest nextest run --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml" \
             --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast --partition hash:${{ matrix.shard }}/3 \
             -E 'not test(windows_case_sensitive_shims)' || test_exit=$?
 
@@ -1265,13 +1265,13 @@ jobs:
             # Run both flavors on NTFS once. Rust's GetTempPath2 ignores
             # TEMP/TMP under the SYSTEM account, so override SystemTemp.
             SystemTemp='${{ steps.snapshot-temp.outputs.directory }}' \
-              cargo-nextest nextest run --test-threads 4 --config-file "$RUNNER_TEMP/snapshot-nextest.toml" \
+              cargo-nextest nextest run --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml" \
                 --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast \
                 -E 'test(windows_case_sensitive_shims)' || test_exit=$?
 
             # Exercise the same environment wrapper under Windows PowerShell 5.1.
             VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v powershell.exe)")" \
-              cargo-nextest nextest run --test-threads 4 --config-file "$RUNNER_TEMP/snapshot-nextest.toml" \
+              cargo-nextest nextest run --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml" \
                 --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast \
                 -E 'test(command_env_powershell)' || test_exit=$?
           fi
