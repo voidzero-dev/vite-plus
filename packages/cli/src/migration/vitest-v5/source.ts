@@ -929,17 +929,16 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
         const object = (node.callee as t.MemberExpression).object;
         const binding = editor.binding(object);
         let initializer =
-          binding?.constant && binding.declaration.type === 'VariableDeclarator'
-            ? binding.declaration.init
-            : undefined;
+          binding?.declaration.type === 'VariableDeclarator' ? binding.declaration.init : undefined;
         if (initializer?.type === 'AwaitExpression') {
           initializer = initializer.argument;
         }
-        const known =
+        const vitestRunner =
           initializer?.type === 'CallExpression' &&
           ['createVitest', 'startVitest'].includes(
             importedName(editor, initializer.callee, NODE_SOURCES) ?? '',
           );
+        const known = vitestRunner && binding?.constant;
         // collect(filters?, options?) places staticParse in the second argument.
         const opts = node.arguments[1];
         if (
@@ -960,6 +959,7 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
           }
         } else if (
           reviewV4 &&
+          vitestRunner &&
           (!known ||
             node.arguments.some((argument) => argument.type === 'SpreadElement') ||
             (opts && !staticObject(opts)))

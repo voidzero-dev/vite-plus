@@ -697,9 +697,11 @@ export function planVitestV5Migration(
   );
   const mergedConfigs = findVitestV5MergedConfigFiles(allSources, allConfigs);
   const browserPossible = [...allSources.values()].some((source) => BROWSER_SIGNAL.test(source));
+  // Manifest commands are resolved per config entry. Standalone shell/workflow
+  // commands still have an unknown cwd/config, so retain their review fallback.
   const browserCliOverride = [...allSources].some(
     ([file, source]) =>
-      /\.(?:json|ya?ml|sh)$/.test(file) &&
+      /\.(?:ya?ml|sh)$/.test(file) &&
       /\b(?:vitest|vp\s+test)\b[^\n]*--(?:no-)?browser(?:[.=\s'"]|$)/.test(source),
   );
   const testModesByVersion = new Map<boolean, ReturnType<typeof resolveVitestV5TestModes>>();

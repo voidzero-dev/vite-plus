@@ -21,6 +21,7 @@ import {
 } from './ast.ts';
 import { migrateBenchmarkConfig } from './benchmark-config.ts';
 import { compatibilityProperty } from './compatibility.ts';
+import { resolveConfigObject } from './config-object.ts';
 
 function isTrue(node: t.Node | undefined): boolean {
   return isBoolean(node) && node.value;
@@ -126,9 +127,11 @@ export function findVitestV5ConfigFiles(
         }
       }
       const collectReferences = (config: t.Node | undefined) => {
-        if (config?.type !== 'ObjectExpression') {
+        const object = resolveConfigObject(editor, config);
+        if (!object) {
           return;
         }
+        config = object;
         const base = objectProperty(config, 'extends')?.value;
         if (isString(base)) {
           addReference(base.value);
@@ -545,8 +548,9 @@ function migrateConfig(
   editor.visit({
     AssignmentExpression(node) {
       if (isModuleExports(editor, node.left)) {
-        if (staticObject(node.right)) {
-          config(node.right);
+        const object = resolveConfigObject(editor, node.right);
+        if (object && node.right.type !== 'CallExpression') {
+          config(object);
         } else if (node.right.type !== 'CallExpression' && reviewV4) {
           editor.report(
             node,
@@ -557,23 +561,9 @@ function migrateConfig(
       }
     },
     ExportDefaultDeclaration(node) {
-      if (staticObject(node.declaration)) {
-        config(node.declaration);
-      } else if (node.declaration.type === 'Identifier') {
-        const binding = editor.binding(node.declaration);
-        if (
-          binding?.constant &&
-          binding.declaration.type === 'VariableDeclarator' &&
-          staticObject(binding.declaration.init)
-        ) {
-          config(binding.declaration.init);
-        } else if (reviewV4) {
-          editor.report(
-            node,
-            'dynamic-config',
-            'Review the effective exported test config and its v4 defaults.',
-          );
-        }
+      const object = resolveConfigObject(editor, node.declaration);
+      if (object && node.declaration.type !== 'CallExpression') {
+        config(object);
       } else if (node.declaration.type !== 'CallExpression' && reviewV4) {
         editor.report(
           node,
@@ -615,12 +605,12 @@ function migrateConfig(
           }
           return;
         }
-        const object = node.arguments[0];
-        if (staticObject(object)) {
+        const object = resolveConfigObject(editor, node.arguments[0]);
+        if (object) {
           config(object);
         } else if (reviewV4) {
           editor.report(
-            object,
+            node.arguments[0],
             'dynamic-config',
             'Review this dynamic config; explicit v4 compatibility settings need manual insertion.',
           );

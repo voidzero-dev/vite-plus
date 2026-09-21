@@ -892,7 +892,7 @@ describe('Vitest v5 config compatibility', () => {
   it.each([
     `export default { test: { projects: [{ test: { globals: true, setupFiles: './setup.js' } }, { test: { globals: false, setupFiles: './setup.js' } }] } };`,
     `export default { test: { globals: true, setupFiles: filesAtRuntime } };`,
-    `export default () => ({ test: { globals: true, setupFiles: './setup.js' } });`,
+    `export default () => condition ? { test: { globals: true, setupFiles: './setup.js' } } : other;`,
   ])('reports unresolved global ownership without rewriting calls: %s', (configSource) => {
     const input = 'beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });';
     const root = project({
@@ -1010,7 +1010,7 @@ describe('Vitest v5 config compatibility', () => {
     `export default { test: { globals: enabledAtRuntime } };`,
     `export default { test: { globals: true, include: patterns } };`,
     `export default { test: { globals: true, exclude: patterns } };`,
-    `export default () => ({ test: { globals: true } });`,
+    `export default () => condition ? { test: { globals: true } } : other;`,
     `export default { test: { globals: true, projects: [{ test: { include: ['unit.test.ts'] } }] } };`,
     `export default { test: { projects: [{ test: { globals: true } }, { test: { globals: false } }] } };`,
   ])('preserves unbound APIs without certain Vitest global ownership: %s', (configSource) => {
@@ -1174,7 +1174,7 @@ export default defineConfig({ plugins: [plugin()] });`;
       { test: { include: ['shared.test.ts'] } },
       { test: { browser: { enabled: true }, include: ['shared.test.ts'] } },
     ] } };`,
-    `export default () => ({ test: { browser: { enabled: true } } });`,
+    `export default () => condition ? { test: { browser: { enabled: true } } } : other;`,
     `import { defineConfig } from 'vitest/config';
 export default wrapper(defineConfig({ test: { browser: { enabled: true } } }));`,
     `export default { test: { projects: ['unknown-config.ts',
@@ -1207,7 +1207,7 @@ module.exports = wrapper(defineConfig({ test: { browser: { enabled: true } } }))
 
   it('renames expect.element matchers even when project ownership is dynamic', () => {
     const root = project({
-      'vite.config.ts': `export default () => ({ test: { browser: { enabled: true } } });`,
+      'vite.config.ts': `export default () => dynamicConfig;`,
       'browser.test.ts': `import { expect } from 'vitest';\nawait expect.element(element).toHaveTextContent('partial');`,
     });
     const plan = planProject(root);
@@ -1914,6 +1914,7 @@ const runner = await createVitest('test', {});
 await runner.collect();
 await runner.collect(['unit'], {});
 await runner.collect([], { staticParse: true });
+await runner.collect([], options);
 other.collect(options);`);
     expect(result.content).toContain('const vite = await resolve(), test = vite.test');
     expect(result.content).toContain('runner.collect(undefined, { staticParse: false })');

@@ -1,4 +1,26 @@
 [[case]]
+name = "callback_workspace_scopes"
+vp = "global"
+comment = "Resolve static callback test options independently of a tooling-only workspace root and a sibling browser suite. Preserve Node text matchers and unrelated collect calls."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts", "{}"], snapshot = false },
+  { argv = ["vpt", "rm", "example.test.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { fmt: { semi: false } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - web\n  - browser\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "web/package.json", "{\"name\":\"web\",\"private\":true,\"type\":\"module\",\"scripts\":{\"test\":\"vitest\"},\"devDependencies\":{\"vitest\":\"4.1.11\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "browser/package.json", "{\"name\":\"browser\",\"private\":true,\"type\":\"module\",\"scripts\":{\"test\":\"vitest\"},\"devDependencies\":{\"vitest\":\"4.1.11\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "web/vite.config.ts", "import { defineConfig } from 'vitest/config';\nexport default defineConfig(({ mode }) => {\n  const isTest = mode === 'test';\n  return {\n    plugins: isTest ? [] : [],\n    ...(!isTest ? { server: { port: 3000 } } : {}),\n    test: { globals: true, setupFiles: ['./setup.ts'] },\n  };\n});\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "web/setup.ts", "beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "web/example.test.ts", "import { expect, vi } from 'vitest';\nvi.mock('./dependency');\nexport function checkText(element) { expect(element).toHaveTextContent('partial'); }\ntest.sequential('works', () => { expect(1).toBe(1); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "browser/vitest.config.ts", "export default { test: { globals: true, browser: { enabled: true } } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "browser/example.test.ts", "test('text', async () => { expect.element(element).toHaveTextContent('partial'); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "web/public/editor.js", "export const result = collector.collect(options);\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "web/vite.config.ts", "web/setup.ts", "web/example.test.ts", "browser/example.test.ts", "web/public/editor.js"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "compatibility"
 vp = "global"
 steps = [

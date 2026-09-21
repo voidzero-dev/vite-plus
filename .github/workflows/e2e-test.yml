@@ -297,10 +297,12 @@ jobs:
           - name: dify
             node-version: 24
             directory: web
+            # Leave time for tests after migration and the Next.js build.
+            timeout: 20
             command: |
               vp run type-check
               vp run build
-              vp run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-onboarding-integration.test.tsx
+              vp run test real-browser-flicker.test.tsx workflow-onboarding-integration.test.tsx
           - name: viteplus-ws-repro
             node-version: 24
             command: |

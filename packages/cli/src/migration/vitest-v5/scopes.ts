@@ -4,13 +4,13 @@ import type * as t from '@oxc-project/types';
 import { minimatch } from 'minimatch';
 
 import {
-  CONFIG_SOURCES,
   SourceEditor,
   importedName,
   isBoolean,
   isModuleExports,
   isString,
   objectProperty,
+  propertyName,
   memberName,
   projectElements,
   staticObject,
@@ -18,8 +18,11 @@ import {
   type VitestV5Finding,
 } from './ast.ts';
 import { literalTestCommands, vitestCommandArgsStart } from './commands.ts';
+import { resolveConfigObject } from './config-object.ts';
 
 interface ConfigEntry {
+  implicit?: boolean;
+  browserOverride?: boolean;
   file?: string;
   root: string;
   uncertain?: boolean;
@@ -30,6 +33,7 @@ interface ConfigEntry {
 }
 
 interface TestScope {
+  excludedRoots?: string[];
   root: string;
   dir?: string;
   discoveryRoot?: string;
@@ -55,6 +59,19 @@ const DEFAULT_TEST_EXCLUDE = ['**/node_modules/**', '**/.git/**'];
 const DEFAULT_BENCHMARK_INCLUDE = ['**/*.{bench,benchmark}.?(c|m)[jt]s?(x)'];
 const DEFAULT_BENCHMARK_EXCLUDE = ['**/node_modules/**', '**/.git/**'];
 const TEST_CONFIG_SOURCES = new Set(['vitest/config', 'vite-plus/test/config', 'vite-plus']);
+const SCOPE_KEYS = [
+  'root',
+  'dir',
+  'include',
+  'exclude',
+  'includeSource',
+  'setupFiles',
+  'globals',
+  'browser',
+  'benchmark',
+  'projects',
+  'name',
+] as const;
 // Match Vitest's discovery order, including precedence across extensions.
 const CONFIG_NAMES = ['vitest.config', 'vite.config'].flatMap((name) =>
   ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'].map((extension) => name + extension),
@@ -80,7 +97,7 @@ export function findVitestV5ConfigEntries(
         typeof command === 'string' && /\bvitest\b|\bvp\s+test\b/.test(command),
     );
     if (!commands.length) {
-      entries.push({ root, file: defaultConfig(sources, root) });
+      entries.push({ root, file: defaultConfig(sources, root), implicit: true });
       continue;
     }
     for (const command of commands) {
@@ -97,10 +114,12 @@ export function findVitestV5ConfigEntries(
         let rootOverride: string | undefined;
         let dirOverride: string | undefined;
         let uncertain = false;
+        let browserOverride = false;
         const projects: string[] = [];
         for (let index = start; index < argv.length && argv[index] !== '--'; index++) {
           const arg = argv[index];
           const option = arg.split('=')[0];
+          browserOverride ||= /^--(?:no-)?browser(?:[.=]|$)/.test(arg);
           if (['--config', '-c', '--root', '-r', '--dir', '--project', '-p'].includes(option)) {
             const value = arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : argv[++index];
             if (!value || value.startsWith('-')) {
@@ -132,6 +151,7 @@ export function findVitestV5ConfigEntries(
           rootOverride,
           dirOverride,
           projects,
+          browserOverride,
           uncertain: uncertain || (!!config && !sources.has(file!)),
         });
       }
@@ -285,24 +305,6 @@ function projectSelected(
   return false;
 }
 
-function exportedConfig(editor: SourceEditor, node: t.Node | undefined): t.Node | undefined {
-  if (node?.type === 'Identifier') {
-    const binding = editor.binding(node);
-    node =
-      binding?.constant && binding.declaration.type === 'VariableDeclarator'
-        ? (binding.declaration.init ?? undefined)
-        : undefined;
-  }
-  if (node?.type === 'CallExpression') {
-    node = ['defineConfig', 'defineProject'].includes(
-      importedName(editor, node.callee, CONFIG_SOURCES) ?? '',
-    )
-      ? node.arguments[0]
-      : undefined;
-  }
-  return node;
-}
-
 /** Vitest resolves local setup entries through local-pkg/mlly with import
  * conditions, then falls back to the literal path. Do not guess TypeScript
  * extensions or package exports that cannot be resolved from scanned files. */
@@ -360,6 +362,7 @@ export function resolveVitestV5TestModes(
   const scopes: TestScope[] = [];
   const findings: VitestV5Finding[] = [];
   const queue = [...entries];
+  const packageRoots = [...new Set(entries.map((entry) => entry.root))];
   const visitedEntries = new Set<string>();
   for (const entry of queue) {
     const key = JSON.stringify(entry);
@@ -385,10 +388,12 @@ export function resolveVitestV5TestModes(
       inline = false,
     ) => {
       found = true;
-      if (!staticObject(object, true)) {
+      const resolved = resolveConfigObject(editor, object);
+      if (!resolved) {
         unknown();
         return;
       }
+      object = resolved;
       if (visited.has(object)) {
         return;
       }
@@ -453,6 +458,25 @@ export function resolveVitestV5TestModes(
           : resolvedRoot;
       }
       const scope: TestScope = {
+        // Merely discovering a workspace's tooling config does not make it a
+        // test invocation over every child package. Explicit scripts, Vitest
+        // configs, and ownership options still authorize cross-package scopes.
+        // Compatibility defaults inserted on a later pass do not change this.
+        excludedRoots:
+          entry.implicit &&
+          !inline &&
+          !root &&
+          path.basename(entry.file!).startsWith('vite.config.') &&
+          (!test ||
+            test.properties.every(
+              (property) =>
+                property.type === 'Property' &&
+                ['clearMocks', 'fakeTimers'].includes(propertyName(property.key) ?? ''),
+            ))
+            ? packageRoots.filter(
+                (root) => root !== entry.root && insideDirectory(root, entry.root),
+              )
+            : undefined,
         root: resolvedRoot,
         dir,
         discoveryRoot,
@@ -465,7 +489,7 @@ export function resolveVitestV5TestModes(
           setupFiles && (!base || base.setupFiles)
             ? [...(base?.setupFiles ?? []), ...setupFiles]
             : undefined,
-        browser: browserMode,
+        browser: entry.browserOverride ? undefined : browserMode,
         globals:
           selected === undefined ? undefined : booleanOption(globals, base ? base.globals : false),
       };
@@ -561,6 +585,7 @@ export function resolveVitestV5TestModes(
                 root: path.dirname(file),
                 cwd: entry.cwd ?? entry.root,
                 projects: entry.projects,
+                browserOverride: entry.browserOverride,
               });
             }
           }
@@ -582,27 +607,15 @@ export function resolveVitestV5TestModes(
             const declaration = baseEditor.ast.body.find(
               (node) => node.type === 'ExportDefaultDeclaration',
             );
-            const baseObject = exportedConfig(baseEditor, declaration?.declaration);
-            if (staticObject(baseObject, true)) {
+            const baseObject = resolveConfigObject(baseEditor, declaration?.declaration);
+            if (baseObject) {
               const baseTest = objectProperty(baseObject, 'test')?.value;
               // Compatibility defaults such as clearMocks do not change file
               // ownership. Accept them on later migration passes as well.
               if (
                 !baseTest ||
                 (staticObject(baseTest, true) &&
-                  ![
-                    'root',
-                    'dir',
-                    'include',
-                    'exclude',
-                    'includeSource',
-                    'setupFiles',
-                    'globals',
-                    'browser',
-                    'benchmark',
-                    'projects',
-                    'name',
-                  ].some((key) => objectProperty(baseTest, key)))
+                  !SCOPE_KEYS.some((key) => objectProperty(baseTest, key)))
               ) {
                 walk(project, scope.root, undefined, true);
                 continue;
@@ -620,11 +633,11 @@ export function resolveVitestV5TestModes(
       editor = new SourceEditor(entry.file, sources.get(entry.file)!);
       editor.visit({
         ExportDefaultDeclaration(node) {
-          walk(exportedConfig(editor, node.declaration));
+          walk(node.declaration);
         },
         AssignmentExpression(node) {
           if (isModuleExports(editor, node.left)) {
-            walk(exportedConfig(editor, node.right));
+            walk(node.right);
           }
         },
       });
@@ -641,6 +654,9 @@ export function resolveVitestV5TestModes(
       const matching: Array<{ scope: TestScope; certain: boolean }> = [];
       let benchmarkFile = false;
       for (const scope of scopes) {
+        if (scope.excludedRoots?.some((root) => insideDirectory(file, root))) {
+          continue;
+        }
         // Setup files execute in this project regardless of include/exclude.
         const setup = scope.setupFiles?.includes(file);
         const inside = insideDirectory(file, scope.root);
