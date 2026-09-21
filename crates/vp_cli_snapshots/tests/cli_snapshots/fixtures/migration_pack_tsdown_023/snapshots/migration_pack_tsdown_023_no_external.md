@@ -36,22 +36,42 @@ export default defineConfig({
   pack: [
     {
       entry: 'src/index.ts', outDir: 'dist/literal', dts: false,
-      deps: { alwaysBundle: ['@fixture/pack-bundled'], resolveDepSubpath: true },
+      deps: { alwaysBundle: ['@fixture/pack-bundled'],
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
     },
     {
       entry: 'src/index.ts', outDir: 'dist/reference', dts: false,
-      deps: { alwaysBundle: bundlePatterns, resolveDepSubpath: true },
+      deps: { alwaysBundle: bundlePatterns,
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
     },
     {
       entry: 'src/index.ts', outDir: 'dist/callback', dts: false,
-      deps: { alwaysBundle: (id) => bundlePatterns.includes(id), resolveDepSubpath: true },
+      deps: { alwaysBundle: (id) => bundlePatterns.includes(id),
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
     },
     {
       entry: 'src/index.ts', outDir: 'dist/method', dts: false,
 
-      deps: { alwaysBundle(id) { return bundlePatterns.includes(id); }, resolveDepSubpath: true, onlyBundle: bundlePatterns },
+      deps: { alwaysBundle(id) { return bundlePatterns.includes(id); },
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true, onlyBundle: bundlePatterns },
     },
-    { deps: { resolveDepSubpath: true },
+    { deps: {
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
       entry: 'src/index.ts', outDir: 'dist/control', dts: false,
     },
   ],
@@ -77,22 +97,42 @@ export default defineConfig({
   pack: [
     {
       entry: 'src/index.ts', outDir: 'dist/literal', dts: false,
-      deps: { alwaysBundle: ['@fixture/pack-bundled'], resolveDepSubpath: true },
+      deps: { alwaysBundle: ['@fixture/pack-bundled'],
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
     },
     {
       entry: 'src/index.ts', outDir: 'dist/reference', dts: false,
-      deps: { alwaysBundle: bundlePatterns, resolveDepSubpath: true },
+      deps: { alwaysBundle: bundlePatterns,
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
     },
     {
       entry: 'src/index.ts', outDir: 'dist/callback', dts: false,
-      deps: { alwaysBundle: (id) => bundlePatterns.includes(id), resolveDepSubpath: true },
+      deps: { alwaysBundle: (id) => bundlePatterns.includes(id),
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
     },
     {
       entry: 'src/index.ts', outDir: 'dist/method', dts: false,
 
-      deps: { alwaysBundle(id) { return bundlePatterns.includes(id); }, resolveDepSubpath: true, onlyBundle: bundlePatterns },
+      deps: { alwaysBundle(id) { return bundlePatterns.includes(id); },
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true, onlyBundle: bundlePatterns },
     },
-    { deps: { resolveDepSubpath: true },
+    { deps: {
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
       entry: 'src/index.ts', outDir: 'dist/control', dts: false,
     },
   ],

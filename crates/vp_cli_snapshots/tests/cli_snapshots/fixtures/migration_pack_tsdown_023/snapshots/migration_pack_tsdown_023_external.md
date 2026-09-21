@@ -35,28 +35,44 @@ export default {
       outDir: 'dist/top',
       dts: false,
       inputOptions: { external: ['foo', './external.js'] },
-      deps: { neverBundle: true, resolveDepSubpath: true },
+      deps: { neverBundle: true,
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
     },
     {
       entry: 'src/index.ts',
       outDir: 'dist/nested',
       dts: false,
       inputOptions: { external: ['foo', './external.js'] },
-      deps: { resolveDepSubpath: true, neverBundle: true },
+      deps: {
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true, neverBundle: true },
     },
     {
       entry: 'src/index.ts',
       outDir: 'dist/constant',
       dts: false,
       inputOptions: { external: externalOptions },
-      deps: { neverBundle: true, resolveDepSubpath: true },
+      deps: { neverBundle: true,
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
     },
     {
       entry: 'src/index.ts',
       outDir: 'dist/alias',
       dts: false,
       inputOptions: { external: externalAlias },
-      deps: { resolveDepSubpath: true, neverBundle: true },
+      deps: {
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true, neverBundle: true },
     },
   ],
 };
