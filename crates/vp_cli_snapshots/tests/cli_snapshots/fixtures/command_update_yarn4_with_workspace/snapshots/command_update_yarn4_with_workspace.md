@@ -157,9 +157,10 @@ unfiltered update still updates all testnpm2 versions
 
 ## `vp update -r --no-save`
 
-unfiltered recursive update remains supported
+warn that --no-save is unsupported while preserving recursive update
 
 ```
+warn: yarn does not support --no-save.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

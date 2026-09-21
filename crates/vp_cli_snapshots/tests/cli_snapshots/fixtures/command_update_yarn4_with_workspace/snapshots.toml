@@ -14,6 +14,6 @@ steps = [
   ["vpt", "stat-file", "node_modules", "--assert", "missing"],
   { argv = ["vp", "update", "testnpm2"], comment = "unfiltered update still updates all testnpm2 versions" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
-  { argv = ["vp", "update", "-r", "--no-save"], comment = "unfiltered recursive update remains supported" },
+  { argv = ["vp", "update", "-r", "--no-save"], comment = "warn that --no-save is unsupported while preserving recursive update" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json"], continue-on-failure = true },
 ]

@@ -1,10 +1,11 @@
 # command_update_yarn4
 
-## `vp update testnpm2`
+## `vp update testnpm2 --no-save`
 
-should update package within semver range
+warn that --no-save is unsupported and continue with yarn up
 
 ```
+warn: yarn does not support --no-save.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0, test-vite-plus-package@npm:1.0.0, testnpm2@npm:1.0.1
