@@ -331,6 +331,18 @@ function migrateConfig(
     if (preserveDefaults && !inherits) {
       addCompatibility(test, 'clearMocks');
     }
+    const namePattern = objectProperty(test, 'testNamePattern');
+    if (
+      reviewV4 &&
+      namePattern &&
+      !(isString(namePattern.value) && /^[\w-]+$/.test(namePattern.value.value))
+    ) {
+      editor.report(
+        namePattern,
+        'test-name-pattern',
+        'Review test-name patterns across suite boundaries; full names now use > separators.',
+      );
+    }
     const browser = objectProperty(test, 'browser');
     if (browser && staticObject(browser.value)) {
       const value = browser.value;
@@ -358,7 +370,7 @@ function migrateConfig(
         }
       }
       const screenshot = objectProperty(value, 'screenshotDirectory');
-      if (screenshot) {
+      if (options.preserveV4 && screenshot) {
         const setting = `screenshotDirectory: ${editor.text(screenshot.value)}`;
         nested(value, 'expect', `toMatchScreenshot: { ${setting} }`, (expect) => {
           nested(expect, 'toMatchScreenshot', setting, (match) =>

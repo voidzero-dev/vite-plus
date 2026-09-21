@@ -356,6 +356,31 @@ steps = [
 ]
 
 [[case]]
+name = "v4_review_boundaries"
+vp = "global"
+comment = "Review kebab-case and config name filters, descriptor restoration callbacks, matcher type aliases, and Temporal initialized in a separate setup file."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.test", "vitest run --test-name-pattern 'suite test'"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { setupFiles: ['./setup.ts'], testNamePattern: 'suite test' } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.ts", "import 'temporal-polyfill/global';\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "environment.ts", "import { populateGlobal } from 'vitest/environments';\nconst { originals } = populateGlobal(global, window);\noriginals.forEach((value, key) => { global[key] = value; });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "matchers.d.ts", "import type { Assertion as A } from 'vitest';\ndeclare global { namespace jest { interface Matchers<R, T> { toBeCustom(): R; } } }\ntype Result = A<string>;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "clock.test.ts", "import { vi, test } from 'vitest';\ntest('clock', () => { vi.setSystemTime(0); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "v5_screenshot_directory"
+vp = "global"
+comment = "Do not copy an existing v5 browser screenshot directory to the separate screenshot matcher configuration."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vitest", "5.0.1"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { browser: { screenshotDirectory: 'screens' } } };\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "vite.config.ts"],
+]
+
+[[case]]
 name = "removed_api_preflight"
 vp = "global"
 comment = "Show blockers and accompanying reviews once before stopping without dependency changes."

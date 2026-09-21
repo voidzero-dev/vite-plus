@@ -55,6 +55,50 @@ function source(input: string, options = v4) {
 }
 
 describe('Vitest v5 diagnostic scope', () => {
+  it('retains the descriptor review after moving the environments entry point', () => {
+    const root = project({
+      'environment.ts': `import { populateGlobal } from 'vitest/environments';
+const { originals } = populateGlobal(global, window);
+originals.forEach((value, key) => { global[key] = value; });`,
+    });
+    const plan = planProject(root);
+    const expected = [expect.objectContaining({ code: 'global-descriptors' })];
+    expect(plan.findings).toEqual(expected);
+    applyVitestV5Migration(plan);
+    expect(fs.readFileSync(path.join(root, 'environment.ts'), 'utf8')).toContain(
+      'vite-plus/test/runtime',
+    );
+    expect(finishVitestV5Migration(plan)).toEqual(expected);
+  });
+
+  it.each(['4.1.11', '5.0.1'])(
+    'reviews cross-file Temporal setup only when migrating v4 (%s)',
+    (vitest) => {
+      const root = project({
+        'package.json': JSON.stringify({ devDependencies: { vitest } }),
+        'vitest.config.ts': `export default { test: { setupFiles: ['./setup.ts'] } };`,
+        'setup.ts': `import 'temporal-polyfill/global';`,
+        'clock.test.ts': `import { vi, test } from 'vitest';
+test('clock', () => { vi.setSystemTime(0); });`,
+      });
+      const plan = planProject(root);
+      expect(plan.projects[0].options.temporalPolyfill).toBe(true);
+      const expected = vitest.startsWith('4')
+        ? [
+            expect.objectContaining({
+              code: 'temporal-system-time',
+              file: path.join(root, 'clock.test.ts'),
+            }),
+          ]
+        : [];
+      expect(plan.findings.filter(({ code }) => code === 'temporal-system-time')).toEqual(expected);
+      applyVitestV5Migration(plan);
+      expect(
+        finishVitestV5Migration(plan).filter(({ code }) => code === 'temporal-system-time'),
+      ).toEqual(expected);
+    },
+  );
+
   it.each(['export default { plugins: [] };', 'export default { test: { clearMocks: false } };'])(
     'resolves Vue-style globals with base %s',
     (baseConfig) => {
@@ -1456,6 +1500,23 @@ reporters: ['default', 'json', ['junit', {}], ['html', { outputFile: 'reports/in
     expect(config(result.content).content).toBe(result.content);
   });
 
+  it.each(['', ", expect: { toMatchScreenshot: { screenshotDirectory: 'matches' } }"])(
+    'preserves v5 screenshot directories%s',
+    (matcher) => {
+      const input = `export default { test: { browser: { screenshotDirectory: 'screens'${matcher} } } };`;
+      expect(config(input, false)).toEqual({ content: input, findings: [] });
+    },
+  );
+
+  it('keeps an explicit screenshot matcher directory when migrating v4', () => {
+    const result = config(`export default { test: { browser: {
+      screenshotDirectory: 'screens',
+      expect: { toMatchScreenshot: { screenshotDirectory: 'matches' } },
+    } } };`);
+    expect(result.content.match(/screenshotDirectory: 'screens'/g)).toHaveLength(1);
+    expect(result.content).toContain("screenshotDirectory: 'matches'");
+  });
+
   it('keeps explicit report destinations without reviewing non-index HTML files', () => {
     const result = config(
       `export default { test: { outputFile: { json: 'report.json' }, reporters: ['json', ['junit', { stdout: false }], ['html', { outputFile: 'custom.html' }]] } };`,
@@ -1499,6 +1560,23 @@ reporters: ['default', 'json', ['junit', {}], ['html', { outputFile: 'reports/in
       { preserveV4: true, temporalPolyfill: true },
     );
     expect(explicit.content).toContain('toNotFake: []');
+  });
+
+  it.each(["'suite test'", '/suite test/', 'patternFromEnv'])(
+    'reviews configured name patterns across suite boundaries: %s',
+    (pattern) => {
+      const input = `export default { test: { testNamePattern: ${pattern} } };`;
+      expect(config(input).findings).toEqual([
+        expect.objectContaining({ code: 'test-name-pattern', severity: 'review' }),
+      ]);
+      expect(config(input, false)).toEqual({ content: input, findings: [] });
+    },
+  );
+
+  it('does not review a simple configured name filter', () => {
+    expect(
+      config("export default { test: { testNamePattern: 'adds_numbers' } };").findings,
+    ).toEqual([]);
   });
 });
 
@@ -1655,6 +1733,74 @@ function helper(v) { v.test.sequential('local', () => {}); }`);
     expect(result.findings.map((finding) => finding.code)).toContain('nested-hoisted-mock');
   });
 
+  it.each([
+    `import { populateGlobal } from 'vitest/environments';
+const { originals } = populateGlobal(global, window);
+originals.forEach((value, key) => { global[key] = value; });`,
+    `import { populateGlobal as populate } from 'vite-plus/test/environments';
+const { originals: saved } = populate(global, window);
+saved.forEach(function (value, key) { const original = value; global[key] = original; });`,
+    `import * as env from 'vitest/environments';
+const result = env.populateGlobal(global, window);
+const saved = result.originals;
+global.foo = saved.get('foo');`,
+    `import { populateGlobal } from 'vitest/environments';
+const { originals } = populateGlobal(global, window);
+for (const [key, value] of originals) { global[key] = value; }`,
+    `import { populateGlobal } from 'vitest/environments';
+const { originals } = populateGlobal(global, window);
+for (const [key, value] of originals.entries()) { global[key] = value; }`,
+  ])('reviews restoration of populateGlobal values through bindings: %s', (input) => {
+    expect(source(input).findings).toEqual([
+      expect.objectContaining({ code: 'global-descriptors', severity: 'review' }),
+    ]);
+    expect(source(input, { preserveV4: false, browser: false }).findings).toEqual([]);
+  });
+
+  it.each([
+    `const originals = new Map();
+originals.forEach((value, key) => { global[key] = value; });
+global.foo = originals.get('foo');`,
+    `import { populateGlobal } from './helper';
+const { originals } = populateGlobal(global, window);
+originals.forEach((value, key) => { global[key] = value; });`,
+    `import { populateGlobal } from 'vitest/environments';
+const { originals } = populateGlobal(global, window);
+originals.forEach((value, key) => { Object.defineProperty(global, key, value); });`,
+    `import { populateGlobal } from 'vitest/environments';
+const { originals } = populateGlobal(global, window);
+originals.forEach((value, key) => { function restore(value) { global[key] = value; } });`,
+  ])('does not review unrelated values or descriptor-based restoration: %s', (input) => {
+    expect(source(input).findings).toEqual([]);
+  });
+
+  it.each([
+    `import 'vitest';
+declare global { namespace jest { interface Matchers<R, T> { toBeCustom(): R; } } }`,
+    `import 'vitest';
+declare global { namespace jest { export interface Matchers<R, T> { toBeCustom(): R; } } }`,
+    `import type { Assertion as A } from 'vitest'; type Result = A<string>;`,
+    `import { type Assertion as A } from 'vite-plus/test'; type Result = A<string>;`,
+    `import type * as V from 'vitest'; type Result = V.Assertion<string>;`,
+    `import type { Assertion as A } from '@vitest/expect'; type Local<T> = A<T>;`,
+    `type Result = jest.Matchers<void, string>;`,
+  ])('reviews legacy matcher namespaces and aliased assertion types: %s', (input) => {
+    expect(source(input).findings.filter(({ code }) => code === 'assertion-types')).toEqual([
+      expect.objectContaining({ severity: 'review' }),
+    ]);
+    expect(source(input, { preserveV4: false, browser: false }).findings).toEqual([]);
+  });
+
+  it.each([
+    `import type { Assertion as A } from 'vitest'; type Result = A<void, string>;`,
+    `import type { Assertion as A } from './types'; type Result = A<string>;`,
+    `import type { Assertion } from './types'; type Result = Assertion<string>;`,
+    `import type { Assertion as A } from 'vitest'; function helper<A>() { type Result = A; }`,
+    `declare module 'vitest' { interface Matchers<R, T> { toBeCustom(): R; } }`,
+  ])('does not review updated or unrelated assertion types: %s', (input) => {
+    expect(source(input).findings).toEqual([]);
+  });
+
   it('reports type imports without blocking runtime migration', () => {
     const result = source(`type Runner = import('vitest/internal/module-runner').ModuleRunner;`);
     expect(result.findings).toEqual([
@@ -1779,6 +1925,8 @@ other.collect(options);`);
 
   it('reports manual migration risks with line locations', () => {
     const result = source(`import { vi, test, expect } from 'vitest';
+import { populateGlobal } from 'vitest/environments';
+const { originals } = populateGlobal(global, window);
 import '@vitest/ws-client';
 test('mock', () => { vi.mock('./a'); vi.fn(class {}); });
 process.env.VITEST_POOL_ID;
@@ -1813,6 +1961,8 @@ describe('Vitest v5 command migration', () => {
   it.each([
     'vitest run -t adds',
     'vitest run --testNamePattern=adds_numbers',
+    'vitest run --test-name-pattern=adds_numbers',
+    'vitest run -- --test-name-pattern "suite test"',
     'vitest run -- -t',
     'vitest --reporter=json | jq',
     'vitest && cp -r .vitest-attachements artifacts',
@@ -1839,6 +1989,9 @@ describe('Vitest v5 command migration', () => {
   it.each([
     ['vitest run -t "suite test"', 'test-name-pattern', 'review'],
     ['vitest run -t suite.test', 'test-name-pattern', 'review'],
+    ['vitest run --test-name-pattern "suite test"', 'test-name-pattern', 'review'],
+    ['vp test --test-name-pattern="suite test"', 'test-name-pattern', 'review'],
+    ['vitest run --testNamePattern "suite test"', 'test-name-pattern', 'review'],
     ['vitest --compare=baseline.json', 'benchmark-api', 'block'],
     ['vitest --outputJson=$BASELINE', 'benchmark-api', 'block'],
   ])('reports %s without changing it', (command, code, severity) => {
@@ -1852,6 +2005,12 @@ describe('Vitest v5 command migration', () => {
       content: 'vitest list',
       findings: [],
     });
+  });
+  it('does not review kebab-case name patterns for v5 projects', () => {
+    expect(
+      migrateVitestV5Command('package.json', 'vitest run --test-name-pattern "suite test"', false)
+        .findings,
+    ).toEqual([]);
   });
   it.each([
     'vitest list',

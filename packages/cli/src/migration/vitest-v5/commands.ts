@@ -242,13 +242,15 @@ export function migrateVitestV5Command(
   const values = argv?.map(({ value }) => value);
   const runner = values ? vitestCommandArgsStart(values) : -1;
   let removedFlag = /(?:^|\s)(?:--compare|--outputJson)(?:\s|=|$)/.test(command);
-  let reviewNamePattern = /(?:^|\s)(?:-t|--testNamePattern)(?:\s|=)/.test(command);
+  let reviewNamePattern = /(?:^|\s)(?:-t|--testNamePattern|--test-name-pattern)(?:\s|=)/.test(
+    command,
+  );
   if (values && runner >= 0) {
     const terminator = values.indexOf('--', runner);
     const args = values.slice(runner, terminator === -1 ? undefined : terminator);
     removedFlag = args.some((value) => /^(?:--compare|--outputJson)(?:=|$)/.test(value));
     reviewNamePattern = args.some((value, index) => {
-      if (!/^(?:-t|--testNamePattern)(?:=|$)/.test(value)) {
+      if (!/^(?:-t|--testNamePattern|--test-name-pattern)(?:=|$)/.test(value)) {
         return false;
       }
       const pattern = value.includes('=') ? value.slice(value.indexOf('=') + 1) : args[index + 1];

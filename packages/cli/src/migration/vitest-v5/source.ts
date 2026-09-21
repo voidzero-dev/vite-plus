@@ -106,6 +106,137 @@ const DOM_GLOBALS = new Set([
 ]);
 
 const CHILD_PROCESS_SOURCES = new Set(['node:child_process', 'child_process']);
+const ENVIRONMENT_SOURCES = new Set([
+  'vitest/environments',
+  'vite-plus/test/environments',
+  'vitest/runtime',
+  'vite-plus/test/runtime',
+]);
+const ASSERTION_SOURCES = new Set(['vitest', 'vite-plus/test', ...EXPECT_SOURCES]);
+
+/** Follow immutable bindings, including Map iteration variables, back to
+ * populateGlobal. A map merely named `originals` is not a Vitest API. */
+function globalRestorationOrigin(
+  editor: SourceEditor,
+  node: t.Node,
+  seen = new Set<t.Node>(),
+): 'result' | 'originals' | 'value' | undefined {
+  if (seen.has(node)) {
+    return undefined;
+  }
+  seen.add(node);
+  const origin = (value: t.Node) => globalRestorationOrigin(editor, value, seen);
+  if (node.type === 'CallExpression') {
+    if (importedName(editor, node.callee, ENVIRONMENT_SOURCES) === 'populateGlobal') {
+      return 'result';
+    }
+    if (
+      memberName(node.callee) === 'get' &&
+      node.callee.type === 'MemberExpression' &&
+      origin(node.callee.object) === 'originals'
+    ) {
+      return 'value';
+    }
+  }
+  if (node.type === 'MemberExpression' && memberName(node) === 'originals') {
+    return origin(node.object) === 'result' ? 'originals' : undefined;
+  }
+  const binding = editor.binding(node);
+  if (!binding?.constant) {
+    return undefined;
+  }
+  const declaration = binding.declaration;
+  const parent = editor.parent(declaration);
+  if (declaration.type === 'VariableDeclarator' && declaration.init) {
+    return origin(declaration.init);
+  }
+  if (
+    declaration.type === 'Property' &&
+    !declaration.computed &&
+    propertyName(declaration.key) === 'originals' &&
+    parent?.type === 'ObjectPattern'
+  ) {
+    const variable = editor.parent(parent);
+    if (variable?.type === 'VariableDeclarator' && variable.init) {
+      return origin(variable.init) === 'result' ? 'originals' : undefined;
+    }
+  }
+  if (
+    (declaration.type === 'ArrowFunctionExpression' || declaration.type === 'FunctionExpression') &&
+    declaration.params[0]?.type === 'Identifier' &&
+    editor.binding(declaration.params[0]) === binding &&
+    parent?.type === 'CallExpression' &&
+    parent.arguments[0] === declaration &&
+    parent.callee.type === 'MemberExpression' &&
+    memberName(parent.callee) === 'forEach'
+  ) {
+    return origin(parent.callee.object) === 'originals' ? 'value' : undefined;
+  }
+  if (
+    declaration.type === 'ArrayPattern' &&
+    declaration.elements[1]?.type === 'Identifier' &&
+    editor.binding(declaration.elements[1]) === binding &&
+    parent?.type === 'VariableDeclarator'
+  ) {
+    const variables = editor.parent(parent);
+    const loop = variables && editor.parent(variables);
+    if (loop?.type === 'ForOfStatement' && loop.left === variables) {
+      const iterable = loop.right;
+      const map =
+        iterable.type === 'CallExpression' &&
+        iterable.callee.type === 'MemberExpression' &&
+        memberName(iterable.callee) === 'entries'
+          ? iterable.callee.object
+          : iterable;
+      return origin(map) === 'originals' ? 'value' : undefined;
+    }
+  }
+  return undefined;
+}
+
+function assertionTypeName(editor: SourceEditor, node: t.Node): string | undefined {
+  if (node.type === 'TSQualifiedName') {
+    if (
+      node.left.type === 'Identifier' &&
+      node.left.name === 'jest' &&
+      node.right.name === 'Matchers'
+    ) {
+      return 'jest.Matchers';
+    }
+    const declaration = editor.binding(node.left)?.declaration;
+    const imported = declaration && editor.parent(declaration);
+    return declaration?.type === 'ImportNamespaceSpecifier' &&
+      imported?.type === 'ImportDeclaration' &&
+      ASSERTION_SOURCES.has(imported.source.value)
+      ? node.right.name
+      : undefined;
+  }
+  if (node.type !== 'Identifier') {
+    return undefined;
+  }
+  const declaration = editor.binding(node)?.declaration;
+  const imported = declaration && editor.parent(declaration);
+  if (declaration?.type === 'ImportSpecifier' && imported?.type === 'ImportDeclaration') {
+    return ASSERTION_SOURCES.has(imported.source.value)
+      ? propertyName(declaration.imported)
+      : undefined;
+  }
+  return node.name;
+}
+
+function isJestMatchers(editor: SourceEditor, node: t.TSInterfaceDeclaration): boolean {
+  let block = editor.parent(node);
+  if (block?.type === 'ExportNamedDeclaration') {
+    block = editor.parent(block);
+  }
+  const namespace = block && editor.parent(block);
+  return (
+    node.id.name === 'Matchers' &&
+    namespace?.type === 'TSModuleDeclaration' &&
+    namespace.id.type === 'Identifier' &&
+    namespace.id.name === 'jest'
+  );
+}
 
 function replacementImport(source: string, name: string): string | undefined {
   if (RUNNER_SOURCES.has(source)) {
@@ -627,7 +758,11 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
             'If this mock replaces a constructor, review its prototype, methods, and instanceof behavior.',
           );
         }
-        if (reviewV4 && method === 'setSystemTime' && /\bTemporal\b/.test(source)) {
+        if (
+          reviewV4 &&
+          method === 'setSystemTime' &&
+          (options.temporalPolyfill || /\bTemporal\b/.test(source))
+        ) {
           editor.report(
             node,
             'temporal-system-time',
@@ -876,7 +1011,7 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
       }
     },
     AssignmentExpression(node) {
-      if (reviewV4 && /\boriginals\b/.test(editor.text(node.right))) {
+      if (reviewV4 && globalRestorationOrigin(editor, node.right) === 'value') {
         editor.report(
           node,
           'global-descriptors',
@@ -903,8 +1038,9 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
     TSInterfaceDeclaration(node) {
       if (
         reviewV4 &&
-        ['Assertion', 'Matchers'].includes(node.id.name) &&
-        (node.typeParameters?.params.length ?? 0) < 2
+        (isJestMatchers(editor, node) ||
+          (['Assertion', 'Matchers'].includes(node.id.name) &&
+            (node.typeParameters?.params.length ?? 0) < 2))
       ) {
         editor.report(
           node,
@@ -914,11 +1050,12 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
       }
     },
     TSTypeReference(node) {
-      const name = editor.text(node.typeName);
+      const name = assertionTypeName(editor, node.typeName);
       if (
         reviewV4 &&
-        ['Assertion', 'Matchers', 'jest.Matchers'].includes(name) &&
-        (node.typeArguments?.params.length ?? 0) < 2
+        (name === 'jest.Matchers' ||
+          (['Assertion', 'Matchers'].includes(name ?? '') &&
+            (node.typeArguments?.params.length ?? 0) < 2))
       ) {
         editor.report(
           node,

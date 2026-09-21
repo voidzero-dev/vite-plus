@@ -14,7 +14,7 @@ const pr = {
 
 const read = (file) => readFileSync(new URL(file, import.meta.url), 'utf8');
 
-test('uses the head branch docs for same-repo and stacked PRs', () => {
+await test('uses the head branch docs for same-repo and stacked PRs', () => {
   assert.equal(
     previewDocsOrigin(pr),
     'https://rfc-vitest-v5-upgrade-viteplus-dev.voidzero-docs.workers.dev',
@@ -27,7 +27,7 @@ test('uses the head branch docs for same-repo and stacked PRs', () => {
   }
 });
 
-test('uses the PR alias for forks, never a same-named repository branch', () => {
+await test('uses the PR alias for forks, never a same-named repository branch', () => {
   assert.equal(
     previewDocsOrigin({
       ...pr,
@@ -37,7 +37,7 @@ test('uses the PR alias for forks, never a same-named repository branch', () => 
   );
 });
 
-test('passes the origin to native builds and includes it in the native cache key', () => {
+await test('passes the origin to native builds and includes it in the native cache key', () => {
   const preview = read('../../workflows/publish-preview.yml');
   const release = read('../../workflows/reusable-release-build.yml');
   const build = read('../../actions/build-upstream/action.yml');
