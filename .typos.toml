@@ -1,4 +1,5 @@
 [default.extend-words]
+pn = "pn" # pnpm short alias
 ratatui = "ratatui"
 PUNICODE = "PUNICODE"
 Jod = "Jod" # Node.js v22 LTS codename
