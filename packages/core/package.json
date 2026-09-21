@@ -114,11 +114,11 @@
     "@oxc-project/types": "catalog:",
     "lightningcss": "catalog:",
     "postcss": "^8.5.6",
-    "yuku-codegen": "^0.9.3",
-    "yuku-parser": "^0.9.3"
+    "yuku-codegen": "^0.10.0",
+    "yuku-parser": "^0.10.0"
   },
   "devDependencies": {
-    "@ast-grep/napi": "^0.43.0",
+    "@ast-grep/napi": "^0.45.0",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",
