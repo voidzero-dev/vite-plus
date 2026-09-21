@@ -21,10 +21,12 @@ Inspect the worktree and preserve unrelated changes. Identify the workspace root
 
 For a project that does not use Vite+ yet, check the prerequisites for the tools it uses: Vite 8+ and Vitest 4.1+. Complete any required upstream upgrades and validate them before starting the Vite+ migration. Then keep those manifests, lockfile, and installed packages available so the migrator can identify the original Vitest version. Do not install vite-plus or upgrade Vitest to the target's bundled version before running migration.
 
-Choose the intended Vite+ release or preview and use its CLI. Use a supported Node.js runtime from the compatibility guide. A global installation is optional:
+Use the CLI from the target Vite+ 1.0 release or its preview build. Use a supported Node.js runtime from the compatibility guide. A global installation is optional:
 
 - With a global vp installation, follow ${__DOCS_ORIGIN__}/guide/upgrade to select the target release and check \`vp toolchain --global\`. Run \`vp help\` and \`vp help migrate\`, then \`vp migrate --no-interactive\` from the workspace root.
-- Without a global installation, replace <target-version> with the intended version and run \`pnpm dlx --package=vite-plus@<target-version> vp migrate --no-interactive\` or \`npx --package=vite-plus@<target-version> vp migrate --no-interactive\` from the workspace root. First run the same command with \`help migrate\` instead of \`migrate --no-interactive\` to read its help. For a preview, use the version from its PR and pass \`--registry=https://registry-bridge.viteplus.dev\` to pnpm or npx before the vp command.
+- Without a global installation, run the target CLI through the package manager from the workspace root. For the 1.0.0 release, use \`pnpm dlx --package=vite-plus@1.0.0 vp migrate --no-interactive\` or \`npx --package=vite-plus@1.0.0 vp migrate --no-interactive\`. First run the same command with \`help migrate\` instead of \`migrate --no-interactive\` to read its help. These commands fetch the target CLI without replacing the old project dependencies first.
+
+Replace 1.0.0 with the intended release version. For a preview, use the version from its PR and pass \`--registry=https://registry-bridge.viteplus.dev\` to pnpm or npx before the vp command.
 
 Do not run migration with an old project's node_modules/.bin/vp. Migrate monorepos from the workspace root so shared manifests, catalogs, overrides, and lockfiles remain consistent.
 

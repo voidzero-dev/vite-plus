@@ -19,7 +19,7 @@ Run a standard vite-plus release from version bump to published announcement. An
 When given a release PR (URL or number), do not start from step 1. First audit the release's current state, then continue from the earliest unfinished step:
 
 - Is the binding version synced? (step 2: `grep -c "'<prev>'" packages/cli/binding/index.cjs` on the release branch)
-- Do the release version examples in `docs/guide/migrate.md`, including its Copy Prompt, match `packages/cli/package.json`? (step 2)
+- Do the release version examples in the migration guide and the setup, migration, and upgrade prompts match `packages/cli/package.json`? (step 2)
 - Is the PR description still the `prepare_release` boilerplate, or already a categorized changelog? (step 3)
 - Is a preview build present and for the current head? (step 4)
 - Does `main` have commits the release branch lacks? (`git log origin/release/vX.Y.Z..origin/main`, step 5)
@@ -33,7 +33,7 @@ Before post-release work, fetch `origin/main` and read its copy of this skill (`
 ## Pipeline overview
 
 1. `Prepare Release` workflow bumps versions and opens the release PR (`release/vX.Y.Z` -> `main`).
-2. Release manager: sync `binding/index.cjs` and the migration guide's release version, write the changelog PR description, offer the preview-build smoke test (recommend it when the release has more than 10 commits since the previous tag), get CI green.
+2. Release manager: sync `binding/index.cjs` and the release versions in the documentation and prompts, write the changelog PR description, offer the preview-build smoke test (recommend it when the release has more than 10 commits since the previous tag), get CI green.
 3. Merging the PR pushes a `packages/cli/package.json` change to `main`, which triggers `release.yml`: build, manual approval gate, npm publish, GitHub release, Docker image, Discord notification.
 4. Release manager: polish the GitHub release notes, verify installs, announce.
 
@@ -82,13 +82,19 @@ regenerate this file, so the CI build's regeneration step produces a
 diff that the post-build no-unexpected-changes guard rejects.
 ```
 
-### Migration guide
+### Documentation and prompts
 
-Use the version in the release branch's `packages/cli/package.json` as the target release version in `docs/guide/migrate.md`. Update the `--package=vite-plus@<curr>` pins in the pnpm and npm command examples, the `upgradePrompt` text used by Copy Prompt, and the surrounding prose that names that exact release. Keep an exact version; do not replace it with a major range or `latest`.
+Use the version in the release branch's `packages/cli/package.json` as the target release version in these files:
+
+- `docs/guide/migrate.md`: pnpm and npm migration command examples and matching release prose.
+- `docs/.vitepress/theme/data/migration-prompts.ts`: `migrationPrompt` and `upgradePrompt`, including their command examples and matching release prose.
+- `docs/.vitepress/theme/components/CopyPrompt.vue`: the default setup prompt's `vp create` command examples and matching release prose. This component also includes the shared `migrationPrompt` and serves both the homepage and Getting Started guide.
+
+Update every `--package=vite-plus@<curr>` pin and the corresponding `For the <curr> release` and `Replace <curr>` text. Keep an exact version; do not replace it with a placeholder, a major range, or `latest`. The prompt text lives in the two source files above, not in `docs/guide/migrate.md`.
 
 Preserve historical versions such as the migration's source version and the release that introduced a breaking change. Leave Node.js requirements, bundled tool versions, and preview-registry instructions unchanged unless their requirements change.
 
-Commit the guide update on the release branch with the binding sync or in a separate release-version sync commit. Recheck both files after a target-version change or a merge from `main`. Before merging, confirm that the guide and Copy Prompt use the target release in both package-manager commands and their matching prose, then run `git diff --check`.
+Commit these updates on the release branch with the binding sync or in a separate release-version sync commit. Recheck all three files and the binding after a target-version change or a merge from `main`. Before merging, confirm that the guide and all three prompts use the target release in both package-manager commands and their matching prose, then run `git diff --check`.
 
 Only these release-version sync commits go directly on the release branch. Everything else goes through `main` (see step 5).
 
@@ -352,7 +358,7 @@ Known release-branch-only failure modes:
 
 ## 6. Merge
 
-Merging the release PR is the release trigger. Before merging confirm: CI green, changelog validated, binding and migration guide versions synced, and (if used) the preview build verified.
+Merging the release PR is the release trigger. Before merging confirm: CI green, changelog validated, binding and documentation versions synced (including all three prompts), and (if used) the preview build verified.
 
 Auto-merge being enabled is not a completed merge. Confirm `mergedAt` and the merge commit, then follow the Release run for that commit; older successful runs can have skipped publishing because the version did not change.
 
@@ -503,7 +509,7 @@ After the release ships and announcements are approved or confirmed complete, re
 
 - [ ] `prepare_release` run for the target version; release PR open
 - [ ] `binding/index.cjs` synced on the release branch (step 2 commit message shape)
-- [ ] `docs/guide/migrate.md` command examples, Copy Prompt, and matching release prose use the exact target version from `packages/cli/package.json`
+- [ ] The migration guide and all three prompts in the step 2 files use the exact target version from `packages/cli/package.json` in their command examples and matching release prose
 - [ ] PR description written from the head branch data; every PR exactly once except documented omissions; breaking changes in their own section above Highlights; no em/en dashes; closing boilerplate intact
 - [ ] Dependency-upgrade PRs consolidated; vite-task bump expanded with upstream credits; security advisories linked
 - [ ] Smoke test offered to the release manager at both levels (local sweep and fork-PR CI), with the commit count stated and a recommendation to run it when that count is above 10; if accepted, forks synced to upstream first, preview build published, and the full ecosystem-ci catalog verified via `test-pkg-pr-new-migrate` (following TESTING.md), with every failure triaged and regressions ruled out against the previous release

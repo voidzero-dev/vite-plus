@@ -20,7 +20,7 @@ A global installation is optional. To install the global \`vp\` CLI when it is n
 
 Open a new terminal after installation. Follow ${__DOCS_ORIGIN__}/guide/upgrade to select the target release or preview and check \`vp toolchain --global\` before scaffolding.
 
-Without a global installation, use a supported Node.js runtime from the compatibility guide and run \`pnpm dlx --package=vite-plus@<target-version> vp create\` or \`npx --package=vite-plus@<target-version> vp create\`. Replace <target-version> with the intended version. For a preview, use the version from its PR and pass \`--registry=https://registry-bridge.viteplus.dev\` to pnpm or npx before the vp command.
+Without a global installation, use a supported Node.js runtime from the compatibility guide. For the 1.0.0 release, run \`pnpm dlx --package=vite-plus@1.0.0 vp create\` or \`npx --package=vite-plus@1.0.0 vp create\`. Replace 1.0.0 with the intended release version. For a preview, use the version from its PR and pass \`--registry=https://registry-bridge.viteplus.dev\` to pnpm or npx before the vp command.
 
 Run \`vp install\`, \`vp check\`, and \`vp test\`, then \`vp build\` for applications or \`vp pack\` for libraries. Without a global CLI, install with the project's package manager and run the local CLI through it, such as \`pnpm exec vp check\` or \`npm exec -- vp check\`. Explain how to use \`vp dev\` for the dev server and \`vp run <task>\` for project scripts or tasks. Report the setup changes, validation results, and any remaining work. Do not commit or push unless I ask.
 
