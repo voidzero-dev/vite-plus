@@ -61,6 +61,7 @@ export interface SourceOptions {
   browserPossible?: boolean;
   globals?: boolean;
   reviewGlobals?: boolean;
+  ownershipReason?: string;
   temporalPolyfill?: boolean;
 }
 

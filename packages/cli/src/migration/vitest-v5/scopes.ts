@@ -19,6 +19,7 @@ import {
 } from './ast.ts';
 import { literalTestCommands, vitestCommandArgsStart } from './commands.ts';
 import { resolveConfigObject } from './config-object.ts';
+import { resolveStorybookScope, type StorybookScope } from './storybook.ts';
 
 interface ConfigEntry {
   implicit?: boolean;
@@ -33,6 +34,8 @@ interface ConfigEntry {
 }
 
 interface TestScope {
+  storybook?: StorybookScope;
+  name?: string;
   excludedRoots?: string[];
   root: string;
   dir?: string;
@@ -50,7 +53,10 @@ interface TestScope {
   globals?: boolean;
 }
 
-export type VitestV5TestMode = Pick<SourceOptions, 'browser' | 'globals' | 'reviewGlobals'> & {
+export type VitestV5TestMode = Pick<
+  SourceOptions,
+  'browser' | 'globals' | 'reviewGlobals' | 'ownershipReason'
+> & {
   benchmark?: boolean;
 };
 
@@ -421,6 +427,13 @@ export function resolveVitestV5TestModes(
       if (selected === false) {
         return;
       }
+      const storybook =
+        resolveStorybookScope(editor, object, sources, entry.file!, entry.cwd ?? entry.root) ??
+        base?.storybook;
+      // The addon supplies a Vite root beside its config directory. An explicit
+      // test.root still overrides it, and test.dir controls glob exclusions.
+      const scopeRoot =
+        test && objectProperty(test, 'root') ? resolvedRoot : (storybook?.root ?? resolvedRoot);
       const dirValue = test && objectProperty(test, 'dir')?.value;
       let dir = base ? base.dir : '';
       if (dirValue) {
@@ -455,9 +468,12 @@ export function resolveVitestV5TestModes(
       if (effectiveDir !== undefined) {
         discoveryRoot = effectiveDir
           ? path.resolve(entry.cwd ?? entry.root, effectiveDir)
-          : resolvedRoot;
+          : scopeRoot;
       }
+      const projectName = test && objectProperty(test, 'name')?.value;
       const scope: TestScope = {
+        storybook,
+        name: isString(projectName) ? projectName.value : path.basename(entry.file!),
         // Merely discovering a workspace's tooling config does not make it a
         // test invocation over every child package. Explicit scripts, Vitest
         // configs, and ownership options still authorize cross-package scopes.
@@ -477,7 +493,7 @@ export function resolveVitestV5TestModes(
                 (root) => root !== entry.root && insideDirectory(root, entry.root),
               )
             : undefined,
-        root: resolvedRoot,
+        root: scopeRoot,
         dir,
         discoveryRoot,
         include: includePatterns ? [...(base?.include ?? []), ...includePatterns] : base?.include,
@@ -494,6 +510,13 @@ export function resolveVitestV5TestModes(
           selected === undefined ? undefined : booleanOption(globals, base ? base.globals : false),
       };
       const addScope = () => {
+        if (scope.storybook?.reason) {
+          editor.report(
+            objectProperty(object, 'plugins')?.value ?? object,
+            'global-api-ownership',
+            scope.storybook.reason,
+          );
+        }
         const resolvedSetup = scope.setupFiles?.map((reference) =>
           resolveSetupFile(sources, scope.root, reference),
         );
@@ -661,15 +684,22 @@ export function resolveVitestV5TestModes(
         const setup = scope.setupFiles?.includes(file);
         const inside = insideDirectory(file, scope.root);
         const discoveryRoot = scope.discoveryRoot;
-        const test =
-          discoveryRoot &&
-          insideDirectory(file, discoveryRoot) &&
-          (scope.include ?? DEFAULT_TEST_INCLUDE).some((pattern) =>
-            matches(file, discoveryRoot, pattern),
-          ) &&
-          !(scope.exclude ?? DEFAULT_TEST_EXCLUDE).some((pattern) =>
-            matches(file, discoveryRoot, pattern),
-          );
+        const test = scope.storybook
+          ? discoveryRoot &&
+            scope.storybook.include?.some((pattern) =>
+              minimatch(file.replaceAll('\\', '/'), pattern, { dot: true }),
+            ) &&
+            !(scope.exclude ?? DEFAULT_TEST_EXCLUDE).some((pattern) =>
+              matches(file, discoveryRoot, pattern),
+            )
+          : discoveryRoot &&
+            insideDirectory(file, discoveryRoot) &&
+            (scope.include ?? DEFAULT_TEST_INCLUDE).some((pattern) =>
+              matches(file, discoveryRoot, pattern),
+            ) &&
+            !(scope.exclude ?? DEFAULT_TEST_EXCLUDE).some((pattern) =>
+              matches(file, discoveryRoot, pattern),
+            );
         const benchmark =
           discoveryRoot &&
           insideDirectory(file, discoveryRoot) &&
@@ -688,7 +718,11 @@ export function resolveVitestV5TestModes(
         if (setup || test || benchmark) {
           matching.push({ scope, certain: true });
         } else if (
-          ((!discoveryRoot || !scope.setupFiles || scope.unresolvedSetup) && inside) ||
+          ((!discoveryRoot ||
+            !scope.setupFiles ||
+            scope.unresolvedSetup ||
+            scope.storybook?.reason) &&
+            inside) ||
           (!scope.benchmark && discoveryRoot && insideDirectory(file, discoveryRoot))
         ) {
           matching.push({ scope, certain: false });
@@ -700,11 +734,18 @@ export function resolveVitestV5TestModes(
       const globals =
         matching.length > 0 &&
         matching.every(({ scope, certain }) => certain && scope.globals === true);
+      const ownershipReason = matching.some(({ scope }) => scope.storybook)
+        ? (matching.find(({ scope }) => scope.storybook?.reason)?.scope.storybook?.reason ??
+          (browserModes.size > 1
+            ? `Conflicting Node/browser projects: ${[...new Set(matching.map(({ scope }) => scope.name))].join(', ')}.`
+            : undefined))
+        : undefined;
       return [
         file,
         {
           benchmark: benchmarkFile,
           browser: browserModes.size === 1 ? browserModes.values().next().value : undefined,
+          ...(ownershipReason ? { ownershipReason } : {}),
           globals,
           reviewGlobals:
             !globals && matching.some(({ scope, certain }) => !certain || scope.globals !== false),

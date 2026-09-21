@@ -1,4 +1,21 @@
 [[case]]
+name = "storybook_project_scopes"
+vp = "global"
+comment = "Use Storybook story patterns to keep jsdom text assertions unchanged without ownership reviews, while still migrating browser assertions."
+steps = [
+  { argv = ["vpt", "rm", "example.test.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import path from 'node:path';\nimport { fileURLToPath } from 'node:url';\nimport { storybookTest as stories } from '@storybook/addon-vitest/vitest-plugin';\nconst dirname = path.dirname(fileURLToPath(import.meta.url));\nexport default { test: { projects: [\n  { extends: true, test: { name: 'integration', environment: 'jsdom', include: ['src/**/*.test.tsx'], setupFiles: ['./setup.ts'] } },\n  { extends: true, plugins: [stories({ configDir: path.join(dirname, '.storybook-test') })], test: { name: 'component-browser', browser: { enabled: true } } },\n] } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".storybook-test/main.ts", "const config = { stories: ['../src/routes/**/*.stories.tsx'] };\nexport default config;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.ts", "import '@testing-library/jest-dom/vitest';\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/account.test.tsx", "import { expect } from 'vitest';\nexport function checkAccount(element) {\n  expect(element).toHaveTextContent('Could not save your display name.');\n  expect(element).toHaveTextContent('Could not save your display name.');\n  expect(element).toHaveTextContent('Could not load profile information.');\n}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/routes/account.stories.tsx", "import { expect } from 'vitest';\nexport function checkBrowser(element) { expect(element).toHaveTextContent('partial'); }\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/unrelated.js", "export function checkOtherRunner(element) { expect(element).toHaveTextContent('partial'); }\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "src/account.test.tsx", "src/routes/account.stories.tsx", "src/unrelated.js", ".storybook-test/main.ts"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "callback_workspace_scopes"
 vp = "global"
 comment = "Resolve static callback test options independently of a tooling-only workspace root and a sibling browser suite. Preserve Node text matchers and unrelated collect calls."

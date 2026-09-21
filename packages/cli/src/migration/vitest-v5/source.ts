@@ -812,7 +812,9 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
             editor.report(
               node,
               'text-content-project',
-              "Resolve this assertion's test project: browser assertions need toMatchTextContent for v4 partial matching; keep Node jest-dom assertions unchanged.",
+              options.ownershipReason
+                ? `${options.ownershipReason} Browser assertions need toMatchTextContent for v4 partial matching; keep Node jest-dom assertions unchanged.`
+                : "Resolve this assertion's test project: browser assertions need toMatchTextContent for v4 partial matching; keep Node jest-dom assertions unchanged.",
             );
           }
         }

@@ -184,3 +184,217 @@ describe('Vitest config factory ownership', () => {
     });
   });
 });
+
+describe('Storybook project ownership', () => {
+  const assertion = `import { expect } from 'vitest'; expect(element).toHaveTextContent('partial');`;
+  const integration = `{ extends: true, test: { name: 'integration', environment: 'jsdom', include: ['src/**/*.test.tsx'], setupFiles: ['./setup.ts'] } }`;
+  const browser = `{ extends: true, plugins: [stories({ configDir: path.join(dirname, '.storybook-test') })], test: { name: 'component-browser', globals: true, browser: { enabled: true }, setupFiles: ['./browser-setup.ts'] } }`;
+  const config = `import path from 'node:path';
+    import { fileURLToPath } from 'node:url';
+    import { storybookTest as stories } from '@storybook/addon-vitest/vitest-plugin';
+    const dirname = path.dirname(fileURLToPath(import.meta.url));
+    export default { test: { projects: [${integration}, ${browser}] } };`;
+  const main = `import type { StorybookConfig } from '@storybook/react-vite';
+    const config: StorybookConfig = { stories: ['../src/routes/**/*.stories.tsx'] };
+    export default config;`;
+  function project(files: Record<string, string> = {}) {
+    return workspace({
+      'vite.config.ts': `export default { fmt: { semi: false } };`,
+      'web/vitest.config.ts': config,
+      'web/.storybook-test/main.ts': main,
+      'web/setup.ts': `import '@testing-library/jest-dom/vitest';`,
+      'web/browser-setup.ts': assertion,
+      'web/src/account.test.tsx': `${assertion}\n${assertion.replace("import { expect } from 'vitest'; ", '')}\n${assertion.replace("import { expect } from 'vitest'; ", '')}`,
+      'web/src/routes/account.stories.tsx': assertion,
+      'web/src/unrelated.js': `expect(element).toHaveTextContent('partial');`,
+      ...files,
+    });
+  }
+
+  it.each([
+    `path.join(dirname, '.storybook-test')`,
+    `path.resolve(import.meta.dirname, '.storybook-test')`,
+    `path.join(__dirname, '.storybook-test')`,
+    `'.storybook-test'`,
+  ])('keeps jsdom matchers and migrates browser stories with configDir %s', (directory) => {
+    const { plan, read } = project({
+      'web/vitest.config.ts': config.replace("path.join(dirname, '.storybook-test')", directory),
+    });
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(read('web/src/account.test.tsx').match(/toHaveTextContent/g)).toHaveLength(3);
+    expect(read('web/src/routes/account.stories.tsx')).toContain('toMatchTextContent');
+    expect(read('web/browser-setup.ts')).toContain('toMatchTextContent');
+    expect(read('web/src/unrelated.js')).toBe(`expect(element).toHaveTextContent('partial');`);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+  });
+
+  it.each([
+    `['../src/examples/*.example.ts']`,
+    `[{ directory: '../src/examples', files: '*.example.ts', titlePrefix: 'Examples' }]`,
+  ])('uses custom story patterns for global API ownership: %s', (stories) => {
+    const { plan, read } = project({
+      'web/.storybook-test/main.ts': `export default { stories: ${stories} };`,
+      'web/src/routes/account.stories.tsx': '',
+      'web/src/examples/account.example.ts': `expect(element).toHaveTextContent('partial');`,
+    });
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(read('web/src/examples/account.example.ts')).toContain('toMatchTextContent');
+    expect(read('web/src/account.test.tsx').match(/toHaveTextContent/g)).toHaveLength(3);
+    expect(read('web/src/unrelated.js')).toBe(`expect(element).toHaveTextContent('partial');`);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+  });
+
+  it.each([
+    `export default { stories: await loadStories() };`,
+    `export default { stories: ['../src/**/*.stories.tsx'], ...extra };`,
+    `export default { stories: ['../src/**/*.stories.tsx'], viteFinal(config) { return config; } };`,
+    `export default { stories: ['../src/**/*.stories.tsx'], presets: ['./preset.js'] };`,
+    `export default { stories: [{ directory: '../src' }] };`,
+  ])('retains ownership review for dynamic discovery: %s', (main) => {
+    const { plan, read } = project({ 'web/.storybook-test/main.ts': main });
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({
+        code: 'global-api-ownership',
+        message: expect.stringContaining('Storybook test ownership is unresolved'),
+      }),
+    );
+    expect(
+      plan.findings.filter(
+        ({ code, file }) => code === 'text-content-project' && file.endsWith('account.test.tsx'),
+      ),
+    ).toHaveLength(3);
+    applyVitestV5Migration(plan);
+    expect(read('web/src/routes/account.stories.tsx')).toBe(assertion);
+    expect(read('web/src/account.test.tsx').match(/toHaveTextContent/g)).toHaveLength(3);
+    expect(finishVitestV5Migration(plan)).toContainEqual(
+      expect.objectContaining({ code: 'text-content-project' }),
+    );
+  });
+
+  it.each([
+    `condition && stories({ configDir: '.storybook-test' })`,
+    `stories({ configDir: getConfigDir() })`,
+    `stories(options)`,
+  ])('does not execute or guess dynamic plugin options: %s', (plugin) => {
+    const { plan } = project({
+      'web/vitest.config.ts': config.replace(
+        "stories({ configDir: path.join(dirname, '.storybook-test') })",
+        plugin,
+      ),
+    });
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({
+        code: 'text-content-project',
+        message: expect.stringContaining('Storybook test ownership is unresolved'),
+      }),
+    );
+    expect(plan.changes.some(({ file }) => file.endsWith('account.test.tsx'))).toBe(false);
+  });
+
+  it('retains review for a genuine browser/jsdom overlap', () => {
+    const { plan, read } = project({
+      'web/.storybook-test/main.ts': `export default { stories: ['../src/**/*.test.tsx'] };`,
+      'web/src/routes/account.stories.tsx': '',
+    });
+    const reviews = plan.findings.filter(({ code }) => code === 'text-content-project');
+    expect(reviews).toHaveLength(3);
+    expect(reviews[0].message).toContain(
+      'Conflicting Node/browser projects: integration, component-browser',
+    );
+    applyVitestV5Migration(plan);
+    expect(read('web/src/account.test.tsx').match(/toHaveTextContent/g)).toHaveLength(3);
+    expect(finishVitestV5Migration(plan)).toContainEqual(
+      expect.objectContaining({ code: 'text-content-project' }),
+    );
+  });
+
+  it('does not recognize an unrelated function by its name', () => {
+    const { plan } = project({
+      'web/vitest.config.ts': config.replace(
+        '@storybook/addon-vitest/vitest-plugin',
+        './unrelated-plugin',
+      ),
+    });
+    expect(
+      plan.findings.filter(
+        ({ code, file }) => code === 'text-content-project' && file.endsWith('account.test.tsx'),
+      ),
+    ).toHaveLength(3);
+    expect(plan.changes.some(({ file }) => file.endsWith('account.test.tsx'))).toBe(false);
+  });
+
+  it('resolves the default config directory and a JavaScript main file', () => {
+    const { plan, read } = project({
+      'web/vitest.config.ts': config.replace(
+        "stories({ configDir: path.join(dirname, '.storybook-test') })",
+        'stories()',
+      ),
+      'web/.storybook/main.js': `export default { stories: ['../src/routes/**/*.stories.tsx'] };`,
+    });
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(read('web/src/account.test.tsx').match(/toHaveTextContent/g)).toHaveLength(3);
+    expect(read('web/src/routes/account.stories.tsx')).toContain('toMatchTextContent');
+  });
+
+  it('retains review for a shared jsdom/browser setup file', () => {
+    const { plan, read } = project({
+      'web/vitest.config.ts': config.replace("'./browser-setup.ts'", "'./setup.ts'"),
+      'web/setup.ts': assertion,
+      'web/browser-setup.ts': '',
+    });
+    expect(plan.findings.filter(({ code }) => code === 'text-content-project')).toEqual([
+      expect.objectContaining({ file: expect.stringContaining('setup.ts') }),
+    ]);
+    applyVitestV5Migration(plan);
+    expect(read('web/setup.ts')).toBe(assertion);
+    expect(read('web/src/account.test.tsx').match(/toHaveTextContent/g)).toHaveLength(3);
+  });
+
+  it.each(['test.root', 'test.dir'])('matches exclusions relative to %s', (setting) => {
+    const { plan, read } = project({
+      'web/vitest.config.ts': config.replace(
+        "name: 'component-browser',",
+        `name: 'component-browser', ${setting.slice(5)}: './src/routes', exclude: ['excluded.stories.tsx'],`,
+      ),
+      'web/browser-setup.ts': '',
+      'web/src/routes/browser-setup.ts': '',
+      'web/src/routes/excluded.stories.tsx': `expect(element).toHaveTextContent('partial');`,
+    });
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(read('web/src/routes/account.stories.tsx')).toContain('toMatchTextContent');
+    expect(read('web/src/routes/excluded.stories.tsx')).toBe(
+      `expect(element).toHaveTextContent('partial');`,
+    );
+  });
+
+  it('uses the Storybook root for setup files in a nested config directory', () => {
+    const { plan, read } = project({
+      'web/vitest.config.ts': config.replace("'.storybook-test'", "'browser/.storybook'"),
+      'web/browser/.storybook/main.ts': `export default { stories: ['../../src/routes/**/*.stories.tsx'] };`,
+      'web/browser-setup.ts': '',
+      'web/browser/browser-setup.ts': assertion,
+    });
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(read('web/browser/browser-setup.ts')).toContain('toMatchTextContent');
+    expect(read('web/src/routes/account.stories.tsx')).toContain('toMatchTextContent');
+    expect(read('web/src/account.test.tsx').match(/toHaveTextContent/g)).toHaveLength(3);
+  });
+
+  it('retains review when a local preset can alter discovery', () => {
+    const { plan } = project({
+      'web/.storybook-test/presets.js': `export const stories = () => ['../src/**/*.test.tsx'];`,
+    });
+    expect(plan.findings).toContainEqual(
+      expect.objectContaining({
+        code: 'text-content-project',
+        message: expect.stringContaining('custom presets'),
+      }),
+    );
+    expect(plan.changes.some(({ file }) => file.endsWith('account.test.tsx'))).toBe(false);
+  });
+});
