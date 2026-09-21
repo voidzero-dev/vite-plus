@@ -1,0 +1,15 @@
+[[case]]
+name = "legacy_test_entry_points"
+vp = "global"
+comment = "Migrate legacy test aliases on fresh and existing Vite+ projects. Check runtime exports and a no-op rerun."
+steps = [
+  { argv = ["vpt", "cp", "entries.mjs", "entries.before"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "entries.mjs"],
+  ["node", "verify.mjs"],
+  { argv = ["vpt", "cp", "entries.before", "entries.mjs"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "entries.mjs"],
+  ["node", "verify.mjs"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]

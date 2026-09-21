@@ -5,6 +5,7 @@ export * from './migrator/tsup.ts';
 export * from './migrator/tsconfig.ts';
 export * from './migrator/framework-shim.ts';
 export * from './migrator/vitest-ecosystem.ts';
+export * from './migrator/vitest-v5.ts';
 export * from './migrator/catalog.ts';
 export * from './migrator/yarn.ts';
 export * from './migrator/source-scan.ts';

@@ -15,7 +15,7 @@ VITE+ - The Unified Toolchain for the Web
 ➤ YN0000: ┌ Link step
 ➤ YN0007: │ command-rebuild-yarn4@workspace:. must be built because it never has been before or the last one failed
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file builds.txt`
@@ -37,7 +37,7 @@ Yarn Berry rebuilds all packages instead of returning a no-op.
 ➤ YN0000: ┌ Link step
 ➤ YN0007: │ command-rebuild-yarn4@workspace:. must be built because it never has been before or the last one failed
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file builds.txt`
@@ -60,7 +60,7 @@ Rebuild only the named package.
 ➤ YN0000: ┌ Link step
 ➤ YN0007: │ command-rebuild-yarn4@workspace:. must be built because it never has been before or the last one failed
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file builds.txt`

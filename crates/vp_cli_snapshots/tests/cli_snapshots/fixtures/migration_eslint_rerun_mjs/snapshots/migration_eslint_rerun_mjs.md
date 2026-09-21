@@ -28,7 +28,6 @@ check eslint removed from devDependencies and scripts rewritten
   },
   "devDependencies": {
     "eslint": "^9.0.0",
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

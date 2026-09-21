@@ -15,7 +15,7 @@ warn: yarn >=2 does not support --workspace-root.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -56,7 +56,7 @@ warn: yarn does not support --workspace.
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -101,10 +101,10 @@ should add packages to packages/app
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -152,10 +152,10 @@ warn: yarn does not support --workspace.
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -203,8 +203,8 @@ should add testnpm2 test-vite-plus-install to all packages and workspace root
 [command-add-yarn4-with-workspace]: ➤ YN0000: └ Completed
 [command-add-yarn4-with-workspace]: ➤ YN0000: ┌ Link step
 [command-add-yarn4-with-workspace]: ➤ YN0000: └ Completed
-[command-add-yarn4-with-workspace]: ➤ YN0000: · Done in <duration> <duration>
-[command-add-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration> <duration>
+[command-add-yarn4-with-workspace]: ➤ YN0000: · Done in <duration>
+[command-add-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration>
 
 [admin]: Process started
 [admin]: ➤ YN0000: · Yarn <version>
@@ -214,8 +214,8 @@ should add testnpm2 test-vite-plus-install to all packages and workspace root
 [admin]: ➤ YN0000: └ Completed
 [admin]: ➤ YN0000: ┌ Link step
 [admin]: ➤ YN0000: └ Completed
-[admin]: ➤ YN0000: · Done in <duration> <duration>
-[admin]: Process exited (exit code 0), completed in <duration> <duration>
+[admin]: ➤ YN0000: · Done in <duration>
+[admin]: Process exited (exit code 0), completed in <duration>
 
 [app]: Process started
 [app]: ➤ YN0000: · Yarn <version>
@@ -225,8 +225,8 @@ should add testnpm2 test-vite-plus-install to all packages and workspace root
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
 [@vite-plus-test/utils]: Process started
 [@vite-plus-test/utils]: ➤ YN0000: · Yarn <version>
@@ -236,10 +236,10 @@ should add testnpm2 test-vite-plus-install to all packages and workspace root
 [@vite-plus-test/utils]: ➤ YN0000: └ Completed
 [@vite-plus-test/utils]: ➤ YN0000: ┌ Link step
 [@vite-plus-test/utils]: ➤ YN0000: └ Completed
-[@vite-plus-test/utils]: ➤ YN0000: · Done in <duration> <duration>
-[@vite-plus-test/utils]: Process exited (exit code 0), completed in <duration> <duration>
+[@vite-plus-test/utils]: ➤ YN0000: · Done in <duration>
+[@vite-plus-test/utils]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
@@ -303,8 +303,8 @@ VITE+ - The Unified Toolchain for the Web
 [command-add-yarn4-with-workspace]: ➤ YN0000: └ Completed
 [command-add-yarn4-with-workspace]: ➤ YN0000: ┌ Link step
 [command-add-yarn4-with-workspace]: ➤ YN0000: └ Completed
-[command-add-yarn4-with-workspace]: ➤ YN0000: · Done in <duration> <duration>
-[command-add-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration> <duration>
+[command-add-yarn4-with-workspace]: ➤ YN0000: · Done in <duration>
+[command-add-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration>
 
 [admin]: Process started
 [admin]: ➤ YN0000: · Yarn <version>
@@ -314,8 +314,8 @@ VITE+ - The Unified Toolchain for the Web
 [admin]: ➤ YN0000: └ Completed
 [admin]: ➤ YN0000: ┌ Link step
 [admin]: ➤ YN0000: └ Completed
-[admin]: ➤ YN0000: · Done in <duration> <duration>
-[admin]: Process exited (exit code 0), completed in <duration> <duration>
+[admin]: ➤ YN0000: · Done in <duration>
+[admin]: Process exited (exit code 0), completed in <duration>
 
 [app]: Process started
 [app]: ➤ YN0000: · Yarn <version>
@@ -325,10 +325,10 @@ VITE+ - The Unified Toolchain for the Web
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`

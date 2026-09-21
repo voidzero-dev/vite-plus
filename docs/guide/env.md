@@ -69,12 +69,12 @@ Package-manager selection uses this priority:
 
 `VP_PACKAGE_MANAGER` selects the manager and version for commands such as `vp install`. Direct package-manager shims ignore this variable and use independent version overrides:
 
-| Variable          | Shims             |
-| ----------------- | ----------------- |
-| `VP_NPM_VERSION`  | `npm`, `npx`      |
-| `VP_PNPM_VERSION` | `pnpm`, `pnpx`    |
-| `VP_YARN_VERSION` | `yarn`, `yarnpkg` |
-| `VP_BUN_VERSION`  | `bun`, `bunx`     |
+| Variable          | Shims                       |
+| ----------------- | --------------------------- |
+| `VP_NPM_VERSION`  | `npm`, `npx`                |
+| `VP_PNPM_VERSION` | `pnpm`, `pnpx`, `pn`, `pnx` |
+| `VP_YARN_VERSION` | `yarn`, `yarnpkg`           |
+| `VP_BUN_VERSION`  | `bun`, `bunx`               |
 
 These variables accept a version or range, such as `10.18.0`, `10`, or `latest`, and override the matching shim's project and default versions. They do not change the manager or version selected by `vp install`.
 
@@ -89,11 +89,13 @@ VP_PNPM_VERSION=10.20.0 pnpm --version
 
 The overrides apply in managed mode. A package manager can also perform its own version switching after Vite+ launches it; for example, pnpm's `managePackageManagerVersions` setting may switch back to the version in `package.json`.
 
-A project selection applies only to its matching shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The npm shim falls back to Node's bundled npm. `vp env use npm` selects standalone npm's latest release for the current shell when no project version or global default is configured.
+A project selection applies only to its matching shims. For example, pnpm controls `pnpm`, `pnpx`, `pn`, and `pnx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The npm shim falls back to Node's bundled npm. `vp env use npm` selects standalone npm's latest release for the current shell when no project version or global default is configured.
 
 ::: details Latest-version caching
 When a named shim falls back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached.
 :::
+
+`pn` runs the same managed binary as `pnpm`, and `pnx` runs the same managed binary as `pnpx` (`pnpm dlx`). These aliases also work with managed pnpm versions older than v11.
 
 ## Environment Modes
 

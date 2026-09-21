@@ -8,6 +8,7 @@
 )]
 
 mod dirs;
+mod documentation;
 mod env_config;
 pub mod env_vars;
 mod error;
@@ -29,6 +30,7 @@ pub use dirs::{
     SHIM_POINTER_EXTENSION, SHIM_POINTER_HEADER, VP_BINARY_NAME, VpDirEnvError, VpDirs,
     VpDirsLayout, is_windows_trampoline, shim_pointer_file_name, validate_vp_dir_env,
 };
+pub use documentation::documentation_url;
 pub use env_config::EnvConfig;
 pub use error::format_error_chain;
 pub use http::{HttpClientError, download_timeout, shared_http_client};

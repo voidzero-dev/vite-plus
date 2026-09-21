@@ -19,6 +19,7 @@ import {
 } from '../../oxlint-plugin-config.ts';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from '../../utils/constants.ts';
+import { documentationUrl } from '../../utils/documentation.ts';
 import { editJsonFile, isJsonFile, readJsonFile, writeJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
@@ -129,7 +130,7 @@ export function rewriteLintStagedConfigFile(projectPath: string, report?: Migrat
   }
   if (hasUnsupported) {
     infoMigration(
-      'Only "staged" in vite.config.ts is supported. See https://viteplus.dev/guide/migrate#lint-staged',
+      `Only "staged" in vite.config.ts is supported. See ${documentationUrl('/guide/migrate#lint-staged')}`,
       report,
     );
   }
@@ -209,7 +210,7 @@ export function mergeTsdownConfigFile(
     );
     if (!importsTsdownConfig) {
       infoMigration(
-        `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/guide/migrate#tsdown`,
+        `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see ${documentationUrl('/guide/migrate#tsdown')}`,
         report,
       );
     }
@@ -230,7 +231,7 @@ export function mergeTsdownConfigFile(
   }
   // Show documentation link for manual merging since we only added the import
   infoMigration(
-    `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/guide/migrate#tsdown`,
+    `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see ${documentationUrl('/guide/migrate#tsdown')}`,
     report,
   );
   return createdViteConfig || result.updated;
@@ -440,7 +441,7 @@ function mergeAndRemoveJsonConfig(
       report,
     );
     infoMigration(
-      'Please complete the merge manually and follow the instructions in the documentation: https://viteplus.dev/config/',
+      `Please complete the merge manually and follow the instructions in the documentation: ${documentationUrl('/config/')}`,
       report,
     );
   }
@@ -486,7 +487,7 @@ export function mergeStagedConfigToViteConfig(
       report,
     );
     infoMigration(
-      `Please add staged config to ${displayRelative(fullViteConfigPath)} manually, see https://viteplus.dev/guide/migrate#lint-staged`,
+      `Please add staged config to ${displayRelative(fullViteConfigPath)} manually, see ${documentationUrl('/guide/migrate#lint-staged')}`,
       report,
     );
     return false;

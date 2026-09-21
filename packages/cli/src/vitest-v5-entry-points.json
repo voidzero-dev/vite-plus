@@ -1,0 +1,22 @@
+{
+  "vitest/coverage": "vite-plus/test/node",
+  "vitest/reporters": "vite-plus/test/node",
+  "vitest/environments": "vite-plus/test/runtime",
+  "vitest/snapshot": "vite-plus/test/runtime",
+  "vitest/mocker": "vite-plus/test/mocker",
+  "vite-plus/test/coverage": "vite-plus/test/node",
+  "vite-plus/test/reporters": "vite-plus/test/node",
+  "vite-plus/test/environments": "vite-plus/test/runtime",
+  "vite-plus/test/snapshot": "vite-plus/test/runtime",
+  "vitest/browser-webdriverio": "@vitest/browser-webdriverio",
+  "vitest/browser-webdriverio/context": "vite-plus/test/browser/context",
+  "vitest/browser/providers/webdriverio": "@vitest/browser-webdriverio",
+  "vitest/browser/providers/webdriverio/context": "vite-plus/test/browser/context",
+  "vitest/plugins/browser-webdriverio": "@vitest/browser-webdriverio",
+  "vite-plus/test/browser-webdriverio": "@vitest/browser-webdriverio",
+  "vite-plus/test/browser-webdriverio/context": "vite-plus/test/browser/context",
+  "vite-plus/test/browser/providers/webdriverio": "@vitest/browser-webdriverio",
+  "vite-plus/test/browser/providers/webdriverio/context": "vite-plus/test/browser/context",
+  "vite-plus/test/plugins/browser-webdriverio": "@vitest/browser-webdriverio",
+  "@vitest/browser/providers/webdriverio": "@vitest/browser-webdriverio"
+}

@@ -30,7 +30,6 @@ Keep the dependency used by the unchanged extensionless script.
   },
   "devDependencies": {
     "@oxlint/plugins": "1.79.0",
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@11.24.0"

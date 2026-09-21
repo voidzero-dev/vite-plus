@@ -19,7 +19,7 @@ Copy the installed CLI and its setup marker into the split data root.
 Setup preserves the existing executable in the shared bin.
 
 ```
-shared-bin: bun, bunx, node, npm, npx, pnpm, pnpx, vpr, vpx, yarn, yarnpkg
+shared-bin: bun, bunx, node, npm, npx, pn, pnpm, pnpx, pnx, vpr, vpx, yarn, yarnpkg
 data/fallback-bin: (empty)
 ```
 
@@ -47,7 +47,7 @@ true
 System-first Node lives under the data root.
 
 ```
-shared-bin: bun, bunx, node, npm, npx, pnpm, pnpx, vpr, vpx, yarn, yarnpkg
+shared-bin: bun, bunx, node, npm, npx, pn, pnpm, pnpx, pnx, vpr, vpx, yarn, yarnpkg
 data/fallback-bin: node
 ```
 
@@ -75,7 +75,7 @@ true
 Refresh preserves both placement and the foreign Node.
 
 ```
-shared-bin: bun, bunx, node, npm, npx, pnpm, pnpx, vpr, vpx, yarn, yarnpkg
+shared-bin: bun, bunx, node, npm, npx, pn, pnpm, pnpx, pnx, vpr, vpx, yarn, yarnpkg
 data/fallback-bin: node
 ```
 
@@ -95,7 +95,7 @@ true
 Managed mode must not overwrite a foreign executable either.
 
 ```
-shared-bin: bun, bunx, node, npm, npx, pnpm, pnpx, vpr, vpx, yarn, yarnpkg
+shared-bin: bun, bunx, node, npm, npx, pn, pnpm, pnpx, pnx, vpr, vpx, yarn, yarnpkg
 data/fallback-bin: (empty)
 ```
 

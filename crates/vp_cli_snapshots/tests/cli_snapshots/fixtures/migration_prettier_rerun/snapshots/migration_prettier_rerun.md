@@ -28,7 +28,6 @@ check prettier removed from devDependencies and scripts rewritten
   },
   "devDependencies": {
     "prettier": "^3.0.0",
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

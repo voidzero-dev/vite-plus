@@ -31,6 +31,7 @@ import { format } from 'oxfmt';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import corePkg from '../core/package.json' with { type: 'json' };
+import { VITEST_VERSION } from './src/utils/constants.ts';
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = 'vitest';
@@ -46,16 +47,12 @@ const UTC_BUILD_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const BROWSER_PROVIDER_PACKAGES: ReadonlyArray<{ pkg: string; short: string }> = [
   { pkg: '@vitest/browser-playwright', short: 'playwright' },
   { pkg: '@vitest/browser-preview', short: 'preview' },
-  { pkg: '@vitest/browser-webdriverio', short: 'webdriverio' },
 ];
 
 // Plugin shim entries: each `@vitest/*` package/subpath projected under
 // `./test/plugins/<name>` to restore the surface that the removed
 // `@voidzero-dev/vite-plus-test` wrapper previously exposed.
 const PLUGIN_SHIM_ENTRIES: ReadonlyArray<readonly [importSpecifier: string, pluginName: string]> = [
-  ['@vitest/runner', 'runner'],
-  ['@vitest/runner/utils', 'runner-utils'],
-  ['@vitest/runner/types', 'runner-types'],
   ['@vitest/utils', 'utils'],
   ['@vitest/utils/source-map', 'utils-source-map'],
   ['@vitest/utils/source-map/node', 'utils-source-map-node'],
@@ -69,7 +66,6 @@ const PLUGIN_SHIM_ENTRIES: ReadonlyArray<readonly [importSpecifier: string, plug
   ['@vitest/utils/constants', 'utils-constants'],
   ['@vitest/utils/diff', 'utils-diff'],
   ['@vitest/spy', 'spy'],
-  ['@vitest/expect', 'expect'],
   ['@vitest/snapshot', 'snapshot'],
   ['@vitest/snapshot/environment', 'snapshot-environment'],
   ['@vitest/snapshot/manager', 'snapshot-manager'],
@@ -86,7 +82,6 @@ const PLUGIN_SHIM_ENTRIES: ReadonlyArray<readonly [importSpecifier: string, plug
   ['@vitest/browser/client', 'browser-client'],
   ['@vitest/browser/locators', 'browser-locators'],
   ['@vitest/browser-playwright', 'browser-playwright'],
-  ['@vitest/browser-webdriverio', 'browser-webdriverio'],
   ['@vitest/browser-preview', 'browser-preview'],
 ];
 
@@ -362,6 +357,9 @@ async function syncTestPackageExports() {
 
   // Read test package.json
   const testPkg = JSON.parse(await readFile(testPkgPath, 'utf-8'));
+  if (testPkg.version !== VITEST_VERSION) {
+    throw new Error(`Expected vitest@${VITEST_VERSION}, found ${testPkg.version}`);
+  }
   const testExports = testPkg.exports as Record<string, unknown>;
 
   // Clean up previous build
@@ -394,6 +392,15 @@ async function syncTestPackageExports() {
       console.log(`  Created ${cliExportPath}`);
     }
   }
+
+  // Vitest v5 no longer re-exports the standalone mocker package. Keep this
+  // public migration target; the other removed entry points use node/runtime.
+  generatedExports['./test/mocker'] = await createShimForExport(
+    'mocker',
+    { types: './index.d.ts', default: './index.js' },
+    '@vitest/mocker',
+    testDistDir,
+  );
 
   // Private shims for `@vitest/browser` and `@vitest/browser/context`. These
   // are referenced as relative paths from the inlined browser-provider d.ts
@@ -494,9 +501,18 @@ async function syncTestPackageExports() {
   console.log('  Created ./test/browser-compat');
 
   for (const [importSpecifier, pluginName] of PLUGIN_SHIM_ENTRIES) {
+    const [scope, name, ...subpath] = importSpecifier.split('/');
+    const packageName = `${scope}/${name}`;
+    const packagePath = require.resolve(`${packageName}/package.json`, { paths: [projectDir] });
+    const packageJson = JSON.parse(await readFile(packagePath, 'utf8'));
+    const exportKey = subpath.length ? `./${subpath.join('/')}` : '.';
+    const exportValue = packageJson.exports?.[exportKey];
+    if (!exportValue) {
+      throw new Error(`Missing public export ${importSpecifier} for ./test/plugins/${pluginName}`);
+    }
     const shimExport = await createShimForExport(
       `plugins/${pluginName}`,
-      `${pluginName}.js`,
+      exportValue,
       importSpecifier,
       testDistDir,
     );
@@ -541,9 +557,12 @@ async function createBareBrowserShims(
     return result;
   }
   const browserPkg = JSON.parse(await readFile(browserPkgPath, 'utf-8'));
-  const browserPkgRoot = dirname(browserPkgPath);
   const browserExports = (browserPkg.exports ?? {}) as Record<string, unknown>;
 
+  // The base browser package already resolves through vite-plus's own dependency
+  // edge. Forward its declarations instead of copying them: relative helpers
+  // stay resolvable, and context aliases share the provider-augmented types.
+  // Keep declaration inlining scoped to provider packages.
   const bareSubpaths = ['./client', './context', './locators', './matchers', './utils'] as const;
   for (const sub of bareSubpaths) {
     const exportValue = browserExports[sub];
@@ -559,7 +578,6 @@ async function createBareBrowserShims(
       exportValue,
       importSpecifier,
       testDistDir,
-      { providerPkgRoot: browserPkgRoot },
     );
     if (shimExport) {
       result[cliPath] = shimExport;
@@ -1010,8 +1028,8 @@ async function writePrivateAtVitestBrowserShims(testDistDir: string): Promise<vo
  * migration rewrites `@vitest/browser-<provider>/context` →
  * `vite-plus/test/browser-<provider>/context`, Node ESM resolution fails with
  * ERR_PACKAGE_PATH_NOT_EXPORTED unless the export entry has a `default`/`import`
- * target. We re-export from `@vitest/browser/context` so the bundled
- * `@vitest/browser` (vite-plus's own pnpm-edge) is reached at runtime.
+ * target. Re-export from `vitest/browser`, the v5 virtual runtime entry.
+ * `@vitest/browser/context` now contains a context-error stub even in a browser.
  */
 async function ensureContextRuntimeShim(
   shimBaseName: string,
@@ -1028,7 +1046,7 @@ async function ensureContextRuntimeShim(
   const jsRelPath = `./dist/test/${shimBaseName}.js`;
   const jsAbsPath = join(testDistDir, `${shimBaseName}.js`);
   await mkdir(dirname(jsAbsPath), { recursive: true });
-  await writeFile(jsAbsPath, `export * from '@vitest/browser/context';\n`);
+  await writeFile(jsAbsPath, `export * from 'vitest/browser';\n`);
   entry.default = jsRelPath;
 }
 
@@ -1038,12 +1056,13 @@ async function ensureContextRuntimeShim(
  * Vitest's package.json only exposes `./browser` (mapped to `./test/browser`).
  * The migration rewrites `@vitest/browser/context` →
  * `vite-plus/test/browser/context`, so we add this path with both runtime and
- * type targets that re-export from `@vitest/browser/context`.
+ * type targets. Runtime imports use the v5 `vitest/browser` virtual module;
+ * types retain the upstream browser-context declarations and augmentations.
  */
 async function createBrowserContextExport(testDistDir: string): Promise<ExportValue> {
   const dir = join(testDistDir, 'browser');
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'context.js'), `export * from '@vitest/browser/context';\n`);
+  await writeFile(join(dir, 'context.js'), `export * from 'vitest/browser';\n`);
   await writeFile(
     join(dir, 'context.d.ts'),
     `import '@vitest/browser/context';\nexport * from '@vitest/browser/context';\n`,
@@ -1169,6 +1188,10 @@ async function createShimForExport(
 
   const baseFileName = shimBaseName.includes('/') ? shimBaseName.split('/').pop()! : shimBaseName;
   const shimDirForFile = shimBaseName.includes('/') ? shimDir : distDir;
+  // Preserve the Vite+ browser-context aliases after v5 moved the virtual
+  // module. Keep the original type specifier for module augmentations.
+  const runtimeSpecifier =
+    testImportSpecifier === '@vitest/browser/context' ? 'vitest/browser' : testImportSpecifier;
 
   // Handle different export value formats
   if (typeof exportValue === 'string') {
@@ -1184,7 +1207,7 @@ async function createShimForExport(
     }
 
     const jsPath = join(shimDirForFile, `${baseFileName}.js`);
-    await writeFile(jsPath, `export * from '${testImportSpecifier}';\n`);
+    await writeFile(jsPath, `export * from '${runtimeSpecifier}';\n`);
     return { default: `./dist/test/${shimBaseName}.js` };
   }
 
@@ -1218,7 +1241,7 @@ async function createShimForExport(
 
     if (value.default && typeof value.default === 'string') {
       const jsPath = join(shimDirForFile, `${baseFileName}.js`);
-      await writeFile(jsPath, `export * from '${testImportSpecifier}';\n`);
+      await writeFile(jsPath, `export * from '${runtimeSpecifier}';\n`);
       (result as Record<string, string>).default = `./dist/test/${shimBaseName}.js`;
     }
 

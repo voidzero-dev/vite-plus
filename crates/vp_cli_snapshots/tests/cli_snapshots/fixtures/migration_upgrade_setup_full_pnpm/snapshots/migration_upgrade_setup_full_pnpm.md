@@ -53,7 +53,7 @@ vite-plus version upgrade is applied
 .nvmrc is migrated to .node-version by the full setup
 
 ```
-20.19.0
+24.11.0
 ```
 
 ## `vpt stat-file .nvmrc --assert-not file`

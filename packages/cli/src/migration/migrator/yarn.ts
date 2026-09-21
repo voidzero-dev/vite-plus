@@ -22,6 +22,7 @@ import {
 import { type MigrationReport } from '../report.ts';
 import {
   WEBDRIVERIO_PROVIDER,
+  findDeclaredSpec,
   readPackageJsonIfExists,
   warnMigration,
   type DependencyBag,
@@ -31,11 +32,23 @@ import {
 const WEBDRIVERIO_PEER_DEP = 'webdriverio';
 
 // Dependencies whose presence before migration signals the user will end up
-// with webdriverio after migration. `@vitest/browser-webdriverio` is the opt-in
-// provider vite-plus keeps in the user's deps (pinned to the bundled vitest)
-// and `webdriverio` is its runtime peer (added via `BROWSER_PROVIDER_PEER_DEPS`);
-// either one means the edgedriver/geckodriver postinstalls must be allowed.
+// with WebDriverIO. Both the community provider and its framework need driver
+// postinstalls, regardless of which one the project declares directly.
 const WEBDRIVERIO_ALLOW_SIGNAL_DEPS = [WEBDRIVERIO_PEER_DEP, WEBDRIVERIO_PROVIDER] as const;
+
+// A standalone WebDriverIO installation does not use Vitest's browser package.
+// Only the provider (or its legacy imports) needs the shared browser override.
+export function workspaceUsesWebdriverioProvider(
+  rootDir: string,
+  packages?: WorkspacePackage[],
+): boolean {
+  return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))].some((dir) => {
+    const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
+    return Boolean(
+      (pkg && findDeclaredSpec(pkg, WEBDRIVERIO_PROVIDER)) || usesWebdriverioProvider(dir),
+    );
+  });
+}
 
 export function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
   for (const name of WEBDRIVERIO_ALLOW_SIGNAL_DEPS) {
@@ -61,8 +74,7 @@ export function workspaceUsesWebdriverio(
   }
   // Source-only signal: a package may target the webdriverio provider purely
   // through imports (e.g. `vite-plus/test/browser-webdriverio`) without a
-  // declared dep yet. The migration injects the provider for those, so the
-  // driver postinstalls must be allowed too.
+  // declared dep yet. Allow driver builds when the user installs the provider.
   if (usesWebdriverioProvider(rootDir)) {
     return true;
   }

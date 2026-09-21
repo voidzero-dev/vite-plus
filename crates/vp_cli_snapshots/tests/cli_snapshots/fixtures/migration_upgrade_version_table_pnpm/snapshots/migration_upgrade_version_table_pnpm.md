@@ -17,7 +17,7 @@ VITE+ - The Unified Toolchain for the Web
 • Dependencies:
     vite-plus            0.1.21 → <version>
     vite                 8.0.0  → <version>
-    vitest               3.2.4  → <version>
-    @vitest/coverage-v8  3.2.4  → <version>
+    vitest               4.1.8  → <version>
+    @vitest/coverage-v8  4.1.8  → <version>
 • Package manager settings configured
 ```

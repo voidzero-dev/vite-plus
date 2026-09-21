@@ -36,13 +36,28 @@ jobs:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
       github.event.label.name == 'preview-build'
-    name: Compute snapshot version
+    name: Compute preview metadata
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
+      docs-origin: ${{ steps.docs.outputs.origin }}
     steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Test preview documentation origin
+        run: node --test .github/scripts/__tests__/preview-docs-origin.mjs
+      - name: Resolve preview documentation origin
+        id: docs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { previewDocsOrigin } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/preview-docs-origin.ts`);
+            core.setOutput('origin', previewDocsOrigin(context.payload.pull_request));
       # Use the exact version the registry bridge serves (0.0.0-commit.<head-sha>,
       # the same head SHA publish-preview-register.yml registers), so the built
       # Rust binary and JS
@@ -64,6 +79,7 @@ jobs:
     uses: ./.github/workflows/reusable-release-build.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
+      docs-origin: ${{ needs.prepare.outputs.docs-origin }}
       cache-key: pkg-pr-new
 
   publish:

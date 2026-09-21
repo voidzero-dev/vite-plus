@@ -9,6 +9,19 @@ use crate::vite_config::{
 
 type Edit = (Range<usize>, String);
 
+const RESOLVE_DEP_SUBPATH_DEFAULT: &str = concat!(
+    "\n// tsdown <0.23 compatibility: resolve external dependency subpaths.\n",
+    "// Remove to preserve subpath imports as written (the new default).\n",
+    "// https://tsdown.dev/options/dependencies#deps-resolvedepsubpath\n",
+    "resolveDepSubpath: true",
+);
+const ATTW_PROFILE_DEFAULT: &str = concat!(
+    "\n// tsdown <0.23 compatibility: keep all declaration resolution checks.\n",
+    "// Remove to use the new 'esm-only' profile.\n",
+    "// https://tsdown.dev/options/lint#profiles\n",
+    "profile: 'strict'",
+);
+
 /// Upgrade the configuration options removed in tsdown 0.23 without evaluating
 /// user code. Only direct pack objects and standalone tsdown configs qualify.
 pub(crate) fn rewrite_pack_config(content: &str, standalone: bool) -> String {
@@ -24,11 +37,42 @@ pub(crate) fn rewrite_pack_config(content: &str, standalone: bool) -> String {
         let source = object.text();
         let rewritten = rewrite_options(&object);
         if rewritten != source {
-            edits.push((object.range(), rewritten));
+            let line = content[..object.range().start].rsplit('\n').next().unwrap_or_default();
+            let indentation: String =
+                line.chars().take_while(|c| matches!(c, ' ' | '\t')).collect();
+            edits.push((object.range(), indent_compatibility_defaults(&rewritten, &indentation)));
         }
     }
     // Select the declaration generator after the other option edits.
     rewrite_pack_dts_generators(&apply_edits(content, edits, 0), standalone)
+}
+
+fn indent_compatibility_defaults(source: &str, object_indentation: &str) -> String {
+    const PREFIX: &str = "export default ";
+    let wrapped = format!("{PREFIX}{source};");
+    let grep = SupportLang::TypeScript.ast_grep(&wrapped);
+    let mut edits = Vec::new();
+    // Match parsed comments so identical text in template literals stays unchanged.
+    for comment in grep.root().dfs().filter(|node| node.kind() == "comment") {
+        let comment_start = comment.range().start - PREFIX.len();
+        let Some(before) = source[..comment_start].strip_suffix('\n') else { continue };
+        let start = before.len();
+        let Some(property) = [RESOLVE_DEP_SUBPATH_DEFAULT, ATTW_PROFILE_DEFAULT]
+            .into_iter()
+            .find(|property| source[start..].starts_with(property))
+        else {
+            continue;
+        };
+        let indentation: String = if let Some((_, line)) = before.rsplit_once('\n') {
+            line.chars().take_while(|c| matches!(c, ' ' | '\t')).collect()
+        } else {
+            // A new deps object can start on the pack object's first line.
+            format!("{object_indentation}  ")
+        };
+        let indented = property.replace('\n', &format!("\n{indentation}  "));
+        edits.push((start..start + property.len(), indented));
+    }
+    apply_edits(source, edits, 0)
 }
 
 pub(crate) fn is_pack_object<D: Doc>(object: &Node<'_, D>, standalone: bool) -> bool {
@@ -132,9 +176,9 @@ impl<'a, D: Doc> ObjectEditor<'a, D> {
         }
     }
 
-    fn set_default(&mut self, name: &str, value: &str) {
+    fn set_default(&mut self, name: &str, property: &str) {
         if self.property(name).is_none() {
-            self.additions.push(format!("{name}: {value}"));
+            self.additions.push(property.to_owned());
         }
     }
 
@@ -373,7 +417,7 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
                             options.rename("skipNodeModulesBundle", "neverBundle");
                         }
                     }
-                    options.set_default("resolveDepSubpath", "true");
+                    options.set_default("resolveDepSubpath", RESOLVE_DEP_SUBPATH_DEFAULT);
                 }
                 "dts" => {
                     if options
@@ -385,7 +429,7 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
                 }
                 "attw" => {
                     if options.value("enabled").is_none_or(|value| value.kind() != "false") {
-                        options.set_default("profile", "'strict'");
+                        options.set_default("profile", ATTW_PROFILE_DEFAULT);
                     }
                 }
                 _ => unreachable!(),
@@ -411,7 +455,7 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
             }
         }
         if config.value("attw").is_some_and(|value| value.kind() == "true") {
-            config.replace_value("attw", "{ profile: 'strict' }".to_owned());
+            config.replace_value("attw", format!("{{ {ATTW_PROFILE_DEFAULT} }}"));
         }
     });
     let source = move_option(&source, "injectStyle", "css", "inject", false);
@@ -419,7 +463,7 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
     let source = move_option(&source, "noExternal", "deps", "alwaysBundle", false);
     let source = move_option(&source, "skipNodeModulesBundle", "deps", "neverBundle", true);
     edit_object(&source, |config| {
-        config.set_default("deps", "{ resolveDepSubpath: true }");
+        config.set_default("deps", &format!("deps: {{ {RESOLVE_DEP_SUBPATH_DEFAULT} }}"));
     })
 }
 
@@ -468,7 +512,11 @@ fn move_option(source: &str, old: &str, group: &str, new: &str, boolean: bool) -
                 config.remove(old);
             }
         } else if config.property(group).is_none() {
-            let defaults = if group == "deps" { ", resolveDepSubpath: true" } else { "" };
+            let defaults = if group == "deps" {
+                format!(", {RESOLVE_DEP_SUBPATH_DEFAULT}")
+            } else {
+                String::new()
+            };
             // Replace in place so comments on the old option stay attached.
             config
                 .edits
@@ -919,5 +967,65 @@ mod tests {
         let actual = migrate("{ deps: { resolveDepSubpath: false }, attw: { enabled: false } }");
         assert!(!actual.contains("'strict'"));
         assert!(actual.contains("resolveDepSubpath: false"));
+    }
+
+    #[test]
+    fn documents_inserted_compatibility_defaults() {
+        for options in [
+            "{ attw: true }",
+            "{ deps: {}, attw: { enabled: true } }",
+            "{ noExternal: ['foo'], attw: {} }",
+            "{ inlineOnly: ['foo'], attw: { enabled: 'ci-only' } }",
+            "{ skipNodeModulesBundle: true, attw: true }",
+        ] {
+            for standalone in [false, true] {
+                let input = if standalone {
+                    format!("export default defineConfig(() => ({options}));")
+                } else {
+                    format!("export default {{ pack: {options} }};")
+                };
+                let actual = rewrite_pack_config(&input, standalone);
+                assert!(
+                    actual
+                        .contains("https://tsdown.dev/options/dependencies#deps-resolvedepsubpath"),
+                    "{actual}"
+                );
+                assert!(actual.contains("https://tsdown.dev/options/lint#profiles"), "{actual}");
+                assert_eq!(actual.matches("// tsdown <0.23 compatibility:").count(), 2, "{actual}");
+                assert_eq!(rewrite_pack_config(&actual, standalone), actual);
+                let grep = SupportLang::TypeScript.ast_grep(&actual);
+                assert!(!grep.root().dfs().any(|node| node.kind() == "ERROR"), "{actual}");
+            }
+        }
+    }
+
+    #[test]
+    fn does_not_annotate_explicit_or_disabled_settings() {
+        for options in [
+            "{ deps: { resolveDepSubpath: true }, attw: { profile: 'strict' } }",
+            "{ deps: { resolveDepSubpath: false }, attw: { profile: 'esm-only' } }",
+            "{ deps: { resolveDepSubpath: resolveSubpaths }, attw: { profile } }",
+            "{ deps: { resolveDepSubpath: true }, attw: false }",
+            "{ deps: { resolveDepSubpath: true }, attw: { enabled: false } }",
+            "{ deps: { resolveDepSubpath: true } }",
+        ] {
+            let input = format!("export default {{ pack: {options} }};");
+            assert_eq!(rewrite_pack_config(&input, false), input);
+        }
+    }
+
+    #[test]
+    fn indents_guidance_without_changing_matching_string_values() {
+        let banner = format!("banner: `{RESOLVE_DEP_SUBPATH_DEFAULT}`");
+        let actual = migrate(&format!("{{\n    deps: {{}},\n    {banner},\n    attw: true,\n}}"));
+        assert!(actual.contains("\n      // tsdown <0.23 compatibility:"), "{actual}");
+        assert!(actual.contains("\n      resolveDepSubpath: true"), "{actual}");
+        assert!(actual.contains("\n      profile: 'strict'"), "{actual}");
+        assert!(actual.contains(&banner), "{actual}");
+
+        let input = "export default {\n  pack: [\n    { entry: 'src/index.ts' },\n  ],\n};";
+        let actual = rewrite_pack_config(input, false);
+        assert!(actual.contains("\n        // tsdown <0.23 compatibility:"), "{actual}");
+        assert_eq!(rewrite_pack_config(&actual, false), actual);
     }
 }

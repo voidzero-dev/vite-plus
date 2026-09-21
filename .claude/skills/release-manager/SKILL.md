@@ -19,6 +19,7 @@ Run a standard vite-plus release from version bump to published announcement. An
 When given a release PR (URL or number), do not start from step 1. First audit the release's current state, then continue from the earliest unfinished step:
 
 - Is the binding version synced? (step 2: `grep -c "'<prev>'" packages/cli/binding/index.cjs` on the release branch)
+- Do the release version examples in the migration guide and the setup, migration, and upgrade prompts match `packages/cli/package.json`? (step 2)
 - Is the PR description still the `prepare_release` boilerplate, or already a categorized changelog? (step 3)
 - Is a preview build present and for the current head? (step 4)
 - Does `main` have commits the release branch lacks? (`git log origin/release/vX.Y.Z..origin/main`, step 5)
@@ -32,7 +33,7 @@ Before post-release work, fetch `origin/main` and read its copy of this skill (`
 ## Pipeline overview
 
 1. `Prepare Release` workflow bumps versions and opens the release PR (`release/vX.Y.Z` -> `main`).
-2. Release manager: sync `binding/index.cjs`, write the changelog PR description, offer the preview-build smoke test (recommend it when the release has more than 10 commits since the previous tag), get CI green.
+2. Release manager: sync `binding/index.cjs` and the release versions in the documentation and prompts, write the changelog PR description, offer the preview-build smoke test (recommend it when the release has more than 10 commits since the previous tag), get CI green.
 3. Merging the PR pushes a `packages/cli/package.json` change to `main`, which triggers `release.yml`: build, manual approval gate, npm publish, GitHub release, Docker image, Discord notification.
 4. Release manager: polish the GitHub release notes, verify installs, announce.
 
@@ -46,7 +47,9 @@ gh workflow run prepare_release.yml --repo voidzero-dev/vite-plus -f version=X.Y
 
 The workflow bumps `packages/cli/package.json`, `packages/core/package.json`, `packages/cli/binding/Cargo.toml`, and `crates/vp_global_cli/Cargo.toml`, refreshes `Cargo.lock`, and opens a PR titled `release: vX.Y.Z` from branch `release/vX.Y.Z`. The PR body ends with `Merging this PR will trigger the release workflow.` and that line must survive every later edit.
 
-## 2. Sync the NAPI binding version (required every release)
+## 2. Sync release versions (required every release)
+
+### NAPI binding
 
 NAPI bakes the package version into version checks in `packages/cli/binding/index.cjs` (26+ sites). `prepare_release` bumps `package.json` but does not regenerate this file, so CI's `Ensure no unexpected file changes after build` step in the `CLI E2E test` job fails until it is synced. Do this immediately; do not wait for CI to fail.
 
@@ -79,7 +82,20 @@ regenerate this file, so the CI build's regeneration step produces a
 diff that the post-build no-unexpected-changes guard rejects.
 ```
 
-This is the only kind of commit that goes directly on the release branch. Everything else goes through `main` (see step 5).
+### Documentation and prompts
+
+Use the version in the release branch's `packages/cli/package.json` as the target release version in these files:
+
+- `docs/guide/migrate.md`: pnpm and npm migration command examples and matching release prose.
+- `docs/.vitepress/theme/data/migration-prompts.ts`: `setupPrompt`, `migrationPrompt`, `upgradePrompt`, and their shared instructions, including command examples and matching release prose. `CopyPrompt` uses `setupPrompt` on both the homepage and Getting Started guide.
+
+Update every `--package=vite-plus@<curr>` pin and the corresponding `For the <curr> release` and `Replace <curr>` text. Keep an exact version; do not replace it with a placeholder, a major range, or `latest`.
+
+Preserve historical versions such as the migration's source version and the release that introduced a breaking change. Leave Node.js requirements, bundled tool versions, and preview-registry instructions unchanged unless their requirements change.
+
+Commit these updates on the release branch with the binding sync or in a separate release-version sync commit. Recheck both files and the binding after a target-version change or a merge from `main`. Before merging, confirm that the guide and all three prompts use the target release in both package-manager commands and their matching prose, then run `git diff --check`.
+
+Only these release-version sync commits go directly on the release branch. Everything else goes through `main` (see step 5).
 
 ## 3. Write the release PR description
 
@@ -308,10 +324,13 @@ Across the full catalog most failures are not regressions, and reporting them as
   git -C <dir> show "$sha" | grep -E '^-.*vite-plus'
   ```
 
+  Parse every YAML document when auditing pnpm lockfiles. Importers and package resolutions can be in separate documents; a single-document parser can miss the resolved versions.
+
   Report that subset separately; "2 of the 7 forks on the previous release pass, the other 5 fail on fork infrastructure" is a far stronger statement than a headline pass rate over the whole catalog.
 
 - **Project-side and infra failures.** Dependency conflicts between the project's own packages, missing fork secrets, third-party GitHub Apps not installed on the fork, network timeouts. Retry once before classifying anything as a network failure; they pass on retry. Two recurring shapes worth naming: a package that imports a dependency it never declared and only ever resolved through hoisting (`Cannot find package 'oxfmt'`) breaks as soon as the harness regenerates the lockfile; and a project whose own dependency has no `main`/`module`/`exports` cannot load its config under any vite-plus version.
 - **Dependency drift during migration.** Regenerating a lockfile can move unrelated floating or nightly dependencies to incompatible versions. Compare with the base lockfile before blaming the candidate. On the test branch, retain the original versions and their dependency graph, then verify a frozen install and rerun the failing command.
+- **Custom quality checks.** Check that project wrappers still load their plugins and recognize migrated test imports. Preserve existing lint diagnostic coverage when repairing migration issues; a smaller baseline can mean that checks stopped running.
 - **Harness artifacts.** Failures your own test setup caused, such as a lockfile the harness deleted and the install never regenerated. Fix these and re-run rather than reporting them.
 
 Report the tally by cause, not just pass/fail, and state plainly which failures you controlled for and which you classified from the error text alone. Only a failure that reproduces on the candidate but not on the previous release is a regression.
@@ -326,7 +345,7 @@ Two fork-CI blockers are worth fixing rather than reporting, both on the **test 
 
 Match checks to the current PR head and the latest applicable workflow runs. Superseded canceled runs can leave failed aggregate checks in the PR rollup. Check required statuses with `gh pr checks <PR#> --required`, and report required reviewer approval separately from technical CI readiness.
 
-Fixes for CI failures go through a **separate PR to `main`**, never as commits on the release branch (the binding sync in step 2 is the sole exception). After the fix PR merges:
+Fixes for CI failures go through a **separate PR to `main`**, never as commits on the release branch (the release-version syncs in step 2 are the exceptions). After the fix PR merges:
 
 ```bash
 git checkout release/vX.Y.Z && git merge origin/main --no-edit && git push origin release/vX.Y.Z
@@ -341,7 +360,7 @@ Known release-branch-only failure modes:
 
 ## 6. Merge
 
-Merging the release PR is the release trigger. Before merging confirm: CI green, changelog validated, binding synced, and (if used) the preview build verified.
+Merging the release PR is the release trigger. Before merging confirm: CI green, changelog validated, binding and documentation versions synced (including all three prompts), and (if used) the preview build verified.
 
 Auto-merge being enabled is not a completed merge. Confirm `mergedAt` and the merge commit, then follow the Release run for that commit; older successful runs can have skipped publishing because the version did not change.
 
@@ -406,7 +425,7 @@ The full package document can update before npm's separately cached installation
        --title "vite-plus vX.Y.Z: <theme>" --notes-file /tmp/release-notes.md
      ```
 
-   - Keep the review draft, body-only notes file, and live release aligned after requested edits. Read back the live title and body to verify the update. Re-run the step 3 validation greps, plus `grep -c 'Merging this PR'` (must be 0).
+   - Keep the review draft, body-only notes file, and live release aligned after requested edits. Read back the live title and body to verify the update. Normalize CRLF and LF before comparing the approved file with the live body, because GitHub can change line endings. Re-run the step 3 validation greps, plus `grep -c 'Merging this PR'` (must be 0).
 
 2. **Verify**:
 
@@ -492,6 +511,7 @@ After the release ships and announcements are approved or confirmed complete, re
 
 - [ ] `prepare_release` run for the target version; release PR open
 - [ ] `binding/index.cjs` synced on the release branch (step 2 commit message shape)
+- [ ] The migration guide and all three prompts in the step 2 files use the exact target version from `packages/cli/package.json` in their command examples and matching release prose
 - [ ] PR description written from the head branch data; every PR exactly once except documented omissions; breaking changes in their own section above Highlights; no em/en dashes; closing boilerplate intact
 - [ ] Dependency-upgrade PRs consolidated; vite-task bump expanded with upstream credits; security advisories linked
 - [ ] Smoke test offered to the release manager at both levels (local sweep and fork-PR CI), with the commit count stated and a recommendation to run it when that count is above 10; if accepted, forks synced to upstream first, preview build published, and the full ecosystem-ci catalog verified via `test-pkg-pr-new-migrate` (following TESTING.md), with every failure triaged and regressions ruled out against the previous release

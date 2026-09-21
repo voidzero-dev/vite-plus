@@ -102,9 +102,10 @@ pub(crate) fn warn_missing_local_cli_if_project(cwd: &AbsolutePath) {
             install_dir.as_path().display()
         ));
     } else {
-        output::warn(
-            "This project does not use vite-plus. Learn how to migrate: https://viteplus.dev/guide/migrate",
-        );
+        output::warn(&format!(
+            "This project does not use vite-plus. Learn how to migrate: {}",
+            vp_shared::documentation_url("/guide/migrate")
+        ));
     }
 }
 

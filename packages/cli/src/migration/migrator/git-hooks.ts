@@ -7,6 +7,7 @@ import spawn from 'cross-spawn';
 import { rewriteScripts } from '../../../binding/index.js';
 import { findUnsafeHookInstallPath, SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
 import type { PackageManager, WorkspacePackage } from '../../types/index.ts';
+import { documentationUrl } from '../../utils/documentation.ts';
 import { findGitRoot } from '../../utils/git.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
@@ -196,7 +197,7 @@ export function preflightGitHooksSetup(
   }
   for (const tool of OTHER_HOOK_TOOLS) {
     if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
-      return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually, see https://viteplus.dev/guide/migrate#git-hook-tools`;
+      return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually, see ${documentationUrl('/guide/migrate#git-hook-tools')}`;
     }
   }
   const workspacePackageReason = findWorkspacePackageHookPolicy(projectPath, packages);
