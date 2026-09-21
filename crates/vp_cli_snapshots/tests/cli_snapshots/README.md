@@ -61,7 +61,8 @@ CI runs three shards per platform. Linux and macOS use `VP_SNAP_SHARD=1/3`
 happens before name filtering, so filtered runs keep the same assignment.
 Leave the variable unset to run the whole suite. Windows uses the existing
 nextest runner with `--partition hash:1/3` (then `2/3` and `3/3`).
-Each CI shard uses eight workers so process and network waits can overlap.
+Unix CI shards use eight workers so process and network waits can overlap.
+Windows uses four workers to limit CPU and filesystem contention.
 Local runs retain libtest's default worker count; override it with
 `--test-threads <count>`.
 
@@ -88,9 +89,13 @@ Environment overrides, mainly for CI:
 | `VP_SNAP_SKIP_FLAVORS`      | Comma-separated flavors to skip registering (e.g. `local`)                    |
 | `VP_SNAP_PACKAGES_DIR`      | Run-scoped directory for sharing packed packages across test processes        |
 | `VP_SNAP_ARTIFACTS_DIR`     | Directory for phase timings and failure diagnostics; unset disables artifacts |
-| `VP_SNAP_NEXTEST_CONFIG`    | With `--list`, write nextest overrides for the discovered isolated cases      |
+| `VP_SNAP_NEXTEST_CONFIG`    | With `--list`, write nextest isolation and registry scheduling overrides      |
 
 Windows CI generates its nextest configuration from the same case definitions.
+Registry cases start before other parallel cases so long installs do not leave
+workers idle near the end of the run. Exact nextest runs read only the selected
+fixture; listing and native shard assignment still discover all cases.
+
 The overrides reserve all test workers for an isolated case and schedule these
 cases last. The file lock remains a fallback when running without the generated
 configuration. To use these overrides locally:

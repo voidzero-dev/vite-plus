@@ -1683,12 +1683,21 @@ fn main() {
 
     let fixtures_dir = flavor::manifest_dir().join("tests/cli_snapshots/fixtures");
 
+    // nextest starts a process with one exact trial. Avoid reading every TOML
+    // file in each child. Native sharding still needs the complete trial list
+    // because its round-robin assignment precedes libtest filtering.
+    let exact_fixture = if args.exact && !args.list && std::env::var_os("VP_SNAP_SHARD").is_none() {
+        args.filter.as_deref().and_then(|name| name.split_once("::")).map(|(fixture, _)| fixture)
+    } else {
+        None
+    };
     let mut fixture_paths = std::fs::read_dir(&fixtures_dir)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", fixtures_dir.display()))
         .map(|entry| entry.unwrap().path())
         .filter(|p| {
-            p.is_dir()
-                && p.file_name().and_then(|n| n.to_str()).is_some_and(|n| !n.starts_with('.'))
+            p.file_name().and_then(|n| n.to_str()).is_some_and(|name| {
+                !name.starts_with('.') && exact_fixture.is_none_or(|fixture| name == fixture)
+            }) && p.is_dir()
         })
         .collect::<Vec<_>>();
     fixture_paths.sort();
@@ -1785,6 +1794,7 @@ fn main() {
 
     let mut tests: Vec<libtest_mimic::Trial> = Vec::new();
     let mut isolated_trials = BTreeSet::new();
+    let mut registry_trials = BTreeSet::new();
     for fixture_path in fixture_paths {
         let fixture_path: Arc<Path> = Arc::from(fixture_path.as_path());
         let fixture_name: Arc<str> = Arc::from(fixture_path.file_name().unwrap().to_str().unwrap());
@@ -1823,6 +1833,8 @@ fn main() {
                 let isolated = case_needs_isolation(&case);
                 if isolated {
                     isolated_trials.insert(trial_name.clone());
+                } else if case.local_registry {
+                    registry_trials.insert(trial_name.clone());
                 }
                 let timings = Arc::clone(&timings);
                 let timing_name = trial_name.clone();
@@ -1889,10 +1901,16 @@ fn main() {
     if args.list
         && let Some(path) = std::env::var_os("VP_SNAP_NEXTEST_CONFIG")
     {
-        std::fs::write(&path, schedule::nextest_config(isolated_trials.iter().map(String::as_str)))
-            .unwrap_or_else(|error| {
-                panic!("failed to write nextest config {}: {error}", Path::new(&path).display())
-            });
+        std::fs::write(
+            &path,
+            schedule::nextest_config(
+                isolated_trials.iter().map(String::as_str),
+                registry_trials.iter().map(String::as_str),
+            ),
+        )
+        .unwrap_or_else(|error| {
+            panic!("failed to write nextest config {}: {error}", Path::new(&path).display())
+        });
     }
 
     if let Some(shard) = std::env::var_os("VP_SNAP_SHARD") {
@@ -1904,7 +1922,11 @@ fn main() {
         // A worker waiting for exclusive access cannot run another ready case.
         // Finish parallel work first, then take the existing exclusive leases.
         // Keep discovery and shard membership independent of execution order.
-        tests.sort_by_key(|trial| isolated_trials.contains(trial.name()));
+        // Registry cases usually install dependencies or start several tools.
+        // Start them early so shorter cases can fill the remaining worker slots.
+        tests.sort_by_key(|trial| {
+            (isolated_trials.contains(trial.name()), !registry_trials.contains(trial.name()))
+        });
     }
 
     drop(discovery_phase);
