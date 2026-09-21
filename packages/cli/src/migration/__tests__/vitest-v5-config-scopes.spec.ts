@@ -185,6 +185,162 @@ describe('Vitest config factory ownership', () => {
   });
 });
 
+describe('In-source test ownership', () => {
+  const test = `test.sequential('in-source', () => { expect(() => { throw new Error(''); }).toThrow(''); });`;
+  const source = `export const add = (a, b) => a + b; if (import.meta.vitest) { ${test} }`;
+
+  it.each([
+    [`{ test: { globals: true, includeSource: ['src/*.ts'] } }`, 'src/add.ts', 'src/excluded.ts'],
+    [
+      `{ root: './app', test: { root: './unit', globals: true, includeSource: ['*.ts'] } }`,
+      'unit/add.ts',
+      'unit/excluded.ts',
+    ],
+    [
+      `{ root: './app', test: { dir: './unit', globals: true, includeSource: ['*.ts'] } }`,
+      'unit/add.ts',
+      'unit/excluded.ts',
+    ],
+    [
+      `{ test: { globals: true, includeSource: ['src/*.ts'], projects: [{ extends: true, test: { name: 'unit', includeSource: ['extra/*.ts'] } }] } }`,
+      'src/add.ts',
+      'src/excluded.ts',
+    ],
+    [
+      `{ test: { projects: [{ test: { root: './unit', globals: true, includeSource: ['*.ts'] } }] } }`,
+      'unit/add.ts',
+      'unit/excluded.ts',
+    ],
+  ])('migrates guarded globals and the normal control using %s', (config, selected, excluded) => {
+    const { plan, read } = workspace({
+      'web/vitest.config.ts': `export default ${config.replace('globals: true,', "globals: true, exclude: ['**/excluded.ts'],")};`,
+      [`web/${selected}`]: source,
+      [`web/${excluded}`]: source,
+      [`web/${path.posix.dirname(selected)}/control.test.ts`]: test,
+      [`web/${path.posix.dirname(selected)}/no-guard.ts`]: test,
+      'web/unrelated/add.ts': source,
+    });
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(read(`web/${selected}`)).toContain("test('in-source', { concurrent: false }");
+    expect(read(`web/${selected}`)).toContain('toThrow(/^$/)');
+    expect(read(`web/${selected}`)).toContain(
+      'export const add = (a, b) => a + b; if (import.meta.vitest)',
+    );
+    expect(read(`web/${path.posix.dirname(selected)}/control.test.ts`)).toContain(
+      'concurrent: false',
+    );
+    expect(read(`web/${excluded}`)).toBe(source);
+    expect(read(`web/${path.posix.dirname(selected)}/no-guard.ts`)).toBe(test);
+    expect(read('web/unrelated/add.ts')).toBe(source);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+  });
+
+  it.each([true, false])('respects extends: %s when merging includeSource patterns', (inherits) => {
+    const { plan, read } = workspace({
+      'web/vitest.config.ts': `export default { test: { includeSource: ['src/*.ts'], projects: [{ extends: ${inherits}, test: { globals: true, includeSource: ['extra/*.ts'] } }] } };`,
+      'web/src/add.ts': source,
+      'web/extra/add.ts': source,
+    });
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(read('web/extra/add.ts')).toContain('concurrent: false');
+    if (inherits) {
+      expect(read('web/src/add.ts')).toContain('concurrent: false');
+    } else {
+      expect(read('web/src/add.ts')).toBe(source);
+    }
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+  });
+
+  it('honors a literal CLI discovery directory override', () => {
+    const { plan, read } = workspace({
+      'web/package.json':
+        '{"devDependencies":{"vitest":"4.1.11"},"scripts":{"test":"vitest run --dir ./unit"}}',
+      'web/vitest.config.ts': `export default { test: { globals: true, dir: './ignored', includeSource: ['*.ts'] } };`,
+      'web/unit/add.ts': source,
+      'web/ignored/add.ts': source,
+    });
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(read('web/unit/add.ts')).toContain('concurrent: false');
+    expect(read('web/ignored/add.ts')).toBe(source);
+    expect(finishVitestV5Migration(plan)).toEqual([]);
+  });
+
+  it.each(['patterns', "['src/*.ts', ...patterns]"])(
+    'reviews unresolved patterns without blocking known test files: %s',
+    (patterns) => {
+      const { plan, read } = workspace({
+        'web/vitest.config.ts': `export default { test: { globals: true, includeSource: ${patterns}, exclude: ['src/excluded.ts'] } };`,
+        'web/src/add.ts': source,
+        'web/src/excluded.ts': source,
+        'web/src/no-guard.ts': test,
+        'web/control.test.ts': test,
+      });
+      expect(plan.findings).toContainEqual(
+        expect.objectContaining({
+          code: 'global-api-ownership',
+          message: expect.stringContaining('test.includeSource'),
+        }),
+      );
+      expect(plan.findings).toContainEqual(
+        expect.objectContaining({
+          file: expect.stringContaining(`${path.sep}src${path.sep}add.ts`),
+          code: 'global-api-ownership',
+        }),
+      );
+      expect(
+        plan.findings.some(
+          ({ file }) => file.endsWith('excluded.ts') || file.endsWith('no-guard.ts'),
+        ),
+      ).toBe(false);
+      applyVitestV5Migration(plan);
+      expect(read('web/src/add.ts')).toBe(source);
+      expect(read('web/src/excluded.ts')).toBe(source);
+      expect(read('web/src/no-guard.ts')).toBe(test);
+      expect(read('web/control.test.ts')).toContain('concurrent: false');
+      expect(finishVitestV5Migration(plan)).toContainEqual(
+        expect.objectContaining({ code: 'global-api-ownership' }),
+      );
+    },
+  );
+
+  it('does not lose unresolved inherited includeSource patterns', () => {
+    const { plan } = workspace({
+      'web/vitest.config.ts': `export default { test: { includeSource: patterns, projects: [{ extends: true, test: { globals: true, includeSource: ['extra/*.ts'] } }] } };`,
+      'web/src/add.ts': source,
+    });
+    expect(plan.findings).toContainEqual(expect.objectContaining({ code: 'global-api-ownership' }));
+    expect(plan.changes.some(({ file }) => file.endsWith('add.ts'))).toBe(false);
+  });
+
+  it('reviews conflicting global ownership of an in-source file', () => {
+    const { plan, read } = workspace({
+      'web/vitest.config.ts': `export default { test: { includeSource: ['src/*.ts'], projects: [{ extends: true, test: { globals: true } }, { extends: true, test: { globals: false } }] } };`,
+      'web/src/add.ts': source,
+    });
+    expect(plan.findings).toContainEqual(expect.objectContaining({ code: 'global-api-ownership' }));
+    applyVitestV5Migration(plan);
+    expect(read('web/src/add.ts')).toBe(source);
+    expect(finishVitestV5Migration(plan)).toContainEqual(
+      expect.objectContaining({ code: 'global-api-ownership' }),
+    );
+  });
+
+  it('keeps explicit Vitest imports independent of the globals setting', () => {
+    const { plan, read } = workspace({
+      'web/vitest.config.ts': `export default { test: { globals: false, includeSource: ['src/*.ts'] } };`,
+      'web/src/add.ts': `import { test, expect } from 'vitest'; ${source}`,
+      'web/src/other.ts': source,
+    });
+    expect(plan.findings).toEqual([]);
+    applyVitestV5Migration(plan);
+    expect(read('web/src/add.ts')).toContain('concurrent: false');
+    expect(read('web/src/other.ts')).toBe(source);
+  });
+});
+
 describe('Storybook project ownership', () => {
   const assertion = `import { expect } from 'vitest'; expect(element).toHaveTextContent('partial');`;
   const integration = `{ extends: true, test: { name: 'integration', environment: 'jsdom', include: ['src/**/*.test.tsx'], setupFiles: ['./setup.ts'] } }`;

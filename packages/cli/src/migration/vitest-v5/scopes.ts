@@ -41,6 +41,8 @@ interface TestScope {
   dir?: string;
   discoveryRoot?: string;
   include?: string[];
+  // An empty array disables in-source discovery; undefined requires review.
+  includeSource?: string[];
   exclude?: string[];
   benchmark?: {
     include?: string[];
@@ -140,7 +142,7 @@ export function findVitestV5ConfigEntries(
               rootOverride = path.resolve(root, value);
             }
           } else if (
-            /^--(?:no-)?(?:globals|include|exclude|workspace|setupFiles|benchmark\.(?:include|exclude|includeSource))(?:[.=]|$)/.test(
+            /^--(?:no-)?(?:globals|include|includeSource|exclude|workspace|setupFiles|benchmark\.(?:include|exclude|includeSource))(?:[.=]|$)/.test(
               arg,
             )
           ) {
@@ -442,8 +444,11 @@ export function resolveVitestV5TestModes(
       // Unlike globals, --dir is not a per-project CLI override in Vitest.
       const effectiveDir = (!inline ? entry.dirOverride : undefined) ?? dir;
       const include = test && objectProperty(test, 'include')?.value;
+      const includeSource = test && objectProperty(test, 'includeSource')?.value;
       const exclude = test && objectProperty(test, 'exclude')?.value;
       const includePatterns = include ? staticPatterns(include, editor) : undefined;
+      const sourcePatterns = includeSource ? staticPatterns(includeSource, editor) : [];
+      const inheritedSourcePatterns = base ? base.includeSource : [];
       const excludePatterns = exclude ? staticPatterns(exclude, editor) : undefined;
       if ((include && !includePatterns) || (exclude && !excludePatterns)) {
         unknown();
@@ -497,6 +502,10 @@ export function resolveVitestV5TestModes(
         dir,
         discoveryRoot,
         include: includePatterns ? [...(base?.include ?? []), ...includePatterns] : base?.include,
+        includeSource:
+          sourcePatterns && inheritedSourcePatterns
+            ? [...inheritedSourcePatterns, ...sourcePatterns]
+            : undefined,
         exclude: excludePatterns ? [...(base?.exclude ?? []), ...excludePatterns] : base?.exclude,
         // Apply defaults only when matching: implicit parent defaults must not
         // be appended to an inline project's explicit benchmark patterns.
@@ -510,6 +519,13 @@ export function resolveVitestV5TestModes(
           selected === undefined ? undefined : booleanOption(globals, base ? base.globals : false),
       };
       const addScope = () => {
+        if (!scope.includeSource) {
+          editor.report(
+            includeSource ?? test ?? object,
+            'global-api-ownership',
+            'Resolve test.includeSource patterns before migrating in-source global APIs. In-source test ownership is not statically known.',
+          );
+        }
         if (scope.storybook?.reason) {
           editor.report(
             objectProperty(object, 'plugins')?.value ?? object,
@@ -676,6 +692,8 @@ export function resolveVitestV5TestModes(
     [...sources.keys()].map((file) => {
       const matching: Array<{ scope: TestScope; certain: boolean }> = [];
       let benchmarkFile = false;
+      // Match Vitest's source-text check, including its exact spelling.
+      const hasInSourceTests = sources.get(file)?.includes('import.meta.vitest');
       for (const scope of scopes) {
         if (scope.excludedRoots?.some((root) => insideDirectory(file, root))) {
           continue;
@@ -684,6 +702,16 @@ export function resolveVitestV5TestModes(
         const setup = scope.setupFiles?.includes(file);
         const inside = insideDirectory(file, scope.root);
         const discoveryRoot = scope.discoveryRoot;
+        const sourceCandidate =
+          hasInSourceTests &&
+          discoveryRoot &&
+          insideDirectory(file, discoveryRoot) &&
+          !(scope.exclude ?? DEFAULT_TEST_EXCLUDE).some((pattern) =>
+            matches(file, discoveryRoot, pattern),
+          );
+        const inSource =
+          sourceCandidate &&
+          scope.includeSource?.some((pattern) => matches(file, discoveryRoot, pattern));
         const test = scope.storybook
           ? discoveryRoot &&
             scope.storybook.include?.some((pattern) =>
@@ -713,9 +741,9 @@ export function resolveVitestV5TestModes(
             (scope.benchmark.includeSource?.some((pattern) =>
               matches(file, discoveryRoot, pattern),
             ) &&
-              sources.get(file)?.includes('import.meta.vitest')));
+              hasInSourceTests));
         benchmarkFile ||= !!benchmark;
-        if (setup || test || benchmark) {
+        if (setup || test || inSource || benchmark) {
           matching.push({ scope, certain: true });
         } else if (
           ((!discoveryRoot ||
@@ -723,7 +751,8 @@ export function resolveVitestV5TestModes(
             scope.unresolvedSetup ||
             scope.storybook?.reason) &&
             inside) ||
-          (!scope.benchmark && discoveryRoot && insideDirectory(file, discoveryRoot))
+          (!scope.benchmark && discoveryRoot && insideDirectory(file, discoveryRoot)) ||
+          (sourceCandidate && !scope.includeSource)
         ) {
           matching.push({ scope, certain: false });
         }

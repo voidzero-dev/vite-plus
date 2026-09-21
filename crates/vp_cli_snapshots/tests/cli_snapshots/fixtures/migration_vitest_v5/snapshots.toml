@@ -1,4 +1,35 @@
 [[case]]
+name = "in_source_test_scopes"
+vp = "global"
+comment = "Migrate globals in guarded includeSource files and normal tests, preserve excluded and unguarded sources, and execute the result with Vitest 5."
+steps = [
+  { argv = ["vpt", "rm", "example.test.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { globals: true, includeSource: ['src/*.js'], exclude: ['src/excluded.js'] } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/add.js", "export const add = (a, b) => a + b;\nif (import.meta.vitest) {\n  test.sequential('in-source', () => {\n    expect(add(2, 3)).toBe(5);\n    expect(() => { throw new Error(''); }).toThrow('');\n  });\n}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "control.test.js", "test.sequential('normal control', () => { expect(() => { throw new Error(''); }).toThrow(''); });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/excluded.js", "if (import.meta.vitest) { test.sequential('excluded', () => { expect(() => { throw new Error('boom'); }).toThrow(''); }); }\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/no-guard.js", "test.sequential('another runner', () => { expect(() => { throw new Error('boom'); }).toThrow(''); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "src/add.js", "control.test.js", "src/excluded.js", "src/no-guard.js"],
+  ["node", "verify-in-source.mjs"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "unresolved_in_source_test_scopes"
+vp = "global"
+comment = "Keep an ownership review for dynamic includeSource patterns without suppressing normal test migration."
+steps = [
+  { argv = ["vpt", "rm", "example.test.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { test: { globals: true, includeSource: process.env.TEST_SOURCES?.split(',') ?? ['src/*.js'] } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/add.js", "export const add = (a, b) => a + b;\nif (import.meta.vitest) { test.sequential('in-source', () => { expect(add(2, 3)).toBe(5); }); }\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "control.test.js", "test.sequential('normal control', () => { expect(() => { throw new Error(''); }).toThrow(''); });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "src/add.js", "control.test.js"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "storybook_project_scopes"
 vp = "global"
 comment = "Use Storybook story patterns to keep jsdom text assertions unchanged without ownership reviews, while still migrating browser assertions."
