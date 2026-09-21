@@ -124,8 +124,6 @@ This switches both components to system-first mode. Vite+ prefers system tools a
 
 Using `pm` records the selected mode for all currently supported package managers and replaces their individual choices. An unscoped `on` or `off` does the same while also changing Node.js.
 
-Setup fills missing family preferences from the existing tool layout. An existing managed package manager or Vite+ shim in the main bin directory keeps its family in managed mode. Otherwise, a fallback shim or an existing system package manager selects system-first mode; a family with neither uses managed mode. Upgrades run this setup automatically. Package-manager calls do not prompt or change these preferences.
-
 ## Commands
 
 ### Setup
