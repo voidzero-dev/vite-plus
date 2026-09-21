@@ -207,7 +207,7 @@ impl PackageManagerCommand {
     /// only command whose typed clap shape selects between two resolvers.
     pub(crate) fn resolve_for_manager(self, manager: &PackageManager) -> Result<Resolution, Error> {
         match self {
-            Self::Install(args) => args.resolve_args_for_manager(manager),
+            Self::Install(args) => args.resolve_for_manager(manager),
             Self::Add(args) => resolve_args_for_manager(manager, args),
             Self::Remove(args) => resolve_args_for_manager(manager, args),
             Self::Update(args) => resolve_args_for_manager(manager, args),

@@ -75,10 +75,10 @@ VITE+ - The Unified Toolchain for the Web
 ➤ YN0000: │
 ➤ YN0028: │ The lockfile would have been modified by this install, which is explicitly forbidden.
 ➤ YN0000: └ Completed
-➤ YN0000: · Failed with errors in <duration> <duration>
+➤ YN0000: · Failed with errors in <duration>
 ```
 
-## `node -e 'const fs = require('\''node:fs'\''); if ('\!'fs.readFileSync('\''yarn.lock'\'').equals(fs.readFileSync('\''before.lock'\''))) process.exit(1); console.log('\''lockfile unchanged'\'');'`
+## `node assert-lockfile-unchanged.mjs yarn.lock`
 
 ```
 lockfile unchanged

@@ -2,7 +2,7 @@ use vp_pm_cli_macros::pm_args;
 
 use super::parse_positive_usize;
 use crate::resolution::{
-    Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm, Resolve, Yarn,
+    Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, Pnpm, Resolve, Yarn,
 };
 
 #[pm_args]
@@ -300,17 +300,7 @@ impl Resolve<AddArgs> for Yarn {
         }
         cmd.arg_if("--exact", args.save_exact);
         if self.is_berry() {
-            if args.lockfile_only {
-                cmd.arg("--mode").arg("update-lockfile");
-                if args.ignore_scripts {
-                    diag.warn(
-                        DiagnosticKind::BehaviorChange,
-                        "yarn@2+ --mode can only be specified once; --lockfile-only takes priority over --ignore-scripts",
-                    );
-                }
-            } else if args.ignore_scripts {
-                cmd.arg("--mode").arg("skip-build");
-            }
+            Self::apply_berry_install_mode(&mut cmd, args.lockfile_only, args.ignore_scripts, diag);
         } else {
             cmd.arg_if("--ignore-scripts", args.ignore_scripts)
                 .arg_if("--ignore-optional", args.no_optional)
@@ -367,7 +357,7 @@ impl Resolve<AddArgs> for Bun {
 mod tests {
     use super::*;
     use crate::resolution::{
-        resolve,
+        DiagnosticKind, resolve,
         test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 

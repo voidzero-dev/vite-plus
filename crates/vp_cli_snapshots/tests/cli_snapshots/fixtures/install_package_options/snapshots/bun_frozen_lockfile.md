@@ -36,7 +36,7 @@ error: lockfile had changes, but lockfile is frozen
 note: try re-running without --frozen-lockfile and commit the updated lockfile
 ```
 
-## `node -e 'const fs = require('\''node:fs'\''); if ('\!'fs.readFileSync('\''bun.lock'\'').equals(fs.readFileSync('\''before.lock'\''))) process.exit(1); console.log('\''lockfile unchanged'\'');'`
+## `node assert-lockfile-unchanged.mjs bun.lock`
 
 ```
 lockfile unchanged

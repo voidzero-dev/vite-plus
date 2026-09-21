@@ -146,25 +146,25 @@ impl Resolve<InstallArgs> for Pnpm {
 }
 
 impl InstallArgs {
-    pub(crate) fn resolve_args_for_manager(
+    pub(crate) fn resolve_for_manager(
         mut self,
         manager: &PackageManager,
     ) -> Result<Resolution, Error> {
         let adding_packages = !self.packages.is_empty();
         // Diagnose the selected mode before conversion discards fields, and before
         // manager-specific support rules can produce misleading or duplicate warnings.
-        let (mode, unsupported) = if adding_packages {
+        let (mode, unsupported): (&str, &[(&str, bool)]) = if adding_packages {
             (
                 "with package names",
-                vec![
-                    ("--fix-lockfile", std::mem::take(&mut self.fix_lockfile)),
-                    ("--resolution-only", std::mem::take(&mut self.resolution_only)),
+                &[
+                    ("--fix-lockfile", self.fix_lockfile),
+                    ("--resolution-only", self.resolution_only),
                 ],
             )
         } else {
             (
                 "without package names",
-                vec![
+                &[
                     ("--save-exact", std::mem::take(&mut self.save_exact)),
                     ("--save-peer", std::mem::take(&mut self.save_peer)),
                     ("--save-optional", std::mem::take(&mut self.save_optional)),
@@ -177,7 +177,7 @@ impl InstallArgs {
         } else {
             resolve_for_manager(manager, self)?
         };
-        for (option, supplied) in unsupported {
+        for &(option, supplied) in unsupported {
             if supplied {
                 resolution.diagnostics.warn(
                     DiagnosticKind::UnsupportedOptionDropped,
@@ -299,17 +299,7 @@ impl Yarn {
         } else {
             cmd.arg_if("--immutable", args.frozen_lockfile);
         }
-        if args.lockfile_only {
-            cmd.arg("--mode").arg("update-lockfile");
-            if args.ignore_scripts {
-                diag.warn(
-                DiagnosticKind::BehaviorChange,
-                "yarn@2+ --mode can only be specified once; --lockfile-only takes priority over --ignore-scripts",
-            );
-            }
-        } else if args.ignore_scripts {
-            cmd.arg("--mode").arg("skip-build");
-        }
+        Self::apply_berry_install_mode(&mut cmd, args.lockfile_only, args.ignore_scripts, diag);
         if args.prod {
             diag.warn(
                 DiagnosticKind::BehaviorChange,
@@ -318,6 +308,25 @@ impl Yarn {
         }
         cmd.arg_if("--refresh-lockfile", args.fix_lockfile).extend(args.pass_through_args.iter());
         cmd.into()
+    }
+
+    pub(super) fn apply_berry_install_mode(
+        cmd: &mut CommandBuilder,
+        lockfile_only: bool,
+        ignore_scripts: bool,
+        diag: &mut Diagnostics,
+    ) {
+        if lockfile_only {
+            cmd.arg("--mode").arg("update-lockfile");
+            if ignore_scripts {
+                diag.warn(
+                    DiagnosticKind::BehaviorChange,
+                    "yarn@2+ --mode can only be specified once; --lockfile-only takes priority over --ignore-scripts",
+                );
+            }
+        } else if ignore_scripts {
+            cmd.arg("--mode").arg("skip-build");
+        }
     }
 }
 

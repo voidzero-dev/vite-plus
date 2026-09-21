@@ -98,7 +98,7 @@ error Your lockfile needs to be updated, but yarn was run with `--frozen-lockfil
 info Visit https://yarnpkg.com/en/docs/cli/install for documentation about this command.
 ```
 
-## `node -e 'const fs = require('\''node:fs'\''); if ('\!'fs.readFileSync('\''yarn.lock'\'').equals(fs.readFileSync('\''before.lock'\''))) process.exit(1); console.log('\''lockfile unchanged'\'');'`
+## `node assert-lockfile-unchanged.mjs yarn.lock`
 
 ```
 lockfile unchanged

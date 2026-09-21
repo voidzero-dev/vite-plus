@@ -18,7 +18,7 @@ static DURATION_RE: LazyLock<regex::Regex> =
 // Match the entire elapsed field, not adjacent values in timing tables.
 static YARN_ELAPSED_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r"(\b(?:Done(?: with (?:warnings|errors))?|[Cc]ompleted) in )\d+(?:\.\d+)?(?:ms|s|m|h)\b(?:[ \t]+\d+(?:\.\d+)?(?:ms|s|m|h)\b)*",
+        r"(\b(?:(?:Done|Failed)(?: with (?:warnings|errors))?|[Cc]ompleted) in )\d+(?:\.\d+)?(?:ms|s|m|h)\b(?:[ \t]+\d+(?:\.\d+)?(?:ms|s|m|h)\b)*",
     )
     .unwrap()
 });

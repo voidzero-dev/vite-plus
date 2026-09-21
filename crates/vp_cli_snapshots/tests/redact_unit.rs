@@ -18,6 +18,7 @@ fn masks_yarn_compound_elapsed_times_as_one_duration() {
             "➤ YN0000: Done in {elapsed}\n\
              ➤ YN0000: · Done with warnings in {elapsed}\n\
              ➤ YN0000: · Done with errors in {elapsed}\n\
+             ➤ YN0000: · Failed with errors in {elapsed}\n\
              [app]: Process exited (exit code 0), completed in {elapsed}\n"
         );
         assert_eq!(
@@ -25,6 +26,7 @@ fn masks_yarn_compound_elapsed_times_as_one_duration() {
             "➤ YN0000: Done in <duration>\n\
              ➤ YN0000: · Done with warnings in <duration>\n\
              ➤ YN0000: · Done with errors in <duration>\n\
+             ➤ YN0000: · Failed with errors in <duration>\n\
              [app]: Process exited (exit code 0), completed in <duration>\n"
         );
     }
