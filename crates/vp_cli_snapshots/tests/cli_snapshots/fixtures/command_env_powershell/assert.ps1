@@ -1,12 +1,13 @@
 $ErrorActionPreference = "Stop"
 
 $expectedBin = Join-Path $env:EXPECTED_VP_HOME "bin"
+$expectedFallback = Join-Path $env:EXPECTED_VP_HOME "fallback-bin"
 $externalBin = Join-Path $PWD "external-node"
 New-Item -ItemType Directory -Path $externalBin | Out-Null
 $node = Get-Command node -CommandType Application | Select-Object -First 1
 Copy-Item -LiteralPath $node.Source -Destination $externalBin
 $externalNode = Join-Path $externalBin (Split-Path $node.Source -Leaf)
-$env:PATH = (@($externalBin, $expectedBin.ToUpperInvariant(), $env:PATH, $expectedBin)) -join [IO.Path]::PathSeparator
+$env:PATH = (@($expectedFallback.ToUpperInvariant(), $externalBin, $expectedBin.ToUpperInvariant(), $env:PATH, $expectedBin, $expectedFallback)) -join [IO.Path]::PathSeparator
 if ((Get-Command node -CommandType Application | Select-Object -First 1).Source -ne $externalNode) {
     throw "Fixture did not create a Node PATH priority conflict"
 }
@@ -25,6 +26,10 @@ if ($binCount -ne 1) {
 }
 if (($env:PATH -split [IO.Path]::PathSeparator)[0] -ne $expectedBin) {
     throw "Activation did not put the shim directory first on PATH"
+}
+$fallbackCount = @($env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -ieq $expectedFallback }).Count
+if ($fallbackCount -ne 1 -or ($env:PATH -split [IO.Path]::PathSeparator)[-1] -ne $expectedFallback) {
+    throw "Activation did not put exactly one fallback directory last on PATH"
 }
 if ((Get-Command node -CommandType Application | Select-Object -First 1).Source -ne (Join-Path $expectedBin (Split-Path $node.Source -Leaf))) {
     throw "Activation did not give the Node shim priority"

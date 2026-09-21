@@ -10,14 +10,14 @@ Setup:
 
 Created Shims:
   <workspace>/activation/home/bin/node
-  <workspace>/activation/home/bin/npm
-  <workspace>/activation/home/bin/npx
-  <workspace>/activation/home/bin/pnpm
-  <workspace>/activation/home/bin/pnpx
-  <workspace>/activation/home/bin/yarn
-  <workspace>/activation/home/bin/yarnpkg
-  <workspace>/activation/home/bin/bun
-  <workspace>/activation/home/bin/bunx
+  <workspace>/activation/home/fallback-bin/npm
+  <workspace>/activation/home/fallback-bin/npx
+  <workspace>/activation/home/fallback-bin/pnpm
+  <workspace>/activation/home/fallback-bin/pnpx
+  <workspace>/activation/home/fallback-bin/yarn
+  <workspace>/activation/home/fallback-bin/yarnpkg
+  <workspace>/activation/home/fallback-bin/bun
+  <workspace>/activation/home/fallback-bin/bunx
   <workspace>/activation/home/bin/vpx
   <workspace>/activation/home/bin/vpr
 
@@ -44,14 +44,14 @@ Setup:
 
 Skipped Shims:
   <workspace>/activation/home/bin/node
-  <workspace>/activation/home/bin/npm
-  <workspace>/activation/home/bin/npx
-  <workspace>/activation/home/bin/pnpm
-  <workspace>/activation/home/bin/pnpx
-  <workspace>/activation/home/bin/yarn
-  <workspace>/activation/home/bin/yarnpkg
-  <workspace>/activation/home/bin/bun
-  <workspace>/activation/home/bin/bunx
+  <workspace>/activation/home/fallback-bin/npm
+  <workspace>/activation/home/fallback-bin/npx
+  <workspace>/activation/home/fallback-bin/pnpm
+  <workspace>/activation/home/fallback-bin/pnpx
+  <workspace>/activation/home/fallback-bin/yarn
+  <workspace>/activation/home/fallback-bin/yarnpkg
+  <workspace>/activation/home/fallback-bin/bun
+  <workspace>/activation/home/fallback-bin/bunx
   <workspace>/activation/home/bin/vpx
   <workspace>/activation/home/bin/vpr
 

@@ -7,10 +7,11 @@ VP_SELF_SETUP_NO_MODIFY_PATH=<unset>:
 VP_SHELL=cmd:
 Next Steps:
   Activate Vite+ in this terminal:
-  set "PATH=<home>/.vite-plus/bin;%PATH%"
+  set "PATH=<home>/.vite-plus/bin;%PATH%;<home>/.vite-plus/fallback-bin"
 
-  For future cmd.exe sessions, add this directory to your user PATH if it is missing:
-  <home>/.vite-plus/bin
+  For future cmd.exe sessions, add these directories to your user PATH if missing:
+  At the start: <home>/.vite-plus/bin
+  At the end: <home>/.vite-plus/fallback-bin
   System Properties -> Environment Variables -> User variables -> Path
   Open a new terminal after updating PATH.
 
@@ -24,10 +25,11 @@ VP_SELF_SETUP_NO_MODIFY_PATH=1:
 VP_SHELL=cmd:
 Next Steps:
   Activate Vite+ in this terminal:
-  set "PATH=<home>/.vite-plus/bin;%PATH%"
+  set "PATH=<home>/.vite-plus/bin;%PATH%;<home>/.vite-plus/fallback-bin"
 
-  For future cmd.exe sessions, add this directory to your user PATH if it is missing:
-  <home>/.vite-plus/bin
+  For future cmd.exe sessions, add these directories to your user PATH if missing:
+  At the start: <home>/.vite-plus/bin
+  At the end: <home>/.vite-plus/fallback-bin
   System Properties -> Environment Variables -> User variables -> Path
   Open a new terminal after updating PATH.
 

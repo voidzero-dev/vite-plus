@@ -12,7 +12,7 @@ Setup:
   Preparing vite-plus environment.
 
 Created Shims:
-  <workspace>/home/bin/node
+  <workspace>/home/fallback-bin/node
   <workspace>/home/bin/npm
   <workspace>/home/bin/npx
   <workspace>/home/bin/pnpm

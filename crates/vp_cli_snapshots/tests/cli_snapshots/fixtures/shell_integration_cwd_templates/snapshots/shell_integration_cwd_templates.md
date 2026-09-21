@@ -256,8 +256,11 @@ PowerShell wrapper and vpr completion keep global -C before env use/run
 $env:VP_HOME = '<workspace>/home'
 $__vp_bin = '<workspace>/home/bin'
 $__vp_fallback = '<workspace>/home/fallback-bin'
-$__vp_paths = @($env:Path -split ';' | Where-Object { $_ -and $_ -ne $__vp_bin -and $_ -ne $__vp_fallback })
-$env:Path = (@($__vp_bin) + $__vp_paths + @($__vp_fallback)) -join ';'
+$env:PATH = @(
+    $__vp_bin
+    $env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -and $_ -ne $__vp_bin -and $_ -ne $__vp_fallback }
+    $__vp_fallback
+) -join [IO.Path]::PathSeparator
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -274,17 +277,26 @@ function vp {
         if ($args -contains "-h" -or $args -contains "--help") {
             & (Join-Path $__vp_bin "vp") @args; return
         }
-        $env:VP_ENV_USE_EVAL_ENABLE = "1"
-        $env:VP_SHELL = "pwsh"
-        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
-            if ($_ -is [System.Management.Automation.ErrorRecord]) {
-                Write-Host $_.Exception.Message
-            } else {
-                $_
+        $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
+        $previousShell = $env:VP_SHELL
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $env:VP_ENV_USE_EVAL_ENABLE = "1"
+            $env:VP_SHELL = "pwsh"
+            # Windows PowerShell 5.1 treats native stderr as an error when redirected.
+            $ErrorActionPreference = "Continue"
+            $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
+                if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                    Write-Host $_.Exception.Message
+                } else {
+                    $_
+                }
             }
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+            $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
+            $env:VP_SHELL = $previousShell
         }
-        Remove-Item Env:VP_ENV_USE_EVAL_ENABLE -ErrorAction SilentlyContinue
-        Remove-Item Env:VP_SHELL -ErrorAction SilentlyContinue
         if ($LASTEXITCODE -eq 0 -and $output) {
             Invoke-Expression ($output -join "`n")
         }

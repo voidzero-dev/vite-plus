@@ -1324,7 +1324,11 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
         shown.push(kind);
         let command = match env_shell {
             Some(env_shell) => env_shell.source_command(env_dir),
-            None => super::format_path_snippet(Shell::Cmd, &[env.dirs.bin.to_string()]),
+            None => format!(
+                "set \"PATH={};%PATH%;{}\"",
+                env.dirs.bin.to_string().replace('%', "%%"),
+                env.dirs.fallback_bin().to_string().replace('%', "%%")
+            ),
         };
         if is_hint {
             let label = match shell_name.as_deref() {
@@ -1383,9 +1387,10 @@ fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
     }
     if shown.contains(&Shell::Cmd) {
         output::raw(
-            "  For future cmd.exe sessions, add this directory to your user PATH if it is missing:",
+            "  For future cmd.exe sessions, add these directories to your user PATH if missing:",
         );
-        output::raw(&format!("  {}", env.dirs.bin.as_path().display()));
+        output::raw(&format!("  At the start: {}", env.dirs.bin.as_path().display()));
+        output::raw(&format!("  At the end: {}", env.dirs.fallback_bin().as_path().display()));
         output::raw("  System Properties -> Environment Variables -> User variables -> Path");
         output::raw("  Open a new terminal after updating PATH.");
     }

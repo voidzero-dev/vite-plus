@@ -95,8 +95,11 @@ if (mode === 'powershell') {
     .split('\n')
     .find((line) => line.trimStart().startsWith('set "PATH='))
     ?.trim();
-  assert.equal(activation, `set "PATH=${dirs.bin};%PATH%"`);
-  assert.match(output, /user PATH if it is missing/);
+  const fallbackBin = path.join(dirs.data, 'fallback-bin');
+  assert.equal(activation, `set "PATH=${dirs.bin};%PATH%;${fallbackBin}"`);
+  assert.match(output, /user PATH if missing/);
+  assert.ok(output.includes(`At the start: ${dirs.bin}`));
+  assert.ok(output.includes(`At the end: ${fallbackBin}`));
   assert.match(output, /System Properties -> Environment Variables -> User variables -> Path/);
   assert.doesNotMatch(output, /open a new terminal to load/i);
   console.log(output);
