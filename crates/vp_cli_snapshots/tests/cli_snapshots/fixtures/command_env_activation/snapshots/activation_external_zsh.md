@@ -14,6 +14,8 @@ Created Shims:
   <workspace>/activation/home/fallback-bin/npx
   <workspace>/activation/home/fallback-bin/pnpm
   <workspace>/activation/home/fallback-bin/pnpx
+  <workspace>/activation/home/fallback-bin/pn
+  <workspace>/activation/home/fallback-bin/pnx
   <workspace>/activation/home/fallback-bin/yarn
   <workspace>/activation/home/fallback-bin/yarnpkg
   <workspace>/activation/home/fallback-bin/bun
@@ -48,6 +50,8 @@ Skipped Shims:
   <workspace>/activation/home/fallback-bin/npx
   <workspace>/activation/home/fallback-bin/pnpm
   <workspace>/activation/home/fallback-bin/pnpx
+  <workspace>/activation/home/fallback-bin/pn
+  <workspace>/activation/home/fallback-bin/pnx
   <workspace>/activation/home/fallback-bin/yarn
   <workspace>/activation/home/fallback-bin/yarnpkg
   <workspace>/activation/home/fallback-bin/bun

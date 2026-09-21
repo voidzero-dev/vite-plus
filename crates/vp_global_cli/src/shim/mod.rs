@@ -20,8 +20,10 @@ pub(crate) use dispatch::find_system_tool;
 use vp_shared::env_vars;
 
 /// Default shims created by `vp env setup`.
-pub const DEFAULT_SHIM_TOOLS: &[&str] =
-    &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx", "vpx", "vpr"];
+pub const DEFAULT_SHIM_TOOLS: &[&str] = &[
+    "node", "npm", "npx", "pnpm", "pnpx", "pn", "pnx", "yarn", "yarnpkg", "bun", "bunx", "vpx",
+    "vpr",
+];
 
 /// Extract the tool name from argv[0].
 /// Core tool shims can live in either the main or fallback bin directory.
@@ -287,5 +289,12 @@ mod tests {
     #[serial]
     fn test_detect_shim_tool_vpr() {
         assert_detect_shim_tool_from_argv0("vpr");
+    }
+
+    #[test]
+    #[serial]
+    fn test_detect_shim_tool_pnpm_short_aliases() {
+        assert_detect_shim_tool_from_argv0("pn");
+        assert_detect_shim_tool_from_argv0("pnx");
     }
 }

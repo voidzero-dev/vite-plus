@@ -733,8 +733,10 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
 
     // Preserve an already selected managed executable, including direct calls to a shim from its children.
     // External manager shims must not be re-entered here: they may have fallen back to us.
-    if env.contains(tool)
-        && let Some(path) = find_system_tool(tool)
+    let inherited_tool =
+        PackageManagerType::from_tool(tool).map_or(tool, |kind| kind.bin_name_for_tool(tool));
+    if env.contains(inherited_tool)
+        && let Some(path) = find_system_tool(inherited_tool)
         && let Ok(target) = path.as_path().canonicalize()
         && ["js_runtime", "package_manager"].iter().any(|directory| {
             vp_shared::EnvConfig::get()
@@ -754,12 +756,6 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         tracing::debug!("bypass mode enabled");
         return bypass_to_system(tool, args, env);
     }
-
-    if let Some(exit_code) = legacy::dispatch_package_manager(tool, args, &env).await {
-        return exit_code;
-    }
-
-    // After the first-use decision, PATH placement selects system-first precedence.
 
     // Package binaries use their install-time Node.js version; core shims use
     // the project-resolved runtime below.
@@ -1388,184 +1384,6 @@ fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathB
             // Nothing left to drop; give up rather than loop forever.
             return None;
         }
-    }
-}
-
-mod legacy {
-    //! Legacy first-use consent for upgrades without saved package-manager preferences.
-    //!
-    //! Fresh installations record these preferences during setup. Keep the prompt,
-    //! shim relocation, and one-time system dispatch together for older installations.
-
-    // TODO: Consider moving first-use consent to `vp upgrade` so the legacy PATH lookup can be removed.
-
-    use dialoguer::{Select, theme::ColorfulTheme};
-    use vp_pm_cli::PackageManagerType;
-    use vp_shared::{PrependOptions, ToolPathEnv, env_vars, output};
-    use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
-
-    use super::{
-        ensure_installed, exec, find_external_tool_in, find_system_tool, resolve_with_cache,
-    };
-    use crate::{
-        commands::env::config::{self, ShimMode},
-        error::Error,
-    };
-
-    pub(super) async fn dispatch_package_manager(
-        tool: &str,
-        args: &[String],
-        env: &ToolPathEnv,
-    ) -> Option<i32> {
-        // Undecided upgrades still ask before taking over an existing package manager.
-        // Inherited selections skip this so an external manager falling back to us cannot prompt again.
-        if !env.contains(tool)
-            && let Some(package_manager) = PackageManagerType::from_tool(tool)
-        {
-            match resolve_package_manager_shim_choice(tool, package_manager).await {
-                Ok(Some(system_path)) => {
-                    let mut child_env = env.clone();
-                    if let Some(bin_dir) = system_path.parent()
-                        && let Err(error) = child_env.prepend(
-                            bin_dir,
-                            &[tool],
-                            PrependOptions { dedupe_anywhere: true },
-                        )
-                    {
-                        eprintln!("vp: Failed to prepare package manager PATH: {error}");
-                        return Some(1);
-                    }
-                    let child_env = match prepare_node_path_for_system_package_manager(child_env)
-                        .await
-                    {
-                        Ok(env) => env,
-                        Err(error) => {
-                            eprintln!(
-                                "vp: Failed to prepare Node.js for system package manager: {error}"
-                            );
-                            return Some(1);
-                        }
-                    };
-                    return Some(exec::exec_tool(&system_path, args, child_env));
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    eprintln!("vp: Failed to configure package-manager shims: {error}");
-                    return Some(1);
-                }
-            }
-        }
-
-        None
-    }
-
-    async fn prepare_node_path_for_system_package_manager(
-        mut env: ToolPathEnv,
-    ) -> Result<ToolPathEnv, Error> {
-        if env.contains("node") && find_system_tool("node").is_some() {
-            return Ok(env);
-        }
-        let config = config::load_config().await?;
-        if config.node_shim_mode == ShimMode::SystemFirst
-            && let Some(node) = find_system_tool("node")
-            && let Some(bin_dir) = node.parent()
-        {
-            env.prepend(bin_dir, &["node"], PrependOptions::default())?;
-            return Ok(env);
-        }
-
-        let cwd = current_dir()?;
-        let resolution =
-            resolve_with_cache(&cwd).await.map_err(|error| Error::Other(error.into()))?;
-        let node = ensure_installed(&resolution.version)
-            .await
-            .map_err(|error| Error::Other(error.into()))?;
-        let bin_dir =
-            node.parent().ok_or_else(|| Error::Other("Node.js has no bin directory".into()))?;
-        env.prepend(bin_dir, &["node"], PrependOptions::default())?;
-        Ok(env)
-    }
-
-    // Return a system executable only for this first decision; saved modes use PATH placement.
-    async fn resolve_package_manager_shim_choice(
-        tool: &str,
-        package_manager: PackageManagerType,
-    ) -> Result<Option<AbsolutePathBuf>, Error> {
-        let mut settings = config::load_config().await?;
-        if settings.configured_package_manager_shim_mode_for(package_manager).is_some()
-            || !vp_shared::is_interactive_terminal()
-        {
-            return Ok(None);
-        }
-        let Some(system_path) = find_external_tool_in(tool, &current_dir()?) else {
-            return Ok(None);
-        };
-        let Some((mode, apply_to_all)) =
-            prompt_package_manager_shim_mode(package_manager, &system_path)
-        else {
-            output::note(
-                "Package-manager preference was not saved; using the system tool this time.",
-            );
-            return Ok(Some(system_path));
-        };
-        if apply_to_all {
-            settings.set_all_package_manager_shim_modes(mode);
-        } else {
-            settings.set_package_manager_shim_mode(package_manager, mode);
-        }
-        // The running shim may be removed while relocating this family. Keep a stable source.
-        let current_exe = std::fs::canonicalize(std::env::current_exe()?)?;
-        crate::commands::env::setup::refresh_shims(&current_exe, &settings, false, false).await?;
-        config::save_config(&settings).await?;
-        Ok((mode == ShimMode::SystemFirst).then_some(system_path))
-    }
-
-    fn prompt_package_manager_shim_mode(
-        package_manager: PackageManagerType,
-        system_path: &AbsolutePath,
-    ) -> Option<(ShimMode, bool)> {
-        let options = [
-            "Use Vite+ for all package managers".to_string(),
-            format!("Use Vite+ for {package_manager}"),
-            format!("Use system {package_manager}"),
-            "Use system package managers".to_string(),
-        ];
-
-        output::raw_stderr("vp: Vite+ now can manage package-manager versions for each project.");
-        output::raw_stderr(&format!(
-            "Existing {package_manager}: {}",
-            system_path.as_path().display()
-        ));
-        output::raw_stderr("");
-        emit_prompt_milestone(&format!("pm-shim-choice:{package_manager}"));
-        let choice = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!("How should {package_manager} run?"))
-            .items(&options)
-            .default(1)
-            .interact()
-            .ok()?;
-
-        Some(match choice {
-            0 => (ShimMode::Managed, true),
-            1 => (ShimMode::Managed, false),
-            2 => (ShimMode::SystemFirst, false),
-            _ => (ShimMode::SystemFirst, true),
-        })
-    }
-
-    /// Emit an invisible synchronization point for the PTY snapshot suite.
-    #[expect(clippy::disallowed_macros)]
-    fn emit_prompt_milestone(name: &str) {
-        use std::io::Write as _;
-
-        if std::env::var_os(env_vars::VP_EMIT_MILESTONES).is_none_or(|value| value != "1") {
-            return;
-        }
-        let id = uuid::Uuid::new_v4();
-        let encoded_name = base64_simd::URL_SAFE_NO_PAD.encode_to_string(name.as_bytes());
-        let mut stderr = std::io::stderr().lock();
-        let _ = write!(stderr, "\x1b]2;pty-terminal-test:{}:{encoded_name}\x1b\\", id.simple());
-        let _ = stderr.flush();
     }
 }
 

@@ -206,11 +206,15 @@ fn selected_shim_tools(scope: EnvScope) -> Vec<&'static str> {
     match scope {
         EnvScope::All => crate::shim::DEFAULT_SHIM_TOOLS.to_vec(),
         EnvScope::Node => vec!["node"],
-        EnvScope::PackageManagers => package_manager::ALL_PACKAGE_MANAGERS
-            .into_iter()
-            .flat_map(|package_manager| package_manager.bin_names().iter().copied())
+        EnvScope::PackageManagers | EnvScope::PackageManager(_) => crate::shim::DEFAULT_SHIM_TOOLS
+            .iter()
+            .copied()
+            .filter(|tool| {
+                vp_pm_cli::PackageManagerType::from_tool(tool).is_some_and(|kind| {
+                    scope.package_manager().is_none_or(|selected| selected == kind)
+                })
+            })
             .collect(),
-        EnvScope::PackageManager(package_manager) => package_manager.bin_names().to_vec(),
     }
 }
 
@@ -1265,11 +1269,11 @@ mod tests {
         assert_eq!(selected_shim_tools(EnvScope::Node), vec!["node"]);
         assert_eq!(
             selected_shim_tools(EnvScope::PackageManager(vp_pm_cli::PackageManagerType::Pnpm)),
-            vec!["pnpm", "pnpx"]
+            vec!["pnpm", "pnpx", "pn", "pnx"]
         );
         assert_eq!(
             selected_shim_tools(EnvScope::PackageManagers),
-            vec!["npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"]
+            vec!["npm", "npx", "pnpm", "pnpx", "pn", "pnx", "yarn", "yarnpkg", "bun", "bunx"]
         );
         assert_eq!(selected_shim_tools(EnvScope::All), crate::shim::DEFAULT_SHIM_TOOLS);
     }

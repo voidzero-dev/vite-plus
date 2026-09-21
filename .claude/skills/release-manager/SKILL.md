@@ -324,10 +324,13 @@ Across the full catalog most failures are not regressions, and reporting them as
   git -C <dir> show "$sha" | grep -E '^-.*vite-plus'
   ```
 
+  Parse every YAML document when auditing pnpm lockfiles. Importers and package resolutions can be in separate documents; a single-document parser can miss the resolved versions.
+
   Report that subset separately; "2 of the 7 forks on the previous release pass, the other 5 fail on fork infrastructure" is a far stronger statement than a headline pass rate over the whole catalog.
 
 - **Project-side and infra failures.** Dependency conflicts between the project's own packages, missing fork secrets, third-party GitHub Apps not installed on the fork, network timeouts. Retry once before classifying anything as a network failure; they pass on retry. Two recurring shapes worth naming: a package that imports a dependency it never declared and only ever resolved through hoisting (`Cannot find package 'oxfmt'`) breaks as soon as the harness regenerates the lockfile; and a project whose own dependency has no `main`/`module`/`exports` cannot load its config under any vite-plus version.
 - **Dependency drift during migration.** Regenerating a lockfile can move unrelated floating or nightly dependencies to incompatible versions. Compare with the base lockfile before blaming the candidate. On the test branch, retain the original versions and their dependency graph, then verify a frozen install and rerun the failing command.
+- **Custom quality checks.** Check that project wrappers still load their plugins and recognize migrated test imports. Preserve existing lint diagnostic coverage when repairing migration issues; a smaller baseline can mean that checks stopped running.
 - **Harness artifacts.** Failures your own test setup caused, such as a lockfile the harness deleted and the install never regenerated. Fix these and re-run rather than reporting them.
 
 Report the tally by cause, not just pass/fail, and state plainly which failures you controlled for and which you classified from the error text alone. Only a failure that reproduces on the candidate but not on the previous release is a regression.
@@ -422,7 +425,7 @@ The full package document can update before npm's separately cached installation
        --title "vite-plus vX.Y.Z: <theme>" --notes-file /tmp/release-notes.md
      ```
 
-   - Keep the review draft, body-only notes file, and live release aligned after requested edits. Read back the live title and body to verify the update. Re-run the step 3 validation greps, plus `grep -c 'Merging this PR'` (must be 0).
+   - Keep the review draft, body-only notes file, and live release aligned after requested edits. Read back the live title and body to verify the update. Normalize CRLF and LF before comparing the approved file with the live body, because GitHub can change line endings. Re-run the step 3 validation greps, plus `grep -c 'Merging this PR'` (must be 0).
 
 2. **Verify**:
 

@@ -1898,6 +1898,8 @@ jobs:
           $env:VP_SKIP_DEPS_INSTALL = "1"
           $env:VP_VERSION = "local-unicode-env"
           $env:VP_NODE_MANAGER = "yes"
+          # The path assertions require managed npm, regardless of the runner's system tools.
+          $env:VP_PM_MANAGER = "yes"
           $env:VP_NODE_VERSION = "22.13.1"
           $env:CI = "true"
           Remove-Item Env:VP_BIN_DIR -ErrorAction SilentlyContinue

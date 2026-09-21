@@ -11,7 +11,7 @@
 Managed mode keeps all tool families in the main bin; fallback can be empty.
 
 ```
-$VP_HOME/bin: bun, bunx, node, npm, npx, pnpm, pnpx, vpr, vpx, yarn, yarnpkg
+$VP_HOME/bin: bun, bunx, node, npm, npx, pn, pnpm, pnpx, pnx, vpr, vpx, yarn, yarnpkg
 $VP_HOME/fallback-bin: (empty)
 ```
 
@@ -32,7 +32,7 @@ Run `vp env on` to always use Vite+ managed tools.
 Only Node moves to fallback.
 
 ```
-$VP_HOME/bin: bun, bunx, npm, npx, pnpm, pnpx, vpr, vpx, yarn, yarnpkg
+$VP_HOME/bin: bun, bunx, npm, npx, pn, pnpm, pnpx, pnx, vpr, vpx, yarn, yarnpkg
 $VP_HOME/fallback-bin: node
 ```
 
@@ -70,7 +70,7 @@ pnpm and pnpx move together; other families and vpx/vpr stay managed.
 
 ```
 $VP_HOME/bin: bun, bunx, npm, npx, vpr, vpx, yarn, yarnpkg
-$VP_HOME/fallback-bin: node, pnpm, pnpx
+$VP_HOME/fallback-bin: node, pn, pnpm, pnpx, pnx
 ```
 
 ## `vp env setup --refresh`
@@ -82,7 +82,7 @@ Refresh preserves saved choices.
 
 ```
 $VP_HOME/bin: bun, bunx, npm, npx, vpr, vpx, yarn, yarnpkg
-$VP_HOME/fallback-bin: node, pnpm, pnpx
+$VP_HOME/fallback-bin: node, pn, pnpm, pnpx, pnx
 ```
 
 ## `PATH=${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} node -p process.execPath.includes('system-bin')`
@@ -119,7 +119,7 @@ Restoring Node leaves the pnpm preference intact and removes its old fallback en
 
 ```
 $VP_HOME/bin: bun, bunx, node, npm, npx, vpr, vpx, yarn, yarnpkg
-$VP_HOME/fallback-bin: pnpm, pnpx
+$VP_HOME/fallback-bin: pn, pnpm, pnpx, pnx
 ```
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} node -p process.execPath.includes('system-bin')`
@@ -147,6 +147,6 @@ Run `vp env off` to prefer system tools instead.
 Restoring pnpm empties fallback again.
 
 ```
-$VP_HOME/bin: bun, bunx, node, npm, npx, pnpm, pnpx, vpr, vpx, yarn, yarnpkg
+$VP_HOME/bin: bun, bunx, node, npm, npx, pn, pnpm, pnpx, pnx, vpr, vpx, yarn, yarnpkg
 $VP_HOME/fallback-bin: (empty)
 ```
