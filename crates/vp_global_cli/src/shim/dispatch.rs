@@ -755,8 +755,6 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         return bypass_to_system(tool, args, env);
     }
 
-    // PATH placement selects system-first precedence.
-
     // Package binaries use their install-time Node.js version; core shims use
     // the project-resolved runtime below.
     if !is_core_shim_tool(tool) {

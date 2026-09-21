@@ -169,27 +169,34 @@ async fn initialize_package_manager_shim_modes(
     use super::{config::ShimMode, package_manager::ALL_PACKAGE_MANAGERS};
 
     let dirs = &vp_shared::EnvConfig::get().dirs;
+    let fallback_bin = dirs.fallback_bin();
     let mut changed = false;
     for kind in ALL_PACKAGE_MANAGERS {
         if settings.configured_package_manager_shim_mode_for(kind).is_some() {
             continue;
         }
 
-        let mut managed = false;
-        let mut system_first = false;
+        let mut has_managed_tool = false;
+        let mut has_system_first_tool = false;
         for tool in kind.bin_names() {
             let main_shim = dirs.bin.join(shim_filename(tool));
             // Older global installs can use direct package links rather than vp shims.
             let legacy_install = tokio::fs::symlink_metadata(&main_shim).await.is_ok()
-                && BinConfig::load(tool).await?.is_some_and(|config| {
-                    LEGACY_PACKAGE_MANAGER_PACKAGES.contains(&config.package.as_str())
+                && BinConfig::load(tool).await?.is_some_and(|bin_config| {
+                    LEGACY_PACKAGE_MANAGER_PACKAGES.contains(&bin_config.package.as_str())
                 });
-            managed |= is_owned_shim(&main_shim, current_exe) || legacy_install;
-            system_first |=
-                is_owned_shim(&dirs.fallback_bin().join(shim_filename(tool)), current_exe)
+            has_managed_tool |= is_owned_shim(&main_shim, current_exe) || legacy_install;
+            has_system_first_tool |=
+                is_owned_shim(&fallback_bin.join(shim_filename(tool)), current_exe)
                     || crate::shim::dispatch::find_system_tool(tool).is_some();
         }
-        let mode = if managed || !system_first { ShimMode::Managed } else { ShimMode::SystemFirst };
+        let mode = if has_managed_tool {
+            ShimMode::Managed
+        } else if has_system_first_tool {
+            ShimMode::SystemFirst
+        } else {
+            ShimMode::Managed
+        };
         settings.set_package_manager_shim_mode(kind, mode);
         changed = true;
     }
@@ -234,7 +241,6 @@ pub(crate) async fn refresh_shims(
     let fallback_bin = dirs.fallback_bin();
     tokio::fs::create_dir_all(&dirs.bin).await?;
     tokio::fs::create_dir_all(&fallback_bin).await?;
-    let owns_shim = |path: &vt_path::AbsolutePath| is_owned_shim(path, current_exe);
     let mut created = Vec::new();
     let mut skipped = Vec::new();
     for tool in crate::shim::DEFAULT_SHIM_TOOLS {
@@ -245,7 +251,9 @@ pub(crate) async fn refresh_shims(
             if matches!(*tool, "vpx" | "vpr") { refresh_entrypoints } else { refresh };
         let exists = tokio::fs::symlink_metadata(&shim_path).await.is_ok();
         // A configured bin directory can contain foreign tools. Never replace them to change modes.
-        let foreign = exists && crate::shim::is_core_shim_tool(tool) && !owns_shim(&shim_path);
+        let foreign = exists
+            && crate::shim::is_core_shim_tool(tool)
+            && !is_owned_shim(&shim_path, current_exe);
         if !foreign && create_shim(current_exe, &bin_dir, tool, refresh_tool).await? {
             created.push(shim_path);
         } else {
@@ -253,7 +261,7 @@ pub(crate) async fn refresh_shims(
         }
 
         let stale = other_dir.join(shim_filename(tool));
-        if owns_shim(&stale) {
+        if is_owned_shim(&stale, current_exe) {
             #[cfg(unix)]
             tokio::fs::remove_file(&stale).await?;
             #[cfg(windows)]
