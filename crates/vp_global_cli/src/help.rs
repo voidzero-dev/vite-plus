@@ -18,21 +18,21 @@ fn section_lines(title: &'static str, lines: Vec<&'static str>) -> HelpSection {
     HelpSection::Lines { title: title.into(), lines: lines.into_iter().map(Into::into).collect() }
 }
 
-fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static str> {
-    match command_path {
-        [] => Some("https://viteplus.dev/guide/"),
+fn documentation_url_for_command_path(command_path: &[&str]) -> Option<String> {
+    let path = match command_path {
+        [] => "/guide/",
         [
             "install" | "add" | "remove" | "update" | "dedupe" | "outdated" | "list" | "ls" | "why"
             | "info" | "view" | "show" | "link" | "unlink" | "rebuild" | "pm",
             ..,
-        ] => Some("https://viteplus.dev/guide/install"),
-        ["dlx"] => Some("https://viteplus.dev/guide/vpx"),
-        ["env", ..] => Some("https://viteplus.dev/guide/env"),
-        ["toolchain"] => Some("https://viteplus.dev/guide/upgrade"),
-        ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
-        ["implode"] => Some("https://viteplus.dev/guide/implode"),
-        _ => None,
-    }
+        ] => "/guide/install",
+        ["dlx"] => "/guide/vpx",
+        ["env", ..] => "/guide/env",
+        ["toolchain" | "upgrade"] => "/guide/upgrade",
+        ["implode"] => "/guide/implode",
+        _ => return None,
+    };
+    Some(vp_shared::documentation_url(path))
 }
 
 fn is_section_heading(line: &str) -> bool {
@@ -725,15 +725,15 @@ Options:
     fn docs_url_is_mapped_for_grouped_commands() {
         assert_eq!(
             documentation_url_for_command_path(&["add"]),
-            Some("https://viteplus.dev/guide/install")
+            Some(vp_shared::documentation_url("/guide/install"))
         );
         assert_eq!(
             documentation_url_for_command_path(&["env", "list"]),
-            Some("https://viteplus.dev/guide/env")
+            Some(vp_shared::documentation_url("/guide/env"))
         );
         assert_eq!(
             documentation_url_for_command_path(&["implode"]),
-            Some("https://viteplus.dev/guide/implode")
+            Some(vp_shared::documentation_url("/guide/implode"))
         );
     }
 

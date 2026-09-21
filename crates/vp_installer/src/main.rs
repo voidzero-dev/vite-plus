@@ -458,7 +458,7 @@ fn print_success(opts: &cli::Options, data_dir: &str, bin_dir: &str) {
     println!();
     println!("  Data directory: {data_dir}");
     println!("  Bin directory:  {bin_dir}");
-    println!("  Documentation:  {}", "https://viteplus.dev/guide/");
+    println!("  Documentation:  {}", vp_shared::documentation_url("/guide/"));
     println!();
 }
 

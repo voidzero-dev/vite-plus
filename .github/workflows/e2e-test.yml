@@ -297,10 +297,12 @@ jobs:
           - name: dify
             node-version: 24
             directory: web
+            # Leave time for tests after migration and the Next.js build.
+            timeout: 20
             command: |
               vp run type-check
               vp run build
-              vp run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-onboarding-integration.test.tsx
+              vp run test real-browser-flicker.test.tsx workflow-onboarding-integration.test.tsx
           - name: viteplus-ws-repro
             node-version: 24
             command: |
@@ -344,7 +346,7 @@ jobs:
           - name: yaak
             node-version: 24
             command: |
-              vp fmt --ignore-path .oxfmtignore
+              vp fmt
               # FIXME: type-aware lint fails with "Invalid tsconfig" without full Rust/wasm bootstrap
               vp lint || true
               vp test
@@ -356,6 +358,16 @@ jobs:
               vp run test:types
               vp test --project nuxt
               vp test --project unit
+          - name: codiff
+            node-version: 24
+            timeout: 20
+            command: |
+              # Migration skips install scripts. node-pty has no Linux prebuild,
+              # so build its approved native addon before running the tests.
+              vp pm rebuild node-pty
+              vp run build
+              # The separate Workers integration suite still requires Vitest 4.
+              vp test run
           - name: vite-plus-jest-dom-repro
             node-version: 24
             command: |
@@ -416,6 +428,19 @@ jobs:
               vp run build && vp run build:demos
               vp run lint
               vp run test:unit
+          - name: 10ten-ja-reader
+            # Match upstream's pin for its locked WebDriverIO/Undici versions.
+            node-version: 24.15.0
+            command: |
+              vp test run --project browser --browser.name=chrome
+          - name: sqlocal
+            node-version: 24
+            command: |
+              vp test run --browser.name=chrome
+          - name: brazilian-utils
+            node-version: 24
+            command: |
+              vp test run --browser.enabled --browser.name=chrome --browser.headless
           - name: solid-vite-plugin
             node-version: 24
             # The next branch's Vite 8 example uses Solid 2 and @solidjs/vite-plugin.
@@ -450,10 +475,24 @@ jobs:
           - os: namespace-profile-windows-4c-8g
             project:
               name: varlet
+          # Codiff's upstream test job is Ubuntu-only and needs native-keymap system libraries.
+          - os: namespace-profile-windows-4c-8g
+            project:
+              name: codiff
           # tiptap upstream CI is ubuntu-only
           - os: namespace-profile-windows-4c-8g
             project:
               name: tiptap
+          # Match upstream's Linux Chrome jobs for these WebDriverIO suites.
+          - os: namespace-profile-windows-4c-8g
+            project:
+              name: 10ten-ja-reader
+          - os: namespace-profile-windows-4c-8g
+            project:
+              name: sqlocal
+          - os: namespace-profile-windows-4c-8g
+            project:
+              name: brazilian-utils
 
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -478,6 +517,12 @@ jobs:
         with:
           name: vite-plus-packages-${{ matrix.os }}
           path: tmp/tgz
+
+      - name: Install Codiff native-keymap dependencies
+        if: matrix.project.name == 'codiff'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libx11-dev libxkbfile-dev
 
       - name: Install vp CLI
         shell: bash

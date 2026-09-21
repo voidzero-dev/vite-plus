@@ -32,10 +32,18 @@ export default defineConfig(() => ({
       copy: 'public',
       nodeProtocol: 'strip',
       css: { inject: true },
-      deps: { neverBundle: true, onlyBundle: [/^allowed/], resolveDepSubpath: true },
+      deps: { neverBundle: true, onlyBundle: [/^allowed/],
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
 
       dts: { generator: 'oxc',  },
-      attw: { profile: 'strict' },
+      attw: {
+        // tsdown <0.23 compatibility: keep all declaration resolution checks.
+        // Remove to use the new 'esm-only' profile.
+        // https://tsdown.dev/options/lint#profiles
+        profile: 'strict' },
     },
     {
       entry: 'src/index.ts',
@@ -97,10 +105,18 @@ export default defineConfig(() => ({
       copy: 'public',
       nodeProtocol: 'strip',
       css: { inject: true },
-      deps: { neverBundle: true, onlyBundle: [/^allowed/], resolveDepSubpath: true },
+      deps: { neverBundle: true, onlyBundle: [/^allowed/],
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true },
 
       dts: { generator: 'oxc',  },
-      attw: { profile: 'strict' },
+      attw: {
+        // tsdown <0.23 compatibility: keep all declaration resolution checks.
+        // Remove to use the new 'esm-only' profile.
+        // https://tsdown.dev/options/lint#profiles
+        profile: 'strict' },
     },
     {
       entry: 'src/index.ts',

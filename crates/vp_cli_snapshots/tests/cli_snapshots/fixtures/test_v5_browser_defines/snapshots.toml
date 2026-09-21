@@ -1,0 +1,28 @@
+[[case]]
+name = "browser_defines"
+vp = "local"
+# The multi-project matrix launches many browsers. Keep other snapshot cases
+# from competing with browser startup; retain the matrix's own parallel projects.
+serial = true
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+comment = "Regression for Vitest #11198, fixed upstream in 5.0.1. Raw configs, project inheritance, programmatic APIs, and the CLI must preserve define values without a Vite+ backport."
+steps = [
+  { argv = ["node", "prepare-local.mjs"], snapshot = false },
+  { argv = ["node", "verify.mjs"], timeout = 180000 },
+  { argv = ["vp", "test", "--config", "vite.config.mjs"], timeout = 120000 },
+]
+
+[[case]]
+name = "packed_browser_defines"
+vp = "global"
+# Use the same isolation as the local matrix, including under Windows nextest.
+serial = true
+local-registry = true
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+comment = "The define regression must also pass with published-package layouts and install scripts disabled."
+steps = [
+  { argv = ["node", "prepare-packed.mjs"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 180000, snapshot = false },
+  { argv = ["node", "verify.mjs", "--packed"], timeout = 180000 },
+  { argv = ["vp", "test", "--config", "vite.config.mjs"], timeout = 120000 },
+]

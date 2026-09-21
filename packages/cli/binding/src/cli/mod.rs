@@ -420,7 +420,8 @@ async fn execute_pm_command(
     // `--node`, ignoring `--dry-run`, …).
     if command.is_managed_global() {
         return Err(Error::Anyhow(anyhow::anyhow!(
-            "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
+            "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See {} to install it, then run the same command via the global `vp` binary.",
+            vp_shared::documentation_url("/guide/")
         )));
     }
     let result = match vp_pm_cli::dispatch_with_metadata(cwd, command).await {

@@ -1,5 +1,10 @@
 # migration_rewrite_declare_module
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
 retained vitest augmentations should keep a package-local vitest
@@ -56,7 +61,6 @@ check package.json
 {
   "name": "migration-rewrite-declare-module",
   "devDependencies": {
-    "vite": "catalog:",
     "vitest": "catalog:",
     "vite-plus": "catalog:"
   },

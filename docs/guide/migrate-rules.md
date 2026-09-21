@@ -44,6 +44,8 @@ When a default upgrade skips setup actions that would apply, it prints a hint to
 
 Migration preserves the previous defaults by setting `deps.resolveDepSubpath` to `true` when absent. Enabled ATTW checks receive `profile: 'strict'` when no profile is set. Explicit values, including `false`, remain unchanged.
 
+The inserted settings include comments with documentation links and instructions for adopting the new defaults. Remove `deps.resolveDepSubpath: true` to [preserve external subpath imports as written](https://tsdown.dev/options/dependencies#deps-resolvedepsubpath). Remove the inserted `attw.profile: 'strict'` to use the new `esm-only` [resolution profile](https://tsdown.dev/options/lint#profiles). This skips `node10` and CommonJS resolution checks. Keep either setting if your package requires the previous behavior. Migration does not add these comments to explicit settings.
+
 `noExternal` moves to `deps.alwaysBundle`, preserving matcher expressions, references, and callback methods. Existing `deps.alwaysBundle` values remain unchanged.
 
 When `external` accompanies either `skipNodeModulesBundle` form, static matchers and references to local constants move to `inputOptions.external` before `deps.neverBundle` is set. Constant declarations and references stay intact. This preserves the original matching rules, including external file paths. Unsupported matchers, conflicting `inputOptions`, and declaration-specific dependency rules leave the pack object unchanged and produce a manual-migration warning.
@@ -54,13 +56,13 @@ The transform does not evaluate configuration code. Objects with spreads, comput
 
 What happens to each toolchain dependency, at a glance:
 
-| Dependency                     | What happens                                                                                                                                                            |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vite-plus`                    | Added where the package is migrated; plain ranges re-pinned to the concrete target, directly or through a catalog.                                                      |
-| `vite`                         | Existing declarations kept and pointed at the core alias. Under pnpm, added as a direct dev dependency wherever needed (see [Vite and Overrides](#vite-and-overrides)). |
-| `vitest`                       | Removed in the common node-mode case because `vite-plus` provides it transitively. Kept or added only when [directly required](#when-vitest-is-directly-required).      |
-| `@vitest/*`                    | Directly installed lockstep packages aligned to the bundled Vitest version (see [Vitest Ecosystem Packages](#vitest-ecosystem-packages)).                               |
-| `@voidzero-dev/vite-plus-test` | Removed everywhere: dependencies, overrides, resolutions, and catalog aliases. Imports are rewritten to the current `vite-plus/test*` surface.                          |
+| Dependency                     | What happens                                                                                                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vite-plus`                    | Added where the package is migrated; plain ranges re-pinned to the concrete target, directly or through a catalog.                                                          |
+| `vite`                         | Existing declarations kept and pointed at the core alias. pnpm packages that use only `vite-plus` need no new `vite` entry (see [Vite and Overrides](#vite-and-overrides)). |
+| `vitest`                       | Removed in the common node-mode case because `vite-plus` provides it transitively. Kept or added only when [directly required](#when-vitest-is-directly-required).          |
+| `@vitest/*`                    | Directly installed lockstep packages aligned to the bundled Vitest version (see [Vitest Ecosystem Packages](#vitest-ecosystem-packages)).                                   |
+| `@voidzero-dev/vite-plus-test` | Removed everywhere: dependencies, overrides, resolutions, and catalog aliases. Imports are rewritten to the current `vite-plus/test*` surface.                              |
 
 ### Version Selection
 
@@ -72,14 +74,14 @@ What happens to each toolchain dependency, at a glance:
 
 ### Vite and Overrides
 
-Package-manager overrides do not create dependency edges by themselves. Under pnpm, a package that lists `vite-plus` in `dependencies` or `devDependencies` but has no `vite` entry anywhere (`dependencies`, `devDependencies`, `optionalDependencies`, or `peerDependencies`) lets pnpm auto-install upstream Vite to satisfy Vitest's required `vite` peer, splitting the project across separate Vite+, Vite, and Vitest instances. To prevent this, `vp migrate` adds the missing `vite` entry to `devDependencies` of every such package; the workspace override then redirects it to Vite+ core.
+You can use `vite-plus` in a pnpm package without declaring `vite`. The `vite-plus` package includes a `vite` dependency aliased to its core, which provides Vitest's required peer. Migration keeps the workspace override for other Vite consumers but does not add `vite` to a package solely because it uses `vite-plus`.
 
 Related rules:
 
 - A direct `vite` declaration is never removed merely because a root override exists.
 - Plain or stale aliases are normalized; named catalog references are kept.
 - Under pnpm the managed override keys use an explicit `@*` range (`vite@*`, `vitest@*`). pnpm applies an override by replacing the declared spec on every manifest, importer manifests included. A bare key matches any spec, including `catalog:`, and `vp up` then rewrites that reference to a concrete version. The `@*` range keeps the override on the semver ranges that transitive and peer declarations use. It leaves `catalog:` references to the catalog, which already resolves them to Vite+ core. Migration re-keys a project that still holds the bare key, and keeps its named-catalog choice.
-- The direct-entry rule above is pnpm-specific. Bun mirrors its core alias as a direct dependency for its peer resolver, and npm browser-provider layouts may need a top-level `vite` edge so nested Vitest packages can resolve `vite`.
+- Bun mirrors its core alias as a direct dependency for its peer resolver, and npm browser-provider layouts may need a top-level `vite` edge so nested Vitest packages can resolve `vite`.
 
 ### When Vitest Is Directly Required
 
@@ -114,9 +116,11 @@ Packages that are **not** aligned:
 - `@vitest/coverage-c8` stopped at an older release and has no Vitest 4 version; and
 - third-party `vitest-*` integrations keep their own compatible versions, though their required Vitest peer may still trigger [direct provisioning](#when-vitest-is-directly-required).
 
-For browser mode, the base `@vitest/browser` runtime and `@vitest/browser-preview` are bundled by Vite+ and are removed as direct dependencies. The Playwright and WebdriverIO providers stay opt-in: a kept or injected provider is referenced through the preferred toolchain catalog at the bundled Vitest version (or written concretely when catalogs are unsupported), and its `playwright` or `webdriverio` peer is installed alongside.
+For browser mode, Vite+ bundles the base `@vitest/browser` runtime and `@vitest/browser-preview`; migration removes their direct dependency entries. The Playwright provider stays opt-in. Migration uses the bundled Vitest version for `@vitest/browser-playwright`, through the preferred toolchain catalog or the dependency entry, and installs its `playwright` peer alongside.
 
-Providers are detected before imports are rewritten. This covers legacy projects that aliased `vitest` to `@voidzero-dev/vite-plus-test` and import from `vitest/browser-<provider>`, `vitest/browser/providers/<provider>`, or `vitest/plugins/browser-<provider>`: those imports still install the corresponding `@vitest/browser-playwright` or `@vitest/browser-webdriverio` dependency and its framework peer.
+Migration detects Playwright usage before it rewrites imports, including legacy `vitest/browser-playwright`, `vitest/browser/providers/playwright`, and `vitest/plugins/browser-playwright` aliases.
+
+`vp migrate` restores removed Vite+ WebDriverIO aliases to `@vitest/browser-webdriverio` and adds `^5.0.0` if the provider is missing. It upgrades older versions, narrows ranges that allow versions below `5.0.0`, updates referenced catalog entries, and removes overrides that force an older provider. Versions and ranges that meet the minimum stay unchanged. Migration ensures the required `webdriverio` peer and adds an `@vitest/browser` override matching bundled Vitest (`resolutions` for Yarn). You manage later community provider upgrades. See [Community WebDriverIO provider](./vitest-v5.md#community-webdriverio-provider).
 
 Object-valued nested npm and Bun overrides are preserved: they are user-defined scopes rather than scalar version pins.
 
@@ -225,7 +229,7 @@ Migration converts legacy Node.js version-manager files to `.node-version`, the 
 
 **Other rules.**
 
-- Each package that declares `vite-plus` also gets a direct `vite` dev dependency (see [Vite and Overrides](#vite-and-overrides)).
+- Packages that use `vite-plus` without a direct `vite` declaration keep that layout (see [Vite and Overrides](#vite-and-overrides)).
 - Unrelated selector-shaped and object-valued overrides are preserved.
 
 ### npm

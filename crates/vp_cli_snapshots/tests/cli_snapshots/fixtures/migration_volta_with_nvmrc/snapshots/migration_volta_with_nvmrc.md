@@ -17,10 +17,10 @@ VITE+ - The Unified Toolchain for the Web
 
 ## `vpt print-file .node-version`
 
-check .node-version comes from .nvmrc (v20.19.0), not volta.node (18.0.0)
+check .node-version comes from .nvmrc (v24.11.0), not volta.node (18.0.0)
 
 ```
-20.19.0
+24.11.0
 ```
 
 ## `vpt stat-file .nvmrc --assert-not file`

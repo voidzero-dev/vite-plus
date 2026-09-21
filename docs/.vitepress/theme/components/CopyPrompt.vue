@@ -2,26 +2,8 @@
 import { Icon } from '@iconify/vue';
 import { computed, onBeforeUnmount, ref, useId } from 'vue';
 
-// Default getting-started prompt handed to an AI coding assistant. Every
-// command and URL here is verified against the Getting Started guide and the
-// live llms-full.txt docs dump.
-const DEFAULT_PROMPT = `I want to use Vite+ in my project. Vite+ is the unified toolchain for the web behind the \`vp\` CLI — one tool combining Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, and Vite Task, plus runtime and package-manager management.
+import { setupPrompt } from '../data/migration-prompts.ts';
 
-First, read ${__DOCS_ORIGIN__}/llms-full.txt to learn Vite+'s commands and configuration.
-
-Install the \`vp\` CLI if it's not already on the system:
-- macOS / Linux: curl -fsSL ${__DOCS_INSTALL_SH_URL__} | bash
-- Windows (PowerShell): irm ${__DOCS_INSTALL_PS1_URL__} | iex
-
-Then open a new terminal and run \`vp help\`. To scaffold a new project run \`vp create\`; to move an existing Vite project onto Vite+ run \`vp migrate\`.
-
-Day-to-day commands: \`vp install\` (dependencies), \`vp dev\` (dev server), \`vp check\` (format + lint + type-check), \`vp test\` (tests), and \`vp build\` (production build).
-
-Help me get set up and explain anything I should know.`;
-
-// DEFAULT_PROMPT interpolates the __DOCS_*__ define constants, so it is not a
-// static literal and cannot be a withDefaults() default (defineProps is
-// hoisted out of setup). Resolve the fallback in promptText instead.
 const props = withDefaults(
   defineProps<{
     prompt?: string;
@@ -33,7 +15,7 @@ const props = withDefaults(
   },
 );
 
-const promptText = computed(() => props.prompt || DEFAULT_PROMPT);
+const promptText = computed(() => props.prompt || setupPrompt);
 
 const titleId = useId();
 const dialogEl = ref<HTMLDialogElement | null>(null);

@@ -1,8 +1,13 @@
 # migration_upgrade_browser_webdriverio_pnpm
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
-source-only WebdriverIO provider should be restored
+restore the community import and install a v5 provider
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -12,22 +17,22 @@ VITE+ - The Unified Toolchain for the Web
 • Dependencies:
     vite-plus  latest → <version>
     vite              → <version>
+• 1 file had imports rewritten
 • Package manager settings configured
 ```
 
 ## `vpt print-file package.json`
 
-provider, webdriverio, and local vitest should be present
+ensure the provider and its framework peer are declared
 
 ```
 {
   "name": "migration-upgrade-browser-webdriverio-pnpm",
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:",
-    "@vitest/browser-webdriverio": "catalog:",
-    "webdriverio": "*",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@vitest/browser-webdriverio": "^5.0.0",
+    "webdriverio": "*"
   },
   "devEngines": {
     "packageManager": {
@@ -39,6 +44,24 @@ provider, webdriverio, and local vitest should be present
 }
 ```
 
+## `vpt print-file vite.config.ts`
+
+legacy Vite+ provider import points to the community package
+
+```
+import { defineConfig } from 'vite-plus';
+import { webdriverio } from '@vitest/browser-webdriverio';
+
+export default defineConfig({
+  test: {
+    browser: {
+      enabled: true,
+      provider: webdriverio(),
+    },
+  },
+});
+```
+
 ## `vpt print-file pnpm-workspace.yaml`
 
 driver builds and shared vitest should be enabled
@@ -48,10 +71,10 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
   vitest: <version>
-  '@vitest/browser-webdriverio': <version>
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'
+  '@vitest/browser@*': 5.0.1
 peerDependencyRules:
   allowAny:
     - vite

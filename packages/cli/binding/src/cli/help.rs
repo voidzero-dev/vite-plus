@@ -123,7 +123,8 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
         let command =
             style(format!("`{invalid_subcommand}`")).for_stderr().blue().bright().to_string();
         output::error(&format!(
-            "The {command} command is only available in the global `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary."
+            "The {command} command is only available in the global `vp` CLI. See {} to install it, then run the same command via the global `vp` binary.",
+            vp_shared::documentation_url("/guide/")
         ));
         return true;
     }

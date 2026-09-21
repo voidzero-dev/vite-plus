@@ -14,10 +14,12 @@ migration should fail because vitest version is not supported
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✘ vitest@3.2.4 in package.json is not supported by auto migration
+Vitest v5: 1 review item (1 block dependency updates)
 
-Please upgrade vitest to version >=4.0.0 first
-Vite+ cannot automatically migrate this project yet.
+package.json
+  1:1 BLOCK [source-version] Upgrade the original project to Vitest 4 before running this migration.
+    Docs: https://viteplus.dev/guide/vitest-v5#before-you-migrate
+Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.
 ```
 
 ## `vpt print-file package.json`

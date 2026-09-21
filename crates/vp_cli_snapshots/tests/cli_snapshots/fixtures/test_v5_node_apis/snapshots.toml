@@ -1,0 +1,14 @@
+[[case]]
+name = "node_api_and_reports"
+vp = "local"
+steps = [{ argv = ["node", "verify.mjs"], timeout = 120000 }]
+
+[[case]]
+name = "list_static_and_runtime_collection"
+vp = "local"
+steps = [
+  ["vp", "test", "list", "dynamic.test.js", "--json"],
+  ["vpt", "stat-file", "collection-ran.txt", "--assert", "missing"],
+  ["vp", "test", "list", "dynamic.test.js", "--no-static-parse", "--json"],
+  ["vpt", "stat-file", "collection-ran.txt", "--assert", "file"],
+]

@@ -1,0 +1,28 @@
+[[case]]
+name = "pnpm_peer_identity_and_test_cache"
+vp = "global"
+local-registry = true
+comment = "Regression for #1932: a root and utility package without direct Vite must share the app's core and Vitest instances, and test tasks must cache."
+steps = [
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["node", "check-identity.mjs"],
+  { argv = ["vp", "run", "test"], cwd = "packages/utils", comment = "First run populates the test cache." },
+  { argv = ["vp", "run", "test"], cwd = "packages/utils", comment = "Second run must hit the cache, without tracking Vite's temporary config as an input." },
+]
+
+[[case]]
+name = "pnpm10_upgrade_peer_identity_and_test_cache"
+vp = "global"
+local-registry = true
+comment = "The existing-Vite+ upgrade path must also preserve dependency identity and caching without injecting Vite, including on pnpm 10."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@10.33.0"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["node", "check-identity.mjs"],
+  { argv = ["vp", "run", "test"], cwd = "packages/utils", comment = "First run populates the test cache." },
+  { argv = ["vp", "run", "test"], cwd = "packages/utils", comment = "Second run must hit the cache." },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false },
+  { argv = ["node", "check-identity.mjs"], comment = "Repeated migration must not inject Vite either." },
+]

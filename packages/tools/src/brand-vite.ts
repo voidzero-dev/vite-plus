@@ -89,12 +89,24 @@ function logPatch(file: string, desc: string, result: 'patched' | 'already') {
 export function brandVite(rootDir: string = process.cwd()) {
   log('Applying Vite+ branding patches...');
 
-  // Always patch raw upstream sources, including when sync-remote already applied branding.
-  execFileSync('git', ['restore', '--source=HEAD', '--', '.'], {
-    cwd: join(rootDir, VITE_DIR),
-  });
-
   const nodeDir = join(rootDir, VITE_NODE_DIR);
+  // Start from upstream sources on every run, but preserve dependency alignment
+  // from sync-remote and any other files that branding does not modify.
+  execFileSync(
+    'git',
+    [
+      'restore',
+      '--source=HEAD',
+      '--',
+      'constants.ts',
+      'cli.ts',
+      'build.ts',
+      'logger.ts',
+      'plugins/reporter.ts',
+      'config.ts',
+    ],
+    { cwd: nodeDir },
+  );
 
   // 1. constants.ts: Add VITE_PLUS_VERSION constant after VERSION
   const constantsFile = join(nodeDir, 'constants.ts');
