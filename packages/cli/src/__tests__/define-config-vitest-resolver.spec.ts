@@ -288,15 +288,14 @@ function makeCtx(resolveFor: (call: ResolveCall) => ResolveResult): {
   return { ctx, calls };
 }
 
-describe('workspace test API identity', () => {
-  function resolver(command: 'serve' | 'build', vitestServer: boolean): ResolveId {
-    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
-      .handler;
-    hook(vitestServer ? { environments: { __vitest__: {} } } : {}, { command, mode: 'test' });
-    return plugin.resolveId as ResolveId;
-  }
+function resolver(command: 'serve' | 'build', vitestServer: boolean): ResolveId {
+  const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
+  const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void }).handler;
+  hook(vitestServer ? { environments: { __vitest__: {} } } : {}, { command, mode: 'test' });
+  return plugin.resolveId as ResolveId;
+}
 
+describe('workspace test API identity', () => {
   it('routes the wrapper through Vitest rather than the child package dependency tree', async () => {
     const resolveId = resolver('serve', true);
     const runnerApi = '/workspace/root-vitest/dist/index.js';

@@ -1825,6 +1825,21 @@ function readYamlObject(filePath: string): Record<string, unknown> {
   return parseYaml(readYaml(filePath)) as Record<string, unknown>;
 }
 
+function overrideFile(manager: PackageManager, version: string) {
+  return manager === PackageManager.pnpm && pnpmSupportsWorkspaceSettings(version)
+    ? 'pnpm-workspace.yaml'
+    : 'package.json';
+}
+function overrideMap(pkg: Record<string, unknown>, manager: PackageManager, version: string) {
+  if (manager === PackageManager.pnpm && !pnpmSupportsWorkspaceSettings(version)) {
+    return (pkg.pnpm as { overrides: Record<string, string> }).overrides;
+  }
+  return pkg[manager === PackageManager.yarn ? 'resolutions' : 'overrides'] as Record<
+    string,
+    string
+  >;
+}
+
 describe('WebDriverIO browser overrides', () => {
   let tmpDir: string;
   const provider = '@vitest/browser-webdriverio';
@@ -1845,20 +1860,6 @@ describe('WebDriverIO browser overrides', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function overrideFile(manager: PackageManager, version: string) {
-    return manager === PackageManager.pnpm && pnpmSupportsWorkspaceSettings(version)
-      ? 'pnpm-workspace.yaml'
-      : 'package.json';
-  }
-  function overrideMap(pkg: Record<string, unknown>, manager: PackageManager, version: string) {
-    if (manager === PackageManager.pnpm && !pnpmSupportsWorkspaceSettings(version)) {
-      return (pkg.pnpm as { overrides: Record<string, string> }).overrides;
-    }
-    return pkg[manager === PackageManager.yarn ? 'resolutions' : 'overrides'] as Record<
-      string,
-      string
-    >;
-  }
   function readOverrides(manager: PackageManager, version: string) {
     const file = overrideFile(manager, version);
     const pkg = file.endsWith('.yaml')

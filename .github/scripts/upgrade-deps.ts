@@ -447,6 +447,25 @@ async function updateReadmeVitestPins(vitestVersion: string): Promise<void> {
 }
 
 // ============ Write metadata files for PR description ============
+const formatVersion = (v: Change): string => {
+  if (v.tag) {
+    return `${v.tag} (${v.new.slice(0, 7)})`;
+  }
+  if (isFullSha(v.new)) {
+    return v.new.slice(0, 7);
+  }
+  return v.new;
+};
+const formatOld = (v: Change): string => {
+  if (!v.old) {
+    return '(unset)';
+  }
+  if (isFullSha(v.old)) {
+    return v.old.slice(0, 7);
+  }
+  return v.old;
+};
+
 function writeMetaFiles(): void {
   if (!META_DIR) {
     return;
@@ -462,25 +481,6 @@ function writeMetaFiles(): void {
 
   const changed = [...changes.entries()].filter(([, v]) => v.old !== v.new);
   const unchanged = [...changes.entries()].filter(([, v]) => v.old === v.new);
-
-  const formatVersion = (v: Change): string => {
-    if (v.tag) {
-      return `${v.tag} (${v.new.slice(0, 7)})`;
-    }
-    if (isFullSha(v.new)) {
-      return v.new.slice(0, 7);
-    }
-    return v.new;
-  };
-  const formatOld = (v: Change): string => {
-    if (!v.old) {
-      return '(unset)';
-    }
-    if (isFullSha(v.old)) {
-      return v.old.slice(0, 7);
-    }
-    return v.old;
-  };
 
   const commitLines = ['feat(deps): upgrade upstream dependencies', ''];
   if (changed.length) {
