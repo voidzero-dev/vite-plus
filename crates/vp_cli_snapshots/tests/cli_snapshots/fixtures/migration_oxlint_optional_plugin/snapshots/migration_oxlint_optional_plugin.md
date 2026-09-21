@@ -30,7 +30,6 @@ Finished in <duration> on 1 file with <n> rules using <n> threads.
     "lint": "vp lint ."
   },
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "optionalDependencies": {

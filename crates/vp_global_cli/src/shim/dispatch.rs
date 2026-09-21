@@ -5,7 +5,6 @@
 //! 2. Node.js installation (if needed)
 //! 3. Tool execution (core shims and package binaries)
 
-use dialoguer::{Select, theme::ColorfulTheme};
 use vp_pm_cli::{PackageManagerType, ensure_package_manager_bin};
 use vp_shared::{PrependOptions, ToolPathEnv, env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
@@ -732,12 +731,24 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         return crate::commands::vpr::execute_vpr(args, &cwd).await;
     }
 
-    // A child may replace PATH while retaining the injection marker.
-    if env.contains(tool)
-        && let Some(system_path) = find_system_tool(tool)
+    // Preserve an already selected managed executable, including direct calls to a shim from its children.
+    // External manager shims must not be re-entered here: they may have fallen back to us.
+    let inherited_tool =
+        PackageManagerType::from_tool(tool).map_or(tool, |kind| kind.bin_name_for_tool(tool));
+    if env.contains(inherited_tool)
+        && let Some(path) = find_system_tool(inherited_tool)
+        && let Ok(target) = path.as_path().canonicalize()
+        && ["js_runtime", "package_manager"].iter().any(|directory| {
+            vp_shared::EnvConfig::get()
+                .dirs
+                .data
+                .join(directory)
+                .as_path()
+                .canonicalize()
+                .is_ok_and(|root| target.starts_with(root))
+        })
     {
-        tracing::debug!("tool path already injected: {tool}");
-        return exec::exec_tool(&system_path, args, env);
+        return exec::exec_tool(&path, args, env);
     }
 
     // Check bypass mode (explicit environment variable)
@@ -746,46 +757,11 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         return bypass_to_system(tool, args, env);
     }
 
-    // Check shim mode from config
-    let shim_mode = load_shim_mode(tool).await;
-    if shim_mode == ShimMode::SystemFirst {
-        tracing::debug!("system-first mode enabled");
-        // In system-first mode, try to find system tool first
-        if let Some(system_path) = find_system_tool(tool) {
-            let child_env = if PackageManagerType::from_tool(tool).is_some() {
-                match prepare_node_path_for_system_package_manager(env).await {
-                    Ok(env) => env,
-                    Err(error) => {
-                        eprintln!(
-                            "vp: Failed to prepare Node.js for system package manager: {error}"
-                        );
-                        return 1;
-                    }
-                }
-            } else {
-                env
-            };
-            // Append current bin_dir to VP_BYPASS to prevent infinite loops
-            // when multiple vite-plus installations exist in PATH.
-            // The next installation will filter all accumulated paths.
-            if let Ok(bin_dir) = config::get_bin_dir() {
-                let bypass_val = match std::env::var_os(env_vars::VP_BYPASS) {
-                    Some(existing) => {
-                        let mut paths: Vec<_> = std::env::split_paths(&existing).collect();
-                        paths.push(bin_dir.as_path().to_path_buf());
-                        std::env::join_paths(paths).unwrap_or(existing)
-                    }
-                    None => std::ffi::OsString::from(bin_dir.as_path()),
-                };
-                // SAFETY: Setting env vars before exec (which replaces the process) is safe
-                unsafe {
-                    std::env::set_var(env_vars::VP_BYPASS, bypass_val);
-                }
-            }
-            return exec::exec_tool(&system_path, args, child_env);
-        }
-        // Fall through to managed if system not found
+    if let Some(exit_code) = legacy::dispatch_package_manager(tool, args, &env).await {
+        return exit_code;
     }
+
+    // After the first-use decision, PATH placement selects system-first precedence.
 
     // Package binaries use their install-time Node.js version; core shims use
     // the project-resolved runtime below.
@@ -805,7 +781,9 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
     // Ensure Node.js is installed and locate its binary for PATH preparation.
     // Package-manager shims can use their own declared version, but JS-based
     // package managers still need the Node.js runtime selected by its mode.
-    let inherited_node = env.contains("node").then(|| find_system_tool("node")).flatten();
+    let inherited_node = (PackageManagerType::from_tool(tool).is_some() && env.contains("node"))
+        .then(|| find_system_tool("node"))
+        .flatten();
     let node_is_inherited = inherited_node.is_some();
     let system_node = if node_is_inherited {
         inherited_node
@@ -966,31 +944,6 @@ fn read_node_version(node_path: &AbsolutePath) -> Option<String> {
         .status
         .success()
         .then(|| String::from_utf8_lossy(&output.stdout).trim().trim_start_matches('v').to_string())
-}
-
-async fn prepare_node_path_for_system_package_manager(
-    mut env: ToolPathEnv,
-) -> Result<ToolPathEnv, Error> {
-    if env.contains("node") && find_system_tool("node").is_some() {
-        return Ok(env);
-    }
-    let config = config::load_config().await?;
-    if config.node_shim_mode == ShimMode::SystemFirst
-        && let Some(node) = find_system_tool("node")
-        && let Some(bin_dir) = node.parent()
-    {
-        env.prepend(bin_dir, &["node"], PrependOptions::default())?;
-        return Ok(env);
-    }
-
-    let cwd = current_dir()?;
-    let resolution = resolve_with_cache(&cwd).await.map_err(|error| Error::Other(error.into()))?;
-    let node =
-        ensure_installed(&resolution.version).await.map_err(|error| Error::Other(error.into()))?;
-    let bin_dir =
-        node.parent().ok_or_else(|| Error::Other("Node.js has no bin directory".into()))?;
-    env.prepend(bin_dir, &["node"], PrependOptions::default())?;
-    Ok(env)
 }
 
 /// Dispatch a package binary shim.
@@ -1301,19 +1254,7 @@ fn resolve_bundled_tool(
         return Ok((node_path.clone(), node_path));
     }
     if external_node {
-        // A version-manager shim may resolve to the manager binary rather than Node.
-        let output = std::process::Command::new(node_path.as_path())
-            .args(["-p", "process.execPath"])
-            // User preloads belong to the actual command, not this runtime probe.
-            .env_remove("NODE_OPTIONS")
-            .output()
-            .map_err(|error| format!("Failed to query Node executable: {error}"))?;
-        if !output.status.success() {
-            return Err(format!("Failed to query Node executable: {}", output.status));
-        }
-        let executable = String::from_utf8(output.stdout).map_err(|error| error.to_string())?;
-        node_path = AbsolutePathBuf::new(executable.trim().into())
-            .ok_or_else(|| format!("Invalid Node executable path: {}", executable.trim()))?;
+        node_path = resolve_external_node_executable(node_path)?;
     }
     // The resolved directory enters PATH and must also work with Windows .cmd scripts.
     let node_path = dunce::canonicalize(node_path).map_err(|error| error.to_string())?;
@@ -1333,112 +1274,63 @@ fn resolve_bundled_tool(
     Ok((node_path, tool_path))
 }
 
-/// Load shim mode from config.
-///
-/// Returns the default (Managed) if config cannot be read.
-async fn load_shim_mode(tool: &str) -> ShimMode {
-    let Some(package_manager) = PackageManagerType::from_tool(tool) else {
-        return config::load_config().await.map(|config| config.node_shim_mode).unwrap_or_default();
-    };
-    resolve_package_manager_shim_mode(tool, package_manager).await
+/// Query external shims for the Node executable they actually select.
+pub(crate) fn resolve_external_node_executable(
+    node_path: AbsolutePathBuf,
+) -> Result<AbsolutePathBuf, String> {
+    // A version-manager shim may resolve to the manager binary rather than Node.
+    let output = std::process::Command::new(node_path.as_path())
+        .args(["-p", "process.execPath"])
+        // User preloads belong to the actual command, not this runtime probe.
+        .env_remove("NODE_OPTIONS")
+        .output()
+        .map_err(|error| format!("Failed to query Node executable: {error}"))?;
+    if !output.status.success() {
+        return Err(format!("Failed to query Node executable: {}", output.status));
+    }
+    let executable = String::from_utf8(output.stdout).map_err(|error| error.to_string())?;
+    AbsolutePathBuf::new(executable.trim().into())
+        .ok_or_else(|| format!("Invalid Node executable path: {}", executable.trim()))
 }
 
-async fn resolve_package_manager_shim_mode(
-    tool: &str,
-    package_manager: PackageManagerType,
-) -> ShimMode {
-    let mut config = match config::load_config().await {
-        Ok(config) => config,
-        Err(error) => {
-            output::warn(&format!("Could not read package-manager shim preferences: {error}"));
-            return ShimMode::Managed;
-        }
-    };
-    if let Some(mode) = config.configured_package_manager_shim_mode_for(package_manager) {
-        return mode;
-    }
-
-    let Some(system_path) = find_system_tool(tool) else {
-        return ShimMode::Managed;
-    };
-
-    if !vp_shared::is_interactive_terminal() {
-        return ShimMode::Managed;
-    }
-
-    let Some((mode, apply_to_all)) =
-        prompt_package_manager_shim_mode(package_manager, &system_path)
-    else {
-        output::note("Package-manager preference was not saved; using the system tool this time.");
-        return ShimMode::SystemFirst;
-    };
-    if apply_to_all {
-        config.set_all_package_manager_shim_modes(mode);
-    } else {
-        config.set_package_manager_shim_mode(package_manager, mode);
-    }
-    if let Err(error) = config::save_config(&config).await {
-        output::warn(&format!("Could not save package-manager shim preferences: {error}"));
-    }
-    mode
-}
-
-fn prompt_package_manager_shim_mode(
-    package_manager: PackageManagerType,
-    system_path: &AbsolutePath,
-) -> Option<(ShimMode, bool)> {
-    let options = [
-        "Use Vite+ for all package managers".to_string(),
-        format!("Use Vite+ for {package_manager}"),
-        format!("Use system {package_manager}"),
-        "Use system package managers".to_string(),
-    ];
-
-    output::raw_stderr("vp: Vite+ now can manage package-manager versions for each project.");
-    output::raw_stderr(&format!("Existing {package_manager}: {}", system_path.as_path().display()));
-    output::raw_stderr("");
-    emit_prompt_milestone(&format!("pm-shim-choice:{package_manager}"));
-    let choice = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt(format!("How should {package_manager} run?"))
-        .items(&options)
-        .default(1)
-        .interact()
-        .ok()?;
-
-    Some(match choice {
-        0 => (ShimMode::Managed, true),
-        1 => (ShimMode::Managed, false),
-        2 => (ShimMode::SystemFirst, false),
-        _ => (ShimMode::SystemFirst, true),
-    })
-}
-
-/// Emit an invisible synchronization point for the PTY snapshot suite.
-#[expect(clippy::disallowed_macros)]
-fn emit_prompt_milestone(name: &str) {
-    use std::io::Write as _;
-
-    if std::env::var_os(env_vars::VP_EMIT_MILESTONES).is_none_or(|value| value != "1") {
-        return;
-    }
-    let id = uuid::Uuid::new_v4();
-    let encoded_name = base64_simd::URL_SAFE_NO_PAD.encode_to_string(name.as_bytes());
-    let mut stderr = std::io::stderr().lock();
-    let _ = write!(stderr, "\x1b]2;pty-terminal-test:{}:{encoded_name}\x1b\\", id.simple());
-    let _ = stderr.flush();
-}
-
-/// Find a system tool in PATH, skipping the vite-plus bin directory and any
-/// directories listed in `VP_BYPASS`.
+/// Return the first PATH match only if it is external; a Vite+ shim selects managed resolution.
 ///
 /// Returns the absolute path to the tool if found, None otherwise.
 pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
-    find_system_tool_in(tool, &current_dir().ok()?)
+    let cwd = current_dir().ok()?;
+    if std::env::var_os(env_vars::VP_BYPASS).is_some() {
+        return find_external_tool_in(tool, &cwd);
+    }
+    find_system_tool_in(tool, &cwd)
 }
 
 /// `cwd` only resolves relative PATH entries; it is a parameter so tests can
 /// exercise them without mutating the process-wide working directory.
 fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let path = std::env::var_os("PATH")?;
+    let paths = std::env::split_paths(&path).map(|path| {
+        if path.is_absolute() || path.starts_with("~") { path } else { cwd.as_path().join(path) }
+    });
+    let path = std::env::join_paths(paths).ok()?;
+    let resolved = vp_command::resolve_bin(tool, Some(&path), cwd).ok()?;
+    let canonical = resolved.as_path().canonicalize().ok();
+    let self_real = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
+    let is_unix_shim = cfg!(unix)
+        && canonical
+            .as_ref()
+            .is_some_and(|target| target.file_name().is_some_and(|name| name == "vp"));
+    if vp_shared::is_windows_trampoline(resolved.as_path())
+        || is_unix_shim
+        || (self_real.is_some() && canonical == self_real)
+    {
+        None
+    } else {
+        Some(resolved)
+    }
+}
+
+/// Explicit bypass skips Vite+ installations and the directories listed by the caller.
+fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     let bin_dir = config::get_bin_dir().ok();
     let path_var = std::env::var_os("PATH")?;
     tracing::debug!("path_var: {:?}", path_var);
@@ -1498,6 +1390,184 @@ fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf
             // Nothing left to drop; give up rather than loop forever.
             return None;
         }
+    }
+}
+
+mod legacy {
+    //! Legacy first-use consent for upgrades without saved package-manager preferences.
+    //!
+    //! Fresh installations record these preferences during setup. Keep the prompt,
+    //! shim relocation, and one-time system dispatch together for older installations.
+
+    // TODO: Consider moving first-use consent to `vp upgrade` so the legacy PATH lookup can be removed.
+
+    use dialoguer::{Select, theme::ColorfulTheme};
+    use vp_pm_cli::PackageManagerType;
+    use vp_shared::{PrependOptions, ToolPathEnv, env_vars, output};
+    use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
+
+    use super::{
+        ensure_installed, exec, find_external_tool_in, find_system_tool, resolve_with_cache,
+    };
+    use crate::{
+        commands::env::config::{self, ShimMode},
+        error::Error,
+    };
+
+    pub(super) async fn dispatch_package_manager(
+        tool: &str,
+        args: &[String],
+        env: &ToolPathEnv,
+    ) -> Option<i32> {
+        // Undecided upgrades still ask before taking over an existing package manager.
+        // Inherited selections skip this so an external manager falling back to us cannot prompt again.
+        if !env.contains(tool)
+            && let Some(package_manager) = PackageManagerType::from_tool(tool)
+        {
+            match resolve_package_manager_shim_choice(tool, package_manager).await {
+                Ok(Some(system_path)) => {
+                    let mut child_env = env.clone();
+                    if let Some(bin_dir) = system_path.parent()
+                        && let Err(error) = child_env.prepend(
+                            bin_dir,
+                            &[tool],
+                            PrependOptions { dedupe_anywhere: true },
+                        )
+                    {
+                        eprintln!("vp: Failed to prepare package manager PATH: {error}");
+                        return Some(1);
+                    }
+                    let child_env = match prepare_node_path_for_system_package_manager(child_env)
+                        .await
+                    {
+                        Ok(env) => env,
+                        Err(error) => {
+                            eprintln!(
+                                "vp: Failed to prepare Node.js for system package manager: {error}"
+                            );
+                            return Some(1);
+                        }
+                    };
+                    return Some(exec::exec_tool(&system_path, args, child_env));
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    eprintln!("vp: Failed to configure package-manager shims: {error}");
+                    return Some(1);
+                }
+            }
+        }
+
+        None
+    }
+
+    async fn prepare_node_path_for_system_package_manager(
+        mut env: ToolPathEnv,
+    ) -> Result<ToolPathEnv, Error> {
+        if env.contains("node") && find_system_tool("node").is_some() {
+            return Ok(env);
+        }
+        let config = config::load_config().await?;
+        if config.node_shim_mode == ShimMode::SystemFirst
+            && let Some(node) = find_system_tool("node")
+            && let Some(bin_dir) = node.parent()
+        {
+            env.prepend(bin_dir, &["node"], PrependOptions::default())?;
+            return Ok(env);
+        }
+
+        let cwd = current_dir()?;
+        let resolution =
+            resolve_with_cache(&cwd).await.map_err(|error| Error::Other(error.into()))?;
+        let node = ensure_installed(&resolution.version)
+            .await
+            .map_err(|error| Error::Other(error.into()))?;
+        let bin_dir =
+            node.parent().ok_or_else(|| Error::Other("Node.js has no bin directory".into()))?;
+        env.prepend(bin_dir, &["node"], PrependOptions::default())?;
+        Ok(env)
+    }
+
+    // Return a system executable only for this first decision; saved modes use PATH placement.
+    async fn resolve_package_manager_shim_choice(
+        tool: &str,
+        package_manager: PackageManagerType,
+    ) -> Result<Option<AbsolutePathBuf>, Error> {
+        let mut settings = config::load_config().await?;
+        if settings.configured_package_manager_shim_mode_for(package_manager).is_some()
+            || !vp_shared::is_interactive_terminal()
+        {
+            return Ok(None);
+        }
+        let Some(system_path) = find_external_tool_in(tool, &current_dir()?) else {
+            return Ok(None);
+        };
+        let Some((mode, apply_to_all)) =
+            prompt_package_manager_shim_mode(package_manager, &system_path)
+        else {
+            output::note(
+                "Package-manager preference was not saved; using the system tool this time.",
+            );
+            return Ok(Some(system_path));
+        };
+        if apply_to_all {
+            settings.set_all_package_manager_shim_modes(mode);
+        } else {
+            settings.set_package_manager_shim_mode(package_manager, mode);
+        }
+        // The running shim may be removed while relocating this family. Keep a stable source.
+        let current_exe = std::fs::canonicalize(std::env::current_exe()?)?;
+        crate::commands::env::setup::refresh_shims(&current_exe, &settings, false, false).await?;
+        config::save_config(&settings).await?;
+        Ok((mode == ShimMode::SystemFirst).then_some(system_path))
+    }
+
+    fn prompt_package_manager_shim_mode(
+        package_manager: PackageManagerType,
+        system_path: &AbsolutePath,
+    ) -> Option<(ShimMode, bool)> {
+        let options = [
+            "Use Vite+ for all package managers".to_string(),
+            format!("Use Vite+ for {package_manager}"),
+            format!("Use system {package_manager}"),
+            "Use system package managers".to_string(),
+        ];
+
+        output::raw_stderr("vp: Vite+ now can manage package-manager versions for each project.");
+        output::raw_stderr(&format!(
+            "Existing {package_manager}: {}",
+            system_path.as_path().display()
+        ));
+        output::raw_stderr("");
+        emit_prompt_milestone(&format!("pm-shim-choice:{package_manager}"));
+        let choice = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!("How should {package_manager} run?"))
+            .items(&options)
+            .default(1)
+            .interact()
+            .ok()?;
+
+        Some(match choice {
+            0 => (ShimMode::Managed, true),
+            1 => (ShimMode::Managed, false),
+            2 => (ShimMode::SystemFirst, false),
+            _ => (ShimMode::SystemFirst, true),
+        })
+    }
+
+    /// Emit an invisible synchronization point for the PTY snapshot suite.
+    #[expect(clippy::disallowed_macros)]
+    fn emit_prompt_milestone(name: &str) {
+        use std::io::Write as _;
+
+        if std::env::var_os(env_vars::VP_EMIT_MILESTONES).is_none_or(|value| value != "1") {
+            return;
+        }
+        let id = uuid::Uuid::new_v4();
+        let encoded_name = base64_simd::URL_SAFE_NO_PAD.encode_to_string(name.as_bytes());
+        let mut stderr = std::io::stderr().lock();
+        let _ = write!(stderr, "\x1b]2;pty-terminal-test:{}:{encoded_name}\x1b\\", id.simple());
+        let _ = stderr.flush();
     }
 }
 
@@ -1625,20 +1695,20 @@ mod tests {
     }
 
     #[test]
-    fn test_find_system_tool_works_without_bypass() {
+    fn test_find_external_tool_works_without_bypass() {
         let temp = TempDir::new().unwrap();
         let dir = temp.path().join("bin_a");
         std::fs::create_dir_all(&dir).unwrap();
         create_fake_executable(&dir, "mytesttool");
         temp_env::with_vars([("PATH", Some(dir.as_os_str())), (env_vars::VP_BYPASS, None)], || {
-            let result = find_system_tool("mytesttool");
+            let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
             assert!(result.is_some(), "Should find tool when no bypass is set");
             assert!(result.unwrap().as_path().starts_with(&dir));
         });
     }
 
     #[test]
-    fn test_find_system_tool_skips_other_installation_trampolines() {
+    fn test_find_external_tool_skips_other_installation_trampolines() {
         let temp = TempDir::new().unwrap();
         let dirs = ["install_a", "install_b", "real"].map(|name| temp.path().join(name));
         for (index, dir) in dirs.iter().enumerate() {
@@ -1660,19 +1730,24 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
             || {
-                assert!(find_system_tool("node").unwrap().as_path().starts_with(&dirs[2]));
+                assert!(
+                    find_external_tool_in("node", &current_dir().unwrap())
+                        .unwrap()
+                        .as_path()
+                        .starts_with(&dirs[2])
+                );
             },
         );
         let path = std::env::join_paths(&dirs[..2]).unwrap();
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
-            || assert!(find_system_tool("node").is_none()),
+            || assert!(find_external_tool_in("node", &current_dir().unwrap()).is_none()),
         );
     }
 
     #[test]
     #[cfg(unix)]
-    fn test_find_system_tool_distinguishes_vp_from_shared_manager_shims() {
+    fn test_find_external_tool_distinguishes_vp_from_shared_manager_shims() {
         let temp = TempDir::new().unwrap();
         let dirs = ["install", "aliases", "real"].map(|name| temp.path().join(name));
         for dir in &dirs {
@@ -1684,7 +1759,14 @@ mod tests {
         let path = std::env::join_paths([&dirs[1], &dirs[2]]).unwrap();
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
-            || assert!(find_system_tool("node").unwrap().as_path().starts_with(&dirs[2])),
+            || {
+                assert!(
+                    find_external_tool_in("node", &current_dir().unwrap())
+                        .unwrap()
+                        .as_path()
+                        .starts_with(&dirs[2])
+                )
+            },
         );
 
         let manager = create_fake_executable(&dirs[0], "tool-manager");
@@ -1694,12 +1776,17 @@ mod tests {
         let path = std::env::join_paths([&dirs[0], &dirs[2]]).unwrap();
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
-            || assert_eq!(find_system_tool("node").unwrap().as_path(), dirs[0].join("node")),
+            || {
+                assert_eq!(
+                    find_external_tool_in("node", &current_dir().unwrap()).unwrap().as_path(),
+                    dirs[0].join("node")
+                )
+            },
         );
     }
 
     #[test]
-    fn test_find_system_tool_skips_single_bypass_path() {
+    fn test_find_external_tool_skips_single_bypass_path() {
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         let dir_b = temp.path().join("bin_b");
@@ -1712,7 +1799,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(dir_a.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_some(), "Should find tool in non-bypassed directory");
                 assert!(
                     result.unwrap().as_path().starts_with(&dir_b),
@@ -1743,7 +1830,7 @@ mod tests {
     /// search continues to the real tool later in PATH.
     #[cfg(unix)]
     #[test]
-    fn test_find_system_tool_skips_self_symlink_and_keeps_searching() {
+    fn test_find_external_tool_skips_self_symlink_and_keeps_searching() {
         let temp = TempDir::new().unwrap();
         let (dir_a, dir_b) = setup_self_symlink_dirs(&temp);
 
@@ -1751,7 +1838,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_some(), "Should skip the self symlink and keep searching");
                 assert!(
                     result.unwrap().as_path().starts_with(&dir_b),
@@ -1767,7 +1854,7 @@ mod tests {
     /// instead of reaching dir_b.
     #[cfg(unix)]
     #[test]
-    fn test_find_system_tool_skips_self_symlink_in_relative_path_entry() {
+    fn test_find_external_tool_skips_self_symlink_in_relative_path_entry() {
         let temp = TempDir::new().unwrap();
         let (_dir_a, dir_b) = setup_self_symlink_dirs(&temp);
 
@@ -1776,7 +1863,7 @@ mod tests {
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, None)],
             || {
                 let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-                let result = find_system_tool_in("mytesttool", &cwd);
+                let result = find_external_tool_in("mytesttool", &cwd);
                 assert!(
                     result.is_some(),
                     "Should skip the relative self-symlink entry and keep searching"
@@ -1790,7 +1877,7 @@ mod tests {
     }
 
     #[test]
-    fn test_find_system_tool_filters_multiple_bypass_paths() {
+    fn test_find_external_tool_filters_multiple_bypass_paths() {
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         let dir_b = temp.path().join("bin_b");
@@ -1808,7 +1895,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(bypass.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_some(), "Should find tool in dir_c");
                 assert!(
                     result.unwrap().as_path().starts_with(&dir_c),
@@ -1819,7 +1906,7 @@ mod tests {
     }
 
     #[test]
-    fn test_find_system_tool_returns_none_when_all_paths_bypassed() {
+    fn test_find_external_tool_returns_none_when_all_paths_bypassed() {
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         std::fs::create_dir_all(&dir_a).unwrap();
@@ -1827,7 +1914,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(dir_a.as_os_str())), (env_vars::VP_BYPASS, Some(dir_a.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_none(), "Should return None when all paths are bypassed");
             },
         );
@@ -1838,7 +1925,7 @@ mod tests {
     /// both A's dir (from bypass) and its own dir (from get_bin_dir), finding the real tool
     /// in a third directory or returning None.
     #[test]
-    fn test_find_system_tool_cumulative_bypass_prevents_loop() {
+    fn test_find_external_tool_cumulative_bypass_prevents_loop() {
         let temp = TempDir::new().unwrap();
         let install_a_bin = temp.path().join("install_a_bin");
         let install_b_bin = temp.path().join("install_b_bin");
@@ -1867,7 +1954,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(bypass.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(result.is_some(), "Should find tool in real_system directory");
                 assert!(
                     result.unwrap().as_path().starts_with(&real_system_bin),
@@ -1879,7 +1966,7 @@ mod tests {
 
     /// When both installations are bypassed and no real system tool exists, should return None.
     #[test]
-    fn test_find_system_tool_returns_none_with_no_real_system_tool() {
+    fn test_find_external_tool_returns_none_with_no_real_system_tool() {
         let temp = TempDir::new().unwrap();
         let install_a_bin = temp.path().join("install_a_bin");
         let install_b_bin = temp.path().join("install_b_bin");
@@ -1895,7 +1982,7 @@ mod tests {
         temp_env::with_vars(
             [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(bypass.as_os_str()))],
             || {
-                let result = find_system_tool("mytesttool");
+                let result = find_external_tool_in("mytesttool", &current_dir().unwrap());
                 assert!(
                     result.is_none(),
                     "Should return None when all dirs are bypassed and no real system tool exists"

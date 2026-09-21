@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import cliPkg from '../package.json' with { type: 'json' };
 import { VITE_PLUS_NAME } from './utils/constants.ts';
@@ -66,7 +67,8 @@ function isVitePlusDeclaredInAncestors(cwd: string): boolean {
  */
 async function resolveToolVersions(localPackagePath: string): Promise<Record<string, string>> {
   try {
-    const mod = await import(`${localPackagePath}/dist/versions.js`);
+    const file = path.join(localPackagePath, 'dist', 'versions.js');
+    const mod = await import(pathToFileURL(file).href);
     if (mod.versions && typeof mod.versions === 'object') {
       return mod.versions as Record<string, string>;
     }

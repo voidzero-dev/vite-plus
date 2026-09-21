@@ -1,0 +1,7 @@
+{
+  "name": "migration-bundled-npm",
+  "private": true,
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

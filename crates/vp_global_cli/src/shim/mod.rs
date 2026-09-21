@@ -19,14 +19,14 @@ pub use dispatch::dispatch;
 pub(crate) use dispatch::find_system_tool;
 use vp_shared::env_vars;
 
-use crate::commands::env::config::get_bin_dir;
-
 /// Default shims created by `vp env setup`.
-pub const DEFAULT_SHIM_TOOLS: &[&str] =
-    &["node", "npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx", "vpx", "vpr"];
+pub const DEFAULT_SHIM_TOOLS: &[&str] = &[
+    "node", "npm", "npx", "pnpm", "pnpx", "pn", "pnx", "yarn", "yarnpkg", "bun", "bunx", "vpx",
+    "vpr",
+];
 
 /// Extract the tool name from argv[0].
-/// We hope all bins should be put under $VP_HOME/bin
+/// Core tool shims can live in either the main or fallback bin directory.
 ///
 /// Handles various formats:
 /// - `node` (Unix)
@@ -42,9 +42,10 @@ pub fn extract_tool_name(argv0: &str) -> String {
     if cfg!(target_os = "linux") {
         stem
     } else {
-        let bin_dir = get_bin_dir();
-        if let Ok(bin_dir) = bin_dir {
-            if let Ok(read_dir) = fs::read_dir(&bin_dir) {
+        let dirs = &vp_shared::EnvConfig::get().dirs;
+        let fallback = dirs.fallback_bin();
+        for bin_dir in [&dirs.bin, &fallback] {
+            if let Ok(read_dir) = fs::read_dir(bin_dir) {
                 for bin in read_dir.flatten() {
                     if bin.path().file_stem().unwrap_or_default().to_string_lossy().to_lowercase()
                         == stem.to_lowercase()
@@ -288,5 +289,12 @@ mod tests {
     #[serial]
     fn test_detect_shim_tool_vpr() {
         assert_detect_shim_tool_from_argv0("vpr");
+    }
+
+    #[test]
+    #[serial]
+    fn test_detect_shim_tool_pnpm_short_aliases() {
+        assert_detect_shim_tool_from_argv0("pn");
+        assert_detect_shim_tool_from_argv0("pnx");
     }
 }

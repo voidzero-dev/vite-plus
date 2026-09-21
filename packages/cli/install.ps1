@@ -20,8 +20,6 @@
 
 # When dot-sourced, returns script-scoped InstallDir, ShimDir, CacheDir, ConfigDir, and StateDir.
 # These are resolved paths, not VP_* overrides for subsequent commands.
-$ErrorActionPreference = "Stop"
-
 $ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
@@ -38,6 +36,10 @@ $PrVersion = $env:VP_PR_VERSION
 # pulls a coherent, clearly-defined test build.
 $BridgeDownloadBase = "https://registry-bridge.viteplus.dev/voidzero-dev/vite-plus"
 $BridgeRegistry = "https://registry-bridge.viteplus.dev/"
+$SupportedProvenancePredicateTypes = @(
+    "https://slsa.dev/provenance/v1",
+    "https://slsa.dev/provenance/v0.2"
+)
 
 $script:InstallStopSignal = 'VP_INSTALL_STOP'
 $script:PackageMetadata = $null
@@ -177,6 +179,73 @@ function Get-VersionFromMetadata {
     return $metadata.version
 }
 
+function Get-PlatformPackageMetadata {
+    param(
+        [string]$PackageName,
+        [string]$Version
+    )
+
+    $encodedPackageName = [System.Uri]::EscapeDataString($PackageName)
+    $metadataUrl = "$NpmRegistry/$encodedPackageName/$Version"
+    try {
+        $metadata = Invoke-RestMethod -Uri $metadataUrl -Headers @{ Accept = "application/json" }
+    } catch {
+        if (Test-IsInstallStopException $_) { throw }
+        $errorMsg = $_.ErrorDetails.Message
+        if ($errorMsg) {
+            try {
+                $errorJson = $errorMsg | ConvertFrom-Json
+                if ($errorJson.error) {
+                    Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $($errorJson.error)`n  URL: $metadataUrl"
+                }
+            } catch {
+                if (Test-IsInstallStopException $_) { throw }
+                # JSON parsing failed, fall through to the generic network error.
+            }
+        }
+        Write-Error-Exit "Failed to fetch CLI package metadata from: $metadataUrl`nError: $_"
+    }
+
+    # Some custom registries return JSON using a non-JSON content type. Match
+    # Get-PackageMetadata by parsing that raw string before inspecting fields.
+    if ($metadata -is [string]) {
+        try {
+            $metadata = $metadata | ConvertFrom-Json
+        } catch {
+            if (Test-IsInstallStopException $_) { throw }
+            Write-Error-Exit "Failed to parse CLI package metadata '${PackageName}@${Version}'`n  URL: $metadataUrl"
+        }
+    }
+    if ($metadata.error) {
+        Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $($metadata.error)`n  URL: $metadataUrl"
+    }
+
+    return $metadata
+}
+
+function Get-VerifiedPlatformTarballUrl {
+    param(
+        [object]$Metadata,
+        [string]$PackageName,
+        [string]$Version
+    )
+
+    # Check nested provenance metadata; registry signatures and package-defined
+    # top-level fields do not satisfy the release check.
+    $predicateType = $Metadata.dist.attestations.provenance.predicateType
+    # Commit preview builds do not carry npm provenance, regardless of registry.
+    $isCommitPreview = $Version -cmatch '\A0\.0\.0-commit\.[0-9a-fA-F]{40}\z'
+    if (-not $isCommitPreview -and $SupportedProvenancePredicateTypes -notcontains $predicateType) {
+        Write-Error-Exit "Refusing to install ${PackageName}@${Version}: the package does not contain supported npm provenance metadata. Vite+ only installs release binaries published with npm provenance."
+    }
+
+    $tarballUrl = $Metadata.dist.tarball
+    if (-not $tarballUrl) {
+        Write-Error-Exit "CLI package metadata for ${PackageName}@${Version} does not include dist.tarball"
+    }
+    return [string]$tarballUrl
+}
+
 function Get-PlatformSuffix {
     param([string]$Platform)
     # Windows needs -msvc suffix, other platforms map directly
@@ -273,7 +342,8 @@ function Get-PayloadAndHandoff {
                 $platformUrl = "$BridgeDownloadBase/@voidzero-dev/vite-plus-cli-$platformSuffix@$($PrCommitVersion.Substring(13))"
             } else {
                 $packageName = "@voidzero-dev/vite-plus-cli-$platformSuffix"
-                $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$platformSuffix-$ViteVersion.tgz"
+                $platformMetadata = Get-PlatformPackageMetadata -PackageName $packageName -Version $ViteVersion
+                $platformUrl = Get-VerifiedPlatformTarballUrl -Metadata $platformMetadata -PackageName $packageName -Version $ViteVersion
             }
 
             $platformTempFile = New-TemporaryFile
@@ -350,10 +420,12 @@ function Invoke-InstallHandoff {
     param([string]$BinarySource)
     $previous = $env:VP_SELF_SETUP_SUPPORT_CHECK
     $previousShell = $env:VP_SELF_SETUP_SHELL
+    $previousVpShell = $env:VP_SHELL
     $previousRegistry = $env:NPM_CONFIG_REGISTRY
     try {
         Remove-Item Env:VP_SELF_SETUP_SUPPORT_CHECK -ErrorAction SilentlyContinue
         $env:VP_SELF_SETUP_SHELL = 'powershell'
+        if (-not $env:VP_SHELL) { $env:VP_SHELL = 'powershell' }
         # Preview dependencies must use the same registry as the downloaded binary.
         if ($PrVersion) {
             $env:NPM_CONFIG_REGISTRY = $BridgeRegistry
@@ -369,12 +441,15 @@ function Invoke-InstallHandoff {
         }
     } finally {
         $env:VP_SELF_SETUP_SHELL = $previousShell
+        $env:VP_SHELL = $previousVpShell
         $env:NPM_CONFIG_REGISTRY = $previousRegistry
         $env:VP_SELF_SETUP_SUPPORT_CHECK = $previous
     }
 }
 
+$previousErrorActionPreference = $ErrorActionPreference
 try {
+    $ErrorActionPreference = "Stop"
     Main
 } catch {
     if (Test-IsInstallStopException $_) {
@@ -384,4 +459,6 @@ try {
         exit $global:LASTEXITCODE
     }
     throw
+} finally {
+    $ErrorActionPreference = $previousErrorActionPreference
 }

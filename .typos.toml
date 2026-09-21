@@ -1,4 +1,9 @@
+[default]
+# Vitest v4 used this misspelled directory; the migrator must recognize it.
+extend-ignore-re = ['\.vitest-attachements\b']
+
 [default.extend-words]
+pn = "pn" # pnpm short alias
 ratatui = "ratatui"
 PUNICODE = "PUNICODE"
 Jod = "Jod" # Node.js v22 LTS codename

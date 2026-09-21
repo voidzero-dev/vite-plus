@@ -206,11 +206,15 @@ fn selected_shim_tools(scope: EnvScope) -> Vec<&'static str> {
     match scope {
         EnvScope::All => crate::shim::DEFAULT_SHIM_TOOLS.to_vec(),
         EnvScope::Node => vec!["node"],
-        EnvScope::PackageManagers => package_manager::ALL_PACKAGE_MANAGERS
-            .into_iter()
-            .flat_map(|package_manager| package_manager.bin_names().iter().copied())
+        EnvScope::PackageManagers | EnvScope::PackageManager(_) => crate::shim::DEFAULT_SHIM_TOOLS
+            .iter()
+            .copied()
+            .filter(|tool| {
+                vp_pm_cli::PackageManagerType::from_tool(tool).is_some_and(|kind| {
+                    scope.package_manager().is_none_or(|selected| selected == kind)
+                })
+            })
             .collect(),
-        EnvScope::PackageManager(package_manager) => package_manager.bin_names().to_vec(),
     }
 }
 
@@ -222,11 +226,15 @@ async fn check_shims(scope: EnvScope) -> bool {
         return false;
     }
 
+    let settings = match load_config().await {
+        Ok(settings) => settings,
+        Err(_) => return false,
+    };
     let mut missing = Vec::new();
 
     let tools = selected_shim_tools(scope);
     for tool in &tools {
-        let shim_path = bin_dir.join(shim_filename(tool));
+        let shim_path = super::setup::shim_dir(&settings, tool).join(shim_filename(tool));
         if !tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             missing.push(*tool);
         }
@@ -556,16 +564,34 @@ async fn check_path(scope: EnvScope) -> bool {
         return false;
     }
 
+    let fallback = vp_shared::EnvConfig::get().dirs.fallback_bin();
+    if !paths.iter().any(|path| path == fallback.as_path()) {
+        print_check(&style(output::CROSS).red().to_string(), "Fallback dir", "not in PATH");
+        print_path_fix(&vp_shared::EnvConfig::get().dirs.config);
+        return false;
+    }
+    let settings = match load_config().await {
+        Ok(settings) => settings,
+        Err(_) => return false,
+    };
+
     // Show which tool would be executed for each shim
     for tool in selected_shim_tools(scope) {
         if let Some(tool_path) = find_in_path(tool) {
-            let expected = bin_dir.join(shim_filename(tool));
+            let expected_dir = super::setup::shim_dir(&settings, tool);
+            let expected = expected_dir.join(shim_filename(tool));
             let display = abbreviate_home(&tool_path.display().to_string());
             if tool_path == expected.as_path() {
                 print_check(
                     &style(output::CHECK).green().to_string(),
                     tool,
                     &format!("{display} {}", style("(vp shim)").dim()),
+                );
+            } else if expected_dir == fallback {
+                print_check(
+                    &style(output::CHECK).green().to_string(),
+                    tool,
+                    &format!("{display} (system)"),
                 );
             } else {
                 print_check(
@@ -1243,11 +1269,11 @@ mod tests {
         assert_eq!(selected_shim_tools(EnvScope::Node), vec!["node"]);
         assert_eq!(
             selected_shim_tools(EnvScope::PackageManager(vp_pm_cli::PackageManagerType::Pnpm)),
-            vec!["pnpm", "pnpx"]
+            vec!["pnpm", "pnpx", "pn", "pnx"]
         );
         assert_eq!(
             selected_shim_tools(EnvScope::PackageManagers),
-            vec!["npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"]
+            vec!["npm", "npx", "pnpm", "pnpx", "pn", "pnx", "yarn", "yarnpkg", "bun", "bunx"]
         );
         assert_eq!(selected_shim_tools(EnvScope::All), crate::shim::DEFAULT_SHIM_TOOLS);
     }

@@ -1,10 +1,11 @@
 # command_update_yarn4
 
-## `vp update testnpm2`
+## `vp update testnpm2 --no-save`
 
-should update package within semver range
+warn that --no-save is unsupported and continue with yarn up
 
 ```
+warn: yarn does not support --no-save.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0, test-vite-plus-package@npm:1.0.0, testnpm2@npm:1.0.1
@@ -14,7 +15,7 @@ should update package within semver range
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -49,7 +50,7 @@ should to absolute latest version
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vp add testnpm2@1.0.0 -D`
@@ -64,7 +65,7 @@ should to absolute latest version
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vp update testnpm2 --latest`
@@ -79,7 +80,7 @@ should to absolute latest version
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -111,7 +112,7 @@ should update and ignore -D options
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -143,7 +144,7 @@ should update all packages but won't change the package.json
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`

@@ -58,7 +58,7 @@ mod portable {
 
     enum ShimLayout {
         SingleRoot,
-        Split { cache: PathBuf },
+        Split { cache: PathBuf, bin: PathBuf },
     }
 
     struct ShimPointer {
@@ -95,7 +95,13 @@ mod portable {
         let parsed = cmdline::parse_shim_pointer(&bytes)?;
         let layout = match parsed.layout {
             ParsedShimLayout::SingleRoot => ShimLayout::SingleRoot,
-            ParsedShimLayout::Split { cache } => ShimLayout::Split { cache: PathBuf::from(cache) },
+            ParsedShimLayout::Split { cache, bin } => ShimLayout::Split {
+                cache: PathBuf::from(cache),
+                // Old sidecars only occur beside the main bin entrypoints.
+                bin: bin
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| exe_path.parent().unwrap().to_path_buf()),
+            },
         };
         Some(ShimPointer { data: PathBuf::from(parsed.data), layout })
     }
@@ -107,7 +113,6 @@ mod portable {
             exe_path.file_stem().and_then(|s| s.to_str()).unwrap_or_else(|| process::exit(1));
 
         // 2. Locate vp.exe via `<name>.shim` (written next to every trampoline).
-        let bin_dir = exe_path.parent().unwrap_or_else(|| process::exit(1));
         let Some(location) = resolve_vp_exe(&exe_path) else {
             use std::io::Write;
             let stderr = std::io::stderr();
@@ -123,10 +128,10 @@ mod portable {
             ShimLayout::SingleRoot => {
                 cmd.env("VP_HOME", &location.pointer.data);
             }
-            ShimLayout::Split { cache } => {
+            ShimLayout::Split { cache, bin } => {
                 cmd.env_remove("VP_HOME");
                 cmd.env("VP_DATA_DIR", &location.pointer.data);
-                cmd.env("VP_BIN_DIR", bin_dir);
+                cmd.env("VP_BIN_DIR", bin);
                 cmd.env("VP_CACHE_DIR", cache);
             }
         }
@@ -170,6 +175,32 @@ mod portable {
                 data.display(),
                 cache.display()
             )
+        }
+
+        #[test]
+        fn fallback_pointer_preserves_main_bin_root() {
+            let root = env::temp_dir().join(format!("vp-trampoline-fallback-{}", process::id()));
+            let _ = fs::remove_dir_all(&root);
+            let data = root.join("data");
+            let bin = root.join("shared-bin");
+            let fallback = data.join("fallback-bin");
+            std::fs::create_dir_all(&fallback).unwrap();
+            write_exe(&data.join("current/bin/vp.exe"));
+            std::fs::write(
+                fallback.join("node.shim"),
+                format!(
+                    "{}bin={}\n",
+                    versioned_pointer("split", &data, &root.join("cache")),
+                    bin.display()
+                ),
+            )
+            .unwrap();
+            let location = resolve_vp_exe(&fallback.join("node.exe")).unwrap();
+            assert_eq!(location.exe, data.join("current/bin/vp.exe"));
+            assert!(
+                matches!(location.pointer.layout, ShimLayout::Split { bin: actual, .. } if actual == bin)
+            );
+            let _ = fs::remove_dir_all(root);
         }
 
         #[test]
@@ -302,7 +333,7 @@ mod portable {
             let location = resolve_vp_exe(&bin.join("vp.exe")).unwrap();
             assert!(matches!(
                 location.pointer.layout,
-                ShimLayout::Split { cache: value } if value == cache
+                ShimLayout::Split { cache: value, .. } if value == cache
             ));
             let _ = fs::remove_dir_all(&root);
         }

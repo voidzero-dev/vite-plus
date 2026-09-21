@@ -28,13 +28,14 @@ impl Resolve<RebuildArgs> for Pnpm {
 }
 
 impl Resolve<RebuildArgs> for Yarn {
-    fn resolve(&self, _args: &RebuildArgs, diag: &mut Diagnostics) -> CommandResolution {
-        let message = if self.is_berry() {
-            "yarn berry does not support the rebuild command"
-        } else {
-            "yarn v1 does not support the rebuild command"
-        };
-        diag.warn(DiagnosticKind::UnsupportedCommandNoop, message);
+    fn resolve(&self, args: &RebuildArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if self.is_berry() {
+            return resolve_rebuild("yarn", args);
+        }
+        diag.warn(
+            DiagnosticKind::UnsupportedCommandNoop,
+            "yarn v1 does not support the rebuild command",
+        );
         CommandResolution::Noop
     }
 }
@@ -96,14 +97,37 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn2_rebuild_not_supported() {
-        let result = resolve(&yarn("4.0.0"), RebuildArgs::default());
+    fn test_yarn_berry_rebuild() {
+        for version in ["2.0.0", "3.0.0", "4.0.0"] {
+            let result = resolve(&yarn(version), RebuildArgs::default());
+            let command = expect_run(result.outcome);
 
-        assert_eq!(result.outcome, CommandResolution::Noop);
-        assert_eq!(
-            result.diagnostics[0].message,
-            "yarn berry does not support the rebuild command"
-        );
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec!["rebuild"]);
+            assert!(result.diagnostics.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_yarn_berry_rebuild_with_packages() {
+        let args = parse_args::<RebuildArgs>(["better-sqlite3", "sharp"]).unwrap();
+        let result = resolve(&yarn("4.0.0"), args);
+        let command = expect_run(result.outcome);
+
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["rebuild", "better-sqlite3", "sharp"]);
+        assert!(result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_yarn_berry_rebuild_with_pass_through() {
+        let args = parse_args::<RebuildArgs>(["--", "--help"]).unwrap();
+        let result = resolve(&yarn("4.0.0"), args);
+        let command = expect_run(result.outcome);
+
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["rebuild", "--help"]);
+        assert!(result.diagnostics.is_empty());
     }
 
     #[test]

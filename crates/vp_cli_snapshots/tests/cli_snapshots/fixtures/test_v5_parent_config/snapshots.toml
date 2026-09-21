@@ -1,0 +1,11 @@
+[[case]]
+name = "directory_local_config"
+vp = ["local", "global"]
+cwd = "sub"
+steps = [["vp", "test", "run"]]
+
+[[case]]
+name = "explicit_config"
+vp = "local"
+cwd = "sub"
+steps = [["vp", "test", "run", "--config", "../vite.config.ts", "--dir", "."]]

@@ -501,7 +501,7 @@ async fn has_valid_version_source(project_path: &AbsolutePath) -> Result<bool, E
 ///
 /// Returns `Some(JsRuntime)` when both conditions are met:
 /// 1. Config has `node_shim_mode == SystemFirst`
-/// 2. A system `node` binary is found in PATH (excluding the vite-plus bin directory)
+/// 2. The first `node` binary on PATH is not a Vite+ shim
 ///
 /// Returns `None` if mode is `Managed` or no system Node.js is found,
 /// allowing the caller to fall through to managed runtime resolution.
@@ -613,6 +613,42 @@ mod tests {
 
         // The command should use the node binary directly
         assert_eq!(cmd.as_std().get_program(), OsStr::new(expected_program));
+    }
+
+    #[test]
+    fn test_prepare_test_command_does_not_probe_node() {
+        use std::ffi::OsStr;
+
+        let project = tempfile::TempDir::new().unwrap();
+        let project_path = AbsolutePathBuf::new(project.path().to_path_buf()).unwrap();
+        let scripts_dir = project_path.join("dist");
+        std::fs::create_dir(scripts_dir.as_path()).unwrap();
+        std::fs::write(
+            project_path.join("package.json").as_path(),
+            r#"{"engines":{"node":">=99.0.0"}}"#,
+        )
+        .unwrap();
+
+        // A nonexistent binary makes any attempt to probe Node fail.
+        let bin_prefix = project_path.join("runtime");
+        let node_binary = bin_prefix.join(if cfg!(windows) { "node.exe" } else { "node" });
+        let entry_point = scripts_dir.join("bin.js");
+        let executor = JsExecutor::new(Some(scripts_dir)).without_missing_local_cli_warning();
+        let cmd = executor
+            .prepare_js_entry(
+                &project_path,
+                &node_binary,
+                &bin_prefix,
+                &["test".into(), "run".into()],
+            )
+            .unwrap();
+
+        assert_eq!(cmd.as_std().get_program(), node_binary.as_path().as_os_str());
+        assert_eq!(
+            cmd.as_std().get_args().collect::<Vec<_>>(),
+            [entry_point.as_path().as_os_str(), OsStr::new("test"), OsStr::new("run")]
+        );
+        assert_eq!(cmd.as_std().get_current_dir(), Some(project_path.as_path()));
     }
 
     #[tokio::test]

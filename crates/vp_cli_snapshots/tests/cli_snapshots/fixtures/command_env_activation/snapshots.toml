@@ -1,0 +1,101 @@
+[[case]]
+name = "activation_managed_bash"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [["node", "verify.mjs", "managed", "bash"]]
+
+[[case]]
+name = "activation_external_zsh"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["zsh"]
+steps = [["node", "verify.mjs", "external", "zsh"]]
+
+[[case]]
+name = "activation_xdg_bash"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [["node", "verify.mjs", "xdg", "bash"]]
+
+[[case]]
+name = "activation_legacy_bash"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [["node", "verify.mjs", "legacy", "bash"]]
+
+[[case]]
+name = "activation_fish"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["fish"]
+steps = [["node", "verify.mjs", "managed", "fish"]]
+
+[[case]]
+name = "activation_nushell"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["nu"]
+steps = [["node", "verify.mjs", "managed", "nu"]]
+
+[[case]]
+name = "activation_profile_guidance"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+# Give each interactive Bash its own PTY so job control cannot affect the next shell.
+steps = [
+  ["node", "profile-guidance.mjs", "unset"],
+  ["node", "profile-guidance.mjs", "unrecognized"],
+  ["node", "profile-guidance.mjs", "bash-login"],
+  ["node", "profile-guidance.mjs", "bash-interactive"],
+]
+
+[[case]]
+name = "activation_login_shell_hint"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "shell-guidance.mjs", "hints"]]
+
+[[case]]
+name = "activation_available_shells"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "shell-guidance.mjs", "available"]]
+
+[[case]]
+name = "activation_powershell_profile_guidance"
+vp = "global"
+steps = [["node", "profile-guidance.mjs", "powershell"]]
+
+[[case]]
+name = "activation_zsh_profile_guidance"
+vp = "global"
+comment = "Login startup reorders PATH after .zshenv; .zshrc must activate the shims afterward."
+skip-platforms = ["windows"]
+requires = ["zsh"]
+# Launch each login shell directly as the PTY owner, without Node as its parent.
+steps = [
+  ["node", "profile-guidance.mjs", "zsh-env"],
+  { argv = ["zsh", "-lic", 'command -v node; test "$(command -v node)" = "$EXPECTED_NODE" || exit 1; node --version'], envs = [
+    ["HOME", "${workspace}/profiles/user"],
+    ["ZDOTDIR", "${workspace}/profiles/user/zsh"],
+    ["EXPECTED_NODE", "${workspace}/profiles/system/node"],
+  ] },
+  ["node", "profile-guidance.mjs", "zsh-interactive"],
+  { argv = ["zsh", "-lic", 'command -v node; test "$(command -v node)" = "$EXPECTED_NODE" || exit 1; node --version'], envs = [
+    ["HOME", "${workspace}/profiles/user"],
+    ["ZDOTDIR", "${workspace}/profiles/user/zsh"],
+    ["EXPECTED_NODE", "${VP_HOME}/bin/node"],
+  ] },
+]
+
+[[case]]
+name = "activation_cmd_path_guidance"
+vp = "global"
+steps = [
+  ["node", "profile-guidance.mjs", "cmd"],
+  ["node", "profile-guidance.mjs", "cmd-no-modify-path"],
+]

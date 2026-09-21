@@ -1,0 +1,10 @@
+{
+  "name": "test-workspace-api-identity",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "devDependencies": {
+    "@types/node": "24.10.3",
+    "vite-plus": "latest"
+  }
+}

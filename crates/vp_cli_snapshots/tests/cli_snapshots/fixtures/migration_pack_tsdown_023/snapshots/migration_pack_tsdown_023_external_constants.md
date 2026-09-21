@@ -26,8 +26,16 @@ const externalOptions = ['foo'];
 
 export default {
   pack: [
-    { inputOptions: { external: externalOptions }, deps: { neverBundle: true, resolveDepSubpath: true }, unbundle: true, dts: { generator: 'tsgo' } },
-    { inputOptions: { external: externalOptions }, deps: { resolveDepSubpath: true, neverBundle: true }, unbundle: true },
+    { inputOptions: { external: externalOptions }, deps: { neverBundle: true,
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true }, unbundle: true, dts: { generator: 'tsgo' } },
+    { inputOptions: { external: externalOptions }, deps: {
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true, neverBundle: true }, unbundle: true },
   ],
 };
 ```
@@ -47,8 +55,16 @@ const externalOptions = ['foo'];
 
 export default {
   pack: [
-    { inputOptions: { external: externalOptions }, deps: { neverBundle: true, resolveDepSubpath: true }, unbundle: true, dts: { generator: 'tsgo' } },
-    { inputOptions: { external: externalOptions }, deps: { resolveDepSubpath: true, neverBundle: true }, unbundle: true },
+    { inputOptions: { external: externalOptions }, deps: { neverBundle: true,
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true }, unbundle: true, dts: { generator: 'tsgo' } },
+    { inputOptions: { external: externalOptions }, deps: {
+        // tsdown <0.23 compatibility: resolve external dependency subpaths.
+        // Remove to preserve subpath imports as written (the new default).
+        // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+        resolveDepSubpath: true, neverBundle: true }, unbundle: true },
   ],
 };
 ```

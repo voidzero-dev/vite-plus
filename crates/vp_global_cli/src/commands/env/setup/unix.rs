@@ -8,6 +8,7 @@ pub(super) fn external_shim_target(binary: &Path) -> Option<PathBuf> {
     let canonical = std::fs::canonicalize(binary).ok()?;
     let env = EnvConfig::get();
     let bin = env.dirs.bin.as_path();
+    let fallback_bin = env.dirs.fallback_bin();
     let cwd = vt_path::current_dir().ok()?;
     let path = std::env::var_os("PATH").unwrap_or_default();
     let mut candidates: Vec<_> = std::env::split_paths(&path).map(|dir| dir.join("vp")).collect();
@@ -27,6 +28,7 @@ pub(super) fn external_shim_target(binary: &Path) -> Option<PathBuf> {
         candidate != &canonical
             && std::fs::canonicalize(candidate).is_ok_and(|target| target == canonical)
             && !passes_through_shims(candidate, bin)
+            && !passes_through_shims(candidate, fallback_bin.as_path())
     })
 }
 

@@ -1,0 +1,12 @@
+[[case]]
+name = "command_rebuild_yarn4"
+vp = "global"
+steps = [
+  { argv = ["vp", "install"], comment = "Run the initial build script." },
+  ["vpt", "print-file", "builds.txt"],
+  { argv = ["vp", "rebuild"], comment = "Yarn Berry rebuilds all packages instead of returning a no-op." },
+  ["vpt", "print-file", "builds.txt"],
+  { argv = ["vp", "rebuild", "command-rebuild-yarn4"], comment = "Rebuild only the named package." },
+  ["vpt", "print-file", "builds.txt"],
+  { argv = ["vp", "rebuild", "--", "--help"], comment = "Forward additional arguments to yarn rebuild." },
+]

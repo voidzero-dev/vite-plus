@@ -1,0 +1,16 @@
+[[case]]
+name = "command_staged_no_stash_restore"
+vp = ["local", "global"]
+comment = "A failed task with --no-stash must restore the unstaged part of a partially staged file."
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["git", "add", "-A"], snapshot = false },
+  { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "init"], snapshot = false },
+  { argv = ["vpt", "write-file", "file.txt", "staged\n"], snapshot = false },
+  { argv = ["git", "add", "file.txt"], snapshot = false },
+  { argv = ["vpt", "write-file", "file.txt", "staged\nunstaged\n"], snapshot = false },
+  { argv = ["vp", "staged", "--no-stash", "--quiet"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "file.txt"], comment = "The working tree retains both staged and unstaged changes.", continue-on-failure = true },
+  { argv = ["git", "show", ":file.txt"], comment = "The index retains only the staged change." },
+  { argv = ["git", "stash", "list"], comment = "No backup stash is created." },
+]

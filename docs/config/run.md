@@ -219,7 +219,7 @@ Vite Task passes a set of common environment variables to all tasks:
 
 - **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
 - **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
-- **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`
+- **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`, `GITHUB_*`, `RUNNER_*`, `ACTIONS_ID_TOKEN_REQUEST_URL`, `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
 - **Terminal:** Color variables (`FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) aren't passed to tasks unless you list them under `env` (the value gets fingerprinted, so changing it invalidates the cache) or `untrackedEnv` (passed without fingerprinting). If `FORCE_COLOR` isn't in either list, the child gets `FORCE_COLOR=1` so cached logs stay colored. Colors get stripped on display when the terminal can't render them.
 
 ### `input`

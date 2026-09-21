@@ -27,7 +27,7 @@ jobs:
           cache-key: upgrade-deps
           tools: just,cargo-shear
 
-      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       - name: Capture current upstream CLI help
         run: node .github/scripts/cli-help-diff.ts capture --output "${UPGRADE_DEPS_META_DIR}/cli-help-before.json"
@@ -78,7 +78,7 @@ jobs:
       - name: Check upgrade dependencies with Kimi K3
         id: check-upgrade-dependencies
         timeout-minutes: 180
-        uses: anthropics/claude-code-action@7b0b255830a1fab6e602658672acad11c12d841d # v1.0.226
+        uses: anthropics/claude-code-action@a4f54ef2c58884867281bd8e2f8d63352ad019a9 # v1.0.229
         env:
           ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
           CLI_HELP_DIFF_CHANGED: ${{ steps.cli-help-diff.outputs.has-changes }}
@@ -113,8 +113,9 @@ jobs:
 
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
-            - Vitest is intentionally capped at the latest stable `4.x` release until
-              Vite+ adapts to a newer major. Do not remove or bypass that cap.
+            - Vitest is capped at the latest stable `5.x` release. Keep the exact
+              version selected by the upgrade script when merging upstream catalogs.
+              Official Vitest packages must use that version. Do not bypass the cap.
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
               working tree, merges their pnpm-workspace catalogs into the root
@@ -135,7 +136,7 @@ jobs:
                cross-major semver conflict in the merged catalog, e.g.
                `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses to
                auto-resolve cross-major conflicts for packages outside its synced list
-               (oxc-*, vitest deps). For passthrough deps that vp does NOT import
+               (oxc-* and tinybench). For passthrough deps that vp does NOT import
                directly (e.g. `diff`, `acorn`, `astring`, anything only present in
                `rolldown/scripts/package.json` or vite's internals), bump vp's
                `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
@@ -243,7 +244,7 @@ jobs:
       - name: Enhance PR description with Kimi K3
         id: enhance-pr-description
         continue-on-error: true
-        uses: anthropics/claude-code-action@7b0b255830a1fab6e602658672acad11c12d841d # v1.0.226
+        uses: anthropics/claude-code-action@a4f54ef2c58884867281bd8e2f8d63352ad019a9 # v1.0.229
         env:
           ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
         with:

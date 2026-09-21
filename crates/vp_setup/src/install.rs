@@ -176,6 +176,7 @@ pub async fn write_upgrade_log(
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
+    show_progress: bool,
 ) -> Result<(), Error> {
     tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
 
@@ -189,6 +190,35 @@ pub async fn install_production_deps(
         args.push(registry_url);
     }
 
+    let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
+        show_progress.then_some("Preparing Node.js and pnpm..."),
+        prepare_install_runtime(),
+    )
+    .await?;
+    let output = vp_shared::progress::with_spinner(
+        show_progress.then_some("Installing dependencies..."),
+        run_pnpm_install(version_dir, &node_runtime, &pnpm_entry, &args, registry),
+    )
+    .await?;
+
+    if !output.status.success() {
+        let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
+        return Err(Error::Setup(
+            format_install_failure_message(
+                vp_shared::exit_code_from_status(output.status),
+                log_path.as_ref(),
+            )
+            .into(),
+        ));
+    }
+
+    if show_progress {
+        vp_shared::output::success("Dependencies installed.");
+    }
+    Ok(())
+}
+
+async fn prepare_install_runtime() -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
     let node_version = NodeProvider::new().resolve_latest_version().await.map_err(|error| {
         Error::Setup(format!("Failed to resolve the latest Node.js LTS version: {error}").into())
     })?;
@@ -210,20 +240,7 @@ pub async fn install_production_deps(
             format!("pnpm entry not found at {}", pnpm_entry.as_path().display()).into(),
         ));
     }
-    let output = run_pnpm_install(version_dir, &node_runtime, &pnpm_entry, &args, registry).await?;
-
-    if !output.status.success() {
-        let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
-        return Err(Error::Setup(
-            format_install_failure_message(
-                vp_shared::exit_code_from_status(output.status),
-                log_path.as_ref(),
-            )
-            .into(),
-        ));
-    }
-
-    Ok(())
+    Ok((node_runtime, pnpm_entry))
 }
 
 async fn run_pnpm_install(

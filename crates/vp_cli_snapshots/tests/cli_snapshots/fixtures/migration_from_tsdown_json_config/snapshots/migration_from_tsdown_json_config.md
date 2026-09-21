@@ -39,7 +39,11 @@ export default defineConfig({
     unbundle: true,
     copy: "public",
     css: { inject: true },
-    "deps": { resolveDepSubpath: true, onlyBundle: false },
+    "deps": {
+      // tsdown <0.23 compatibility: resolve external dependency subpaths.
+      // Remove to preserve subpath imports as written (the new default).
+      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+      resolveDepSubpath: true, onlyBundle: false },
     "inputOptions": {
       "cwd": "./src"
     }
@@ -125,7 +129,11 @@ export default defineConfig({
     unbundle: true,
     copy: "public",
     css: { inject: true },
-    "deps": { resolveDepSubpath: true, onlyBundle: false },
+    "deps": {
+      // tsdown <0.23 compatibility: resolve external dependency subpaths.
+      // Remove to preserve subpath imports as written (the new default).
+      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+      resolveDepSubpath: true, onlyBundle: false },
     "inputOptions": {
       "cwd": "./src"
     }

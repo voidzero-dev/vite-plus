@@ -25,6 +25,7 @@ use crate::{
     commands::{
         env::{bin_config::BinConfig, package_metadata::PackageMetadata},
         global::{LEGACY_PACKAGE_MANAGER_PACKAGES, install::uninstall},
+        shell::{ALL_SHELL_PROFILES, Shell, ShellProfileRoot, resolve_profile_path},
     },
     error::Error,
     help,
@@ -52,6 +53,16 @@ impl EnvShell {
             EnvShell::Fish => "env.fish",
             EnvShell::Nu => "env.nu",
             EnvShell::Powershell => "env.ps1",
+        }
+    }
+
+    fn source_command(self, env_dir: &vt_path::AbsolutePath) -> String {
+        let path = env_dir.join(self.env_file_name()).to_string();
+        match self {
+            Self::Posix => format!(". \"{}\"", escape_posix_double_quoted_string(&path)),
+            Self::Fish => format!("source \"{}\"", escape_fish_double_quoted_string(&path)),
+            Self::Nu => format!("source \"{}\"", escape_nu_double_quoted_string(&path)),
+            Self::Powershell => format!(". '{}'", escape_powershell_single_quoted_string(&path)),
         }
     }
 }
@@ -103,35 +114,9 @@ pub(crate) async fn execute_for_binary(
     // Create wrapper script in bin/
     setup_vp_wrapper(current_exe, bin_dir, refresh_entrypoints).await?;
 
-    // Create default tool shims
-    let mut created = Vec::new();
-    let mut skipped = Vec::new();
-
-    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
-        let refresh_tool =
-            if matches!(*tool, "vpx" | "vpr") { refresh_entrypoints } else { refresh };
-        let result = create_shim(current_exe, bin_dir, tool, refresh_tool).await?;
-        if result {
-            created.push(*tool);
-        } else {
-            skipped.push(*tool);
-        }
-
-        // Remove legacy .cmd/.ps1/extensionless launchers that would shadow
-        // an existing trampoline .exe in PowerShell/Git Bash (create_shim
-        // skips existing shims without cleaning siblings).
-        #[cfg(windows)]
-        cleanup_legacy_windows_shim(bin_dir, tool).await;
-
-        // Drop stale `npm install -g` link configs for default shim names. The
-        // link itself is replaced by the shim above, and a leftover Npm-sourced
-        // BinConfig would let a later `npm uninstall -g` delete the default shim.
-        if let Ok(Some(config)) = super::bin_config::BinConfig::load(tool).await
-            && config.source == super::bin_config::BinSource::Npm
-        {
-            let _ = super::bin_config::BinConfig::delete(tool).await;
-        }
-    }
+    let settings = super::config::load_config().await?;
+    let (created, skipped) =
+        refresh_shims(current_exe, &settings, refresh, refresh_entrypoints).await?;
 
     #[cfg(windows)]
     if refresh {
@@ -149,8 +134,7 @@ pub(crate) async fn execute_for_binary(
     // Print results
     if !created.is_empty() {
         output::raw(&help::render_heading("Created Shims"));
-        for tool in &created {
-            let shim_path = bin_dir.join(shim_filename(tool));
+        for shim_path in &created {
             output::raw(&format!("  {}", shim_path.as_path().display()));
         }
     }
@@ -160,8 +144,7 @@ pub(crate) async fn execute_for_binary(
             output::raw("");
         }
         output::raw(&help::render_heading("Skipped Shims"));
-        for tool in &skipped {
-            let shim_path = bin_dir.join(shim_filename(tool));
+        for shim_path in &skipped {
             output::raw(&format!("  {}", shim_path.as_path().display()));
         }
         output::raw("");
@@ -172,6 +155,85 @@ pub(crate) async fn execute_for_binary(
     print_path_instructions(&dirs.config);
 
     Ok(ExitStatus::default())
+}
+
+/// Resolve placement independently for Node.js and each package-manager family.
+pub(super) fn shim_dir(settings: &super::config::Config, tool: &str) -> vt_path::AbsolutePathBuf {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    let mode = if tool == "node" {
+        settings.node_shim_mode
+    } else if let Some(kind) = vp_pm_cli::PackageManagerType::from_tool(tool) {
+        settings.package_manager_shim_mode_for(kind)
+    } else {
+        super::config::ShimMode::Managed
+    };
+    match mode {
+        super::config::ShimMode::Managed => dirs.bin.clone(),
+        super::config::ShimMode::SystemFirst => dirs.fallback_bin(),
+    }
+}
+
+/// Reconcile both shim directories from effective preferences; setup and mode changes share this path.
+pub(crate) async fn refresh_shims(
+    current_exe: &std::path::Path,
+    settings: &super::config::Config,
+    refresh: bool,
+    refresh_entrypoints: bool,
+) -> Result<(Vec<vt_path::AbsolutePathBuf>, Vec<vt_path::AbsolutePathBuf>), Error> {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    let fallback_bin = dirs.fallback_bin();
+    tokio::fs::create_dir_all(&dirs.bin).await?;
+    tokio::fs::create_dir_all(&fallback_bin).await?;
+    let owns_shim = |path: &vt_path::AbsolutePath| {
+        crate::commands::global::install::is_vp_shim_target(path)
+            || (std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
+                && std::fs::canonicalize(path).is_ok_and(|target| {
+                    std::fs::canonicalize(current_exe).is_ok_and(|source| source == target)
+                }))
+    };
+    let mut created = Vec::new();
+    let mut skipped = Vec::new();
+    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
+        let bin_dir = shim_dir(settings, tool);
+        let other_dir = if bin_dir == dirs.bin { &fallback_bin } else { &dirs.bin };
+        let shim_path = bin_dir.join(shim_filename(tool));
+        let refresh_tool =
+            if matches!(*tool, "vpx" | "vpr") { refresh_entrypoints } else { refresh };
+        let exists = tokio::fs::symlink_metadata(&shim_path).await.is_ok();
+        // A configured bin directory can contain foreign tools. Never replace them to change modes.
+        let foreign = exists && crate::shim::is_core_shim_tool(tool) && !owns_shim(&shim_path);
+        if !foreign && create_shim(current_exe, &bin_dir, tool, refresh_tool).await? {
+            created.push(shim_path);
+        } else {
+            skipped.push(shim_path);
+        }
+
+        let stale = other_dir.join(shim_filename(tool));
+        if owns_shim(&stale) {
+            #[cfg(unix)]
+            tokio::fs::remove_file(&stale).await?;
+            #[cfg(windows)]
+            {
+                remove_or_rename_to_old(&stale).await;
+                let pointer = stale.as_path().with_extension(vp_shared::SHIM_POINTER_EXTENSION);
+                tokio::fs::remove_file(pointer).await?;
+                cleanup_legacy_windows_shim(other_dir, tool).await;
+            }
+        }
+        #[cfg(windows)]
+        if !foreign {
+            cleanup_legacy_windows_shim(&bin_dir, tool).await;
+        }
+        // Old npm-global metadata must not let uninstall remove a default shim.
+        if let Ok(Some(config)) = BinConfig::load(tool).await
+            && config.source == super::bin_config::BinSource::Npm
+        {
+            BinConfig::delete(tool).await?;
+        }
+    }
+    #[cfg(windows)]
+    cleanup_old_files(&fallback_bin).await;
+    Ok((created, skipped))
 }
 
 /// Remove legacy managed installs left by versions that did not expose package-manager shims.
@@ -610,16 +672,20 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS____vp_bin="__VP_BIN__"
-while case ":${PATH}:" in *":${__vp_bin}:"*) true ;; *) false ;; esac; do
-    __vp_tmp=":${PATH}:"
-    __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
-    __vp_before="${__vp_before#:}"
-    __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
-    __vp_after="${__vp_after%:}"
-    PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+__vp_fallback="__VP_FALLBACK_BIN__"
+for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
+    while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
+        __vp_tmp=":${PATH}:"
+        __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
+        __vp_before="${__vp_before#:}"
+        __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
+        __vp_after="${__vp_after%:}"
+        PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+    done
 done
-export PATH="${__vp_bin}${PATH:+:${PATH}}"
-unset __vp_bin __vp_tmp __vp_before __vp_after
+export PATH="${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}"
+unset __vp_bin __vp_fallback __vp_dir __vp_tmp __vp_before __vp_after
+hash -r 2>/dev/null || true
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -646,7 +712,9 @@ vp() {
         eval "$__vp_out"
     else
         unset __vp_env_use
-        command vp "$@"
+        command vp "$@" || return $?
+        # Mode changes move executables between directories; discard cached command paths.
+        hash -r 2>/dev/null || true
     fi
 }
 
@@ -693,7 +761,10 @@ const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.d
 __ENV_EXPORTS__while set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
     set -e PATH[$__vp_idx]
 end
-set -gx PATH "__VP_BIN__" $PATH
+while set -l __vp_idx (contains -i -- "__VP_FALLBACK_BIN__" $PATH)
+    set -e PATH[$__vp_idx]
+end
+set -gx PATH "__VP_BIN__" $PATH "__VP_FALLBACK_BIN__"
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -753,7 +824,7 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
+__ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" and $in != "__VP_FALLBACK_BIN__" } | prepend "__VP_BIN__" | append "__VP_FALLBACK_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -829,9 +900,12 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS__$__vp_bin = '__VP_BIN_WIN__'
-if ($env:Path -split ';' -notcontains $__vp_bin) {
-    $env:Path = "$__vp_bin;$env:Path"
-}
+$__vp_fallback = '__VP_FALLBACK_BIN_WIN__'
+$env:PATH = @(
+    $__vp_bin
+    $env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -and $_ -ne $__vp_bin -and $_ -ne $__vp_fallback }
+    $__vp_fallback
+) -join [IO.Path]::PathSeparator
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
@@ -848,17 +922,26 @@ function vp {
         if ($args -contains "-h" -or $args -contains "--help") {
             & (Join-Path $__vp_bin "vp") @args; return
         }
-        $env:VP_ENV_USE_EVAL_ENABLE = "1"
-        $env:VP_SHELL = "pwsh"
-        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
-            if ($_ -is [System.Management.Automation.ErrorRecord]) {
-                Write-Host $_.Exception.Message
-            } else {
-                $_
+        $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
+        $previousShell = $env:VP_SHELL
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $env:VP_ENV_USE_EVAL_ENABLE = "1"
+            $env:VP_SHELL = "pwsh"
+            # Windows PowerShell 5.1 treats native stderr as an error when redirected.
+            $ErrorActionPreference = "Continue"
+            $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
+                if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                    Write-Host $_.Exception.Message
+                } else {
+                    $_
+                }
             }
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+            $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
+            $env:VP_SHELL = $previousShell
         }
-        Remove-Item Env:VP_ENV_USE_EVAL_ENABLE -ErrorAction SilentlyContinue
-        Remove-Item Env:VP_SHELL -ErrorAction SilentlyContinue
         if ($LASTEXITCODE -eq 0 -and $output) {
             Invoke-Expression ($output -join "`n")
         }
@@ -1048,6 +1131,7 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
     let dirs = &config.dirs;
     let home_dir = config.user_home.as_path();
     let bin_path_ref = render_home_relative_path(dirs.bin.as_path(), home_dir);
+    let fallback_path_ref = render_home_relative_path(dirs.fallback_bin().as_path(), home_dir);
     let dir_envs = render_dir_envs(shell, config);
 
     match shell {
@@ -1056,7 +1140,12 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
                 &bin_path_ref,
                 escape_posix_double_quoted_string,
             );
+            let fallback_path_ref = escape_home_relative_double_quoted_path(
+                &fallback_path_ref,
+                escape_posix_double_quoted_string,
+            );
             ENV_TEMPLATE_POSIX
+                .replace("__VP_FALLBACK_BIN__", &fallback_path_ref)
                 .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN__", &bin_path_ref)
         }
@@ -1065,7 +1154,12 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
                 &bin_path_ref,
                 escape_fish_double_quoted_string,
             );
+            let fallback_path_ref = escape_home_relative_double_quoted_path(
+                &fallback_path_ref,
+                escape_fish_double_quoted_string,
+            );
             ENV_TEMPLATE_FISH
+                .replace("__VP_FALLBACK_BIN__", &fallback_path_ref)
                 .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN__", &bin_path_ref)
         }
@@ -1075,6 +1169,10 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
             let bin_path_ref_nu =
                 escape_nu_double_quoted_string(&render_nu_path_ref(&bin_path_ref));
             ENV_TEMPLATE_NU
+                .replace(
+                    "__VP_FALLBACK_BIN__",
+                    &escape_nu_double_quoted_string(&render_nu_path_ref(&fallback_path_ref)),
+                )
                 .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN__", &bin_path_ref_nu)
         }
@@ -1083,6 +1181,10 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
             let bin_path_win =
                 escape_powershell_single_quoted_string(&dirs.bin.as_path().display().to_string());
             ENV_TEMPLATE_PS1
+                .replace(
+                    "__VP_FALLBACK_BIN_WIN__",
+                    &escape_powershell_single_quoted_string(&dirs.fallback_bin().to_string()),
+                )
                 .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN_WIN__", &bin_path_win)
         }
@@ -1112,55 +1214,189 @@ async fn create_env_files() -> Result<(), Error> {
     Ok(())
 }
 
+/// Inspect the explicitly selected shell without changing its profiles.
+/// Bash only checks non-login startup; the printed advice must keep that qualification.
+/// Zsh login startup can reorder PATH after `.zshenv`, so require `.zshrc`.
+fn has_configured_profile(config: &vp_shared::EnvConfig) -> bool {
+    let shell = config.vp_shell.as_deref().map(str::to_ascii_lowercase);
+    for profile in ALL_SHELL_PROFILES {
+        let relevant = match shell.as_deref() {
+            Some("zsh") => profile.path == ".zshrc",
+            Some("bash") => profile.path == ".bashrc",
+            Some("sh") => profile.path == ".profile",
+            Some("fish") => matches!(profile.root, ShellProfileRoot::Fish),
+            Some("nu" | "nushell") => profile.env_file == "env.nu",
+            _ => false,
+        };
+        if !relevant {
+            continue;
+        }
+        let path = resolve_profile_path(profile, &config.user_home);
+        let Ok(content) = std::fs::read_to_string(path) else { continue };
+        let env_file = config.dirs.config.join(profile.env_file);
+        let absolute = env_file.to_string();
+        let home_relative =
+            render_home_relative_path(env_file.as_path(), config.user_home.as_path());
+        let escape = match profile.env_file {
+            "env.fish" => escape_fish_double_quoted_string,
+            "env.nu" => escape_nu_double_quoted_string,
+            _ => escape_posix_double_quoted_string,
+        };
+        let escaped_relative = if profile.env_file == "env.nu" {
+            escape(&render_nu_path_ref(&home_relative))
+        } else {
+            escape_home_relative_double_quoted_path(&home_relative, escape)
+        };
+        let mut arguments = vec![
+            format!("\"{}\"", escape(&absolute)),
+            format!("'{absolute}'"),
+            absolute,
+            format!("\"{escaped_relative}\""),
+            format!("\"{}\"", escaped_relative.replacen("$HOME", "${HOME}", 1)),
+            render_nu_path_ref(&escaped_relative),
+        ];
+        if profile.env_file == "env.nu" {
+            arguments.push(format!("'{}'", render_nu_path_ref(&home_relative)));
+        }
+        for line in content.lines() {
+            let line = line.trim_start();
+            let Some(argument) = line.strip_prefix(". ").or_else(|| line.strip_prefix("source "))
+            else {
+                continue;
+            };
+            let argument = argument.trim_start();
+            if arguments.iter().any(|expected| {
+                argument.strip_prefix(expected).is_some_and(|rest| {
+                    rest.is_empty()
+                        || rest.starts_with(char::is_whitespace)
+                        || rest.starts_with(';')
+                })
+            }) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Print instructions for sourcing the environment files and adding bin to `PATH`.
 fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
-    // Use paths relative to $HOME. POSIX and Fish use $HOME. Nushell cannot
-    // expand $HOME in the parse-time `source` keyword, so use ~.
-    let env_path = env_dir.as_path().display().to_string();
-    let home = vp_shared::EnvConfig::get().user_home.as_path().display().to_string();
-    let (env_path, nu_env_path) = if let Some(suffix) = env_path.strip_prefix(&home) {
-        (format!("$HOME{suffix}"), format!("~{suffix}"))
-    } else {
-        (env_path.clone(), env_path)
-    };
-
     output::raw(&help::render_heading("Next Steps"));
-    output::raw("  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
-    output::raw("");
-    output::raw(&format!("  . \"{env_path}/env\""));
-    output::raw("");
-    output::raw("  For fish shell, add to ~/.config/fish/config.fish:");
-    output::raw("");
-    output::raw(&format!("  source \"{env_path}/env.fish\""));
-    output::raw("");
-    output::raw("  For Nushell, add to ~/.config/nushell/config.nu:");
-    output::raw("");
-    output::raw(&format!("  source '{nu_env_path}/env.nu'"));
-    output::raw("");
-    output::raw("  For PowerShell, add to your $PROFILE:");
-    output::raw("");
-    output::raw(&format!("  . \"{env_path}/env.ps1\""));
-    output::raw("");
-    output::raw("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
-
-    #[cfg(target_os = "macos")]
-    {
-        output::raw("  - macOS: Add to ~/.profile or use launchd");
+    let env = vp_shared::EnvConfig::get();
+    let explicit_shell = env.vp_shell.as_deref().and_then(|s| s.parse::<Shell>().ok());
+    // SHELL is a login-shell hint, not proof of the current shell or its startup mode.
+    let login_shell = if cfg!(unix) { std::env::var("SHELL").ok() } else { None };
+    let shell_name = env
+        .vp_shell
+        .as_deref()
+        .filter(|_| explicit_shell.is_some())
+        .or_else(|| login_shell.as_deref().and_then(|path| path.rsplit('/').next()));
+    let shell = explicit_shell.or_else(|| shell_name.and_then(|s| s.parse::<Shell>().ok()));
+    let shell_name = shell_name.map(str::to_ascii_lowercase);
+    let is_hint = explicit_shell.is_none() && shell.is_some();
+    let commands: &[(Shell, &str, Option<EnvShell>, &[&str])] = &[
+        (Shell::Posix, "Bash/Zsh", Some(EnvShell::Posix), &["sh", "bash", "zsh"]),
+        (Shell::Fish, "Fish", Some(EnvShell::Fish), &["fish"]),
+        (Shell::NuShell, "Nushell", Some(EnvShell::Nu), &["nu"]),
+        (Shell::PowerShell, "PowerShell", Some(EnvShell::Powershell), &["pwsh", "powershell"]),
+        (Shell::Cmd, "cmd.exe", None, &["cmd"]),
+    ];
+    let cwd = vt_path::current_dir().ok();
+    let default_shell = if cfg!(windows) { Shell::Cmd } else { Shell::Posix };
+    let mut shown = Vec::new();
+    if !is_hint {
+        output::raw("  Activate Vite+ in this terminal:");
     }
-
-    #[cfg(target_os = "linux")]
-    {
-        output::raw("  - Linux: Add to ~/.profile for display manager integration");
+    for &(kind, label, env_shell, binaries) in commands {
+        let show = match shell {
+            Some(selected) => selected == kind,
+            None => {
+                kind == default_shell
+                    || binaries.iter().any(|bin| {
+                        cwd.as_ref()
+                            .is_some_and(|cwd| vp_command::resolve_bin(bin, None, cwd).is_ok())
+                    })
+            }
+        };
+        if !show {
+            continue;
+        }
+        shown.push(kind);
+        let command = match env_shell {
+            Some(env_shell) => env_shell.source_command(env_dir),
+            None => format!(
+                "set \"PATH={};%PATH%;{}\"",
+                env.dirs.bin.to_string().replace('%', "%%"),
+                env.dirs.fallback_bin().to_string().replace('%', "%%")
+            ),
+        };
+        if is_hint {
+            let label = match shell_name.as_deref() {
+                Some("zsh") => "Zsh",
+                Some("bash") => "Bash",
+                Some("sh") => "sh",
+                _ => label,
+            };
+            output::raw(&format!("  For {label}, run:"));
+        }
+        if shell.is_some() {
+            output::raw(&format!("  {command}"));
+        } else {
+            output::raw(&format!("  {label}: {command}"));
+        }
     }
-
-    #[cfg(target_os = "windows")]
-    {
-        output::raw("  - Windows: System Properties -> Environment Variables -> Path");
+    output::raw("");
+    if shown.iter().any(|s| matches!(s, Shell::Posix | Shell::Fish | Shell::NuShell)) {
+        let conditional = is_hint || shell.is_none();
+        let configured = !conditional && has_configured_profile(&env);
+        if shell_name.as_deref() == Some("bash") {
+            output::raw(if conditional {
+                "  If your ~/.bashrc does not already load Vite+, add this command for interactive non-login Bash sessions."
+            } else if configured {
+                "  Or start an interactive non-login Bash shell to load your configured ~/.bashrc."
+            } else {
+                "  Add the command to ~/.bashrc for interactive non-login Bash sessions."
+            });
+            output::raw(
+                "  Login Bash shells must also load the command through their login profile.",
+            );
+        } else {
+            output::raw(match (shell_name.as_deref(), conditional, configured) {
+                (Some("zsh"), true, _) => {
+                    "  If your .zshrc does not already load Vite+, add this command."
+                }
+                (_, true, _) => {
+                    "  If your shell profile does not already load Vite+, add the command for your shell."
+                }
+                (_, _, true) => "  Or open a new terminal to load your configured shell profile.",
+                (Some("zsh"), _, _) => {
+                    "  Add the command to your .zshrc file to activate future Zsh terminals."
+                }
+                _ => {
+                    "  Add the command for your shell to its profile to activate future terminals."
+                }
+            });
+        }
     }
-
+    if shown.contains(&Shell::PowerShell) {
+        output::raw(if shell == Some(Shell::PowerShell) {
+            "  Add this command to $PROFILE if it is not already there, for future PowerShell sessions."
+        } else {
+            "  For PowerShell, add its command to $PROFILE if it is not already there."
+        });
+    }
+    if shown.contains(&Shell::Cmd) {
+        output::raw(
+            "  For future cmd.exe sessions, add these directories to your user PATH if missing:",
+        );
+        output::raw(&format!("  At the start: {}", env.dirs.bin.as_path().display()));
+        output::raw(&format!("  At the end: {}", env.dirs.fallback_bin().as_path().display()));
+        output::raw("  System Properties -> Environment Variables -> User variables -> Path");
+        output::raw("  Open a new terminal after updating PATH.");
+    }
     output::raw("");
     output::raw(&format!(
-        "  Restart your terminal and IDE, then run {} to verify.",
+        "  Restart an already-running IDE to load its environment. Run {} to verify.",
         help::accent_command("vp env doctor")
     ));
 }
@@ -1191,6 +1427,80 @@ mod tests {
         let trampoline = dir.join("vp-shim.exe");
         std::fs::write(&trampoline, b"fake-trampoline").unwrap();
         trampoline
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_configured_profile_checks_the_selected_shell_and_current_install() {
+        let temp = TempDir::new().unwrap();
+        let home = temp.path().join("user");
+        let vp_home = home.join(".vite-plus");
+        let zsh = temp.path().join("zsh");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&zsh).unwrap();
+        vp_shared::EnvConfig::with_vars(
+            [
+                ("HOME", home.as_os_str()),
+                ("USERPROFILE", home.as_os_str()),
+                ("VP_HOME", vp_home.as_os_str()),
+                ("VP_SHELL", std::ffi::OsStr::new("zsh")),
+                ("ZDOTDIR", zsh.as_os_str()),
+            ],
+            |config| {
+                assert!(!has_configured_profile(&config));
+                std::fs::write(home.join(".bashrc"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+                assert!(!has_configured_profile(&config), "Bash does not configure Zsh");
+                std::fs::write(zsh.join(".zshenv"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+                assert!(!has_configured_profile(&config), ".zshenv runs before login PATH setup");
+                let profile = zsh.join(".zshrc");
+                for line in [
+                    "# . \"$HOME/.vite-plus/env\"",
+                    ". \"$HOME/other-install/env\"",
+                    ". \"$HOME/.vite-plus/env.fish\"",
+                ] {
+                    std::fs::write(&profile, line).unwrap();
+                    assert!(!has_configured_profile(&config), "{line}");
+                }
+                for line in [
+                    ". \"$HOME/.vite-plus/env\"",
+                    "source \"${HOME}/.vite-plus/env\" # existing setup",
+                    ". ~/.vite-plus/env",
+                ] {
+                    std::fs::write(&profile, line).unwrap();
+                    assert!(has_configured_profile(&config), "{line}");
+                }
+                std::fs::remove_file(&profile).unwrap();
+                assert!(!has_configured_profile(&config), "Do not cache profile state");
+            },
+        );
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_profile_check_does_not_infer_unknown_shell_or_bash_startup_mode() {
+        let temp = TempDir::new().unwrap();
+        let home = temp.path().join("user");
+        let vp_home = home.join(".vite-plus");
+        let xdg = home.join(".config");
+        std::fs::create_dir_all(xdg.join("fish")).unwrap();
+        std::fs::write(xdg.join("fish/config.fish"), "source \"$HOME/.vite-plus/env.fish\"\n")
+            .unwrap();
+        std::fs::write(home.join(".bash_profile"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+        for shell in [None, Some("unknown"), Some("bash")] {
+            vp_shared::EnvConfig::with_vars(
+                [
+                    ("HOME", Some(home.as_os_str())),
+                    ("USERPROFILE", Some(home.as_os_str())),
+                    ("VP_HOME", Some(vp_home.as_os_str())),
+                    ("XDG_CONFIG_HOME", Some(xdg.as_os_str())),
+                    ("VP_SHELL", shell.map(std::ffi::OsStr::new)),
+                    ("SHELL", Some(std::ffi::OsStr::new("/bin/bash"))),
+                ],
+                |config| {
+                    assert!(!has_configured_profile(&config), "{shell:?}");
+                },
+            );
+        }
     }
 
     #[test]
@@ -1572,12 +1882,13 @@ mod tests {
                     "env file should contain a PATH cleanup loop"
                 );
                 assert!(
-                    env_content.contains("*\":${__vp_bin}:\"*)"),
+                    env_content.contains("*\":${__vp_dir}:\"*)"),
                     "env file should check for existing bin in PATH"
                 );
                 // Verify it re-prepends exactly once after cleanup.
                 assert!(
-                    env_content.contains("export PATH=\"${__vp_bin}${PATH:+:${PATH}}\""),
+                    env_content
+                        .contains("export PATH=\"${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}\""),
                     "env file should prepend bin to PATH after removing duplicates"
                 );
             },

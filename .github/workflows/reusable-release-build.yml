@@ -14,6 +14,11 @@ on:
         type: string
         required: false
         default: 'release'
+      docs-origin:
+        description: 'Documentation origin compiled into the native CLI, NAPI binding, and installer.'
+        type: string
+        required: false
+        default: 'https://viteplus.dev'
 
 jobs:
   build-rust:
@@ -25,6 +30,7 @@ jobs:
       RELEASE_BUILD: 'true'
       DEBUG: 'napi:*'
       VERSION: ${{ inputs.version }}
+      VITE_PLUS_DOCS_ORIGIN: ${{ inputs.docs-origin }}
     strategy:
       fail-fast: false
       matrix:
@@ -56,7 +62,7 @@ jobs:
       - name: Rustup Adds Target
         run: rustup target add ${{ matrix.settings.target }}
 
-      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       - name: Set build version
         shell: bash

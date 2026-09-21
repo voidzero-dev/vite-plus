@@ -7,7 +7,7 @@ use std::{path::Path, process::ExitCode};
 
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use vp_pm_cli::PackageManagerType;
-use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install};
+use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install, is_commit_preview_version};
 use vp_shared::{EnvConfig, env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -187,8 +187,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         .ok()
         .filter(|value| !value.is_empty())
         .or_else(|| {
-            version
-                .starts_with("0.0.0-commit.")
+            is_commit_preview_version(version)
                 .then(|| "https://registry-bridge.viteplus.dev/".to_string())
         });
     let registry = registry.as_deref();
@@ -239,7 +238,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
         if !skip_deps {
-            install::install_production_deps(&version_dir, registry).await?;
+            install::install_production_deps(&version_dir, registry, true).await?;
         }
     }
     #[cfg(windows)]
@@ -298,6 +297,12 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         config::save_config(&settings).await?;
     }
 
+    // Existing Windows installs also need the fallback directory in their persistent PATH.
+    #[cfg(windows)]
+    if in_place && std::env::var(env_vars::VP_SELF_SETUP_NO_MODIFY_PATH).as_deref() != Ok("1") {
+        shell::configure().await?;
+    }
+
     // 2. Activate a standalone download; an upgrade hook must not overwrite rollback history.
     if deploy {
         install::save_previous_version(&dirs.data).await?;
@@ -311,9 +316,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
 
     // 3. Run setup in this process. Spawning the unmarked binary here would reenter self-setup.
     tokio::fs::create_dir_all(&dirs.bin).await?;
-    // Always create and refresh shims, even in system-first mode; `vp env off` and per-tool preferences control runtime dispatch.
-    // VpDirs::bin is private by default, so replacing its shims leaves system-first tools elsewhere on PATH intact.
-    // Users explicitly pointing VpDirs::bin at a shared directory accept replacement of conflicting entries there.
+    // Setup places each tool according to its effective management mode.
     setup::execute_for_binary(binary.as_path(), true, true, false).await?;
     if deploy {
         let name = version_dir

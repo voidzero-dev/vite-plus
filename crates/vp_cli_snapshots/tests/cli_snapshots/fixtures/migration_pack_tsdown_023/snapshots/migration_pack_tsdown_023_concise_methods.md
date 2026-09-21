@@ -35,7 +35,11 @@ VITE+ - The Unified Toolchain for the Web
 ```
 import { defineConfig } from 'vite-plus/pack';
 
-export default defineConfig(() => ({ deps: { resolveDepSubpath: true },
+export default defineConfig(() => ({ deps: {
+    // tsdown <0.23 compatibility: resolve external dependency subpaths.
+    // Remove to preserve subpath imports as written (the new default).
+    // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+    resolveDepSubpath: true },
   entry: 'src/index.ts',
   unbundle: true,
   dts: { generator: 'oxc' },
@@ -91,7 +95,11 @@ This project is already using Vite+! Happy coding!
 ```
 import { defineConfig } from 'vite-plus/pack';
 
-export default defineConfig(() => ({ deps: { resolveDepSubpath: true },
+export default defineConfig(() => ({ deps: {
+    // tsdown <0.23 compatibility: resolve external dependency subpaths.
+    // Remove to preserve subpath imports as written (the new default).
+    // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+    resolveDepSubpath: true },
   entry: 'src/index.ts',
   unbundle: true,
   dts: { generator: 'oxc' },

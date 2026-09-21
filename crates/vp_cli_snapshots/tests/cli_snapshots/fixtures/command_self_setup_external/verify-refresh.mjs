@@ -44,9 +44,13 @@ function createEnvironment(directory) {
     VP_HOME: home,
     VP_SELF_SETUP_NO_MODIFY_PATH: '1',
     NPM_CONFIG_REGISTRY: 'http://127.0.0.1:9',
-    PATH: [path.join(home, 'bin'), path.join(directory, 'brew/bin'), system, env.PATH].join(
-      path.delimiter,
-    ),
+    PATH: [
+      path.join(home, 'bin'),
+      path.join(directory, 'brew/bin'),
+      system,
+      env.PATH,
+      path.join(home, 'fallback-bin'),
+    ].join(path.delimiter),
   };
 }
 
@@ -69,6 +73,7 @@ function verifyDoctor(source) {
   const env = createEnvironment(directory);
   const publicBin = path.join(directory, 'brew/bin');
   const shimBin = path.join(env.VP_HOME, 'bin');
+  const fallbackBin = path.join(env.VP_HOME, 'fallback-bin');
   const systemBin = path.join(directory, 'system/bin');
   fs.mkdirSync(publicBin, { recursive: true });
   fs.symlinkSync(binary, path.join(publicBin, 'vp'));
@@ -104,7 +109,7 @@ function verifyDoctor(source) {
         binary,
         ['env', 'doctor', 'node'],
         directory,
-        { ...env, PATH: paths.join(path.delimiter) },
+        { ...env, PATH: [...paths, fallbackBin].join(path.delimiter) },
         status,
       );
     } finally {

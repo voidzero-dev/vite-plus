@@ -1,0 +1,9 @@
+{
+  "name": "command-rebuild-yarn4",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "yarn@4.10.3",
+  "scripts": {
+    "postinstall": "node -e \"require('node:fs').appendFileSync('builds.txt', 'built\\n')\""
+  }
+}

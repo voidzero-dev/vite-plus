@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+autoInstallPeers: true
+hoist: false
+peerDependencyRules:
+  allowAny:
+    - vite
+overrides:
+  vite@*: npm:@voidzero-dev/vite-plus-core@latest

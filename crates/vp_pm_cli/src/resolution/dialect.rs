@@ -56,6 +56,11 @@ impl Npm {
     pub(crate) fn unknown_version() -> Self {
         Self { version: None }
     }
+
+    /// Whether npm is v12 or newer, treating unknown versions as current.
+    pub(crate) fn is_npm_12_or_newer(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(12, 0, 0))
+    }
 }
 
 impl PackageManagerDialect for Npm {

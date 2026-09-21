@@ -344,7 +344,7 @@ Examples:
         scope: Option<String>,
     },
 
-    /// Create or update shims in VP_HOME/bin
+    /// Create or update managed and system-first tool shims
     Setup {
         /// Force refresh shims even if they exist
         #[arg(long)]

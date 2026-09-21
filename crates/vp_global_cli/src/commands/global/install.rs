@@ -1295,11 +1295,12 @@ mod tests {
                     assert_eq!(
                         contents,
                         format!(
-                            "{}\nlayout={}\ndata={}\ncache={}\n",
+                            "{}\nlayout={}\ndata={}\ncache={}\nbin={}\n",
                             vp_shared::SHIM_POINTER_HEADER,
                             dirs.layout().as_str(),
                             dirs.data.as_path().display(),
-                            dirs.cache.as_path().display()
+                            dirs.cache.as_path().display(),
+                            dirs.bin.as_path().display()
                         )
                     );
                 }

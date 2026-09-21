@@ -4,8 +4,6 @@ use vp_cli_help::{HelpRow, HelpSection, help_doc_from_command, print_help_doc};
 
 use crate::js_command_args::parser::{CliParseError, ParseResult, help_arg, parse_args};
 
-const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";
-
 #[derive(Debug, Args)]
 struct HooksCliArgs {
     #[command(subcommand)]
@@ -93,7 +91,10 @@ pub fn parse_hooks_args(argv: Vec<String>) -> ParseHooksArgsOutcome {
         ParseResult::Help(command) => {
             let command = command_for_help(*command, &help_argv);
             let is_top_level = command.get_name() == "vp hooks";
-            let mut doc = help_doc_from_command(command, Some(DOCUMENTATION_URL.into()));
+            let mut doc = help_doc_from_command(
+                command,
+                Some(vp_shared::documentation_url("/guide/commit-hooks").into()),
+            );
             if is_top_level {
                 doc.sections.push(HelpSection::Rows {
                     title: "Environment".into(),

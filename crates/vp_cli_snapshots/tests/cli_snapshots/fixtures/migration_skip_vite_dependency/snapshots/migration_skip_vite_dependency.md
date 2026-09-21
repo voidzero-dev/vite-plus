@@ -1,5 +1,10 @@
 # migration_skip_vite_dependency
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
 migration should skip rewriting vite imports when vite is in dependencies
