@@ -626,8 +626,13 @@ impl CaseHome {
             tool_dirs.push(case_root.to_path_buf());
         }
 
+        let path_env = compose_path_env(&path_dirs);
+        let mut entries: Vec<_> = std::env::split_paths(&path_env).collect();
+        let fallback_bin = self.vp_home().join("fallback-bin");
+        entries.push(fallback_bin.clone());
+        tool_dirs.push(fallback_bin);
         Ok(CaseInstall {
-            path_env: compose_path_env(&path_dirs),
+            path_env: std::env::join_paths(entries).unwrap(),
             tool_dirs,
             vpt: runtime.vpt.clone(),
             sh: runtime.sh.clone(),
@@ -705,8 +710,7 @@ impl CaseHome {
             ));
         }
 
-        // Cases start from fresh-install consent. A dedicated first-use fixture
-        // removes this config before exercising upgrade compatibility.
+        // Cases start with explicit package-manager preferences, as fresh installations do.
         let output = std::process::Command::new(vp)
             .args(["env", "on", "pm"])
             .env_clear()

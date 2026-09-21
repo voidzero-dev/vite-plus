@@ -432,6 +432,13 @@ pub fn redact_output(
     paths: &[(&str, &'static str)],
     normalize_separators: bool,
 ) -> String {
+    // Piped Windows commands retain CRLF, unlike the rendered PTY output.
+    {
+        use cow_utils::CowUtils as _;
+        if let Cow::Owned(replaced) = output.as_str().cow_replace("\r\n", "\n") {
+            output = replaced;
+        }
+    }
     // ConPTY repaints rows padded to the full grid width with explicit
     // spaces when a second console client attaches to the terminal. Trailing
     // blanks are never meaningful in a rendered grid, so trim every row on

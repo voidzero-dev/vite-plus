@@ -320,8 +320,12 @@ Files in `<CONFIG>`, including `config.json`, must contain portable user
 preferences. Store machine-specific paths, downloaded payloads, caches, and
 session state in the local categories.
 
-The generated `<CONFIG>/env*` files add the resolved `<BIN>` to `PATH`. They do
-not export the internal `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group.
+The generated `<CONFIG>/env*` files prepend the resolved `<BIN>` and append
+`<DATA>/fallback-bin` to `PATH`. System-first Node.js and package-manager shims
+live in the fallback directory; reaching any of these shims selects its managed
+tool. `vp env setup --refresh` and mode changes reconcile placement from config.
+The fallback directory stays under the owned data root when `<BIN>` is shared.
+The files do not export the internal `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group.
 Each process resolves the split layout from its current environment. The files
 keep an explicit `VP_HOME` only when they must preserve a custom monolithic
 root. Features must not store machine identity or durable state in these files.
@@ -431,8 +435,9 @@ permission. Without permission, the installer keeps the foreign entry.
 shim only after the ownership check identifies it as a Vite+ shim.
 
 Windows sidecar files record ownership and tell the trampoline which layout to
-preserve. The versioned sidecar records the layout mode, data root, and cache
-root. A split trampoline sets `VP_DATA_DIR`, `VP_BIN_DIR`, and `VP_CACHE_DIR`
+preserve. The versioned sidecar records the layout mode, data root, bin root,
+and cache root. Older sidecars without a bin root use their executable parent;
+fallback trampolines record the main bin root explicitly. A split trampoline sets `VP_DATA_DIR`, `VP_BIN_DIR`, and `VP_CACHE_DIR`
 for its child. A single-root trampoline sets `VP_HOME`. It does not infer the
 mode from path equality because an explicit split layout can also set `<BIN>`
 to `<DATA>/bin`.

@@ -222,11 +222,15 @@ async fn check_shims(scope: EnvScope) -> bool {
         return false;
     }
 
+    let settings = match load_config().await {
+        Ok(settings) => settings,
+        Err(_) => return false,
+    };
     let mut missing = Vec::new();
 
     let tools = selected_shim_tools(scope);
     for tool in &tools {
-        let shim_path = bin_dir.join(shim_filename(tool));
+        let shim_path = super::setup::shim_dir(&settings, tool).join(shim_filename(tool));
         if !tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             missing.push(*tool);
         }
@@ -556,16 +560,34 @@ async fn check_path(scope: EnvScope) -> bool {
         return false;
     }
 
+    let fallback = vp_shared::EnvConfig::get().dirs.fallback_bin();
+    if !paths.iter().any(|path| path == fallback.as_path()) {
+        print_check(&style(output::CROSS).red().to_string(), "Fallback dir", "not in PATH");
+        print_path_fix(&vp_shared::EnvConfig::get().dirs.config);
+        return false;
+    }
+    let settings = match load_config().await {
+        Ok(settings) => settings,
+        Err(_) => return false,
+    };
+
     // Show which tool would be executed for each shim
     for tool in selected_shim_tools(scope) {
         if let Some(tool_path) = find_in_path(tool) {
-            let expected = bin_dir.join(shim_filename(tool));
+            let expected_dir = super::setup::shim_dir(&settings, tool);
+            let expected = expected_dir.join(shim_filename(tool));
             let display = abbreviate_home(&tool_path.display().to_string());
             if tool_path == expected.as_path() {
                 print_check(
                     &style(output::CHECK).green().to_string(),
                     tool,
                     &format!("{display} {}", style("(vp shim)").dim()),
+                );
+            } else if expected_dir == fallback {
+                print_check(
+                    &style(output::CHECK).green().to_string(),
+                    tool,
+                    &format!("{display} (system)"),
                 );
             } else {
                 print_check(

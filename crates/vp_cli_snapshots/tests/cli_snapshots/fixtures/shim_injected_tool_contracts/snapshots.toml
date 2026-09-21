@@ -41,7 +41,7 @@ steps = [
   { argv = ["node", "setup-system-npm.cjs"], snapshot = false },
   { argv = ["vp", "env", "off", "npm"], snapshot = false },
   { argv = ["vp", "env", "off", "node"], snapshot = false },
-  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-npm${PATH_SEPARATOR}/usr/bin${PATH_SEPARATOR}/bin"]], comment = "An absent system alias resolves normally instead of entering injected-tool passthrough" },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-npm${PATH_SEPARATOR}/usr/bin${PATH_SEPARATOR}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin"]], comment = "An absent system alias resolves normally instead of entering injected-tool passthrough" },
 ]
 
 [[case]]

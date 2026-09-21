@@ -476,7 +476,7 @@ jobs:
           test "$CONFIG_DIR" = "$(dump_dir config)"
           test "$STATE_DIR" = "$(dump_dir state)"
 
-      - name: Custom shared bin refreshes Node even in system-first mode
+      - name: Custom shared bin preserves Node in system-first mode
         run: |
           set -euo pipefail
           FOREIGN=$(mktemp -d)
@@ -492,7 +492,7 @@ jobs:
           export VP_BIN_DIR="$FOREIGN/.local/bin"
           export VP_DATA_DIR="$FOREIGN/.local/share/vite-plus"
           export VP_CACHE_DIR="$FOREIGN/.cache/vite-plus"
-          # Explicitly sharing the Vite+ bin directory accepts replacement there; system-first tools elsewhere stay intact.
+          # System-first shims belong under data, leaving shared-bin tools intact.
           export VP_NODE_MANAGER=no
           export PATH="$FOREIGN/user-bin:$PATH"
           unset VP_HOME
@@ -500,8 +500,10 @@ jobs:
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-foreign-node bash packages/cli/install.sh
 
           test ! -d "$FOREIGN/.vite-plus"
-          test -f "$FOREIGN/.local/bin/node"
-          test -L "$FOREIGN/.local/bin/node"
+          test "$("$FOREIGN/.local/bin/node")" = "foreign-node"
+          # Probe the installed launcher without downloading a managed runtime.
+          FALLBACK_BIN=$(VP_DUMP_DIRS=1 "$VP_DATA_DIR/fallback-bin/node" | awk -F '\t' '$1 == "bin" { print $2 }')
+          test "$FALLBACK_BIN" = "$VP_BIN_DIR"
           test "$("$FOREIGN/user-bin/node")" = "foreign-node"
 
       - name: Existing ~/.vite-plus is reused
@@ -1759,7 +1761,7 @@ jobs:
           if (Test-Path $legacyRoot) { throw "implode left the monolithic root" }
           if ($removingRoots.Count -ne 0) { throw "implode left a renamed monolithic root" }
 
-      - name: PowerShell installer refreshes shared-bin Node even in system-first mode
+      - name: PowerShell installer preserves shared-bin Node in system-first mode
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -1787,18 +1789,28 @@ jobs:
           $env:VP_LOCAL_TGZ = $fakeTgz
           $env:VP_SKIP_DEPS_INSTALL = "1"
           $env:VP_VERSION = "local-foreign-node"
-          # Explicitly sharing the Vite+ bin directory accepts replacement there; system-first tools elsewhere stay intact.
+          # System-first shims belong under data, leaving shared-bin tools intact.
           $env:VP_NODE_MANAGER = "no"
           $env:CI = "true"
 
           & ./packages/cli/install.ps1
 
-          $trampoline = Join-Path $data "current/bin/vp-shim.exe"
-          if ((Get-FileHash $node).Hash -ne (Get-FileHash $trampoline).Hash) {
-            Write-Error "install.ps1 did not refresh node.exe in the configured bin directory"
+          if ([System.IO.File]::ReadAllText($node) -ne "foreign-node") {
+            Write-Error "install.ps1 replaced the foreign Node in the shared bin directory"
           }
-          if ([System.IO.File]::ReadAllText($pointer) -ne [System.IO.File]::ReadAllText((Join-Path $bin "vp.shim"))) {
-            Write-Error "install.ps1 did not refresh the Node shim pointer"
+          if ([System.IO.File]::ReadAllText($pointer) -ne "$data`n") {
+            Write-Error "install.ps1 replaced the foreign Node pointer"
+          }
+          $fallbackNode = Join-Path $data "fallback-bin/node.exe"
+          # Probe the installed launcher without downloading a managed runtime.
+          $env:VP_DUMP_DIRS = "1"
+          try {
+            $dirs = @(& $fallbackNode)
+            if ($LASTEXITCODE -ne 0 -or $dirs -notcontains "bin`t$bin") {
+              Write-Error "The fallback Node launcher did not preserve the main bin directory"
+            }
+          } finally {
+            Remove-Item Env:VP_DUMP_DIRS
           }
           if ([System.IO.File]::ReadAllText($externalNode) -ne "external-node") {
             Write-Error "install.ps1 replaced node.exe outside the configured bin directory"

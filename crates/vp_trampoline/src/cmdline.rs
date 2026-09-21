@@ -23,7 +23,7 @@ pub const SHIM_POINTER_HEADER: &str = "vite-plus-shim-v1";
 #[derive(Debug, PartialEq, Eq)]
 pub enum ShimLayout<'a> {
     SingleRoot,
-    Split { cache: &'a str },
+    Split { cache: &'a str, bin: Option<&'a str> },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -48,11 +48,14 @@ pub fn parse_shim_pointer(bytes: &[u8]) -> Option<ShimPointer<'_>> {
     let mut layout = None;
     let mut data = None;
     let mut cache = None;
+    let mut bin = None;
     for line in lines {
         if let Some(value) = line.strip_prefix("layout=") {
             layout = Some(value);
         } else if let Some(value) = line.strip_prefix("data=") {
             data = (!value.is_empty()).then_some(value);
+        } else if let Some(value) = line.strip_prefix("bin=") {
+            bin = (!value.is_empty()).then_some(value);
         } else if let Some(value) = line.strip_prefix("cache=") {
             cache = (!value.is_empty()).then_some(value);
         }
@@ -61,7 +64,7 @@ pub fn parse_shim_pointer(bytes: &[u8]) -> Option<ShimPointer<'_>> {
     let data = data?;
     let layout = match layout? {
         "single-root" => ShimLayout::SingleRoot,
-        "split" => ShimLayout::Split { cache: cache? },
+        "split" => ShimLayout::Split { cache: cache?, bin },
         _ => return None,
     };
     Some(ShimPointer { data, layout })
@@ -291,7 +294,7 @@ mod tests {
             ),
             Some(ShimPointer {
                 data: r"D:\data",
-                layout: ShimLayout::Split { cache: r"C:\cache" },
+                layout: ShimLayout::Split { cache: r"C:\cache", bin: None },
             })
         );
     }

@@ -912,11 +912,14 @@ fn remove_vite_plus_lines(
 /// Remove the vp bin directory from the Windows User PATH via PowerShell.
 #[cfg(windows)]
 fn remove_windows_path_entry(bin_path: &vt_path::AbsolutePath) -> std::io::Result<()> {
-    let bin_str = bin_path.as_path().to_string_lossy();
+    let bin_str = super::env::setup::escape_powershell_single_quoted_string(&bin_path.to_string());
+    let fallback = super::env::setup::escape_powershell_single_quoted_string(
+        &vp_shared::EnvConfig::get().dirs.fallback_bin().to_string(),
+    );
     let script = vt_str::format!(
         "[Environment]::SetEnvironmentVariable('Path', \
          ([Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | \
-         Where-Object {{ $_ -ne '{bin_str}' }}) -join ';', 'User')"
+         Where-Object {{ $_ -ne '{bin_str}' -and $_ -ne '{fallback}' }}) -join ';', 'User')"
     );
     let status = std::process::Command::new("powershell")
         .args(["-NoProfile", "-Command", &script])

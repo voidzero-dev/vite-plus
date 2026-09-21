@@ -18,7 +18,7 @@
 ## `vp env off node`
 
 
-## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-npm${PATH_SEPARATOR}/usr/bin${PATH_SEPARATOR}/bin vp install`
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-npm${PATH_SEPARATOR}/usr/bin${PATH_SEPARATOR}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin vp install`
 
 An absent system alias resolves normally instead of entering injected-tool passthrough
 

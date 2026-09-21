@@ -23,8 +23,8 @@ Configuration
 PATH
   ✓ vp                ~/.vite-plus/bin/vp
   ✓ Shim dir          ~/.vite-plus/bin
-  ✓ pnpm              ~/.vite-plus/bin/pnpm (vp shim)
-  ✓ pnpx              ~/.vite-plus/bin/pnpx (vp shim)
+  ✓ pnpm              <workspace>/system-bin/pnpm (system)
+  ✓ pnpx              ~/.vite-plus/fallback-bin/pnpx (vp shim)
 
 Package Manager Resolution
     Source            system PATH

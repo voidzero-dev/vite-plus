@@ -467,10 +467,14 @@ pub fn run() -> ! {
         ShimLayout::SingleRoot => {
             set_env(w!("VP_HOME"), b"VP_HOME", Some(&data));
         }
-        ShimLayout::Split { cache } => {
+        ShimLayout::Split { cache, bin } => {
             let Some(cache) = utf8_path(cache) else {
                 fail_invalid_pointer(&pointer_path);
             };
+            // A fallback shim is outside the main bin directory. Older sidecars use the executable parent.
+            let bin = bin
+                .map(|bin| utf8_path(bin).unwrap_or_else(|| fail_invalid_pointer(&pointer_path)));
+            let bin_dir = bin.as_deref().unwrap_or(bin_dir);
             set_env(w!("VP_HOME"), b"VP_HOME", None);
             set_env(w!("VP_DATA_DIR"), b"VP_DATA_DIR", Some(&data));
             set_env(w!("VP_BIN_DIR"), b"VP_BIN_DIR", Some(bin_dir));

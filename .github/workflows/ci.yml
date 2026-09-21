@@ -440,11 +440,18 @@ jobs:
       - name: Install Global CLI vp
         run: |
           pnpm bootstrap-cli:ci
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
-          else
-            echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+          if [[ "$RUNNER_OS" != "Windows" ]]; then
+            . "$HOME/.vite-plus/env"
+            # GITHUB_PATH prepends entries, but fallback shims must remain last.
+            echo "PATH=$PATH" >> "$GITHUB_ENV"
           fi
+
+      - name: Load Windows CLI environment
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          . (Join-Path $HOME '.vite-plus/env.ps1')
+          "PATH=$env:Path" >> $env:GITHUB_ENV
 
       - name: Verify vp installation
         run: |
