@@ -18,6 +18,8 @@
 mod exit_code;
 mod flavor;
 mod redact;
+mod registry_pack;
+mod report;
 mod shard;
 
 use std::{
@@ -1193,11 +1195,13 @@ fn run_case(
     runtime: &FlavorRuntime,
     snapshot_name: &str,
     local_registry_pack: Option<&Path>,
+    report: &report::Report,
 ) -> Result<(), String> {
     let snapshots = snapshot_test::Snapshots::new(fixture_path.join("snapshots"));
 
     // Copy the fixture to a per-case staging directory so the test runs in
     // isolation and workspace-root discovery doesn't walk past the fixture.
+    let staging_phase = report.phase("fixture-staging");
     let case_root = tmpdir.join(format!("{fixture_name}_case_{case_index}_{}", flavor.as_str()));
     let stage = case_root.join("workspace");
     std::fs::create_dir_all(&stage).unwrap();
@@ -1211,8 +1215,11 @@ fn run_case(
         .copy_tree(fixture_path, &stage)
         .unwrap();
 
+    drop(staging_phase);
+    let setup_phase = report.phase("case-setup");
     let case_home = CaseHome::provision(&case_root, case.seed_runtime);
     let case_install = case_home.provision_vite_plus(flavor, runtime)?;
+    drop(setup_phase);
 
     let mut case_env = baseline_env(&case_home, &case_install);
     for key in &case.unset_env {
@@ -1232,7 +1239,8 @@ fn run_case(
     // fold its registry env into every step. Held to the end of the case so
     // its teardown removes the throwaway package-manager caches. Registry env
     // never sets PATH, so folding it in after `case_path` is derived is safe.
-    let _registry = if case.local_registry {
+    let registry_phase = report.phase("registry-startup");
+    let registry = if case.local_registry {
         let pack_dir = local_registry_pack
             .ok_or("internal error: local-registry case reached run_case without a packed dir")?;
         // Prefer the seed runtime's real node binary over the case's node
@@ -1250,6 +1258,8 @@ fn run_case(
     } else {
         None
     };
+
+    drop(registry_phase);
 
     // Installs through the local registry are slower than pure vp commands, so
     // local-registry steps get a 120s default (still overridable per step);
@@ -1292,6 +1302,11 @@ fn run_case(
         let step_env: &BTreeMap<String, OsString> = &step_env;
         let timeout = step.timeout(step_default_timeout);
 
+        let execution_phase = report.phase(format!(
+            "step-{}: {}",
+            step_index + 1,
+            step.display_command_line(&case.cwd)
+        ));
         let (termination_state, raw_output) = if step.tty {
             'tty: {
                 let mut cmd = CommandBuilder::new(&program);
@@ -1430,6 +1445,10 @@ fn run_case(
             (state, block)
         };
 
+        drop(execution_phase);
+        let rendering_phase = report.phase(format!("render-step-{}", step_index + 1));
+        report.capture(&step.display_command_line(&case.cwd), &raw_output);
+
         // Blank line separator before every `##`.
         doc.push('\n');
         doc.push_str("## `");
@@ -1478,6 +1497,8 @@ fn run_case(
             doc.push_str(&redacted);
         }
 
+        drop(rendering_phase);
+
         // Shell-like `&&` semantics with line boundaries: a failing step
         // skips the rest of its line, up to and including the next
         // continue-on-failure step, then the following line resumes.
@@ -1504,6 +1525,8 @@ fn run_case(
         step_index += 1;
     }
 
+    report.actual(&doc);
+    let cleanup_phase = report.phase("case-cleanup");
     // Cleanup steps: best-effort, never snapshotted. Per-step envs apply
     // here too: cleanup often depends on the same PATH/prefix overrides as
     // the step it tears down.
@@ -1529,11 +1552,15 @@ fn run_case(
         }
     }
 
+    drop(registry);
+    drop(cleanup_phase);
+
     // Deferred so the cleanup above always runs, even for hung steps.
     if let Some(error) = timeout_error {
         return Err(error);
     }
 
+    let _comparison_phase = report.phase("snapshot-comparison");
     snapshots.check_snapshot(snapshot_name, &doc)
 }
 
@@ -1614,6 +1641,24 @@ fn case_needs_isolation(case: &Case) -> bool {
 }
 
 fn main() {
+    let args = libtest_mimic::Arguments::from_args();
+    // A unique process directory avoids collisions between nextest workers and
+    // repeated trials (for example the two Windows PowerShell versions in CI).
+    let artifacts = if args.list {
+        None
+    } else {
+        std::env::var_os("VP_SNAP_ARTIFACTS_DIR").map(|root| {
+            std::fs::create_dir_all(&root).expect("failed to create snapshot artifact directory");
+            tempfile::Builder::new()
+                .prefix("run-")
+                .tempdir_in(root)
+                .expect("failed to create process artifact directory")
+                .keep()
+        })
+    };
+    let run_report =
+        report::Report::new(artifacts.as_ref().map(|dir| dir.join("runner")), "runner".into());
+    let discovery_phase = run_report.phase("discovery");
     let tmp_dir = tempfile::tempdir().unwrap();
     // dunce, not std: std's canonicalize returns a `\\?\` verbatim path on
     // Windows, and CMD.EXE (which runs the local flavor's .cmd shims)
@@ -1654,8 +1699,6 @@ fn main() {
     // run in isolation; see `EXECUTION_GATE`. This replaces the old
     // Linux-wide `--test-threads=1`, which serialized the entire suite to
     // protect a handful of ctrl-c cases.
-    let args = libtest_mimic::Arguments::from_args();
-
     // `VP_SNAP_SKIP_FLAVORS=local` (comma-separated) skips registering trials
     // for a flavor entirely; CI legs that don't build the JS CLI use it.
     let skip_flavors: Vec<String> = std::env::var("VP_SNAP_SKIP_FLAVORS")
@@ -1670,9 +1713,9 @@ fn main() {
         run_root: Arc<Path>,
         global: std::sync::OnceLock<Result<FlavorRuntime, String>>,
         local: std::sync::OnceLock<Result<FlavorRuntime, String>>,
-        /// Packed checkout packages (vite-plus, @voidzero-dev/vite-plus-core),
-        /// produced once on the first local-registry case and shared by every
-        /// per-case registry via `SNAP_LOCAL_VP_PACKAGES_DIR`.
+        /// Packed checkout packages, prepared once per process by default.
+        /// VP_SNAP_PACKAGES_DIR also shares them across nextest processes;
+        /// this cell avoids revalidating the directory for each local trial.
         local_registry_pack: std::sync::OnceLock<Result<Arc<Path>, String>>,
     }
     impl LazyRuntimes {
@@ -1687,31 +1730,36 @@ fn main() {
         /// Packs the checkout packages once and returns the shared dir. Reuses
         /// `local-npm-registry.ts --pack-to` so the pack logic lives in one
         /// place (the same helper the tool and ecosystem-ci use).
-        fn local_registry_pack(&self) -> Result<Arc<Path>, String> {
+        fn local_registry_pack(&self, report: &report::Report) -> Result<Arc<Path>, String> {
             self.local_registry_pack
                 .get_or_init(|| {
                     let node = which::which("node")
                         .map_err(|e| format!("`node` not found on PATH (needed to pack): {e}"))?;
                     let repo_root = flavor::repo_root();
                     let script = repo_root.join("packages/tools/src/local-npm-registry.ts");
-                    let dest = self.run_root.join("local-registry-packages");
-                    std::fs::create_dir_all(&dest)
-                        .map_err(|e| format!("failed to create pack dir: {e}"))?;
-                    // Inherit the runner's environment so the packer finds
-                    // `pnpm` and `node` the same way a developer would.
-                    let output = std::process::Command::new(&node)
-                        .arg(&script)
-                        .arg("--pack-to")
-                        .arg(&dest)
-                        .current_dir(&repo_root)
-                        .output()
-                        .map_err(|e| format!("failed to run local-registry pack: {e}"))?;
-                    if !output.status.success() {
-                        return Err(format!(
-                            "packing checkout packages failed:\n{}",
-                            String::from_utf8_lossy(&output.stderr)
-                        ));
-                    }
+                    let root = std::env::var_os("VP_SNAP_PACKAGES_DIR").map_or_else(
+                        || self.run_root.join("local-registry-packages"),
+                        PathBuf::from,
+                    );
+                    let dest = registry_pack::get_or_prepare(&root, &repo_root, |dest| {
+                        let _packing_phase = report.phase("registry-pack");
+                        // Inherit the runner environment so pnpm and node resolve
+                        // just as they do for a developer's normal package build.
+                        let output = std::process::Command::new(&node)
+                            .arg(&script)
+                            .arg("--pack-to")
+                            .arg(dest)
+                            .current_dir(&repo_root)
+                            .output()
+                            .map_err(|e| format!("failed to run local-registry pack: {e}"))?;
+                        if !output.status.success() {
+                            return Err(format!(
+                                "packing checkout packages failed:\n{}",
+                                String::from_utf8_lossy(&output.stderr)
+                            ));
+                        }
+                        Ok(())
+                    })?;
                     Ok(Arc::from(dest.as_path()))
                 })
                 .clone()
@@ -1775,29 +1823,29 @@ fn main() {
                 let isolated = case_needs_isolation(&case);
                 let timings = Arc::clone(&timings);
                 let timing_name = trial_name.clone();
+                let artifact_dir = artifacts
+                    .as_ref()
+                    .map(|dir| dir.join("cases").join(&*fixture_name).join(&snapshot_name));
                 tests.push(
                     libtest_mimic::Trial::test(trial_name, move || {
-                        // Hold the execution lease for the whole case: shared
-                        // (parallel) unless the case needs isolation. Acquired
-                        // before timing so the reported duration is the case's
-                        // own work, not time spent waiting for the lease.
+                        let report = report::Report::new(artifact_dir, timing_name.clone());
+                        let gate_phase = report.phase("gate-wait");
+                        // Keep the console's case duration independent of lock
+                        // waiting; the artifact records that wait separately.
                         let _gate = acquire_gate(isolated);
+                        drop(gate_phase);
                         let started = std::time::Instant::now();
-                        let result = (|| -> Result<(), libtest_mimic::Failed> {
-                            let runtime = match runtimes.get(flavor) {
-                                Ok(runtime) => runtime,
-                                Err(message) => return Err(message.clone().into()),
-                            };
-                            // Pack the checkout once, lazily, only when a
-                            // local-registry case actually runs.
+                        let result = (|| -> Result<(), String> {
+                            let runtime_phase = report.phase("flavor-setup");
+                            let runtime = runtimes.get(flavor).as_ref().map_err(Clone::clone)?;
+                            drop(runtime_phase);
+                            let pack_phase = report.phase("registry-pack-or-reuse");
                             let local_registry_pack = if case.local_registry {
-                                match runtimes.local_registry_pack() {
-                                    Ok(dir) => Some(dir),
-                                    Err(message) => return Err(message.into()),
-                                }
+                                Some(runtimes.local_registry_pack(&report)?)
                             } else {
                                 None
                             };
+                            drop(pack_phase);
                             run_case(
                                 &tmp_dir_path,
                                 &fixture_path,
@@ -1808,11 +1856,15 @@ fn main() {
                                 runtime,
                                 &snapshot_name,
                                 local_registry_pack.as_deref(),
+                                &report,
                             )
-                            .map_err(Into::into)
                         })();
                         timings.lock().unwrap().push((timing_name, started.elapsed()));
-                        result
+                        let artifact_result = report.finish(
+                            result.as_ref().err().map(String::as_str),
+                            Some(&fixture_path.join("snapshots").join(&snapshot_name)),
+                        );
+                        result.and(artifact_result).map_err(Into::into)
                     })
                     .with_ignored_flag(ignored),
                 );
@@ -1825,7 +1877,10 @@ fn main() {
         tests = shard::select(tests, shard).unwrap_or_else(|error| panic!("{error}"));
     }
 
+    drop(discovery_phase);
+    let execution_phase = run_report.phase("tests");
     let conclusion = libtest_mimic::run(&args, tests);
+    drop(execution_phase);
 
     // Report each case's wall time (slowest first). Skipped for `--list`,
     // which runs nothing.
@@ -1842,6 +1897,11 @@ fn main() {
 
     // exit() never returns, so the staged run tree must be dropped first or
     // every run would leave its full tempdir behind.
+    let cleanup_phase = run_report.phase("run-cleanup");
     drop(tmp_dir);
+    drop(cleanup_phase);
+    run_report
+        .finish(conclusion.has_failed().then_some("one or more snapshot tests failed"), None)
+        .expect("failed to write runner timing artifact");
     conclusion.exit();
 }

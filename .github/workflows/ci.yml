@@ -970,6 +970,9 @@ jobs:
       - name: Build snapshot test binaries
         run: cargo test -p vp_cli_snapshots --no-run --message-format=json > "$RUNNER_TEMP/snapshot-test-build.json"
 
+      - name: Test snapshot runner utilities
+        run: cargo test -p vp_cli_snapshots --test redact_unit --test shard_unit --test registry_pack_unit --test report_unit
+
       - name: Package CLI test binaries
         run: |
           artifact_dir="$(mktemp -d)"
@@ -1110,6 +1113,16 @@ jobs:
           CARGO_MANIFEST_DIR: ${{ github.workspace }}/crates/vp_cli_snapshots
           CARGO_BIN_EXE_vpt: ${{ github.workspace }}/target/snapshot-tests/vpt
           VP_SNAP_SHARD: ${{ matrix.shard }}/3
+          VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
+
+      - name: Upload snapshot diagnostics and timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snapshot-diagnostics-${{ matrix.target }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/snapshot-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Runs the PTY snapshot suite (crates/vp_cli_snapshots) on Windows with
   # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
@@ -1256,8 +1269,20 @@ jobs:
           exit "$test_exit"
         env:
           RUST_BACKTRACE: '1'
+          # Share immutable tarballs across nextest processes in this job.
+          VP_SNAP_PACKAGES_DIR: ${{ runner.temp }}/snapshot-packages
+          VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
           # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
+
+      - name: Upload snapshot diagnostics and timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snapshot-diagnostics-windows-${{ matrix.shard }}
+          path: ${{ runner.temp }}/snapshot-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
 
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
