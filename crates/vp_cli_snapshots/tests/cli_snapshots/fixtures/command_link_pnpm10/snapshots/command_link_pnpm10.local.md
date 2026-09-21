@@ -51,7 +51,7 @@ Packages: -1
 -
 
 dependencies:
-- testnpm2 1.0.1
+- testnpm2
  testnpm2 1.0.0 <- ../test-lib-pnpm
 ```
 

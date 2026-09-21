@@ -282,6 +282,21 @@ fn normalizes_pnpm_removed_dependency_versions() {
 }
 
 #[test]
+fn normalizes_pnpm_dedupe_removed_versions_without_done_line() {
+    for section in ["dependencies", "devDependencies", "optionalDependencies"] {
+        for version in [" 1.0.0", "", " 1.0.0-beta.1+build.2"] {
+            let input = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2{version}\n- @scope/pkg{version}\n testnpm2 1.0.1\n\n- after-section 3.0.0\n"
+            );
+            let expected = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2\n- @scope/pkg\n testnpm2 1.0.1\n\n- after-section 3.0.0\n"
+            );
+            assert_eq!(redact_output(input, &[], true), expected);
+        }
+    }
+}
+
+#[test]
 fn preserves_pnpm_added_versions_and_text_outside_dependency_sections() {
     let input = concat!(
         "- outside 2.0.0\n\n",

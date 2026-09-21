@@ -244,6 +244,9 @@ static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // pnpm reads a removed package's manifest concurrently with unlinking the
 // package, so its removal summary may omit the version. Strip that version
 // within dependency sections of pnpm output; keep names and added versions.
+// `pnpm dedupe` omits the Done footer, so also recognize its removal count.
+static PNPM_REMOVAL_COUNT_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)^Packages: -\d+\n").unwrap());
 static PNPM_DEPENDENCY_SECTION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
         r"(?m)^(?:dependencies|devDependencies|optionalDependencies):\n(?:[^\n]+\n?)*",
@@ -630,7 +633,9 @@ pub fn redact_output(
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
     output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
 
-    if output.contains("Done in <duration> using pnpm <version>") {
+    if output.contains("Done in <duration> using pnpm <version>")
+        || PNPM_REMOVAL_COUNT_RE.is_match(&output)
+    {
         output = PNPM_DEPENDENCY_SECTION_RE
             .replace_all(&output, |caps: &regex::Captures| {
                 PNPM_REMOVED_VERSION_RE.replace_all(&caps[0], "${1}").into_owned()
