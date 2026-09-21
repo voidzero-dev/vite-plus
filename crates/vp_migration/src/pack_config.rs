@@ -51,28 +51,26 @@ fn indent_compatibility_defaults(source: &str, object_indentation: &str) -> Stri
     const PREFIX: &str = "export default ";
     let wrapped = format!("{PREFIX}{source};");
     let grep = SupportLang::TypeScript.ast_grep(&wrapped);
-    let comments: Vec<_> = grep
-        .root()
-        .dfs()
-        .filter(|node| node.kind() == "comment")
-        .map(|node| node.range().start - PREFIX.len())
-        .collect();
     let mut edits = Vec::new();
-    for property in [RESOLVE_DEP_SUBPATH_DEFAULT, ATTW_PROFILE_DEFAULT] {
-        for (start, _) in source.match_indices(property) {
-            // The same text inside a template literal is user data.
-            if !comments.contains(&(start + 1)) {
-                continue;
-            }
-            let indentation: String = if let Some((_, line)) = source[..start].rsplit_once('\n') {
-                line.chars().take_while(|c| matches!(c, ' ' | '\t')).collect()
-            } else {
-                // A new deps object can start on the pack object's first line.
-                format!("{object_indentation}  ")
-            };
-            let indented = property.replace('\n', &format!("\n{indentation}  "));
-            edits.push((start..start + property.len(), indented));
-        }
+    // Match parsed comments so identical text in template literals stays unchanged.
+    for comment in grep.root().dfs().filter(|node| node.kind() == "comment") {
+        let comment_start = comment.range().start - PREFIX.len();
+        let Some(before) = source[..comment_start].strip_suffix('\n') else { continue };
+        let start = before.len();
+        let Some(property) = [RESOLVE_DEP_SUBPATH_DEFAULT, ATTW_PROFILE_DEFAULT]
+            .into_iter()
+            .find(|property| source[start..].starts_with(property))
+        else {
+            continue;
+        };
+        let indentation: String = if let Some((_, line)) = before.rsplit_once('\n') {
+            line.chars().take_while(|c| matches!(c, ' ' | '\t')).collect()
+        } else {
+            // A new deps object can start on the pack object's first line.
+            format!("{object_indentation}  ")
+        };
+        let indented = property.replace('\n', &format!("\n{indentation}  "));
+        edits.push((start..start + property.len(), indented));
     }
     apply_edits(source, edits, 0)
 }

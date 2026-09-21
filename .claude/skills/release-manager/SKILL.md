@@ -87,14 +87,13 @@ diff that the post-build no-unexpected-changes guard rejects.
 Use the version in the release branch's `packages/cli/package.json` as the target release version in these files:
 
 - `docs/guide/migrate.md`: pnpm and npm migration command examples and matching release prose.
-- `docs/.vitepress/theme/data/migration-prompts.ts`: `migrationPrompt` and `upgradePrompt`, including their command examples and matching release prose.
-- `docs/.vitepress/theme/components/CopyPrompt.vue`: the default setup prompt's `vp create` command examples and matching release prose. This component also includes the shared `migrationPrompt` and serves both the homepage and Getting Started guide.
+- `docs/.vitepress/theme/data/migration-prompts.ts`: `setupPrompt`, `migrationPrompt`, `upgradePrompt`, and their shared instructions, including command examples and matching release prose. `CopyPrompt` uses `setupPrompt` on both the homepage and Getting Started guide.
 
-Update every `--package=vite-plus@<curr>` pin and the corresponding `For the <curr> release` and `Replace <curr>` text. Keep an exact version; do not replace it with a placeholder, a major range, or `latest`. The prompt text lives in the two source files above, not in `docs/guide/migrate.md`.
+Update every `--package=vite-plus@<curr>` pin and the corresponding `For the <curr> release` and `Replace <curr>` text. Keep an exact version; do not replace it with a placeholder, a major range, or `latest`.
 
 Preserve historical versions such as the migration's source version and the release that introduced a breaking change. Leave Node.js requirements, bundled tool versions, and preview-registry instructions unchanged unless their requirements change.
 
-Commit these updates on the release branch with the binding sync or in a separate release-version sync commit. Recheck all three files and the binding after a target-version change or a merge from `main`. Before merging, confirm that the guide and all three prompts use the target release in both package-manager commands and their matching prose, then run `git diff --check`.
+Commit these updates on the release branch with the binding sync or in a separate release-version sync commit. Recheck both files and the binding after a target-version change or a merge from `main`. Before merging, confirm that the guide and all three prompts use the target release in both package-manager commands and their matching prose, then run `git diff --check`.
 
 Only these release-version sync commits go directly on the release branch. Everything else goes through `main` (see step 5).
 

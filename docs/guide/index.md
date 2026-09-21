@@ -8,7 +8,7 @@ Vite+ also ships a [global `vp` CLI](/guide/global-cli) that manages Node.js and
 
 If you already have a Vite project, run [`vp migrate`](/guide/migrate) to migrate it to Vite+, or give your coding agent our [migration prompt](/guide/migrate#migration-prompt).
 
-Building with an AI assistant? View and copy a prompt to create a new project, migrate an existing project, or upgrade Vite+. It includes validation and compatibility review guidance for Vitest 5 and tsdown 0.23:
+Building with an AI assistant? View and copy a prompt to create a new project, migrate an existing project, or upgrade Vite+:
 
 <CopyPrompt />
 

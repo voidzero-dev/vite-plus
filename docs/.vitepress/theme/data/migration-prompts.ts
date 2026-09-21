@@ -1,3 +1,5 @@
+const localMigrationPrompt = `Without a global installation, run the target CLI through the package manager from the workspace root. For the 1.0.0 release, use \`pnpm dlx --package=vite-plus@1.0.0 vp migrate --no-interactive\` or \`npx --package=vite-plus@1.0.0 vp migrate --no-interactive\`. First run the same command with \`help migrate\` instead of \`migrate --no-interactive\` to read its help. These commands fetch the target CLI without replacing the old project dependencies first.`;
+
 const compatibilityReviewPrompt = `After establishing a passing baseline, try to remove the generated "Vitest v4 compatibility" settings with no code changes or small, localized fixes:
 
 1. Use the migration diff and generated comments to identify additions in root, workspace, and inline project configs. Read each linked explanation and check the effective setting after removal, including inherited values. Preserve pre-existing user settings and settings whose origin is unclear.
@@ -24,7 +26,7 @@ For a project that does not use Vite+ yet, check the prerequisites for the tools
 Use the CLI from the target Vite+ 1.0 release or its preview build. Use a supported Node.js runtime from the compatibility guide. A global installation is optional:
 
 - With a global vp installation, follow ${__DOCS_ORIGIN__}/guide/upgrade to select the target release and check \`vp toolchain --global\`. Run \`vp help\` and \`vp help migrate\`, then \`vp migrate --no-interactive\` from the workspace root.
-- Without a global installation, run the target CLI through the package manager from the workspace root. For the 1.0.0 release, use \`pnpm dlx --package=vite-plus@1.0.0 vp migrate --no-interactive\` or \`npx --package=vite-plus@1.0.0 vp migrate --no-interactive\`. First run the same command with \`help migrate\` instead of \`migrate --no-interactive\` to read its help. These commands fetch the target CLI without replacing the old project dependencies first.
+- ${localMigrationPrompt}
 
 Replace 1.0.0 with the intended release version. For a preview, use the version from its PR and pass \`--registry=https://registry-bridge.viteplus.dev\` to pnpm or npx before the vp command.
 
@@ -60,7 +62,7 @@ Inspect the worktree and preserve unrelated changes. Keep the original manifests
 Use the CLI from the target Vite+ 1.0 release or its preview build. A global installation is optional. Use a supported Node.js runtime from the Vite+ compatibility guide.
 
 - With a global vp installation, follow ${__DOCS_ORIGIN__}/guide/upgrade to upgrade it and check \`vp toolchain --global\`. Run \`vp help migrate\`, then \`vp migrate --no-interactive\` from the workspace root.
-- Without a global installation, run the target CLI through the package manager from the workspace root. For the 1.0.0 release, use \`pnpm dlx --package=vite-plus@1.0.0 vp migrate --no-interactive\` or \`npx --package=vite-plus@1.0.0 vp migrate --no-interactive\`. First run the same command with \`help migrate\` instead of \`migrate --no-interactive\` to read its help. These commands fetch the target CLI without replacing the old project dependencies first.
+- ${localMigrationPrompt}
 
 Replace 1.0.0 with the intended release version. For a preview, use the version from its PR and pass \`--registry=https://registry-bridge.viteplus.dev\` to pnpm or npx before the vp command. Do not run migration with the old project's node_modules/.bin/vp. Keep the existing project setup; do not use --full unless I request it.
 
@@ -73,3 +75,26 @@ Run \`vp install\`, \`vp check\`, and \`vp test\`, plus the project's browser, c
 ${compatibilityReviewPrompt}
 
 Report the migration changes and unresolved findings as well. Do not commit or push unless I ask.`;
+
+// Shared by the homepage and Getting Started guide.
+export const setupPrompt = `I want to use Vite+ in my project. Vite+ is the unified toolchain for the web behind the \`vp\` CLI — one tool combining Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, and Vite Task, plus runtime and package-manager management.
+
+First, read ${__DOCS_ORIGIN__}/llms-full.txt and ${__DOCS_ORIGIN__}/guide to learn Vite+'s commands and configuration. Inspect the worktree and preserve unrelated changes. Determine whether I want a new project or want to migrate or upgrade an existing project. Follow only the matching flow below.
+
+For a new project:
+
+Read ${__DOCS_ORIGIN__}/guide/create and choose the template, target directory, package manager, and intended Vite+ release or preview for my project. Use the target CLI's \`help create\` output to select supported options. Scaffold with \`vp create\`; do not overwrite existing project files.
+
+A global installation is optional. To install the global \`vp\` CLI when it is not already available:
+- macOS / Linux: curl -fsSL ${__DOCS_INSTALL_SH_URL__} | bash
+- Windows (PowerShell): irm ${__DOCS_INSTALL_PS1_URL__} | iex
+
+Open a new terminal after installation. Follow ${__DOCS_ORIGIN__}/guide/upgrade to select the target release or preview and check \`vp toolchain --global\` before scaffolding.
+
+Without a global installation, use a supported Node.js runtime from the compatibility guide. For the 1.0.0 release, run \`pnpm dlx --package=vite-plus@1.0.0 vp create\` or \`npx --package=vite-plus@1.0.0 vp create\`. Replace 1.0.0 with the intended release version. For a preview, use the version from its PR and pass \`--registry=https://registry-bridge.viteplus.dev\` to pnpm or npx before the vp command.
+
+Run \`vp install\`, \`vp check\`, and \`vp test\`, then \`vp build\` for applications or \`vp pack\` for libraries. Without a global CLI, install with the project's package manager and run the local CLI through it, such as \`pnpm exec vp check\` or \`npm exec -- vp check\`. Explain how to use \`vp dev\` for the dev server and \`vp run <task>\` for project scripts or tasks. Report the setup changes, validation results, and any remaining work. Do not commit or push unless I ask.
+
+For an existing project, including one that already uses Vite+, follow these migration or upgrade instructions:
+
+${migrationPrompt}`;

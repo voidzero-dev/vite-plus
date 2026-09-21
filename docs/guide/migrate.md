@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { migrationPrompt, upgradePrompt } from '../.vitepress/theme/data/migration-prompts';
+import { migrationPrompt, upgradePrompt } from '../.vitepress/theme/data/migration-prompts.ts';
 </script>
 
 # Migrate to Vite+
