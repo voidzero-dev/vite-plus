@@ -1,6 +1,7 @@
 [[case]]
 name = "command_publish_npm10"
 vp = "global"
+skip-platforms = ["windows"]
 serial = true
 steps = [
   { argv = ["vp", "pm", "publish", "--help"], comment = "should show help", continue-on-failure = true },

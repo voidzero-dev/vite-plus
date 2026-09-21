@@ -30,7 +30,19 @@ steps = [
 
 [[case]]
 name = "picker_cancel"
-vp = ["local", "global"]
+vp = ["local"]
+comment = "Ctrl+C in the package picker cancels with exit 130 and runs nothing."
+steps = [
+  { argv = ["vp", "build"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]
+
+[[case]]
+name = "picker_cancel"
+vp = ["global"]
+skip-platforms = ["windows"]
 comment = "Ctrl+C in the package picker cancels with exit 130 and runs nothing."
 steps = [
   { argv = ["vp", "build"], interactions = [

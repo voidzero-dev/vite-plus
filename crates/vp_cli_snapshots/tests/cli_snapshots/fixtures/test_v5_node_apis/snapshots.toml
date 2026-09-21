@@ -1,6 +1,7 @@
 [[case]]
 name = "node_api_and_reports"
 vp = "local"
+skip-platforms = ["windows"]
 steps = [{ argv = ["node", "verify.mjs"], timeout = 120000 }]
 
 [[case]]

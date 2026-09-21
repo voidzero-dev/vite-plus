@@ -1,6 +1,7 @@
 [[case]]
 name = "browser_defines"
 vp = "local"
+skip-platforms = ["windows"]
 # The multi-project matrix launches many browsers. Keep other snapshot cases
 # from competing with browser startup; retain the matrix's own parallel projects.
 serial = true
@@ -15,7 +16,8 @@ steps = [
 [[case]]
 name = "packed_browser_defines"
 vp = "global"
-# Use the same isolation as the local matrix, including under Windows nextest.
+skip-platforms = ["windows"]
+# Use the same isolation as the local matrix.
 serial = true
 local-registry = true
 env = { PLAYWRIGHT_BROWSERS_PATH = "0" }

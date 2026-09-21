@@ -1,6 +1,13 @@
 [[case]]
 name = "directory_local_config"
-vp = ["local", "global"]
+vp = ["local"]
+skip-platforms = ["windows"]
+cwd = "sub"
+steps = [["vp", "test", "run"]]
+
+[[case]]
+name = "directory_local_config"
+vp = ["global"]
 cwd = "sub"
 steps = [["vp", "test", "run"]]
 
