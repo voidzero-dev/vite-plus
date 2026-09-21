@@ -1,0 +1,18 @@
+[[case]]
+name = "github_actions_oidc_is_untracked"
+vp = "global"
+steps = [
+  { argv = ["vp", "run", "oidc"], envs = [["ACTIONS_ID_TOKEN_REQUEST_URL", "https://example.invalid/oidc"], ["ACTIONS_ID_TOKEN_REQUEST_TOKEN", "test-token-1"]] },
+  { argv = ["vp", "run", "oidc"], comment = "Changing OIDC credentials preserves the cache hit", envs = [["ACTIONS_ID_TOKEN_REQUEST_URL", "https://example.invalid/another-oidc"], ["ACTIONS_ID_TOKEN_REQUEST_TOKEN", "test-token-2"]] },
+]
+
+[[case]]
+name = "incomplete_tracking_skips_cache"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+env = { VP_RUN_INTERNAL_FSPY_SHM_CAPACITY = "536936448" }
+comment = "Limit tracking to 64 KiB of records after the descriptor table. The task must finish successfully and skip caching on both runs."
+steps = [
+  ["vp", "run", "-v", "tracking"],
+  ["vp", "run", "-v", "tracking"],
+]

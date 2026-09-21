@@ -39,6 +39,8 @@ For this task, Vite Task records source files, config files, missing files the c
 
 File system tracking also tracks outputs. If you omit [`output`](/config/run#output), Vite Task archives files the command writes after a successful run and restores them on a cache hit.
 
+Tracking ends when the task's main process exits. Background processes can continue running, but Vite Task does not record their file accesses after that point. Keep work that affects the task's result in the foreground.
+
 ### Limitations
 
 Vite Task cannot track environment variable reads, and it cannot always tell which tracked paths are stable inputs, generated outputs, or tool-managed cache paths that should not become inputs or outputs.
@@ -48,6 +50,8 @@ Use [Override Inputs And Outputs](#override-inputs-and-outputs) when file system
 Use [`env`](/config/run#env) when a command needs an environment variable and the value should affect the cache, or [`untrackedEnv`](/config/run#untrackedenv) when the value should not affect the cache.
 
 These limitations do not apply to `vp build`: Vite reports [Cooperative Tracking](#cooperative-tracking) metadata automatically, including `VITE_*`, `NODE_ENV`, and Vite-managed cache paths that should not become inputs or outputs. A standard `vp build` task does not need manual `input`, `output`, or `env`.
+
+If a task accesses more files than automatic tracking can record, the task still runs to completion, but Vite Task skips saving the result. Run `vp run --verbose <task>` to see the `Not cached` explanation. Configure both [`input`](/config/run#input) and [`output`](/config/run#output) with explicit globs, without `{ auto: true }`, to cache that task.
 
 ### Override Inputs And Outputs
 
