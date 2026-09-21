@@ -3583,6 +3583,9 @@ export interface DetectWorkspaceResult {
   root?: string;
 }
 
+/** Build documentation links with the same compiled origin as the native CLI. */
+export declare function documentationUrl(path: string): string;
+
 /**
  * Download a package manager
  *

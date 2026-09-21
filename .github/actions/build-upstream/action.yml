@@ -31,12 +31,13 @@ runs:
     - uses: ./.github/actions/compute-native-cache-input-hash
       id: native-cache-inputs
 
-    # Include env vars (RELEASE_BUILD, DEBUG, VERSION) to ensure cache miss on release builds.
+    # Include the documentation origin so preview binaries cannot reuse release links.
     - name: Compute NAPI binding cache key
       id: cache-key
       shell: bash
       run: |
-        echo "key=napi-binding-v3-${INPUTS_TARGET}-${RELEASE_BUILD}-${DEBUG}-${VERSION}-${NPM_TAG}-${{ steps.native-cache-inputs.outputs.hash }}" >> "$GITHUB_OUTPUT"
+        DOCS_ORIGIN_HASH=$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(process.env.VITE_PLUS_DOCS_ORIGIN || "https://viteplus.dev").digest("hex").slice(0, 16))')
+        echo "key=napi-binding-v3-${INPUTS_TARGET}-${RELEASE_BUILD}-${DEBUG}-${VERSION}-${NPM_TAG}-${DOCS_ORIGIN_HASH}-${{ steps.native-cache-inputs.outputs.hash }}" >> "$GITHUB_OUTPUT"
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 

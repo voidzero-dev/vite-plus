@@ -6,6 +6,12 @@ use napi_derive::napi;
 use vp_command::run_command_with_fspy;
 use vt_path::AbsolutePathBuf;
 
+/// Build documentation links with the same compiled origin as the native CLI.
+#[napi]
+pub fn documentation_url(path: String) -> String {
+    vp_shared::documentation_url(&path)
+}
+
 /// Input parameters for running a command with fspy tracking.
 ///
 /// This structure contains the information needed to execute a command:

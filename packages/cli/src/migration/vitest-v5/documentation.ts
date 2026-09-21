@@ -1,4 +1,6 @@
-const guide = 'https://viteplus.dev/guide/vitest-v5';
+import { documentationUrl } from '../../utils/documentation.ts';
+
+const guide = documentationUrl('/guide/vitest-v5');
 const upstream = 'https://vitest.dev/guide/migration/';
 
 const sections: Record<string, string> = {

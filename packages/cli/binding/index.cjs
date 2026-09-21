@@ -1044,6 +1044,7 @@ module.exports.shutdownAsyncRuntime = nativeBinding.shutdownAsyncRuntime;
 module.exports.startAsyncRuntime = nativeBinding.startAsyncRuntime;
 module.exports.analyzeMigrationSource = nativeBinding.analyzeMigrationSource;
 module.exports.detectWorkspace = nativeBinding.detectWorkspace;
+module.exports.documentationUrl = nativeBinding.documentationUrl;
 module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
 module.exports.ensureBlockingStdio = nativeBinding.ensureBlockingStdio;
 module.exports.getVpDirs = nativeBinding.getVpDirs;

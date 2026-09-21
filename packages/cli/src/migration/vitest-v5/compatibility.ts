@@ -1,3 +1,4 @@
+import { documentationUrl } from '../../utils/documentation.ts';
 import type { AddedProperty } from './ast.ts';
 
 const settings = {
@@ -45,6 +46,6 @@ export function compatibilityProperty(key: keyof typeof settings): AddedProperty
   return {
     key,
     value,
-    comment: `// Vitest v4 compatibility: ${reason}\n// ${adoption}\n// https://vitest.dev/guide/migration/#${section}`,
+    comment: `// Vitest v4 compatibility: ${reason}\n// ${adoption}\n// ${documentationUrl('/guide/vitest-v5#remove-unneeded-compatibility-settings')}\n// https://vitest.dev/guide/migration/#${section}`,
   };
 }

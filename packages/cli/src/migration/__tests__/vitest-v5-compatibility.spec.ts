@@ -50,12 +50,15 @@ describe('Vitest v4 compatibility comments', () => {
     const comments = parseSource('vitest.config.mjs', result.content).comments;
     const link = `// https://vitest.dev/guide/migration/#${section}`;
     const index = comments.findIndex((span) => result.content.slice(span.start, span.end) === link);
-    expect(index).toBeGreaterThanOrEqual(2);
-    expect(result.content.slice(comments[index - 2].start, comments[index - 2].end)).toMatch(
+    expect(index).toBeGreaterThanOrEqual(3);
+    expect(result.content.slice(comments[index - 3].start, comments[index - 3].end)).toMatch(
       /^\/\/ Vitest v4 compatibility: .+\.$/,
     );
-    expect(result.content.slice(comments[index - 1].start, comments[index - 1].end)).toMatch(
+    expect(result.content.slice(comments[index - 2].start, comments[index - 2].end)).toMatch(
       /^\/\/ (Remove|Keep) .+\.$/,
+    );
+    expect(result.content.slice(comments[index - 1].start, comments[index - 1].end)).toBe(
+      '// https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings',
     );
     expect(result.content.slice(comments[index].end).trimStart().startsWith(setting)).toBe(true);
     expect(migrate(result.content)).toEqual(result);

@@ -5,8 +5,6 @@ use vp_cli_help::{HelpRow, HelpSection, help_doc_from_command, print_help_doc};
 use super::common::boolean_option;
 use crate::js_command_args::parser::{CliParseError, ParseResult, help_arg, parse_args};
 
-const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/commit-hooks";
-
 #[derive(Debug, Args)]
 struct ConfigCliArgs {
     #[arg(
@@ -87,7 +85,10 @@ pub fn parse_config_args(argv: Vec<String>) -> ParseConfigArgsOutcome {
     match parse_args::<ConfigCliArgs>(config_command(), argv) {
         ParseResult::Ok(value) => ParseConfigArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {
-            let mut doc = help_doc_from_command(*command, Some(DOCUMENTATION_URL.into()));
+            let mut doc = help_doc_from_command(
+                *command,
+                Some(vp_shared::documentation_url("/guide/commit-hooks").into()),
+            );
             doc.sections.push(HelpSection::Rows {
                 title: "Environment".into(),
                 rows: vec![HelpRow {

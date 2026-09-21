@@ -29,12 +29,15 @@ The Node compatibility checks cover `.node-version`, `.nvmrc`, and the `engines.
 
 ## Preserve existing behavior
 
-For v4 configs, the migration adds compatibility settings where you omitted the corresponding option. Explicit settings take precedence. Beside each added setting, you get a comment with the reason, guidance for adopting v5 behavior, and a link to the Vitest migration guide:
+Preview builds link to the PR documentation site for Vite+ guidance. Release builds use `viteplus.dev`. Links to upstream Vitest documentation stay the same.
+
+For v4 configs, the migration adds compatibility settings where you omitted the corresponding option. Explicit settings take precedence. Beside each added setting, you get a comment with the reason, guidance for adopting v5 behavior, and links to the cleanup checklist and the Vitest migration guide:
 
 ```ts
 test: {
   // Vitest v4 compatibility: preserve mock call history.
   // Remove after tests no longer rely on calls from setup or earlier tests.
+  // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
   // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
   clearMocks: false,
 }

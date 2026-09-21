@@ -14,6 +14,11 @@ on:
         type: string
         required: false
         default: 'release'
+      docs-origin:
+        description: 'Documentation origin compiled into the native CLI, NAPI binding, and installer.'
+        type: string
+        required: false
+        default: 'https://viteplus.dev'
 
 jobs:
   build-rust:
@@ -25,6 +30,7 @@ jobs:
       RELEASE_BUILD: 'true'
       DEBUG: 'napi:*'
       VERSION: ${{ inputs.version }}
+      VITE_PLUS_DOCS_ORIGIN: ${{ inputs.docs-origin }}
     strategy:
       fail-fast: false
       matrix:

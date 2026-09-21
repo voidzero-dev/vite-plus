@@ -37,6 +37,7 @@ import {
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
+import { documentationUrl } from '../utils/documentation.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { findGitRoot, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
@@ -95,7 +96,7 @@ import {
 const listTemplatesMessage = renderCliDoc({
   usage: 'vp create --list',
   summary: 'List available builtin and popular project templates.',
-  documentationUrl: 'https://viteplus.dev/guide/create',
+  documentationUrl: documentationUrl('/guide/create'),
   sections: [
     {
       title: 'Vite+ Built-in Templates',
