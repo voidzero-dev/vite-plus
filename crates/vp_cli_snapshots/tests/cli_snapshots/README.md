@@ -89,12 +89,11 @@ Environment overrides, mainly for CI:
 | `VP_SNAP_SKIP_FLAVORS`      | Comma-separated flavors to skip registering (e.g. `local`)                    |
 | `VP_SNAP_PACKAGES_DIR`      | Run-scoped directory for sharing packed packages across test processes        |
 | `VP_SNAP_ARTIFACTS_DIR`     | Directory for phase timings and failure diagnostics; unset disables artifacts |
-| `VP_SNAP_NEXTEST_CONFIG`    | With `--list`, write nextest isolation and registry scheduling overrides      |
+| `VP_SNAP_NEXTEST_CONFIG`    | With `--list`, write nextest overrides for the discovered isolated cases      |
 
 Windows CI generates its nextest configuration from the same case definitions.
-Registry cases start before other parallel cases so long installs do not leave
-workers idle near the end of the run. Exact nextest runs read only the selected
-fixture; listing and native shard assignment still discover all cases.
+Exact nextest runs read only the selected fixture; listing and native shard
+assignment still discover all cases.
 
 The overrides reserve all test workers for an isolated case and schedule these
 cases last. The file lock remains a fallback when running without the generated

@@ -1794,7 +1794,6 @@ fn main() {
 
     let mut tests: Vec<libtest_mimic::Trial> = Vec::new();
     let mut isolated_trials = BTreeSet::new();
-    let mut registry_trials = BTreeSet::new();
     for fixture_path in fixture_paths {
         let fixture_path: Arc<Path> = Arc::from(fixture_path.as_path());
         let fixture_name: Arc<str> = Arc::from(fixture_path.file_name().unwrap().to_str().unwrap());
@@ -1833,8 +1832,6 @@ fn main() {
                 let isolated = case_needs_isolation(&case);
                 if isolated {
                     isolated_trials.insert(trial_name.clone());
-                } else if case.local_registry {
-                    registry_trials.insert(trial_name.clone());
                 }
                 let timings = Arc::clone(&timings);
                 let timing_name = trial_name.clone();
@@ -1901,16 +1898,10 @@ fn main() {
     if args.list
         && let Some(path) = std::env::var_os("VP_SNAP_NEXTEST_CONFIG")
     {
-        std::fs::write(
-            &path,
-            schedule::nextest_config(
-                isolated_trials.iter().map(String::as_str),
-                registry_trials.iter().map(String::as_str),
-            ),
-        )
-        .unwrap_or_else(|error| {
-            panic!("failed to write nextest config {}: {error}", Path::new(&path).display())
-        });
+        std::fs::write(&path, schedule::nextest_config(isolated_trials.iter().map(String::as_str)))
+            .unwrap_or_else(|error| {
+                panic!("failed to write nextest config {}: {error}", Path::new(&path).display())
+            });
     }
 
     if let Some(shard) = std::env::var_os("VP_SNAP_SHARD") {
@@ -1922,11 +1913,7 @@ fn main() {
         // A worker waiting for exclusive access cannot run another ready case.
         // Finish parallel work first, then take the existing exclusive leases.
         // Keep discovery and shard membership independent of execution order.
-        // Registry cases usually install dependencies or start several tools.
-        // Start them early so shorter cases can fill the remaining worker slots.
-        tests.sort_by_key(|trial| {
-            (isolated_trials.contains(trial.name()), !registry_trials.contains(trial.name()))
-        });
+        tests.sort_by_key(|trial| isolated_trials.contains(trial.name()));
     }
 
     drop(discovery_phase);
