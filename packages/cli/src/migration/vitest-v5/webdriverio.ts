@@ -235,8 +235,8 @@ export function migrateWebdriverioDependencies(
     }
     if (!INSTALL_FIELDS.some((field) => typeof get(file, [field, 'webdriverio']) === 'string')) {
       let peer = '*';
+      const pkg = read(file);
       for (const name of ['webdriverio', '@wdio/cli', '@wdio/globals']) {
-        const pkg = read(file);
         const spec = [...INSTALL_FIELDS, 'peerDependencies']
           .map((field) => object(pkg[field])[name])
           .find((spec): spec is string => typeof spec === 'string');
@@ -274,21 +274,21 @@ export function migrateWebdriverioDependencies(
   const projectNames = selected
     .map((file) => read(file).name)
     .filter((name): name is string => typeof name === 'string');
-  const matchesProject = (parents: string[]) => {
+  function matchesProject(parents: string[]): boolean {
     const concrete = parents.filter((parent) => parent !== '**');
-    return (
-      concrete.length === 0 ||
-      (concrete.length === 1 &&
-        projectNames.some((name) =>
-          new RegExp(
-            `^${concrete[0]
-              .split('*')
-              .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
-              .join('.*')}$`,
-          ).test(name),
-        ))
-    );
-  };
+    if (concrete.length === 0) {
+      return true;
+    }
+    if (concrete.length !== 1) {
+      return false;
+    }
+    const pattern = concrete[0]
+      .split('*')
+      .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*');
+    const expression = new RegExp(`^${pattern}$`);
+    return projectNames.some((name) => expression.test(name));
+  }
   const overrideMap = (file: string, keys: string[], parents: string[] = []) => {
     for (const [key, value] of Object.entries(object(get(file, keys)))) {
       const target = extractOverrideTargetName(key);
@@ -351,7 +351,7 @@ export function migrateWebdriverioDependencies(
             ) {
               set(rootManifest, [field, WEBDRIVERIO_PROVIDER], after);
               set(file, versionPath, `$${WEBDRIVERIO_PROVIDER}`);
-            } else if (direct !== after) {
+            } else {
               block(file, versionPath.join('.'), after);
             }
           }

@@ -266,13 +266,12 @@ function projectSelected(
     }
     const explicitName = objectProperty(instance, 'name')?.value;
     const browserName = objectProperty(instance, 'browser')?.value;
-    const instanceName = isString(explicitName)
-      ? explicitName.value
-      : !explicitName && isString(browserName)
-        ? name.value
-          ? `${name.value} (${browserName.value})`
-          : browserName.value
-        : undefined;
+    let instanceName: string | undefined;
+    if (isString(explicitName)) {
+      instanceName = explicitName.value;
+    } else if (!explicitName && isString(browserName)) {
+      instanceName = name.value ? `${name.value} (${browserName.value})` : browserName.value;
+    }
     // Instance-specific overrides need review; never silently skip an instance
     // selected by its name rather than by its parent project name.
     if (
@@ -426,10 +425,9 @@ export function resolveVitestV5TestModes(
       const effectiveDir = (!inline ? entry.dirOverride : undefined) ?? dir;
       const include = test && objectProperty(test, 'include')?.value;
       const exclude = test && objectProperty(test, 'exclude')?.value;
-      if (
-        (include && !staticPatterns(include, editor)) ||
-        (exclude && !staticPatterns(exclude, editor))
-      ) {
+      const includePatterns = include ? staticPatterns(include, editor) : undefined;
+      const excludePatterns = exclude ? staticPatterns(exclude, editor) : undefined;
+      if ((include && !includePatterns) || (exclude && !excludePatterns)) {
         unknown();
         return;
       }
@@ -458,12 +456,8 @@ export function resolveVitestV5TestModes(
         root: resolvedRoot,
         dir,
         discoveryRoot,
-        include: include
-          ? [...(base?.include ?? []), ...staticPatterns(include, editor)!]
-          : base?.include,
-        exclude: exclude
-          ? [...(base?.exclude ?? []), ...staticPatterns(exclude, editor)!]
-          : base?.exclude,
+        include: includePatterns ? [...(base?.include ?? []), ...includePatterns] : base?.include,
+        exclude: excludePatterns ? [...(base?.exclude ?? []), ...excludePatterns] : base?.exclude,
         // Apply defaults only when matching: implicit parent defaults must not
         // be appended to an inline project's explicit benchmark patterns.
         benchmark: benchmarkPatterns(benchmark, base ? base.benchmark : {}, editor),

@@ -368,7 +368,7 @@ function sourceVersion(
   if (spec && semver.validRange(spec)) {
     return unambiguousRunnerVersion(spec);
   }
-  if (dependency(pkg, 'vite-plus')) {
+  if (vitePlus) {
     const bundled = installedSourceVersion(directory, 'vite-plus', 'vite-plus', vitePlusRange);
     if (bundled) {
       return bundled;
@@ -677,7 +677,6 @@ export function planVitestV5Migration(
     ...(workspace.packages ?? []).map((pkg) => path.resolve(workspace.rootDir, pkg.path)),
   ];
   const projects: ProjectPlan[] = [];
-  const changes: FileChange[] = [];
   const projectSources = new Map(
     [...new Set(directories)].map((directory) => [
       directory,
@@ -690,6 +689,7 @@ export function planVitestV5Migration(
       allSources.set(file, source);
     }
   }
+  const rewrittenSources = new Map(allSources);
   const configEntries = findVitestV5ConfigEntries(allSources, projectSources.keys());
   const allConfigs = findVitestV5ConfigFiles(
     allSources,
@@ -790,16 +790,12 @@ export function planVitestV5Migration(
       findings.push(...testModes.findings.filter((item) => item.file === file));
       findings.push(...result.findings);
       if (source !== result.content) {
-        changes.push({ file, before: source, after: result.content });
+        rewrittenSources.set(file, result.content);
       }
     }
   }
   // Compose manifest edits with script/Node edits before producing one atomic
   // preflight plan. This also runs for existing Vite+ projects and stateless reruns.
-  const rewrittenSources = new Map(allSources);
-  for (const change of changes) {
-    rewrittenSources.set(change.file, change.after);
-  }
   findings.push(...migrateWebdriverioDependencies(workspace, rewrittenSources, inputs));
   return {
     rootDir: workspace.rootDir,

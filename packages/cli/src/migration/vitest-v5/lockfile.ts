@@ -39,15 +39,18 @@ export function lockedVitestVersion(
   spec: string,
 ): string | undefined {
   const range = spec.replace(/^npm:vitest@/, '');
-  if (!semver.validRange(range) && !/^[\w.-]+$/.test(range)) {
+  const validRange = semver.validRange(range);
+  if (!validRange && !/^[\w.-]+$/.test(range)) {
     return undefined;
   }
-  const valid = (version: unknown): string | undefined =>
-    typeof version === 'string' &&
-    semver.valid(version) &&
-    (!semver.validRange(range) || semver.satisfies(version, range, { includePrerelease: true }))
+  function valid(version: unknown): string | undefined {
+    if (typeof version !== 'string' || !semver.valid(version)) {
+      return undefined;
+    }
+    return !validRange || semver.satisfies(version, range, { includePrerelease: true })
       ? version
       : undefined;
+  }
   const relative = path.relative(root, directory).replaceAll('\\', '/');
   const read = (name: string) =>
     fs.readFileSync(path.join(root, name), 'utf8').replace(/^\uFEFF/, '');

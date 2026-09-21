@@ -102,28 +102,29 @@ export function findVitestV5ConfigFiles(
   for (const file of files) {
     try {
       const editor = new SourceEditor(file, sources.get(file)!);
-      const addReference = (reference: string) => {
+      function addReference(reference: string): void {
         if (reference.startsWith('!')) {
           return;
         }
-        const target = path.resolve(path.dirname(file), reference);
+        const directory = path.dirname(file);
+        const target = path.resolve(directory, reference);
         if (sources.has(target) && /\.[cm]?[jt]sx?$/.test(target)) {
           files.add(target);
-        } else {
-          for (const candidate of sources.keys()) {
-            const relative = path.relative(path.dirname(file), candidate).replaceAll('\\', '/');
-            const pattern = reference.replaceAll('\\', '/').replace(/^\.\//, '');
-            if (
-              /\.[cm]?[jt]sx?$/.test(candidate) &&
-              (minimatch(relative, pattern, { dot: true }) ||
-                (CONFIG_FILENAME.test(candidate) &&
-                  minimatch(path.posix.dirname(relative), pattern, { dot: true })))
-            ) {
-              files.add(candidate);
-            }
+          return;
+        }
+        const pattern = reference.replaceAll('\\', '/').replace(/^\.\//, '');
+        for (const candidate of sources.keys()) {
+          const relative = path.relative(directory, candidate).replaceAll('\\', '/');
+          if (
+            /\.[cm]?[jt]sx?$/.test(candidate) &&
+            (minimatch(relative, pattern, { dot: true }) ||
+              (CONFIG_FILENAME.test(candidate) &&
+                minimatch(path.posix.dirname(relative), pattern, { dot: true })))
+          ) {
+            files.add(candidate);
           }
         }
-      };
+      }
       const collectReferences = (config: t.Node | undefined) => {
         if (config?.type !== 'ObjectExpression') {
           return;
