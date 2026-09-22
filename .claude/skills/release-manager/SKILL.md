@@ -244,15 +244,15 @@ git -C ~/git/github.com/vite-plus-ecosystem-ci/$repo checkout "$branch"
 
 The `.github` repo also ships `scripts/setup-local.sh <repo>` (or `--all`), which does the clone, tracked-branch checkout, remotes, and fork base-repo pinning from the manifest in one step.
 
-**Sync every fork to upstream before you test anything.** The forks drift, often by hundreds of commits, so a checkout straight from `origin` validates stale code and any PR you open against it carries all that drift instead of just the upgrade. For each fork, fetch `source` and fast-forward the tracked branch, skipping any fork whose branch has commits upstream does not have rather than clobbering it:
+**Sync every fork to upstream before you test anything.** The forks drift, often by hundreds of commits, so a checkout straight from `origin` validates stale code and any PR you open against it carries all that drift instead of just the upgrade. From the `.github` checkout, run the safe sync command before the local sweep:
 
 ```bash
-git -C "$dir" fetch source
-git -C "$dir" rev-list --left-right --count "origin/$branch...source/$branch"   # left must be 0 to fast-forward
-git -C "$dir" push --no-verify origin "source/$branch:refs/heads/$branch"
+scripts/sync-forks.sh --all
 ```
 
-Do this before both the local sweep and the fork PRs. If PRs were already opened against a stale base, GitHub will not recompute their merge base when the base branch moves; close and reopen each one to force it (a reopened draft stays a draft). TESTING.md carries the full procedure.
+The command fast-forwards only forks with no fork-only commits. Exit code `2` means that at least one fork needs a sync or manual work. Resolve or explicitly skip each reported fork. Never overwrite a divergent tracked branch.
+
+Run `scripts/sync-forks.sh "$repo"` again immediately before you open each fork PR. If it prints `REOPEN`, close and reopen the current release PR so GitHub calculates a new merge base. Close superseded PRs and delete their branches. TESTING.md carries the full procedure.
 
 **Validate in the project's own CI.** Beyond the local `vp migrate`, exercise the prerelease in the fork's real CI by opening a draft PR on the fork, following "Smoke-test via a fork PR" in TESTING.md: branch `update-vite-plus-prerelease-test-<version>` synced from `source`, apply the upgrade, open a **draft** PR on the fork (never upstream) **assigned to the release manager**, then watch its checks for upgrade-related failures. Offer this alongside the local sweep rather than treating it as an afterthought; it is the only level that exercises each project's own build and tests. Some projects' CIs install with a non-standard tool that cannot resolve preview builds through the bridge `.npmrc` (e.g. cnpmcore's `utoo`), so check the install step before trusting fork-CI results.
 
