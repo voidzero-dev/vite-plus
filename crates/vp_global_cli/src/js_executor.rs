@@ -82,7 +82,8 @@ impl JsExecutor {
     /// Resolution order:
     /// 1. Explicitly provided `scripts_dir`
     /// 2. `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable
-    /// 3. Auto-detect from binary location (../dist relative to binary)
+    /// 3. Per-user dependencies for a bare Homebrew installation
+    /// 4. Bundled dependencies relative to the binary
     pub fn get_scripts_dir(&self) -> Result<AbsolutePathBuf, Error> {
         // 1. Use explicitly provided scripts_dir
         if let Some(dir) = &self.scripts_dir {
@@ -98,7 +99,7 @@ impl JsExecutor {
             return Ok(package.join("node_modules/vite-plus/dist"));
         }
 
-        // 3. Auto-detect from binary location
+        // 4. Auto-detect from binary location
         // JS scripts are at ../node_modules/vite-plus/dist relative to the binary directory
         // e.g., <DATA>/<version>/bin/vp -> <DATA>/<version>/node_modules/vite-plus/dist/
         let exe_path = std::env::current_exe().map_err(|_| Error::JsScriptsDirNotFound)?;
