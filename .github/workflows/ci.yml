@@ -1252,27 +1252,28 @@ jobs:
           VP_SNAP_NEXTEST_CONFIG="$RUNNER_TEMP/snapshot-nextest.toml" \
             cargo-nextest nextest list --archive-file windows-snapshot-tests.tar.zst --workspace-remap . \
             > "$RUNNER_TEMP/snapshot-test-list.txt"
+          nextest_run_args=(
+            --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml"
+            --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast
+          )
           # --no-fail-fast: on a snapshot suite every diff is diagnostic
           # signal; cancelling on the first failure hides the rest.
           test_exit=0
           # This fixture requires case-sensitive directory support, which the
           # default temp directory on these runners does not provide.
-          cargo-nextest nextest run --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml" \
-            --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast --partition hash:${{ matrix.shard }}/3 \
+          cargo-nextest nextest run "${nextest_run_args[@]}" --partition hash:${{ matrix.shard }}/3 \
             -E 'not test(windows_case_sensitive_shims)' || test_exit=$?
 
           if [[ '${{ matrix.shard }}' == '1' ]]; then
             # Run both flavors on NTFS once. Rust's GetTempPath2 ignores
             # TEMP/TMP under the SYSTEM account, so override SystemTemp.
             SystemTemp='${{ steps.snapshot-temp.outputs.directory }}' \
-              cargo-nextest nextest run --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml" \
-                --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast \
+              cargo-nextest nextest run "${nextest_run_args[@]}" \
                 -E 'test(windows_case_sensitive_shims)' || test_exit=$?
 
             # Exercise the same environment wrapper under Windows PowerShell 5.1.
             VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v powershell.exe)")" \
-              cargo-nextest nextest run --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml" \
-                --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast \
+              cargo-nextest nextest run "${nextest_run_args[@]}" \
                 -E 'test(command_env_powershell)' || test_exit=$?
           fi
           exit "$test_exit"

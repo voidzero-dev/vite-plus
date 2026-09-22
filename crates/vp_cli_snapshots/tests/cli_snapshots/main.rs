@@ -1301,11 +1301,8 @@ fn run_case(
         let step_env: &BTreeMap<String, OsString> = &step_env;
         let timeout = step.timeout(step_default_timeout);
 
-        let execution_phase = report.phase(format!(
-            "step-{}: {}",
-            step_index + 1,
-            step.display_command_line(&case.cwd)
-        ));
+        let command_line = step.display_command_line(&case.cwd);
+        let execution_phase = report.phase(format!("step-{}: {command_line}", step_index + 1));
         let (termination_state, raw_output) = if step.tty {
             'tty: {
                 let mut cmd = CommandBuilder::new(&program);
@@ -1446,12 +1443,12 @@ fn run_case(
 
         drop(execution_phase);
         let rendering_phase = report.phase(format!("render-step-{}", step_index + 1));
-        report.capture(&step.display_command_line(&case.cwd), &raw_output);
+        report.capture(&command_line, &raw_output);
 
         // Blank line separator before every `##`.
         doc.push('\n');
         doc.push_str("## `");
-        doc.push_str(&step.display_command_line(&case.cwd));
+        doc.push_str(&command_line);
         doc.push_str("`\n\n");
 
         if let Some(comment) = step.comment.as_deref() {
@@ -1466,8 +1463,7 @@ fn run_case(
         if matches!(termination_state, TerminationState::TimedOut) {
             let redacted = redact_output(raw_output, &redactions, !step.formatted_snapshot);
             timeout_error = Some(format!(
-                "step `{}` timed out after {timeout:?}; partial output:\n{redacted}",
-                step.display_command_line(&case.cwd),
+                "step `{command_line}` timed out after {timeout:?}; partial output:\n{redacted}",
             ));
             break;
         }
@@ -1694,10 +1690,13 @@ fn main() {
     let mut fixture_paths = std::fs::read_dir(&fixtures_dir)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", fixtures_dir.display()))
         .map(|entry| entry.unwrap().path())
-        .filter(|p| {
-            p.file_name().and_then(|n| n.to_str()).is_some_and(|name| {
-                !name.starts_with('.') && exact_fixture.is_none_or(|fixture| name == fixture)
-            }) && p.is_dir()
+        .filter(|path| {
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                return false;
+            };
+            !name.starts_with('.')
+                && exact_fixture.is_none_or(|fixture| name == fixture)
+                && path.is_dir()
         })
         .collect::<Vec<_>>();
     fixture_paths.sort();

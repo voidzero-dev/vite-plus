@@ -1,7 +1,7 @@
 //! Optional per-process artifacts. Each trial owns its files, including under nextest.
 use std::{
     cell::{Cell, RefCell},
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
@@ -34,7 +34,7 @@ impl Report {
         Phase { report: self, name: name.into(), started: Instant::now() }
     }
 
-    pub fn record(&self, name: &str, elapsed: Duration) {
+    fn record(&self, name: &str, elapsed: Duration) {
         if self.directory.is_some() {
             self.phases.borrow_mut().push(serde_json::json!({
                 "name": name,
@@ -68,11 +68,7 @@ impl Report {
         }
     }
 
-    pub fn finish(
-        &self,
-        error: Option<&str>,
-        expected: Option<&std::path::Path>,
-    ) -> Result<(), String> {
+    pub fn finish(&self, error: Option<&str>, expected: Option<&Path>) -> Result<(), String> {
         let Some(directory) = &self.directory else { return Ok(()) };
         let write = || -> std::io::Result<()> {
             std::fs::create_dir_all(directory)?;
@@ -85,18 +81,17 @@ impl Report {
                 "phases": *self.phases.borrow(),
             });
             std::fs::write(directory.join("timing.json"), serde_json::to_vec_pretty(&timings)?)?;
-            if let Some(error) = error {
-                std::fs::write(directory.join("error.txt"), error)?;
-                std::fs::write(directory.join("output.txt"), self.output.borrow().as_bytes())?;
-                if let Some(actual) = self.actual.borrow().as_ref() {
-                    std::fs::write(directory.join("actual.md"), actual)?;
-                }
-                if let Some(expected) = expected {
-                    match std::fs::read(expected) {
-                        Ok(contents) => std::fs::write(directory.join("expected.md"), contents)?,
-                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                        Err(error) => return Err(error),
-                    }
+            let Some(error) = error else { return Ok(()) };
+            std::fs::write(directory.join("error.txt"), error)?;
+            std::fs::write(directory.join("output.txt"), self.output.borrow().as_bytes())?;
+            if let Some(actual) = self.actual.borrow().as_ref() {
+                std::fs::write(directory.join("actual.md"), actual)?;
+            }
+            if let Some(expected) = expected {
+                match std::fs::read(expected) {
+                    Ok(contents) => std::fs::write(directory.join("expected.md"), contents)?,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error),
                 }
             }
             Ok(())

@@ -1,5 +1,6 @@
 //! Share immutable package tarballs across nextest processes within one test run.
 use std::{
+    collections::BTreeMap,
     fs::{File, OpenOptions},
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
@@ -22,34 +23,34 @@ fn stamp(path: &Path) -> Result<serde_json::Value, String> {
 fn collect_inputs(
     root: &Path,
     relative: &Path,
-    inputs: &mut std::collections::BTreeMap<String, serde_json::Value>,
+    inputs: &mut BTreeMap<String, serde_json::Value>,
     ancestors: &mut Vec<PathBuf>,
 ) -> Result<(), String> {
     let path = root.join(relative);
-    if path.is_dir() {
-        let canonical = dunce::canonicalize(&path).map_err(|error| error.to_string())?;
-        if ancestors.contains(&canonical) {
-            return Err(format!("cycle in package inputs at {}", path.display()));
-        }
-        ancestors.push(canonical);
-        for entry in path.read_dir().map_err(|error| format!("{}: {error}", path.display()))? {
-            let entry = entry.map_err(|error| error.to_string())?;
-            // Installed dependencies and Cargo output are not package inputs.
-            if matches!(entry.file_name().to_str(), Some("node_modules" | "target" | ".git")) {
-                continue;
-            }
-            collect_inputs(root, &relative.join(entry.file_name()), inputs, ancestors)?;
-        }
-        ancestors.pop();
-    } else {
+    if !path.is_dir() {
         inputs.insert(relative.to_string_lossy().into_owned(), stamp(&path)?);
+        return Ok(());
     }
+    let canonical = dunce::canonicalize(&path).map_err(|error| error.to_string())?;
+    if ancestors.contains(&canonical) {
+        return Err(format!("cycle in package inputs at {}", path.display()));
+    }
+    ancestors.push(canonical);
+    for entry in path.read_dir().map_err(|error| format!("{}: {error}", path.display()))? {
+        let name = entry.map_err(|error| error.to_string())?.file_name();
+        // Installed dependencies and Cargo output are not package inputs.
+        if matches!(name.to_str(), Some("node_modules" | "target" | ".git")) {
+            continue;
+        }
+        collect_inputs(root, &relative.join(name), inputs, ancestors)?;
+    }
+    ancestors.pop();
     Ok(())
 }
 
 fn build_stamp(repo: &Path) -> Result<serde_json::Value, String> {
     let repo = dunce::canonicalize(repo).map_err(|error| error.to_string())?;
-    let mut inputs = std::collections::BTreeMap::new();
+    let mut inputs = BTreeMap::new();
     for path in
         ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "packages/cli", "packages/core"]
     {
@@ -59,12 +60,12 @@ fn build_stamp(repo: &Path) -> Result<serde_json::Value, String> {
 }
 
 fn archives(directory: &Path) -> Result<serde_json::Value, String> {
-    let mut archives = std::collections::BTreeMap::new();
+    let mut archives = BTreeMap::new();
     for entry in directory.read_dir().map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
-        if entry.path().extension().is_some_and(|extension| extension == "tgz") {
-            archives
-                .insert(entry.file_name().to_string_lossy().into_owned(), stamp(&entry.path())?);
+        let path = entry.path();
+        if path.extension().is_some_and(|extension| extension == "tgz") {
+            archives.insert(entry.file_name().to_string_lossy().into_owned(), stamp(&path)?);
         }
     }
     if archives.len() != 2 {
