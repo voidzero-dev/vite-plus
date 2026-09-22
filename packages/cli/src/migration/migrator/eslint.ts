@@ -4,11 +4,13 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { type OxlintConfig } from 'oxlint';
+import semver from 'semver';
 
 import { rewriteEslint } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
+import { fetchNpmResource, getNpmRegistry } from '../../utils/npm-config.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
@@ -104,6 +106,36 @@ function extractSkippedRules(output: Buffer): string | undefined {
 }
 
 /**
+ * Resolve the `@oxlint/migrate` version to install. `@oxlint/migrate`
+ * trails `oxlint` releases (published minutes to days later), so the exact
+ * bundled-oxlint pin can name a version the registry does not have yet.
+ * Pick the greatest published version that is not newer than the bundled
+ * Oxlint. Fall back to the exact pin when the registry cannot be reached
+ * and let the dlx step surface the failure.
+ */
+export async function resolveOxlintMigrateVersion(oxlintVersion: string): Promise<string> {
+  try {
+    const response = await fetchNpmResource(`${getNpmRegistry('@oxlint')}/@oxlint/migrate`, {
+      headers: { accept: 'application/vnd.npm.install-v1+json' },
+      timeoutMs: 5000,
+    });
+    if (!response.ok) {
+      return oxlintVersion;
+    }
+    const packument = (await response.json()) as { versions?: Record<string, unknown> };
+    if (packument.versions && Object.hasOwn(packument.versions, oxlintVersion)) {
+      return oxlintVersion;
+    }
+    const candidates = Object.keys(packument.versions ?? {}).filter(
+      (version) => semver.valid(version) && semver.lte(version, oxlintVersion),
+    );
+    return candidates.length > 0 ? candidates.toSorted(semver.rcompare)[0] : oxlintVersion;
+  } catch {
+    return oxlintVersion;
+  }
+}
+
+/**
  * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
  * Returns true on success, false on failure (spawn error or non-zero exit).
  */
@@ -152,10 +184,12 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
-    // Pin @oxlint/migrate to the bundled oxlint version.
+    // Pin @oxlint/migrate to the bundled oxlint version when the registry
+    // has it; the package trails oxlint releases, so resolve the newest
+    // published version that is not newer than the pin.
     // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
     const { versions } = await import('../versions.js');
-    const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
+    const migratePackage = `@oxlint/migrate@${await resolveOxlintMigrateVersion(versions.oxlint)}`;
     const migrateArgs = [
       '--merge',
       ...(!hasBaseUrlInTsconfig(projectPath) ? ['--type-aware'] : []),

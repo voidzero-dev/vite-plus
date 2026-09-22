@@ -1,0 +1,104 @@
+[[case]]
+name = "command_self_setup_external_bundled"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1", NPM_CONFIG_REGISTRY = "http://127.0.0.1:9" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external/bin", "system/bin", "home"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/bin/vp"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/js_runtime/node/22.18.0/bin/node", "system/bin/node"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "system/bin/node"], snapshot = false },
+  { argv = ["vpt", "write-file", "external/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.3.2"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "external/node_modules/vite-plus/dist/bin.js", "console.log('external bundled CLI: ' + process.argv.slice(2).join(' '));"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "external/bin/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "external/bin"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "external"], snapshot = false },
+  { argv = ["./external/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "no"], ["VP_PM_MANAGER", "no"]], comment = "A read-only package prefix needs neither a marker nor registry access", snapshot = false },
+  ["vpt", "stat-file", "external/bin/.vp-setup-complete", "--assert", "missing"],
+  ["vpt", "stat-file", "home/current", "--assert", "missing"],
+  ["vpt", "stat-file", "home/self-setup", "--assert", "dir"],
+  { argv = ["./external/bin/vp", "sync-versions", "--json"], envs = [["VP_HOME", "${workspace}/home"], ["PATH", "${workspace}/system/bin${PATH_SEPARATOR}${PATH}"]], comment = "A later command uses the package manager's bundled JavaScript without another setup prompt" },
+  { argv = ["./external/bin/vp", "env", "off"], envs = [["VP_HOME", "${workspace}/home"]], snapshot = false },
+  { argv = ["./external/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "yes"]], comment = "Later invocations preserve the user's saved management choices", snapshot = false },
+  ["vpt", "print-file", "home/config.json"],
+  { argv = ["./home/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"]], comment = "The user shim also recognizes the external installation", snapshot = false },
+  ["vpt", "stat-file", "home/bin/vp", "--assert", "symlink"],
+]
+after = [
+  ["vpt", "chmod", "755", "external"],
+  ["vpt", "chmod", "755", "external/bin"],
+]
+
+[[case]]
+name = "command_self_setup_external_replacement"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+steps = [["node", "verify-refresh.mjs", "replacement"]]
+
+[[case]]
+name = "command_self_setup_external_preferences"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "verify-refresh.mjs", "preferences"]]
+
+[[case]]
+name = "command_self_setup_external_doctor"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "verify-refresh.mjs", "doctor"]]
+
+[[case]]
+name = "command_self_setup_external_bare"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_SKIP_DEPS_INSTALL = "1", VP_VERSION = "external-test", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external", "home/external-test/bin"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "external/vp"], snapshot = false },
+  { argv = ["vpt", "cp", "external/vp", "home/external-test/bin/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "555", "home/external-test/bin/vp"], comment = "An interrupted bootstrap left a read-only binary before activation", snapshot = false },
+  { argv = ["./external/vp", "--help"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "no"]], comment = "Retry replaces the incomplete copy and finishes setup", snapshot = false },
+  ["vpt", "stat-file", "home/current/bin/.vp-setup-complete", "--assert", "file"],
+  ["vpt", "stat-file", "external/.vp-setup-complete", "--assert", "missing"],
+  { argv = ["./external/vp", "env", "off"], envs = [["VP_HOME", "${workspace}/home"]], comment = "The external binary reuses its completed installation" },
+  { argv = ["./external/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "yes"]], snapshot = false },
+  ["vpt", "stat-file", "home/.previous-version", "--assert", "missing"],
+  ["vpt", "print-file", "home/config.json"],
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "no"], ["VP_SELF_SETUP_SHELL", "sh"]], comment = "An explicit installer handoff still reinstalls the same version", snapshot = false },
+  ["vpt", "print-file", "home/.previous-version"],
+  ["vpt", "stat-file", "home/current/bin/.vp-setup-complete", "--assert", "file"],
+]
+
+[[case]]
+name = "command_self_setup_external_homebrew"
+vp = "global"
+skip-platforms = ["windows"]
+unset-env = ["VP_CLI_TEST", "VP_NO_UPDATE_CHECK", "CI"]
+env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1", NPM_CONFIG_REGISTRY = "http://127.0.0.1:9" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "brew-prefix/bin", "home"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "brew-prefix/bin/vp"], snapshot = false },
+  { argv = ["vpt", "write-file", "brew-prefix/INSTALL_RECEIPT.json", '{"homebrew_version":"7.0.2","source":{"tap":"fengmk2/core"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "brew-prefix/node_modules/vite-plus/package.json", '{"name":"vite-plus"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "brew-prefix/node_modules/vite-plus/dist/bin.js", "console.log('bundled CLI');"], snapshot = false },
+  { argv = ["./brew-prefix/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"], ["VP_NODE_MANAGER", "no"], ["VP_PM_MANAGER", "no"]], snapshot = false },
+  { argv = ["./home/bin/vp", "upgrade"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "--force"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "0.0.1", "--registry", "http://127.0.0.1:9"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "--rollback"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "--silent"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+  { argv = ["./home/bin/vp", "upgrade", "--check"], envs = [["VP_HOME", "${workspace}/home"]] },
+  { argv = ["./home/bin/vp", "upgrade", "--check", "--silent"], envs = [["VP_HOME", "${workspace}/home"]] },
+  { argv = ["./home/bin/vp", "upgrade", "--background-check"], envs = [["VP_HOME", "${workspace}/home"]] },
+  { argv = ["./home/bin/vp", "env", "off"], envs = [["VP_HOME", "${workspace}/home"]] },
+  ["vpt", "stat-file", "home/current", "--assert", "missing"],
+  ["vpt", "stat-file", "home/cache/upgrade-check.json", "--assert", "missing"],
+  ["vpt", "stat-file", "brew-prefix/bin/.vp-setup-complete", "--assert", "missing"],
+  { argv = ["./home/bin/vp", "implode", "--yes"], envs = [["VP_HOME", "${workspace}/home"]], comment = "Cleanup removes user data and leaves the Homebrew package installed" },
+  ["vpt", "stat-file", "home", "--assert", "missing"],
+  ["vpt", "stat-file", "brew-prefix/bin/vp", "--assert", "file"],
+  ["vpt", "stat-file", "brew-prefix/INSTALL_RECEIPT.json", "--assert", "file"],
+  ["vpt", "stat-file", "brew-prefix/node_modules/vite-plus/dist/bin.js", "--assert", "file"],
+]

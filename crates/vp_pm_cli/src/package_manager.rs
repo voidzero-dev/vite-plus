@@ -1,21 +1,15 @@
-#![allow(clippy::disallowed_macros, clippy::print_stdout)]
+#![allow(clippy::disallowed_macros)]
+#![cfg_attr(test, allow(clippy::print_stdout))]
 
 use std::{
     collections::HashMap,
     env, fmt,
     fs::{self, File},
-    io::{self, BufReader, Write},
+    io::{self, BufReader},
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use crossterm::{
-    cursor,
-    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
-    execute,
-    style::{Color, Print, ResetColor, SetForegroundColor},
-    terminal,
-};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use tokio::fs::remove_dir_all;
@@ -63,13 +57,13 @@ impl fmt::Display for PackageManagerType {
 }
 
 impl PackageManagerType {
-    /// Map an invoked shim tool name (including aliases like `npx`, `pnpx`,
+    /// Map an invoked shim tool name (including aliases like `npx`, `pn`, `pnpx`, `pnx`,
     /// `yarnpkg`, `bunx`) to the package-manager family that provides it.
     #[must_use]
     pub fn from_tool(tool: &str) -> Option<Self> {
         match tool {
             "npm" | "npx" => Some(Self::Npm),
-            "pnpm" | "pnpx" => Some(Self::Pnpm),
+            "pnpm" | "pn" | "pnpx" | "pnx" => Some(Self::Pnpm),
             "yarn" | "yarnpkg" => Some(Self::Yarn),
             "bun" | "bunx" => Some(Self::Bun),
             _ => None,
@@ -92,12 +86,13 @@ impl PackageManagerType {
     }
 
     /// Resolve the bin file name for an invoked tool, preserving alias names
-    /// that the managed PM installs alongside its primary binary.
+    /// that the managed PM installs alongside its primary binary. The short pnpm
+    /// aliases use the existing binaries so cached and pre-v11 installations work.
     #[must_use]
     pub fn bin_name_for_tool(self, tool: &str) -> &'static str {
         match (tool, self) {
             ("npx", Self::Npm) => "npx",
-            ("pnpx", Self::Pnpm) => "pnpx",
+            ("pnpx" | "pnx", Self::Pnpm) => "pnpx",
             ("yarnpkg", Self::Yarn) => "yarnpkg",
             ("bunx", Self::Bun) => "bunx",
             (_, Self::Npm) => "npm",
@@ -227,9 +222,27 @@ impl PackageManagerBuilder {
     /// Build the package manager.
     /// Detect the package manager from the current working directory.
     pub async fn build(&self) -> Result<PackageManager, Error> {
-        let (workspace_root, _) = find_workspace_root(&self.cwd)?;
-        let (package_manager_type, version_or_req, hash, _) =
-            get_package_manager_type_and_version(&workspace_root, self.client_override)?;
+        let (package_manager_type, version_or_req, hash, source) =
+            match (find_workspace_root(&self.cwd), self.client_override) {
+                (Ok((workspace_root, _)), default) => {
+                    get_package_manager_type_and_version(&workspace_root, default)?
+                }
+                (Err(vt_workspace::Error::PackageJsonNotFound(_)), Some(package_manager_type)) => {
+                    // Use the fallback outside a project without creating a manifest.
+                    (package_manager_type, "default".into(), None, PackageManagerSource::Default)
+                }
+                (Err(error), _) => return Err(error.into()),
+            };
+
+        // A lockfile selects npm, but does not request a version separate from Node's npm.
+        if package_manager_type == PackageManagerType::Npm
+            && matches!(
+                source,
+                PackageManagerSource::LockfileOrConfig | PackageManagerSource::Default
+            )
+        {
+            return resolve_npm_from_path(&self.cwd).await;
+        }
 
         // only download the package manager if it's not already downloaded
         let (install_dir, _package_name, version) =
@@ -242,21 +255,31 @@ impl PackageManagerBuilder {
             bin_prefix: install_dir.join("bin"),
         })
     }
+}
 
-    /// Build the package manager with default package manager.
-    /// If the package manager is not specified, prompt the user to select a package manager.
-    pub async fn build_with_default(&self) -> Result<PackageManager, Error> {
-        let package_manager = match self.build().await {
-            Ok(pm) => pm,
-            Err(Error::UnrecognizedPackageManager) => {
-                // Prompt user to select a package manager
-                let selected_type = prompt_package_manager_selection()?;
-                Self::new(&self.cwd).package_manager_type(selected_type).build().await?
-            }
-            Err(e) => return Err(e),
-        };
-        Ok(package_manager)
+// Version gates and migration must use the npm on PATH, not the latest registry release.
+async fn resolve_npm_from_path(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
+    let npm = vp_command::resolve_bin("npm", None, cwd)?;
+    let output = tokio::process::Command::new(npm.as_path())
+        .arg("--version")
+        .current_dir(cwd)
+        // User preloads can print to stdout; only the actual command should run them.
+        .env_remove("NODE_OPTIONS")
+        .output()
+        .await?;
+    if !output.status.success() {
+        return Err(io::Error::other("failed to read npm version").into());
     }
+    let version = Version::parse(String::from_utf8_lossy(&output.stdout).trim())?;
+    let bin_prefix = npm
+        .parent()
+        .ok_or_else(|| Error::CannotFindBinaryPath("npm".into()))?
+        .to_absolute_path_buf();
+    Ok(PackageManager {
+        client: PackageManagerType::Npm,
+        version: version.to_string().into(),
+        bin_prefix,
+    })
 }
 
 impl PackageManager {
@@ -315,7 +338,7 @@ impl PackageManager {
 /// from the workspace root.
 ///
 /// The returned version is exact when detected from the `packageManager` field,
-/// `"latest"` when detected from lockfiles/config files/default, and may be a
+/// `"default"` when inferred from lockfiles/config files/default, and may be a
 /// semver range (or `"*"` for an absent version) when detected from
 /// `devEngines.packageManager` (see rfcs/dev-engines.md).
 pub fn get_package_manager_type_and_version(
@@ -347,33 +370,33 @@ pub fn get_package_manager_type_and_version(
         ));
     }
 
-    let version = Str::from("latest");
+    let version = Str::from("default");
     let source = PackageManagerSource::LockfileOrConfig;
-    // if pnpm-workspace.yaml exists, use pnpm@latest
+    // if pnpm-workspace.yaml exists, select pnpm
     if matches!(workspace_root.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)) {
         return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
-    // if pnpm-lock.yaml exists, use pnpm@latest
+    // if pnpm-lock.yaml exists, select pnpm
     let pnpm_lock_yaml_path = workspace_root.path.join("pnpm-lock.yaml");
     if is_exists_file(&pnpm_lock_yaml_path)? {
         return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
-    // if yarn.lock or .yarnrc.yml exists, use yarn@latest
+    // if yarn.lock or .yarnrc.yml exists, select yarn
     let yarn_lock_path = workspace_root.path.join("yarn.lock");
     let yarnrc_yml_path = workspace_root.path.join(".yarnrc.yml");
     if is_exists_file(&yarn_lock_path)? || is_exists_file(&yarnrc_yml_path)? {
         return Ok((PackageManagerType::Yarn, version, None, source));
     }
 
-    // if package-lock.json exists, use npm@latest
+    // if package-lock.json exists, select npm
     let package_lock_json_path = workspace_root.path.join("package-lock.json");
     if is_exists_file(&package_lock_json_path)? {
         return Ok((PackageManagerType::Npm, version, None, source));
     }
 
-    // if bun.lock (text format) or bun.lockb (binary format) exists, use bun@latest
+    // if bun.lock (text format) or bun.lockb (binary format) exists, select bun
     let bun_lock_path = workspace_root.path.join("bun.lock");
     if is_exists_file(&bun_lock_path)? {
         return Ok((PackageManagerType::Bun, version, None, source));
@@ -383,25 +406,25 @@ pub fn get_package_manager_type_and_version(
         return Ok((PackageManagerType::Bun, version, None, source));
     }
 
-    // if .pnpmfile.cjs exists, use pnpm@latest
+    // if .pnpmfile.cjs exists, select pnpm
     let pnpmfile_cjs_path = workspace_root.path.join(".pnpmfile.cjs");
     if is_exists_file(&pnpmfile_cjs_path)? {
         return Ok((PackageManagerType::Pnpm, version, None, source));
     }
-    // if legacy pnpmfile.cjs exists, use pnpm@latest
+    // if legacy pnpmfile.cjs exists, select pnpm
     // https://newreleases.io/project/npm/pnpm/release/6.0.0
     let legacy_pnpmfile_cjs_path = workspace_root.path.join("pnpmfile.cjs");
     if is_exists_file(&legacy_pnpmfile_cjs_path)? {
         return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
-    // if bunfig.toml exists, use bun@latest
+    // if bunfig.toml exists, select bun
     let bunfig_toml_path = workspace_root.path.join("bunfig.toml");
     if is_exists_file(&bunfig_toml_path)? {
         return Ok((PackageManagerType::Bun, version, None, source));
     }
 
-    // if yarn.config.cjs exists, use yarn@latest (yarn 2.0+)
+    // if yarn.config.cjs exists, select yarn (yarn 2.0+)
     let yarn_config_cjs_path = workspace_root.path.join("yarn.config.cjs");
     if is_exists_file(&yarn_config_cjs_path)? {
         return Ok((PackageManagerType::Yarn, version, None, source));
@@ -465,14 +488,13 @@ pub fn resolve_package_manager_from_package_json(
     }))
 }
 
-/// Read the package manager selected by an explicit/session override, project files, or default.
+/// Read the package manager selected by an explicit/session override or project files.
 ///
 /// The returned version is the declared requirement. It is intentionally not resolved against the
 /// registry or managed installs, so callers can inspect the selection without network access.
 pub fn resolve_environment_package_manager_spec(
     cwd: impl AsRef<AbsolutePath>,
     override_spec: Option<(PackageManagerType, &str, Option<&str>)>,
-    default_spec: Option<(PackageManagerType, &str, Option<&str>)>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
     if let Some((package_manager_type, version, hash)) = override_spec {
         return Ok(Some(EnvironmentPackageManagerResolution {
@@ -488,7 +510,7 @@ pub fn resolve_environment_package_manager_spec(
     let (workspace_root, _) = match find_workspace_root(cwd.as_ref()) {
         Ok(result) => result,
         Err(vt_workspace::Error::PackageJsonNotFound(_)) => {
-            return Ok(default_spec.map(environment_package_manager_default));
+            return Ok(None);
         }
         Err(error) => return Err(error.into()),
     };
@@ -529,9 +551,7 @@ pub fn resolve_environment_package_manager_spec(
                 project_root: Some(workspace_root.path.to_absolute_path_buf()),
             }))
         }
-        Err(Error::UnrecognizedPackageManager) => {
-            Ok(default_spec.map(environment_package_manager_default))
-        }
+        Err(Error::UnrecognizedPackageManager) => Ok(None),
         Err(error) => Err(error),
     }
 }
@@ -553,20 +573,23 @@ fn environment_package_manager_default(
 /// operations such as `vp env install` and package-manager shims. When `expected` is set, a
 /// different selected family falls back to the matching configured default before registry lookup.
 pub async fn resolve_environment_package_manager(
-    cwd: impl AsRef<AbsolutePath>,
-    override_spec: Option<(PackageManagerType, &str, Option<&str>)>,
+    resolution: Option<EnvironmentPackageManagerResolution>,
     default_spec: Option<(PackageManagerType, &str, Option<&str>)>,
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let mut resolution =
-        resolve_environment_package_manager_spec(cwd, override_spec, default_spec)?;
-    if let Some(expected) = expected
-        && resolution.as_ref().is_some_and(|resolution| resolution.package_manager_type != expected)
-    {
-        resolution = default_spec
-            .filter(|(package_manager, _, _)| *package_manager == expected)
-            .map(environment_package_manager_default);
-    }
+    let kind =
+        expected.or_else(|| resolution.as_ref().map(|resolution| resolution.package_manager_type));
+    // A matching project version wins; an npm lockfile only selects the family.
+    let resolution = resolution.filter(|resolution| {
+        Some(resolution.package_manager_type) == kind
+            && !(resolution.package_manager_type == PackageManagerType::Npm
+                && resolution.source == PackageManagerSource::LockfileOrConfig.description())
+    });
+    let resolution = resolution.or_else(|| {
+        default_spec
+            .filter(|(package_manager, _, _)| kind.is_none_or(|kind| *package_manager == kind))
+            .map(environment_package_manager_default)
+    });
     let Some(mut resolution) = resolution else {
         return Ok(None);
     };
@@ -943,17 +966,23 @@ async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<
     }
 }
 
-/// Resolve an exact, range, or `latest` package-manager version without downloading it.
+/// Resolve an exact, range, `latest`, or manager-specific `default` version without downloading it.
 pub async fn resolve_package_manager_version(
     package_manager_type: PackageManagerType,
     version: &str,
 ) -> Result<Str, Error> {
-    if version == "latest" {
-        get_latest_version(package_manager_type).await
-    } else if Version::parse(version).is_ok() {
-        Ok(version.into())
-    } else {
-        resolve_package_manager_range(package_manager_type, version).await
+    match version {
+        "default" => match package_manager_type {
+            PackageManagerType::Npm => {
+                Ok(resolve_npm_from_path(&vt_path::current_dir()?).await?.version)
+            }
+            PackageManagerType::Pnpm | PackageManagerType::Yarn | PackageManagerType::Bun => {
+                get_latest_version(package_manager_type).await
+            }
+        },
+        "latest" => get_latest_version(package_manager_type).await,
+        _ if Version::parse(version).is_ok() => Ok(version.into()),
+        _ => resolve_package_manager_range(package_manager_type, version).await,
     }
 }
 
@@ -1827,223 +1856,6 @@ async fn create_bun_shim_files(bin_prefix: &AbsolutePath) -> Result<(), Error> {
     Ok(())
 }
 
-use vp_shared::is_ci_environment;
-
-/// Interactive menu for selecting a package manager with keyboard navigation
-fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
-    let options = [
-        ("pnpm (recommended)", PackageManagerType::Pnpm),
-        ("npm", PackageManagerType::Npm),
-        ("yarn", PackageManagerType::Yarn),
-        ("bun", PackageManagerType::Bun),
-    ];
-
-    let mut selected_index = 0;
-
-    // Print header and instructions with proper line breaks
-    println!("\nNo package manager detected. Please select one:");
-    println!(
-        "   Use ↑↓ arrows to navigate, Enter to select, 1-{} for quick selection",
-        options.len()
-    );
-    println!("   Press Esc, q, or Ctrl+C to cancel installation\n");
-
-    // Enable raw mode for keyboard input
-    terminal::enable_raw_mode()?;
-
-    // Clear the selection area and hide cursor
-    execute!(io::stdout(), cursor::Hide)?;
-
-    let result = loop {
-        // Display menu with current selection
-        for (i, (name, _)) in options.iter().enumerate() {
-            execute!(io::stdout(), cursor::MoveToColumn(2))?;
-
-            if i == selected_index {
-                // Highlight selected item
-                execute!(
-                    io::stdout(),
-                    SetForegroundColor(Color::Blue),
-                    Print("▶ "),
-                    Print(format!("[{}] ", i + 1)),
-                    Print(name),
-                    ResetColor,
-                    Print(" ← ")
-                )?;
-            } else {
-                execute!(
-                    io::stdout(),
-                    Print("  "),
-                    SetForegroundColor(Color::DarkGrey),
-                    Print(format!("[{}] ", i + 1)),
-                    ResetColor,
-                    Print(name),
-                    Print("   ")
-                )?;
-            }
-
-            if i < options.len() - 1 {
-                execute!(io::stdout(), Print("\n"))?;
-            }
-        }
-
-        // Move cursor back up for next iteration
-        if options.len() > 1 {
-            execute!(io::stdout(), cursor::MoveUp((options.len() - 1) as u16))?;
-        }
-
-        // Read keyboard input, skipping non-Press events (e.g. Release on Windows)
-        let (code, modifiers) = loop {
-            if let Event::Key(KeyEvent { code, modifiers, kind, .. }) = event::read()?
-                && kind == KeyEventKind::Press
-            {
-                break (code, modifiers);
-            }
-        };
-
-        match code {
-            // Handle Ctrl+C for exit
-            KeyCode::Char('c') if modifiers.contains(event::KeyModifiers::CONTROL) => {
-                // Clean up terminal before exiting
-                terminal::disable_raw_mode()?;
-                execute!(
-                    io::stdout(),
-                    cursor::Show,
-                    cursor::MoveDown(options.len() as u16),
-                    Print("\n\n"),
-                    SetForegroundColor(Color::Yellow),
-                    Print("⚠ Installation cancelled by user\n"),
-                    ResetColor
-                )?;
-                return Err(Error::UserCancelled);
-            }
-            KeyCode::Up => {
-                selected_index = selected_index.saturating_sub(1);
-            }
-            KeyCode::Down if selected_index < options.len() - 1 => {
-                selected_index += 1;
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                break Ok(options[selected_index].1);
-            }
-            KeyCode::Char('1') => {
-                break Ok(options[0].1);
-            }
-            KeyCode::Char('2') if options.len() > 1 => {
-                break Ok(options[1].1);
-            }
-            KeyCode::Char('3') if options.len() > 2 => {
-                break Ok(options[2].1);
-            }
-            KeyCode::Char('4') if options.len() > 3 => {
-                break Ok(options[3].1);
-            }
-            KeyCode::Esc | KeyCode::Char('q') => {
-                // Exit on escape/quit
-                terminal::disable_raw_mode()?;
-                execute!(
-                    io::stdout(),
-                    cursor::Show,
-                    cursor::MoveDown(options.len() as u16),
-                    Print("\n\n"),
-                    SetForegroundColor(Color::Yellow),
-                    Print("⚠ Installation cancelled by user\n"),
-                    ResetColor
-                )?;
-                return Err(Error::UserCancelled);
-            }
-            _ => {}
-        }
-    };
-
-    // Clean up: disable raw mode and show cursor
-    terminal::disable_raw_mode()?;
-    execute!(io::stdout(), cursor::Show, cursor::MoveDown(options.len() as u16), Print("\n"))?;
-
-    // Print selection confirmation
-    if let Ok(pm) = &result {
-        let name = match pm {
-            PackageManagerType::Pnpm => "pnpm",
-            PackageManagerType::Npm => "npm",
-            PackageManagerType::Yarn => "yarn",
-            PackageManagerType::Bun => "bun",
-        };
-        println!("\n✓ Selected package manager: {name}\n");
-    }
-
-    result
-}
-
-/// Prompt the user to select a package manager
-fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
-    // In CI environment, automatically use pnpm without prompting
-    if is_ci_environment() {
-        tracing::info!("CI environment detected. Using default package manager: pnpm");
-        return Ok(PackageManagerType::Pnpm);
-    }
-
-    // Check if stdin is a TTY (terminal) - if not, use default
-    if !vp_shared::is_stdin_terminal() {
-        tracing::info!("Non-interactive environment detected. Using default package manager: pnpm");
-        return Ok(PackageManagerType::Pnpm);
-    }
-
-    // Try interactive menu first, fall back to simple prompt on error
-    match interactive_package_manager_menu() {
-        Ok(pm) => Ok(pm),
-        Err(err) => {
-            match err {
-                Error::UserCancelled => Err(err),
-                // Fallback to simple text prompt if interactive menu fails
-                _ => simple_text_prompt(),
-            }
-        }
-    }
-}
-
-/// Simple text-based prompt as fallback
-fn simple_text_prompt() -> Result<PackageManagerType, Error> {
-    let managers = [
-        ("pnpm", PackageManagerType::Pnpm),
-        ("npm", PackageManagerType::Npm),
-        ("yarn", PackageManagerType::Yarn),
-        ("bun", PackageManagerType::Bun),
-    ];
-
-    println!("\nNo package manager detected. Please select one:");
-    println!("────────────────────────────────────────────────");
-
-    for (i, (name, _)) in managers.iter().enumerate() {
-        if i == 0 {
-            println!("  [{}] {} (recommended)", i + 1, name);
-        } else {
-            println!("  [{}] {}", i + 1, name);
-        }
-    }
-
-    print!("\nEnter your choice (1-{}) [default: 1]: ", managers.len());
-    io::stdout().flush()?;
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-
-    let choice = input.trim();
-    let index = if choice.is_empty() {
-        0 // Default to pnpm
-    } else {
-        choice
-            .parse::<usize>()
-            .ok()
-            .and_then(|n| if n > 0 && n <= managers.len() { Some(n - 1) } else { None })
-            .unwrap_or(0) // Default to pnpm if invalid input
-    };
-
-    let (name, selected_type) = &managers[index];
-    println!("✓ Selected package manager: {name}\n");
-
-    Ok(*selected_type)
-}
-
 #[cfg(test)]
 mod tests {
     use std::{fs, time::UNIX_EPOCH};
@@ -2157,6 +1969,8 @@ mod tests {
         assert_eq!(PackageManagerType::from_tool("npx"), Some(PackageManagerType::Npm));
         assert_eq!(PackageManagerType::from_tool("pnpm"), Some(PackageManagerType::Pnpm));
         assert_eq!(PackageManagerType::from_tool("pnpx"), Some(PackageManagerType::Pnpm));
+        assert_eq!(PackageManagerType::from_tool("pn"), Some(PackageManagerType::Pnpm));
+        assert_eq!(PackageManagerType::from_tool("pnx"), Some(PackageManagerType::Pnpm));
         assert_eq!(PackageManagerType::from_tool("yarn"), Some(PackageManagerType::Yarn));
         assert_eq!(PackageManagerType::from_tool("yarnpkg"), Some(PackageManagerType::Yarn));
         assert_eq!(PackageManagerType::from_tool("bun"), Some(PackageManagerType::Bun));
@@ -2171,9 +1985,13 @@ mod tests {
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         create_package_json(&cwd, r#"{"packageManager":"pnpm@10.18.0"}"#);
 
-        let resolution = resolve_environment_package_manager(
+        let selected = resolve_environment_package_manager_spec(
             &cwd,
             Some((PackageManagerType::Yarn, "1.22.22", Some("sha512.example"))),
+        )
+        .unwrap();
+        let resolution = resolve_environment_package_manager(
+            selected,
             Some((PackageManagerType::Bun, "1.2.0", None)),
             None,
         )
@@ -2193,9 +2011,9 @@ mod tests {
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         create_package_json(&cwd, r#"{"name":"example"}"#);
 
+        let selected = resolve_environment_package_manager_spec(&cwd, None).unwrap();
         let resolution = resolve_environment_package_manager(
-            &cwd,
-            None,
+            selected,
             Some((PackageManagerType::Bun, "1.2.0", None)),
             None,
         )
@@ -2214,9 +2032,9 @@ mod tests {
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         create_package_json(&cwd, r#"{"packageManager":"bun@1.2.0"}"#);
 
+        let selected = resolve_environment_package_manager_spec(&cwd, None).unwrap();
         let resolution = resolve_environment_package_manager(
-            &cwd,
-            None,
+            selected,
             Some((PackageManagerType::Pnpm, "10.18.0", None)),
             Some(PackageManagerType::Pnpm),
         )
@@ -2238,8 +2056,7 @@ mod tests {
             r#"{"devEngines":{"packageManager":{"name":"pnpm","version":"^10.0.0"}}}"#,
         );
 
-        let resolution =
-            resolve_environment_package_manager_spec(&cwd, None, None).unwrap().unwrap();
+        let resolution = resolve_environment_package_manager_spec(&cwd, None).unwrap().unwrap();
 
         assert_eq!(resolution.package_manager_type, PackageManagerType::Pnpm);
         assert_eq!(resolution.version, "^10.0.0");
@@ -2433,6 +2250,8 @@ mod tests {
         assert_eq!(PackageManagerType::Npm.bin_name_for_tool("npx"), "npx");
         assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnpm"), "pnpm");
         assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnpx"), "pnpx");
+        assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pn"), "pnpm");
+        assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnx"), "pnpx");
         assert_eq!(PackageManagerType::Yarn.bin_name_for_tool("yarn"), "yarn");
         assert_eq!(PackageManagerType::Yarn.bin_name_for_tool("yarnpkg"), "yarnpkg");
         assert_eq!(PackageManagerType::Bun.bin_name_for_tool("bun"), "bun");
@@ -2871,71 +2690,6 @@ mod tests {
 
     #[tokio::test]
     #[cfg(not(windows))] // FIXME
-    async fn test_detect_package_manager_with_package_lock_json() {
-        let vp_home = shared_vp_home();
-        vp_shared::EnvConfig::with_vars_async(
-            [(env_vars::VP_HOME, vp_home.as_os_str())],
-            |_| async move {
-                use std::process::Command;
-
-                let temp_dir = create_temp_dir();
-                let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-                let package_content = r#"{"name": "test-package"}"#;
-                create_package_json(&temp_dir_path, package_content);
-
-                // Create package-lock.json
-                fs::write(temp_dir_path.join("package-lock.json"), r#"{"lockfileVersion": 2}"#)
-                    .expect("Failed to write package-lock.json");
-
-                let result = PackageManager::builder(temp_dir_path)
-                    .build()
-                    .await
-                    .expect("Should detect npm");
-                assert_eq!(result.client.to_string(), "npm");
-
-                // check shim files
-                let bin_prefix = result.get_bin_prefix();
-                assert!(is_exists_file(bin_prefix.join("npm")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npm.cmd")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npm.ps1")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npx")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npx.cmd")).unwrap());
-                assert!(is_exists_file(bin_prefix.join("npx.ps1")).unwrap());
-
-                // run npm --version
-                let mut paths =
-                    env::split_paths(&env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>();
-                paths.insert(0, bin_prefix.into_path_buf());
-                let output = Command::new("npm")
-                    .arg("--version")
-                    .env("PATH", env::join_paths(&paths).unwrap())
-                    .output()
-                    .expect("Failed to run npm");
-                assert!(
-                    output.status.success(),
-                    "stderr: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
-                // println!("npm --version: {:?}", String::from_utf8_lossy(&output.stdout));
-
-                // run npx --version
-                let output = Command::new("npx")
-                    .arg("--version")
-                    .env("PATH", env::join_paths(&paths).unwrap())
-                    .output()
-                    .expect("Failed to run npx");
-                assert!(
-                    output.status.success(),
-                    "stderr: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
-            },
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[cfg(not(windows))] // FIXME
     async fn test_detect_package_manager_with_package_manager_field() {
         let vp_home = shared_vp_home();
         vp_shared::EnvConfig::with_vars_async(
@@ -3204,7 +2958,7 @@ mod tests {
 
         // onFail: ignore continues down the detection chain to the lockfile
         assert_eq!(pm_type, PackageManagerType::Pnpm);
-        assert_eq!(version, "latest");
+        assert_eq!(version, "default");
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
 
@@ -3226,7 +2980,7 @@ mod tests {
 
         // an empty array imposes nothing: detection falls through to the lockfile
         assert_eq!(pm_type, PackageManagerType::Pnpm);
-        assert_eq!(version, "latest");
+        assert_eq!(version, "default");
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
 
@@ -3275,7 +3029,7 @@ mod tests {
 
         // onFail: warn on the last entry warns and continues down the chain
         assert_eq!(pm_type, PackageManagerType::Pnpm);
-        assert_eq!(version, "latest");
+        assert_eq!(version, "default");
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
 
@@ -4315,7 +4069,7 @@ mod tests {
             PackageManagerType::Npm,
             "package-lock.json should take precedence over pnpmfile.cjs and yarn.config.cjs"
         );
-        assert_eq!(version, "latest");
+        assert_eq!(version, "default");
         assert_eq!(hash, None);
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
@@ -4372,7 +4126,7 @@ mod tests {
         let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
-        assert_eq!(version.as_str(), "latest");
+        assert_eq!(version.as_str(), "default");
         assert!(hash.is_none());
     }
 
@@ -4392,7 +4146,7 @@ mod tests {
         let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
-        assert_eq!(version.as_str(), "latest");
+        assert_eq!(version.as_str(), "default");
         assert!(hash.is_none());
     }
 
@@ -4412,7 +4166,7 @@ mod tests {
         let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
-        assert_eq!(version.as_str(), "latest");
+        assert_eq!(version.as_str(), "default");
         assert!(hash.is_none());
     }
 

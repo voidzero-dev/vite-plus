@@ -27,7 +27,7 @@ jobs:
           cache-key: upgrade-deps
           tools: just,cargo-shear
 
-      - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       - name: Capture current upstream CLI help
         run: node .github/scripts/cli-help-diff.ts capture --output "${UPGRADE_DEPS_META_DIR}/cli-help-before.json"
@@ -75,18 +75,34 @@ jobs:
             --output "${UPGRADE_DEPS_META_DIR}/cli-help-report.md" \
             --github-output "${GITHUB_OUTPUT}"
 
-      - name: Check upgrade dependencies
+      - name: Check upgrade dependencies with Kimi K3
         id: check-upgrade-dependencies
         timeout-minutes: 180
-        uses: anthropics/claude-code-action@0a8d3c9443bbff909ab973b6a17a340b913f229f # v1.0.221
+        uses: anthropics/claude-code-action@a4f54ef2c58884867281bd8e2f8d63352ad019a9 # v1.0.229
         env:
+          ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
           CLI_HELP_DIFF_CHANGED: ${{ steps.cli-help-diff.outputs.has-changes }}
           CLI_HELP_DIFF_REPORT: ${{ env.UPGRADE_DEPS_META_DIR }}/cli-help-report.md
           RELEASE_BUILD: 'true'
         with:
-          claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ secrets.MOONSHOT_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: 'true'
+          settings: |
+            {
+              "env": {
+                "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
+                "ANTHROPIC_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
+                "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
+                "CLAUDE_CODE_EFFORT_LEVEL": "max"
+              }
+            }
           prompt: |
             Your goal: after the daily upstream-dependency upgrade, bring the project back
             to a fully green state. The upgrade script has bumped every dep to its latest
@@ -97,8 +113,9 @@ jobs:
 
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
-            - Vitest is intentionally capped at the latest stable `4.x` release until
-              Vite+ adapts to a newer major. Do not remove or bypass that cap.
+            - Vitest is capped at the latest stable `5.x` release. Keep the exact
+              version selected by the upgrade script when merging upstream catalogs.
+              Official Vitest packages must use that version. Do not bypass the cap.
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
               working tree, merges their pnpm-workspace catalogs into the root
@@ -119,7 +136,7 @@ jobs:
                cross-major semver conflict in the merged catalog, e.g.
                `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses to
                auto-resolve cross-major conflicts for packages outside its synced list
-               (oxc-*, vitest deps). For passthrough deps that vp does NOT import
+               (oxc-* and tinybench). For passthrough deps that vp does NOT import
                directly (e.g. `diff`, `acorn`, `astring`, anything only present in
                `rolldown/scripts/package.json` or vite's internals), bump vp's
                `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
@@ -206,7 +223,7 @@ jobs:
             Do NOT run `git commit` or `git push`. A later workflow step commits every
             modified file for you.
           claude_args: |
-            --model opus --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model "k3[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
 
@@ -224,14 +241,31 @@ jobs:
         continue-on-error: true
         run: pnpm fmt
 
-      - name: Enhance PR description with Claude
+      - name: Enhance PR description with Kimi K3
         id: enhance-pr-description
         continue-on-error: true
-        uses: anthropics/claude-code-action@0a8d3c9443bbff909ab973b6a17a340b913f229f # v1.0.221
+        uses: anthropics/claude-code-action@a4f54ef2c58884867281bd8e2f8d63352ad019a9 # v1.0.229
+        env:
+          ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
         with:
-          claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ secrets.MOONSHOT_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: 'true'
+          settings: |
+            {
+              "env": {
+                "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
+                "ANTHROPIC_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
+                "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
+                "CLAUDE_CODE_EFFORT_LEVEL": "max"
+              }
+            }
           prompt: |
             Your task is to generate an accurate commit message and PR description for this
             automated upstream-dependency upgrade PR. All output must be written in English.
@@ -296,7 +330,7 @@ jobs:
               two output files. A later workflow step will consume them.
             - Do NOT modify any file inside the repository working tree.
           claude_args: |
-            --model opus --allowedTools "Bash,Read,Write,Edit"
+            --model "k3[1m]" --allowedTools "Bash,Read,Write,Edit"
           additional_permissions: |
             actions: read
 

@@ -11,8 +11,9 @@ inputs:
   skip-native:
     description: >-
       Skip the NAPI binding cache and all native cargo/napi build steps; the
-      native binaries must already be in place (e.g. downloaded from the
-      windows-cli-binaries artifact produced by the build-windows-cli job).
+      native binaries and Cargo metadata must already be in place (e.g.
+      downloaded from the windows-cli-binaries artifact produced by the
+      build-windows-cli job).
     required: false
     default: 'false'
 
@@ -30,12 +31,13 @@ runs:
     - uses: ./.github/actions/compute-native-cache-input-hash
       id: native-cache-inputs
 
-    # Include env vars (RELEASE_BUILD, DEBUG, VERSION) to ensure cache miss on release builds.
+    # Include the documentation origin so preview binaries cannot reuse release links.
     - name: Compute NAPI binding cache key
       id: cache-key
       shell: bash
       run: |
-        echo "key=napi-binding-v3-${INPUTS_TARGET}-${RELEASE_BUILD}-${DEBUG}-${VERSION}-${NPM_TAG}-${{ steps.native-cache-inputs.outputs.hash }}" >> "$GITHUB_OUTPUT"
+        DOCS_ORIGIN_HASH=$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(process.env.VITE_PLUS_DOCS_ORIGIN || "https://viteplus.dev").digest("hex").slice(0, 16))')
+        echo "key=napi-binding-v3-${INPUTS_TARGET}-${RELEASE_BUILD}-${DEBUG}-${VERSION}-${NPM_TAG}-${DOCS_ORIGIN_HASH}-${{ steps.native-cache-inputs.outputs.hash }}" >> "$GITHUB_OUTPUT"
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
@@ -86,7 +88,13 @@ runs:
         pnpm --filter rolldown build-node
         pnpm --filter vite build-types
         pnpm --filter "@voidzero-dev/*" build
-        pnpm --filter vite-plus build-ts
+
+    # Native binding formatting imports the repo config, which needs the
+    # built CLI. Prebuilt bindings do not need this preliminary build.
+    - name: Build vite-plus TypeScript for native binding formatting
+      if: steps.native.outputs.build == 'true'
+      shell: bash
+      run: pnpm --filter vite-plus build-ts
 
     # Install zig + cargo-zigbuild for musl cross-compilation (napi-cross only supports gnu)
     - name: Add musl Rust target
@@ -212,6 +220,10 @@ runs:
       shell: bash
       run: |
         pnpm --filter=vite-plus build-ts
+      env:
+        # Reuse metadata from the native build so consumer jobs do not
+        # download a Rust toolchain and dependency sources to generate versions.
+        VP_BUILD_CARGO_METADATA: ${{ inputs.skip-native == 'true' && format('{0}/packages/cli/binding/vite-plus.cargo-metadata.json', github.workspace) || '' }}
 
     - name: Print output after build
       shell: bash

@@ -9,7 +9,7 @@
 use std::{borrow::Cow, fmt::Write as _, io::Write as _};
 
 use clap::{Arg, Command};
-use owo_colors::OwoColorize;
+use console::style;
 use terminal_size::{Width, terminal_size_of};
 
 const HELP_RIGHT_MARGIN: usize = 4;
@@ -129,14 +129,14 @@ pub fn render_heading(title: &str) -> String {
     }
 
     if should_accent_heading(title) {
-        heading.bold().bright_blue().to_string()
+        style(&heading).bold().blue().bright().to_string()
     } else {
-        heading.bold().to_string()
+        style(&heading).bold().to_string()
     }
 }
 
 fn render_usage_value(usage: &str) -> String {
-    if should_style_help() { usage.bold().to_string() } else { usage.to_string() }
+    if should_style_help() { style(&usage).bold().to_string() } else { usage.to_string() }
 }
 
 fn should_accent_heading(title: &str) -> bool {
@@ -149,7 +149,7 @@ fn write_documentation_footer(output: &mut String, documentation_url: &str) {
 }
 
 pub fn accent(text: &str) -> String {
-    if should_style_help() { text.bright_blue().to_string() } else { text.to_string() }
+    if should_style_help() { style(&text).blue().bright().to_string() } else { text.to_string() }
 }
 
 pub fn accent_command(command: &str) -> String {
@@ -157,10 +157,7 @@ pub fn accent_command(command: &str) -> String {
 }
 
 pub fn should_style_help() -> bool {
-    vp_shared::is_stdout_terminal()
-        && std::env::var_os("NO_COLOR").is_none()
-        && std::env::var("CLICOLOR").map_or(true, |value| value != "0")
-        && std::env::var("TERM").map_or(true, |term| term != "dumb")
+    console::colors_enabled()
 }
 
 fn terminal_content_width() -> usize {
@@ -321,7 +318,7 @@ fn render_muted_comment_suffix(line: &str) -> String {
     }
 
     if let Some((prefix, suffix)) = split_comment_suffix(line) {
-        return format!("{}{}", prefix, suffix.bright_black());
+        return format!("{}{}", prefix, style(&suffix).black().bright());
     }
 
     line.to_string()

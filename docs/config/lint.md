@@ -1,6 +1,6 @@
 # Lint Config
 
-`vp lint` and `vp check` read Oxlint settings from the `lint` block in the root `vite.config.ts`. See [Oxlint's configuration](https://oxc.rs/docs/guide/usage/linter/config.html) for details.
+`vp lint` and `vp check` use the workspace-root `lint` block, including when run from a package directory. Package configs do not replace these lint settings. Use `vp lint -c <path>` or `vp lint --config <path>` to select another config. If the root config has no `lint` block, Oxlint uses [native discovery](/guide/lint#configuration). See [Oxlint's configuration](https://oxc.rs/docs/guide/usage/linter/config.html) for details.
 
 ## Example
 
@@ -25,4 +25,4 @@ We recommend enabling both `options.typeAware` and `options.typeCheck` so `vp li
 
 For file- or package-specific lint rules, use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) from the root `vite.config.ts`.
 
-Vite+ does not currently support nested lint configuration. See [troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details and how to give feedback on future support.
+Oxlint disables nested configs in Vite+ mode, so nested lint configs do not override settings for individual files. See [troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details.

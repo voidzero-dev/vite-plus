@@ -11,7 +11,6 @@ rust-version.workspace = true
 backon = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
-indicatif = { workspace = true }
 hex = { workspace = true }
 node-semver = { workspace = true }
 pgp = { workspace = true }

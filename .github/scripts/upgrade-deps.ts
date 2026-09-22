@@ -50,6 +50,7 @@ type PnpmWorkspaceVersions = {
   vitest: string;
   tsdown: string;
   lightningcss: string;
+  lintStaged: string;
   oxcNodeCli: string;
   oxcNodeCore: string;
   oxfmt: string;
@@ -72,7 +73,7 @@ type PnpmWorkspaceEntry = {
 const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 // Vitest major upgrades can change the bundled API, export shims, and CLI
 // behavior. Advance this only after Vite+ has adapted to the new major.
-const SUPPORTED_VITEST_MAJOR = 4;
+const SUPPORTED_VITEST_MAJOR = 5;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
@@ -211,18 +212,15 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   let content = fs.readFileSync(filePath, 'utf8');
 
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
-  // All @vitest/* catalog entries (browser + core direct deps) must stay pinned
+  // Official @vitest/* catalog entries (browser + core direct deps) stay pinned
   // to the same exact version as `vitest` itself, otherwise the catalog drifts
   // from VITEST_VERSION.
   const vitestExactVersionPackages = [
     '@vitest/browser',
     '@vitest/browser-playwright',
     '@vitest/browser-preview',
-    '@vitest/browser-webdriverio',
-    '@vitest/expect',
     '@vitest/mocker',
     '@vitest/pretty-format',
-    '@vitest/runner',
     '@vitest/snapshot',
     '@vitest/spy',
     '@vitest/utils',
@@ -277,6 +275,12 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       pattern: /\n {2}lightningcss: ([^\n]+)\n/,
       replacement: `\n  lightningcss: ${versions.lightningcss}\n`,
       newVersion: versions.lightningcss,
+    },
+    {
+      name: 'lint-staged',
+      pattern: /\n {2}lint-staged: \^([\d.]+(?:-[\w.]+)?)\n/,
+      replacement: `\n  lint-staged: ^${versions.lintStaged}\n`,
+      newVersion: versions.lintStaged,
     },
     {
       name: '@oxc-node/cli',
@@ -443,6 +447,25 @@ async function updateReadmeVitestPins(vitestVersion: string): Promise<void> {
 }
 
 // ============ Write metadata files for PR description ============
+const formatVersion = (v: Change): string => {
+  if (v.tag) {
+    return `${v.tag} (${v.new.slice(0, 7)})`;
+  }
+  if (isFullSha(v.new)) {
+    return v.new.slice(0, 7);
+  }
+  return v.new;
+};
+const formatOld = (v: Change): string => {
+  if (!v.old) {
+    return '(unset)';
+  }
+  if (isFullSha(v.old)) {
+    return v.old.slice(0, 7);
+  }
+  return v.old;
+};
+
 function writeMetaFiles(): void {
   if (!META_DIR) {
     return;
@@ -458,25 +481,6 @@ function writeMetaFiles(): void {
 
   const changed = [...changes.entries()].filter(([, v]) => v.old !== v.new);
   const unchanged = [...changes.entries()].filter(([, v]) => v.old === v.new);
-
-  const formatVersion = (v: Change): string => {
-    if (v.tag) {
-      return `${v.tag} (${v.new.slice(0, 7)})`;
-    }
-    if (isFullSha(v.new)) {
-      return v.new.slice(0, 7);
-    }
-    return v.new;
-  };
-  const formatOld = (v: Change): string => {
-    if (!v.old) {
-      return '(unset)';
-    }
-    if (isFullSha(v.old)) {
-      return v.old.slice(0, 7);
-    }
-    return v.old;
-  };
 
   const commitLines = ['feat(deps): upgrade upstream dependencies', ''];
   if (changed.length) {
@@ -524,6 +528,7 @@ const [
   vitestVersion,
   tsdownVersion,
   lightningcssVersion,
+  lintStagedVersion,
   oxcNodeCliVersion,
   oxcNodeCoreVersion,
   oxfmtVersion,
@@ -539,6 +544,7 @@ const [
   getLatestNpmVersion('tsdown'),
   // Mirror exactly what the bundled @tsdown/css depends on.
   getNpmDependencyRange('@tsdown/css', 'lightningcss'),
+  getLatestNpmVersion('lint-staged'),
   getLatestNpmVersion('@oxc-node/cli'),
   getLatestNpmVersion('@oxc-node/core'),
   getLatestNpmVersion('oxfmt'),
@@ -554,6 +560,7 @@ const [
 console.log(`vitest: ${vitestVersion}`);
 console.log(`tsdown: ${tsdownVersion}`);
 console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
+console.log(`lint-staged: ${lintStagedVersion}`);
 console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
 console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
 console.log(`oxfmt: ${oxfmtVersion}`);
@@ -570,6 +577,7 @@ await updatePnpmWorkspace({
   vitest: vitestVersion,
   tsdown: tsdownVersion,
   lightningcss: lightningcssVersion,
+  lintStaged: lintStagedVersion,
   oxcNodeCli: oxcNodeCliVersion,
   oxcNodeCore: oxcNodeCoreVersion,
   oxfmt: oxfmtVersion,

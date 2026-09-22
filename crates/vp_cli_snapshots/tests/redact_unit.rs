@@ -12,6 +12,82 @@ mod redact;
 use redact::{redact_output, redact_version_probe_output};
 
 #[test]
+fn masks_yarn_compound_elapsed_times_as_one_duration() {
+    for elapsed in ["999ms", "1s", "1s 0ms", "1m 2s", "1h 2m 3s 4ms"] {
+        let input = format!(
+            "➤ YN0000: Done in {elapsed}\n\
+             ➤ YN0000: · Done with warnings in {elapsed}\n\
+             ➤ YN0000: · Done with errors in {elapsed}\n\
+             ➤ YN0000: · Failed with errors in {elapsed}\n\
+             [app]: Process exited (exit code 0), completed in {elapsed}\n"
+        );
+        assert_eq!(
+            redact_output(input, &[], true),
+            "➤ YN0000: Done in <duration>\n\
+             ➤ YN0000: · Done with warnings in <duration>\n\
+             ➤ YN0000: · Done with errors in <duration>\n\
+             ➤ YN0000: · Failed with errors in <duration>\n\
+             [app]: Process exited (exit code 0), completed in <duration>\n"
+        );
+    }
+    assert_eq!(
+        redact_output("timings: 1s 200ms\ntransform 1s, tests 200ms\n".to_owned(), &[], true),
+        "timings: <duration> <duration>\ntransform <duration>, tests <duration>\n"
+    );
+}
+
+#[test]
+fn omits_optional_yarn_step_timing_without_hiding_completion_text() {
+    for suffix in ["", " in 999ms", " in 1s", " in 1s 0ms", " in 1m 2s"] {
+        assert_eq!(
+            redact_output(format!("➤ YN0000: └ Completed{suffix}\n"), &[], true),
+            "➤ YN0000: └ Completed\n"
+        );
+    }
+    assert_eq!(
+        redact_output("Completed in 1s 2ms\n".to_owned(), &[], true),
+        "Completed in <duration>\n"
+    );
+}
+
+#[test]
+fn masks_only_the_vitest_help_version_banner() {
+    for version in ["4.1.11", "5.0.1", "5.1.0-rc.1+build.2"] {
+        let input = format!("vitest/{version}\n\nUsage:\n  $ vitest [...filters]\n");
+        assert_eq!(
+            redact_output(input, &[], true),
+            "vitest/<version>\n\nUsage:\n  $ vitest [...filters]\n"
+        );
+    }
+    let input = concat!(
+        "fixture: vitest/5.0.1\n",
+        "vitest/5.0.1/config.js\n",
+        "https://example.com/vitest/5.0.1\n",
+        "installed vitest@5.0.1\n",
+        "5.0.1\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
+}
+
+#[test]
+fn masks_vitest_v5_timing_but_preserves_coverage_percentages() {
+    let input = " Duration  112ms (transform 57%, import 28%, worker 8%, tests 6%)\nCoverage 90%\n";
+    assert_eq!(
+        redact_output(input.to_owned(), &[], true),
+        " Duration  <duration> (<timing>)\nCoverage 90%\n"
+    );
+}
+
+#[test]
+fn masks_vitest_api_port_but_preserves_other_localhost_urls() {
+    let input = "API started at http://localhost:63316/\nBrowser runner started at http://localhost:63317/__vitest_test__/?sessionId=keep-session\nhttp://localhost:9229/\n";
+    assert_eq!(
+        redact_output(input.to_owned(), &[], true),
+        "API started at http://localhost:<port>/\nBrowser runner started at http://localhost:<port>/__vitest_test__/?sessionId=keep-session\nhttp://localhost:9229/\n"
+    );
+}
+
+#[test]
 fn masks_bare_version_block_only_for_version_probe_steps() {
     // `npm --version` / `npx --version` print a bare semver alone in the
     // step's code fence; the runner masks it via the probe-scoped helper.
@@ -21,6 +97,13 @@ fn masks_bare_version_block_only_for_version_probe_steps() {
     // `.node-version` file is a fixture-controlled assertion.
     let node_version_file = "```\n25.8.2\n```\n".to_owned();
     assert_eq!(redact_output(node_version_file.clone(), &[], true), node_version_file);
+}
+
+#[test]
+fn normalizes_piped_windows_line_endings() {
+    // Non-TTY Node version probes must share snapshots with Unix and PTY output.
+    let input = "```\nv22.18.0\r\n\n```\n".to_owned();
+    assert_eq!(redact_output(input, &[], true), "```\n<version>\n\n```\n");
 }
 
 #[test]
@@ -45,6 +128,23 @@ fn masks_size_numbers_keeping_units_and_spares_plain_stems() {
         redacted,
         "dist/assets/index-<hash>.js  <size> kB | gzip: <size> kB, <size>MB total\nkeep vite-tsconfig.js\n"
     );
+}
+
+#[test]
+fn masks_yarn_file_hashes_and_lockfile_diff_checksums() {
+    let input = concat!(
+        "➤ YN0085: │ + dep@file:./dep#./dep::hash=8572a9&locator=app%40workspace%3A.\n",
+        "➤ YN0028: │ -  checksum: 10c0/deadbeef\n",
+        "➤ YN0028: │ +  version: 2.0.0\n",
+        "checksum: 10c0/deadbeef\n",
+    );
+    let expected = concat!(
+        "➤ YN0085: │ + dep@file:./dep#./dep::hash=<hash>&locator=app%40workspace%3A.\n",
+        "➤ YN0028: │ -  checksum: <hash>\n",
+        "➤ YN0028: │ +  version: 2.0.0\n",
+        "checksum: 10c0/deadbeef\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), expected);
 }
 
 #[test]
@@ -88,11 +188,35 @@ fn masks_bun_build_hash_only_in_bun_banners() {
 }
 
 #[test]
+fn masks_lint_staged_backup_hashes() {
+    let input = concat!(
+        "✔ Backed up original state in git stash (a1b2c3d)\n",
+        "✔ Done backing up original state (d4e5f6a)!\n",
+        "commit (deadbeef1) applied\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "✔ Backed up original state in git stash (<hash>)\n",
+            "✔ Done backing up original state (<hash>)!\n",
+            "commit (deadbeef1) applied\n",
+        )
+    );
+}
+
+#[test]
 fn normalizes_managed_executable_paths_and_missing_commands() {
     let input = concat!(
         r#""bin_path": "<home>/.vite-plus/js_runtime/node/24.18.1/node.exe""#,
         "\n",
         r#""pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm.cmd""#,
+        "\n",
+        r#""npm": "<home>/.vite-plus/js_runtime/node/22.18.0/npm.cmd""#,
+        "\n",
+        r#""npx": "<home>/.vite-plus/js_runtime/node/22.18.0/npx.cmd""#,
+        "\n",
+        r#"export PATH="<home>/.vite-plus/js_runtime/node/22.18.0:$PATH""#,
         "\n",
         "error: Command execution failed: No such file or directory (os error 2)\n",
     )
@@ -103,6 +227,12 @@ fn normalizes_managed_executable_paths_and_missing_commands() {
             r#""bin_path": "<home>/.vite-plus/js_runtime/node/<version>/bin/node""#,
             "\n",
             r#""pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm""#,
+            "\n",
+            r#""npm": "<home>/.vite-plus/js_runtime/node/<version>/bin/npm""#,
+            "\n",
+            r#""npx": "<home>/.vite-plus/js_runtime/node/<version>/bin/npx""#,
+            "\n",
+            r#"export PATH="<home>/.vite-plus/js_runtime/node/<version>/bin:$PATH""#,
             "\n",
             "error: Command execution failed: program not found\n",
         )
@@ -164,6 +294,21 @@ fn normalizes_pnpm_removed_dependency_versions() {
             );
             let expected = format!(
                 "Packages: -2\n--\n\n{section}:\n- testnpm2\n- @scope/pkg\n\nDone in <duration> using pnpm <version>\n"
+            );
+            assert_eq!(redact_output(input, &[], true), expected);
+        }
+    }
+}
+
+#[test]
+fn normalizes_pnpm_dedupe_removed_versions_without_done_line() {
+    for section in ["dependencies", "devDependencies", "optionalDependencies"] {
+        for version in [" 1.0.0", "", " 1.0.0-beta.1+build.2"] {
+            let input = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2{version}\n- @scope/pkg{version}\n testnpm2 1.0.1\n\n- after-section 3.0.0\n"
+            );
+            let expected = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2\n- @scope/pkg\n testnpm2 1.0.1\n\n- after-section 3.0.0\n"
             );
             assert_eq!(redact_output(input, &[], true), expected);
         }

@@ -118,7 +118,7 @@ unfiltered update still updates all testnpm2 versions
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -157,9 +157,10 @@ unfiltered update still updates all testnpm2 versions
 
 ## `vp update -r --no-save`
 
-unfiltered recursive update remains supported
+warn that --no-save is unsupported while preserving recursive update
 
 ```
+warn: yarn does not support --no-save.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -167,7 +168,7 @@ unfiltered recursive update remains supported
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json`

@@ -31,7 +31,7 @@ runs:
       id: cache-key
       shell: bash
       run: |
-        echo "key=windows-cli-xwin-v1-${{ steps.native-cache-inputs.outputs.hash }}" >> "$GITHUB_OUTPUT"
+        echo "key=windows-cli-xwin-v2-${{ steps.native-cache-inputs.outputs.hash }}" >> "$GITHUB_OUTPUT"
 
     - name: Define binary paths
       id: binary-paths
@@ -41,6 +41,7 @@ runs:
           echo 'paths<<EOF'
           echo 'packages/cli/binding/*.node'
           echo 'packages/cli/binding/vite-plus.build-time'
+          echo 'packages/cli/binding/vite-plus.cargo-metadata.json'
           echo 'target/x86_64-pc-windows-msvc/release/vp.exe'
           echo 'target/x86_64-pc-windows-msvc/release/vp-shim.exe'
           echo 'target/x86_64-pc-windows-msvc/release/vp-setup.exe'
@@ -60,7 +61,7 @@ runs:
         save-cache: ${{ inputs.save-cache }}
         cache-key: windows-cli-cross
 
-    - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
+    - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
       if: steps.binaries-cache.outputs.cache-hit != 'true'
 
     # --skip-format: formatting the generated index.cjs/index.d.cts needs the
@@ -93,6 +94,16 @@ runs:
       run: node packages/tools/src/build-trampoline.ts --xwin --release --target x86_64-pc-windows-msvc
       env:
         XWIN_ACCEPT_LICENSE: '1'
+
+    # TypeScript builds need only these Cargo package fields for toolchain
+    # versions. Export them where the Rust dependencies are already present.
+    - name: Export Cargo metadata
+      if: steps.binaries-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        cargo metadata --locked --format-version 1 \
+          | jq '{packages: [.packages[] | {name, version, source}]}' \
+          > packages/cli/binding/vite-plus.cargo-metadata.json
 
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:

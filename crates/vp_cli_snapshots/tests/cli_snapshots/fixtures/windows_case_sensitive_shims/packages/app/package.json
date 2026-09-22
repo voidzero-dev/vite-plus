@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/app",
+  "private": true,
+  "scripts": {
+    "probe": "astro --version",
+    "priority": "node-priority -e \"process.exit(0)\""
+  }
+}

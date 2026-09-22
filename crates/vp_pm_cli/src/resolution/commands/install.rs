@@ -1,9 +1,12 @@
 use vp_pm_cli_macros::pm_args;
 
 use super::parse_positive_usize;
-use crate::resolution::{
-    AddArgs, Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm,
-    Resolve, SaveDependencyArgs, Yarn,
+use crate::{
+    Error, PackageManager,
+    resolution::{
+        AddArgs, Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm,
+        Resolution, Resolve, SaveDependencyArgs, Yarn, resolve_for_manager,
+    },
 };
 
 #[pm_args]
@@ -143,7 +146,49 @@ impl Resolve<InstallArgs> for Pnpm {
 }
 
 impl InstallArgs {
-    pub(crate) fn into_add_args(self) -> AddArgs {
+    pub(crate) fn resolve_for_manager(
+        mut self,
+        manager: &PackageManager,
+    ) -> Result<Resolution, Error> {
+        let adding_packages = !self.packages.is_empty();
+        // Diagnose the selected mode before conversion discards fields, and before
+        // manager-specific support rules can produce misleading or duplicate warnings.
+        let (mode, unsupported): (&str, &[(&str, bool)]) = if adding_packages {
+            (
+                "with package names",
+                &[
+                    ("--fix-lockfile", self.fix_lockfile),
+                    ("--resolution-only", self.resolution_only),
+                ],
+            )
+        } else {
+            (
+                "without package names",
+                &[
+                    ("--save-exact", std::mem::take(&mut self.save_exact)),
+                    ("--save-peer", std::mem::take(&mut self.save_peer)),
+                    ("--save-optional", std::mem::take(&mut self.save_optional)),
+                    ("--save-catalog", std::mem::take(&mut self.save_catalog)),
+                ],
+            )
+        };
+        let mut resolution = if adding_packages {
+            resolve_for_manager(manager, self.into_add_args())?
+        } else {
+            resolve_for_manager(manager, self)?
+        };
+        for &(option, supplied) in unsupported {
+            if supplied {
+                resolution.diagnostics.warn(
+                    DiagnosticKind::UnsupportedOptionDropped,
+                    vt_str::format!("install {mode} does not support {option}."),
+                );
+            }
+        }
+        Ok(resolution)
+    }
+
+    fn into_add_args(self) -> AddArgs {
         let save_dependency = if self.dev {
             SaveDependencyArgs { save_dev: true, ..Default::default() }
         } else if self.save_peer {
@@ -163,6 +208,16 @@ impl InstallArgs {
             save_catalog: self.save_catalog,
             allow_build: None,
             ignore_scripts: self.ignore_scripts,
+            no_optional: self.no_optional,
+            frozen_lockfile: self.frozen_lockfile,
+            no_frozen_lockfile: self.no_frozen_lockfile,
+            lockfile_only: self.lockfile_only,
+            prefer_offline: self.prefer_offline,
+            offline: self.offline,
+            force: self.force,
+            no_lockfile: self.no_lockfile,
+            shamefully_hoist: self.shamefully_hoist,
+            silent: self.silent,
             filter: self.filter,
             workspace_root: self.workspace_root,
             workspace: false,
@@ -244,17 +299,7 @@ impl Yarn {
         } else {
             cmd.arg_if("--immutable", args.frozen_lockfile);
         }
-        if args.lockfile_only {
-            cmd.arg("--mode").arg("update-lockfile");
-            if args.ignore_scripts {
-                diag.warn(
-                DiagnosticKind::BehaviorChange,
-                "yarn@2+ --mode can only be specified once; --lockfile-only takes priority over --ignore-scripts",
-            );
-            }
-        } else if args.ignore_scripts {
-            cmd.arg("--mode").arg("skip-build");
-        }
+        Self::apply_berry_install_mode(&mut cmd, args.lockfile_only, args.ignore_scripts, diag);
         if args.prod {
             diag.warn(
                 DiagnosticKind::BehaviorChange,
@@ -263,6 +308,25 @@ impl Yarn {
         }
         cmd.arg_if("--refresh-lockfile", args.fix_lockfile).extend(args.pass_through_args.iter());
         cmd.into()
+    }
+
+    pub(super) fn apply_berry_install_mode(
+        cmd: &mut CommandBuilder,
+        lockfile_only: bool,
+        ignore_scripts: bool,
+        diag: &mut Diagnostics,
+    ) {
+        if lockfile_only {
+            cmd.arg("--mode").arg("update-lockfile");
+            if ignore_scripts {
+                diag.warn(
+                    DiagnosticKind::BehaviorChange,
+                    "yarn@2+ --mode can only be specified once; --lockfile-only takes priority over --ignore-scripts",
+                );
+            }
+        } else if ignore_scripts {
+            cmd.arg("--mode").arg("skip-build");
+        }
     }
 }
 
@@ -294,6 +358,77 @@ mod tests {
         resolve,
         test_utils::{bun, expect_run, npm, pnpm, yarn},
     };
+
+    #[test]
+    fn install_with_packages_warns_on_install_only_options() {
+        let manager = crate::PackageManager::from_bin_prefix(
+            crate::PackageManagerType::Pnpm,
+            "11.24.0",
+            vt_path::current_dir().unwrap().join(".test-package-manager/bin"),
+        );
+        let args = InstallArgs {
+            packages: vec!["react".to_string()],
+            fix_lockfile: true,
+            resolution_only: true,
+            lockfile_only: true,
+            save_exact: true,
+            ..Default::default()
+        };
+        let resolution =
+            crate::cli::PackageManagerCommand::Install(args).resolve_for_manager(&manager).unwrap();
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            ["add", "--save-exact", "--lockfile-only", "react"]
+        );
+        assert_eq!(
+            resolution
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "install with package names does not support --fix-lockfile.",
+                "install with package names does not support --resolution-only.",
+            ],
+        );
+    }
+
+    #[test]
+    fn install_without_packages_warns_on_add_only_options() {
+        let manager = crate::PackageManager::from_bin_prefix(
+            crate::PackageManagerType::Npm,
+            "11.13.0",
+            vt_path::current_dir().unwrap().join(".test-package-manager/bin"),
+        );
+        let args = InstallArgs {
+            save_exact: true,
+            save_peer: true,
+            save_optional: true,
+            save_catalog: true,
+            lockfile_only: true,
+            offline: true,
+            ..Default::default()
+        };
+        let resolution =
+            crate::cli::PackageManagerCommand::Install(args).resolve_for_manager(&manager).unwrap();
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            ["install", "--package-lock-only", "--offline"]
+        );
+        assert_eq!(
+            resolution
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "install without package names does not support --save-exact.",
+                "install without package names does not support --save-peer.",
+                "install without package names does not support --save-optional.",
+                "install without package names does not support --save-catalog.",
+            ],
+        );
+    }
 
     #[test]
     fn test_pnpm_basic_install() {

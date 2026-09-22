@@ -14,6 +14,23 @@ static UUID_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 static DURATION_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)?(ns|µs|ms|s)\b").unwrap());
+// Yarn prints elapsed times as one or several units (999ms vs 1s 0ms).
+// Match the entire elapsed field, not adjacent values in timing tables.
+static YARN_ELAPSED_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(\b(?:(?:Done|Failed)(?: with (?:warnings|errors))?|[Cc]ompleted) in )\d+(?:\.\d+)?(?:ms|s|m|h)\b(?:[ \t]+\d+(?:\.\d+)?(?:ms|s|m|h)\b)*",
+    )
+    .unwrap()
+});
+// Yarn omits the step timer entirely for fast steps. Keep the completion
+// marker while removing its optional, already normalized elapsed field.
+static YARN_STEP_TIMING_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(➤ YN0000: └ Completed) in <duration>").unwrap());
+// Vitest v5 prints the timing breakdown as percentages. Its order and omitted
+// zero-cost phases vary between runs, so redact the complete timing detail.
+static VITEST_TIMING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)(Duration\s+<duration>) \((?:[a-z]+ \d+%(?:, )?)+\)").unwrap()
+});
 // Only v-prefixed versions are masked: tool and runtime banners all print
 // that form (`vite v7.3.2`, `vp v0.2.2`, `Node.js v24.18.0`) and churn on
 // every dep bump, while bare semver literals (`app-1.0.0.tgz`,
@@ -21,6 +38,12 @@ static DURATION_RE: LazyLock<regex::Regex> =
 // able to assert.
 static VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\bv\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b").unwrap()
+});
+// Vitest's delegated help prints a bare `vitest/5.0.1` banner. Match the
+// complete line so paths, dependency pins, and other fixture values stay intact.
+static VITEST_HELP_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^vitest/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+        .unwrap()
 });
 static TOOLCHAIN_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b").unwrap()
@@ -62,7 +85,14 @@ static BUN_BUILD_HASH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // spelling used by the shared snapshots.
 static WINDOWS_MANAGED_NODE_BIN_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r"(<home>/.vite-plus/js_runtime/node/(?:<version>|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?))/node\.exe\b",
+        r"(<home>/.vite-plus/js_runtime/node/(?:<version>|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?))/(node|npm|npx)\.(?:exe|cmd)\b",
+    )
+    .unwrap()
+});
+// Bash PATH output uses the runtime root on Windows and its bin directory on Unix.
+static WINDOWS_MANAGED_NODE_PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(export PATH="<home>/.vite-plus/js_runtime/node/(?:<version>|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?))(:\$PATH")"#,
     )
     .unwrap()
 });
@@ -181,6 +211,10 @@ static ASSET_HASH_RE: LazyLock<regex::Regex> =
 // verbatim.
 static LOCAL_REGISTRY_URL_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"http://127\.0\.0\.1:\d+").unwrap());
+static VITEST_API_PORT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"((?:API|Browser runner) started at http://(?:localhost|127\.0\.0\.1):)\d+")
+        .unwrap()
+});
 // npm names its debug log after the wall-clock start of the failing run.
 static NPM_LOG_NAME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}_\d{3}Z(-debug-\d+\.log)").unwrap()
@@ -210,6 +244,9 @@ static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // pnpm reads a removed package's manifest concurrently with unlinking the
 // package, so its removal summary may omit the version. Strip that version
 // within dependency sections of pnpm output; keep names and added versions.
+// `pnpm dedupe` omits the Done footer, so also recognize its removal count.
+static PNPM_REMOVAL_COUNT_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)^Packages: -\d+\n").unwrap());
 static PNPM_DEPENDENCY_SECTION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
         r"(?m)^(?:dependencies|devDependencies|optionalDependencies):\n(?:[^\n]+\n?)*",
@@ -269,10 +306,17 @@ static YARN1_STEP_EMOJI_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // depends on what ran earlier in the environment; strip it entirely.
 static YARN_TELEMETRY_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"(?m)^\u{27A4} YN0065: [^\n]*\n(?:[ \t]*\n)*").unwrap());
+// Yarn's file archive hashes and lockfile checksums differ across platforms.
+static YARN_FILE_HASH_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(::hash=)[0-9a-f]+(&locator=)").unwrap());
+static YARN_LOCKFILE_CHECKSUM_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^(\x{27A4} YN0028: [^\n]*checksum: )[0-9a-f]+/[0-9a-f]+").unwrap()
+});
 // `vp staged` reports the backup stash it created; the short hash covers a
 // commit of the working tree at run time, so it can never be stable.
-static STASH_HASH_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"(git stash \()[0-9a-f]+(\))").unwrap());
+static STASH_HASH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"((?:git stash|Done backing up original state) \()[0-9a-f]+(\))").unwrap()
+});
 // Package managers emit blank separator lines whose count races their own
 // progress rendering under a PTY; collapse runs so spacing is stable.
 static BLANK_RUN_RE: LazyLock<regex::Regex> =
@@ -424,6 +468,13 @@ pub fn redact_output(
     paths: &[(&str, &'static str)],
     normalize_separators: bool,
 ) -> String {
+    // Piped Windows commands retain CRLF, unlike the rendered PTY output.
+    {
+        use cow_utils::CowUtils as _;
+        if let Cow::Owned(replaced) = output.as_str().cow_replace("\r\n", "\n") {
+            output = replaced;
+        }
+    }
     // ConPTY repaints rows padded to the full grid width with explicit
     // spaces when a second console client attaches to the terminal. Trailing
     // blanks are never meaningful in a rendered grid, so trim every row on
@@ -447,7 +498,8 @@ pub fn redact_output(
 
     // Normalize platform-specific managed executable paths and missing-command
     // diagnostics before applying the general version redactions below.
-    output = WINDOWS_MANAGED_NODE_BIN_RE.replace_all(&output, "${1}/bin/node").into_owned();
+    output = WINDOWS_MANAGED_NODE_BIN_RE.replace_all(&output, "${1}/bin/${2}").into_owned();
+    output = WINDOWS_MANAGED_NODE_PATH_RE.replace_all(&output, "${1}/bin${2}").into_owned();
     output = WINDOWS_MANAGED_PM_BIN_RE.replace_all(&output, "${1}").into_owned();
     output = COMMAND_NOT_FOUND_RE.replace_all(&output, "${1}program not found").into_owned();
 
@@ -456,10 +508,13 @@ pub fn redact_output(
 
     // Redact durations like "0ns", "123ms" or "1.23s" to "<duration>".
     // Runs before version redaction so "1.23s" never half-matches as a version.
+    output = YARN_ELAPSED_RE.replace_all(&output, "${1}<duration>").into_owned();
     output = DURATION_RE.replace_all(&output, "<duration>").into_owned();
+    output = VITEST_TIMING_RE.replace_all(&output, "$1 (<timing>)").into_owned();
 
     // Redact semver-shaped versions (bundled tool versions, Node versions).
     output = VERSION_RE.replace_all(&output, "<version>").into_owned();
+    output = VITEST_HELP_VERSION_RE.replace_all(&output, "vitest/<version>").into_owned();
 
     // Toolchain output is generated from the bundled manifest, so every
     // version and compiled revision changes when that manifest is refreshed.
@@ -557,17 +612,7 @@ pub fn redact_output(
         })
         .into_owned();
 
-    // Normalize yarn's timing-dependent completion text: yarn appends
-    // "in Xs Ys" only when the step was slow enough to time, a race;
-    // DURATION_RE has already masked the numbers.
-    {
-        use cow_utils::CowUtils as _;
-        if let Cow::Owned(replaced) =
-            output.as_str().cow_replace("Completed in <duration> <duration>", "Completed")
-        {
-            output = replaced;
-        }
-    }
+    output = YARN_STEP_TIMING_RE.replace_all(&output, "${1}").into_owned();
 
     // Mask the racy completed-count in the global-install spinner row
     output = INSTALL_PROGRESS_COUNT_RE.replace_all(&output, "${1}<n>/${2}").into_owned();
@@ -583,17 +628,22 @@ pub fn redact_output(
     // notice, and the stash hash `vp staged` reports for its backup
     output = YARN1_STEP_EMOJI_RE.replace_all(&output, "${1} ").into_owned();
     output = YARN_TELEMETRY_RE.replace_all(&output, "").into_owned();
+    output = YARN_FILE_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
+    output = YARN_LOCKFILE_CHECKSUM_RE.replace_all(&output, "${1}<hash>").into_owned();
     output = STASH_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
 
     // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
     // log name, live spinner frames, and pnpm's nondeterministic progress lines
     output = LOCAL_REGISTRY_URL_RE.replace_all(&output, "http://127.0.0.1:<port>").into_owned();
+    output = VITEST_API_PORT_RE.replace_all(&output, "${1}<port>").into_owned();
     output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
     output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
 
-    if output.contains("Done in <duration> using pnpm <version>") {
+    if output.contains("Done in <duration> using pnpm <version>")
+        || PNPM_REMOVAL_COUNT_RE.is_match(&output)
+    {
         output = PNPM_DEPENDENCY_SECTION_RE
             .replace_all(&output, |caps: &regex::Captures| {
                 PNPM_REMOVED_VERSION_RE.replace_all(&caps[0], "${1}").into_owned()

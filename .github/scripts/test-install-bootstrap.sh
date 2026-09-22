@@ -59,6 +59,9 @@ curl() {
     *file://*) command curl "$@" ;;
     *-fsSIL*) printf 'x-commit-key: voidzero-dev:vite-plus:%s\r\n' "$fixture_sha" ;;
     *'https://custom.example/vite-plus/'*) printf '{"version":"0.2.9"}\n' ;;
+    *'https://custom.example/@voidzero-dev%2Fvite-plus-cli-'*)
+      # Release payloads must pass the real provenance gate before handoff.
+      printf '{"version":"0.2.9","dist":{"tarball":"https://custom.example/platform.tgz","attestations":{"provenance":{"predicateType":"https://slsa.dev/provenance/v1"}}}}\n' ;;
     *) cp "$test_root/payload.tgz" "${@: -1}" ;;
   esac
 }

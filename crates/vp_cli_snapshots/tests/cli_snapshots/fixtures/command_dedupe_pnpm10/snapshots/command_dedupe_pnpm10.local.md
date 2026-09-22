@@ -153,7 +153,7 @@ Packages: -1
 -
 
 dependencies:
-- testnpm2 1.0.1
+- testnpm2
 ```
 
 ## `vpt print-file package.json`

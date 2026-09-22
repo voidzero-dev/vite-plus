@@ -30,7 +30,7 @@
   "vue-mini": {
     "repository": "https://github.com/vue-mini/vue-mini.git",
     "branch": "master",
-    "hash": "333c5957bf99a68991c9f91019670c56b65bd896"
+    "hash": "d8ba920b64922c959314226ffcf70af52b27e344"
   },
   "vite-plugin-react": {
     "repository": "https://github.com/vitejs/vite-plugin-react.git",
@@ -98,15 +98,21 @@
   "yaak": {
     "repository": "https://github.com/mountain-loop/yaak.git",
     "branch": "main",
-    "hash": "b4a1c418bb3f923858dd55729f585e189327a038",
+    "hash": "c6e09a5af3b20fc43cb6000af7b420af24ff510a",
     "forceFreshMigration": true
   },
   "npmx.dev": {
     "repository": "https://github.com/npmx-dev/npmx.dev.git",
     "branch": "main",
-    "hash": "035776c96cf8f089c44e6011264b534b0bcde53c",
+    "hash": "0e44738831077879c7ab00469fc50f5dbcf18650",
     "forceFreshMigration": true,
     "playwright": true
+  },
+  "codiff": {
+    "repository": "https://github.com/nkzw-tech/codiff.git",
+    "branch": "main",
+    "hash": "1bfbe4506f5321bd419d56f40d8b02a5f6fc82c7",
+    "forceFreshMigration": true
   },
   "vite-plus-jest-dom-repro": {
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-jest-dom-repro.git",
@@ -158,6 +164,22 @@
     "repository": "https://github.com/ueberdosis/tiptap.git",
     "branch": "main",
     "hash": "f434577e6bb2010b321653cb132a57bda18764fa",
+    "forceFreshMigration": true
+  },
+  "10ten-ja-reader": {
+    "repository": "https://github.com/birchill/10ten-ja-reader.git",
+    "branch": "main",
+    "hash": "7eabad2d5075ce278c580a59c4deb6b2d794383f"
+  },
+  "sqlocal": {
+    "repository": "https://github.com/DallasHoff/sqlocal.git",
+    "branch": "main",
+    "hash": "ef38d4d76d7e09da5ffc3b3ab0ba98ea78c18000"
+  },
+  "brazilian-utils": {
+    "repository": "https://github.com/brazilian-utils/javascript.git",
+    "branch": "main",
+    "hash": "2b2c73518fbfdad820e4760b19fee99c4d836c94",
     "forceFreshMigration": true
   },
   "solid-vite-plugin": {

@@ -3,6 +3,19 @@ use std::path::Path;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 
+/// Parse source and resolve lexical bindings for the TypeScript migration rules.
+#[napi]
+pub fn analyze_migration_source(filename: String, source: String) -> Result<String> {
+    vp_migration::analyze_migration_source(&filename, &source).map_err(Error::from_reason)
+}
+
+/// Check inherited `.gitignore` rules without requiring the directory to exist.
+#[napi]
+pub fn is_directory_gitignored(root: String, directory: String) -> Result<bool> {
+    Ok(vp_migration::is_directory_gitignored(Path::new(&root), Path::new(&directory))
+        .map_err(anyhow::Error::from)?)
+}
+
 /// Rewrite scripts json content using rules from rules_yaml
 ///
 /// # Arguments
@@ -181,6 +194,23 @@ pub fn upsert_json_config(
 pub fn has_config_key(vite_config_path: String, config_key: String) -> Result<bool> {
     let content = std::fs::read_to_string(&vite_config_path).map_err(anyhow::Error::from)?;
     Ok(vp_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
+}
+
+/// Remove a top-level key from a recognized Vite config object.
+#[napi]
+pub fn remove_config_key(
+    vite_config_path: String,
+    config_key: String,
+) -> Result<MergeJsonConfigResult> {
+    let content = std::fs::read_to_string(&vite_config_path).map_err(anyhow::Error::from)?;
+    let result =
+        vp_migration::remove_config_key(&content, &config_key).map_err(anyhow::Error::from)?;
+
+    Ok(MergeJsonConfigResult {
+        content: result.content,
+        updated: result.updated,
+        uses_function_callback: result.uses_function_callback,
+    })
 }
 
 /// Error from batch import rewriting

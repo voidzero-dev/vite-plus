@@ -17,7 +17,9 @@ test-utils = ["dep:temp-env", "dep:tempfile"]
 [dependencies]
 directories = { workspace = true }
 nix = { workspace = true, features = ["fs", "poll", "term"] }
-owo-colors = { workspace = true }
+console = { workspace = true }
+indicatif = { workspace = true }
+cow-utils = { workspace = true }
 serde = { workspace = true }
 # use `preserve_order` feature to preserve the order of the fields in `package.json`
 serde_json = { workspace = true, features = ["preserve_order"] }
@@ -25,6 +27,7 @@ supports-color = "3"
 temp-env = { workspace = true, optional = true, features = ["async_closure"] }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vt_path = { workspace = true }
@@ -40,8 +43,10 @@ rustls = { workspace = true }
 webpki-root-certs = { workspace = true }
 
 [dev-dependencies]
+indicatif = { workspace = true, features = ["in_memory"] }
 serial_test = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 # Enables the `test-utils` feature for this crate's own tests and doctests
 # (a package's dev-dependencies are active when it is the tested target).
 vp_shared = { path = ".", features = ["test-utils"] }

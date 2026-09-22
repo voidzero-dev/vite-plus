@@ -324,6 +324,54 @@ pub fn has_config_key(vite_config_content: &str, config_key: &str) -> Result<boo
     Ok(false)
 }
 
+/// Remove a top-level key from each recognized Vite config object.
+///
+/// Unrecognized config shapes are left untouched. The returned content may
+/// retain whitespace where the property was removed; callers format generated
+/// configs after migration.
+pub fn remove_config_key(
+    vite_config_content: &str,
+    config_key: &str,
+) -> Result<MergeResult, Error> {
+    let uses_function_callback = check_function_callback(vite_config_content)?;
+    let grep = SupportLang::TypeScript.ast_grep(vite_config_content);
+    let root = grep.root();
+    let mut edits = Vec::new();
+
+    for node in root.dfs() {
+        let matches_key = match node.kind().as_ref() {
+            "pair" => node.field("key").is_some_and(|key| pair_key_matches(&key, config_key)),
+            "shorthand_property_identifier" => node.text() == config_key,
+            _ => continue,
+        };
+        if !matches_key {
+            continue;
+        }
+        let Some(parent_object) = node.parent() else { continue };
+        if parent_object.kind() != "object" || !is_direct_recognized_config_object(&parent_object) {
+            continue;
+        }
+
+        let range = node.range();
+        edits.push((range.start, range.end));
+        if let Some(next) = node.next_all().find(|sibling| sibling.kind() != "comment")
+            && next.kind() == ","
+        {
+            let comma = next.range();
+            edits.push((comma.start, comma.end));
+        }
+    }
+
+    edits.sort_by_key(|(start, _)| std::cmp::Reverse(*start));
+    let updated = !edits.is_empty();
+    let mut content = vite_config_content.to_owned();
+    for (start, end) in edits {
+        content.replace_range(start..end, "");
+    }
+
+    Ok(MergeResult { content, updated, uses_function_callback })
+}
+
 /// Wrap safe inline Vite plugin arrays with `lazyPlugins(() => [...])`.
 ///
 /// This transform is intentionally conservative: it only touches direct
@@ -1067,6 +1115,38 @@ export default defineConfig({
         assert!(has_config_key(cfg, "lint").unwrap());
         assert!(!has_config_key(cfg, "pack").unwrap());
         assert!(!has_config_key(cfg, "staged").unwrap());
+    }
+
+    // ── remove_config_key ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_remove_config_key_from_define_config() {
+        let cfg = r#"export default defineConfig({
+  pack: { exports: true },
+  lint: { options: { typeAware: true, typeCheck: true } },
+  fmt: {},
+});
+"#;
+        let result = remove_config_key(cfg, "lint").unwrap();
+
+        assert!(result.updated);
+        assert!(!result.content.contains("lint:"));
+        assert!(result.content.contains("pack: { exports: true }"));
+        assert!(result.content.contains("fmt: {}"));
+    }
+
+    #[test]
+    fn test_remove_config_key_ignores_nested_and_unrecognized_objects() {
+        for cfg in [
+            "export default defineConfig({ plugin: { lint: {} } });",
+            "export default defineConfig(() => ({ plugin: { config() { return { lint: {} } } } }));",
+            "export default defineConfig(() => config);",
+            "module.exports = { lint: {} };",
+        ] {
+            let result = remove_config_key(cfg, "lint").unwrap();
+            assert!(!result.updated);
+            assert_eq!(result.content, cfg);
+        }
     }
 
     #[test]

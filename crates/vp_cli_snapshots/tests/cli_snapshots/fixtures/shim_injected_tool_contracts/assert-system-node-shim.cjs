@@ -22,6 +22,19 @@ if (process.argv[2] === 'setup') {
     execFileSync('node', ['--version'], { encoding: 'utf8', timeout: 10000 }).trim(),
     process.version,
   );
+  // Current must report the same bundled npm that the external Node shim executes.
+  const current = JSON.parse(
+    execFileSync('vp', ['env', 'current', 'npm', '--json'], {
+      encoding: 'utf8',
+      timeout: 10000,
+    }),
+  ).package_manager;
+  assert.equal(current.version, '10.9.3');
+  assert.equal(current.installed, true);
+  assert.equal(current.source, 'Node.js bundled npm');
+  for (const tool of ['npm', 'npx']) {
+    assert.equal(current.bin_paths[tool], path.join(path.dirname(process.execPath), tool));
+  }
   const preload = process.argv[2] === 'preload';
   const options = {
     encoding: 'utf8',

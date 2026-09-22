@@ -1,3 +1,4 @@
 *.node
 *.wasm
 vite-plus.build-time
+vite-plus.cargo-metadata.json

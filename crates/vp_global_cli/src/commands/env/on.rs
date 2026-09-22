@@ -23,6 +23,7 @@ pub async fn execute(scope: Option<String>) -> Result<ExitStatus, Error> {
             ShimMode::Managed,
         );
     }
+    super::setup::refresh_shims(&std::env::current_exe()?, &config, false, false).await?;
     save_config(&config).await?;
 
     let component = match scope {

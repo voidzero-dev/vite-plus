@@ -1,5 +1,7 @@
 [[case]]
 name = "pm_audit_bun"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "global"
 serial = true
 cwd = "bun"

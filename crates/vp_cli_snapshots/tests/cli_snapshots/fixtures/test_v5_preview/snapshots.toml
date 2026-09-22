@@ -1,0 +1,19 @@
+[[case]]
+name = "preview_runtime"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+steps = [{ argv = ["node", "verify.mjs"], timeout = 120000 }]
+
+[[case]]
+name = "upstream_real_timers"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+comment = "Known upstream regression introduced in Vitest 4.1.1 and still present in 5.0.1, not a new v5 release blocker: Preview locator clicks advance fake timers while using real timers. Require success when upstream fixes it."
+steps = [{ argv = ["node", "verify.mjs", "--real-timers"], timeout = 120000 }]
+
+[[case]]
+name = "upstream_browser_defines"
+vp = "local"
+env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+comment = "Regression for upstream #11198, fixed in 5.0.1: Preview must preserve string and boolean define values without a Vite+ backport."
+steps = [{ argv = ["node", "verify.mjs", "--browser-defines"], timeout = 120000 }]

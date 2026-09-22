@@ -80,7 +80,14 @@ Project-owned hook scripts such as `.vite-hooks/pre-commit` should be committed 
 
 ### `vp staged`
 
-`vp staged` runs staged-file checks using the `staged` config from `vite.config.ts`. To run it before each commit, add it to the project-owned pre-commit hook:
+`vp staged` runs staged-file checks using the `staged` config from `vite.config.ts`. It bundles `lint-staged` 17 and requires:
+
+- Node.js `22.22.1` or later in the `22.x` line, or `24.11.0` or later
+- Git `2.32.0` or later
+
+Node.js `20.x` is no longer supported for staged checks. These requirements also apply when a pre-commit hook runs `vp staged`. Upgrade the project's Node.js runtime and the Git installation on developer machines and CI runners before using the command. See the [lint-staged 17 release notes](https://github.com/lint-staged/lint-staged/releases/tag/v17.0.0) for the upstream changes.
+
+To run it before each commit, add it to the project-owned pre-commit hook:
 
 ```bash
 vp staged

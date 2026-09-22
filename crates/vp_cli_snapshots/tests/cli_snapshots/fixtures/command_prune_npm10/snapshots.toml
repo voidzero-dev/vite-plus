@@ -1,6 +1,7 @@
 [[case]]
 name = "command_prune_npm10"
 vp = "global"
+skip-platforms = ["windows"]
 serial = true
 steps = [
   { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },

@@ -7,8 +7,8 @@ use std::{collections::HashSet, ffi::OsStr, process::ExitStatus};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
+use console::style;
 use dialoguer::{Confirm, theme::ColorfulTheme};
-use owo_colors::OwoColorize;
 use tokio::runtime::Runtime;
 use vp_pm_cli::{ManagedGlobalCommand, PackageManagerCommand};
 use vp_shared::output;
@@ -344,7 +344,7 @@ Examples:
         scope: Option<String>,
     },
 
-    /// Create or update shims in VP_HOME/bin
+    /// Create or update managed and system-first tool shims
     Setup {
         /// Force refresh shims even if they exist
         #[arg(long)]
@@ -1019,14 +1019,17 @@ fn prompt_reinstall_node_mismatches(
 ) -> bool {
     output::info("Some global packages were installed with a different Node.js version.");
     output::raw("");
-    output::raw(&format!("Current Node.js: {}", display_node_version(current_node_version).bold()));
+    output::raw(&format!(
+        "Current Node.js: {}",
+        style(&display_node_version(current_node_version)).bold()
+    ));
     output::raw("");
     output::raw("Affected packages:");
     for package in packages {
         output::raw(&format!(
             "- {} (installed with {})",
-            package.name.bold(),
-            display_node_version(&package.installed_node).bold()
+            style(&package.name).bold(),
+            style(&display_node_version(&package.installed_node)).bold()
         ));
     }
     output::raw("");

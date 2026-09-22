@@ -7,7 +7,6 @@ use vp_pm_cli::PackageManagerType;
 use super::common::{agent_option, boolean_option, editor_option};
 use crate::js_command_args::parser::{CliParseError, ParseResult, help_arg, parse_args};
 
-const DOCUMENTATION_URL: &str = "https://viteplus.dev/guide/create";
 const PACKAGE_MANAGER_ERROR: &str = "use pnpm, npm, yarn, or bun";
 
 fn parse_package_manager(value: &str) -> Result<PackageManagerType, &'static str> {
@@ -204,7 +203,10 @@ pub fn parse_create_args(argv: Vec<String>) -> ParseCreateArgsOutcome {
     match parse_args::<CreateCliArgs>(create_command(), argv) {
         ParseResult::Ok(value) => ParseCreateArgsOutcome::Ok { value: value.into() },
         ParseResult::Help(command) => {
-            let mut doc = help_doc_from_command(*command, Some(DOCUMENTATION_URL.into()));
+            let mut doc = help_doc_from_command(
+                *command,
+                Some(vp_shared::documentation_url("/guide/create").into()),
+            );
             doc.sections.push(HelpSection::Lines {
                 title: "Examples".into(),
                 lines: vec![

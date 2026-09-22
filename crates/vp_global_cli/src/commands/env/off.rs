@@ -1,7 +1,7 @@
 //! Enable system-first mode command.
 //!
 //! Handles `vp env off` to set shim mode to "system_first" -
-//! shims prefer system Node.js, fallback to managed if not found.
+//! Tool shims move to the fallback directory so PATH prefers system tools.
 
 use std::process::ExitStatus;
 
@@ -24,6 +24,7 @@ pub async fn execute(scope: Option<String>) -> Result<ExitStatus, Error> {
             ShimMode::SystemFirst,
         );
     }
+    super::setup::refresh_shims(&std::env::current_exe()?, &config, false, false).await?;
     save_config(&config).await?;
 
     let component = match scope {

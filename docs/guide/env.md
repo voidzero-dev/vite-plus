@@ -65,16 +65,16 @@ Package-manager selection uses this priority:
 4. `devEngines.packageManager`
 5. Lockfile or manager-specific configuration
 6. The named package manager's global default version
-7. The named shim's latest release
+7. The named shim's latest release (Node.js' bundled version for `npm`)
 
 `VP_PACKAGE_MANAGER` selects the manager and version for commands such as `vp install`. Direct package-manager shims ignore this variable and use independent version overrides:
 
-| Variable          | Shims             |
-| ----------------- | ----------------- |
-| `VP_NPM_VERSION`  | `npm`, `npx`      |
-| `VP_PNPM_VERSION` | `pnpm`, `pnpx`    |
-| `VP_YARN_VERSION` | `yarn`, `yarnpkg` |
-| `VP_BUN_VERSION`  | `bun`, `bunx`     |
+| Variable          | Shims                       |
+| ----------------- | --------------------------- |
+| `VP_NPM_VERSION`  | `npm`, `npx`                |
+| `VP_PNPM_VERSION` | `pnpm`, `pnpx`, `pn`, `pnx` |
+| `VP_YARN_VERSION` | `yarn`, `yarnpkg`           |
+| `VP_BUN_VERSION`  | `bun`, `bunx`               |
 
 These variables accept a version or range, such as `10.18.0`, `10`, or `latest`, and override the matching shim's project and default versions. They do not change the manager or version selected by `vp install`.
 
@@ -89,11 +89,13 @@ VP_PNPM_VERSION=10.20.0 pnpm --version
 
 The overrides apply in managed mode. A package manager can also perform its own version switching after Vite+ launches it; for example, pnpm's `managePackageManagerVersions` setting may switch back to the version in `package.json`.
 
-A project selection applies only to its matching shims. For example, pnpm controls `pnpm` and `pnpx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The directly invoked npm shim keeps its Node-bundled fallback, while an explicit `vp env ... npm` family scope uses standalone npm's latest release.
+A project selection applies only to its matching shims. For example, pnpm controls `pnpm`, `pnpx`, `pn`, and `pnx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The npm shim falls back to Node's bundled npm. `vp env use npm` selects standalone npm's latest release for the current shell when no project version or global default is configured.
 
 ::: details Latest-version caching
 When a named shim falls back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached.
 :::
+
+`pn` runs the same managed binary as `pnpm`, and `pnx` runs the same managed binary as `pnpx` (`pnpm dlx`). These aliases also work with managed pnpm versions older than v11.
 
 ## Environment Modes
 
@@ -120,17 +122,20 @@ If you do not want Vite+ to manage Node.js first, run:
 vp env off
 ```
 
-This switches both components to system-first mode. Vite+ prefers system tools and falls back to managed installations. Mixed configurations compose: a system package-manager launcher receives the Node.js selected by the Node mode.
+This switches both components to system-first mode. Vite+ prefers system tools and falls back to managed installations. Mixed configurations compose: package-manager launchers that look up Node.js through PATH receive the runtime selected by the Node mode.
 
-Using `pm` records the selected mode for all currently supported package managers and replaces their individual choices. An unscoped `on` or `off` does the same while also changing Node.js. A family without a recorded mode remains undecided until its shim is first used or an `on` / `off` command configures it.
+Using `pm` records the selected mode for all currently supported package managers and replaces their individual choices. An unscoped `on` or `off` does the same while also changing Node.js.
 
 ## Commands
 
 ### Setup
 
-- `vp env setup` creates or updates the `node`, `npm`, `npx`, `pnpm`, `pnpx`, `yarn`, `yarnpkg`, `bun`, `bunx`, `vpx`, and `vpr` shims in the resolved bin directory. It writes shell setup scripts in the config directory.
-- `vp env on` / `vp env off` changes both modes; append `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the change
-- `vp env print` prints PATH setup for both components; append a selector to print one
+- `vp env setup` creates tool shims and writes shell setup scripts.
+- `vp env setup --refresh` recreates Vite+ shims and regenerates shell setup scripts using your saved preferences.
+- `vp env on` / `vp env off` switches between Vite+-managed and system-first modes; append `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the change.
+- `vp env print` prints PATH setup for both components; append a selector to print one.
+
+Upgrades refresh the setup automatically. Open a new terminal or reload your shell setup script afterward.
 
 PowerShell needs to dot-source the generated setup script in the current shell before `vp env use` can affect only that shell session:
 

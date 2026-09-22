@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_bundled_npm"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent"], comment = "An npm lockfile without a package-manager pin migrates using Node's bundled npm version" },
+  { argv = ["node", "assert-npm-version.cjs"], comment = "Migration persists a concrete npm version matching the selected Node runtime" },
+]

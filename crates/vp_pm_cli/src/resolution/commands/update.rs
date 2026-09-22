@@ -57,7 +57,7 @@ pub struct UpdateArgs {
     pub(crate) no_optional: bool,
 
     /// Update lockfile only, don't modify package.json
-    #[arg(long)]
+    #[arg(long, not_supported(yarn))]
     pub(crate) no_save: bool,
 
     /// Only update if package exists in workspace (pnpm-specific)
@@ -356,6 +356,22 @@ mod tests {
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["up", "react"]);
+    }
+
+    #[test]
+    fn test_yarn_update_drops_no_save_with_warning() {
+        for (version, subcommand) in
+            [("1.22.0", "upgrade"), ("2.0.0", "up"), ("3.0.0", "up"), ("4.0.0", "up")]
+        {
+            let args = parse_args::<UpdateArgs>(["react", "--no-save"]).unwrap();
+            let resolution = resolve(&yarn(version), args);
+            let command = expect_run(resolution.outcome);
+
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec![subcommand, "react"]);
+            assert_eq!(resolution.diagnostics.len(), 1);
+            assert_eq!(resolution.diagnostics[0].message, "yarn does not support --no-save.");
+        }
     }
 
     #[test]

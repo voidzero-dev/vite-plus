@@ -10,6 +10,12 @@ VITE+ - The Unified Toolchain for the Web
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied, 1 file had imports rewritten
+! Warnings:
+  - Vitest v5: 1 review item
+
+vitest.config.ts
+  19:10 REVIEW [global-api-ownership] Resolve test.dir before migrating global APIs. The test discovery directory is not statically known.
+    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ```
 
 ## `vpt print-file vitest.config.ts`
@@ -23,15 +29,27 @@ import { foo } from '@foo/vite-plugin-foo';
 import { playwright } from 'vite-plus/test/browser-playwright';
 import { server } from 'vite-plus/test/browser/context';
 import { preview } from 'vite-plus/test/browser-preview';
-import { webdriverio } from 'vite-plus/test/browser-webdriverio';
+import { webdriverio } from '@vitest/browser-webdriverio';
 import { userEvent } from 'vite-plus/test/browser/context';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [foo()],
   test: {
+    // Vitest v4 compatibility: preserve mock call history.
+    // Remove after tests no longer rely on calls from setup or earlier tests.
+    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+    clearMocks: false,
     dir: join(import.meta.dirname, 'test'),
     browser: {
+      locators: {
+        // Vitest v4 compatibility: keep partial, case-insensitive locator matching.
+        // Remove after updating locators for full, case-sensitive matches.
+        // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+        // https://vitest.dev/guide/migration/#locators-are-strict-by-default
+        exact: false
+      },
       enabled: true,
       provider: playwright(),
       headless: true,
@@ -62,7 +80,7 @@ check package.json
     "@vitest/coverage-v8": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@vitest/browser-webdriverio": "catalog:",
+    "@vitest/browser-webdriverio": "^5.0.0",
     "webdriverio": "*",
     "playwright": "*",
     "vite-plus": "catalog:"
@@ -86,7 +104,6 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vitest: <version>
   vite-plus: <version>
-  '@vitest/browser-webdriverio': <version>
   '@vitest/browser-playwright': <version>
   '@vitest/coverage-v8': <version>
 allowBuilds:
@@ -95,6 +112,7 @@ allowBuilds:
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'
+  '@vitest/browser@*': 5.0.1
 peerDependencyRules:
   allowAny:
     - vite

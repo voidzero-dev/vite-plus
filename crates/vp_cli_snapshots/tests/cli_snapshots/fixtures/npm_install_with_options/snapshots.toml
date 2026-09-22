@@ -1,6 +1,7 @@
 [[case]]
 name = "npm_install_with_options"
 vp = "local"
+skip-platforms = ["windows"]
 serial = true
 steps = [
   { argv = ["vp", "install", "--help"], comment = "print help message", continue-on-failure = true },

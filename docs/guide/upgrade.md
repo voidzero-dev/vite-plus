@@ -32,6 +32,8 @@ vp toolchain --global
 
 ## Global `vp`
 
+Update the global CLI with:
+
 ```bash
 vp upgrade                        # upgrade to the latest version
 vp upgrade --check                # check for updates without installing
@@ -76,6 +78,18 @@ vp upgrade --rollback
 ```
 
 Older versions are pruned automatically after each upgrade. The active version and the previous version are always kept, so a rollback target is never removed.
+
+### Homebrew
+
+Homebrew owns its installed binary and JavaScript package. Update them with:
+
+```bash
+brew upgrade vite-plus
+```
+
+`vp upgrade` detects Homebrew installations and directs you to this command without downloading or installing another version. This also applies to `--force`, a specific version, and `--rollback`. Use Homebrew to manage these installations.
+
+`vp upgrade --check` directs you to `brew outdated vite-plus`. Automatic npm update checks and notices are disabled for Homebrew installations.
 
 ## Preview Builds
 

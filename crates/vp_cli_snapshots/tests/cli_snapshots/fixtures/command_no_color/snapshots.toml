@@ -1,0 +1,20 @@
+[[case]]
+name = "command_no_color"
+vp = ["local", "global"]
+env = { NO_COLOR = "1" }
+steps = [
+  { argv = ["vp", "check", "--help"], formatted-snapshot = true, continue-on-failure = true },
+  { argv = ["vp", "--definitely-invalid"], comment = "Argument errors and highlighted arguments honor NO_COLOR", formatted-snapshot = true, continue-on-failure = true },
+  { argv = ["vp", "check", "--no-fmt", "--no-lint"], comment = "Shared errors and command-specific summaries honor NO_COLOR", formatted-snapshot = true, continue-on-failure = true },
+]
+
+[[case]]
+name = "prompt_no_color"
+vp = "local"
+env = { NO_COLOR = "1" }
+steps = [
+  { argv = ["vp", "create"], comment = "The picocolors-backed picker remains interactive without color", formatted-snapshot = true, interactions = [
+    { "expect-milestone" = "select:select:0" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]

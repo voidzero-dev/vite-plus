@@ -72,7 +72,6 @@ check package.json
 ```
 {
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

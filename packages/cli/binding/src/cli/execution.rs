@@ -7,24 +7,17 @@ use vt_path::AbsolutePathBuf;
 
 use super::{
     resolver::SubcommandResolver,
-    types::{
-        CapturedCommandOutput, ResolvedUniversalViteConfig, SynthesizableSubcommand,
-        exit_status_from,
-    },
+    types::{CapturedCommandOutput, SynthesizableSubcommand, exit_status_from},
 };
 
 /// Resolve a subcommand into a prepared `tokio::process::Command`.
 async fn resolve_and_build_command(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
-    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
 ) -> Result<tokio::process::Command, Error> {
-    let resolved = resolver
-        .resolve(subcommand, resolved_vite_config, envs, cwd)
-        .await
-        .map_err(|e| Error::Anyhow(e))?;
+    let resolved = resolver.resolve(subcommand, envs, cwd).await.map_err(Error::Anyhow)?;
 
     // Resolve the program path using `which` to handle Windows .cmd/.bat files (PATHEXT)
     let program_path = {
@@ -54,7 +47,6 @@ async fn resolve_and_build_command(
 pub(super) async fn resolve_and_execute(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
-    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
 ) -> Result<ExitStatus, Error> {
@@ -63,8 +55,7 @@ pub(super) async fn resolve_and_execute(
         SynthesizableSubcommand::Dev { .. } | SynthesizableSubcommand::Preview { .. }
     );
 
-    let mut cmd =
-        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd).await?;
+    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd).await?;
 
     // For interactive commands (dev, preview), use terminal guard to restore terminal state on exit
     let status = if is_interactive {
@@ -86,14 +77,12 @@ pub(super) enum FilterStream {
 pub(super) async fn resolve_and_execute_with_filter(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
-    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     stream: FilterStream,
     filter: impl Fn(&str) -> Cow<'_, str>,
 ) -> Result<ExitStatus, Error> {
-    let mut cmd =
-        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd).await?;
+    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd).await?;
     match stream {
         FilterStream::Stdout => cmd.stdout(Stdio::piped()),
         FilterStream::Stderr => cmd.stderr(Stdio::piped()),
@@ -120,16 +109,19 @@ pub(super) async fn resolve_and_execute_with_filter(
 pub(crate) async fn resolve_and_capture_output(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
-    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     force_color_if_terminal: bool,
 ) -> Result<CapturedCommandOutput, Error> {
-    let mut cmd =
-        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd).await?;
+    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd).await?;
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
-    if force_color_if_terminal && vp_shared::is_stdout_terminal() {
+    // Capturing output hides the terminal from the child. Preserve colors only when
+    // the parent supports them, without overriding an explicit FORCE_COLOR value.
+    if force_color_if_terminal
+        && console::colors_enabled()
+        && !cmd.as_std().get_envs().any(|(key, _)| key == "FORCE_COLOR")
+    {
         cmd.env("FORCE_COLOR", "1");
     }
 

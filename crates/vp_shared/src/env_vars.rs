@@ -92,7 +92,7 @@ pub const VP_PACKAGE_MANAGER: &str = "VP_PACKAGE_MANAGER";
 /// Override the npm and npx shim version.
 pub const VP_NPM_VERSION: &str = "VP_NPM_VERSION";
 
-/// Override the pnpm and pnpx shim version.
+/// Override the pnpm, pnpx, pn, and pnx shim version.
 pub const VP_PNPM_VERSION: &str = "VP_PNPM_VERSION";
 
 /// Override the yarn and yarnpkg shim version.

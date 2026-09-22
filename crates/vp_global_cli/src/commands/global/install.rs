@@ -8,10 +8,10 @@ use std::{
     time::Duration,
 };
 
+use console::style;
 use futures::{StreamExt, stream::FuturesUnordered};
 use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use owo_colors::OwoColorize;
 use tokio::process::Command;
 use uuid::Uuid;
 use vp_js_runtime::NodeProvider;
@@ -525,14 +525,14 @@ pub async fn install(
         output::success(&format!(
             "{} {} {}{}",
             operation_past,
-            package_name.bold(),
+            style(&package_name).bold(),
             if update { "to " } else { "" },
-            installed_version.as_deref().unwrap_or("(no version)").bold()
+            style(installed_version.as_deref().unwrap_or("(no version)")).bold()
         ));
         if !bin_names.is_empty() {
             let bins = bin_names
                 .iter()
-                .map(|bin_name| bin_name.bold().to_string())
+                .map(|bin_name| style(bin_name).bold().to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
             output::raw(&format!("  Bins: {}", bins));
@@ -1295,11 +1295,12 @@ mod tests {
                     assert_eq!(
                         contents,
                         format!(
-                            "{}\nlayout={}\ndata={}\ncache={}\n",
+                            "{}\nlayout={}\ndata={}\ncache={}\nbin={}\n",
                             vp_shared::SHIM_POINTER_HEADER,
                             dirs.layout().as_str(),
                             dirs.data.as_path().display(),
-                            dirs.cache.as_path().display()
+                            dirs.cache.as_path().display(),
+                            dirs.bin.as_path().display()
                         )
                     );
                 }

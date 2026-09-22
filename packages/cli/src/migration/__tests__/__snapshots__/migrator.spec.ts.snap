@@ -17,7 +17,6 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
     "foo": "1.0.0",
   },
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:",
   },
 }
@@ -29,7 +28,6 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
     "foo": "1.0.0",
   },
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest",
   },
 }

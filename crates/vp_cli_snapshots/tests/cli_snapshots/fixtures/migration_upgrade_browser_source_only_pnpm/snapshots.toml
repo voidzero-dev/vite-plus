@@ -2,6 +2,7 @@
 name = "migration_upgrade_browser_source_only_pnpm"
 vp = "global"
 steps = [
+  { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"4.1.11\"}"], comment = "record the original runner version without adding a direct dependency", snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"], comment = "source-only browser provider should be restored", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "provider, framework peer, and local vitest should be present", continue-on-failure = true },
   { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "shared vitest catalog and override should be present", continue-on-failure = true },

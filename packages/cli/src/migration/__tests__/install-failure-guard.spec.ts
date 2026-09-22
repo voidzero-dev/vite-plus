@@ -50,6 +50,25 @@ describe('migration install failure handling', () => {
   });
 
   describe('full migration path (executeMigrationPlan)', () => {
+    it('defers Vitest compatibility writes until all tool migration abort gates pass', () => {
+      const full = binSource.slice(
+        binSource.indexOf('async function executeMigrationPlan('),
+        binSource.indexOf('async function main('),
+      );
+      const existing = binSource.slice(binSource.indexOf('async function main('));
+      for (const branch of [full, existing]) {
+        expect(branch).not.toContain('applyVitestV5Migration(vitestV5Plan)');
+        const apply = branch.indexOf(
+          'vitestV5Plan = applyRefreshedVitestV5Migration(vitestV5Plan)',
+        );
+        expect(apply).toBeGreaterThan(branch.indexOf('ESLint migration failed.'));
+        expect(apply).toBeGreaterThan(branch.indexOf('Prettier migration failed.'));
+        expect(apply).toBeGreaterThan(branch.indexOf('Complete the tsup migration manually'));
+      }
+      expect(full.indexOf('applyRefreshedVitestV5Migration(vitestV5Plan)')).toBeGreaterThan(
+        full.indexOf('checkVitestVersion(workspaceInfo.rootDir)'),
+      );
+    });
     it('reconciles `finalInstallSummary` through `handleInstallResult`', () => {
       // The full-path final reinstall must run through the helper so a failed
       // install after manifest/source rewrites does not silently report a

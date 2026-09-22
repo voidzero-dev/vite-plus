@@ -20,9 +20,11 @@ vp fmt . --write
 
 Put formatting configuration directly in the `fmt` block in the root `vite.config.ts` so all your configuration stays in one place. We do not recommend using `.oxfmtrc.json` with Vite+.
 
-Vite+ does not currently support nested format configuration. For now, use [`fmt.overrides`](/guide/monorepo#format-overrides) in the root `vite.config.ts` for file- or package-specific options. The long-term behavior is open for discussion; [share your use case and expectations](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) to help shape it.
+When the workspace-root config has a `fmt` block, `vp fmt` and `vp check` use it even when run from a package directory. Package configs cannot replace the root format settings. Commands keep the package working directory, so relative file arguments retain their meaning. Use [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific options.
 
-For editors, disable nested formatter configs so format-on-save uses the root Vite+ `fmt` block:
+An explicit `vp fmt -c <path>` or `vp fmt --config <path>` selects another config. Otherwise, when running from the workspace root or when the root config has no `fmt` block, Oxfmt discovers the nearest `vite.config.*` file with a `fmt` block. Supported extensions are `.js`, `.mjs`, `.ts`, `.cjs`, `.mts`, and `.cts`. Nested configs do not override settings for individual files.
+
+For editors, disable nested formatter configs to prevent per-file overrides:
 
 ```json [.vscode/settings.json]
 {

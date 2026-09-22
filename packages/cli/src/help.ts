@@ -1,3 +1,4 @@
+import { documentationUrl } from './utils/documentation.ts';
 import { renderCliDoc, type CliDoc } from './utils/help.ts';
 import { log, printHeader } from './utils/terminal.ts';
 
@@ -53,7 +54,7 @@ const commandHelpDocs = {
         lines: ['  vp dev', '  vp dev --open', '  vp dev --host localhost --port 5173'],
       },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/dev',
+    documentationUrl: documentationUrl('/guide/dev'),
   },
   build: {
     usage: 'vp build [ROOT] [OPTIONS]',
@@ -132,7 +133,7 @@ const commandHelpDocs = {
         lines: ['  vp build', '  vp build --watch', '  vp build --sourcemap'],
       },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/build',
+    documentationUrl: documentationUrl('/guide/build'),
   },
   preview: {
     usage: 'vp preview [ROOT] [OPTIONS]',
@@ -172,7 +173,7 @@ const commandHelpDocs = {
       },
       { title: 'Examples', lines: ['  vp preview', '  vp preview --port 4173'] },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/build',
+    documentationUrl: documentationUrl('/guide/build'),
   },
   test: {
     usage: 'vp test [COMMAND] [FILTERS]... [OPTIONS]',
@@ -479,7 +480,7 @@ const commandHelpDocs = {
         lines: ['  vp test', '  vp test src/foo.test.ts', '  vp test watch --coverage'],
       },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/test',
+    documentationUrl: documentationUrl('/guide/test'),
   },
   lint: {
     usage: 'vp lint [PATH]... [OPTIONS]',
@@ -720,7 +721,7 @@ const commandHelpDocs = {
         ],
       },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/lint',
+    documentationUrl: documentationUrl('/guide/lint'),
   },
   fmt: {
     usage: 'vp fmt [PATH]... [OPTIONS]',
@@ -789,7 +790,7 @@ const commandHelpDocs = {
       },
       { title: 'Examples', lines: ['  vp fmt', '  vp fmt src --check', '  vp fmt . --write'] },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/fmt',
+    documentationUrl: documentationUrl('/guide/fmt'),
   },
   check: {
     usage: 'vp check [OPTIONS] [PATHS]...',
@@ -825,7 +826,7 @@ const commandHelpDocs = {
         lines: ['  vp check', '  vp check --fix', '  vp check --no-lint src/index.ts'],
       },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/check',
+    documentationUrl: documentationUrl('/guide/check'),
   },
   pack: {
     usage: 'vp pack [...files] [OPTIONS]',
@@ -924,7 +925,7 @@ const commandHelpDocs = {
         lines: ['  vp pack', '  vp pack src/index.ts --dts', '  vp pack --watch'],
       },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/pack',
+    documentationUrl: documentationUrl('/guide/pack'),
   },
   run: {
     usage: 'vp run [OPTIONS] [TASK_SPECIFIER] [ADDITIONAL_ARGS]...',
@@ -998,7 +999,7 @@ const commandHelpDocs = {
         ],
       },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/run',
+    documentationUrl: documentationUrl('/guide/run'),
   },
   exec: {
     usage: 'vp exec [OPTIONS] [COMMAND]...',
@@ -1062,7 +1063,7 @@ const commandHelpDocs = {
         ],
       },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/vpx',
+    documentationUrl: documentationUrl('/guide/vpx'),
   },
   cache: {
     usage: 'vp cache <COMMAND>',
@@ -1071,7 +1072,7 @@ const commandHelpDocs = {
       { title: 'Commands', rows: [{ label: 'clean', description: 'Clean up all the cache' }] },
       { title: 'Options', rows: [{ label: '-h, --help', description: 'Print help' }] },
     ],
-    documentationUrl: 'https://viteplus.dev/guide/cache',
+    documentationUrl: documentationUrl('/guide/cache'),
   },
 } satisfies Record<string, CliDoc>;
 

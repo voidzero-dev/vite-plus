@@ -1,6 +1,6 @@
 [package]
 name = "vp_global_cli"
-version = "0.3.2"
+version = "0.3.3"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,7 +12,6 @@ name = "vp"
 path = "src/main.rs"
 
 [dependencies]
-base64-simd = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true, features = ["unstable-dynamic"] }
@@ -29,7 +28,7 @@ tar = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-owo-colors = { workspace = true }
+console = { workspace = true }
 same-file = { workspace = true }
 oxc_resolver = { workspace = true }
 rustc-hash = { workspace = true }

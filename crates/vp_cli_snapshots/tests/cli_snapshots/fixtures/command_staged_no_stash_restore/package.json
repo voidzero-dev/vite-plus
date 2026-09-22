@@ -1,0 +1,5 @@
+{
+  "name": "command-staged-no-stash-restore",
+  "private": true,
+  "type": "module"
+}

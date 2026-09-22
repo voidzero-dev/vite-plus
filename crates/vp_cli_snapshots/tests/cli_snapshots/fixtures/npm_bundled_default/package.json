@@ -1,0 +1,7 @@
+{
+  "name": "npm-bundled-default",
+  "private": true,
+  "devEngines": {
+    "runtime": { "name": "node", "version": "22.18.0" }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "migration-vitest-v5",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "test": "vitest list"
+  },
+  "devDependencies": {
+    "vite": "^8.0.0",
+    "vitest": "4.1.11"
+  }
+}

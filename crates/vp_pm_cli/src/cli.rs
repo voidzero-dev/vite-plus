@@ -207,10 +207,7 @@ impl PackageManagerCommand {
     /// only command whose typed clap shape selects between two resolvers.
     pub(crate) fn resolve_for_manager(self, manager: &PackageManager) -> Result<Resolution, Error> {
         match self {
-            Self::Install(args) if !args.packages.is_empty() => {
-                resolve_args_for_manager(manager, args.into_add_args())
-            }
-            Self::Install(args) => resolve_args_for_manager(manager, args),
+            Self::Install(args) => args.resolve_for_manager(manager),
             Self::Add(args) => resolve_args_for_manager(manager, args),
             Self::Remove(args) => resolve_args_for_manager(manager, args),
             Self::Update(args) => resolve_args_for_manager(manager, args),
@@ -283,6 +280,7 @@ impl PackageManagerCommand {
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::Install(args) => args.silent,
+            Self::Add(args) => args.silent,
             Self::Dlx(args) => args.silent,
             Self::Outdated(args) => {
                 matches!(args.format, Some(OutdatedFormat::Json | OutdatedFormat::List))
@@ -301,6 +299,7 @@ impl PackageManagerCommand {
     pub(crate) fn should_render_diagnostics(&self) -> bool {
         match self {
             Self::Install(args) => !args.silent,
+            Self::Add(args) => !args.silent,
             Self::Dlx(args) => !args.silent,
             _ => true,
         }
@@ -514,6 +513,48 @@ mod tests {
     }
 
     #[test]
+    fn yarn_before_3_drops_lockfile_only_when_adding_packages() {
+        for version in ["2.4.2", "2.0.0", "1.22.22"] {
+            let manager = package_manager(PackageManagerType::Yarn, version);
+            for command in ["add", "install", "i"] {
+                let resolution = parse(&[command, "./dep", "--lockfile-only"])
+                    .unwrap()
+                    .resolve_for_manager(&manager)
+                    .unwrap();
+                let resolved = crate::resolution::test_utils::expect_run(resolution.outcome);
+
+                assert_eq!(resolved.args, ["add", "./dep"], "yarn@{version}: {command}");
+                assert_eq!(resolution.diagnostics.len(), 1);
+                assert_eq!(
+                    resolution.diagnostics[0].message,
+                    "yarn <3 does not support --lockfile-only."
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn yarn_from_3_preserves_lockfile_only_when_adding_packages() {
+        for version in ["3.0.0", "3.1.0", "4.10.3"] {
+            let manager = package_manager(PackageManagerType::Yarn, version);
+            for command in ["add", "install", "i"] {
+                let resolution = parse(&[command, "./dep", "--lockfile-only"])
+                    .unwrap()
+                    .resolve_for_manager(&manager)
+                    .unwrap();
+                let resolved = crate::resolution::test_utils::expect_run(resolution.outcome);
+
+                assert_eq!(
+                    resolved.args,
+                    ["add", "--mode", "update-lockfile", "./dep"],
+                    "yarn@{version}: {command}"
+                );
+                assert!(resolution.diagnostics.is_empty(), "yarn@{version}: {command}");
+            }
+        }
+    }
+
+    #[test]
     fn install_and_add_preserve_ignore_scripts() {
         for (client, version, add_command, flags) in [
             (PackageManagerType::Npm, "11.0.0", "install", vec!["--ignore-scripts"]),
@@ -667,6 +708,7 @@ mod tests {
     fn classifies_quiet_and_machine_readable_commands() {
         for args in [
             &["install", "--silent"][..],
+            &["add", "react", "--silent"][..],
             &["dlx", "--silent", "tsx"][..],
             &["outdated", "--format", "json"][..],
             &["why", "react", "--parseable"][..],
@@ -689,6 +731,7 @@ mod tests {
             assert!(!parse(args).unwrap().is_quiet_or_machine_readable(), "{args:?}");
         }
         assert!(!parse(&["install"]).unwrap().is_quiet_or_machine_readable());
+        assert!(!parse(&["add", "react"]).unwrap().is_quiet_or_machine_readable());
     }
 
     #[test]
@@ -760,6 +803,7 @@ mod tests {
     #[test]
     fn suppresses_diagnostics_only_for_explicit_silent_modes() {
         for args in [
+            &["add", "react"][..],
             &["outdated", "--format", "json"][..],
             &["why", "react", "--parseable"][..],
             &["info", "react", "--json"][..],
@@ -768,7 +812,11 @@ mod tests {
             assert!(parse(args).unwrap().should_render_diagnostics(), "{args:?}");
         }
 
-        for args in [&["install", "--silent"][..], &["dlx", "--silent", "tsx"][..]] {
+        for args in [
+            &["install", "--silent"][..],
+            &["add", "react", "--silent"][..],
+            &["dlx", "--silent", "tsx"][..],
+        ] {
             assert!(!parse(args).unwrap().should_render_diagnostics(), "{args:?}");
         }
     }

@@ -24,9 +24,17 @@ impl Resolve<PatchArgs> for Pnpm {
 }
 
 impl Resolve<PatchArgs> for Npm {
-    fn resolve(&self, _args: &PatchArgs, diag: &mut Diagnostics) -> CommandResolution {
-        diag.warn(DiagnosticKind::UnsupportedCommandNoop, "npm does not have a 'patch' command.");
-        CommandResolution::Noop
+    fn resolve(&self, args: &PatchArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.is_npm_12_or_newer() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "npm does not have a 'patch' command.",
+            );
+            return CommandResolution::Noop;
+        }
+        let mut cmd = CommandBuilder::new("npm");
+        cmd.arg("patch").arg("add").arg(&args.package).extend(args.pass_through_args.iter());
+        cmd.into()
     }
 }
 
@@ -66,6 +74,27 @@ mod tests {
     }
 
     #[test]
+    fn test_npm_patch() {
+        for manager in [npm("12.0.0"), npm("12.0.2"), Npm::unknown_version()] {
+            for package in
+                ["left-pad@1.3.0", "@scope/pkg@1.0.0", "add", "commit", "update", "ls", "rm"]
+            {
+                let result = resolve(
+                    &manager,
+                    PatchArgs {
+                        package: package.to_string(),
+                        pass_through_args: vec!["--edit-dir".to_string(), ".patches".to_string()],
+                    },
+                );
+                assert!(result.diagnostics.is_empty());
+                let command = expect_run(result.outcome);
+                assert_eq!(command.program, "npm");
+                assert_eq!(command.args, vec!["patch", "add", package, "--edit-dir", ".patches"]);
+            }
+        }
+    }
+
+    #[test]
     fn test_pnpm_patch() {
         let command = expect_run(resolve(&pnpm("10.0.0"), patch_args("left-pad")).outcome);
 
@@ -91,12 +120,14 @@ mod tests {
 
     #[test]
     fn test_npm_patch_not_supported() {
-        let result = resolve(&npm("11.0.0"), patch_args("left-pad"));
+        for version in ["10.0.0", "11.0.0", "12.0.0-beta.1"] {
+            let result = resolve(&npm(version), patch_args("left-pad"));
 
-        assert_eq!(result.outcome, CommandResolution::Noop);
-        assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.diagnostics[0].kind, DiagnosticKind::UnsupportedCommandNoop);
-        assert_eq!(result.diagnostics[0].message, "npm does not have a 'patch' command.");
+            assert_eq!(result.outcome, CommandResolution::Noop);
+            assert_eq!(result.diagnostics.len(), 1);
+            assert_eq!(result.diagnostics[0].kind, DiagnosticKind::UnsupportedCommandNoop);
+            assert_eq!(result.diagnostics[0].message, "npm does not have a 'patch' command.");
+        }
     }
 
     #[test]
