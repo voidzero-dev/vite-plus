@@ -702,37 +702,37 @@ impl CaseHome {
     }
 
     fn run_env_setup(&self, vp: &Path, report: &report::Report) -> Result<(), String> {
+        // Every case starts with managed package-manager shims. Set these
+        // preferences before setup so it creates each shim once, without a
+        // second process that moves inferred system-first shims afterward.
+        let preferences_phase = report.phase("case-setup/preferences");
+        let preferences = serde_json::json!({
+            "packageManagerShimModes": {
+                "bun": "managed",
+                "npm": "managed",
+                "pnpm": "managed",
+                "yarn": "managed",
+            },
+        });
+        std::fs::write(
+            self.vp_home().join("config.json"),
+            serde_json::to_vec_pretty(&preferences).unwrap(),
+        )
+        .map_err(|e| format!("failed to write case package-manager preferences: {e}"))?;
+        drop(preferences_phase);
         let env = self.base_env(compose_path_env(&[]));
-        let setup_phase = report.phase("case-setup/env-setup");
+        let _setup_phase = report.phase("case-setup/env-setup");
         let output = std::process::Command::new(vp)
             .args(["env", "setup", "--refresh"])
             .env_clear()
             .envs(&env)
             .output()
             .map_err(|e| format!("failed to run `vp env setup`: {e}"))?;
-        if !output.status.success() {
-            return Err(format!(
-                "`vp env setup` failed with status {}\nstdout:\n{}\nstderr:\n{}",
-                output.status,
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            ));
-        }
-
-        drop(setup_phase);
-        let _preferences_phase = report.phase("case-setup/env-on-pm");
-        // Cases start with explicit package-manager preferences, as fresh installations do.
-        let output = std::process::Command::new(vp)
-            .args(["env", "on", "pm"])
-            .env_clear()
-            .envs(&env)
-            .output()
-            .map_err(|e| format!("failed to run `vp env on pm`: {e}"))?;
         if output.status.success() {
             return Ok(());
         }
         Err(format!(
-            "`vp env on pm` failed with status {}\nstdout:\n{}\nstderr:\n{}",
+            "`vp env setup` failed with status {}\nstdout:\n{}\nstderr:\n{}",
             output.status,
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)

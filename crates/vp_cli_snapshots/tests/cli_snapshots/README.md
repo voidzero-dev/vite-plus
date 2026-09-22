@@ -123,7 +123,7 @@ durations are milliseconds; nested phases must not be added together. The
 existing console timings still exclude gate waiting.
 
 The `case-setup/*` phases divide `case-setup` into home creation, binary and
-package installation, `vp env setup`, and `vp env on pm`. These phases are
+package installation, preference seeding, and `vp env setup`. These phases are
 nested inside `case-setup`; use them to identify preparation costs without
 counting the parent duration twice.
 
@@ -169,6 +169,12 @@ flavor exposes sibling `.cmd` shims under
 `VP_HOME/current/node_modules/.vite-plus-bin` instead. The list form registers
 one trial and one snapshot per flavor; use it for parity cases (help output,
 routing, error messages) where both surfaces must agree.
+
+Each case starts with explicit managed-mode preferences for npm, pnpm, Yarn,
+and Bun. The runner writes these preferences before `vp env setup` so setup
+creates the shims in their final locations in one pass. Tests of preference
+inference or an empty installation must create a separate home, as the
+`shim_package_manager_setup` fixture does.
 
 A step is a bare argv array or a table:
 
