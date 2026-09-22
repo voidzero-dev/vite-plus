@@ -122,7 +122,7 @@ jobs:
           const file = 'crates/vp_global_cli/Cargo.toml';
           const source = fs.readFileSync(file, 'utf8');
           const version = source.match(/^version = "([^"]+)"/m)[1];
-          const [major, minor, patch] = version.split('.').map(Number);
+          const [major, minor, patch] = version.split(/[-+]/, 1)[0].split('.').map(Number);
           const next = `${major}.${minor}.${patch + 1}`;
           fs.writeFileSync(file, source.replace(/^version = "[^"]+"/m, `version = "${next}"`));
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${next}\n`);

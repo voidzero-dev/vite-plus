@@ -189,7 +189,8 @@ async function formulaFor(binary, value, registryUrl, revision = false) {
     url: pathToFileURL(archive).href,
     sha256,
   }));
-  let result = updateFormula(formula, value, assets);
+  // Publication requires a stable version; this test can use a prerelease checkout.
+  let result = updateFormula(formula, value.split(/[-+]/, 1)[0], assets);
   // Local archive URLs have no GitHub release tag from which Homebrew can infer the version.
   result = result.replace('  license', `  version "${value}"\n  license`);
   if (revision) {
