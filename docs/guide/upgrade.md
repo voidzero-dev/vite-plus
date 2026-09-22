@@ -87,7 +87,7 @@ Older versions are pruned automatically after each upgrade. The active version a
 
 ### Homebrew
 
-Homebrew owns its installed binary and JavaScript package. Update them with:
+Homebrew owns its installed binary. Update the core formula with:
 
 ```bash
 brew upgrade vite-plus
@@ -95,7 +95,9 @@ brew upgrade vite-plus
 
 `vp upgrade` detects Homebrew installations and directs you to this command without downloading or installing another version. This also applies to `--force`, a specific version, and `--rollback`. Use Homebrew to manage these installations.
 
-`vp upgrade --check` directs you to `brew outdated vite-plus`. Automatic npm update checks and notices are disabled for Homebrew installations.
+For the [official tap](/guide/homebrew), use `brew upgrade voidzero-dev/vite-plus/vp`. First use installs the new version's per-user dependencies.
+
+`vp upgrade --check` directs you to `brew outdated` with the installed formula name. Automatic npm update checks and notices are disabled for Homebrew installations.
 
 ## Preview Builds
 
