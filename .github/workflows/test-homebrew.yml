@@ -1,0 +1,150 @@
+name: Test Homebrew installation
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [main]
+    paths:
+      - 'HomebrewFormula/**'
+      - '.github/scripts/*homebrew*'
+      - '.github/scripts/__tests__/homebrew-formula.mjs'
+      - '.github/workflows/test-homebrew.yml'
+      - '.github/workflows/release.yml'
+      - 'crates/vp_setup/**'
+      - 'crates/vp_global_cli/src/self_setup*'
+      - 'crates/vp_global_cli/src/self_setup/**'
+      - 'crates/vp_global_cli/src/homebrew.rs'
+      - 'crates/vp_pm_cli/src/package_manager/bootstrap.rs'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  changes:
+    if: >-
+      github.event.action != 'labeled' || github.event.label.name == 'test: install-e2e'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      test: >-
+        ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: install-e2e') || steps.paths.outputs.packaging == 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.18.0'
+          package-manager-cache: false
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: paths
+        with:
+          filters: |
+            packaging:
+              - 'HomebrewFormula/**'
+              - '.github/scripts/*homebrew*'
+              - '.github/scripts/__tests__/homebrew-formula.mjs'
+              - '.github/workflows/test-homebrew.yml'
+              - '.github/workflows/release.yml'
+              - 'crates/vp_setup/**'
+              - 'crates/vp_global_cli/src/self_setup*'
+              - 'crates/vp_global_cli/src/self_setup/**'
+              - 'crates/vp_global_cli/src/homebrew.rs'
+              - 'crates/vp_pm_cli/src/package_manager/bootstrap.rs'
+
+      - name: Check formula publication rules
+        run: node --test .github/scripts/__tests__/homebrew-formula.mjs
+
+  install:
+    name: Homebrew (${{ matrix.target }})
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/clone
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17)
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: homebrew-${{ matrix.target }}
+
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+
+      - uses: ./.github/actions/build-upstream
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Pack the current checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/homebrew-packages"
+          node packages/tools/src/local-npm-registry.ts --pack-to "$RUNNER_TEMP/homebrew-packages"
+          cp "${CARGO_TARGET_DIR:-target}/$TARGET/release/vp" "$RUNNER_TEMP/vp-under-test"
+
+      - name: Build a second CLI version for upgrade testing
+        id: replacement
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const file = 'crates/vp_global_cli/Cargo.toml';
+          const source = fs.readFileSync(file, 'utf8');
+          const version = source.match(/^version = "([^"]+)"/m)[1];
+          const [major, minor, patch] = version.split('.').map(Number);
+          const next = `${major}.${minor}.${patch + 1}`;
+          fs.writeFileSync(file, source.replace(/^version = "[^"]+"/m, `version = "${next}"`));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${next}\n`);
+          JS
+          cargo build --release -p vp_global_cli --target "$TARGET"
+          cp "${CARGO_TARGET_DIR:-target}/$TARGET/release/vp" "$RUNNER_TEMP/vp-replacement"
+          git restore -- Cargo.lock crates/vp_global_cli/Cargo.toml
+
+      - name: Check authentication, retries, and external ownership
+        env:
+          TEST_VP_BINARY: ${{ runner.temp }}/vp-under-test
+        run: |
+          fixture="$GITHUB_WORKSPACE/crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_self_setup_external/homebrew.mjs"
+          cd "$(mktemp -d)"
+          node "$fixture"
+
+      - name: Install and upgrade through a disposable Homebrew tap
+        env:
+          REPLACEMENT_VERSION: ${{ steps.replacement.outputs.version }}
+        run: |
+          node .github/scripts/test-homebrew.mjs \
+            --binary "$RUNNER_TEMP/vp-under-test" \
+            --packages-dir "$RUNNER_TEMP/homebrew-packages" \
+            --replacement-binary "$RUNNER_TEMP/vp-replacement" \
+            --replacement-version "$REPLACEMENT_VERSION"

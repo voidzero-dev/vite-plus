@@ -1,6 +1,7 @@
 # RFC: Vite+-managed Homebrew tap
 
-Status: Draft for discussion. This RFC does not change installation behavior.
+Status: Implementation proposed. The formula stays disabled until a compatible
+release is published and its formula update is approved.
 
 ## Motivation
 
@@ -91,9 +92,12 @@ and links the public commands. It creates no per-user Vite+ installation.
 The first `vp` invocation prepares Node.js and uses its bundled npm to download
 the pinned pnpm package. Then pnpm installs `vite-plus@A` and production
 dependencies in the user's data directory, keyed by CLI version and platform.
-The Homebrew files stay unchanged.
+Setup saves management choices before downloads so a failed attempt can retry
+without asking again. The Homebrew files stay unchanged.
 
 ```text
+<CONFIG>/config.json                 # saved before downloads
+
 <DATA>/
 ├── js_runtime/node/<node-version>/
 │   ├── bin/node
@@ -109,7 +113,7 @@ The Homebrew files stay unchanged.
 
 ### 4. Complete user setup
 
-Setup creates preferences, shell environment files, and shims. It records
+Setup completes preferences and creates shell environment files and shims. It records
 completion in user-owned state only after installation succeeds. All shims
 link through Homebrew's stable public command. This example uses managed
 Node.js and system-first npm:
@@ -177,14 +181,13 @@ attempts and allow interrupted installs to retry without repeating preference
 prompts. Keep these directories separate from the script installer's `current`
 link.
 
-## Required CLI changes
+## CLI behavior
 
-Add a mode for Homebrew-owned binaries without bundled JavaScript. The current
-[self-setup code](../crates/vp_global_cli/src/self_setup.rs) copies bare external
-binaries into a managed installation; this mode must retain the Homebrew binary.
-The [JavaScript resolver](../crates/vp_global_cli/src/js_executor.rs) must find
-its matching per-user dependency directory instead of expecting JavaScript
-beside the executable.
+The [self-setup code](../crates/vp_global_cli/src/self_setup.rs) retains Homebrew-owned
+binaries without bundled JavaScript and prepares their per-user dependencies.
+The [JavaScript resolver](../crates/vp_global_cli/src/js_executor.rs) uses that
+matching dependency directory. Other bare external binaries still deploy to a
+managed installation.
 
 Reuse [environment setup](../crates/vp_global_cli/src/commands/env/setup.rs)
 to initialize missing package-manager preferences and place shims. Preserve
@@ -263,6 +266,9 @@ automation opens a formula update PR with the version, target URLs, and
 checksums. A failed update leaves the previous formula available. Use a formula
 `revision` for recipe fixes and a new release for CLI changes. A formula-only
 merge must not trigger another product release.
+
+The updater checks the release tag for the new bootstrap and formula before
+removing the initial disable gate. Existing releases cannot enable the tap.
 
 Vite+ release maintainers own the formula and its release automation through
 the existing repository review process. Confirm a primary maintainer and a

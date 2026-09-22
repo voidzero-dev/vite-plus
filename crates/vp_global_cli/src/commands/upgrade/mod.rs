@@ -41,17 +41,22 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         return Ok(ExitStatus::default());
     }
 
-    if crate::homebrew::owns_current_exe() {
+    if let Some(homebrew) = crate::homebrew::current() {
         if options.check && !options.rollback {
             if !options.silent {
-                output::info(
-                    "Homebrew manages this installation. Run `brew outdated vite-plus` to check for updates.",
-                );
+                output::info(&format!(
+                    "Homebrew manages this installation. Run `brew outdated {}` to check for updates.",
+                    homebrew.formula,
+                ));
             }
             return Ok(ExitStatus::default());
         }
         return Err(Error::Upgrade(
-            "Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.".into(),
+            format!(
+                "Homebrew manages this installation. Run `brew upgrade {}` to update it.",
+                homebrew.formula
+            )
+            .into(),
         ));
     }
 

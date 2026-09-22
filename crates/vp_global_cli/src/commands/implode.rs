@@ -205,9 +205,11 @@ fn report_preserved_paths(roots: &[AbsolutePathBuf]) {
 }
 
 fn print_homebrew_uninstall_notice() {
-    output::note(
-        "The Homebrew package remains installed. Run `brew uninstall vite-plus` to remove it.",
-    );
+    let formula =
+        crate::homebrew::current().map_or("vite-plus", |homebrew| homebrew.formula.as_str());
+    output::note(&format!(
+        "The Homebrew package remains installed. Run `brew uninstall {formula}` to remove it.",
+    ));
     output::note(
         "To run `vp` again, restart your terminal or run `hash -r` in Bash. The remaining Homebrew package will start setup again.",
     );

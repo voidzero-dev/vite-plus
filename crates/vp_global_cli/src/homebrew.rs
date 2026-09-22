@@ -2,30 +2,148 @@
 
 use std::{path::Path, sync::OnceLock};
 
-pub(crate) fn owns_current_exe() -> bool {
-    static HOMEBREW: OnceLock<bool> = OnceLock::new();
-    *HOMEBREW.get_or_init(|| std::env::current_exe().is_ok_and(|binary| owns_binary(&binary)))
+use vt_path::AbsolutePathBuf;
+
+pub(crate) struct Installation {
+    pub(crate) binary: AbsolutePathBuf,
+    pub(crate) formula: String,
 }
 
-fn owns_binary(binary: &Path) -> bool {
+pub(crate) fn current() -> Option<&'static Installation> {
+    static HOMEBREW: OnceLock<Option<Installation>> = OnceLock::new();
+    HOMEBREW
+        .get_or_init(|| std::env::current_exe().ok().and_then(|binary| installation(&binary)))
+        .as_ref()
+}
+
+pub(crate) fn owns_current_exe() -> bool {
+    current().is_some()
+}
+
+fn installation(binary: &Path) -> Option<Installation> {
     // Resolve both Homebrew's public entrypoint and Vite+'s generated shims.
-    let Ok(binary) = std::fs::canonicalize(binary) else { return false };
-    let Some(bin) = binary.parent().filter(|bin| bin.file_name().is_some_and(|name| name == "bin"))
-    else {
-        return false;
-    };
-    let Some(prefix) = bin.parent() else { return false };
-    let Ok(data) = std::fs::read(prefix.join("INSTALL_RECEIPT.json")) else { return false };
-    let Ok(receipt) = serde_json::from_slice::<serde_json::Value>(&data) else { return false };
-    receipt
-        .get("homebrew_version")
+    let binary = std::fs::canonicalize(binary).ok()?;
+    let bin = binary.parent().filter(|bin| bin.file_name().is_some_and(|name| name == "bin"))?;
+    let prefix = bin.parent()?;
+    let data = std::fs::read(prefix.join("INSTALL_RECEIPT.json")).ok()?;
+    let receipt = serde_json::from_slice::<serde_json::Value>(&data).ok()?;
+    if receipt.get("homebrew_version").and_then(serde_json::Value::as_str).is_none_or(str::is_empty)
+    {
+        return None;
+    }
+    let source = receipt.get("source");
+    let name = source
+        .and_then(|source| source.get("path"))
         .and_then(serde_json::Value::as_str)
-        .is_some_and(|version| !version.is_empty())
+        .and_then(|path| Path::new(path).file_stem())
+        .and_then(|name| name.to_str())
+        .filter(|name| valid_component(name))
+        .or_else(|| {
+            let rack = prefix.parent()?;
+            (rack.parent()?.file_name()? == "Cellar")
+                .then(|| rack.file_name()?.to_str().filter(|name| valid_component(name)))?
+        })
+        .unwrap_or("vite-plus");
+    let tap = source
+        .and_then(|source| source.get("tap"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|tap| {
+            let parts = tap.split('/').collect::<Vec<_>>();
+            parts.len() == 2 && parts.iter().all(|part| valid_component(part))
+        });
+    let formula = match tap {
+        Some("homebrew/core") | None => name.to_string(),
+        Some(tap) => format!("{tap}/{name}"),
+    };
+    Some(Installation { binary: AbsolutePathBuf::new(binary)?, formula })
+}
+
+fn valid_component(value: &str) -> bool {
+    value.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+        && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.@+".contains(&byte))
+}
+
+impl Installation {
+    /// Homebrew's standard Cellar layout exposes a stable link outside the keg.
+    pub(crate) fn public_binary(&self) -> Option<AbsolutePathBuf> {
+        let cellar = self.binary.parent()?.parent()?.parent()?.parent()?;
+        if cellar.as_path().file_name()? != "Cellar" {
+            return None;
+        }
+        let public = cellar.parent()?.join("bin/vp");
+        (std::fs::canonicalize(&public).ok()? == self.binary.as_path()).then_some(public)
+    }
+}
+
+/// A Homebrew package can ship the JS payload in its prefix (core), or let each
+/// user install matching dependencies on first launch (the official tap).
+pub(crate) fn user_package_dir() -> Result<Option<AbsolutePathBuf>, crate::error::Error> {
+    let Some(homebrew) = current() else { return Ok(None) };
+    if crate::self_setup::has_bundled_package(homebrew.binary.as_path()) {
+        return Ok(None);
+    }
+    let platform = vp_setup::platform::detect_platform_suffix()?;
+    Ok(Some(vp_shared::EnvConfig::get().dirs.cli_package(env!("CARGO_PKG_VERSION"), &platform)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn owns_binary(binary: &Path) -> bool {
+        installation(binary).is_some()
+    }
+
+    #[test]
+    fn identifies_core_and_tap_formulae_from_receipts() {
+        let root = tempfile::tempdir().unwrap();
+        let prefix = root.path().join("Cellar/vp/0.3.4");
+        let binary = prefix.join("bin/vp");
+        std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        std::fs::write(&binary, b"vp").unwrap();
+        for (tap, path, expected) in [
+            ("voidzero-dev/vite-plus", "/tap/HomebrewFormula/vp.rb", "voidzero-dev/vite-plus/vp"),
+            ("homebrew/core", "/tap/Formula/v/vite-plus.rb", "vite-plus"),
+            ("fengmk2/core", "/tap/Formula/v/vite-plus.rb", "fengmk2/core/vite-plus"),
+            ("bad/tap/extra", "/tap/HomebrewFormula/vp.rb", "vp"),
+            ("bad;command/tap", "/tap/HomebrewFormula/vp.rb", "vp"),
+        ] {
+            std::fs::write(
+                prefix.join("INSTALL_RECEIPT.json"),
+                serde_json::to_vec(&serde_json::json!({
+                    "homebrew_version": "7.0.2", "source": { "tap": tap, "path": path }
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            let install = installation(&binary).unwrap();
+            assert_eq!(install.formula, expected);
+            assert_eq!(install.binary.as_path(), std::fs::canonicalize(&binary).unwrap());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn public_entrypoint_survives_cellar_replacement_without_path() {
+        let root = tempfile::tempdir().unwrap();
+        for version in ["old", "new"] {
+            let prefix = root.path().join("Cellar/vp").join(version);
+            std::fs::create_dir_all(prefix.join("bin")).unwrap();
+            std::fs::write(prefix.join("bin/vp"), version).unwrap();
+            std::fs::write(prefix.join("INSTALL_RECEIPT.json"), br#"{"homebrew_version":"7.0.2"}"#)
+                .unwrap();
+        }
+        let public = root.path().join("bin/vp");
+        std::fs::create_dir_all(public.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink("../Cellar/vp/old/bin/vp", &public).unwrap();
+        let old = installation(&public).unwrap();
+        let stable = old.public_binary().unwrap();
+        std::fs::remove_file(&public).unwrap();
+        std::os::unix::fs::symlink("../Cellar/vp/new/bin/vp", &public).unwrap();
+        std::fs::remove_dir_all(root.path().join("Cellar/vp/old")).unwrap();
+        assert_eq!(std::fs::read_to_string(&stable).unwrap(), "new");
+        assert_eq!(installation(&public).unwrap().public_binary().unwrap(), stable);
+    }
 
     #[test]
     fn detects_receipt_under_custom_prefix() {

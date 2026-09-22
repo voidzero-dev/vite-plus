@@ -7,7 +7,7 @@
 ```
 Before installation: preserve this output.
 info: installing vite-plus@<version>...
-⠿ Downloading pnpm <version>... <size> B (<size> B/s)
+⠿ Preparing Node.js and pnpm... <duration>
 ```
 
 **← write-key:** `enter`

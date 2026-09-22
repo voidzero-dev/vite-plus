@@ -94,6 +94,10 @@ impl JsExecutor {
             return AbsolutePathBuf::new(dir.into()).ok_or(Error::JsScriptsDirNotFound);
         }
 
+        if let Some(package) = crate::homebrew::user_package_dir()? {
+            return Ok(package.join("node_modules/vite-plus/dist"));
+        }
+
         // 3. Auto-detect from binary location
         // JS scripts are at ../node_modules/vite-plus/dist relative to the binary directory
         // e.g., <DATA>/<version>/bin/vp -> <DATA>/<version>/node_modules/vite-plus/dist/
