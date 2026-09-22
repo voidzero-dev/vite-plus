@@ -5,7 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { homedir, tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -27,9 +27,8 @@ const version = (
   await fs.readFile(path.join(repository, 'crates/vp_global_cli/Cargo.toml'), 'utf8')
 ).match(/^version = "([^"]+)"/m)[1];
 const replacementVersion = values['replacement-version'] ?? version;
-// Linux's build sandbox permits writes under /tmp, so keep Homebrew itself outside it.
-const testParent = process.platform === 'linux' ? homedir() : tmpdir();
-const root = await fs.realpath(await fs.mkdtemp(path.join(testParent, 'vp-homebrew-e2e-')));
+// Build sandboxes permit writes in system temporary directories. Keep Homebrew outside them.
+const root = await fs.realpath(await fs.mkdtemp(path.join(homedir(), 'vp-homebrew-e2e-')));
 const prefix = path.join(root, 'brew');
 const brew = path.join(prefix, 'bin/brew');
 const formulaName = 'viteplus/e2e/vp';
