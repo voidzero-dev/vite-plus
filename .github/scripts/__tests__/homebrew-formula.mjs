@@ -11,7 +11,9 @@ import {
 } from '../update-homebrew-formula.mjs';
 
 const formula = await readFile(new URL('../../../HomebrewFormula/vp.rb', import.meta.url), 'utf8');
-const version = '0.3.4';
+const currentVersion = formula.match(/\/releases\/download\/v(\d+\.\d+\.\d+)\//)[1];
+const [major, minor, patch] = currentVersion.split('.').map(Number);
+const version = `${major}.${minor}.${patch + 1}`;
 const archive = Buffer.from('release fixture');
 const digest = createHash('sha256').update(archive).digest('hex');
 const checksums = targets.map(([, , target]) => `${digest}  vp-${target}.tar.gz`).join('\n');
@@ -65,7 +67,9 @@ await test('missing, repeated, and invalid checksums cannot update a formula', (
 });
 
 await test('updates preserve recipe changes and reset only a previous version revision', () => {
-  const revised = formula.replace('  license', '  revision 2\n  license');
+  const revised = formula
+    .replace(/^  revision \d+\n/m, '')
+    .replace('  license', '  revision 2\n  license');
   const result = updateFormula(revised, version, assets);
   assert.ok(!result.includes('disable!'));
   assert.ok(!result.includes('revision 2'));
@@ -73,7 +77,7 @@ await test('updates preserve recipe changes and reset only a previous version re
   assert.ok(result.includes('  def install\n    bin.install "vp"'));
   const sameVersion = result.replace('  license', '  revision 1\n  license');
   assert.equal(updateFormula(sameVersion, version, assets), sameVersion);
-  assert.throws(() => updateFormula(result, '0.3.3', assets), /downgrade/);
+  assert.throws(() => updateFormula(result, currentVersion, assets), /downgrade/);
   assert.throws(
     () => updateFormula(formula.replace('BEGIN RELEASE ASSETS', 'missing'), version, assets),
     /Missing release asset block/,
