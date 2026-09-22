@@ -77,19 +77,21 @@ impl SubcommandResolver {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
-                let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
-                } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
-                };
+                if !has_explicit_config(&args) {
+                    let owned_resolved_vite_config;
+                    let resolved_vite_config = if let Some(config) = resolved_vite_config {
+                        config
+                    } else {
+                        owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
+                        &owned_resolved_vite_config
+                    };
 
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.lint, &resolved_vite_config.config_file)
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
+                    if let (Some(_), Some(config_file)) =
+                        (&resolved_vite_config.lint, &resolved_vite_config.config_file)
+                    {
+                        args.insert(0, "-c".to_string());
+                        args.insert(1, config_file.clone());
+                    }
                 }
 
                 Ok(ResolvedSubcommand {
@@ -114,19 +116,21 @@ impl SubcommandResolver {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
-                let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
-                } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
-                };
+                if !has_explicit_config(&args) {
+                    let owned_resolved_vite_config;
+                    let resolved_vite_config = if let Some(config) = resolved_vite_config {
+                        config
+                    } else {
+                        owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
+                        &owned_resolved_vite_config
+                    };
 
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
+                    if let (Some(_), Some(config_file)) =
+                        (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
+                    {
+                        args.insert(0, "-c".to_string());
+                        args.insert(1, config_file.clone());
+                    }
                 }
 
                 Ok(ResolvedSubcommand {
@@ -321,6 +325,14 @@ pub(super) fn check_cache_inputs() -> Vec<UserInputEntry> {
     ]
 }
 
+// Oxlint and Oxfmt accept both separate and attached config values. Leave
+// validation to the tool, and do not treat paths after `--` as options.
+fn has_explicit_config(args: &[String]) -> bool {
+    args.iter()
+        .take_while(|arg| *arg != "--")
+        .any(|arg| arg == "--config" || arg.starts_with("--config=") || arg.starts_with("-c"))
+}
+
 fn merge_resolved_envs(
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     resolved_envs: Vec<(String, String)>,
@@ -362,13 +374,9 @@ mod tests {
         })
     }
 
-    #[tokio::test]
-    async fn builtins_reuse_the_calling_node_runtime() {
-        let temp = tempfile::tempdir().unwrap();
-        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let runtime: Arc<OsStr> = Arc::from(cwd.join("custom runtime").as_path().as_os_str());
-        let resolver = SubcommandResolver::new(cwd.clone().into()).with_cli_options(CliOptions {
-            node_exec_path: Arc::clone(&runtime),
+    fn cli_options(runtime: Arc<OsStr>) -> CliOptions {
+        CliOptions {
+            node_exec_path: runtime,
             lint: tool_resolver(),
             fmt: tool_resolver(),
             vite: tool_resolver(),
@@ -378,7 +386,101 @@ mod tests {
             toolchain_manifest_path: String::new(),
             vite_plus_package_path: String::new(),
             resolve_universal_vite_config: Arc::new(|_| Box::pin(async { Ok("{}".to_string()) })),
+        }
+    }
+
+    #[tokio::test]
+    async fn explicit_tool_configs_bypass_vite_config() {
+        let temp = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let mut options = cli_options(Arc::from(OsStr::new("node")));
+        options.resolve_universal_vite_config = Arc::new(|_| {
+            Box::pin(async { anyhow::bail!("explicit configs must not load vite.config") })
         });
+        let resolver = SubcommandResolver::new(cwd.clone().into()).with_cli_options(options);
+        let config = serde_json::from_value(serde_json::json!({
+            "configFile": "vite.config.ts", "lint": {}, "fmt": {}
+        }))
+        .unwrap();
+        let envs = Arc::new(FxHashMap::default());
+
+        for args in [
+            vec!["--config", "custom config.json", "index.js"],
+            vec!["-c", "custom.json", "index.js"],
+            vec!["--config=custom.json", "index.js"],
+            vec!["-c=custom.json", "index.js"],
+            vec!["-ccustom.json", "index.js"],
+            vec!["--config"],
+            vec!["--config="],
+        ] {
+            for resolved_config in [None, Some(&config)] {
+                for command in [
+                    SynthesizableSubcommand::Lint {
+                        args: args.iter().map(ToString::to_string).collect(),
+                    },
+                    SynthesizableSubcommand::Fmt {
+                        args: args.iter().map(ToString::to_string).collect(),
+                    },
+                ] {
+                    let resolved =
+                        resolver.resolve(command, resolved_config, &envs, &cwd).await.unwrap();
+                    let tool_args: Vec<_> = resolved
+                        .args
+                        .iter()
+                        .skip_while(|arg| arg.as_str() != "tool.js")
+                        .skip(1)
+                        .map(Str::as_str)
+                        .collect();
+                    assert_eq!(tool_args, args);
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn tool_configs_default_to_vite_config_before_option_terminator() {
+        let temp = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let mut options = cli_options(Arc::from(OsStr::new("node")));
+        options.resolve_universal_vite_config = Arc::new(|_| {
+            Box::pin(async {
+                Ok(r#"{"configFile":"vite.config.ts","lint":{},"fmt":{}}"#.to_string())
+            })
+        });
+        let resolver = SubcommandResolver::new(cwd.clone().into()).with_cli_options(options);
+        let envs = Arc::new(FxHashMap::default());
+
+        for args in [vec!["index.js"], vec!["--", "--config", "-custom.js"]] {
+            for command in [
+                SynthesizableSubcommand::Lint {
+                    args: args.iter().map(ToString::to_string).collect(),
+                },
+                SynthesizableSubcommand::Fmt {
+                    args: args.iter().map(ToString::to_string).collect(),
+                },
+            ] {
+                let resolved = resolver.resolve(command, None, &envs, &cwd).await.unwrap();
+                let tool_args: Vec<_> = resolved
+                    .args
+                    .iter()
+                    .skip_while(|arg| arg.as_str() != "tool.js")
+                    .skip(1)
+                    .map(Str::as_str)
+                    .collect();
+                let expected: Vec<_> =
+                    ["-c", "vite.config.ts"].into_iter().chain(args.clone()).collect();
+                assert_eq!(tool_args, expected);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn builtins_reuse_the_calling_node_runtime() {
+        let temp = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let runtime: Arc<OsStr> = Arc::from(cwd.join("custom runtime").as_path().as_os_str());
+        let resolver = SubcommandResolver::new(cwd.clone().into())
+            .with_cli_options(cli_options(Arc::clone(&runtime)));
         let envs = Arc::new(FxHashMap::default());
         for command in [
             SynthesizableSubcommand::Lint { args: vec![] },

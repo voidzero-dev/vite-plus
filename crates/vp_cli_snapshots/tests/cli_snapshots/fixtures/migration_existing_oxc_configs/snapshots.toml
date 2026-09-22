@@ -1,0 +1,92 @@
+[[case]]
+name = "migration_existing_oxc_configs"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "finish a leftover Oxfmt config even when Vite+ is already installed" },
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"],
+  { argv = ["vp", "fmt", "src/index.ts"], comment = "the migrated options must affect formatting" },
+  ["vpt", "print-file", "src/index.ts"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a completed migration should be a no-op on retry" },
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "stat-file", "AGENTS.md", "--assert-not", "file"],
+  ["vpt", "stat-file", ".vite-hooks", "--assert-not", "dir"],
+  ["vpt", "stat-file", ".vscode", "--assert-not", "dir"],
+]
+
+[[case]]
+name = "migration_existing_oxc_configs_unreferenced_lint"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", "{\"rules\":{\"no-console\":\"error\"},\"options\":{\"typeAware\":false,\"typeCheck\":false}}\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "finish both unreferenced Oxc configs in a project that already uses Vite+" },
+  ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"],
+  ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vp", "fmt", "src/index.ts"],
+  ["vpt", "print-file", "src/index.ts"],
+  ["vp", "lint", "src/index.ts"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "the restored finalization must remain a no-op on retry" },
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vp", "fmt", "--check", "src/index.ts"],
+  { argv = ["vpt", "write-file", "src/index.ts", "console.log('hello')\n"], snapshot = false },
+  { argv = ["vp", "lint", "src/index.ts"], comment = "the merged lint rule must apply after the JSON config is removed", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_existing_oxc_configs_inline_fmt"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { fmt: { singleQuote: false, semi: false } };\n"], snapshot = false },
+  { argv = ["vp", "fmt", "src/index.ts"], comment = "the existing inline fmt config takes precedence over the standalone config" },
+  ["vpt", "print-file", "src/index.ts"],
+  { argv = ["vpt", "write-file", "src/index.ts", "export const message = \"preserved\";\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "keep the standalone config when fmt is already configured" },
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "stat-file", ".oxfmtrc.json", "--assert", "file"],
+  { argv = ["vp", "fmt", "src/index.ts"], comment = "formatting must still use the existing inline options after migration" },
+  ["vpt", "print-file", "src/index.ts"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "retrying the completed migration should be a no-op" },
+  ["vpt", "print-file", "vite.config.ts"],
+]
+
+[[case]]
+name = "migration_existing_oxc_configs_imported"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "import fmt from './.oxfmtrc.json' with { type: 'json' };\nimport { readFileSync } from 'node:fs';\nconst lint = JSON.parse(readFileSync(new URL('./.oxlintrc.json', import.meta.url), 'utf8'));\nexport default { fmt, lint };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".oxlintrc.json", "{\"rules\":{\"no-debugger\":\"error\"}}\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "preserve JSON configs loaded with imports and readFileSync" },
+  ["vpt", "print-file", ".oxfmtrc.json"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vp", "fmt", "src/index.ts"],
+  ["vpt", "print-file", "src/index.ts"],
+  ["vp", "lint", "src/index.ts"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "retry preserves both imported configs" },
+  ["vp", "fmt", "--check", "src/index.ts"],
+  ["vp", "lint", "src/index.ts"],
+]
+
+[[case]]
+name = "migration_existing_oxc_configs_script"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.fmt", "vp fmt -c .oxfmtrc.json src/index.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "preserve the config passed explicitly by a package script" },
+  ["vpt", "stat-file", ".oxfmtrc.json", "--assert", "file"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vp", "run", "fmt"],
+  ["vpt", "print-file", "src/index.ts"],
+]
+
+[[case]]
+name = "migration_existing_oxc_configs_extends"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", "{\"extends\":[\"./lint-base.json\"]}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "lint-base.json", "{\"rules\":{\"no-console\":\"error\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/index.ts", "console.log('hello');\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "preserve JSON inheritance instead of copying file paths into inline lint.extends" },
+  ["vpt", "print-file", ".oxlintrc.json"],
+  { argv = ["vp", "lint", "-c", ".oxlintrc.json", "src/index.ts"], comment = "the retained JSON config must still load the inherited no-console rule", continue-on-failure = true },
+]

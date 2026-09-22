@@ -5,10 +5,12 @@ import { rewriteScripts } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
+import { detectConfigs } from '../detector.ts';
 import {
   dropDeadOxlintPluginsDependency,
   hasTsconfigTypesToRewrite,
   mergeTsdownConfigFile,
+  mergeViteConfigFiles,
   rewriteAllImports,
   rewriteTsconfigTypes,
 } from '../migrator.ts';
@@ -83,6 +85,7 @@ export type CoreMigrationFinalizationResult = {
   scripts: boolean;
   tsconfigTypes: boolean;
   imports: boolean;
+  oxcConfigs: boolean;
   tsdownConfig: boolean;
 };
 
@@ -149,6 +152,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
     scripts: false,
     tsconfigTypes: false,
     imports: false,
+    oxcConfigs: false,
     tsdownConfig: false,
   };
 
@@ -176,6 +180,28 @@ export function finalizeCoreMigrationForExistingVitePlus(
   // existing-Vite+ path just as the fresh migration path does.
   for (const projectPath of projectPaths) {
     result.tsdownConfig = mergeTsdownConfigFile(projectPath, silent, report) || result.tsdownConfig;
+  }
+
+  // A failed migration may have installed Vite+ before merging these files.
+  // Finish that core work without opting into unrelated first-time setup.
+  for (const projectPath of projectPaths) {
+    const configs = detectConfigs(projectPath);
+    const standaloneConfigs = [configs.oxlintConfig, configs.oxfmtConfig].filter(
+      (config) => config !== undefined,
+    );
+    if (standaloneConfigs.length === 0) {
+      continue;
+    }
+    mergeViteConfigFiles(
+      projectPath,
+      silent,
+      report,
+      workspaceInfo.packages,
+      workspaceInfo.rootDir,
+    );
+    if (standaloneConfigs.some((config) => !fs.existsSync(path.join(projectPath, config)))) {
+      result.oxcConfigs = true;
+    }
   }
 
   return result;
