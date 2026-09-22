@@ -362,6 +362,10 @@ jobs:
             node-version: 24
             timeout: 20
             command: |
+              # Codiff uses pnpm's default 24-hour release age. Allow newly
+              # published toolchain packages in this ecosystem run.
+              export pnpm_config_minimum_release_age=0
+              export PNPM_CONFIG_MINIMUM_RELEASE_AGE=0
               # Migration skips install scripts. node-pty has no Linux prebuild,
               # so build its approved native addon before running the tests.
               vp pm rebuild node-pty
@@ -436,7 +440,8 @@ jobs:
           - name: sqlocal
             node-version: 24
             command: |
-              vp test run --browser.name=chrome
+              # OPFS setup can exceed the upstream 1-second hook timeout on CI.
+              vp test run --browser.name=chrome --hookTimeout=5000
           - name: brazilian-utils
             node-version: 24
             command: |
