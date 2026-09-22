@@ -100,6 +100,10 @@ jobs:
 
       - name: Verify bin setup
         run: |
+          # Apply the generated environment so doctor sees both the main and
+          # system-first fallback shim directories.
+          . "$HOME/.vite-plus/env"
+
           # Verify bin directory was created by vp env --setup
           BIN_PATH="$HOME/.vite-plus/bin"
           ls -al "$BIN_PATH"
@@ -1422,6 +1426,10 @@ jobs:
       - name: Verify bin setup on bash
         shell: bash
         run: |
+          # Git Bash does not load the persistent Windows user PATH. Apply the
+          # generated environment before checking it with doctor.
+          . "$HOME/.vite-plus/env"
+
           # Verify bin directory was created by vp env --setup
           BIN_PATH="$HOME/.vite-plus/bin"
           ls -al "$BIN_PATH"
