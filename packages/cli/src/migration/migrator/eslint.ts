@@ -123,6 +123,9 @@ export async function resolveOxlintMigrateVersion(oxlintVersion: string): Promis
       return oxlintVersion;
     }
     const packument = (await response.json()) as { versions?: Record<string, unknown> };
+    if (packument.versions && Object.hasOwn(packument.versions, oxlintVersion)) {
+      return oxlintVersion;
+    }
     const candidates = Object.keys(packument.versions ?? {}).filter(
       (version) => semver.valid(version) && semver.lte(version, oxlintVersion),
     );
