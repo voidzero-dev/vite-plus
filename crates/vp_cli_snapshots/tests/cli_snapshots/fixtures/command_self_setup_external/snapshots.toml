@@ -1,4 +1,10 @@
 [[case]]
+name = "command_self_setup_homebrew_user_dependencies"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "homebrew.mjs"], timeout = 120000 }]
+
+[[case]]
 name = "command_self_setup_external_bundled"
 vp = "global"
 skip-platforms = ["windows"]

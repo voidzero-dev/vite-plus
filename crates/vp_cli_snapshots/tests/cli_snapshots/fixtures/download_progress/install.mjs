@@ -33,6 +33,22 @@ const nodeBin = join(home, 'js_runtime/node/99.0.0/bin');
 for (const directory of [nodeBin, user, external]) mkdirSync(directory, { recursive: true });
 // Use the runner's real Node for the mock pnpm program, without a network download.
 symlinkSync(process.execPath, join(nodeBin, 'node'));
+// Model Node's bundled npm while retaining deterministic download checkpoints.
+const npmBin = join(nodeBin, '../lib/node_modules/npm/bin');
+mkdirSync(npmBin, { recursive: true });
+writeFileSync(
+  join(npmBin, 'npm-cli.js'),
+  `
+  const fs = require('node:fs');
+  fetch(process.env.npm_config_registry + '/pnpm/-/pnpm-10.33.0.tgz')
+    .then(response => response.arrayBuffer())
+    .then(data => {
+      const filename = 'pnpm-10.33.0.tgz';
+      fs.writeFileSync(filename, Buffer.from(data));
+      console.log(JSON.stringify([{ name: 'pnpm', version: '10.33.0', filename }]));
+    });
+`,
+);
 copyFileSync(join(process.env.VP_HOME, 'bin/vp'), join(external, 'vp'));
 const lockfile = "lockfileVersion: '9.0'\n";
 writeFileSync(join(external, 'vp-install-lock.yaml'), lockfile);
@@ -191,9 +207,9 @@ try {
   if (failure) {
     assert.equal(stdout, '');
     const log = readFileSync(join(home, 'upgrade.log'), 'utf8');
-    assert.ok(log.includes('pnpm captured stdout'));
-    assert.ok(log.includes('pnpm captured stderr'));
-    console.log('Failure log preserves pnpm stdout and stderr.');
+    assert.ok(log.includes('exit code 17'));
+    assert.ok(!log.includes('pnpm captured'));
+    console.log('Failure log records the exit code without registry output.');
   } else if (upgradeHandoff) {
     assert.ok(stdout.includes('Usage:'));
     console.log('The first command runs after self-setup completes.');

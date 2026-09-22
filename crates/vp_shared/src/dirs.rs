@@ -124,6 +124,12 @@ impl VpDirs {
         self.data.join("fallback-bin")
     }
 
+    /// JavaScript dependencies for a CLI whose executable is owned by Homebrew.
+    #[must_use]
+    pub fn cli_package(&self, version: &str, platform: &str) -> AbsolutePathBuf {
+        self.data.join("cli-packages").join(version).join(platform)
+    }
+
     /// Return the resolution mode that selected these roots.
     #[must_use]
     pub const fn layout(&self) -> VpDirsLayout {

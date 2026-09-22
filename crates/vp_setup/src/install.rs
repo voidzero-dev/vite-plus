@@ -14,7 +14,7 @@ use std::{
 use flate2::read::GzDecoder;
 use tar::Archive;
 use vp_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
-use vp_pm_cli::{PackageManagerType, download_package_manager};
+use vp_pm_cli::{PackageManagerType, configure_npm_command, download_package_manager};
 use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -171,7 +171,7 @@ fn format_install_failure_message(exit_code: i32, log_path: Option<&AbsolutePath
     format!("Failed to install production dependencies (exit code: {exit_code}){log_msg}")
 }
 
-/// Write stdout and stderr from a failed install to `upgrade.log`.
+/// Record the exit code without registry output, which can contain credentials.
 ///
 /// The log is written to the **parent** of `version_dir` (i.e. `<DATA>/upgrade.log`)
 /// so it survives the cleanup that removes `version_dir` on failure.
@@ -179,15 +179,14 @@ fn format_install_failure_message(exit_code: i32, log_path: Option<&AbsolutePath
 /// Returns the log file path on success, or `None` if writing failed.
 pub async fn write_upgrade_log(
     version_dir: &AbsolutePath,
-    stdout: &[u8],
-    stderr: &[u8],
+    exit_code: i32,
 ) -> Option<AbsolutePathBuf> {
     // Write to parent dir so the log survives version_dir cleanup on failure
     let parent = version_dir.as_path().parent()?;
     let log_path = AbsolutePathBuf::new(parent.join("upgrade.log"))?;
-    let stdout_str = String::from_utf8_lossy(stdout);
-    let stderr_str = String::from_utf8_lossy(stderr);
-    let content = format!("=== stdout ===\n{stdout_str}\n=== stderr ===\n{stderr_str}");
+    let content = format!(
+        "pnpm install failed with exit code {exit_code}.\nCheck npm registry access and authentication in your user configuration.\nRegistry output is not saved because it can contain credentials.\n"
+    );
     match tokio::fs::write(&log_path, &content).await {
         Ok(()) => Some(log_path),
         Err(e) => {
@@ -199,8 +198,8 @@ pub async fn write_upgrade_log(
 
 /// Install production dependencies with a compatible managed Node.js and pinned pnpm.
 ///
-/// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace [--registry <url>]`
-/// with `CI=true`. On failure, writes stdout+stderr to the parent directory's `upgrade.log`.
+/// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace`
+/// with `CI=true`. On failure, records the exit code in the parent directory's `upgrade.log`.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
@@ -232,7 +231,8 @@ pub async fn install_production_deps(
     .await?;
 
     if !output.status.success() {
-        let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
+        let exit_code = vp_shared::exit_code_from_status(output.status);
+        let log_path = write_upgrade_log(version_dir, exit_code).await;
         return Err(Error::Setup(
             format_install_failure_message(
                 vp_shared::exit_code_from_status(output.status),
@@ -363,9 +363,8 @@ async fn run_pnpm_install(
             .env("NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH", "1000");
     }
 
-    if let Some(registry_url) = registry {
-        cmd.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
-    }
+    configure_npm_command(&mut cmd, registry)
+        .map_err(|error| Error::Setup(error.to_string().into()))?;
 
     let output = cmd.output().await?;
     Ok(output)
@@ -997,10 +996,7 @@ mod tests {
         let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 
-        let stdout = b"some stdout output";
-        let stderr = b"error: something went wrong";
-
-        let result = write_upgrade_log(&version_dir, stdout, stderr).await;
+        let result = write_upgrade_log(&version_dir, 17).await;
         assert!(result.is_some(), "write_upgrade_log should return log path");
 
         let log_path = result.unwrap();
@@ -1013,28 +1009,12 @@ mod tests {
         assert!(log_path.as_path().exists(), "upgrade.log should exist");
 
         let content = tokio::fs::read_to_string(&log_path).await.unwrap();
-        assert!(content.contains("=== stdout ==="), "log should have stdout section");
-        assert!(content.contains("some stdout output"), "log should contain stdout");
-        assert!(content.contains("=== stderr ==="), "log should have stderr section");
-        assert!(content.contains("error: something went wrong"), "log should contain stderr");
+        assert!(content.contains("exit code 17"));
+        assert!(content.contains("Registry output is not saved"));
 
         // Log should survive version_dir removal
         tokio::fs::remove_dir_all(&version_dir).await.unwrap();
         assert!(log_path.as_path().exists(), "upgrade.log should survive version_dir cleanup");
-    }
-
-    #[tokio::test]
-    async fn test_write_upgrade_log_handles_empty_output() {
-        let temp = tempfile::tempdir().unwrap();
-        let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
-        tokio::fs::create_dir(&version_dir).await.unwrap();
-
-        let result = write_upgrade_log(&version_dir, b"", b"").await;
-        assert!(result.is_some());
-
-        let content = tokio::fs::read_to_string(result.unwrap()).await.unwrap();
-        assert!(content.contains("=== stdout ==="));
-        assert!(content.contains("=== stderr ==="));
     }
 
     #[tokio::test]

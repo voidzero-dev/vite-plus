@@ -100,6 +100,9 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
         if let Ok(binary) = std::env::current_exe().and_then(std::fs::canonicalize) {
             print_check(" ", "CLI binary", &abbreviate_home(&binary.display().to_string()));
         }
+        if let Some(package) = crate::homebrew::user_package_dir()? {
+            print_check(" ", "CLI dependencies", &abbreviate_home(&package.to_string()));
+        }
     }
     has_errors |= !check_dirs().await;
     has_errors |= !check_shims(scope).await;
