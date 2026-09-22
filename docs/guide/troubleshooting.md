@@ -26,11 +26,11 @@ The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`. `
 
 ## Nested lint or format config is not applied
 
-When running `vp lint`, `vp fmt`, or `vp check` from the workspace root, configs in subdirectories do not override the root lint and format settings for individual files. From a package directory, lint commands still use the root `lint` block when it exists. Use `vp lint -c <path>` or `vp lint --config <path>` to select another lint config. Formatting can select a package-level config: Oxfmt searches the working directory and its parents for a `vite.config.*` file with a `fmt` block.
+When running `vp lint`, `vp fmt`, or `vp check`, configs in subdirectories do not override settings for individual files. Commands run from a package directory still use the workspace-root `lint` and `fmt` blocks when they exist. Use `-c <path>` or `--config <path>` with `vp lint` or `vp fmt` to select another config. If the root config has no block for that tool, the tool uses native discovery from the working directory.
 
 Keep lint and format settings in the root `vite.config.ts`. Use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) and [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific settings. You can also [import configuration objects](/guide/monorepo#composing-configuration-files) into the root config to keep settings in separate files.
 
-For IDE integration, we have `disableNestedConfig` and `fmt.disableNestedConfig` config to disable nested lint and format configs and keep editor behavior aligned with the root Vite+ config. See [IDE Integration](/guide/ide-integration) for setup instructions for your editor.
+For IDE integration, `disableNestedConfig` and `fmt.disableNestedConfig` disable per-file nested lint and format configs. See [IDE Integration](/guide/ide-integration) for setup instructions for your editor.
 
 We're holding off on applying nested configs to individual files for now. Some of the factors we're considering are how implicit config discovery affects the predictability of linting and formatting, what context AI agents need to understand the settings that apply, and the potential performance cost of finding and loading multiple configs. At the same time, we recognize that keeping package-specific context close to the code may have benefits. The use cases we've heard so far haven't given us a strong enough reason to commit to those semantics. Waiting leaves room to add support later, and we'd like to hear why your project needs nested configs, especially where root-level overrides fall short.
 

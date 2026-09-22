@@ -33,7 +33,7 @@ Finished in <duration> on 1 files using <n> threads.
 
 ## `vpt print-file src/index.js`
 
-The parent fmt settings are discovered too.
+The root fmt settings apply from a subdirectory too.
 
 ```
 console.log('hello')
@@ -72,10 +72,10 @@ Finished in <duration> on 1 files using <n> threads.
 
 ## `vpt print-file src/index.js`
 
-Formatting still discovers the working directory's fmt settings.
+The root fmt settings still apply when the working directory has its own fmt block.
 
 ```
-console.log("hello");
+console.log('hello')
 ```
 
 ## `vp lint src/index.js`
@@ -88,7 +88,7 @@ Running from the root keeps per-file nested lint configs disabled.
 
   × eslint(no-console): Unexpected console statement.
    ╭─[src/index.js:1:1]
- 1 │ console.log("hello");
+ 1 │ console.log('hello')
    · ───────────
    ╰────
   help: Delete this console statement.

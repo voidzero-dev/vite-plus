@@ -61,6 +61,22 @@ impl SubcommandResolver {
         })?)
     }
 
+    /// Resolve root settings for package runs unless the user selected another config.
+    async fn resolve_workspace_config(
+        &self,
+        cwd: &AbsolutePath,
+        args: &[String],
+    ) -> anyhow::Result<Option<ResolvedUniversalViteConfig>> {
+        let explicit_config = args
+            .iter()
+            .take_while(|arg| arg.as_str() != "--")
+            .any(|arg| arg.starts_with("-c") || arg == "--config" || arg.starts_with("--config="));
+        if cwd == self.workspace_path.as_ref() || explicit_config {
+            return Ok(None);
+        }
+        self.resolve_universal_vite_config().await.map(Some)
+    }
+
     /// Resolve a synthesizable subcommand to a concrete program, args, cache config, and envs.
     pub(super) async fn resolve(
         &self,
@@ -77,19 +93,12 @@ impl SubcommandResolver {
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
 
-                let explicit_config =
-                    args.iter().take_while(|arg| arg.as_str() != "--").any(|arg| {
-                        arg.starts_with("-c") || arg == "--config" || arg.starts_with("--config=")
-                    });
-                if cwd != self.workspace_path.as_ref() && !explicit_config {
-                    // Keep package runs aligned with the root lint options used by `vp check`.
-                    let config = self.resolve_universal_vite_config().await?;
-                    if config.lint.is_some()
-                        && let Some(config_file) = config.config_file
-                    {
-                        args.insert(0, "-c".to_string());
-                        args.insert(1, config_file);
-                    }
+                if let Some(config) = self.resolve_workspace_config(cwd, &args).await?
+                    && config.lint.is_some()
+                    && let Some(config_file) = config.config_file
+                {
+                    args.insert(0, "-c".to_string());
+                    args.insert(1, config_file);
                 }
 
                 Ok(ResolvedSubcommand {
@@ -110,13 +119,21 @@ impl SubcommandResolver {
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
-            SynthesizableSubcommand::Fmt { args } => {
+            SynthesizableSubcommand::Fmt { mut args } => {
                 let cli_options = self.cli_options()?;
                 let resolved = (cli_options.fmt)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
+
+                if let Some(config) = self.resolve_workspace_config(cwd, &args).await?
+                    && config.fmt.is_some()
+                    && let Some(config_file) = config.config_file
+                {
+                    args.insert(0, "-c".to_string());
+                    args.insert(1, config_file);
+                }
 
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
@@ -423,16 +440,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn lint_from_subdirectory_uses_root_config_when_it_has_lint_settings() {
+    async fn lint_and_fmt_from_subdirectory_use_the_matching_root_config_block() {
         let temp = tempfile::tempdir().unwrap();
         let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
         let cwd = root.join("packages/app");
         let config_file = root.join("vite config.mts").as_path().to_str().unwrap().to_string();
         let envs = Arc::new(FxHashMap::default());
 
-        for lint in [serde_json::json!({}), serde_json::Value::Null] {
-            let has_lint = !lint.is_null();
-            let config = serde_json::json!({ "configFile": config_file, "lint": lint }).to_string();
+        for mut config in [
+            serde_json::json!({}),
+            serde_json::json!({ "lint": {} }),
+            serde_json::json!({ "fmt": {} }),
+            serde_json::json!({ "lint": {}, "fmt": {} }),
+        ] {
+            let has_lint = config.get("lint").is_some();
+            let has_fmt = config.get("fmt").is_some();
+            config["configFile"] = serde_json::json!(config_file);
+            let config = config.to_string();
             let root_string = root.as_path().to_str().unwrap().to_string();
             let mut options = cli_options(Arc::from(OsStr::new("node")));
             options.resolve_universal_vite_config = Arc::new(move |path| {
@@ -444,24 +468,35 @@ mod tests {
 
             // A config-looking filename after `--` must not suppress root selection.
             for args in [&["index.ts"][..], &["--", "--config"]] {
-                let command = SynthesizableSubcommand::Lint {
-                    args: args.iter().map(|arg| (*arg).to_string()).collect(),
-                };
-                let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
-                let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
-                let mut expected_args =
-                    vec!["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"];
-                if has_lint {
-                    expected_args.extend(["-c", config_file.as_str()]);
+                let tool_args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+                for (command, prefix, has_block) in [
+                    (
+                        SynthesizableSubcommand::Lint { args: tool_args.clone() },
+                        &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
+                        has_lint,
+                    ),
+                    (
+                        SynthesizableSubcommand::Fmt { args: tool_args.clone() },
+                        &["tool.js"],
+                        has_fmt,
+                    ),
+                ] {
+                    let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
+                    let actual_args: Vec<&str> =
+                        resolved.args.iter().map(|arg| arg.as_str()).collect();
+                    let mut expected_args = prefix.to_vec();
+                    if has_block {
+                        expected_args.extend(["-c", config_file.as_str()]);
+                    }
+                    expected_args.extend(args);
+                    assert_eq!(actual_args, expected_args);
                 }
-                expected_args.extend(args);
-                assert_eq!(actual_args, expected_args);
             }
         }
     }
 
     #[tokio::test]
-    async fn explicit_lint_config_from_subdirectory_skips_root_config_loading() {
+    async fn explicit_lint_and_fmt_config_from_subdirectory_skips_root_config_loading() {
         let temp = tempfile::tempdir().unwrap();
         let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
         let cwd = root.join("packages/app");
@@ -476,14 +511,19 @@ mod tests {
             &["--config", "custom.json", "index.ts"],
             &["--config=custom.json", "index.ts"],
         ] {
-            let command = SynthesizableSubcommand::Lint {
-                args: args.iter().map(|arg| (*arg).to_string()).collect(),
-            };
-            let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
-            let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
-            let expected_args =
-                [&["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..], args].concat();
-            assert_eq!(actual_args, expected_args);
+            let tool_args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+            for (command, prefix) in [
+                (
+                    SynthesizableSubcommand::Lint { args: tool_args.clone() },
+                    &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
+                ),
+                (SynthesizableSubcommand::Fmt { args: tool_args.clone() }, &["tool.js"]),
+            ] {
+                let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
+                let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
+                let expected_args = [prefix, args].concat();
+                assert_eq!(actual_args, expected_args);
+            }
         }
     }
 }

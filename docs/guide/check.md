@@ -29,7 +29,7 @@ vp check --no-fmt --no-lint # Type-check only (requires `typeCheck` enabled).
 - [`fmt`](/guide/fmt#configuration) block in `vite.config.ts`
 - TypeScript project structure and tsconfig files for type-aware linting
 
-When run from a workspace package, `vp check` uses the workspace-root `lint` block for both lint rules and type-check options. A package config cannot disable root type checking. File paths and TypeScript projects are still resolved from the package working directory.
+When run from a workspace package, `vp check` uses the workspace-root `lint` and `fmt` blocks. Package configs cannot replace root format settings, lint rules, or type-check options. File paths and TypeScript projects are still resolved from the package working directory.
 
 Recommended base `lint` config:
 
