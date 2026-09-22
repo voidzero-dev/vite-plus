@@ -4,7 +4,7 @@ import { defineConfig, defineProject } from 'vite-plus';
 import { playwright } from 'vite-plus/test/browser-playwright';
 
 const require = createRequire(import.meta.resolve('vite-plus/package.json'));
-const executablePath = existsSync('chromium-path.json')
+export const executablePath = existsSync('chromium-path.json')
   ? JSON.parse(readFileSync('chromium-path.json', 'utf8'))
   : require('playwright').chromium.executablePath();
 
@@ -29,7 +29,9 @@ export function project(name, browser = true) {
           headless: true,
           // Browser startup can exceed Vitest's 60s connection timeout on CI.
           connectTimeout: 120000,
-          provider: playwright({ launchOptions: { executablePath } }),
+          provider: playwright(process.env.VP_TEST_BROWSER_WS_ENDPOINT
+            ? { connectOptions: { wsEndpoint: process.env.VP_TEST_BROWSER_WS_ENDPOINT } }
+            : { launchOptions: { executablePath } }),
           instances: [{ browser: 'chromium' }],
         },
       } : {}),
