@@ -1,0 +1,147 @@
+[[case]]
+name = "install_with_packages_drops_install_only_options"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "./dep", "--fix-lockfile", "--resolution-only", "--lockfile-only"], comment = "diagnose install-only options before converting to add, while preserving common options" },
+  ["vpt", "stat-file", "package-lock.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "install_without_packages_drops_add_only_options"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "--save-exact", "--save-peer", "--save-optional", "--save-catalog", "--lockfile-only"], comment = "diagnose add-only options without package names instead of reporting manager support" },
+  ["vpt", "stat-file", "package-lock.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "npm_lockfile_only"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "./dep", "--lockfile-only"], comment = "adding a package preserves lockfile-only" },
+  ["vpt", "stat-file", "package-lock.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "npm_offline"
+vp = "global"
+# Keep registry configuration out of PowerShell shim arguments and use a fresh cache on every platform.
+env = { npm_config_fetch_retries = "0", npm_config_cache = ".npm-cache" }
+steps = [
+  { argv = ["npm", "--version"], comment = "provision npm before pointing its registry at an unreachable endpoint", snapshot = false },
+  { argv = ["vp", "install", "vp-install-option-uncached-probe@1.0.0", "--offline"], envs = [["npm_config_registry", "http://127.0.0.1:9"]], comment = "an uncached package fails in offline mode rather than attempting a connection", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "node_modules", "--assert", "missing"], continue-on-failure = true },
+  ["vpt", "stat-file", "package-lock.json", "--assert", "missing"],
+]
+
+[[case]]
+name = "bun_frozen_lockfile"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.3.11"], snapshot = false },
+  ["vp", "install", "./dep", "--lockfile-only"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  { argv = ["vpt", "cp", "bun.lock", "before.lock"], snapshot = false },
+  { argv = ["vp", "install", "./dep-v2", "--frozen-lockfile"], comment = "a named-package install must not rewrite a frozen lockfile", continue-on-failure = true },
+  { argv = ["node", "assert-lockfile-unchanged.mjs", "bun.lock"], continue-on-failure = true },
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "pnpm_unsupported_install_options"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.24.0"], snapshot = false },
+  { argv = ["vp", "install", "./dep", "--lockfile-only", "--frozen-lockfile"], comment = "warn for frozen-lockfile that pnpm add cannot accept, but preserve lockfile-only" },
+  ["vpt", "stat-file", "pnpm-lock.yaml", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+]
+
+[[case]]
+name = "yarn_2_drops_lockfile_only"
+vp = "global"
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0", YARN_NODE_LINKER = "node-modules" }
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@2.4.2"], snapshot = false },
+  { argv = ["vp", "add", "./dep", "--lockfile-only"], comment = "Yarn 2 warns and installs normally because add does not support --mode" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["node", "-p", "require('./node_modules/install-option-dep/package.json').version"],
+  { argv = ["vpt", "rm", "-rf", "node_modules", "yarn.lock", ".yarn"], snapshot = false },
+  { argv = ["vp", "install", "./dep-v2", "--lockfile-only"], comment = "positional install uses the same warning-and-drop policy" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["node", "-p", "require('./node_modules/install-option-dep/package.json').version"],
+]
+
+[[case]]
+name = "yarn_3_lockfile_only"
+vp = "global"
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0", YARN_NODE_LINKER = "node-modules" }
+steps = [
+  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@3.0.0"], snapshot = false },
+  { argv = ["vp", "add", "./dep", "--lockfile-only"], comment = "Yarn 3 supports update-lockfile without installing packages" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-rf", "yarn.lock", ".yarn"], snapshot = false },
+  { argv = ["vp", "install", "./dep-v2", "--lockfile-only"], comment = "positional install preserves lockfile-only at the first supported Yarn release" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+]
+
+[[case]]
+name = "yarn_berry_lockfile_only"
+vp = "global"
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
+  { argv = ["vp", "install", "./dep", "--lockfile-only", "--ignore-scripts"], comment = "use update-lockfile rather than skip-build when both options are supplied" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  ["vpt", "stat-file", ".pnp.cjs", "--assert", "missing"],
+]
+
+[[case]]
+name = "yarn_classic_frozen_lockfile_modes"
+vp = "global"
+# dep-v2's manifest must differ in size because Classic skips copying files with equal size/mtime.
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@1.22.22"], snapshot = false },
+  { argv = ["vp", "install", "./dep", "--frozen-lockfile"], comment = "named-package installs warn and drop the unsupported add option" },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  { argv = ["vp", "add", "./dep", "--frozen-lockfile"], comment = "direct add also warns and continues without the option" },
+  { argv = ["vpt", "cp", "yarn.lock", "before.lock"], snapshot = false },
+  ["node", "-p", "require('./node_modules/install-option-dep/package.json').version"],
+  { argv = ["vp", "install", "--frozen-lockfile"], comment = "package-free frozen installs succeed when the manifest and lockfile agree" },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.install-option-dep", "file:./dep-v2"], snapshot = false },
+  { argv = ["vp", "install", "--frozen-lockfile"], comment = "package-free installs still enforce the frozen lockfile", continue-on-failure = true },
+  { argv = ["node", "assert-lockfile-unchanged.mjs", "yarn.lock"], continue-on-failure = true },
+  { argv = ["vp", "install", "--no-frozen-lockfile"], comment = "package-free installs can explicitly allow lockfile changes" },
+  ["node", "-p", "require('./node_modules/install-option-dep/package.json').version"],
+  { argv = ["vp", "add", "./dep", "--no-frozen-lockfile"], comment = "Classic add warns and drops the unsupported negated flag" },
+  ["node", "-p", "require('./node_modules/install-option-dep/package.json').version"],
+]
+
+[[case]]
+name = "yarn_berry_frozen_lockfile_modes"
+vp = "global"
+env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
+  { argv = ["vp", "install", "./dep", "--frozen-lockfile"], comment = "named-package installs use add, which has no immutable option" },
+  { argv = ["vpt", "cp", "yarn.lock", "before.lock"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.install-option-dep", "file:./dep-v2"], snapshot = false },
+  { argv = ["vp", "install", "--frozen-lockfile"], comment = "package-free installs map frozen-lockfile to immutable", continue-on-failure = true },
+  { argv = ["node", "assert-lockfile-unchanged.mjs", "yarn.lock"], continue-on-failure = true },
+  { argv = ["vp", "install", "--no-frozen-lockfile"], comment = "package-free installs map no-frozen-lockfile to no-immutable" },
+  ["node", "-p", "require('./node_modules/install-option-dep/package.json').version"],
+  { argv = ["vp", "add", "./dep", "--no-frozen-lockfile"], comment = "direct add also warns for the unsupported immutable override" },
+]

@@ -160,6 +160,16 @@ Options:
   --save-catalog                      Save the new dependency to the default catalog
   --allow-build <NAMES>               A list of package names allowed to run postinstall
   --ignore-scripts                    Do not run lifecycle scripts
+  --no-optional                       Do not install optionalDependencies
+  --frozen-lockfile                   Fail if lockfile needs to be updated
+  --no-frozen-lockfile                Allow lockfile updates
+  --lockfile-only                     Only update lockfile, don't install
+  --prefer-offline                    Use cached packages when available
+  --offline                           Only use packages already in cache
+  -f, --force                         Force reinstall all dependencies
+  --no-lockfile                       Don't read or generate lockfile
+  --shamefully-hoist                  Create flat node_modules (pnpm only)
+  --silent                            Suppress Vite+ output and enable native silent mode where supported
   --filter <PATTERN>                  Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root                Add to workspace root
   --workspace                         Only add if package exists in workspace (pnpm-specific)

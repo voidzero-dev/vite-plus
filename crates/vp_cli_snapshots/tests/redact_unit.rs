@@ -18,6 +18,7 @@ fn masks_yarn_compound_elapsed_times_as_one_duration() {
             "➤ YN0000: Done in {elapsed}\n\
              ➤ YN0000: · Done with warnings in {elapsed}\n\
              ➤ YN0000: · Done with errors in {elapsed}\n\
+             ➤ YN0000: · Failed with errors in {elapsed}\n\
              [app]: Process exited (exit code 0), completed in {elapsed}\n"
         );
         assert_eq!(
@@ -25,6 +26,7 @@ fn masks_yarn_compound_elapsed_times_as_one_duration() {
             "➤ YN0000: Done in <duration>\n\
              ➤ YN0000: · Done with warnings in <duration>\n\
              ➤ YN0000: · Done with errors in <duration>\n\
+             ➤ YN0000: · Failed with errors in <duration>\n\
              [app]: Process exited (exit code 0), completed in <duration>\n"
         );
     }
@@ -126,6 +128,23 @@ fn masks_size_numbers_keeping_units_and_spares_plain_stems() {
         redacted,
         "dist/assets/index-<hash>.js  <size> kB | gzip: <size> kB, <size>MB total\nkeep vite-tsconfig.js\n"
     );
+}
+
+#[test]
+fn masks_yarn_file_hashes_and_lockfile_diff_checksums() {
+    let input = concat!(
+        "➤ YN0085: │ + dep@file:./dep#./dep::hash=8572a9&locator=app%40workspace%3A.\n",
+        "➤ YN0028: │ -  checksum: 10c0/deadbeef\n",
+        "➤ YN0028: │ +  version: 2.0.0\n",
+        "checksum: 10c0/deadbeef\n",
+    );
+    let expected = concat!(
+        "➤ YN0085: │ + dep@file:./dep#./dep::hash=<hash>&locator=app%40workspace%3A.\n",
+        "➤ YN0028: │ -  checksum: <hash>\n",
+        "➤ YN0028: │ +  version: 2.0.0\n",
+        "checksum: 10c0/deadbeef\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), expected);
 }
 
 #[test]
