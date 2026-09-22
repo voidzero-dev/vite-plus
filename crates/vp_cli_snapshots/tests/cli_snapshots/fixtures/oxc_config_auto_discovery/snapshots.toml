@@ -24,13 +24,13 @@ name = "discover_config_from_subdirectory"
 vp = "local"
 steps = [
   { argv = ["vpt", "write-file", "src/vite.config.ts", "export default {};\n"] },
-  { argv = ["vp", "lint", "index.js"], cwd = "src", comment = "A config without lint settings is skipped in favor of the parent config.", continue-on-failure = true },
+  { argv = ["vp", "lint", "index.js"], cwd = "src", comment = "Running from a subdirectory uses the root lint config.", continue-on-failure = true },
   { argv = ["vp", "fmt", "index.js"], cwd = "src" },
   { argv = ["vpt", "print-file", "src/index.js"], comment = "The parent fmt settings are discovered too." },
   { argv = ["vpt", "write-file", "src/vite.config.ts", "export default { lint: { rules: { 'no-console': 'off' } }, fmt: { singleQuote: false, semi: true } };\n"] },
-  { argv = ["vp", "lint", "index.js"], cwd = "src", comment = "The config in the working directory takes precedence when it has lint settings." },
+  { argv = ["vp", "lint", "index.js"], cwd = "src", comment = "The root lint config still applies when the working directory has its own lint settings.", continue-on-failure = true },
   { argv = ["vp", "fmt", "index.js"], cwd = "src" },
-  { argv = ["vpt", "print-file", "src/index.js"], comment = "The working directory's fmt settings take precedence too." },
+  { argv = ["vpt", "print-file", "src/index.js"], comment = "Formatting still discovers the working directory's fmt settings." },
   { argv = ["vp", "lint", "src/index.js"], comment = "Running from the root keeps per-file nested lint configs disabled.", continue-on-failure = true },
   { argv = ["vp", "fmt", "src/index.js"] },
   { argv = ["vpt", "print-file", "src/index.js"], comment = "Running from the root keeps per-file nested fmt configs disabled." },

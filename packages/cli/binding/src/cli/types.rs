@@ -10,6 +10,8 @@ use vt_str::Str;
 /// Resolved configuration from vite.config.ts
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct ResolvedUniversalViteConfig {
+    #[serde(rename = "configFile")]
+    pub(crate) config_file: Option<String>,
     pub(crate) lint: Option<serde_json::Value>,
     pub(crate) check: Option<serde_json::Value>,
     pub(crate) run: Option<serde_json::Value>,

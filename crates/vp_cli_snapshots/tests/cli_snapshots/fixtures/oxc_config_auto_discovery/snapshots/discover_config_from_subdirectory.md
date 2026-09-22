@@ -8,7 +8,7 @@
 
 ## `cd src && vp lint index.js`
 
-A config without lint settings is skipped in favor of the parent config.
+Running from a subdirectory uses the root lint config.
 
 **Exit code:** 1
 
@@ -47,10 +47,20 @@ console.log('hello')
 
 ## `cd src && vp lint index.js`
 
-The config in the working directory takes precedence when it has lint settings.
+The root lint config still applies when the working directory has its own lint settings.
+
+**Exit code:** 1
 
 ```
-Found 0 warnings and 0 errors.
+
+  × eslint(no-console): Unexpected console statement.
+   ╭─[index.js:1:1]
+ 1 │ console.log('hello')
+   · ───────────
+   ╰────
+  help: Delete this console statement.
+
+Found 0 warnings and 1 error.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
@@ -62,7 +72,7 @@ Finished in <duration> on 1 files using <n> threads.
 
 ## `vpt print-file src/index.js`
 
-The working directory's fmt settings take precedence too.
+Formatting still discovers the working directory's fmt settings.
 
 ```
 console.log("hello");
