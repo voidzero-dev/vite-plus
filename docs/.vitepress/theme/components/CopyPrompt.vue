@@ -87,12 +87,12 @@ onBeforeUnmount(() => {
   <button
     type="button"
     class="button"
-    :aria-label="`${label} for setting up Vite+ with an AI assistant`"
+    :aria-label="`${prompt ? label : copyLabel} for setting up Vite+ with an AI assistant`"
     @mousedown="blurPointerTarget"
-    @click="openView"
+    @click="prompt ? openView() : copyPrompt()"
   >
-    <Icon icon="lucide:eye" class="size-4" aria-hidden="true" />
-    <span>{{ label }}</span>
+    <Icon :icon="prompt ? 'lucide:eye' : copyIcon" class="size-4" aria-hidden="true" />
+    <span>{{ prompt ? label : copyLabel }}</span>
   </button>
 
   <Teleport to="body">
