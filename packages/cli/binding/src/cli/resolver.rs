@@ -429,7 +429,7 @@ mod tests {
                     SynthesizableSubcommand::Lint { args: tool_args.clone() },
                     &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
                 ),
-                (SynthesizableSubcommand::Fmt { args: tool_args.clone() }, &["tool.js"]),
+                (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"]),
             ] {
                 let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
                 let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
@@ -447,14 +447,12 @@ mod tests {
         let config_file = root.join("vite config.mts").as_path().to_str().unwrap().to_string();
         let envs = Arc::new(FxHashMap::default());
 
-        for mut config in [
-            serde_json::json!({}),
-            serde_json::json!({ "lint": {} }),
-            serde_json::json!({ "fmt": {} }),
-            serde_json::json!({ "lint": {}, "fmt": {} }),
+        for (mut config, has_lint, has_fmt) in [
+            (serde_json::json!({}), false, false),
+            (serde_json::json!({ "lint": {} }), true, false),
+            (serde_json::json!({ "fmt": {} }), false, true),
+            (serde_json::json!({ "lint": {}, "fmt": {} }), true, true),
         ] {
-            let has_lint = config.get("lint").is_some();
-            let has_fmt = config.get("fmt").is_some();
             config["configFile"] = serde_json::json!(config_file);
             let config = config.to_string();
             let root_string = root.as_path().to_str().unwrap().to_string();
@@ -475,11 +473,7 @@ mod tests {
                         &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
                         has_lint,
                     ),
-                    (
-                        SynthesizableSubcommand::Fmt { args: tool_args.clone() },
-                        &["tool.js"],
-                        has_fmt,
-                    ),
+                    (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"], has_fmt),
                 ] {
                     let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
                     let actual_args: Vec<&str> =
@@ -517,7 +511,7 @@ mod tests {
                     SynthesizableSubcommand::Lint { args: tool_args.clone() },
                     &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
                 ),
-                (SynthesizableSubcommand::Fmt { args: tool_args.clone() }, &["tool.js"]),
+                (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"]),
             ] {
                 let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
                 let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
