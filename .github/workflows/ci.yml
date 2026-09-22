@@ -970,6 +970,9 @@ jobs:
       - name: Build snapshot test binaries
         run: cargo test -p vp_cli_snapshots --no-run --message-format=json > "$RUNNER_TEMP/snapshot-test-build.json"
 
+      - name: Test snapshot runner utilities
+        run: cargo test -p vp_cli_snapshots --test redact_unit --test shard_unit --test registry_pack_unit --test report_unit --test schedule_unit
+
       - name: Package CLI test binaries
         run: |
           artifact_dir="$(mktemp -d)"
@@ -1102,7 +1105,7 @@ jobs:
           VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
           VP_SNAP_FISH_BIN="$(command -v fish)" \
           VP_SNAP_NU_BIN="$(command -v nu)" \
-          ./target/snapshot-tests/cli_snapshots
+          ./target/snapshot-tests/cli_snapshots --test-threads 8
         env:
           RUST_BACKTRACE: '1'
           # Relocate fixture and helper paths while keeping the same test
@@ -1110,6 +1113,16 @@ jobs:
           CARGO_MANIFEST_DIR: ${{ github.workspace }}/crates/vp_cli_snapshots
           CARGO_BIN_EXE_vpt: ${{ github.workspace }}/target/snapshot-tests/vpt
           VP_SNAP_SHARD: ${{ matrix.shard }}/3
+          VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
+
+      - name: Upload snapshot diagnostics and timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snapshot-diagnostics-${{ matrix.target }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/snapshot-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Runs the PTY snapshot suite (crates/vp_cli_snapshots) on Windows with
   # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
@@ -1233,31 +1246,53 @@ jobs:
           # Keep pwsh at its canonical installation path; copying pwsh.exe
           # alone can break its adjacent runtime dependencies.
           export VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v pwsh.exe)")"
+          # Reserve all nextest workers for cases that need the execution gate.
+          # Generate the overrides from the fixtures, including automatic Ctrl-C
+          # isolation, so this configuration cannot drift from the runner.
+          VP_SNAP_NEXTEST_CONFIG="$RUNNER_TEMP/snapshot-nextest.toml" \
+            cargo-nextest nextest list --archive-file windows-snapshot-tests.tar.zst --workspace-remap . \
+            > "$RUNNER_TEMP/snapshot-test-list.txt"
+          nextest_run_args=(
+            --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml"
+            --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast
+          )
           # --no-fail-fast: on a snapshot suite every diff is diagnostic
           # signal; cancelling on the first failure hides the rest.
           test_exit=0
           # This fixture requires case-sensitive directory support, which the
           # default temp directory on these runners does not provide.
-          cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast --partition hash:${{ matrix.shard }}/3 \
+          cargo-nextest nextest run "${nextest_run_args[@]}" --partition hash:${{ matrix.shard }}/3 \
             -E 'not test(windows_case_sensitive_shims)' || test_exit=$?
 
           if [[ '${{ matrix.shard }}' == '1' ]]; then
             # Run both flavors on NTFS once. Rust's GetTempPath2 ignores
             # TEMP/TMP under the SYSTEM account, so override SystemTemp.
             SystemTemp='${{ steps.snapshot-temp.outputs.directory }}' \
-              cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast \
+              cargo-nextest nextest run "${nextest_run_args[@]}" \
                 -E 'test(windows_case_sensitive_shims)' || test_exit=$?
 
             # Exercise the same environment wrapper under Windows PowerShell 5.1.
             VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v powershell.exe)")" \
-              cargo-nextest nextest run --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast \
+              cargo-nextest nextest run "${nextest_run_args[@]}" \
                 -E 'test(command_env_powershell)' || test_exit=$?
           fi
           exit "$test_exit"
         env:
           RUST_BACKTRACE: '1'
+          # Share immutable tarballs across nextest processes in this job.
+          VP_SNAP_PACKAGES_DIR: ${{ runner.temp }}/snapshot-packages
+          VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
           # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
+
+      - name: Upload snapshot diagnostics and timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snapshot-diagnostics-windows-${{ matrix.shard }}
+          path: ${{ runner.temp }}/snapshot-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
 
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)

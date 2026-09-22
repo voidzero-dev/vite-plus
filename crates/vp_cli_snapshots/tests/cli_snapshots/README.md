@@ -61,22 +61,82 @@ CI runs three shards per platform. Linux and macOS use `VP_SNAP_SHARD=1/3`
 happens before name filtering, so filtered runs keep the same assignment.
 Leave the variable unset to run the whole suite. Windows uses the existing
 nextest runner with `--partition hash:1/3` (then `2/3` and `3/3`).
+Each CI shard uses eight workers so process and network waits can overlap.
+Local runs retain libtest's default worker count; override it with
+`--test-threads <count>`.
+
+Within each shard, the in-process runner executes parallel cases before isolated
+cases. This keeps workers available for ready work instead of blocking them on
+the execution gate. Scheduling happens after partitioning and does not change
+shard membership or test listing order.
+The existing gate still protects `serial = true` and Ctrl-C cases, including
+against other runner processes.
 
 Environment overrides, mainly for CI:
 
-| Variable                    | Effect                                                              |
-| --------------------------- | ------------------------------------------------------------------- |
-| `VP_SNAP_GLOBAL_VP`         | Path to a prebuilt global `vp` binary (skips the target-dir lookup) |
-| `VP_SNAP_LOCAL_CLI_BIN_DIR` | Local CLI bin dir (default `<repo>/packages/cli/bin`)               |
-| `VP_SNAP_JS_RUNTIME_DIR`    | Provisioned managed runtime to seed case homes with                 |
-| `VP_SNAP_SH_BIN`            | POSIX `sh` binary for cases that execute the generated `env` file   |
-| `VP_SNAP_BASH_BIN`          | Bash binary for cases that execute the generated `env` file         |
-| `VP_SNAP_ZSH_BIN`           | Zsh binary for cases that execute the generated `env` file          |
-| `VP_SNAP_CMD_BIN`           | System cmd.exe for cases that execute generated batch files         |
-| `VP_SNAP_FISH_BIN`          | Fish binary for cases that execute generated `env.fish` files       |
-| `VP_SNAP_NU_BIN`            | Nushell binary for cases that execute generated `env.nu` files      |
-| `VP_SNAP_PWSH_BIN`          | PowerShell binary for cases that execute generated `env.ps1` files  |
-| `VP_SNAP_SKIP_FLAVORS`      | Comma-separated flavors to skip registering (e.g. `local`)          |
+| Variable                    | Effect                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `VP_SNAP_GLOBAL_VP`         | Path to a prebuilt global `vp` binary (skips the target-dir lookup)           |
+| `VP_SNAP_LOCAL_CLI_BIN_DIR` | Local CLI bin dir (default `<repo>/packages/cli/bin`)                         |
+| `VP_SNAP_JS_RUNTIME_DIR`    | Provisioned managed runtime to seed case homes with                           |
+| `VP_SNAP_SH_BIN`            | POSIX `sh` binary for cases that execute the generated `env` file             |
+| `VP_SNAP_BASH_BIN`          | Bash binary for cases that execute the generated `env` file                   |
+| `VP_SNAP_ZSH_BIN`           | Zsh binary for cases that execute the generated `env` file                    |
+| `VP_SNAP_CMD_BIN`           | System cmd.exe for cases that execute generated batch files                   |
+| `VP_SNAP_FISH_BIN`          | Fish binary for cases that execute generated `env.fish` files                 |
+| `VP_SNAP_NU_BIN`            | Nushell binary for cases that execute generated `env.nu` files                |
+| `VP_SNAP_PWSH_BIN`          | PowerShell binary for cases that execute generated `env.ps1` files            |
+| `VP_SNAP_SKIP_FLAVORS`      | Comma-separated flavors to skip registering (e.g. `local`)                    |
+| `VP_SNAP_PACKAGES_DIR`      | Run-scoped directory for sharing packed packages across test processes        |
+| `VP_SNAP_ARTIFACTS_DIR`     | Directory for phase timings and failure diagnostics; unset disables artifacts |
+| `VP_SNAP_NEXTEST_CONFIG`    | With `--list`, write nextest overrides for the discovered isolated cases      |
+
+Windows CI generates its nextest configuration from the same case definitions.
+Exact nextest runs read only the selected fixture; listing and native shard
+assignment still discover all cases.
+
+The overrides reserve all test workers for an isolated case and schedule these
+cases last. The file lock remains a fallback when running without the generated
+configuration. To use these overrides locally:
+
+```bash
+VP_SNAP_NEXTEST_CONFIG="$PWD/target/snapshot-nextest.toml" cargo nextest list -p vp_cli_snapshots
+cargo nextest run -p vp_cli_snapshots --config-file target/snapshot-nextest.toml
+```
+
+`VP_SNAP_PACKAGES_DIR` packs the checkout on the first registry case, under a
+cross-process file lock. Later cases reuse the completed tarballs. Use a fresh
+directory for each test run and keep the build unchanged while tests run. The
+runner checks the checkout path and input/tarball file sizes and modification
+times; a changed build fails instead of silently testing stale packages. This
+is a per-run preparation directory, not a persistent content-addressed cache.
+Each case still has its own registry server, overlays, and mutable caches.
+Windows CI uses this to avoid repacking in every nextest process.
+
+With `VP_SNAP_ARTIFACTS_DIR` set, each runner process creates a unique `run-*`
+directory. `runner/timing.json` records discovery, test execution, and final
+cleanup. `cases/<fixture>/<snapshot>/timing.json` records gate waiting,
+provisioning, package preparation/reuse, registry startup, individual steps,
+rendering, comparison, and cleanup. `registry-pack` appears only in the process
+that actually packs; it is nested inside `registry-pack-or-reuse`. Phase
+durations are milliseconds; nested phases must not be added together. The
+existing console timings still exclude gate waiting.
+
+The `case-setup/*` phases divide `case-setup` into home creation, binary and
+package installation, preference seeding, and first-start setup. These phases are
+nested inside `case-setup`; use them to identify preparation costs without
+counting the parent duration twice.
+
+`workspace-cleanup` removes the case workspace after comparison, while other
+workers can still run tests. The final `run-cleanup` removes shared run files and
+any case files left by a panic or an unsuccessful earlier cleanup attempt.
+
+Failed cases also write `error.txt`, `expected.md` (when present), `actual.md`
+(when a complete or partial snapshot was rendered), and `output.txt`. The output
+contains the last 1 MiB of unredacted rendered step output, including successful
+hidden steps; it is not the raw PTY byte stream. Artifacts survive temporary
+workspace cleanup. CI uploads these files and timings on successful and failed
+runs. Listing tests with `--list` neither packs packages nor creates artifacts.
 
 ## Case reference
 
@@ -102,13 +162,23 @@ after = [ ... ]               # cleanup steps, never snapshotted
 
 `vp` picks which CLI runs the case. Both flavors install the built Rust binary
 into the case's `VP_HOME/current/bin`, install the checkout package under that
-case home, and run `vp env setup` before steps. `"global"` exposes only
+case home, and run first-start setup before steps. `"global"` exposes only
 `VP_HOME/bin`; `"local"` also exposes the case-local
 `VP_HOME/current/node_modules/vite-plus/bin` package bin. On Windows, local
 flavor exposes sibling `.cmd` shims under
 `VP_HOME/current/node_modules/.vite-plus-bin` instead. The list form registers
 one trial and one snapshot per flavor; use it for parity cases (help output,
 routing, error messages) where both surfaces must agree.
+
+Each case starts with explicit managed-mode preferences for npm, pnpm, Yarn,
+and Bun. The runner writes these preferences before starting the unmarked
+`vp` binary with no arguments. First-start setup creates the environment files
+and shims, then exits. This avoids a second `vp env setup --refresh`. Tests of
+preference inference or an empty installation must create a separate home, as the
+`shim_package_manager_setup` fixture does.
+The preparation command sets `VP_SELF_SETUP_NO_MODIFY_PATH=1` so Windows
+self-setup does not add temporary case homes to the user's persistent `PATH`.
+This override applies only to runner preparation, not to fixture commands.
 
 A step is a bare argv array or a table:
 

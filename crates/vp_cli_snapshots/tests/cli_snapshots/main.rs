@@ -18,10 +18,13 @@
 mod exit_code;
 mod flavor;
 mod redact;
+mod registry_pack;
+mod report;
+mod schedule;
 mod shard;
 
 use std::{
-    collections::{BTreeMap, hash_map::DefaultHasher},
+    collections::{BTreeMap, BTreeSet, hash_map::DefaultHasher},
     ffi::OsString,
     fs::{File, OpenOptions},
     hash::{Hash, Hasher},
@@ -578,7 +581,9 @@ impl CaseHome {
         &self,
         flavor: Flavor,
         runtime: &FlavorRuntime,
+        report: &report::Report,
     ) -> Result<CaseInstall, String> {
+        let binaries_phase = report.phase("case-setup/install-binaries");
         let current_bin = self.vp_home().join("current").join("bin");
         std::fs::create_dir_all(&current_bin)
             .map_err(|e| format!("failed to create current/bin dir: {e}"))?;
@@ -602,6 +607,8 @@ impl CaseHome {
             flavor::install_file(&current_bin.join("vp-shim.exe"), &shim, "global vp-shim.exe")?;
         }
 
+        drop(binaries_phase);
+        let package_phase = report.phase("case-setup/install-package");
         let package_dir = self.vp_home().join("current").join("node_modules").join("vite-plus");
         Self::install_case_package(&runtime.cli_package_dir, &package_dir)?;
         let local_bin_dir = local_package_bin_dir(&package_dir);
@@ -609,7 +616,8 @@ impl CaseHome {
         if flavor == Flavor::Local {
             self.write_local_package_cmd_shims(&package_dir, &local_bin_dir)?;
         }
-        self.run_env_setup(&vp)?;
+        drop(package_phase);
+        self.run_initial_setup(&vp, report)?;
 
         let vp_bin_dir = self.vp_home().join("bin");
         let mut tool_dirs = match flavor {
@@ -693,35 +701,45 @@ impl CaseHome {
         Ok(())
     }
 
-    fn run_env_setup(&self, vp: &Path) -> Result<(), String> {
+    fn run_initial_setup(&self, vp: &Path, report: &report::Report) -> Result<(), String> {
+        // Every case starts with managed package-manager shims. Set these
+        // preferences before setup so it creates each shim once, without a
+        // second process that moves inferred system-first shims afterward.
+        let preferences_phase = report.phase("case-setup/preferences");
+        let preferences = serde_json::json!({
+            "packageManagerShimModes": {
+                "bun": "managed",
+                "npm": "managed",
+                "pnpm": "managed",
+                "yarn": "managed",
+            },
+        });
+        std::fs::write(
+            self.vp_home().join("config.json"),
+            serde_json::to_vec_pretty(&preferences).unwrap(),
+        )
+        .map_err(|e| format!("failed to write case package-manager preferences: {e}"))?;
+        drop(preferences_phase);
         let env = self.base_env(compose_path_env(&[]));
+        let _setup_phase = report.phase("case-setup/first-start");
+        // This fresh installation has no setup marker. Its first invocation
+        // creates the environment files and shims, then exits with no args.
+        // Passing `env setup --refresh` would run setup a second time.
         let output = std::process::Command::new(vp)
-            .args(["env", "setup", "--refresh"])
             .env_clear()
             .envs(&env)
+            // The unmarked case binary runs self-setup first. Its Windows
+            // handoff must not start PowerShell to add this temporary home
+            // to the real user's persistent PATH. Case commands do not
+            // inherit this override, so self-setup fixtures retain coverage.
+            .env("VP_SELF_SETUP_NO_MODIFY_PATH", "1")
             .output()
-            .map_err(|e| format!("failed to run `vp env setup`: {e}"))?;
-        if !output.status.success() {
-            return Err(format!(
-                "`vp env setup` failed with status {}\nstdout:\n{}\nstderr:\n{}",
-                output.status,
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            ));
-        }
-
-        // Cases start with explicit package-manager preferences, as fresh installations do.
-        let output = std::process::Command::new(vp)
-            .args(["env", "on", "pm"])
-            .env_clear()
-            .envs(&env)
-            .output()
-            .map_err(|e| format!("failed to run `vp env on pm`: {e}"))?;
+            .map_err(|e| format!("failed to run first-start setup: {e}"))?;
         if output.status.success() {
             return Ok(());
         }
         Err(format!(
-            "`vp env on pm` failed with status {}\nstdout:\n{}\nstderr:\n{}",
+            "first-start setup failed with status {}\nstdout:\n{}\nstderr:\n{}",
             output.status,
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
@@ -1185,20 +1203,20 @@ fn start_local_registry(
 )]
 fn run_case(
     tmpdir: &Path,
+    case_root: &Path,
     fixture_path: &Path,
-    fixture_name: &str,
-    case_index: usize,
     case: &Case,
     flavor: Flavor,
     runtime: &FlavorRuntime,
     snapshot_name: &str,
     local_registry_pack: Option<&Path>,
+    report: &report::Report,
 ) -> Result<(), String> {
     let snapshots = snapshot_test::Snapshots::new(fixture_path.join("snapshots"));
 
     // Copy the fixture to a per-case staging directory so the test runs in
     // isolation and workspace-root discovery doesn't walk past the fixture.
-    let case_root = tmpdir.join(format!("{fixture_name}_case_{case_index}_{}", flavor.as_str()));
+    let staging_phase = report.phase("fixture-staging");
     let stage = case_root.join("workspace");
     std::fs::create_dir_all(&stage).unwrap();
     if case.link_node_modules {
@@ -1211,8 +1229,13 @@ fn run_case(
         .copy_tree(fixture_path, &stage)
         .unwrap();
 
-    let case_home = CaseHome::provision(&case_root, case.seed_runtime);
-    let case_install = case_home.provision_vite_plus(flavor, runtime)?;
+    drop(staging_phase);
+    let setup_phase = report.phase("case-setup");
+    let home_phase = report.phase("case-setup/home");
+    let case_home = CaseHome::provision(case_root, case.seed_runtime);
+    drop(home_phase);
+    let case_install = case_home.provision_vite_plus(flavor, runtime, report)?;
+    drop(setup_phase);
 
     let mut case_env = baseline_env(&case_home, &case_install);
     for key in &case.unset_env {
@@ -1232,7 +1255,8 @@ fn run_case(
     // fold its registry env into every step. Held to the end of the case so
     // its teardown removes the throwaway package-manager caches. Registry env
     // never sets PATH, so folding it in after `case_path` is derived is safe.
-    let _registry = if case.local_registry {
+    let registry_phase = report.phase("registry-startup");
+    let registry = if case.local_registry {
         let pack_dir = local_registry_pack
             .ok_or("internal error: local-registry case reached run_case without a packed dir")?;
         // Prefer the seed runtime's real node binary over the case's node
@@ -1250,6 +1274,8 @@ fn run_case(
     } else {
         None
     };
+
+    drop(registry_phase);
 
     // Installs through the local registry are slower than pure vp commands, so
     // local-registry steps get a 120s default (still overridable per step);
@@ -1292,6 +1318,8 @@ fn run_case(
         let step_env: &BTreeMap<String, OsString> = &step_env;
         let timeout = step.timeout(step_default_timeout);
 
+        let command_line = step.display_command_line(&case.cwd);
+        let execution_phase = report.phase(format!("step-{}: {command_line}", step_index + 1));
         let (termination_state, raw_output) = if step.tty {
             'tty: {
                 let mut cmd = CommandBuilder::new(&program);
@@ -1430,10 +1458,14 @@ fn run_case(
             (state, block)
         };
 
+        drop(execution_phase);
+        let rendering_phase = report.phase(format!("render-step-{}", step_index + 1));
+        report.capture(&command_line, &raw_output);
+
         // Blank line separator before every `##`.
         doc.push('\n');
         doc.push_str("## `");
-        doc.push_str(&step.display_command_line(&case.cwd));
+        doc.push_str(&command_line);
         doc.push_str("`\n\n");
 
         if let Some(comment) = step.comment.as_deref() {
@@ -1448,8 +1480,7 @@ fn run_case(
         if matches!(termination_state, TerminationState::TimedOut) {
             let redacted = redact_output(raw_output, &redactions, !step.formatted_snapshot);
             timeout_error = Some(format!(
-                "step `{}` timed out after {timeout:?}; partial output:\n{redacted}",
-                step.display_command_line(&case.cwd),
+                "step `{command_line}` timed out after {timeout:?}; partial output:\n{redacted}",
             ));
             break;
         }
@@ -1478,6 +1509,8 @@ fn run_case(
             doc.push_str(&redacted);
         }
 
+        drop(rendering_phase);
+
         // Shell-like `&&` semantics with line boundaries: a failing step
         // skips the rest of its line, up to and including the next
         // continue-on-failure step, then the following line resumes.
@@ -1504,6 +1537,8 @@ fn run_case(
         step_index += 1;
     }
 
+    report.actual(&doc);
+    let cleanup_phase = report.phase("case-cleanup");
     // Cleanup steps: best-effort, never snapshotted. Per-step envs apply
     // here too: cleanup often depends on the same PATH/prefix overrides as
     // the step it tears down.
@@ -1529,11 +1564,15 @@ fn run_case(
         }
     }
 
+    drop(registry);
+    drop(cleanup_phase);
+
     // Deferred so the cleanup above always runs, even for hung steps.
     if let Some(error) = timeout_error {
         return Err(error);
     }
 
+    let _comparison_phase = report.phase("snapshot-comparison");
     snapshots.check_snapshot(snapshot_name, &doc)
 }
 
@@ -1614,6 +1653,24 @@ fn case_needs_isolation(case: &Case) -> bool {
 }
 
 fn main() {
+    let args = libtest_mimic::Arguments::from_args();
+    // A unique process directory avoids collisions between nextest workers and
+    // repeated trials (for example the two Windows PowerShell versions in CI).
+    let artifacts = if args.list {
+        None
+    } else {
+        std::env::var_os("VP_SNAP_ARTIFACTS_DIR").map(|root| {
+            std::fs::create_dir_all(&root).expect("failed to create snapshot artifact directory");
+            tempfile::Builder::new()
+                .prefix("run-")
+                .tempdir_in(root)
+                .expect("failed to create process artifact directory")
+                .keep()
+        })
+    };
+    let run_report =
+        report::Report::new(artifacts.as_ref().map(|dir| dir.join("runner")), "runner".into());
+    let discovery_phase = run_report.phase("discovery");
     let tmp_dir = tempfile::tempdir().unwrap();
     // dunce, not std: std's canonicalize returns a `\\?\` verbatim path on
     // Windows, and CMD.EXE (which runs the local flavor's .cmd shims)
@@ -1639,12 +1696,24 @@ fn main() {
 
     let fixtures_dir = flavor::manifest_dir().join("tests/cli_snapshots/fixtures");
 
+    // nextest starts a process with one exact trial. Avoid reading every TOML
+    // file in each child. Native sharding still needs the complete trial list
+    // because its round-robin assignment precedes libtest filtering.
+    let exact_fixture = if args.exact && !args.list && std::env::var_os("VP_SNAP_SHARD").is_none() {
+        args.filter.as_deref().and_then(|name| name.split_once("::")).map(|(fixture, _)| fixture)
+    } else {
+        None
+    };
     let mut fixture_paths = std::fs::read_dir(&fixtures_dir)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", fixtures_dir.display()))
         .map(|entry| entry.unwrap().path())
-        .filter(|p| {
-            p.is_dir()
-                && p.file_name().and_then(|n| n.to_str()).is_some_and(|n| !n.starts_with('.'))
+        .filter(|path| {
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                return false;
+            };
+            !name.starts_with('.')
+                && exact_fixture.is_none_or(|fixture| name == fixture)
+                && path.is_dir()
         })
         .collect::<Vec<_>>();
     fixture_paths.sort();
@@ -1654,8 +1723,6 @@ fn main() {
     // run in isolation; see `EXECUTION_GATE`. This replaces the old
     // Linux-wide `--test-threads=1`, which serialized the entire suite to
     // protect a handful of ctrl-c cases.
-    let args = libtest_mimic::Arguments::from_args();
-
     // `VP_SNAP_SKIP_FLAVORS=local` (comma-separated) skips registering trials
     // for a flavor entirely; CI legs that don't build the JS CLI use it.
     let skip_flavors: Vec<String> = std::env::var("VP_SNAP_SKIP_FLAVORS")
@@ -1670,9 +1737,9 @@ fn main() {
         run_root: Arc<Path>,
         global: std::sync::OnceLock<Result<FlavorRuntime, String>>,
         local: std::sync::OnceLock<Result<FlavorRuntime, String>>,
-        /// Packed checkout packages (vite-plus, @voidzero-dev/vite-plus-core),
-        /// produced once on the first local-registry case and shared by every
-        /// per-case registry via `SNAP_LOCAL_VP_PACKAGES_DIR`.
+        /// Packed checkout packages, prepared once per process by default.
+        /// VP_SNAP_PACKAGES_DIR also shares them across nextest processes;
+        /// this cell avoids revalidating the directory for each local trial.
         local_registry_pack: std::sync::OnceLock<Result<Arc<Path>, String>>,
     }
     impl LazyRuntimes {
@@ -1687,31 +1754,36 @@ fn main() {
         /// Packs the checkout packages once and returns the shared dir. Reuses
         /// `local-npm-registry.ts --pack-to` so the pack logic lives in one
         /// place (the same helper the tool and ecosystem-ci use).
-        fn local_registry_pack(&self) -> Result<Arc<Path>, String> {
+        fn local_registry_pack(&self, report: &report::Report) -> Result<Arc<Path>, String> {
             self.local_registry_pack
                 .get_or_init(|| {
                     let node = which::which("node")
                         .map_err(|e| format!("`node` not found on PATH (needed to pack): {e}"))?;
                     let repo_root = flavor::repo_root();
                     let script = repo_root.join("packages/tools/src/local-npm-registry.ts");
-                    let dest = self.run_root.join("local-registry-packages");
-                    std::fs::create_dir_all(&dest)
-                        .map_err(|e| format!("failed to create pack dir: {e}"))?;
-                    // Inherit the runner's environment so the packer finds
-                    // `pnpm` and `node` the same way a developer would.
-                    let output = std::process::Command::new(&node)
-                        .arg(&script)
-                        .arg("--pack-to")
-                        .arg(&dest)
-                        .current_dir(&repo_root)
-                        .output()
-                        .map_err(|e| format!("failed to run local-registry pack: {e}"))?;
-                    if !output.status.success() {
-                        return Err(format!(
-                            "packing checkout packages failed:\n{}",
-                            String::from_utf8_lossy(&output.stderr)
-                        ));
-                    }
+                    let root = std::env::var_os("VP_SNAP_PACKAGES_DIR").map_or_else(
+                        || self.run_root.join("local-registry-packages"),
+                        PathBuf::from,
+                    );
+                    let dest = registry_pack::get_or_prepare(&root, &repo_root, |dest| {
+                        let _packing_phase = report.phase("registry-pack");
+                        // Inherit the runner environment so pnpm and node resolve
+                        // just as they do for a developer's normal package build.
+                        let output = std::process::Command::new(&node)
+                            .arg(&script)
+                            .arg("--pack-to")
+                            .arg(dest)
+                            .current_dir(&repo_root)
+                            .output()
+                            .map_err(|e| format!("failed to run local-registry pack: {e}"))?;
+                        if !output.status.success() {
+                            return Err(format!(
+                                "packing checkout packages failed:\n{}",
+                                String::from_utf8_lossy(&output.stderr)
+                            ));
+                        }
+                        Ok(())
+                    })?;
                     Ok(Arc::from(dest.as_path()))
                 })
                 .clone()
@@ -1737,6 +1809,7 @@ fn main() {
     let local_build_present = flavor::repo_root().join("packages/cli/dist/bin.js").is_file();
 
     let mut tests: Vec<libtest_mimic::Trial> = Vec::new();
+    let mut isolated_trials = BTreeSet::new();
     for fixture_path in fixture_paths {
         let fixture_path: Arc<Path> = Arc::from(fixture_path.as_path());
         let fixture_name: Arc<str> = Arc::from(fixture_path.file_name().unwrap().to_str().unwrap());
@@ -1773,46 +1846,64 @@ fn main() {
                     || required_tool_missing
                     || (case.local_registry && !local_build_present);
                 let isolated = case_needs_isolation(&case);
+                if isolated {
+                    isolated_trials.insert(trial_name.clone());
+                }
                 let timings = Arc::clone(&timings);
                 let timing_name = trial_name.clone();
+                let artifact_dir = artifacts
+                    .as_ref()
+                    .map(|dir| dir.join("cases").join(&*fixture_name).join(&snapshot_name));
                 tests.push(
                     libtest_mimic::Trial::test(trial_name, move || {
-                        // Hold the execution lease for the whole case: shared
-                        // (parallel) unless the case needs isolation. Acquired
-                        // before timing so the reported duration is the case's
-                        // own work, not time spent waiting for the lease.
+                        let report = report::Report::new(artifact_dir, timing_name.clone());
+                        let gate_phase = report.phase("gate-wait");
+                        // Keep the console's case duration independent of lock
+                        // waiting; the artifact records that wait separately.
                         let _gate = acquire_gate(isolated);
+                        drop(gate_phase);
                         let started = std::time::Instant::now();
-                        let result = (|| -> Result<(), libtest_mimic::Failed> {
-                            let runtime = match runtimes.get(flavor) {
-                                Ok(runtime) => runtime,
-                                Err(message) => return Err(message.clone().into()),
-                            };
-                            // Pack the checkout once, lazily, only when a
-                            // local-registry case actually runs.
+                        let result = (|| -> Result<(), String> {
+                            let runtime_phase = report.phase("flavor-setup");
+                            let runtime = runtimes.get(flavor).as_ref().map_err(Clone::clone)?;
+                            drop(runtime_phase);
+                            let pack_phase = report.phase("registry-pack-or-reuse");
                             let local_registry_pack = if case.local_registry {
-                                match runtimes.local_registry_pack() {
-                                    Ok(dir) => Some(dir),
-                                    Err(message) => return Err(message.into()),
-                                }
+                                Some(runtimes.local_registry_pack(&report)?)
                             } else {
                                 None
                             };
-                            run_case(
+                            drop(pack_phase);
+                            let case_root = tmp_dir_path.join(format!(
+                                "{fixture_name}_case_{case_index}_{}",
+                                flavor.as_str()
+                            ));
+                            let result = run_case(
                                 &tmp_dir_path,
+                                &case_root,
                                 &fixture_path,
-                                &fixture_name,
-                                case_index,
                                 &case,
                                 flavor,
                                 runtime,
                                 &snapshot_name,
                                 local_registry_pack.as_deref(),
-                            )
-                            .map_err(Into::into)
+                                &report,
+                            );
+                            // Reclaim each workspace while other workers can
+                            // still make progress, instead of deleting every
+                            // installed dependency in one serial tail. The run
+                            // TempDir remains a fallback after panics or files
+                            // that are still open during this first attempt.
+                            let _cleanup_phase = report.phase("workspace-cleanup");
+                            let _ = std::fs::remove_dir_all(&case_root);
+                            result
                         })();
                         timings.lock().unwrap().push((timing_name, started.elapsed()));
-                        result
+                        let artifact_result = report.finish(
+                            result.as_ref().err().map(String::as_str),
+                            Some(&fixture_path.join("snapshots").join(&snapshot_name)),
+                        );
+                        result.and(artifact_result).map_err(Into::into)
                     })
                     .with_ignored_flag(ignored),
                 );
@@ -1820,12 +1911,31 @@ fn main() {
         }
     }
 
+    if args.list
+        && let Some(path) = std::env::var_os("VP_SNAP_NEXTEST_CONFIG")
+    {
+        std::fs::write(&path, schedule::nextest_config(isolated_trials.iter().map(String::as_str)))
+            .unwrap_or_else(|error| {
+                panic!("failed to write nextest config {}: {error}", Path::new(&path).display())
+            });
+    }
+
     if let Some(shard) = std::env::var_os("VP_SNAP_SHARD") {
         let shard = shard.to_str().expect("VP_SNAP_SHARD must be valid UTF-8");
         tests = shard::select(tests, shard).unwrap_or_else(|error| panic!("{error}"));
     }
 
+    if !args.list {
+        // A worker waiting for exclusive access cannot run another ready case.
+        // Finish parallel work first, then take the existing exclusive leases.
+        // Keep discovery and shard membership independent of execution order.
+        tests.sort_by_key(|trial| isolated_trials.contains(trial.name()));
+    }
+
+    drop(discovery_phase);
+    let execution_phase = run_report.phase("tests");
     let conclusion = libtest_mimic::run(&args, tests);
+    drop(execution_phase);
 
     // Report each case's wall time (slowest first). Skipped for `--list`,
     // which runs nothing.
@@ -1842,6 +1952,11 @@ fn main() {
 
     // exit() never returns, so the staged run tree must be dropped first or
     // every run would leave its full tempdir behind.
+    let cleanup_phase = run_report.phase("run-cleanup");
     drop(tmp_dir);
+    drop(cleanup_phase);
+    run_report
+        .finish(conclusion.has_failed().then_some("one or more snapshot tests failed"), None)
+        .expect("failed to write runner timing artifact");
     conclusion.exit();
 }
