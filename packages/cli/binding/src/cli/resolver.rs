@@ -82,8 +82,6 @@ impl SubcommandResolver {
                     args: [
                         Str::from("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"),
                         Str::from(js_path_str),
-                        // Auto-discover the config, but keep per-file nested configs disabled.
-                        Str::from("--disable-nested-config"),
                     ]
                     .into_iter()
                     .chain(args.into_iter().map(Str::from))
@@ -107,8 +105,7 @@ impl SubcommandResolver {
 
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
-                    args: [Str::from(js_path_str), Str::from("--disable-nested-config")]
-                        .into_iter()
+                    args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
@@ -392,21 +389,15 @@ mod tests {
             &["-c", "custom.json", "src"],
             &["--config", "custom.json", "src"],
             &["--config=custom.json", "src"],
+            &["--disable-nested-config", "src"],
         ] {
             let tool_args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
             for (command, prefix) in [
                 (
                     SynthesizableSubcommand::Lint { args: tool_args.clone() },
-                    &[
-                        "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
-                        "tool.js",
-                        "--disable-nested-config",
-                    ][..],
+                    &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
                 ),
-                (
-                    SynthesizableSubcommand::Fmt { args: tool_args.clone() },
-                    &["tool.js", "--disable-nested-config"],
-                ),
+                (SynthesizableSubcommand::Fmt { args: tool_args.clone() }, &["tool.js"]),
             ] {
                 let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
                 let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
