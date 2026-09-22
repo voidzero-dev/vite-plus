@@ -5,7 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -27,7 +27,9 @@ const version = (
   await fs.readFile(path.join(repository, 'crates/vp_global_cli/Cargo.toml'), 'utf8')
 ).match(/^version = "([^"]+)"/m)[1];
 const replacementVersion = values['replacement-version'] ?? version;
-const root = await fs.realpath(await fs.mkdtemp(path.join(tmpdir(), 'vp-homebrew-e2e-')));
+// Linux's build sandbox permits writes under /tmp, so keep Homebrew itself outside it.
+const testParent = process.platform === 'linux' ? homedir() : tmpdir();
+const root = await fs.realpath(await fs.mkdtemp(path.join(testParent, 'vp-homebrew-e2e-')));
 const prefix = path.join(root, 'brew');
 const brew = path.join(prefix, 'bin/brew');
 const formulaName = 'viteplus/e2e/vp';
@@ -45,10 +47,11 @@ const token = randomBytes(24).toString('hex');
 async function run(command, args, env = baseEnv, cwd = root, expected = 0) {
   const child = spawn(command, args, { env, cwd, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '';
-  for (const stream of [child.stdout, child.stderr])
+  for (const stream of [child.stdout, child.stderr]) {
     stream.setEncoding('utf8').on('data', (data) => {
       output += data;
     });
+  }
   const [code, signal] = await once(child, 'close');
   assert.equal(signal, null, output);
   assert.ok(!output.includes(token), 'Registry credentials appeared in command output');
@@ -58,7 +61,9 @@ async function run(command, args, env = baseEnv, cwd = root, expected = 0) {
 
 async function registry(packagesDir) {
   const args = [path.join(repository, 'packages/tools/src/local-npm-registry.ts'), '--serve'];
-  if (packagesDir) args.push('--packages-dir', packagesDir);
+  if (packagesDir) {
+    args.push('--packages-dir', packagesDir);
+  }
   const child = spawn(process.execPath, args, {
     env: baseEnv,
     cwd: root,
@@ -94,8 +99,10 @@ async function registry(packagesDir) {
 async function authenticatedRegistry(upstream) {
   const requests = new Set();
   const server = createServer(async (request, response) => {
-    if (request.headers.authorization !== `Bearer ${token}`)
-      return response.writeHead(401).end('Unauthorized');
+    if (request.headers.authorization !== `Bearer ${token}`) {
+      response.writeHead(401).end('Unauthorized');
+      return;
+    }
     requests.add(request.url);
     try {
       const remote = request.url.startsWith('/tarball/')
@@ -118,7 +125,9 @@ async function authenticatedRegistry(upstream) {
             : value,
         );
         response.end(text);
-      } else response.end(Buffer.from(await result.arrayBuffer()));
+      } else {
+        response.end(Buffer.from(await result.arrayBuffer()));
+      }
     } catch {
       response.writeHead(502).end('Registry fixture failed');
     }
@@ -184,7 +193,9 @@ async function formulaFor(binary, value, registryUrl, revision = false) {
   let result = updateFormula(formula, value, assets);
   // Local archive URLs have no GitHub release tag from which Homebrew can infer the version.
   result = result.replace('  license', `  version "${value}"\n  license`);
-  if (revision) result = result.replace('  license', '  revision 1\n  license');
+  if (revision) {
+    result = result.replace('  license', '  revision 1\n  license');
+  }
   // brew test uses a separate home. Point only this disposable formula at the checkout registry.
   result = result.replace(
     '  test do\n',
@@ -203,12 +214,13 @@ try {
   await fs.mkdir(brewTemp);
   const noNpm = path.join(root, 'no-npm');
   await fs.mkdir(noNpm);
-  for (const tool of ['node', 'npm', 'pnpm'])
+  for (const tool of ['node', 'npm', 'pnpm']) {
     await fs.writeFile(
       path.join(noNpm, tool),
       '#!/bin/sh\necho "npm tools must not run during brew install" >&2\nexit 77\n',
       { mode: 0o755 },
     );
+  }
   const brewEnv = {
     ...baseEnv,
     HOME: brewHome,
@@ -250,8 +262,9 @@ try {
     .digest('hex');
   assert.ok(!(await fs.readdir(brewHome)).includes('.vite-plus'));
   assert.ok(!(await fs.readdir(oldKeg)).includes('node_modules'));
-  for (const alias of ['vpr', 'vpx'])
+  for (const alias of ['vpr', 'vpx']) {
     assert.equal(await fs.realpath(path.join(prefix, 'bin', alias)), await fs.realpath(publicVp));
+  }
   console.log(
     'Homebrew installs the current native binary and aliases without npm tools or user setup.',
   );
@@ -292,9 +305,11 @@ try {
   assert.ok(!(await fs.readdir(path.join(oldKeg, 'bin'))).includes('.vp-setup-complete'));
   assert.ok(!(await fs.readdir(first.VP_HOME)).includes('current'));
   const settings = await fs.readFile(path.join(first.VP_HOME, 'config.json'), 'utf8');
-  for (const env of [first, second])
-    for (const variable of ['VP_NODE_MANAGER', 'VP_PM_MANAGER', 'VP_PNPM_MANAGER'])
+  for (const env of [first, second]) {
+    for (const variable of ['VP_NODE_MANAGER', 'VP_PM_MANAGER', 'VP_PNPM_MANAGER']) {
       delete env[variable];
+    }
+  }
   const marker = path.join(packageDir(first), '.vp-deps-complete');
   const completed = (await fs.stat(marker)).mtimeMs;
   await run(shim(first, 'vp'), ['--help'], first, project);
@@ -304,8 +319,9 @@ try {
     ['fmt', '--check', 'src.js'],
     ['lint', 'src.js'],
     ['build'],
-  ])
+  ]) {
     await run(publicVp, args, first, project);
+  }
   assert.ok(!(await fs.readdir(project)).includes('node_modules'));
   await fs.access(path.join(project, 'dist/index.html'));
   console.log(
@@ -336,7 +352,9 @@ try {
     const packages = path.join(root, 'next-packages');
     await fs.cp(path.resolve(values['packages-dir']), packages, { recursive: true });
     for (const archive of await fs.readdir(packages)) {
-      if (!archive.endsWith('.tgz')) continue;
+      if (!archive.endsWith('.tgz')) {
+        continue;
+      }
       const unpacked = await fs.mkdtemp(path.join(root, 'next-package-'));
       await run('tar', ['-xzf', path.join(packages, archive), '-C', unpacked]);
       const manifestPath = path.join(unpacked, 'package/package.json');
@@ -367,8 +385,9 @@ try {
   await assert.rejects(fs.access(oldKeg));
   await fs.writeFile(path.join(first.HOME, '.npmrc'), `registry=${nextRegistry}/\n`);
   await run(shim(first, 'vp'), ['--help'], first, project);
-  for (const name of ['node', 'pn', 'tsc'])
+  for (const name of ['node', 'pn', 'tsc']) {
     await run(shim(first, name), ['--version'], first, project);
+  }
   await run(shim(first, 'pnx'), ['--help'], first, project);
   await run(path.join(first.VP_HOME, 'fallback-bin/npm'), ['--version'], first, project);
   await fs.access(path.join(packageDir(first, replacementVersion), '.vp-deps-complete'));
@@ -413,7 +432,9 @@ try {
     server.close();
     server.closeAllConnections();
   }
-  for (const child of children) child.kill();
+  for (const child of children) {
+    child.kill();
+  }
   // Keep failures available for inspection; the prefix is always task-local.
   console.log(`Homebrew e2e files: ${root}`);
 }
