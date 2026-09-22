@@ -27,6 +27,8 @@ export function project(name, browser = true) {
         browser: {
           enabled: true,
           headless: true,
+          // Browser startup can exceed Vitest's 60s connection timeout on CI.
+          connectTimeout: 120000,
           provider: playwright({ launchOptions: { executablePath } }),
           instances: [{ browser: 'chromium' }],
         },
