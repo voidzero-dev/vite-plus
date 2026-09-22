@@ -617,7 +617,7 @@ impl CaseHome {
             self.write_local_package_cmd_shims(&package_dir, &local_bin_dir)?;
         }
         drop(package_phase);
-        self.run_env_setup(&vp, report)?;
+        self.run_initial_setup(&vp, report)?;
 
         let vp_bin_dir = self.vp_home().join("bin");
         let mut tool_dirs = match flavor {
@@ -701,7 +701,7 @@ impl CaseHome {
         Ok(())
     }
 
-    fn run_env_setup(&self, vp: &Path, report: &report::Report) -> Result<(), String> {
+    fn run_initial_setup(&self, vp: &Path, report: &report::Report) -> Result<(), String> {
         // Every case starts with managed package-manager shims. Set these
         // preferences before setup so it creates each shim once, without a
         // second process that moves inferred system-first shims afterward.
@@ -721,18 +721,25 @@ impl CaseHome {
         .map_err(|e| format!("failed to write case package-manager preferences: {e}"))?;
         drop(preferences_phase);
         let env = self.base_env(compose_path_env(&[]));
-        let _setup_phase = report.phase("case-setup/env-setup");
+        let _setup_phase = report.phase("case-setup/first-start");
+        // This fresh installation has no setup marker. Its first invocation
+        // creates the environment files and shims, then exits with no args.
+        // Passing `env setup --refresh` would run setup a second time.
         let output = std::process::Command::new(vp)
-            .args(["env", "setup", "--refresh"])
             .env_clear()
             .envs(&env)
+            // The unmarked case binary runs self-setup first. Its Windows
+            // handoff must not start PowerShell to add this temporary home
+            // to the real user's persistent PATH. Case commands do not
+            // inherit this override, so self-setup fixtures retain coverage.
+            .env("VP_SELF_SETUP_NO_MODIFY_PATH", "1")
             .output()
-            .map_err(|e| format!("failed to run `vp env setup`: {e}"))?;
+            .map_err(|e| format!("failed to run first-start setup: {e}"))?;
         if output.status.success() {
             return Ok(());
         }
         Err(format!(
-            "`vp env setup` failed with status {}\nstdout:\n{}\nstderr:\n{}",
+            "first-start setup failed with status {}\nstdout:\n{}\nstderr:\n{}",
             output.status,
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)

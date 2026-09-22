@@ -123,7 +123,7 @@ durations are milliseconds; nested phases must not be added together. The
 existing console timings still exclude gate waiting.
 
 The `case-setup/*` phases divide `case-setup` into home creation, binary and
-package installation, preference seeding, and `vp env setup`. These phases are
+package installation, preference seeding, and first-start setup. These phases are
 nested inside `case-setup`; use them to identify preparation costs without
 counting the parent duration twice.
 
@@ -162,7 +162,7 @@ after = [ ... ]               # cleanup steps, never snapshotted
 
 `vp` picks which CLI runs the case. Both flavors install the built Rust binary
 into the case's `VP_HOME/current/bin`, install the checkout package under that
-case home, and run `vp env setup` before steps. `"global"` exposes only
+case home, and run first-start setup before steps. `"global"` exposes only
 `VP_HOME/bin`; `"local"` also exposes the case-local
 `VP_HOME/current/node_modules/vite-plus/bin` package bin. On Windows, local
 flavor exposes sibling `.cmd` shims under
@@ -171,10 +171,14 @@ one trial and one snapshot per flavor; use it for parity cases (help output,
 routing, error messages) where both surfaces must agree.
 
 Each case starts with explicit managed-mode preferences for npm, pnpm, Yarn,
-and Bun. The runner writes these preferences before `vp env setup` so setup
-creates the shims in their final locations in one pass. Tests of preference
-inference or an empty installation must create a separate home, as the
+and Bun. The runner writes these preferences before starting the unmarked
+`vp` binary with no arguments. First-start setup creates the environment files
+and shims, then exits. This avoids a second `vp env setup --refresh`. Tests of
+preference inference or an empty installation must create a separate home, as the
 `shim_package_manager_setup` fixture does.
+The preparation command sets `VP_SELF_SETUP_NO_MODIFY_PATH=1` so Windows
+self-setup does not add temporary case homes to the user's persistent `PATH`.
+This override applies only to runner preparation, not to fixture commands.
 
 A step is a bare argv array or a table:
 

@@ -8,6 +8,21 @@ const prepared = fs.realpathSync(process.env.VP_HOME);
 const referenceHome = path.resolve('reference-home');
 const reference = path.join(referenceHome, '.vite-plus');
 const windows = process.platform === 'win32';
+assert.equal(process.env.VP_SELF_SETUP_NO_MODIFY_PATH, undefined);
+if (windows) {
+  const result = spawnSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      '[Environment]::GetEnvironmentVariable("Path", "User")',
+    ],
+    { encoding: 'utf8', timeout: 30000 },
+  );
+  assert.equal(result.status, 0, result.error?.message ?? result.stdout + result.stderr);
+  assert.ok(!result.stdout.toLowerCase().includes(prepared.toLowerCase()));
+}
 const binaryName = windows ? 'vp.exe' : 'vp';
 const bin = path.join(reference, 'current', 'bin');
 fs.mkdirSync(bin, { recursive: true });
@@ -24,6 +39,7 @@ for (const name of Object.keys(env)) {
 Object.assign(env, {
   VP_HOME: reference,
   VP_CLI_TEST: '1',
+  VP_SELF_SETUP_NO_MODIFY_PATH: '1',
   HOME: referenceHome,
   USERPROFILE: referenceHome,
   PATH: windows
