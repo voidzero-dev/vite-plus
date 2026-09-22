@@ -27,7 +27,7 @@ function download(url) {
   return Promise.resolve(new Response(url.endsWith('vp-checksums.txt') ? checksums : archive));
 }
 
-test('release publication requires the compatible tag and each verified archive', async () => {
+await test('release publication requires the compatible tag and each verified archive', async () => {
   assert.deepEqual(await verifyRelease(version, release, download), assets);
   await assert.rejects(verifyRelease(version, { ...release, draft: true }, download), /published/);
   await assert.rejects(
@@ -48,7 +48,7 @@ test('release publication requires the compatible tag and each verified archive'
   );
 });
 
-test('missing, repeated, and invalid checksums cannot update a formula', () => {
+await test('missing, repeated, and invalid checksums cannot update a formula', () => {
   assert.throws(
     () => releaseAssets(version, checksums.split('\n').slice(1).join('\n')),
     /Expected one checksum/,
@@ -64,7 +64,7 @@ test('missing, repeated, and invalid checksums cannot update a formula', () => {
   assert.throws(() => releaseAssets('0.3.4-beta.1', checksums), /stable release/);
 });
 
-test('updates preserve recipe changes and reset only a previous version revision', () => {
+await test('updates preserve recipe changes and reset only a previous version revision', () => {
   const revised = formula.replace('  license', '  revision 2\n  license');
   const result = updateFormula(revised, version, assets);
   assert.ok(!result.includes('disable!'));

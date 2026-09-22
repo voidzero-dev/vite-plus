@@ -77,7 +77,9 @@ export function updateFormula(source, version, assets) {
   let updated = source
     .replace(assetBlock, `  # BEGIN RELEASE ASSETS\n${blocks}\n  # END RELEASE ASSETS`)
     .replace(launchGate, '');
-  if (difference > 0) updated = updated.replace(/^  revision \d+\n/m, '');
+  if (difference > 0) {
+    updated = updated.replace(/^  revision \d+\n/m, '');
+  }
   return updated;
 }
 
@@ -140,9 +142,14 @@ async function main() {
   const guideResult = guideSource
     .replace(/::: warning Availability\n[\s\S]*?:::\n\n/, '')
     .replace('When the tap becomes available, run:', 'Install the tap:');
-  if (result !== source) await writeFile(file, result);
-  if (guideResult !== guideSource) await writeFile(guide, guideResult);
+  if (result !== source) {
+    await writeFile(file, result);
+  }
+  if (guideResult !== guideSource) {
+    await writeFile(guide, guideResult);
+  }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href)
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   await main();
+}
