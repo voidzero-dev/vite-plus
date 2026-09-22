@@ -469,6 +469,18 @@ pub(crate) async fn resolve_unix_vp_shim_target(
         && same_file::is_same_file(current_exe, homebrew.binary.as_path()).unwrap_or(false)
         && let Some(public) = homebrew.public_binary()
     {
+        let dirs = &vp_shared::EnvConfig::get().dirs;
+        if unix::passes_through_shims(public.as_path(), dirs.bin.as_path())
+            || unix::passes_through_shims(public.as_path(), dirs.fallback_bin().as_path())
+        {
+            return Err(Error::ConfigError(
+                format!(
+                    "Vite+ shim directories must not contain the Homebrew entrypoint {}. Choose separate VP_BIN_DIR and VP_DATA_DIR paths.",
+                    public.as_path().display()
+                )
+                .into(),
+            ));
+        }
         return Ok(public.as_path().to_path_buf());
     }
     let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
@@ -656,10 +668,10 @@ async fn refresh_package_shims(
             continue;
         }
         let shim = bin_dir.join(&name);
-        // Keep foreign files, including npm's direct package links.
-        if crate::commands::global::install::is_vp_shim_target(&shim)
-            && tokio::fs::read_link(&shim).await? != target.as_path()
-        {
+        // The saved Vp source and a link to vp identify an owned package shim even
+        // after its old installation is removed. Keep foreign files and direct package links.
+        let Ok(previous) = tokio::fs::read_link(&shim).await else { continue };
+        if previous.file_name().is_some_and(|name| name == "vp") && previous != target {
             tokio::fs::remove_file(&shim).await?;
             tokio::fs::symlink(&target, &shim).await?;
         }
