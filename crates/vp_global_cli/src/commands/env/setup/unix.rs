@@ -34,7 +34,7 @@ pub(super) fn external_shim_target(binary: &Path) -> Option<PathBuf> {
 
 // Canonical equality alone would accept aliases back to our own vp/node shims,
 // creating a cycle as soon as setup replaces them. Check every link in the chain.
-fn passes_through_shims(candidate: &Path, bin: &Path) -> bool {
+pub(super) fn passes_through_shims(candidate: &Path, bin: &Path) -> bool {
     let bin = std::fs::canonicalize(bin).unwrap_or_else(|_| bin.to_path_buf());
     let mut path = candidate.to_path_buf();
     for _ in 0..40 {
