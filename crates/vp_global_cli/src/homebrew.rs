@@ -63,6 +63,7 @@ fn valid_component(value: &str) -> bool {
         && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.@+".contains(&byte))
 }
 
+#[cfg(unix)]
 impl Installation {
     /// Homebrew's standard Cellar layout exposes a stable link outside the keg.
     pub(crate) fn public_binary(&self) -> Option<AbsolutePathBuf> {

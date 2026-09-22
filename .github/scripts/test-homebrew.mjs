@@ -335,15 +335,19 @@ try {
     assert.ok(values['replacement-binary'] && values['packages-dir']);
     const packages = path.join(root, 'next-packages');
     await fs.cp(path.resolve(values['packages-dir']), packages, { recursive: true });
-    const cliArchive = (await fs.readdir(packages)).find((name) => name.startsWith('vite-plus-'));
-    const unpacked = path.join(root, 'next-cli');
-    await fs.mkdir(unpacked);
-    await run('tar', ['-xzf', path.join(packages, cliArchive), '-C', unpacked]);
-    const manifestPath = path.join(unpacked, 'package/package.json');
-    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
-    manifest.version = replacementVersion;
-    await fs.writeFile(manifestPath, JSON.stringify(manifest));
-    await run('tar', ['-czf', path.join(packages, cliArchive), '-C', unpacked, 'package']);
+    for (const archive of await fs.readdir(packages)) {
+      if (!archive.endsWith('.tgz')) continue;
+      const unpacked = await fs.mkdtemp(path.join(root, 'next-package-'));
+      await run('tar', ['-xzf', path.join(packages, archive), '-C', unpacked]);
+      const manifestPath = path.join(unpacked, 'package/package.json');
+      const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+      manifest.version = replacementVersion;
+      if (manifest.name === 'vite-plus') {
+        manifest.dependencies.vite = `npm:@voidzero-dev/vite-plus-core@${replacementVersion}`;
+      }
+      await fs.writeFile(manifestPath, JSON.stringify(manifest));
+      await run('tar', ['-czf', path.join(packages, archive), '-C', unpacked, 'package']);
+    }
     nextRegistry = await registry(packages);
   }
   await fs.chmod(oldKeg, 0o755);
