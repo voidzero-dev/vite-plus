@@ -119,6 +119,12 @@ impl JsExecutor {
     /// This is passed to JS scripts via `VP_CLI_BIN` environment variable
     /// so they can invoke vp commands when needed.
     fn get_bin_path() -> Result<AbsolutePathBuf, Error> {
+        #[cfg(unix)]
+        if let Some(public) = crate::homebrew::current().and_then(|install| install.public_binary())
+        {
+            // A running JS command can invoke vp after Homebrew removes its original keg.
+            return Ok(public);
+        }
         let exe_path = std::env::current_exe().map_err(|_| Error::CliBinaryNotFound)?;
         AbsolutePathBuf::new(exe_path).ok_or(Error::CliBinaryNotFound)
     }

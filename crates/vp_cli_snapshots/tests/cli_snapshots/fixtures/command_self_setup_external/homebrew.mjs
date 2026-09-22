@@ -61,7 +61,7 @@ const pnpmCode = `
       if (!response.ok) { console.error(process.env.NPM_TOKEN); process.exit(17); }
       fs.mkdirSync('node_modules/vite-plus/dist', { recursive: true });
       fs.writeFileSync('node_modules/vite-plus/package.json', JSON.stringify({ name: 'vite-plus', version }));
-      fs.writeFileSync('node_modules/vite-plus/dist/bin.js', "console.log('homebrew user CLI')");
+      fs.writeFileSync('node_modules/vite-plus/dist/bin.js', "require('node:fs').writeFileSync(process.env.TEST_CLI_BINARY, process.env.VP_CLI_BIN); console.log('homebrew user CLI')");
     });
   } else { console.log('pinned pnpm tool'); }
 `;
@@ -162,6 +162,7 @@ function environment(name, auth = true) {
     VP_PNPM_MANAGER: 'yes',
     NPM_TOKEN: token,
     TEST_REGISTRY: url,
+    TEST_CLI_BINARY: path.join(home, 'vp-path'),
     npm_config_fetch_retries: '0',
     npm_config_cache: path.join(home, 'npm-cache'),
     PATH: [
@@ -215,11 +216,14 @@ try {
 
   const cli = await run(path.join(env.VP_HOME, 'bin/vp'), ['sync-versions', '--json'], env);
   assert.equal(cli.stdout.trim(), 'homebrew user CLI');
+  const savedBinary = fs.readFileSync(env.TEST_CLI_BINARY, 'utf8');
+  assert.equal(savedBinary, publicVp);
   const replacement = keg('new');
   fs.unlinkSync(publicVp);
   fs.symlinkSync(path.join(replacement, 'bin/vp'), publicVp);
   unlock(old);
   fs.rmSync(old, { recursive: true });
+  await run(savedBinary, ['--help'], env);
   await run(path.join(env.VP_HOME, 'bin/vp'), ['--help'], env);
   await run(path.join(env.VP_HOME, 'bin/node'), ['--version'], env);
   for (const shim of ['pn', 'pnx']) {
