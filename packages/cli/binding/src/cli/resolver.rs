@@ -506,7 +506,7 @@ mod tests {
 
         for args in [
             &["-c", "custom.json", "index.ts"][..],
-            &["-ccustom.json", "index.ts"],
+            &["-c./custom.json", "index.ts"],
             &["-c=custom.json", "index.ts"],
             &["--config", "custom.json", "index.ts"],
             &["--config=custom.json", "index.ts"],
