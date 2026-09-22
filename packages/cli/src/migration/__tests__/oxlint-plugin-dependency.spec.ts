@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import { readJsonFile, writeJsonFile } from '../../utils/json.ts';
@@ -11,6 +11,7 @@ import {
   dropDeadOxlintPluginsDependency,
   finalizeCoreMigrationForExistingVitePlus,
   packageOwnsOxlintApi,
+  resolveOxlintMigrateVersion,
   rewriteMonorepo,
   rewritePackageJson,
   rewriteStandaloneProject,
@@ -555,5 +556,69 @@ describe('Oxlint plugin dependency cleanup', () => {
     expect(packageOwnsOxlintApi(pkg)).toBe(false);
     rewritePackageJson(pkg, PackageManager.pnpm);
     expect(pkg.optionalDependencies).toEqual({});
+  });
+});
+
+function packument(versions: string[]): Response {
+  return new Response(
+    JSON.stringify({ versions: Object.fromEntries(versions.map((v) => [v, {}])) }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  );
+}
+
+describe('resolveOxlintMigrateVersion', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the bundled oxlint pin when the registry has it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => packument(['1.83.0', '1.84.0', '1.85.0'])),
+    );
+    await expect(resolveOxlintMigrateVersion('1.85.0')).resolves.toBe('1.85.0');
+  });
+
+  it('falls back to the newest published version not newer than the pin', async () => {
+    // `@oxlint/migrate` trails `oxlint` releases: the pin may not exist yet.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => packument(['1.83.0', '1.84.0'])),
+    );
+    await expect(resolveOxlintMigrateVersion('1.85.0')).resolves.toBe('1.84.0');
+  });
+
+  it('ignores published versions newer than the pin', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => packument(['1.84.0', '1.86.0'])),
+    );
+    await expect(resolveOxlintMigrateVersion('1.85.0')).resolves.toBe('1.84.0');
+  });
+
+  it('keeps the pin when the registry request fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down');
+      }),
+    );
+    await expect(resolveOxlintMigrateVersion('1.85.0')).resolves.toBe('1.85.0');
+  });
+
+  it('keeps the pin when the registry responds with an error status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('upstream error', { status: 503 })),
+    );
+    await expect(resolveOxlintMigrateVersion('1.85.0')).resolves.toBe('1.85.0');
+  });
+
+  it('keeps the pin when no published version satisfies it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => packument(['2.0.0'])),
+    );
+    await expect(resolveOxlintMigrateVersion('1.85.0')).resolves.toBe('1.85.0');
   });
 });
