@@ -122,6 +122,11 @@ that actually packs; it is nested inside `registry-pack-or-reuse`. Phase
 durations are milliseconds; nested phases must not be added together. The
 existing console timings still exclude gate waiting.
 
+The `case-setup/*` phases divide `case-setup` into home creation, binary and
+package installation, `vp env setup`, and `vp env on pm`. These phases are
+nested inside `case-setup`; use them to identify preparation costs without
+counting the parent duration twice.
+
 `workspace-cleanup` removes the case workspace after comparison, while other
 workers can still run tests. The final `run-cleanup` removes shared run files and
 any case files left by a panic or an unsuccessful earlier cleanup attempt.

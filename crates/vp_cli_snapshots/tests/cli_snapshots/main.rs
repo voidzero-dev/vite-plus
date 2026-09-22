@@ -581,7 +581,9 @@ impl CaseHome {
         &self,
         flavor: Flavor,
         runtime: &FlavorRuntime,
+        report: &report::Report,
     ) -> Result<CaseInstall, String> {
+        let binaries_phase = report.phase("case-setup/install-binaries");
         let current_bin = self.vp_home().join("current").join("bin");
         std::fs::create_dir_all(&current_bin)
             .map_err(|e| format!("failed to create current/bin dir: {e}"))?;
@@ -605,6 +607,8 @@ impl CaseHome {
             flavor::install_file(&current_bin.join("vp-shim.exe"), &shim, "global vp-shim.exe")?;
         }
 
+        drop(binaries_phase);
+        let package_phase = report.phase("case-setup/install-package");
         let package_dir = self.vp_home().join("current").join("node_modules").join("vite-plus");
         Self::install_case_package(&runtime.cli_package_dir, &package_dir)?;
         let local_bin_dir = local_package_bin_dir(&package_dir);
@@ -612,7 +616,8 @@ impl CaseHome {
         if flavor == Flavor::Local {
             self.write_local_package_cmd_shims(&package_dir, &local_bin_dir)?;
         }
-        self.run_env_setup(&vp)?;
+        drop(package_phase);
+        self.run_env_setup(&vp, report)?;
 
         let vp_bin_dir = self.vp_home().join("bin");
         let mut tool_dirs = match flavor {
@@ -696,8 +701,9 @@ impl CaseHome {
         Ok(())
     }
 
-    fn run_env_setup(&self, vp: &Path) -> Result<(), String> {
+    fn run_env_setup(&self, vp: &Path, report: &report::Report) -> Result<(), String> {
         let env = self.base_env(compose_path_env(&[]));
+        let setup_phase = report.phase("case-setup/env-setup");
         let output = std::process::Command::new(vp)
             .args(["env", "setup", "--refresh"])
             .env_clear()
@@ -713,6 +719,8 @@ impl CaseHome {
             ));
         }
 
+        drop(setup_phase);
+        let _preferences_phase = report.phase("case-setup/env-on-pm");
         // Cases start with explicit package-manager preferences, as fresh installations do.
         let output = std::process::Command::new(vp)
             .args(["env", "on", "pm"])
@@ -1216,8 +1224,10 @@ fn run_case(
 
     drop(staging_phase);
     let setup_phase = report.phase("case-setup");
+    let home_phase = report.phase("case-setup/home");
     let case_home = CaseHome::provision(case_root, case.seed_runtime);
-    let case_install = case_home.provision_vite_plus(flavor, runtime)?;
+    drop(home_phase);
+    let case_install = case_home.provision_vite_plus(flavor, runtime, report)?;
     drop(setup_phase);
 
     let mut case_env = baseline_env(&case_home, &case_install);
