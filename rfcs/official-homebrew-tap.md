@@ -104,8 +104,9 @@ directory, keyed by CLI version and platform. The Homebrew files stay unchanged.
 ### 4. Complete user setup
 
 Setup creates preferences, shell environment files, and shims. It records
-completion in user-owned state only after installation succeeds. Example shims
-link through Homebrew's stable public command, not a versioned Cellar path.
+completion in user-owned state only after installation succeeds. All shims
+link through Homebrew's stable public command. This example uses managed
+Node.js and system-first npm:
 
 ```text
 <CONFIG>/
@@ -115,8 +116,12 @@ link through Homebrew's stable public command, not a versioned Cellar path.
 <BIN>/
 ├── vp   -> <BREW>/bin/vp
 ├── node -> <BREW>/bin/vp
+└── ...                             # vpr, vpx, and other managed shims
+
+<DATA>/fallback-bin/
 ├── npm  -> <BREW>/bin/vp
-└── ...                             # other tool shims
+├── npx  -> <BREW>/bin/vp
+└── ...                             # other system-first shims
 
 <STATE>/self-setup/
 └── <receipt-for-A>.json
@@ -124,8 +129,10 @@ link through Homebrew's stable public command, not a versioned Cellar path.
 
 The executable remains at `<BREW>/Cellar/vp/A/bin/vp` and loads JavaScript from
 `<DATA>/cli-packages/A/<platform>/node_modules/vite-plus`. Later invocations
-reuse these files. Runtime selection retains the user's system-first or managed
-preferences, independently of the tools used to install dependencies.
+reuse these files. The generated environment follows the existing
+[directory layout](directory-layout.md): `<BIN>` comes first on `PATH`, and
+`<DATA>/fallback-bin` comes last. System tools take precedence over fallback
+shims. These preferences are independent of the tools used to install dependencies.
 
 ### 5. Upgrade through Homebrew
 
@@ -172,6 +179,11 @@ binaries into a managed installation; this mode must retain the Homebrew binary.
 The [JavaScript resolver](../crates/vp_global_cli/src/js_executor.rs) must find
 its matching per-user dependency directory instead of expecting JavaScript
 beside the executable.
+
+Reuse [environment setup](../crates/vp_global_cli/src/commands/env/setup.rs)
+to initialize missing package-manager preferences and place shims. Preserve
+saved choices when dependencies change. Both shim directories must retain
+stable Homebrew targets across upgrades.
 
 Existing script installations and core installations with bundled JavaScript
 must retain their behavior. Automatic setup needs no new public `vp setup`
@@ -254,6 +266,9 @@ Test with isolated homes and synthetic credentials:
   project-local `vite-plus` masking missing dependencies.
 - Homebrew upgrade, removal of the old version, separate users, uninstall,
   `vp implode`, and migration preserve the ownership rules above.
+- Mixed management preferences survive upgrades. Commands through both shim
+  directories, including `pn` and `pnx`, still work after the old Cellar version
+  is removed.
 
 Run installation checks for packaging changes and on the `test: install-e2e`
 label. PR tests receive no publishing credentials. Update installation and
