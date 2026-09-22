@@ -41,7 +41,10 @@ user's settings and shims. Homebrew retains ownership of the executable; Vite+
 manages each user's dependencies. Published package formats stay unchanged.
 
 The initial scope is stable releases on macOS and glibc Linux, for ARM64 and
-x64. Launch each target only after its installation tests pass.
+x64. The [release build](../.github/workflows/reusable-release-build.yml)
+already produces archives for all four targets. Launch each target after its
+Homebrew installation tests pass. Treat Intel macOS as best-effort, consistent
+with [Homebrew's support tiers](https://docs.brew.sh/Support-Tiers).
 
 Installation assumes network access: GitHub for the tap and binary, and the
 configured npm registry and runtime sources for first-run setup.
@@ -85,14 +88,17 @@ and links the public commands. It creates no per-user Vite+ installation.
 
 ### 3. Prepare dependencies on first use
 
-The first `vp` invocation reuses the shared Node.js and pinned pnpm bootstrap.
-It installs `vite-plus@A` and production dependencies in the user's data
-directory, keyed by CLI version and platform. The Homebrew files stay unchanged.
+The first `vp` invocation prepares Node.js and uses its bundled npm to download
+the pinned pnpm package. Then pnpm installs `vite-plus@A` and production
+dependencies in the user's data directory, keyed by CLI version and platform.
+The Homebrew files stay unchanged.
 
 ```text
 <DATA>/
 ├── js_runtime/node/<node-version>/
-├── package_manager/pnpm/<pnpm-version>/
+│   ├── bin/node
+│   └── lib/node_modules/npm/        # included in the Node.js distribution
+├── package_manager/pnpm/<pnpm-version>/pnpm/
 └── cli-packages/A/<platform>/
     ├── package.json
     ├── pnpm-lock.yaml
@@ -191,10 +197,10 @@ command. Setup must not write into the Cellar.
 
 ## Registry configuration
 
-The user runs `vp` outside Homebrew's build sandbox, so pnpm can read `~/.npmrc`
-and inherit normal registry and token environment variables. Follow
-[pnpm's registry and authentication rules](https://pnpm.io/10.x/npmrc), including
-scoped registries and user-level token placeholders:
+The user runs `vp` outside Homebrew's build sandbox. Both npm and pnpm read
+`~/.npmrc`, or the file selected by `NPM_CONFIG_USERCONFIG`, and inherit registry
+and token environment variables. Use [npm-compatible authentication](https://docs.npmjs.com/cli/v11/configuring-npm/npmrc/)
+at both stages, including registry-scoped tokens and basic authentication:
 
 ```ini
 registry=https://registry.example.com/repository/npm/
@@ -203,15 +209,21 @@ registry=https://registry.example.com/repository/npm/
 
 Users export `NPM_TOKEN` before running `vp`. They can also use
 `NPM_CONFIG_REGISTRY` for a registry override. No Homebrew-specific npm variables
-or Homebrew npm downloader are required. Run dependency installation in its own
-directory so the calling project's workspace and `.npmrc` do not control it.
+or Homebrew npm downloader are required.
 
-One bootstrap gap remains: the shared [dependency installer](../crates/vp_setup/src/install.rs)
-downloads pnpm through Rust before pnpm can read configuration. That download
-must honor the user's registry and credentials too. Fix and test this shared
-bootstrap path before claiming support for authenticated private registries.
-Keep credentials out of logs and receipts, and do not fall back to the public
-registry after authentication fails.
+Change the shared [dependency installer](../crates/vp_setup/src/install.rs) to
+fetch pinned pnpm with Node's bundled npm. Invoke Node and `npm-cli.js` by their
+absolute paths. Use [`npm pack`](https://docs.npmjs.com/cli/v11/commands/npm-pack/)
+with an exact version, `--ignore-scripts`, `--json`, and `--workspaces=false` in
+a temporary directory. npm handles registry metadata, tarball URLs, integrity,
+and credentials. Reuse the existing pnpm cache layout and installation lock.
+Then use that pnpm for dependency installation.
+
+Run both stages outside the calling project's workspace. Resolve an explicit
+relative `NPM_CONFIG_USERCONFIG` before changing directories, and pass the same
+registry override to both stages. Keep credentials out of command arguments,
+logs, and receipts. Authentication failures must stop setup without public
+registry fallback. pnpm-only credential helpers are outside the initial scope.
 
 ## Commands and migration
 
@@ -252,6 +264,10 @@ checksums. A failed update leaves the previous formula available. Use a formula
 `revision` for recipe fixes and a new release for CLI changes. A formula-only
 merge must not trigger another product release.
 
+Vite+ release maintainers own the formula and its release automation through
+the existing repository review process. Confirm a primary maintainer and a
+backup before launch. Formula failures belong in this repository's issue tracker.
+
 ## Launch checks
 
 Test with isolated homes and synthetic credentials:
@@ -259,7 +275,9 @@ Test with isolated homes and synthetic credentials:
 - `brew install` downloads the release and creates the commands without
   preinstalled Node.js or pnpm. The formula does not run npm or user setup.
 - First use on a fresh home bootstraps dependencies through public and
-  authenticated private registries, including pnpm's own download.
+  authenticated private registries, including pnpm's own download. Cover token
+  and basic authentication, registry and user-config overrides, and rejection
+  of invalid credentials or corrupted tarballs.
 - Later invocations reuse dependencies; failed and concurrent setup attempts
   recover without repeated preference prompts or writes to the Cellar.
 - Formatting, linting, and builds use the matching package without a
@@ -274,18 +292,8 @@ Run installation checks for packaging changes and on the `test: install-e2e`
 label. PR tests receive no publishing credentials. Update installation and
 migration guides when the tap is ready.
 
-## Tradeoffs and open decisions
+## Tradeoffs
 
 The formula stays small and dependency installation shares the script installer's
 code. Each user downloads and stores their own dependencies. Homebrew manages
 the executable; Vite+ manages the per-user JavaScript installation.
-
-Installing dependencies into the Cellar would make them available to all users,
-but requires npm configuration handling during Homebrew installation. A complete
-GitHub bundle would avoid that step at the cost of another packaging format.
-
-Before implementation, decide:
-
-1. Who maintains the tap and release automation?
-2. Should launch include all four targets, or start with macOS?
-3. How should the shared pnpm bootstrap reuse npm authentication configuration?
