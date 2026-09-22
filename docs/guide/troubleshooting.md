@@ -26,7 +26,7 @@ The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`. `
 
 ## Nested lint or format config is not applied
 
-When running `vp lint`, `vp fmt`, or `vp check` from the workspace root, configs in subdirectories do not override the root lint and format settings for individual files. Running from a package directory can select a package-level config instead: Oxlint and Oxfmt search the working directory and its parents for a `vite.config.ts` with the relevant `lint` or `fmt` block.
+When running `vp lint`, `vp fmt`, or `vp check` from the workspace root, configs in subdirectories do not override the root lint and format settings for individual files. Running from a package directory can select a package-level config instead: Oxlint and Oxfmt search the working directory and its parents for a `vite.config.*` file with the relevant `lint` or `fmt` block.
 
 Keep lint and format settings in the root `vite.config.ts`. Use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) and [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific settings. You can also [import configuration objects](/guide/monorepo#composing-configuration-files) into the root config to keep settings in separate files.
 

@@ -1,6 +1,6 @@
 # vite_config_js
 
-Known upstream gap: auto-discovery ignores vite.config.js, but explicit loading works. An upstream fix must change this snapshot.
+Auto-discovery and explicit loading both support vite.config.js.
 
 ## `vpt cp config.mjs vite.config.js`
 
@@ -9,8 +9,18 @@ Known upstream gap: auto-discovery ignores vite.config.js, but explicit loading 
 
 Automatic discovery should apply the lint block in vite.config.js.
 
+**Exit code:** 1
+
 ```
-Found 0 warnings and 0 errors.
+
+  × eslint(no-console): Unexpected console statement.
+   ╭─[src/index.js:1:1]
+ 1 │ console.log("hello");
+   · ───────────
+   ╰────
+  help: Delete this console statement.
+
+Found 0 warnings and 1 error.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
@@ -18,21 +28,28 @@ Finished in <duration> on 1 file with <n> rules using <n> threads.
 
 Automatic discovery should apply the fmt block in vite.config.js.
 
+**Exit code:** 1
+
 ```
 Checking formatting...
 
-All matched files use the correct format.
+src/index.js (<duration>)
+
+Format issues found in above 1 files. Run without `--check` to fix.
 Finished in <duration> on 1 files using <n> threads.
-No config found, using defaults. Please add a config file or try `vp fmt --init` if needed.
 ```
 
 ## `vp check src`
 
 The composite command should use the same config.
 
+**Exit code:** 1
+
 ```
-pass: All 1 file are correctly formatted (<duration>, <n> threads)
-pass: Found no warnings or lint errors in 1 file (<duration>, <n> threads)
+error: Formatting issues found
+src/index.js (<duration>)
+
+Found formatting issues in 1 file (<duration>, <n> threads). Run `vp check --fix` to fix them.
 ```
 
 ## `vp lint -c vite.config.js src`

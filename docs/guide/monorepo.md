@@ -8,7 +8,7 @@ Because `vite.config.ts` is just JavaScript, you can choose to put your entire c
 
 Run `vp lint`, `vp fmt`, and `vp check` from the workspace root to apply the root lint and format settings across packages. These commands do not apply nested configs to individual files. Define file- or package-specific settings with overrides in the root `vite.config.ts`.
 
-When run from a package directory, Oxlint and Oxfmt search that directory and its parents for a `vite.config.ts` with the relevant `lint` or `fmt` block. A package config with that block takes precedence over the root config. Configs without the relevant block are skipped.
+When run from a package directory, Oxlint and Oxfmt search that directory and its parents for a `vite.config.*` file with the relevant `lint` or `fmt` block. A package config with that block takes precedence over the root config. Configs without the relevant block are skipped.
 
 Use `lint.overrides` for Oxlint rules that only apply to some packages:
 

@@ -1,6 +1,6 @@
 # Format Config
 
-`vp fmt` and `vp check` read Oxfmt settings from the `fmt` block in `vite.config.ts`. Oxfmt [discovers the config](/guide/fmt#configuration) from the working directory and its parents. Keep shared settings in the workspace-root config. See [Oxfmt's configuration](https://oxc.rs/docs/guide/usage/formatter/config.html) for details.
+`vp fmt` and `vp check` read Oxfmt settings from the `fmt` block in your Vite config. Oxfmt [discovers the config](/guide/fmt#configuration) from the working directory and its parents. Keep shared settings in the workspace-root config. See [Oxfmt's configuration](https://oxc.rs/docs/guide/usage/formatter/config.html) for details.
 
 ## Example
 

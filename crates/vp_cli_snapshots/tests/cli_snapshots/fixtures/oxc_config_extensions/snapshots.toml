@@ -1,13 +1,9 @@
 # Cover every filename in Vite's DEFAULT_CONFIG_FILES and VITE_CONFIG_FILES.
-# Auto-discovery currently supports only vite.config.ts. Keep the other cases
-# active so upstream support changes appear as snapshot diffs on dependency upgrades.
-# Each explicit -c invocation proves that the config itself is valid and loadable.
-# With full extension support, automatic and explicit loading should report the
-# same no-console error and formatting issues.
+# Automatic and explicit loading must report the same lint and formatting issues.
 
 [[case]]
 name = "vite_config_js"
-comment = "Known upstream gap: auto-discovery ignores vite.config.js, but explicit loading works. An upstream fix must change this snapshot."
+comment = "Auto-discovery and explicit loading both support vite.config.js."
 vp = "local"
 steps = [
   { argv = ["vpt", "cp", "config.mjs", "vite.config.js"], snapshot = false },
@@ -20,7 +16,7 @@ steps = [
 
 [[case]]
 name = "vite_config_mjs"
-comment = "Known upstream gap: auto-discovery ignores vite.config.mjs, but explicit loading works. An upstream fix must change this snapshot."
+comment = "Auto-discovery and explicit loading both support vite.config.mjs."
 vp = "local"
 steps = [
   { argv = ["vpt", "cp", "config.mjs", "vite.config.mjs"], snapshot = false },
@@ -33,7 +29,7 @@ steps = [
 
 [[case]]
 name = "vite_config_ts"
-comment = "Baseline: auto-discovery and explicit loading both support vite.config.ts."
+comment = "Auto-discovery and explicit loading both support vite.config.ts."
 vp = "local"
 steps = [
   { argv = ["vpt", "cp", "config.mjs", "vite.config.ts"], snapshot = false },
@@ -46,7 +42,7 @@ steps = [
 
 [[case]]
 name = "vite_config_cjs"
-comment = "Known upstream gap: auto-discovery ignores vite.config.cjs, but explicit loading works. An upstream fix must change this snapshot."
+comment = "Auto-discovery and explicit loading both support vite.config.cjs."
 vp = "local"
 steps = [
   { argv = ["vpt", "cp", "config.cjs", "vite.config.cjs"], snapshot = false },
@@ -59,7 +55,7 @@ steps = [
 
 [[case]]
 name = "vite_config_mts"
-comment = "Known upstream gap: auto-discovery ignores vite.config.mts, but explicit loading works. An upstream fix must change this snapshot."
+comment = "Auto-discovery and explicit loading both support vite.config.mts."
 vp = "local"
 steps = [
   { argv = ["vpt", "cp", "config.mjs", "vite.config.mts"], snapshot = false },
@@ -72,7 +68,7 @@ steps = [
 
 [[case]]
 name = "vite_config_cts"
-comment = "Known upstream gap: auto-discovery ignores vite.config.cts, but explicit loading works. An upstream fix must change this snapshot."
+comment = "Auto-discovery and explicit loading both support vite.config.cts."
 vp = "local"
 steps = [
   { argv = ["vpt", "cp", "config.cjs", "vite.config.cts"], snapshot = false },

@@ -20,7 +20,7 @@ vp fmt . --write
 
 Put formatting configuration directly in the `fmt` block in the root `vite.config.ts` so all your configuration stays in one place. We do not recommend using `.oxfmtrc.json` with Vite+.
 
-Oxfmt discovers the nearest `vite.config.ts` with a `fmt` block, starting from the working directory and searching parent directories. Running `vp fmt` from a package directory can therefore use that package's format settings. Running from the workspace root does not apply nested configs to individual files; use [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific options.
+Oxfmt discovers the nearest `vite.config.*` file with a `fmt` block, starting from the working directory and searching parent directories. Supported extensions are `.js`, `.mjs`, `.ts`, `.cjs`, `.mts`, and `.cts`. Running `vp fmt` from a package directory can therefore use that package's format settings. Running from the workspace root does not apply nested configs to individual files; use [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific options.
 
 For editors, disable nested formatter configs so format-on-save uses the root Vite+ `fmt` block:
 

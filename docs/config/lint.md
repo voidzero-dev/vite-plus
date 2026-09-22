@@ -1,6 +1,6 @@
 # Lint Config
 
-`vp lint` and `vp check` read Oxlint settings from the `lint` block in `vite.config.ts`. Oxlint [discovers the config](/guide/lint#configuration) from the working directory and its parents. Keep shared settings in the workspace-root config. See [Oxlint's configuration](https://oxc.rs/docs/guide/usage/linter/config.html) for details.
+`vp lint` and `vp check` read Oxlint settings from the `lint` block in your Vite config. Oxlint [discovers the config](/guide/lint#configuration) from the working directory and its parents. Keep shared settings in the workspace-root config. See [Oxlint's configuration](https://oxc.rs/docs/guide/usage/linter/config.html) for details.
 
 ## Example
 

@@ -1,6 +1,6 @@
 # vite_config_ts
 
-Baseline: auto-discovery and explicit loading both support vite.config.ts.
+Auto-discovery and explicit loading both support vite.config.ts.
 
 ## `vpt cp config.mjs vite.config.ts`
 

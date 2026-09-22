@@ -20,7 +20,7 @@ vp lint --type-aware
 
 Put lint configuration directly in the `lint` block in the root `vite.config.ts` so all your configuration stays in one place. We do not recommend using `oxlint.config.ts` or `.oxlintrc.json` with Vite+.
 
-Oxlint discovers the nearest `vite.config.ts` with a `lint` block, starting from the working directory and searching parent directories. Running `vp lint` from a package directory can therefore use that package's lint settings. Running from the workspace root does not apply nested configs to individual files; use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) for file- or package-specific rules.
+Oxlint discovers the nearest `vite.config.*` file with a `lint` block, starting from the working directory and searching parent directories. Supported extensions are `.js`, `.mjs`, `.ts`, `.cjs`, `.mts`, and `.cts`. Running `vp lint` from a package directory can therefore use that package's lint settings. Running from the workspace root does not apply nested configs to individual files; use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) for file- or package-specific rules.
 
 For the upstream rule set, options, and compatibility details, see the [Oxlint docs](https://oxc.rs/docs/guide/usage/linter.html).
 
