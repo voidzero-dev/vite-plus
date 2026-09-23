@@ -2,8 +2,8 @@
 name = "browser_defines"
 vp = "local"
 skip-platforms = ["windows"]
-# The multi-project matrix launches many browsers. Keep other snapshot cases
-# from competing with browser startup; retain the matrix's own parallel projects.
+# Keep other snapshot cases from competing with Chromium startup and the
+# matrix's parallel browser contexts.
 serial = true
 env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
 comment = "Regression for Vitest #11198, fixed upstream in 5.0.1. Raw configs, project inheritance, programmatic APIs, and the CLI must preserve define values without a Vite+ backport."
