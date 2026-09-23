@@ -1,7 +1,7 @@
 # Homebrew tap
 
 ::: warning Availability
-The official tap is not available yet. Its formula stays disabled until the first release with per-user Homebrew setup is published.
+Stable installation stays disabled until the first release with per-user Homebrew setup is published. Preview builds can be tested with the selector below.
 Use the [script installer](/guide/global-cli) or Homebrew core in the meantime.
 :::
 
@@ -76,3 +76,22 @@ brew uninstall voidzero-dev/vite-plus/vp
 ```
 
 `brew uninstall` alone keeps user data. Each user can remove their own data with `vp implode` before the shared executable is removed.
+
+## Test a preview build
+
+Set `HOMEBREW_VP_PR_VERSION` to a PR number or full commit SHA. The PR must have a published `preview-build` that includes Homebrew tap support.
+
+```bash
+HOMEBREW_VP_PR_VERSION="<pr-or-sha>" brew install voidzero-dev/vite-plus/vp
+HOMEBREW_VP_PR_VERSION="<pr-or-sha>" brew test voidzero-dev/vite-plus/vp
+```
+
+Use `brew reinstall` instead of `brew install` to replace an installed build. Use a full SHA to keep installation and verification on the same commit.
+`brew test` uses temporary user data and does not change your shell configuration.
+
+Homebrew downloads only the native preview package from the registry bridge and verifies its checksum. It resolves PR numbers to the latest published commit, which can differ from the current PR head.
+First launch installs the matching dependencies from the bridge. An explicit `NPM_CONFIG_REGISTRY` must point to a registry that also serves those preview packages.
+
+The selector is specific to this tap. It does not change other Homebrew formulae, and no npm client is needed during `brew install`.
+To test changes to the formula itself, first check out the PR in the tap repository. Set `HOMEBREW_NO_AUTO_UPDATE=1` for these commands to keep that checkout.
+To return to a stable release once available, run `brew reinstall voidzero-dev/vite-plus/vp` without the selector.
