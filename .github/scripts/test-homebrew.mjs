@@ -233,6 +233,11 @@ try {
     HOMEBREW_NO_INSTALL_CLEANUP: '1',
     PATH: [noNpm, '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(path.delimiter),
   };
+  await run(
+    brew,
+    ['ruby', path.join(repository, '.github/scripts/__tests__/homebrew-preview.rb')],
+    brewEnv,
+  );
   const tapSource = path.join(root, 'tap');
   await fs.mkdir(path.join(tapSource, 'HomebrewFormula'), { recursive: true });
   await fs.writeFile(

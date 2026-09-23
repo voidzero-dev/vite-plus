@@ -75,6 +75,8 @@ await test('updates preserve recipe changes and reset only a previous version re
   assert.ok(!result.includes('revision 2'));
   assert.ok(result.includes('conflicts_with "vite-plus"'));
   assert.ok(result.includes('  def install\n    bin.install "vp"'));
+  assert.ok(result.includes('ENV["HOMEBREW_VP_PR_VERSION"].presence'));
+  assert.ok(result.includes('Preview.resolve(preview_ref, platform)'));
   const sameVersion = result.replace('  license', '  revision 1\n  license');
   assert.equal(updateFormula(sameVersion, version, assets), sameVersion);
   assert.throws(() => updateFormula(result, currentVersion, assets), /downgrade/);
