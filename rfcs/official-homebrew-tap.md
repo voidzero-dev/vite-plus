@@ -1,7 +1,7 @@
 # RFC: Vite+-managed Homebrew tap
 
-Status: Implementation proposed. The formula stays disabled until a compatible
-release is published and its formula update is approved.
+Status: Implementation proposed. Stable installation stays disabled until a
+compatible release is published and its formula update is approved.
 
 ## Motivation
 
@@ -270,6 +270,12 @@ merge must not trigger another product release.
 The updater checks the release tag for the new bootstrap and formula before
 removing the initial disable gate. Existing releases cannot enable the tap.
 
+For early testing, `HOMEBREW_VP_PR_VERSION` selects a published preview by PR
+number or full commit SHA. The formula downloads the native package from the
+registry bridge and verifies its integrity. First use installs matching preview
+dependencies. The [Homebrew guide](../docs/guide/homebrew.md#test-a-preview-build)
+describes this opt-in path; normal installation continues to use GitHub Releases.
+
 Vite+ release maintainers own the formula and its release automation through
 the existing repository review process. Confirm a primary maintainer and a
 backup before launch. Formula failures belong in this repository's issue tracker.
@@ -300,6 +306,6 @@ migration guides when the tap is ready.
 
 ## Tradeoffs
 
-The formula stays small and dependency installation shares the script installer's
-code. Each user downloads and stores their own dependencies. Homebrew manages
+Dependency installation shares the script installer's code. Each user downloads
+and stores their own dependencies. Homebrew manages
 the executable; Vite+ manages the per-user JavaScript installation.
