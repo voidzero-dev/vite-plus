@@ -288,10 +288,15 @@ Snapshots are plain-text screen grids: styling is flattened, and redaction
 masks paths, durations, versions, UUIDs, thread counts, byte-size numbers
 (units kept: `<size> kB`), and content-hash asset suffixes (see
 `redact.rs`; sizes and hashes because output bytes differ across OSes). If
-a case produces nondeterministic
-output, fix it with a milestone or a redaction rule; never rerun until
-green. Set
+a case produces nondeterministic output, fix it with controlled fixture data,
+a milestone, or a redaction rule; never rerun until green. Set
 `formatted-snapshot = true` on a step only when the test is about colors.
+
+For registry fallback tests, use `local-registry = true` and a fixture
+`mock-manifest.json` entry such as `"npm/latest"` to control the resolved version.
+Keep the CLI input unpinned so the fallback is still tested, and keep exact
+version assertions. Unmocked registry requests go upstream, so
+`local-registry = true` alone does not freeze dist-tags.
 
 Fixture trees are excluded from repo-wide fmt, lint, typecheck, and vitest
 (`vite.config.ts`, `tsconfig.json`); recorded snapshots and

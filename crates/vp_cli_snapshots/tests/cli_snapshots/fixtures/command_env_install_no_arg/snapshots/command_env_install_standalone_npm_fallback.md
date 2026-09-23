@@ -7,7 +7,7 @@ Explicit npm installation uses standalone registry npm without installing Node.j
 an explicit npm scope exports the standalone npm fallback
 
 ```
-export VP_NPM_VERSION=12.1.0
+export VP_NPM_VERSION=10.9.4
 Using npm <version> (resolved from registry fallback)
 ```
 
