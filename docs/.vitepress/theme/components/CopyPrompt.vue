@@ -21,7 +21,11 @@ const titleId = useId();
 const dialogEl = ref<HTMLDialogElement | null>(null);
 const state = ref<'idle' | 'copied' | 'error'>('idle');
 const copyLabel = computed(() =>
-  state.value === 'copied' ? 'Copied!' : state.value === 'error' ? 'Could not copy' : 'Copy Prompt',
+  state.value === 'copied'
+    ? 'Prompt copied!'
+    : state.value === 'error'
+      ? 'Could not copy'
+      : 'Copy prompt',
 );
 const copyIcon = computed(() =>
   state.value === 'copied'
@@ -43,20 +47,12 @@ const flash = (next: 'copied' | 'error') => {
   }, 1600);
 };
 
-// The theme draws the `.button` border with an `outline`, but a global reset
-// (`button:focus:not(:focus-visible) { outline: none !important }`) strips it
-// after a mouse click. The theme only ever uses `.button` on <a> tags, so this
-// bites only real <button> elements. For pointer activation (event.detail > 0)
-// drop focus so the button returns to its resting state and keeps its border;
-// keyboard activation (detail === 0) keeps focus so the a11y focus ring shows.
 const blurPointerTarget = (event: MouseEvent) => {
-  if (event.detail > 0) {
-    (event.currentTarget as HTMLElement | null)?.blur();
-  }
+  const target = event.currentTarget as HTMLElement;
+  requestAnimationFrame(() => target.blur());
 };
 
-const copyPrompt = async (event: MouseEvent) => {
-  blurPointerTarget(event);
+const copyPrompt = async () => {
   try {
     await navigator.clipboard.writeText(promptText.value);
     flash('copied');
@@ -65,8 +61,7 @@ const copyPrompt = async (event: MouseEvent) => {
   }
 };
 
-const openView = (event: MouseEvent) => {
-  blurPointerTarget(event);
+const openView = () => {
   dialogEl.value?.showModal();
 };
 
@@ -93,6 +88,7 @@ onBeforeUnmount(() => {
     type="button"
     class="button"
     :aria-label="`${label} for setting up Vite+ with an AI assistant`"
+    @mousedown="blurPointerTarget"
     @click="openView"
   >
     <Icon icon="lucide:eye" class="size-4" aria-hidden="true" />
@@ -121,7 +117,7 @@ onBeforeUnmount(() => {
           class="m-0 overflow-auto px-5 pb-4 font-mono text-sm leading-relaxed break-words whitespace-pre-wrap"
           >{{ promptText }}</pre>
         <footer class="flex justify-end border-t border-stroke px-5 py-3 dark:border-nickel">
-          <button type="button" class="button" @click="copyPrompt">
+          <button type="button" class="button" @mousedown="blurPointerTarget" @click="copyPrompt">
             <Icon :icon="copyIcon" class="size-4" aria-hidden="true" />
             <span>{{ copyLabel }}</span>
           </button>
