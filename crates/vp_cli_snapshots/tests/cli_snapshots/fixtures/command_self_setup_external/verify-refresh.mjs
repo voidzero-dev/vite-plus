@@ -68,6 +68,62 @@ function readSettings(env) {
   return JSON.parse(fs.readFileSync(path.join(env.VP_HOME, 'config.json'), 'utf8'));
 }
 
+function verifyHomebrewSources(source) {
+  for (const [label, tap, name, sourceLabel] of [
+    ['core', 'homebrew/core', 'vite-plus', 'Homebrew Core'],
+    ['official', 'voidzero-dev/vite-plus', 'vp', 'Vite+ Homebrew tap'],
+    ['other', 'example/tools', 'vp', 'Homebrew'],
+    ['unknown', null, 'vite-plus', 'Homebrew'],
+  ]) {
+    const directory = path.resolve(`source-${label}`);
+    const prefix = path.join(directory, 'Cellar', name, 'test');
+    const binary = createBundle(source, prefix, 'bundled CLI');
+    const formula = tap && tap !== 'homebrew/core' ? `${tap}/${name}` : name;
+    fs.writeFileSync(
+      path.join(prefix, 'INSTALL_RECEIPT.json'),
+      JSON.stringify({
+        homebrew_version: '7.0.2',
+        source: { tap, path: `/tap/Formula/${name}.rb` },
+      }),
+    );
+    const env = createEnvironment(directory);
+    run(binary, ['--help'], directory, { ...env, VP_NODE_MANAGER: 'no', VP_PM_MANAGER: 'no' });
+    const invoke = (args, expectedStatus = 0) => {
+      const result = spawnSync(binary, args, { cwd: directory, env, encoding: 'utf8' });
+      const text = (result.stdout + result.stderr).replace(/\u001b\[[0-9;]*m/g, '').trim();
+      assert.equal(result.status, expectedStatus, text);
+      return text;
+    };
+    console.log(`${label} installation`);
+    const doctor = invoke(['env', 'doctor', 'node']);
+    assert.ok(doctor.includes(sourceLabel), doctor);
+    console.log(
+      doctor
+        .split('\n')
+        .filter((line) => /CLI source|CLI formula/.test(line))
+        .join('\n'),
+    );
+    for (const [args, status, action] of [
+      [['upgrade'], 1, 'upgrade'],
+      [['upgrade', '--check'], 0, 'outdated'],
+    ]) {
+      const text = invoke(args, status);
+      assert.ok(text.includes(`${sourceLabel} manages this installation`), text);
+      assert.ok(text.includes(`brew ${action} ${formula}`), text);
+      assert.equal(text.includes('To switch to the official Vite+ tap'), label === 'core', text);
+      console.log(text);
+    }
+    assert.equal(invoke(['upgrade', '--check', '--silent']), '');
+    assert.ok(!invoke(['upgrade', '--silent'], 1).includes('To switch'));
+    const removed = invoke(['implode', '--yes']);
+    const notice = `The ${sourceLabel} package remains installed. Run \`brew uninstall ${formula}\` to remove it.`;
+    assert.ok(removed.includes(notice), removed);
+    assert.ok(fs.existsSync(binary));
+    assert.ok(!fs.existsSync(env.VP_HOME));
+    console.log(notice);
+  }
+}
+
 function verifyDoctor(source) {
   const directory = path.resolve('doctor');
   const prefix = path.join(directory, 'cellar/vite-plus/0.3.2');
@@ -325,6 +381,10 @@ function main() {
   }
 
   const source = process.env.TEST_VP_BINARY ?? path.join(process.env.VP_HOME, 'bin/vp');
+  if (action === 'homebrew-sources') {
+    verifyHomebrewSources(source);
+    return;
+  }
   if (action === 'homebrew-collision') {
     verifyHomebrewCollision(source);
     return;

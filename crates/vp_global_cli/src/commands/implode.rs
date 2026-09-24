@@ -149,10 +149,11 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
 }
 
 fn print_homebrew_uninstall_notice() {
-    let formula =
-        crate::homebrew::current().map_or("vite-plus", |homebrew| homebrew.formula.as_str());
+    let Some(homebrew) = crate::homebrew::current() else { return };
     output::note(&format!(
-        "The Homebrew package remains installed. Run `brew uninstall {formula}` to remove it.",
+        "The {} package remains installed. Run `brew uninstall {}` to remove it.",
+        homebrew.source_label(),
+        homebrew.formula,
     ));
     output::note(
         "To run `vp` again, restart your terminal or run `hash -r` in Bash. The remaining Homebrew package will start setup again.",
@@ -331,10 +332,11 @@ fn confirm_implode(
         ));
     }
 
-    if crate::homebrew::owns_current_exe() {
-        output::warn(
-            "This will remove Vite+-managed data, shims, and shell entries. The Homebrew package will remain installed.",
-        );
+    if let Some(homebrew) = crate::homebrew::current() {
+        output::warn(&format!(
+            "This will remove Vite+-managed data, shims, and shell entries. The {} package will remain installed.",
+            homebrew.source_label(),
+        ));
     } else {
         output::warn("This will completely remove vite-plus from your system!");
     }

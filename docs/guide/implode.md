@@ -26,14 +26,12 @@ vp implode --yes
 
 ## Homebrew
 
-Run `vp implode` first to remove Vite+-managed runtimes, global packages, configuration, shims, and shell entries. Then remove the Homebrew package:
+For the [official Homebrew tap](/guide/homebrew), run `vp implode` first to remove Vite+-managed runtimes, global packages, configuration, shims, and shell entries. Then remove the Homebrew package:
 
 ```bash
 vp implode
-brew uninstall vite-plus
+brew uninstall voidzero-dev/vite-plus/vp
 ```
-
-For the [official tap](/guide/homebrew), use `brew uninstall voidzero-dev/vite-plus/vp` instead.
 
 The confirmation prompt explains that the Homebrew package will remain installed. After cleanup, `vp implode` shows the uninstall command for the owning formula.
 
