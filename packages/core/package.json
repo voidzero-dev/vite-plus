@@ -224,7 +224,7 @@
   },
   "bundledVersions": {
     "vite": "8.3.0",
-    "rolldown": "1.2.9",
+    "rolldown": "1.2.10",
     "tsdown": "0.23.0"
   }
 }
