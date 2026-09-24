@@ -22,7 +22,9 @@ on:
       - 'crates/vp_pm_cli/src/package_manager/bootstrap.rs'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # A skipped run for an unrelated label must not cancel installation tests.
+  group: >-
+    ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name != 'test: install-e2e' && github.event.label.name || 'install' }}
   cancel-in-progress: true
 
 defaults:
