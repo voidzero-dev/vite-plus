@@ -2,7 +2,7 @@
 
 ::: warning Availability
 Stable installation stays disabled until the first release with per-user Homebrew setup is published. Preview builds can be tested with the selector below.
-Use the [script installer](/guide/global-cli) or Homebrew core in the meantime.
+Use the [script installer](/guide/global-cli) in the meantime.
 :::
 
 The official tap installs the native `vp` CLI from GitHub Releases on macOS and glibc Linux, for ARM64 and x64.
@@ -40,13 +40,7 @@ Relative user-config paths resolve from your current directory. No Homebrew-spec
 Authentication failures stop setup. Fix the configuration and run `vp` again; setup preserves your management choices.
 Failure logs record the exit code without registry output, which can contain credentials.
 
-## Switch an existing installation
-
-For a Homebrew core installation, remove the core formula first:
-
-```bash
-brew uninstall vite-plus
-```
+## Switch from the script installer
 
 Install the tap with the commands above. Then invoke Homebrew's executable directly, so an existing script-install shim cannot take precedence:
 
@@ -66,7 +60,7 @@ brew upgrade voidzero-dev/vite-plus/vp
 ```
 
 The first invocation of the new version installs its matching dependencies and preserves your preferences.
-`vp upgrade` detects the owning formula and shows the appropriate Homebrew command.
+`vp upgrade` identifies the official tap and directs you to `brew upgrade voidzero-dev/vite-plus/vp`.
 
 For complete removal, remove your user data before uninstalling the executable:
 

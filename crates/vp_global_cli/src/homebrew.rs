@@ -7,6 +7,24 @@ use vt_path::AbsolutePathBuf;
 pub(crate) struct Installation {
     pub(crate) binary: AbsolutePathBuf,
     pub(crate) formula: String,
+    pub(crate) source: Source,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Source {
+    Core,
+    OfficialTap,
+    Other,
+}
+
+impl Installation {
+    pub(crate) fn source_label(&self) -> &'static str {
+        match self.source {
+            Source::Core => "Homebrew Core",
+            Source::OfficialTap => "Vite+ Homebrew tap",
+            Source::Other => "Homebrew",
+        }
+    }
 }
 
 pub(crate) fn current() -> Option<&'static Installation> {
@@ -55,7 +73,12 @@ fn installation(binary: &Path) -> Option<Installation> {
         Some("homebrew/core") | None => name.to_string(),
         Some(tap) => format!("{tap}/{name}"),
     };
-    Some(Installation { binary: AbsolutePathBuf::new(binary)?, formula })
+    let source = match tap {
+        Some("homebrew/core") => Source::Core,
+        Some("voidzero-dev/vite-plus") if name == "vp" => Source::OfficialTap,
+        _ => Source::Other,
+    };
+    Some(Installation { binary: AbsolutePathBuf::new(binary)?, formula, source })
 }
 
 fn valid_component(value: &str) -> bool {
@@ -102,12 +125,22 @@ mod tests {
         let binary = prefix.join("bin/vp");
         std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
         std::fs::write(&binary, b"vp").unwrap();
-        for (tap, path, expected) in [
-            ("voidzero-dev/vite-plus", "/tap/HomebrewFormula/vp.rb", "voidzero-dev/vite-plus/vp"),
-            ("homebrew/core", "/tap/Formula/v/vite-plus.rb", "vite-plus"),
-            ("fengmk2/core", "/tap/Formula/v/vite-plus.rb", "fengmk2/core/vite-plus"),
-            ("bad/tap/extra", "/tap/HomebrewFormula/vp.rb", "vp"),
-            ("bad;command/tap", "/tap/HomebrewFormula/vp.rb", "vp"),
+        for (tap, path, expected, source) in [
+            (
+                "voidzero-dev/vite-plus",
+                "/tap/HomebrewFormula/vp.rb",
+                "voidzero-dev/vite-plus/vp",
+                Source::OfficialTap,
+            ),
+            ("homebrew/core", "/tap/Formula/v/vite-plus.rb", "vite-plus", Source::Core),
+            (
+                "fengmk2/core",
+                "/tap/Formula/v/vite-plus.rb",
+                "fengmk2/core/vite-plus",
+                Source::Other,
+            ),
+            ("bad/tap/extra", "/tap/HomebrewFormula/vp.rb", "vp", Source::Other),
+            ("bad;command/tap", "/tap/HomebrewFormula/vp.rb", "vp", Source::Other),
         ] {
             std::fs::write(
                 prefix.join("INSTALL_RECEIPT.json"),
@@ -119,6 +152,7 @@ mod tests {
             .unwrap();
             let install = installation(&binary).unwrap();
             assert_eq!(install.formula, expected);
+            assert_eq!(install.source, source);
             assert_eq!(install.binary.as_path(), std::fs::canonicalize(&binary).unwrap());
         }
     }
@@ -164,6 +198,7 @@ mod tests {
         }
         std::fs::write(receipt, r#"{"homebrew_version":"7.0.2"}"#).unwrap();
         assert!(owns_binary(&binary));
+        assert_eq!(installation(&binary).unwrap().source, Source::Other);
 
         // A separate managed installation stays independent of Homebrew.
         let managed = temp.path().join("managed/0.3.2/bin/vp");

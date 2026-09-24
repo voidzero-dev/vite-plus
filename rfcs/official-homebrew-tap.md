@@ -237,6 +237,11 @@ the installed formula and tap. `vp upgrade` directs users to
 versions, force, and rollback, and keep npm update checks disabled for the CLI.
 `vp env doctor` reports the Homebrew executable and per-user dependency location.
 
+Use the installation receipt to distinguish the official tap, Homebrew Core,
+and other taps. Upgrade and removal notices name the owning source and formula;
+Core's upgrade notice also explains how to switch to the official tap while
+preserving user data. Public Homebrew guides describe the official tap.
+
 `vp implode` removes user-managed dependencies, runtimes, settings, and shims.
 `brew uninstall` removes the executable. Document both steps for complete
 removal; the formula must not delete user data from an uninstall hook.
