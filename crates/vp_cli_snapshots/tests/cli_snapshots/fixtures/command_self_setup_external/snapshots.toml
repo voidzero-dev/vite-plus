@@ -1,4 +1,10 @@
 [[case]]
+name = "command_self_setup_homebrew_sources"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "verify-refresh.mjs", "homebrew-sources"]]
+
+[[case]]
 name = "command_self_setup_homebrew_user_dependencies"
 vp = "global"
 skip-platforms = ["windows"]
