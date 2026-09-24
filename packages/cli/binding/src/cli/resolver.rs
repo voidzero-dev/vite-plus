@@ -1,5 +1,6 @@
 use std::{borrow::Cow, env, ffi::OsStr, iter, sync::Arc};
 
+use cow_utils::CowUtils;
 use rustc_hash::FxHashMap;
 use vt::config::user::{
     AutoTracking, EnabledCacheConfig, GlobWithBase, InputBase, UserCacheConfig, UserInputEntry,
@@ -53,6 +54,14 @@ impl SubcommandResolver {
             .as_path()
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
+        if let Some(config) = vp_static_config::resolve_static_metadata(&self.workspace_path)
+            && let Some(config_file) = config.config_file.as_path().to_str()
+        {
+            let mut resolved: ResolvedUniversalViteConfig =
+                serde_json::from_value(config.metadata)?;
+            resolved.config_file = Some(config_file.cow_replace('\\', "/").into_owned());
+            return Ok(resolved);
+        }
         let vite_config_json =
             (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string()).await?;
 
@@ -542,6 +551,106 @@ mod tests {
             .unwrap();
         assert_eq!(loads.load(Ordering::SeqCst), 2);
         assert_eq!(resolved.args.as_ref(), &[Str::from("tool.js")]);
+    }
+
+    #[tokio::test]
+    async fn literal_metadata_skips_javascript_and_observes_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let file = root.join("vite.config.ts");
+        let resolver = SubcommandResolver::new(root.clone().into())
+            .with_cli_options(cli_options(Arc::from(OsStr::new("node"))));
+        std::fs::write(&file, "export default { lint: {}, fmt: {}, check: { fmt: false } };")
+            .unwrap();
+
+        // The callback in cli_options fails if JavaScript resolution is used.
+        let config = resolver.resolve_universal_vite_config().await.unwrap();
+        assert_eq!(config.lint, Some(serde_json::json!({})));
+        assert_eq!(config.fmt, Some(serde_json::json!({})));
+        assert_eq!(config.check, Some(serde_json::json!({ "fmt": false })));
+        assert_eq!(
+            config.config_file.as_deref(),
+            Some(file.as_path().to_str().unwrap().cow_replace('\\', "/").as_ref())
+        );
+
+        let envs = Arc::new(FxHashMap::default());
+        let cwd = root.join("packages/app");
+        let resolved = resolver
+            .resolve(
+                SynthesizableSubcommand::Fmt { args: vec!["src".to_string()] },
+                &envs,
+                &cwd,
+                Some(&config),
+            )
+            .await
+            .unwrap();
+        assert!(resolved.args.ends_with(&[
+            Str::from("-c"),
+            Str::from(config.config_file.unwrap()),
+            Str::from("src")
+        ]));
+
+        std::fs::write(&file, "export default { check: { lint: false } };").unwrap();
+        let config = resolver.resolve_universal_vite_config().await.unwrap();
+        assert!(config.lint.is_none());
+        assert!(config.fmt.is_none());
+        assert_eq!(config.check, Some(serde_json::json!({ "lint": false })));
+
+        std::fs::remove_file(file).unwrap();
+        // Removal must return to the existing JavaScript no-config path.
+        assert!(resolver.resolve_universal_vite_config().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn dynamic_metadata_and_vite_options_use_runtime_resolution() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let file = root.join("vite.config.ts");
+        let loads = Arc::new(AtomicUsize::new(0));
+        let mut options = cli_options(Arc::from(OsStr::new("node")));
+        options.resolve_universal_vite_config = {
+            let loads = Arc::clone(&loads);
+            Arc::new(move |_| {
+                loads.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async { Ok(r#"{"check":{"fmt":false}}"#.to_string()) })
+            })
+        };
+        let resolver = SubcommandResolver::new(root.into()).with_cli_options(options);
+        for (index, source) in [
+            "export default async () => ({ check: { fmt: false } });",
+            "export default { plugins: [{ name: 'metadata', config() { return { check: { fmt: false } }; } }] };",
+            "import { defineConfig } from 'vite-plus'; export default defineConfig({});",
+            "export default {}; console.log('side effect');",
+            "export default { envPrefix: '' };",
+            "export default { __proto__: { check: { fmt: false } } };",
+            "export default {",
+        ].iter().enumerate() {
+            std::fs::write(&file, source).unwrap();
+            let config = resolver.resolve_universal_vite_config().await.unwrap();
+            assert_eq!(config.check, Some(serde_json::json!({ "fmt": false })));
+            assert_eq!(loads.load(Ordering::SeqCst), index + 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn runtime_errors_are_not_hidden_by_static_extraction() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        std::fs::write(
+            root.join("vite.config.ts"),
+            "export default {}; throw new Error('bad config');",
+        )
+        .unwrap();
+        let mut options = cli_options(Arc::from(OsStr::new("node")));
+        options.resolve_universal_vite_config =
+            Arc::new(|_| Box::pin(async { anyhow::bail!("bad config") }));
+        let resolver = SubcommandResolver::new(root.into()).with_cli_options(options);
+        assert_eq!(
+            resolver.resolve_universal_vite_config().await.unwrap_err().to_string(),
+            "bad config"
+        );
     }
 
     #[tokio::test]

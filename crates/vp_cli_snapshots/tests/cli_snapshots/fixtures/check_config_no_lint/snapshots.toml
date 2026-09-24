@@ -4,3 +4,16 @@ vp = "local"
 steps = [
   { argv = ["vp", "check"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "static_metadata_and_runtime_fallback"
+vp = "local"
+steps = [
+  { argv = ["vp", "check"], comment = "A literal metadata export preserves the configured check phases." },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { check: { fmt: false, lint: false } };\n"], snapshot = false },
+  { argv = ["vp", "check"], comment = "The next command observes the changed metadata.", continue-on-failure = true },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default async () => ({ plugins: [{ name: 'metadata', config() { return { check: { fmt: false, lint: false } }; } }] });\n"], snapshot = false },
+  { argv = ["vp", "check"], comment = "Config functions and plugin hooks still run through Vite.", continue-on-failure = true },
+  { argv = ["vpt", "write-file", "vite.config.ts", "console.log('config side effect'); export default { check: { fmt: false, lint: false } };\n"], snapshot = false },
+  { argv = ["vp", "check"], comment = "A module with executable statements must retain its side effects.", continue-on-failure = true },
+]

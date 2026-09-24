@@ -14,6 +14,9 @@ use oxc_span::SourceType;
 use rustc_hash::FxHashMap;
 use vt_path::AbsolutePath;
 
+mod metadata;
+pub use metadata::{StaticConfigMetadata, resolve_static_metadata};
+
 /// Packages whose `defineConfig` helpers preserve top-level config fields.
 const TRUSTED_DEFINE_CONFIG_PACKAGES: &[&str] = &["vite-plus", "vite"];
 /// The name of the config helper static extraction trusts.

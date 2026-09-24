@@ -18,6 +18,8 @@ The cases cover root and package-directory `vp check --fix`, missing and minimal
 
 Config evaluations are measured in separate runs. Synchronous log writes do not affect the timing samples. The current ceilings are four evaluations for a root or package check and five for staged checks. Each process may evaluate its config at most once. The check process reuses its resolved config when it selects the config for each tool phase.
 
+Timing samples for plain metadata exports exercise the Rust static path in the check process. The `defineConfig` case retains JavaScript resolution. Evaluation probes add an executable log statement, which deliberately requires runtime resolution; their counts describe that instrumented config, not the static timing fixture. Rust resolver tests verify that eligible configs do not call the JavaScript resolver and that later calls observe file changes. Tool processes still resolve their own configs.
+
 The benchmark uses temporary projects outside the checkout so ancestor config discovery cannot find the repository's config. It runs the same Node executable in staged tasks and tool children. It uses a separate Node compile-cache directory and removes fixtures after completion. Warmups make this a measurement of fresh-process startup with warm filesystem and compile caches, not a cold-disk benchmark.
 
 The [Config Performance workflow](../../.github/workflows/config-performance.yml) runs only when a relevant PR opens, updates, or reopens. Draft PRs run normally.

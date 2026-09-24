@@ -2,6 +2,16 @@
 
 Statically extracts configuration from `vite.config.*` files without executing JavaScript.
 
+`resolve_static_metadata` provides a stricter path for the CLI's universal config resolver.
+It accepts only a single `export default` object containing literal `lint`, `fmt`, `check`,
+`run`, or `staged` fields. It rejects imports, executable statements, Vite settings, and
+values with dynamic behavior. Unsupported, missing, or unreadable configs return `None`
+so the CLI uses its existing JavaScript resolver. Each call reads the file again.
+
+This differs from field extraction: a statically extractable field does not prove that
+the rest of the module can be skipped. Prototype setters and unsupported string values
+also require runtime resolution.
+
 ## What it does
 
 Parses vite config files using [oxc_parser](https://crates.io/crates/oxc_parser) and extracts
