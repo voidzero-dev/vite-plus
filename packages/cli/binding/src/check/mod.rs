@@ -84,6 +84,7 @@ pub(crate) async fn execute_check(
             envs,
             cwd,
             false,
+            &resolved_vite_config,
         )
         .await?;
         let (fmt_status, combined_output) = combine_output(captured);
@@ -177,6 +178,7 @@ pub(crate) async fn execute_check(
             envs,
             cwd,
             true,
+            &resolved_vite_config,
         )
         .await?;
         let (lint_status, combined_output) = combine_output(captured);
@@ -261,6 +263,7 @@ pub(crate) async fn execute_check(
             envs,
             cwd,
             false,
+            &resolved_vite_config,
         )
         .await?;
         let (refmt_status, combined_output) = combine_output(captured);

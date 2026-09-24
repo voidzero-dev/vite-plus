@@ -1,4 +1,4 @@
-use std::{env, ffi::OsStr, iter, sync::Arc};
+use std::{borrow::Cow, env, ffi::OsStr, iter, sync::Arc};
 
 use rustc_hash::FxHashMap;
 use vt::config::user::{
@@ -62,11 +62,12 @@ impl SubcommandResolver {
     }
 
     /// Resolve root settings for package runs unless the user selected another config.
-    async fn resolve_workspace_config(
+    async fn resolve_workspace_config<'a>(
         &self,
         cwd: &AbsolutePath,
         args: &[String],
-    ) -> anyhow::Result<Option<ResolvedUniversalViteConfig>> {
+        resolved_config: Option<&'a ResolvedUniversalViteConfig>,
+    ) -> anyhow::Result<Option<Cow<'a, ResolvedUniversalViteConfig>>> {
         let explicit_config = args
             .iter()
             .take_while(|arg| arg.as_str() != "--")
@@ -74,7 +75,12 @@ impl SubcommandResolver {
         if cwd == self.workspace_path.as_ref() || explicit_config {
             return Ok(None);
         }
-        self.resolve_universal_vite_config().await.map(Some)
+        // Composite commands can reuse their config within this invocation.
+        // Do not cache it on the resolver: task runs may observe config changes.
+        if let Some(config) = resolved_config {
+            return Ok(Some(Cow::Borrowed(config)));
+        }
+        self.resolve_universal_vite_config().await.map(|config| Some(Cow::Owned(config)))
     }
 
     /// Resolve a synthesizable subcommand to a concrete program, args, cache config, and envs.
@@ -83,6 +89,7 @@ impl SubcommandResolver {
         subcommand: SynthesizableSubcommand,
         envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
         cwd: &AbsolutePath,
+        resolved_config: Option<&ResolvedUniversalViteConfig>,
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
             SynthesizableSubcommand::Lint { mut args } => {
@@ -93,12 +100,13 @@ impl SubcommandResolver {
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
 
-                if let Some(config) = self.resolve_workspace_config(cwd, &args).await?
+                if let Some(config) =
+                    self.resolve_workspace_config(cwd, &args, resolved_config).await?
                     && config.lint.is_some()
-                    && let Some(config_file) = config.config_file
+                    && let Some(config_file) = &config.config_file
                 {
                     args.insert(0, "-c".to_string());
-                    args.insert(1, config_file);
+                    args.insert(1, config_file.clone());
                 }
 
                 Ok(ResolvedSubcommand {
@@ -127,12 +135,13 @@ impl SubcommandResolver {
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
 
-                if let Some(config) = self.resolve_workspace_config(cwd, &args).await?
+                if let Some(config) =
+                    self.resolve_workspace_config(cwd, &args, resolved_config).await?
                     && config.fmt.is_some()
-                    && let Some(config_file) = config.config_file
+                    && let Some(config_file) = &config.config_file
                 {
                     args.insert(0, "-c".to_string());
-                    args.insert(1, config_file);
+                    args.insert(1, config_file.clone());
                 }
 
                 Ok(ResolvedSubcommand {
@@ -403,7 +412,7 @@ mod tests {
             SynthesizableSubcommand::Preview { args: vec![] },
             SynthesizableSubcommand::Doc { args: vec![] },
         ] {
-            let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
+            let resolved = resolver.resolve(command, &envs, &cwd, None).await.unwrap();
             assert_eq!(resolved.program, runtime);
         }
     }
@@ -431,7 +440,7 @@ mod tests {
                 ),
                 (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"]),
             ] {
-                let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
+                let resolved = resolver.resolve(command, &envs, &cwd, None).await.unwrap();
                 let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
                 let expected_args = [prefix, args].concat();
                 assert_eq!(actual_args, expected_args);
@@ -475,7 +484,7 @@ mod tests {
                     ),
                     (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"], has_fmt),
                 ] {
-                    let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
+                    let resolved = resolver.resolve(command, &envs, &cwd, None).await.unwrap();
                     let actual_args: Vec<&str> =
                         resolved.args.iter().map(|arg| arg.as_str()).collect();
                     let mut expected_args = prefix.to_vec();
@@ -487,6 +496,52 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn check_phases_reuse_config_without_caching_later_commands() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let cwd = root.join("packages/app");
+        let config_file = root.join("vite.config.ts").as_path().to_str().unwrap().to_string();
+        let loads = Arc::new(AtomicUsize::new(0));
+        let mut options = cli_options(Arc::from(OsStr::new("node")));
+        options.resolve_universal_vite_config = {
+            let loads = Arc::clone(&loads);
+            let config_file = config_file.clone();
+            Arc::new(move |_| {
+                // A later command must observe removal of the root tool blocks.
+                let config = if loads.fetch_add(1, Ordering::SeqCst) == 0 {
+                    serde_json::json!({ "configFile": config_file, "lint": {}, "fmt": {} })
+                } else {
+                    serde_json::json!({ "configFile": config_file })
+                };
+                Box::pin(async move { Ok(config.to_string()) })
+            })
+        };
+        let resolver = SubcommandResolver::new(root.into()).with_cli_options(options);
+        let envs = Arc::new(FxHashMap::default());
+        let config = resolver.resolve_universal_vite_config().await.unwrap();
+
+        for command in [
+            SynthesizableSubcommand::Fmt { args: vec![] },
+            SynthesizableSubcommand::Lint { args: vec![] },
+            SynthesizableSubcommand::Fmt { args: vec![] },
+        ] {
+            let resolved = resolver.resolve(command, &envs, &cwd, Some(&config)).await.unwrap();
+            let args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
+            assert!(args.ends_with(&["-c", &config_file]));
+        }
+        assert_eq!(loads.load(Ordering::SeqCst), 1);
+
+        let resolved = resolver
+            .resolve(SynthesizableSubcommand::Fmt { args: vec![] }, &envs, &cwd, None)
+            .await
+            .unwrap();
+        assert_eq!(loads.load(Ordering::SeqCst), 2);
+        assert_eq!(resolved.args.as_ref(), &[Str::from("tool.js")]);
     }
 
     #[tokio::test]
@@ -513,7 +568,7 @@ mod tests {
                 ),
                 (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"]),
             ] {
-                let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
+                let resolved = resolver.resolve(command, &envs, &cwd, None).await.unwrap();
                 let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
                 let expected_args = [prefix, args].concat();
                 assert_eq!(actual_args, expected_args);

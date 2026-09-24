@@ -129,9 +129,6 @@ if (maybePrintCommandHelp(args)) {
 } else {
   // All other commands — delegate to Rust core via NAPI binding
   try {
-    // This module imports `vitest/config` through define-config. Load it here
-    // so `migrate` and `config` can handle stale aliases before Vitest loads.
-    const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
     const initInspection = inspectInitCommand(command, args.slice(1));
     if (
       initInspection.handled &&
@@ -155,7 +152,10 @@ if (maybePrintCommandHelp(args)) {
       doc,
       toolchainManifestPath: path.join(cliDistDir, 'toolchain.json'),
       vitePlusPackagePath,
-      resolveUniversalViteConfig,
+      async resolveUniversalViteConfig(err, cwd) {
+        const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
+        return resolveUniversalViteConfig(err, cwd);
+      },
       explicitChdir,
       args: rustCliArgs,
     });

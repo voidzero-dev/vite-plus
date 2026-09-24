@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { withConfigMetadataResolution } from './define-config.ts';
 import { VITE_CONFIG_FILES } from './utils/constants.ts';
 
 /**
@@ -83,7 +82,11 @@ export interface ResolveViteConfigOptions {
  * Resolve vite.config.ts and return the config object.
  */
 export async function resolveViteConfig(cwd: string, options?: ResolveViteConfigOptions) {
-  const { resolveConfig } = await import('./index.js');
+  // Discovery helpers and commands without a config must not load Vite/Vitest.
+  const [{ resolveConfig }, { withConfigMetadataResolution }] = await Promise.all([
+    import('./index.js'),
+    import('./define-config.ts'),
+  ]);
 
   // This loads the config purely to read a non-plugin block (lint/fmt/pack/run/
   // staged/create…), so skip the user's plugin factory while it evaluates.
@@ -107,6 +110,11 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
     throw err;
   }
   try {
+    // Rust already supplies the workspace root. Without a config there are no
+    // user metadata blocks, so there is no need to initialize Vite.
+    if (!hasViteConfig(viteConfigCwd)) {
+      return '{}';
+    }
     const config = await resolveViteConfig(viteConfigCwd);
 
     return JSON.stringify({

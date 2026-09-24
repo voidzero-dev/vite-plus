@@ -16,7 +16,7 @@ Use `--samples 2 --warmup 1` for a smoke run. A timing comparison requires at le
 
 The cases cover root and package-directory `vp check --fix`, missing and minimal configs, `defineConfig`, root `lint`/`fmt` blocks, standalone tools, and `vp staged` with a check or a no-op task. Each sample starts a fresh process. Cases rotate between rounds. File and Git preparation happen outside the timed interval, and each sample receives the same three unformatted TypeScript files. Staged samples verify the formatted Git index. Command errors and timeouts fail the benchmark.
 
-Config evaluations are measured in separate runs. Synchronous log writes do not affect the timing samples. The current ceilings are four evaluations for a root check, seven for a package check, and five for staged checks. Each Oxc child may evaluate its config at most once. These ceilings retain the current package-directory overhead until a separate optimization reduces it. Reduce the relevant ceiling with that optimization.
+Config evaluations are measured in separate runs. Synchronous log writes do not affect the timing samples. The current ceilings are four evaluations for a root or package check and five for staged checks. Each process may evaluate its config at most once. The check process reuses its resolved config when it selects the config for each tool phase.
 
 The benchmark uses temporary projects outside the checkout so ancestor config discovery cannot find the repository's config. It runs the same Node executable in staged tasks and tool children. It uses a separate Node compile-cache directory and removes fixtures after completion. Warmups make this a measurement of fresh-process startup with warm filesystem and compile caches, not a cold-disk benchmark.
 

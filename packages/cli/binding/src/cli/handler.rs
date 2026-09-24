@@ -96,7 +96,8 @@ impl CommandHandler for VitePlusCommandHandler {
                 if super::app_target::needs_elicitation(&subcmd, &command.cwd) {
                     return Ok(HandledCommand::Verbatim);
                 }
-                let resolved = self.resolver.resolve(subcmd, &command.envs, &command.cwd).await?;
+                let resolved =
+                    self.resolver.resolve(subcmd, &command.envs, &command.cwd, None).await?;
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
             CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),

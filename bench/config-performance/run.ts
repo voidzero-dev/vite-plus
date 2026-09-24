@@ -73,8 +73,8 @@ const cases = [
     package: false,
     maxLoads: 4,
   },
-  { id: 'package/check/minimal', config: 'minimal', command: 'check', package: true, maxLoads: 7 },
-  { id: 'package/check/blocks', config: 'blocks', command: 'check', package: true, maxLoads: 7 },
+  { id: 'package/check/minimal', config: 'minimal', command: 'check', package: true, maxLoads: 4 },
+  { id: 'package/check/blocks', config: 'blocks', command: 'check', package: true, maxLoads: 4 },
   { id: 'root/fmt/minimal', config: 'minimal', command: 'fmt', package: false, maxLoads: 1 },
   { id: 'root/lint/minimal', config: 'minimal', command: 'lint', package: false, maxLoads: 1 },
   { id: 'root/staged/minimal', config: 'minimal', command: 'staged', package: false, maxLoads: 5 },
@@ -249,10 +249,7 @@ try {
     }
     const loads = [...processes.values()];
     report.results[index].configLoads = loads;
-    if (
-      entries.length > item.maxLoads ||
-      loads.some(({ role, count }) => count > (role === 'check' && item.package ? 4 : 1))
-    ) {
+    if (entries.length > item.maxLoads || loads.some(({ count }) => count > 1)) {
       throw new Error(`${item.id}: config evaluation budget exceeded: ${JSON.stringify(loads)}`);
     }
   }
