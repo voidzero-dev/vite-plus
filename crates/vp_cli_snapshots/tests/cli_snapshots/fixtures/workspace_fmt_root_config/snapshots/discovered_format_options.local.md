@@ -13,10 +13,15 @@ Finished in <duration> on 1 files using <n> threads.
 
 ## `vp check --no-lint index.js`
 
-The formatting phase of check also discovers the package config.
+The check command keeps the root format settings.
+
+**Exit code:** 1
 
 ```
-pass: All 1 file are correctly formatted (<duration>, <n> threads)
+error: Formatting issues found
+index.js (<duration>)
+
+Found formatting issues in 1 file (<duration>, <n> threads). Run `vp check --fix` to fix them.
 ```
 
 ## `vp fmt index.js`
@@ -35,6 +40,13 @@ export const message = "hello";
 
 ## `vp check --no-lint index.js`
 
+Direct formatting does not change the root settings used by check.
+
+**Exit code:** 1
+
 ```
-pass: All 1 file are correctly formatted (<duration>, <n> threads)
+error: Formatting issues found
+index.js (<duration>)
+
+Found formatting issues in 1 file (<duration>, <n> threads). Run `vp check --fix` to fix them.
 ```

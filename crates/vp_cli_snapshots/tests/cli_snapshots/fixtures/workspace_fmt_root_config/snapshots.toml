@@ -4,10 +4,10 @@ vp = ["local", "global"]
 cwd = "packages/app"
 steps = [
   { argv = ["vp", "fmt", "--check", "index.js"], comment = "Oxfmt discovers the package format settings.", continue-on-failure = true },
-  { argv = ["vp", "check", "--no-lint", "index.js"], comment = "The formatting phase of check also discovers the package config.", continue-on-failure = true },
+  { argv = ["vp", "check", "--no-lint", "index.js"], comment = "The check command keeps the root format settings.", continue-on-failure = true },
   { argv = ["vp", "fmt", "index.js"] },
   { argv = ["vpt", "print-file", "index.js"], comment = "The package double-quote and semicolon settings apply with package-relative file paths." },
-  { argv = ["vp", "check", "--no-lint", "index.js"] },
+  { argv = ["vp", "check", "--no-lint", "index.js"], comment = "Direct formatting does not change the root settings used by check.", continue-on-failure = true },
 ]
 
 [[case]]
@@ -22,11 +22,32 @@ steps = [
 ]
 
 [[case]]
-name = "check_fix_uses_discovered_format"
+name = "check_fix_uses_root_format"
 vp = "local"
 cwd = "packages/app"
 steps = [
   { argv = ["vp", "check", "--fix", "fix.js"] },
-  { argv = ["vpt", "print-file", "fix.js"], comment = "Formatting after the root curly lint fix uses package quotes and semicolons." },
+  { argv = ["vpt", "print-file", "fix.js"], comment = "Formatting after the curly lint fix also uses root quotes and semicolons." },
   { argv = ["vp", "check", "fix.js"] },
+]
+
+[[case]]
+name = "check_without_root_format"
+vp = "local"
+cwd = "packages/app"
+steps = [
+  { argv = ["vpt", "write-file", "../../vite.config.ts", "export default { lint: {} };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default { fmt: { singleQuote: true, semi: false } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "index.js", "export const message = 'hello'\n"], snapshot = false },
+  { argv = ["vp", "check", "--no-lint", "index.js"], comment = "Without a root fmt block, check lets Oxfmt discover the package format settings." },
+]
+
+[[case]]
+name = "check_explicit_format_config"
+vp = "local"
+cwd = "packages/app"
+steps = [
+  { argv = ["vp", "check", "--no-lint", "--", "-c", "vite.config.ts", "index.js"], comment = "An explicit config passed through check still takes precedence over the root config." },
+  { argv = ["vp", "check", "--no-lint", "--", "--config", "vite.config.ts", "index.js"] },
+  { argv = ["vp", "check", "--no-lint", "--", "--config=vite.config.ts", "index.js"] },
 ]

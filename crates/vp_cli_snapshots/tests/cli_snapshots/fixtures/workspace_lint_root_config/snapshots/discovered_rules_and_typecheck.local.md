@@ -11,10 +11,28 @@ Finished in <duration> on 1 file with <n> rules using <n> threads.
 
 ## `vp check --no-fmt index.ts`
 
-The lint phase of check also lets Oxlint discover the package config.
+The check command keeps the root lint rules and type-check options.
+
+**Exit code:** 1
 
 ```
-pass: Found no warnings, lint errors, or type errors in 1 file (<duration>, <n> threads)
+error: Lint or type issues found
+× eslint(no-console): Unexpected console statement.
+   ╭─[index.ts:2:1]
+ 1 │ export const value: number = "not a number";
+ 2 │ console.log(value);
+   · ───────────
+   ╰────
+  help: Delete this console statement.
+
+  × typescript(TS2322): Type 'string' is not assignable to type 'number'.
+   ╭─[index.ts:1:14]
+ 1 │ export const value: number = "not a number";
+   ·              ─────
+ 2 │ console.log(value);
+   ╰────
+
+Found 2 errors and 0 warnings in 1 file (<duration>, <n> threads)
 ```
 
 ## `vp check --no-fmt --no-lint index.ts`
