@@ -1,12 +1,12 @@
 [[case]]
-name = "root_rules_and_typecheck"
+name = "discovered_rules_and_typecheck"
 vp = ["local", "global"]
 cwd = "packages/app"
 steps = [
-  { argv = ["vp", "lint", "index.ts"], comment = "The root lint rules and type-check options apply even when the package has its own lint block.", continue-on-failure = true },
-  { argv = ["vp", "check", "--no-fmt", "index.ts"], comment = "The check wrapper and Oxlint both use the root config.", continue-on-failure = true },
-  { argv = ["vp", "check", "--no-fmt", "--no-lint", "index.ts"], comment = "Type-check-only mode reports the same type error without lint rules.", continue-on-failure = true },
-  { argv = ["vp", "lint", "-c", "../../vite.config.ts", "index.ts"], comment = "Explicit root selection has the same result and preserves package-relative file paths.", continue-on-failure = true },
+  { argv = ["vp", "lint", "index.ts"], comment = "Oxlint discovers the package lint block without the root rules or type-check options.", continue-on-failure = true },
+  { argv = ["vp", "check", "--no-fmt", "index.ts"], comment = "The lint phase of check also lets Oxlint discover the package config.", continue-on-failure = true },
+  { argv = ["vp", "check", "--no-fmt", "--no-lint", "index.ts"], comment = "Type-check-only mode still reports the type error without lint rules.", continue-on-failure = true },
+  { argv = ["vp", "lint", "-c", "../../vite.config.ts", "index.ts"], comment = "Explicit root selection enables the root rules and type checking while preserving package-relative file paths.", continue-on-failure = true },
 ]
 
 [[case]]
@@ -15,9 +15,9 @@ vp = "local"
 cwd = "packages/app"
 steps = [
   { argv = ["vpt", "write-file", "vite.config.ts", "export default { lint: { options: { typeAware: false, typeCheck: false }, rules: { 'no-console': 'off' } } };\n"], snapshot = false },
-  { argv = ["vp", "lint", "index.ts"], comment = "Package options cannot disable the root rules or type checking.", continue-on-failure = true },
+  { argv = ["vp", "lint", "index.ts"], comment = "Oxlint uses the package rules and type-check options.", continue-on-failure = true },
   { argv = ["vp", "check", "--no-fmt", "index.ts"], continue-on-failure = true },
-  { argv = ["vp", "lint", "-c", "vite.config.ts", "index.ts"], comment = "An explicit package config overrides the root config without a duplicate config argument." },
+  { argv = ["vp", "lint", "-c", "vite.config.ts", "index.ts"], comment = "An explicit package config matches native discovery." },
   { argv = ["vp", "lint", "--config", "vite.config.ts", "index.ts"] },
   { argv = ["vp", "lint", "--config=vite.config.ts", "index.ts"] },
 ]

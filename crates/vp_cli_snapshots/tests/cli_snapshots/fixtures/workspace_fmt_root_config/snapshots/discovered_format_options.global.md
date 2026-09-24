@@ -1,35 +1,26 @@
-# root_format_options
+# discovered_format_options
 
 ## `vp fmt --check index.js`
 
-The package format settings cannot replace the root settings.
-
-**Exit code:** 1
+Oxfmt discovers the package format settings.
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
 Checking formatting...
 
-index.js (<duration>)
-
-Format issues found in above 1 files. Run without `--check` to fix.
+All matched files use the correct format.
 Finished in <duration> on 1 files using <n> threads.
 ```
 
 ## `vp check --no-lint index.js`
 
-The formatting phase of check uses the same root config.
-
-**Exit code:** 1
+The formatting phase of check also discovers the package config.
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-error: Formatting issues found
-index.js (<duration>)
-
-Found formatting issues in 1 file (<duration>, <n> threads). Run `vp check --fix` to fix them.
+pass: All 1 file are correctly formatted (<duration>, <n> threads)
 ```
 
 ## `vp fmt index.js`
@@ -42,10 +33,10 @@ Finished in <duration> on 1 files using <n> threads.
 
 ## `vpt print-file index.js`
 
-The root single-quote and semicolon settings apply without changing the package working directory.
+The package double-quote and semicolon settings apply with package-relative file paths.
 
 ```
-export const message = 'hello'
+export const message = "hello";
 ```
 
 ## `vp check --no-lint index.js`

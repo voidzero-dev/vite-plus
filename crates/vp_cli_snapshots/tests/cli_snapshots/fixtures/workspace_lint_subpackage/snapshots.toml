@@ -4,7 +4,7 @@ vp = "local"
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "lint", "packages/app-a"], comment = "Running from the root uses the root no-console:warn rule.", continue-on-failure = true },
-  { argv = ["vp", "lint"], cwd = "packages/app-a", comment = "Running from the package still uses the root no-console:warn rule.", continue-on-failure = true },
+  { argv = ["vp", "lint"], cwd = "packages/app-a", comment = "Running from the package discovers its no-console:off rule.", continue-on-failure = true },
   { argv = ["vp", "lint", "-c", "vite.config.ts"], cwd = "packages/app-a", comment = "Explicitly selecting the package config uses its no-console:off rule." },
   { argv = ["vpt", "write-file", "packages/app-a/vite.config.ts", "export default {};\n"] },
   { argv = ["vp", "lint"], cwd = "packages/app-a", comment = "A package config without lint settings also uses the root config.", continue-on-failure = true },

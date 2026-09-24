@@ -64,22 +64,6 @@ impl SubcommandResolver {
         })?)
     }
 
-    /// Resolve root settings for package runs unless the user selected another config.
-    async fn resolve_workspace_config(
-        &self,
-        cwd: &AbsolutePath,
-        args: &[String],
-    ) -> anyhow::Result<Option<ResolvedUniversalViteConfig>> {
-        let explicit_config = args
-            .iter()
-            .take_while(|arg| arg.as_str() != "--")
-            .any(|arg| arg.starts_with("-c") || arg == "--config" || arg.starts_with("--config="));
-        if cwd == self.workspace_path.as_ref() || explicit_config {
-            return Ok(None);
-        }
-        self.resolve_universal_vite_config().await.map(Some)
-    }
-
     /// Resolve a synthesizable subcommand to a concrete program, args, cache config, and envs.
     pub(super) async fn resolve(
         &self,
@@ -88,21 +72,13 @@ impl SubcommandResolver {
         cwd: &AbsolutePath,
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
-            SynthesizableSubcommand::Lint { mut args } => {
+            SynthesizableSubcommand::Lint { args } => {
                 let cli_options = self.cli_options()?;
                 let resolved = (cli_options.lint)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
-
-                if let Some(config) = self.resolve_workspace_config(cwd, &args).await?
-                    && config.lint.is_some()
-                    && let Some(config_file) = config.config_file
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file);
-                }
 
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
@@ -122,21 +98,13 @@ impl SubcommandResolver {
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
-            SynthesizableSubcommand::Fmt { mut args } => {
+            SynthesizableSubcommand::Fmt { args } => {
                 let cli_options = self.cli_options()?;
                 let resolved = (cli_options.fmt)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
-
-                if let Some(config) = self.resolve_workspace_config(cwd, &args).await?
-                    && config.fmt.is_some()
-                    && let Some(config_file) = config.config_file
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file);
-                }
 
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
@@ -412,112 +380,37 @@ mod tests {
     #[tokio::test]
     async fn lint_and_fmt_preserve_args_without_loading_config() {
         let temp = tempfile::tempdir().unwrap();
-        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let resolver = SubcommandResolver::new(cwd.clone().into())
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let resolver = SubcommandResolver::new(root.clone().into())
             .with_cli_options(cli_options(Arc::from(OsStr::new("node"))));
         let envs = Arc::new(EnvMap::default());
 
-        for args in [
-            &["src"][..],
-            &["-c", "custom.json", "src"],
-            &["--config", "custom.json", "src"],
-            &["--config=custom.json", "src"],
-            &["--disable-nested-config", "src"],
-        ] {
-            let tool_args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
-            for (command, prefix) in [
-                (
-                    SynthesizableSubcommand::Lint { args: tool_args.clone() },
-                    &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
-                ),
-                (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"]),
+        for cwd in [&root, &root.join("packages/app"), &root.join("packages/app/src")] {
+            for args in [
+                &[][..],
+                &["src"],
+                &["-c", "custom.json", "src"],
+                &["-c./custom.json", "src"],
+                &["-c=custom.json", "src"],
+                &["--config", "custom.json", "src"],
+                &["--config=custom.json", "src"],
+                &["--disable-nested-config", "src"],
+                &["--", "--config"],
             ] {
-                let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
-                let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
-                let expected_args = [prefix, args].concat();
-                assert_eq!(actual_args, expected_args);
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn lint_and_fmt_from_subdirectory_use_the_matching_root_config_block() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let cwd = root.join("packages/app");
-        let config_file = root.join("vite config.mts").as_path().to_str().unwrap().to_string();
-        let envs = Arc::new(EnvMap::default());
-
-        for (mut config, has_lint, has_fmt) in [
-            (serde_json::json!({}), false, false),
-            (serde_json::json!({ "lint": {} }), true, false),
-            (serde_json::json!({ "fmt": {} }), false, true),
-            (serde_json::json!({ "lint": {}, "fmt": {} }), true, true),
-        ] {
-            config["configFile"] = serde_json::json!(config_file);
-            let config = config.to_string();
-            let root_string = root.as_path().to_str().unwrap().to_string();
-            let mut options = cli_options(Arc::from(OsStr::new("node")));
-            options.resolve_universal_vite_config = Arc::new(move |path| {
-                assert_eq!(path, root_string);
-                let config = config.clone();
-                Box::pin(async move { Ok(config) })
-            });
-            let resolver = SubcommandResolver::new(root.clone().into()).with_cli_options(options);
-
-            // A config-looking filename after `--` must not suppress root selection.
-            for args in [&["index.ts"][..], &["--", "--config"]] {
                 let tool_args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
-                for (command, prefix, has_block) in [
+                for (command, prefix) in [
                     (
                         SynthesizableSubcommand::Lint { args: tool_args.clone() },
                         &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
-                        has_lint,
                     ),
-                    (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"], has_fmt),
+                    (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"]),
                 ] {
-                    let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
+                    let resolved = resolver.resolve(command, &envs, cwd).await.unwrap();
                     let actual_args: Vec<&str> =
                         resolved.args.iter().map(|arg| arg.as_str()).collect();
-                    let mut expected_args = prefix.to_vec();
-                    if has_block {
-                        expected_args.extend(["-c", config_file.as_str()]);
-                    }
-                    expected_args.extend(args);
+                    let expected_args = [prefix, args].concat();
                     assert_eq!(actual_args, expected_args);
                 }
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn explicit_lint_and_fmt_config_from_subdirectory_skips_root_config_loading() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let cwd = root.join("packages/app");
-        let resolver = SubcommandResolver::new(root.into())
-            .with_cli_options(cli_options(Arc::from(OsStr::new("node"))));
-        let envs = Arc::new(EnvMap::default());
-
-        for args in [
-            &["-c", "custom.json", "index.ts"][..],
-            &["-c./custom.json", "index.ts"],
-            &["-c=custom.json", "index.ts"],
-            &["--config", "custom.json", "index.ts"],
-            &["--config=custom.json", "index.ts"],
-        ] {
-            let tool_args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
-            for (command, prefix) in [
-                (
-                    SynthesizableSubcommand::Lint { args: tool_args.clone() },
-                    &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
-                ),
-                (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"]),
-            ] {
-                let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
-                let actual_args: Vec<&str> = resolved.args.iter().map(|arg| arg.as_str()).collect();
-                let expected_args = [prefix, args].concat();
-                assert_eq!(actual_args, expected_args);
             }
         }
     }

@@ -1,6 +1,6 @@
 # Format Config
 
-`vp fmt` and `vp check` use the workspace-root `fmt` block, including when run from a package directory. Package configs do not replace these format settings. Use `vp fmt -c <path>` or `vp fmt --config <path>` to select another config. If the root config has no `fmt` block, Oxfmt uses [native discovery](/guide/fmt#configuration). See [Oxfmt's configuration](https://oxc.rs/docs/guide/usage/formatter/config.html) for details.
+`vp fmt` and the formatting phase of `vp check` use Oxfmt's [native config discovery](/guide/fmt#configuration) from the working directory. Use `vp fmt -c <path>` or `vp fmt --config <path>` to select another config. See [Oxfmt's configuration](https://oxc.rs/docs/guide/usage/formatter/config.html) for details.
 
 ## Example
 

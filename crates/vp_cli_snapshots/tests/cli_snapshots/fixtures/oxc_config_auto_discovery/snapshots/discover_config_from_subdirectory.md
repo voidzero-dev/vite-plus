@@ -47,20 +47,10 @@ console.log('hello')
 
 ## `cd src && vp lint index.js`
 
-The root lint config still applies when the working directory has its own lint settings.
-
-**Exit code:** 1
+Oxlint discovers the lint settings in the working directory.
 
 ```
-
-  × eslint(no-console): Unexpected console statement.
-   ╭─[index.js:1:1]
- 1 │ console.log('hello')
-   · ───────────
-   ╰────
-  help: Delete this console statement.
-
-Found 0 warnings and 1 error.
+Found 0 warnings and 0 errors.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
@@ -72,10 +62,10 @@ Finished in <duration> on 1 files using <n> threads.
 
 ## `vpt print-file src/index.js`
 
-The root fmt settings still apply when the working directory has its own fmt block.
+Oxfmt discovers the fmt settings in the working directory.
 
 ```
-console.log('hello')
+console.log("hello");
 ```
 
 ## `vp lint src/index.js`
@@ -88,7 +78,7 @@ Running from the root keeps per-file nested lint configs disabled.
 
   × eslint(no-console): Unexpected console statement.
    ╭─[src/index.js:1:1]
- 1 │ console.log('hello')
+ 1 │ console.log("hello");
    · ───────────
    ╰────
   help: Delete this console statement.

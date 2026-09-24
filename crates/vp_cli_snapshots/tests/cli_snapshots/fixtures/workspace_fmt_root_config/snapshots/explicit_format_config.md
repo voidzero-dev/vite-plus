@@ -2,7 +2,7 @@
 
 ## `vp fmt -c vite.config.ts --check index.js`
 
-An explicit package config takes precedence without a duplicate automatic config argument.
+An explicit package config matches native discovery.
 
 ```
 Checking formatting...

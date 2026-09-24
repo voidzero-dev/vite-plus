@@ -1,4 +1,4 @@
-# check_fix_uses_root_format
+# check_fix_uses_discovered_format
 
 ## `vp check --fix fix.js`
 
@@ -9,12 +9,12 @@ pass: Found no warnings or lint errors in 1 file (<duration>, <n> threads)
 
 ## `vpt print-file fix.js`
 
-Formatting after the curly lint fix also uses root quotes and semicolons.
+Formatting after the root curly lint fix uses package quotes and semicolons.
 
 ```
 export function greet(show) {
   if (show) {
-    console.log('hello')
+    console.log("hello");
   }
 }
 ```

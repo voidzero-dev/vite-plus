@@ -1,12 +1,12 @@
 [[case]]
-name = "root_format_options"
+name = "discovered_format_options"
 vp = ["local", "global"]
 cwd = "packages/app"
 steps = [
-  { argv = ["vp", "fmt", "--check", "index.js"], comment = "The package format settings cannot replace the root settings.", continue-on-failure = true },
-  { argv = ["vp", "check", "--no-lint", "index.js"], comment = "The formatting phase of check uses the same root config.", continue-on-failure = true },
+  { argv = ["vp", "fmt", "--check", "index.js"], comment = "Oxfmt discovers the package format settings.", continue-on-failure = true },
+  { argv = ["vp", "check", "--no-lint", "index.js"], comment = "The formatting phase of check also discovers the package config.", continue-on-failure = true },
   { argv = ["vp", "fmt", "index.js"] },
-  { argv = ["vpt", "print-file", "index.js"], comment = "The root single-quote and semicolon settings apply without changing the package working directory." },
+  { argv = ["vpt", "print-file", "index.js"], comment = "The package double-quote and semicolon settings apply with package-relative file paths." },
   { argv = ["vp", "check", "--no-lint", "index.js"] },
 ]
 
@@ -15,18 +15,18 @@ name = "explicit_format_config"
 vp = "local"
 cwd = "packages/app"
 steps = [
-  { argv = ["vp", "fmt", "-c", "vite.config.ts", "--check", "index.js"], comment = "An explicit package config takes precedence without a duplicate automatic config argument." },
+  { argv = ["vp", "fmt", "-c", "vite.config.ts", "--check", "index.js"], comment = "An explicit package config matches native discovery." },
   { argv = ["vp", "fmt", "--config", "vite.config.ts", "--check", "index.js"] },
   { argv = ["vp", "fmt", "--config=vite.config.ts", "--check", "index.js"] },
   { argv = ["vp", "fmt", "-c", "../../vite.config.ts", "--check", "index.js"], comment = "Selecting the root config explicitly detects the conflicting format.", continue-on-failure = true },
 ]
 
 [[case]]
-name = "check_fix_uses_root_format"
+name = "check_fix_uses_discovered_format"
 vp = "local"
 cwd = "packages/app"
 steps = [
   { argv = ["vp", "check", "--fix", "fix.js"] },
-  { argv = ["vpt", "print-file", "fix.js"], comment = "Formatting after the curly lint fix also uses root quotes and semicolons." },
+  { argv = ["vpt", "print-file", "fix.js"], comment = "Formatting after the root curly lint fix uses package quotes and semicolons." },
   { argv = ["vp", "check", "fix.js"] },
 ]
