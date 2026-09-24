@@ -40,9 +40,7 @@ function makeWorkspaceInfo(overrides: Partial<WorkspaceInfo> = {}): WorkspaceInf
     packages: [],
     downloadPackageManager: {
       name: '',
-      installDir: '',
       binPrefix: '',
-      packageName: '',
       version: '',
     },
     ...overrides,

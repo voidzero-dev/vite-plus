@@ -32,9 +32,7 @@ function makeWorkspaceInfo(rootDir: string, packageManager: PackageManager): Wor
     packageManagerVersion: '10.33.0',
     downloadPackageManager: {
       name: packageManager,
-      installDir: '/tmp',
       binPrefix: '/tmp/bin',
-      packageName: packageManager,
       version: '1.0.0',
     },
     packages: [],
