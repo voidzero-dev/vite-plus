@@ -20,7 +20,7 @@ vp fmt . --write
 
 Put formatting configuration directly in the `fmt` block in the root `vite.config.ts` so all your configuration stays in one place. We do not recommend using `.oxfmtrc.json` with Vite+.
 
-`vp fmt` lets Oxfmt discover configuration from the working directory, including when run from a workspace package. Relative file arguments retain their meaning. Use [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific options.
+`vp fmt` finds its config from the working directory, so package directories without their own `fmt` block use the root config. Relative file arguments retain their meaning. Use [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific options instead of adding `fmt` blocks to package configs.
 
 `vp check` uses the workspace-root `fmt` block when it exists, including from a package directory. Package configs cannot replace those format settings in `vp check`.
 
