@@ -1,8 +1,7 @@
 mod analysis;
 
-use std::{ffi::OsStr, sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant};
 
-use rustc_hash::FxHashMap;
 use vp_error::Error;
 use vp_shared::output;
 use vt::ExitStatus;
@@ -14,7 +13,8 @@ use self::analysis::{
     print_stdout_block, print_summary_line,
 };
 use crate::cli::{
-    CapturedCommandOutput, SubcommandResolver, SynthesizableSubcommand, resolve_and_capture_output,
+    CapturedCommandOutput, EnvMap, SubcommandResolver, SynthesizableSubcommand,
+    resolve_and_capture_output,
 };
 
 /// Execute the `vp check` composite command (fmt + lint + optional type checks).
@@ -26,7 +26,7 @@ pub(crate) async fn execute_check(
     no_lint_flag: bool,
     no_error_on_unmatched_pattern: bool,
     paths: Vec<String>,
-    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    envs: &Arc<EnvMap>,
     cwd: &AbsolutePathBuf,
 ) -> Result<ExitStatus, Error> {
     let mut status = ExitStatus::SUCCESS;

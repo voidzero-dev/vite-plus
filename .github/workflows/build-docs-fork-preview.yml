@@ -85,8 +85,10 @@ jobs:
           # Build the same commit that workflow_run.head_sha identifies.
           ref: ${{ github.event.pull_request.head.sha }}
 
+      # Keep in sync with the pin in .github/actions/deploy-docs/action.yml.
       - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
+          version: 1.0.0-rc.0
           working-directory: docs
           cache: false
 

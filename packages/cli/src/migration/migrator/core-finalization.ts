@@ -9,6 +9,7 @@ import {
   dropDeadOxlintPluginsDependency,
   hasTsconfigTypesToRewrite,
   mergeTsdownConfigFile,
+  migrateTaskCacheConfigInViteConfig,
   rewriteAllImports,
   rewriteTsconfigTypes,
 } from '../migrator.ts';
@@ -84,6 +85,10 @@ export type CoreMigrationFinalizationResult = {
   tsconfigTypes: boolean;
   imports: boolean;
   tsdownConfig: boolean;
+  taskCacheConfig: boolean;
+  // Kept out of the report so that review items alone do not make an
+  // up-to-date project run the rest of the migration.
+  taskCacheWarnings: string[];
 };
 
 function getCoreMigrationProjectPaths(workspaceInfo: CoreMigrationWorkspace): string[] {
@@ -150,6 +155,8 @@ export function finalizeCoreMigrationForExistingVitePlus(
     tsconfigTypes: false,
     imports: false,
     tsdownConfig: false,
+    taskCacheConfig: false,
+    taskCacheWarnings: [],
   };
 
   if (pending.scripts) {
@@ -176,6 +183,12 @@ export function finalizeCoreMigrationForExistingVitePlus(
   // existing-Vite+ path just as the fresh migration path does.
   for (const projectPath of projectPaths) {
     result.tsdownConfig = mergeTsdownConfigFile(projectPath, silent, report) || result.tsdownConfig;
+  }
+
+  for (const projectPath of projectPaths) {
+    result.taskCacheConfig =
+      migrateTaskCacheConfigInViteConfig(projectPath, silent, report, result.taskCacheWarnings) ||
+      result.taskCacheConfig;
   }
 
   return result;

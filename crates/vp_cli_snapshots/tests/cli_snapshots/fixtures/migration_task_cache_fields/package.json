@@ -1,0 +1,13 @@
+{
+  "name": "migration-task-cache-fields",
+  "devDependencies": {
+    "vite-plus": "0.2.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.16.0",
+      "onFail": "download"
+    }
+  }
+}

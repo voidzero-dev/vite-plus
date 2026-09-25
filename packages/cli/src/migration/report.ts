@@ -18,6 +18,7 @@ export interface MigrationReport {
   removedConfigCount: number;
   tsdownImportCount: number;
   wrappedPluginConfigCount: number;
+  migratedTaskCacheConfigCount: number;
   rewrittenImportFileCount: number;
   preservedUpstreamVitestImportFileCount: number;
   rewrittenImportErrors: Array<{ path: string; message: string }>;
@@ -43,6 +44,7 @@ export function createMigrationReport(): MigrationReport {
     removedConfigCount: 0,
     tsdownImportCount: 0,
     wrappedPluginConfigCount: 0,
+    migratedTaskCacheConfigCount: 0,
     rewrittenImportFileCount: 0,
     preservedUpstreamVitestImportFileCount: 0,
     rewrittenImportErrors: [],

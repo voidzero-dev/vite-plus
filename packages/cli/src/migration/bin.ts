@@ -534,7 +534,8 @@ function showMigrationSummary(options: {
     report.inlinedLintStagedConfigCount +
     report.removedConfigCount +
     report.tsdownImportCount +
-    report.wrappedPluginConfigCount;
+    report.wrappedPluginConfigCount +
+    report.migratedTaskCacheConfigCount;
 
   log(
     `${styleText('magenta', '◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)} to Vite+ ${VITE_PLUS_VERSION}`,
@@ -614,6 +615,9 @@ function showMigrationSummary(options: {
     log(
       `${styleText('gray', '•')} Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt`,
     );
+  }
+  if (report.migratedTaskCacheConfigCount > 0) {
+    log(`${styleText('gray', '•')} Task cache settings moved under \`cache\``);
   }
   if (report.gitHooksConfigured) {
     log(`${styleText('gray', '•')} Git hooks configured`);
@@ -1174,7 +1178,8 @@ async function main() {
       coreMigrationResult.scripts ||
       coreMigrationResult.tsconfigTypes ||
       coreMigrationResult.imports ||
-      coreMigrationResult.tsdownConfig
+      coreMigrationResult.tsdownConfig ||
+      coreMigrationResult.taskCacheConfig
     ) {
       didMigrate = true;
     }
@@ -1211,11 +1216,17 @@ async function main() {
       if (vitestV5Preflight) {
         prompts.log.warn(vitestV5Preflight);
       }
+      for (const warning of coreMigrationResult.taskCacheWarnings) {
+        prompts.log.warn(warning);
+      }
       if (skippedSetupCandidates) {
         log(FULL_MIGRATION_HINT);
       }
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
+    }
+    for (const warning of coreMigrationResult.taskCacheWarnings) {
+      addMigrationWarning(report, warning);
     }
 
     const setupOptions = getExistingVitePlusSetupOptions(options, fullSetup);

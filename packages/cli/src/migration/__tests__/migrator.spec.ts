@@ -8774,6 +8774,8 @@ describe('existing Vite+ core migration finalization', () => {
       tsconfigTypes: true,
       imports: true,
       tsdownConfig: false,
+      taskCacheConfig: false,
+      taskCacheWarnings: [],
     });
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -8851,6 +8853,8 @@ export default defineConfig({
       tsconfigTypes: false,
       imports: true,
       tsdownConfig: true,
+      taskCacheConfig: false,
+      taskCacheWarnings: [],
     });
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
       "import tsdownConfig from './tsdown.config.js';",
@@ -8868,6 +8872,8 @@ export default defineConfig({
       tsconfigTypes: false,
       imports: false,
       tsdownConfig: false,
+      taskCacheConfig: false,
+      taskCacheWarnings: [],
     });
   });
 
@@ -8905,10 +8911,187 @@ export default defineConfig({ entry: 'src/index.ts' });
       tsconfigTypes: false,
       imports: true,
       tsdownConfig: false,
+      taskCacheConfig: false,
+      taskCacheWarnings: [],
     });
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(originalViteConfig);
     expect(report.tsdownImportCount).toBe(0);
     expect(report.manualSteps).toEqual([]);
+  });
+
+  it('moves task cache settings under cache in the root and workspace packages', () => {
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', devDependencies: { 'vite-plus': 'latest' } }, null, 2),
+    );
+    fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ name: 'app' }, null, 2));
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  run: {
+    tasks: {
+      build: {
+        command: 'vp build',
+        env: ['NODE_ENV'],
+        output: ['dist/**'],
+      },
+    },
+  },
+});
+`,
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'vite.config.ts'),
+      `export default {
+  run: { tasks: { test: { command: 'vp test', cache: true, input: ['src/**'] } } },
+};
+`,
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+    const report = createMigrationReport();
+
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true, report)).toMatchObject({
+      taskCacheConfig: true,
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(`      build: {
+        command: 'vp build',
+        cache: {
+        env: ['NODE_ENV'],
+        output: ['dist/**'],
+        },
+      },`);
+    expect(fs.readFileSync(path.join(appDir, 'vite.config.ts'), 'utf8')).toContain(
+      "test: { command: 'vp test', cache: { input: ['src/**'] } }",
+    );
+    expect(report.migratedTaskCacheConfigCount).toBe(2);
+    expect(report.warnings).toEqual([]);
+
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true, report)).toMatchObject({
+      taskCacheConfig: false,
+      taskCacheWarnings: [],
+    });
+    expect(report.migratedTaskCacheConfigCount).toBe(2);
+  });
+
+  it('warns about task cache settings that need manual migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }, null, 2),
+    );
+    const viteConfig = `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  run: {
+    tasks: {
+      build: { ...shared, command: 'vp build', env: ['NODE_ENV'] },
+      dev: { command: 'vp dev', cache: false, input: ['src/**'] },
+    },
+  },
+});
+`;
+    fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), viteConfig);
+    const report = createMigrationReport();
+
+    const result = finalizeCoreMigrationForExistingVitePlus(
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      true,
+      report,
+    );
+
+    expect(result.taskCacheConfig).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(viteConfig);
+    expect(report.migratedTaskCacheConfigCount).toBe(0);
+    // Review items stay out of the report so an up-to-date project can exit early.
+    expect(report.warnings).toEqual([]);
+    expect(result.taskCacheWarnings).toHaveLength(1);
+    expect(result.taskCacheWarnings[0]).toContain(
+      'vite.config.ts: Move `env`, `untrackedEnv`, `input`, and `output` under `cache` manually in tasks `build`, `dev`; they were left unchanged.',
+    );
+    expect(result.taskCacheWarnings[0]).toContain('/config/run#cache');
+  });
+});
+
+describe('rewriteStandaloneProject — task cache settings', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-task-cache-'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('moves task cache settings under cache during a fresh migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite';
+
+export default defineConfig({
+  run: { tasks: { build: { command: 'vite build', untrackedEnv: ['CI'] } } },
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      true,
+      true,
+      report,
+    );
+
+    const viteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
+    expect(viteConfig).toContain(
+      "build: { command: 'vite build', cache: { untrackedEnv: ['CI'] } }",
+    );
+    expect(report.migratedTaskCacheConfigCount).toBe(1);
+  });
+
+  it('moves task cache settings in monorepo packages', () => {
+    const appDir = path.join(tmpDir, 'apps', 'web');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', workspaces: ['apps/*'], devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'web', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'vite.config.ts'),
+      `export default {
+  run: { tasks: { build: { command: 'vite build', input: ['src/**'] } } },
+};
+`,
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.workspacePatterns = ['apps/*'];
+    workspaceInfo.parentDirs = ['apps'];
+    workspaceInfo.packages = [{ name: 'web', path: 'apps/web' }];
+    const report = createMigrationReport();
+
+    rewriteMonorepo(workspaceInfo, true, true, report);
+
+    expect(fs.readFileSync(path.join(appDir, 'vite.config.ts'), 'utf8')).toContain(
+      "build: { command: 'vite build', cache: { input: ['src/**'] } }",
+    );
+    expect(report.migratedTaskCacheConfigCount).toBe(1);
   });
 });
 

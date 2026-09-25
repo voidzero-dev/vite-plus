@@ -1052,6 +1052,7 @@ module.exports.hasConfigKey = nativeBinding.hasConfigKey;
 module.exports.isDirectoryGitignored = nativeBinding.isDirectoryGitignored;
 module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;
+module.exports.migrateTaskCacheConfig = nativeBinding.migrateTaskCacheConfig;
 module.exports.parseConfigArgs = nativeBinding.parseConfigArgs;
 module.exports.parseCreateArgs = nativeBinding.parseCreateArgs;
 module.exports.parseHooksArgs = nativeBinding.parseHooksArgs;

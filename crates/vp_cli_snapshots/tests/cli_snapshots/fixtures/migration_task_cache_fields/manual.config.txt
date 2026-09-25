@@ -1,0 +1,13 @@
+import { defineConfig } from 'vite-plus';
+
+const shared = { env: ['NODE_ENV'] };
+
+export default defineConfig({
+  run: {
+    tasks: {
+      build: { ...shared, command: 'vp build', input: ['src/**'] },
+      dev: { command: 'vp dev', cache: false, env: ['PORT'] },
+      check: { command: 'vp check', env: ['CI'] },
+    },
+  },
+});

@@ -95,7 +95,9 @@ export default defineConfig({
       build: {
         command: 'vp build',
         dependsOn: ['lint'],
-        env: ['NODE_ENV'],
+        cache: {
+          env: ['NODE_ENV'],
+        },
       },
       deploy: {
         command: 'deploy-script --prod',

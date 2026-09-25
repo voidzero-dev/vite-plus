@@ -9,6 +9,7 @@ import {
   hasConfigKey,
   mergeJsonConfig,
   mergeTsdownConfig,
+  migrateTaskCacheConfig,
   rewriteImportsInDirectory,
   rewriteScripts,
   wrapLazyPlugins,
@@ -536,6 +537,52 @@ export function wrapLazyPluginsInViteConfig(
       `✔ Wrapped inline Vite plugins with lazyPlugins in ${displayRelative(viteConfigPath)}`,
     );
   }
+}
+
+/**
+ * Move `env`, `untrackedEnv`, `input`, and `output` from the top level of
+ * each `run.tasks` entry into its `cache` object, as Vite Task requires.
+ * Tasks that need manual changes are warned about, or collected into
+ * `manualWarnings` when the caller reports them later.
+ */
+export function migrateTaskCacheConfigInViteConfig(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+  manualWarnings?: string[],
+): boolean {
+  const configs = detectConfigs(projectPath);
+  if (!configs.viteConfig) {
+    return false;
+  }
+
+  const viteConfigPath = path.join(projectPath, configs.viteConfig);
+  const result = migrateTaskCacheConfig(viteConfigPath);
+  if (result.manualTasks.length > 0) {
+    const tasks = result.manualTasks.map((task) => `\`${task}\``).join(', ');
+    const warning = `${displayRelative(viteConfigPath)}: Move \`env\`, \`untrackedEnv\`, \`input\`, and \`output\` under \`cache\` manually in ${
+      result.manualTasks.length === 1 ? 'task' : 'tasks'
+    } ${tasks}; ${result.manualTasks.length === 1 ? 'it was' : 'they were'} left unchanged. See ${documentationUrl('/config/run#cache')}`;
+    if (manualWarnings) {
+      manualWarnings.push(warning);
+    } else {
+      warnMigration(warning, report);
+    }
+  }
+  if (!result.updated) {
+    return false;
+  }
+
+  fs.writeFileSync(viteConfigPath, result.content);
+  if (report) {
+    report.migratedTaskCacheConfigCount++;
+  }
+  if (!silent) {
+    prompts.log.success(
+      `✔ Moved task cache settings under \`cache\` in ${displayRelative(viteConfigPath)}`,
+    );
+  }
+  return true;
 }
 
 /**

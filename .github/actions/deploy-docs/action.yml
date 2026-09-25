@@ -34,8 +34,12 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    # docs/vite.config.ts uses the task cache format of this release. Once a
+    # release requires task cache settings under `cache`, remove this pin and
+    # the one in build-docs-fork-preview.yml, and update docs/vite.config.ts.
     - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
       with:
+        version: 1.0.0-rc.0
         cache: true
         working-directory: docs
         cache-dependency-path: docs/pnpm-lock.yaml

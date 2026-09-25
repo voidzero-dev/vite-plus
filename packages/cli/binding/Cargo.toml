@@ -39,6 +39,7 @@ vp_static_config = { workspace = true }
 vp_toolchain = { workspace = true }
 vt_str = { workspace = true }
 vt = { workspace = true }
+vt_casefold = { workspace = true }
 vt_workspace = { workspace = true }
 rolldown_binding = { workspace = true, optional = true, features = ["disable_panic_hook"] }
 

@@ -1,0 +1,21 @@
+[[case]]
+name = "migration_task_cache_fields"
+vp = "global"
+comment = "Move task cache settings under cache on an existing Vite+ project without --full, then keep them on a second migration."
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]
+
+[[case]]
+name = "migration_task_cache_fields_manual"
+vp = "global"
+comment = "Warn about tasks whose cache settings cannot be moved safely, move the rest, and keep warning without migrating again."
+steps = [
+  { argv = ["vpt", "cp", "manual.config.txt", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+]
