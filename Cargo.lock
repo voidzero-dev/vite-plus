@@ -6075,7 +6075,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "append-only-vec",
@@ -6097,7 +6097,6 @@ dependencies = [
  "oxc_index",
  "oxc_str",
  "oxc_traverse",
- "percent-encoding",
  "petgraph 0.8.3",
  "rayon",
  "regex",
@@ -6264,7 +6263,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_common"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6300,13 +6299,12 @@ dependencies = [
 
 [[package]]
 name = "rolldown_dev"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
  "futures",
  "rolldown",
- "rolldown-notify",
  "rolldown_common",
  "rolldown_dev_common",
  "rolldown_error",
@@ -6321,7 +6319,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_dev_common"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "derive_more",
  "rolldown_common",
@@ -6333,7 +6331,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_devtools"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "blake3",
  "rolldown_devtools_action",
@@ -6346,7 +6344,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_devtools_action"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "serde",
  "ts-rs",
@@ -6354,7 +6352,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_ecmascript"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "arcstr",
  "oxc",
@@ -6366,7 +6364,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_ecmascript_utils"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "memchr",
  "oxc",
@@ -6376,7 +6374,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_error"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6393,7 +6391,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_fs"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "oxc_resolver",
  "vfs",
@@ -6401,18 +6399,20 @@ dependencies = [
 
 [[package]]
 name = "rolldown_fs_watcher"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "rolldown-notify",
  "rolldown-notify-debouncer-full",
+ "rolldown_common",
  "rolldown_error",
  "rustc-hash",
  "tracing",
+ "walkdir",
 ]
 
 [[package]]
 name = "rolldown_plugin"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6441,7 +6441,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_asset_module"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "rolldown_common",
@@ -6453,7 +6453,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_bundle_analyzer"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "arcstr",
  "rolldown_common",
@@ -6467,7 +6467,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_chunk_import_map"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "arcstr",
  "rolldown_common",
@@ -6480,7 +6480,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_copy_module"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6493,7 +6493,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_data_url"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "arcstr",
  "base64-simd",
@@ -6506,7 +6506,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_esm_external_require"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "nodejs-built-in-modules",
  "rolldown_common",
@@ -6517,7 +6517,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_hmr"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "rolldown_common",
  "rolldown_plugin",
@@ -6525,7 +6525,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_isolated_declaration"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "arcstr",
  "oxc",
@@ -6539,10 +6539,11 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_lazy_compilation"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
+ "oxc",
  "rolldown_common",
  "rolldown_plugin",
  "rolldown_utils",
@@ -6551,7 +6552,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_oxc_runtime"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "arcstr",
  "phf 0.14.0",
@@ -6562,7 +6563,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_replace"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "oxc",
@@ -6578,7 +6579,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_utils"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6732,7 +6733,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_plugin_vite_resolve"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6786,7 +6787,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_resolver"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6801,7 +6802,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_sourcemap"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "criterion2",
  "memchr",
@@ -6811,7 +6812,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_std_utils"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "regex",
  "sugar_path",
@@ -6857,7 +6858,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_tracing"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "tracing",
  "tracing-chrome",
@@ -6873,7 +6874,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_utils"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6911,7 +6912,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_watcher"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -6930,7 +6931,7 @@ dependencies = [
 
 [[package]]
 name = "rolldown_workspace"
-version = "1.2.10"
+version = "1.2.11"
 
 [[package]]
 name = "ropey"
@@ -7756,7 +7757,7 @@ dependencies = [
 
 [[package]]
 name = "string_wizard"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "insta",
  "memchr",

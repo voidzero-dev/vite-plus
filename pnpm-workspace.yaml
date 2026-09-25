@@ -103,7 +103,7 @@ catalog:
   oxc-transform: =0.151.0
   oxfmt: =0.70.0
   oxlint: =1.85.0
-  oxlint-tsgolint: =7.0.2002
+  oxlint-tsgolint: =7.0.2003
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -223,6 +223,15 @@ packageExtensions:
   '@volar/typescript':
     dependencies:
       '@volar/language-service': 2.4.28
+  '@vue/compiler-core':
+    dependencies:
+      '@babel/types': ^7.29.8
+  '@vue/compiler-sfc':
+    dependencies:
+      '@babel/types': ^7.29.8
+  '@vue/language-core':
+    dependencies:
+      '@vue/compiler-sfc': ^3.5.0
 patchedDependencies:
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
