@@ -48,10 +48,6 @@ export default defineConfig({
           input: ['src/**'],
         },
       },
-      dev: {
-        command: 'vp dev',
-        cache: false,
-      },
     },
   },
 });
@@ -95,10 +91,6 @@ export default defineConfig({
           env: ['LINT_LEVEL'],
           input: ['src/**'],
         },
-      },
-      dev: {
-        command: 'vp dev',
-        cache: false,
       },
     },
   },

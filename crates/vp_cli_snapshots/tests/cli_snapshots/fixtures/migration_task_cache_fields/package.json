@@ -1,7 +1,5 @@
 {
   "name": "migration-task-cache-fields",
-  "type": "module",
-  "private": true,
   "devDependencies": {
     "vite-plus": "0.2.0"
   },

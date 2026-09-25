@@ -23,10 +23,6 @@ export default defineConfig({
         },
         input: ['src/**'],
       },
-      dev: {
-        command: 'vp dev',
-        cache: false,
-      },
     },
   },
 });
