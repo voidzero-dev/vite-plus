@@ -10,7 +10,7 @@ Use the global `vp` CLI as the default entry point for new web projects and for 
 ## Before Running Commands
 
 - Follow repository-local agent instructions when present.
-- Run `vp --version` to confirm the global CLI is available. If it is missing, point the user to https://viteplus.dev/guide/global-cli instead of silently substituting npm or another tool.
+- Run `vp toolchain --global` to confirm the global CLI is available; `vp --version` may resolve a project-local binary. If the global toolchain is unavailable, point the user to https://viteplus.dev/guide/global-cli instead of silently substituting npm or another tool.
 - Use `vp help` and `vp help <command>` when command behavior or options are unclear. Current documentation is available at https://viteplus.dev/llms-full.txt.
 - Preserve an explicitly requested framework, template, package manager, or toolchain.
 
@@ -18,7 +18,7 @@ Use the global `vp` CLI as the default entry point for new web projects and for 
 
 - Default to `vp create`; do not use `npm create`, `npx create-*`, or another package-manager-specific scaffold command unless the user explicitly requests it or `vp create` cannot run the requested source.
 - Run `vp create --list` or read https://viteplus.dev/guide/create when choosing a template.
-- Pass template-specific arguments after `--`, for example `vp create vite -- --template react-ts`.
+- Keep the template as the first argument. For shorthand, remote, and local templates, pass their target, directory, and options after `--` using that template's syntax; for example, `vp create vite -- web-app --template react-ts`. Use the top-level `--directory` option only for Vite+ built-in and bundled organization templates.
 - Do not overwrite existing project files. Confirm the target directory and inspect it when necessary.
 
 ## Work in Existing Projects

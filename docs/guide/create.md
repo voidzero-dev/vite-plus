@@ -42,7 +42,7 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 
 ## Options
 
-- `--directory <dir>` writes the generated project into a specific target directory
+- `--directory <dir>` writes Vite+ built-in, local, and bundled organization templates into a specific target directory. For shorthand and remote templates, pass their target directory after `--` using that template's syntax.
 - `--agent <name>` creates agent instructions files during scaffolding
 - `--no-agent` skips agent instruction setup
 - `--editor <name>` writes editor config files
@@ -76,7 +76,7 @@ Arguments after `--` are passed directly to the selected template.
 This matters when the template itself accepts flags. For example, you can forward Vite template selection like this:
 
 ```bash
-vp create vite -- --template react-ts
+vp create vite -- my-app --template react-ts
 ```
 
 ## Examples

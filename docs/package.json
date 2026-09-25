@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "node .vitepress/scripts/copy-installers.mjs && vp run build:site",
-    "build:cloudflare": "node .vitepress/scripts/copy-installers.mjs && vitepress build",
-    "build:netlify": "node .vitepress/scripts/copy-installers.mjs && vitepress build",
+    "build": "node .vitepress/scripts/copy-installers.mjs && node .vitepress/scripts/generate-agent-setup.mjs && vp run build:site",
+    "build:cloudflare": "node .vitepress/scripts/copy-installers.mjs && node .vitepress/scripts/generate-agent-setup.mjs && vitepress build",
+    "build:netlify": "node .vitepress/scripts/copy-installers.mjs && node .vitepress/scripts/generate-agent-setup.mjs && vitepress build",
     "preview": "vitepress preview",
     "update-trusted-stack-stats": "node .vitepress/theme/data/fetch-trusted-stack-stats.ts"
   },
