@@ -1,8 +1,8 @@
 export default {
   run: {
     tasks: {
-      // Docs deploys build with the released `vp` from setup-vp. Keep the cache
-      // settings at the top level until a release requires them under `cache`.
+      // Docs builds pin `vp` in .github/actions/deploy-docs/action.yml. Keep the
+      // cache settings at the top level until that pin requires them under `cache`.
       'build:site': {
         command: 'vitepress build',
         // The docs and installer URLs depend on the explicit origin or Workers
