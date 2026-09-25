@@ -1371,8 +1371,9 @@ mod tests {
                     tasks: {
                         hello: {
                             command: 'node hello.mjs',
-                            envs: ['FOO', 'BAR'],
-                            cache: true,
+                            cache: {
+                                env: ['FOO', 'BAR'],
+                            },
                         },
                     },
                 },
@@ -1385,8 +1386,9 @@ mod tests {
                 "tasks": {
                     "hello": {
                         "command": "node hello.mjs",
-                        "envs": ["FOO", "BAR"],
-                        "cache": true,
+                        "cache": {
+                            "env": ["FOO", "BAR"],
+                        },
                     }
                 }
             }),

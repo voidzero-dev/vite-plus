@@ -18,16 +18,16 @@ use cow_utils::CowUtils;
 pub(crate) use execution::resolve_and_capture_output;
 // Re-exports for lib.rs and check/mod.rs
 pub use resolver::SubcommandResolver;
-use rustc_hash::FxHashMap;
-pub(crate) use types::CapturedCommandOutput;
 pub use types::{
     BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand, ToolchainArgs,
     ViteConfigResolverFn,
 };
+pub(crate) use types::{CapturedCommandOutput, EnvMap};
 use vp_error::Error;
 pub use vp_shared::init_tracing;
 use vp_shared::{PrependOptions, env_vars, prepend_tools_to_path_env};
 use vt::{ExitStatus, Session, SessionConfig};
+use vt_casefold::EnvName;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
 
@@ -76,16 +76,19 @@ async fn execute_direct_subcommand(
         SubcommandResolver::new(Arc::clone(&workspace_path))
     };
 
-    let envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> = Arc::new({
-        let mut envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = std::env::vars_os()
-            .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
+    let envs: Arc<EnvMap> = Arc::new({
+        let mut envs: EnvMap = std::env::vars_os()
+            .map(|(k, v)| (EnvName::new(Arc::from(k.as_os_str())), Arc::from(v.as_os_str())))
             .collect();
         // When elicitation retargeted the command, the tool runs with the
         // target as its working directory: keep the POSIX PWD consistent,
         // like a real `cd`. Untargeted runs keep the caller's PWD verbatim
         // (it may legitimately differ from cwd through shell symlinks).
         if cfg!(unix) && retargeted {
-            envs.insert(Arc::from(OsStr::new("PWD")), Arc::from(cwd.as_path().as_os_str()));
+            envs.insert(
+                EnvName::new(Arc::from(OsStr::new("PWD"))),
+                Arc::from(cwd.as_path().as_os_str()),
+            );
         }
         envs
     });
@@ -143,21 +146,12 @@ async fn execute_direct_subcommand(
     Ok(status)
 }
 
-fn is_path_env_key(key: &OsStr) -> bool {
-    if cfg!(windows) { key.eq_ignore_ascii_case("PATH") } else { key == "PATH" }
-}
-
 fn try_prepend_to_env_path(
-    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    envs: &Arc<EnvMap>,
     bin_prefix: &AbsolutePath,
-) -> Result<Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>, Error> {
-    let path_key = envs
-        .keys()
-        .find(|key| is_path_env_key(key.as_ref()))
-        .cloned()
-        .unwrap_or_else(|| Arc::from(OsStr::new("PATH")));
+) -> Result<Arc<EnvMap>, Error> {
     let current_path =
-        envs.get(&path_key).map_or_else(Default::default, |path| path.to_os_string());
+        vt::get_path_env(envs).map_or_else(Default::default, |path| path.to_os_string());
     let paths = if current_path.is_empty() {
         Vec::new()
     } else {
@@ -173,15 +167,13 @@ fn try_prepend_to_env_path(
     )
     .map_err(|error| Error::Anyhow(anyhow::Error::new(error)))?;
 
-    let mut envs = FxHashMap::clone(envs);
-    envs.insert(path_key, Arc::from(new_path.as_os_str()));
+    let mut envs = EnvMap::clone(envs);
+    // An existing PATH keeps its spelling (Windows commonly uses `Path`).
+    envs.insert(EnvName::new(Arc::from(OsStr::new("PATH"))), Arc::from(new_path.as_os_str()));
     Ok(Arc::new(envs))
 }
 
-fn prepend_to_env_path(
-    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-    bin_prefix: &AbsolutePath,
-) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
+fn prepend_to_env_path(envs: &Arc<EnvMap>, bin_prefix: &AbsolutePath) -> Arc<EnvMap> {
     match try_prepend_to_env_path(envs, bin_prefix) {
         Ok(updated_envs) => updated_envs,
         Err(error) => {
@@ -196,8 +188,8 @@ fn prepend_to_env_path(
 
 async fn envs_with_explicit_package_manager_path(
     cwd: &AbsolutePath,
-    envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-) -> Result<Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>, Error> {
+    envs: Arc<EnvMap>,
+) -> Result<Arc<EnvMap>, Error> {
     let Some(resolution) = (match vp_pm_cli::resolve_package_manager_from_package_json(cwd) {
         Ok(resolution) => resolution,
         Err(error) => {
@@ -451,14 +443,17 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use rustc_hash::FxHashMap;
     use vt::config::UserRunConfig;
+    use vt_casefold::EnvName;
     use vt_path::AbsolutePathBuf;
 
-    use super::{Error, envs_with_explicit_package_manager_path, prepend_to_env_path};
+    use super::{EnvMap, Error, envs_with_explicit_package_manager_path, prepend_to_env_path};
 
-    fn envs_with_path(path: &std::ffi::OsStr) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
-        Arc::new(FxHashMap::from_iter([(Arc::from(OsStr::new("PATH")), Arc::from(path))]))
+    fn envs_with_path(path: &std::ffi::OsStr) -> Arc<EnvMap> {
+        Arc::new(EnvMap::from_iter([(
+            EnvName::new(Arc::from(OsStr::new("PATH"))),
+            Arc::from(path),
+        )]))
     }
 
     #[test]
@@ -470,7 +465,7 @@ mod tests {
         let envs = envs_with_path(original_path.as_os_str());
 
         let updated = prepend_to_env_path(&envs, &pm_bin);
-        let path_value = updated.get(OsStr::new("PATH")).expect("PATH should exist");
+        let path_value = vt::get_path_env(&updated).expect("PATH should exist");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths.first().map(std::path::PathBuf::as_path), Some(pm_bin.as_path()));
@@ -485,7 +480,7 @@ mod tests {
         let envs = envs_with_path(original_path.as_os_str());
 
         let updated = prepend_to_env_path(&envs, &pm_bin);
-        let path_value = updated.get(OsStr::new("PATH")).expect("PATH should exist");
+        let path_value = vt::get_path_env(&updated).expect("PATH should exist");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths, vec![pm_bin.as_path().to_path_buf()]);
@@ -495,10 +490,10 @@ mod tests {
     fn creates_path_when_env_map_has_no_path() {
         let cwd = std::env::current_dir().expect("current_dir should exist");
         let pm_bin = AbsolutePathBuf::new(cwd.join("pm-bin")).expect("pm bin should be absolute");
-        let envs = Arc::new(FxHashMap::default());
+        let envs = Arc::new(EnvMap::default());
 
         let updated = prepend_to_env_path(&envs, &pm_bin);
-        let path_value = updated.get(OsStr::new("PATH")).expect("PATH should be created");
+        let path_value = vt::get_path_env(&updated).expect("PATH should be created");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths, vec![pm_bin.as_path().to_path_buf()]);
@@ -511,13 +506,16 @@ mod tests {
         let pm_bin = AbsolutePathBuf::new(cwd.join("pm-bin")).expect("pm bin should be absolute");
         let original_path = std::env::join_paths([old_bin.as_path()]).expect("valid PATH");
         let key = if cfg!(windows) { "Path" } else { "PATH" };
-        let envs = Arc::new(FxHashMap::from_iter([(
-            Arc::from(OsStr::new(key)),
+        let envs = Arc::new(EnvMap::from_iter([(
+            EnvName::new(Arc::from(OsStr::new(key))),
             Arc::from(original_path.as_os_str()),
         )]));
 
         let updated = prepend_to_env_path(&envs, &pm_bin);
-        let path_value = updated.get(OsStr::new(key)).expect("existing PATH key should be updated");
+        let [(path_key, path_value)] = updated.iter().collect::<Vec<_>>()[..] else {
+            panic!("the existing PATH entry should be updated in place: {updated:?}");
+        };
+        assert_eq!(path_key.inner().as_ref(), OsStr::new(key));
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths.first().map(std::path::PathBuf::as_path), Some(pm_bin.as_path()));
@@ -543,7 +541,7 @@ mod tests {
             .await
             .expect("package manager preflight errors should not fail direct commands");
 
-        assert_eq!(updated.get(OsStr::new("PATH")), envs.get(OsStr::new("PATH")));
+        assert_eq!(vt::get_path_env(&updated), vt::get_path_env(&envs));
         fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
     }
 
@@ -602,7 +600,7 @@ mod tests {
             .await
             .expect("missing packageManager should not error");
 
-        assert_eq!(updated.get(OsStr::new("PATH")), envs.get(OsStr::new("PATH")));
+        assert_eq!(vt::get_path_env(&updated), vt::get_path_env(&envs));
         assert_eq!(
             fs::read_to_string(temp_dir.join("package.json")).expect("package.json should exist"),
             r#"{"name":"fixture"}"#

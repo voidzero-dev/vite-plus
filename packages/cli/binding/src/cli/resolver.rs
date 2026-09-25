@@ -1,15 +1,18 @@
 use std::{env, ffi::OsStr, iter, sync::Arc};
 
-use rustc_hash::FxHashMap;
 use vt::config::user::{
     AutoTracking, EnabledCacheConfig, GlobWithBase, InputBase, UserCacheConfig, UserInputEntry,
 };
+use vt_casefold::EnvName;
 use vt_path::AbsolutePath;
 use vt_str::Str;
 
 use super::{
     help::should_prepend_vitest_run,
-    types::{CliOptions, ResolvedSubcommand, ResolvedUniversalViteConfig, SynthesizableSubcommand},
+    types::{
+        CliOptions, EnvMap, ResolvedSubcommand, ResolvedUniversalViteConfig,
+        SynthesizableSubcommand,
+    },
 };
 
 /// Resolves synthesizable subcommands to concrete programs and arguments.
@@ -81,7 +84,7 @@ impl SubcommandResolver {
     pub(super) async fn resolve(
         &self,
         subcommand: SynthesizableSubcommand,
-        envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+        envs: &Arc<EnvMap>,
         cwd: &AbsolutePath,
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
@@ -327,25 +330,23 @@ pub(super) fn check_cache_inputs() -> Vec<UserInputEntry> {
     ]
 }
 
-fn merge_resolved_envs(
-    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-    resolved_envs: Vec<(String, String)>,
-) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
-    let mut envs = FxHashMap::clone(envs);
+fn merge_resolved_envs(envs: &Arc<EnvMap>, resolved_envs: Vec<(String, String)>) -> Arc<EnvMap> {
+    let mut envs = EnvMap::clone(envs);
     for (k, v) in resolved_envs {
-        envs.entry(Arc::from(OsStr::new(&k))).or_insert_with(|| Arc::from(OsStr::new(&v)));
+        envs.entry(EnvName::new(Arc::from(OsStr::new(&k))))
+            .or_insert_with(|| Arc::from(OsStr::new(&v)));
     }
     Arc::new(envs)
 }
 
 /// Merge resolved envs and inject VP_VERSION for rolldown-vite branding.
 fn merge_resolved_envs_with_version(
-    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    envs: &Arc<EnvMap>,
     resolved_envs: Vec<(String, String)>,
-) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
+) -> Arc<EnvMap> {
     let mut merged = merge_resolved_envs(envs, resolved_envs);
     let map = Arc::make_mut(&mut merged);
-    map.entry(Arc::from(OsStr::new("VP_VERSION")))
+    map.entry(EnvName::new(Arc::from(OsStr::new("VP_VERSION"))))
         .or_insert_with(|| Arc::from(OsStr::new(env!("CARGO_PKG_VERSION"))));
     merged
 }
@@ -392,7 +393,7 @@ mod tests {
         let runtime: Arc<OsStr> = Arc::from(cwd.join("custom runtime").as_path().as_os_str());
         let resolver = SubcommandResolver::new(cwd.clone().into())
             .with_cli_options(cli_options(Arc::clone(&runtime)));
-        let envs = Arc::new(FxHashMap::default());
+        let envs = Arc::new(EnvMap::default());
         for command in [
             SynthesizableSubcommand::Lint { args: vec![] },
             SynthesizableSubcommand::Fmt { args: vec![] },
@@ -414,7 +415,7 @@ mod tests {
         let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
         let resolver = SubcommandResolver::new(cwd.clone().into())
             .with_cli_options(cli_options(Arc::from(OsStr::new("node"))));
-        let envs = Arc::new(FxHashMap::default());
+        let envs = Arc::new(EnvMap::default());
 
         for args in [
             &["src"][..],
@@ -445,7 +446,7 @@ mod tests {
         let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
         let cwd = root.join("packages/app");
         let config_file = root.join("vite config.mts").as_path().to_str().unwrap().to_string();
-        let envs = Arc::new(FxHashMap::default());
+        let envs = Arc::new(EnvMap::default());
 
         for (mut config, has_lint, has_fmt) in [
             (serde_json::json!({}), false, false),
@@ -496,7 +497,7 @@ mod tests {
         let cwd = root.join("packages/app");
         let resolver = SubcommandResolver::new(root.into())
             .with_cli_options(cli_options(Arc::from(OsStr::new("node"))));
-        let envs = Arc::new(FxHashMap::default());
+        let envs = Arc::new(EnvMap::default());
 
         for args in [
             &["-c", "custom.json", "index.ts"][..],

@@ -1,6 +1,6 @@
 #![allow(clippy::allow_attributes, clippy::disallowed_types)]
 
-use std::{ffi::OsStr, hint::black_box, path::PathBuf, sync::Arc};
+use std::{hint::black_box, path::PathBuf};
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rustc_hash::FxHashMap;
@@ -70,9 +70,8 @@ fn bench_workspace_load(c: &mut Criterion) {
         b.iter(|| {
             runtime.block_on(async {
                 let mut owned_callbacks = BenchSessionConfig::default();
-                let envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = FxHashMap::default();
                 let mut session = Session::init_with(
-                    envs,
+                    FxHashMap::default(),
                     fixture_path.clone().into(),
                     owned_callbacks.as_callbacks(),
                 )
@@ -88,10 +87,12 @@ fn bench_workspace_load(c: &mut Criterion) {
         b.iter(|| {
             runtime.block_on(async {
                 let mut owned_callbacks = BenchSessionConfig::default();
-                let envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = FxHashMap::default();
-                let mut session =
-                    Session::init_with(envs, path.clone().into(), owned_callbacks.as_callbacks())
-                        .expect("Failed to create session");
+                let mut session = Session::init_with(
+                    FxHashMap::default(),
+                    path.clone().into(),
+                    owned_callbacks.as_callbacks(),
+                )
+                .expect("Failed to create session");
                 black_box(
                     session.ensure_task_graph_loaded().await.expect("Failed to load task graph"),
                 );

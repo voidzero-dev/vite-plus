@@ -7,7 +7,7 @@ Vite Task can automatically track dependencies and cache tasks run through `vp r
 When a task runs successfully (exit code 0), its terminal output (stdout/stderr) and all written files (output files) are saved. On the next run, Vite Task checks if anything changed:
 
 1. **Arguments:** did the [additional arguments](/guide/run#additional-arguments) passed to the task change?
-2. **Environment variables:** did any [fingerprinted env vars](/config/run#env) change?
+2. **Environment variables:** did any [fingerprinted env vars](/config/run#cache-env) change?
 3. **Inputs:** did any input file that the command reads change?
 
 When all checks match, Vite Task replays the cached terminal output, restores saved output files, and skips the command.
@@ -50,14 +50,16 @@ Vite Task uses [automatic data tracking](/guide/automatic-data-tracking) to lear
 - **File system tracking:** Vite Task records file reads, missing-file probes, directory listings, and written output files for every task with cache enabled.
 - **Cooperative tracking:** cache-reporting tools can report metadata that file system tracking cannot infer. Vite+ supports this for `vp build` today.
 
-Use [`input`](/config/run#input) or [`output`](/config/run#output) when a task needs manual tracking rules. `input` controls what invalidates the cache. `output` controls which files Vite Task restores on a cache hit.
+Use [`cache.input`](/config/run#cache-input) or [`cache.output`](/config/run#cache-output) when a task needs manual tracking rules. `input` controls what invalidates the cache. `output` controls which files Vite Task restores on a cache hit.
 
 ```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'node build.mjs',
-    input: [{ auto: true }, '!dist/**'],
-    output: ['dist/**'],
+    cache: {
+      input: [{ auto: true }, '!dist/**'],
+      output: ['dist/**'],
+    },
   },
 }
 ```
@@ -66,20 +68,22 @@ tasks: {
 
 By default, tasks run in a clean environment. Only a small set of common variables, such as `PATH`, `HOME`, and `CI`, are passed through. Other environment variables are neither visible to the task nor included in the cache fingerprint.
 
-To add an environment variable to the cache key, add it to [`env`](/config/run#env). Changing its value then invalidates the cache:
+To add an environment variable to the cache key, add it to [`cache.env`](/config/run#cache-env). Changing its value then invalidates the cache:
 
 ```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'webpack --mode production',
-    env: ['NODE_ENV'],
+    cache: {
+      env: ['NODE_ENV'],
+    },
   },
 }
 ```
 
-To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untrackedenv). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not affect caching behavior.
+To pass a variable to the task **without** affecting cache behavior, use [`cache.untrackedEnv`](/config/run#cache-untrackedenv). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not affect caching behavior.
 
-See [Run Config](/config/run#env) for details on wildcard patterns and the full list of automatically passed-through variables.
+See [Run Config](/config/run#cache-env) for details on wildcard patterns and the full list of automatically passed-through variables.
 
 ## Cache Sharing
 
