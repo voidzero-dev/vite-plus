@@ -186,10 +186,6 @@ tasks: {
 }
 ```
 
-::: warning
-`env`, `untrackedEnv`, `input`, and `output` must be set under `cache`. Setting them at the top level of a task is an error.
-:::
-
 ### `cache.env`
 
 - **Type:** `string[]`
