@@ -6,7 +6,7 @@ use vp_error::Error;
 
 use crate::{
     pack_config::can_edit_object,
-    vite_config::{is_direct_recognized_config_object, pair_key_matches},
+    vite_config::{is_define_config_call, is_direct_recognized_config_object, pair_key_matches},
 };
 
 /// Task settings that Vite Task only accepts inside a task's `cache` object.
@@ -37,8 +37,10 @@ pub struct TaskCacheMigrationResult {
 /// Only static task objects in a direct config object are updated. Tasks with
 /// spreads, computed, escaped, or duplicate keys, comments the edit cannot
 /// place, or a `cache` value other than `true` or an object literal are
-/// reported in `manual_tasks` and left unchanged. Moved settings keep their
-/// text and indentation; the formatter nests them inside `cache`.
+/// reported in `manual_tasks` and left unchanged, as are tasks in a top-level
+/// object that is not the config itself, such as a variable the config refers
+/// to. Moved settings keep their text and indentation; the formatter nests
+/// them inside `cache`.
 pub fn migrate_task_cache_config(
     vite_config_path: &Path,
 ) -> Result<TaskCacheMigrationResult, Error> {
@@ -51,12 +53,14 @@ fn migrate_task_cache_config_content(content: &str) -> TaskCacheMigrationResult 
     let mut edits = Vec::new();
     let mut manual_tasks = Vec::new();
     for task in grep.root().dfs().filter(|node| node.kind() == "object") {
-        let Some(name) = task_name(&task) else { continue };
+        let Some((name, direct)) = task_name(&task) else { continue };
         let fields: Vec<_> = task.children().filter(is_cache_field).collect();
         if fields.is_empty() {
             continue;
         }
-        match move_fields_under_cache(content, &task, &fields) {
+        let task_edits =
+            if direct { move_fields_under_cache(content, &task, &fields) } else { None };
+        match task_edits {
             Some(task_edits) => edits.extend(task_edits),
             None => manual_tasks.push(name),
         }
@@ -77,27 +81,56 @@ fn migrate_task_cache_config_content(content: &str) -> TaskCacheMigrationResult 
     TaskCacheMigrationResult { content: updated, updated: true, manual_tasks }
 }
 
-/// Returns the task name when `object` is a task in `run.tasks` of a direct
-/// config object.
-fn task_name<D: Doc>(object: &Node<'_, D>) -> Option<String> {
+/// Returns the task name when `object` is a task in `run.tasks` of a top-level
+/// object, and whether that object is a direct config object. Objects nested
+/// in other objects, such as a plugin's `config()` result, are ignored.
+fn task_name<D: Doc>(object: &Node<'_, D>) -> Option<(String, bool)> {
     let task = value_pair(object)?;
     let tasks = task.parent().filter(|node| node.kind() == "object")?;
     let tasks_pair = value_pair(&tasks).filter(|pair| has_key(pair, "tasks"))?;
     let run = tasks_pair.parent().filter(|node| node.kind() == "object")?;
     let run_pair = value_pair(&run).filter(|pair| has_key(pair, "run"))?;
     let config = run_pair.parent().filter(|node| node.kind() == "object")?;
-    // `is_direct_recognized_config_object` looks through `satisfies` but not `as`.
-    let mut asserted = config.clone();
-    while let Some(parent) = asserted.parent().filter(|node| node.kind() == "as_expression") {
-        asserted = parent;
-    }
-    if !is_direct_recognized_config_object(&asserted)
-        || config.ancestors().any(|ancestor| ancestor.kind() == "object")
-    {
+    if config.ancestors().any(|ancestor| ancestor.kind() == "object") {
         return None;
     }
     let key = task.field("key")?;
-    Some(key.text().trim_matches(['\'', '"']).to_owned())
+    Some((key.text().trim_matches(['\'', '"']).to_owned(), is_direct_config(&config)))
+}
+
+/// Whether `object` is a direct config object, looking through parentheses and
+/// type assertions around it and around a `defineConfig` callback, as in
+/// `defineConfig((env) => ({ ... }) as UserConfig)` and
+/// `defineConfig(((env) => ({ ... })) as UserConfigFn)`.
+fn is_direct_config<D: Doc>(object: &Node<'_, D>) -> bool {
+    let outer = outermost_wrapper(object);
+    if is_direct_recognized_config_object(&outer) {
+        return true;
+    }
+    outer
+        .parent()
+        .filter(|arrow| {
+            arrow.kind() == "arrow_function"
+                && arrow.field("body").is_some_and(|body| body.range() == outer.range())
+        })
+        .and_then(|arrow| outermost_wrapper(&arrow).parent())
+        .filter(|arguments| arguments.kind() == "arguments")
+        .and_then(|arguments| arguments.parent())
+        .is_some_and(|call| is_define_config_call(&call))
+}
+
+/// The outermost parenthesized or type-asserted expression around `node`.
+fn outermost_wrapper<'a, D: Doc>(node: &Node<'a, D>) -> Node<'a, D> {
+    let mut outer = node.clone();
+    while let Some(parent) = outer.parent().filter(|parent| {
+        matches!(
+            parent.kind().as_ref(),
+            "parenthesized_expression" | "satisfies_expression" | "as_expression"
+        )
+    }) {
+        outer = parent;
+    }
+    outer
 }
 
 /// Returns the pair whose value is `node`, looking through parentheses and
@@ -595,9 +628,15 @@ mod tests {
             "export default defineConfig({ run: { tasks: ({ build: { command: 'x', env: ['A'] } }) } });",
             "export default defineConfig({ run: { tasks: { build: { command: 'x', env: ['A'] } } } } as UserConfig);",
             "export default { run: { tasks: { build: { command: 'x', env: ['A'] } } } } as UserConfig;",
+            "export default defineConfig((env) => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } }) as UserConfig);",
+            "export default defineConfig(() => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } } satisfies UserConfig));",
+            "export default defineConfig(() => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } }) satisfies UserConfig);",
+            "export default defineConfig(((env: Env) => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } })) as UserConfigFn);",
+            "export default ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } });",
         ] {
-            let actual = migrate(input).content;
-            assert!(actual.contains("cache: { env: ['A'] }"), "{actual}");
+            let result = migrate(input);
+            assert!(result.content.contains("cache: { env: ['A'] }"), "{}", result.content);
+            assert!(result.manual_tasks.is_empty(), "{input}");
         }
     }
 
@@ -608,13 +647,28 @@ mod tests {
             "export default defineConfig({ run: { cache: { tasks: true }, env: ['A'] } });",
             "export default defineConfig({ plugins: [{ config() { return { run: { tasks: { build: { env: ['A'] } } } }; } }] });",
             "export default defineConfig({ test: { run: { tasks: { build: { env: ['A'] } } } } });",
-            "const config = { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; export default config;",
+            "const config = { run: { tasks: { build: { command: 'x', cache: { env: ['A'] } } } } }; export default config;",
             "export default defineConfig({ run: { tasks: { build: 'tsc', check: ['vp lint', 'vp build'] } } });",
             "export default defineConfig({ run: { tasks: { build: { command: 'x', cache: { env: ['A'] } } } } });",
         ] {
             let result = migrate(input);
             assert_eq!(result.content, input);
             assert!(result.manual_tasks.is_empty(), "{input}");
+        }
+    }
+
+    #[test]
+    fn reports_tasks_outside_the_config_object() {
+        for input in [
+            "const config = { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; export default config;",
+            "const shared: UserConfig = { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; export default defineConfig(shared);",
+            "export default mergeConfig(base, { run: { tasks: { build: { command: 'x', env: ['A'] } } } });",
+            "export default withTests((() => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } })) as Fn);",
+            "export function withTasks() { return { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; }",
+        ] {
+            let result = migrate(input);
+            assert_eq!(result.content, input);
+            assert_eq!(result.manual_tasks, ["build"], "{input}");
         }
     }
 
