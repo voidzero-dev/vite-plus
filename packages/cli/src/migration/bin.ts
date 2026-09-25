@@ -1216,11 +1216,17 @@ async function main() {
       if (vitestV5Preflight) {
         prompts.log.warn(vitestV5Preflight);
       }
+      for (const warning of coreMigrationResult.taskCacheWarnings) {
+        prompts.log.warn(warning);
+      }
       if (skippedSetupCandidates) {
         log(FULL_MIGRATION_HINT);
       }
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
+    }
+    for (const warning of coreMigrationResult.taskCacheWarnings) {
+      addMigrationWarning(report, warning);
     }
 
     const setupOptions = getExistingVitePlusSetupOptions(options, fullSetup);

@@ -1,6 +1,6 @@
 # migration_task_cache_fields_manual
 
-Warn about tasks whose cache settings cannot be moved safely and move the rest.
+Warn about tasks whose cache settings cannot be moved safely, move the rest, and keep warning without migrating again.
 
 ## `vpt cp manual.config.txt vite.config.ts`
 
@@ -38,4 +38,13 @@ export default defineConfig({
     },
   },
 });
+```
+
+## `vp migrate --no-interactive`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+vite.config.ts: Move `env`, `untrackedEnv`, `input`, and `output` under `cache` manually in tasks `build`, `dev`; they were left unchanged. See https://viteplus.dev/config/run#cache
+This project is already using Vite+! Happy coding!
 ```

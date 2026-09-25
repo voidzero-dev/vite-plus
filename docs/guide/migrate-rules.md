@@ -80,9 +80,17 @@ build: {
 },
 ```
 
-Comments on their own line above a moved setting, and comments that follow it on the same line, move with it.
+Moved settings keep their text and indentation, and the formatting step described in [After the Migration](#after-the-migration) indents them inside `cache`. Comments on their own line above a moved setting, and `//` comments that follow it on the same line, move with it.
 
-The transform does not evaluate configuration code. It leaves a task unchanged and prints a manual-migration warning for spreads, computed or duplicate keys, method settings, a setting that already exists in `cache`, and a `cache` value other than `true` or an object literal. With `cache: false`, the moved settings would have no effect, so decide whether to remove them or enable caching.
+The transform does not evaluate configuration code. It leaves a task unchanged and prints a manual-migration warning when the task has:
+
+- spreads, or computed, escaped, or duplicate keys;
+- a moved setting written as a method, such as `input() { ... }`;
+- a comment between a moved setting and its comma, or after the last setting in `cache`;
+- a moved setting that already exists in `cache`;
+- a `cache` value other than `true` or an object literal.
+
+With `cache: false`, the moved settings would have no effect, so decide whether to remove them or enable caching. On a project that is otherwise up to date, `vp migrate` prints these warnings without running the rest of the migration.
 
 ## Dependency Rules
 

@@ -28,17 +28,17 @@ export default defineConfig({
       build: {
         command: 'vp build',
         cache: {
-          // Rebuild when the deploy target changes.
-          env: ['DEPLOY_TARGET'],
-          untrackedEnv: ['CI'],
-          input: [{ auto: true }, '!dist/**'],
-          output: ['dist/**'], // restored on cache hits
+        // Rebuild when the deploy target changes.
+        env: ['DEPLOY_TARGET'],
+        untrackedEnv: ['CI'],
+        input: [{ auto: true }, '!dist/**'],
+        output: ['dist/**'], // restored on cache hits
         },
       },
       typecheck: {
         command: 'tsc --noEmit',
         cache: {
-          env: ['TSC_MODE'],
+        env: ['TSC_MODE'],
         },
       },
       lint: {
@@ -72,17 +72,17 @@ export default defineConfig({
       build: {
         command: 'vp build',
         cache: {
-          // Rebuild when the deploy target changes.
-          env: ['DEPLOY_TARGET'],
-          untrackedEnv: ['CI'],
-          input: [{ auto: true }, '!dist/**'],
-          output: ['dist/**'], // restored on cache hits
+        // Rebuild when the deploy target changes.
+        env: ['DEPLOY_TARGET'],
+        untrackedEnv: ['CI'],
+        input: [{ auto: true }, '!dist/**'],
+        output: ['dist/**'], // restored on cache hits
         },
       },
       typecheck: {
         command: 'tsc --noEmit',
         cache: {
-          env: ['TSC_MODE'],
+        env: ['TSC_MODE'],
         },
       },
       lint: {

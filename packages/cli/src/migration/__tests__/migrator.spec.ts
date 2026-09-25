@@ -8775,6 +8775,7 @@ describe('existing Vite+ core migration finalization', () => {
       imports: true,
       tsdownConfig: false,
       taskCacheConfig: false,
+      taskCacheWarnings: [],
     });
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -8853,6 +8854,7 @@ export default defineConfig({
       imports: true,
       tsdownConfig: true,
       taskCacheConfig: false,
+      taskCacheWarnings: [],
     });
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
       "import tsdownConfig from './tsdown.config.js';",
@@ -8871,6 +8873,7 @@ export default defineConfig({
       imports: false,
       tsdownConfig: false,
       taskCacheConfig: false,
+      taskCacheWarnings: [],
     });
   });
 
@@ -8909,6 +8912,7 @@ export default defineConfig({ entry: 'src/index.ts' });
       imports: true,
       tsdownConfig: false,
       taskCacheConfig: false,
+      taskCacheWarnings: [],
     });
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(originalViteConfig);
     expect(report.tsdownImportCount).toBe(0);
@@ -8960,8 +8964,8 @@ export default defineConfig({
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(`      build: {
         command: 'vp build',
         cache: {
-          env: ['NODE_ENV'],
-          output: ['dist/**'],
+        env: ['NODE_ENV'],
+        output: ['dist/**'],
         },
       },`);
     expect(fs.readFileSync(path.join(appDir, 'vite.config.ts'), 'utf8')).toContain(
@@ -8972,6 +8976,7 @@ export default defineConfig({
 
     expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true, report)).toMatchObject({
       taskCacheConfig: false,
+      taskCacheWarnings: [],
     });
     expect(report.migratedTaskCacheConfigCount).toBe(2);
   });
@@ -8995,20 +9000,22 @@ export default defineConfig({
     fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), viteConfig);
     const report = createMigrationReport();
 
-    expect(
-      finalizeCoreMigrationForExistingVitePlus(
-        makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
-        true,
-        report,
-      ).taskCacheConfig,
-    ).toBe(false);
+    const result = finalizeCoreMigrationForExistingVitePlus(
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      true,
+      report,
+    );
+
+    expect(result.taskCacheConfig).toBe(false);
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(viteConfig);
     expect(report.migratedTaskCacheConfigCount).toBe(0);
-    expect(report.warnings).toHaveLength(1);
-    expect(report.warnings[0]).toContain(
+    // Review items stay out of the report so an up-to-date project can exit early.
+    expect(report.warnings).toEqual([]);
+    expect(result.taskCacheWarnings).toHaveLength(1);
+    expect(result.taskCacheWarnings[0]).toContain(
       'vite.config.ts: Move `env`, `untrackedEnv`, `input`, and `output` under `cache` manually in tasks `build`, `dev`; they were left unchanged.',
     );
-    expect(report.warnings[0]).toContain('/config/run#cache');
+    expect(result.taskCacheWarnings[0]).toContain('/config/run#cache');
   });
 });
 

@@ -86,6 +86,9 @@ export type CoreMigrationFinalizationResult = {
   imports: boolean;
   tsdownConfig: boolean;
   taskCacheConfig: boolean;
+  // Kept out of the report so that review items alone do not make an
+  // up-to-date project run the rest of the migration.
+  taskCacheWarnings: string[];
 };
 
 function getCoreMigrationProjectPaths(workspaceInfo: CoreMigrationWorkspace): string[] {
@@ -153,6 +156,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
     imports: false,
     tsdownConfig: false,
     taskCacheConfig: false,
+    taskCacheWarnings: [],
   };
 
   if (pending.scripts) {
@@ -183,7 +187,8 @@ export function finalizeCoreMigrationForExistingVitePlus(
 
   for (const projectPath of projectPaths) {
     result.taskCacheConfig =
-      migrateTaskCacheConfigInViteConfig(projectPath, silent, report) || result.taskCacheConfig;
+      migrateTaskCacheConfigInViteConfig(projectPath, silent, report, result.taskCacheWarnings) ||
+      result.taskCacheConfig;
   }
 
   return result;
