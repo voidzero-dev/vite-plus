@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - 'docs/**'
+      - 'skills/vite-plus/**'
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
       - 'packages/cli/install-legacy.sh'

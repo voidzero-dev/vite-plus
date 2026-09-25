@@ -160,7 +160,7 @@ export default extendConfig(
             },
           }),
           llmstxt({
-            ignoreFiles: ['team.md'],
+            ignoreFiles: ['team.md', 'public/agent-setup/vite-plus/SKILL.md'],
             description: 'The Unified Toolchain for the Web',
             details: '',
           }),

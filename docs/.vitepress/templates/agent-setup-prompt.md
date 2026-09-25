@@ -31,7 +31,7 @@ Open a new shell after installation if necessary. Follow `<docs-origin>/guide/up
 Find the current agent's identifier in the definitive [Supported Agents](https://github.com/vercel-labs/skills#supported-agents) table. Install the skill only for that agent; replace `<agent-id>` with its identifier and do not use `*`.
 
 ```bash
-vp dlx skills add https://github.com/voidzero-dev/vite-plus/tree/main/skills/vite-plus --global --yes --agent <agent-id>
+vp dlx skills add __VITE_PLUS_SKILL_SOURCE__ --global --yes --agent <agent-id>
 ```
 
 If the table says the agent is project-only or does not list it, leave the verified global `vp` installation in place and report that the global skill was not installed. Do not edit an unknown global configuration file manually.
@@ -51,9 +51,11 @@ vp dlx skills update vite-plus --global --yes
 vp dlx skills remove vite-plus --global --yes
 ```
 
-## Follow the matching project flow
+## Follow an explicitly requested project flow
 
-Determine whether the user wants a new project or wants to migrate or upgrade an existing project. Follow only the matching flow.
+Stop after global setup unless the user explicitly asked to create, migrate, or upgrade a project. Do not infer permission to migrate from running these instructions inside an existing repository. If the requested project action is unclear, ask before modifying project files or dependencies.
+
+When a project change was explicitly requested, follow only the matching flow below.
 
 ### New project
 
