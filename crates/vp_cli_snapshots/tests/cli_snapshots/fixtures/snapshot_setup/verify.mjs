@@ -29,6 +29,16 @@ fs.mkdirSync(bin, { recursive: true });
 for (const name of windows ? [binaryName, 'vp-shim.exe'] : [binaryName]) {
   fs.copyFileSync(path.join(prepared, 'current', 'bin', name), path.join(bin, name));
 }
+// Provision the case's own vite-plus package like the prepared home. Without
+// it, setup installs vite-plus@<binary version> from npm, which does not exist
+// until that version is released.
+const packageDir = path.join(reference, 'current', 'node_modules', 'vite-plus');
+fs.mkdirSync(path.dirname(packageDir), { recursive: true });
+fs.symlinkSync(
+  fs.realpathSync(path.join(prepared, 'current', 'node_modules', 'vite-plus')),
+  packageDir,
+  windows ? 'junction' : 'dir',
+);
 
 const env = { ...process.env };
 for (const name of Object.keys(env)) {
