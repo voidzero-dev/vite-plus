@@ -52,6 +52,38 @@ When `external` accompanies either `skipNodeModulesBundle` form, static matchers
 
 The transform does not evaluate configuration code. Objects with spreads, computed keys, or duplicate keys, and conflicting old and new options require manual review. Dynamic boolean selectors remain unchanged. Unrelated Vite and plugin options remain unchanged. Run `vp pack` after migration to check the result. Node.js requirements, TypeScript module resolution, and programmatic `build()` return values require separate review.
 
+## Task Cache Configuration
+
+`vp migrate` moves `env`, `untrackedEnv`, `input`, and `output` from the top level of each task into the task's [`cache`](/config/run#cache) object. It updates static `run.tasks` objects in `vite.config.*`. This also runs on existing Vite+ projects without `--full`, including workspace packages.
+
+| Previous task config | Updated task config                            |
+| -------------------- | ---------------------------------------------- |
+| No `cache`           | Adds `cache` with the moved settings           |
+| `cache: true`        | Replaces `true` with the moved settings        |
+| `cache: { ... }`     | Adds the moved settings to the existing object |
+
+```ts
+// Before
+build: {
+  command: 'vp build',
+  env: ['NODE_ENV'],
+  input: [{ auto: true }, '!dist/**'],
+},
+
+// After
+build: {
+  command: 'vp build',
+  cache: {
+    env: ['NODE_ENV'],
+    input: [{ auto: true }, '!dist/**'],
+  },
+},
+```
+
+Comments on their own line above a moved setting, and comments that follow it on the same line, move with it.
+
+The transform does not evaluate configuration code. It leaves a task unchanged and prints a manual-migration warning for spreads, computed or duplicate keys, method settings, a setting that already exists in `cache`, and a `cache` value other than `true` or an object literal. With `cache: false`, the moved settings would have no effect, so decide whether to remove them or enable caching.
+
 ## Dependency Rules
 
 What happens to each toolchain dependency, at a glance:

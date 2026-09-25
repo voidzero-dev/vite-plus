@@ -29,6 +29,7 @@ import {
   mergeViteConfigFiles,
   migratePnpmOverridesToWorkspaceYaml,
   migratePnpmSettingsToWorkspaceYaml,
+  migrateTaskCacheConfigInViteConfig,
   pnpmSupportsWorkspaceSettings,
   supportsCatalog,
   projectListsRequiredVitestPeer,
@@ -340,6 +341,7 @@ export function rewriteStandaloneProject(
   rewriteAllImports(projectPath, silent, report, true, oxlintOwnerDirs);
   dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages, originalOxlintDependencies);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
+  migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
 }
@@ -492,8 +494,11 @@ export function rewriteMonorepo(
     originalOxlintDependencies,
   );
   wrapLazyPluginsInViteConfig(workspaceInfo.rootDir, silent, report);
+  migrateTaskCacheConfigInViteConfig(workspaceInfo.rootDir, silent, report);
   for (const pkg of workspaceInfo.packages) {
-    wrapLazyPluginsInViteConfig(path.join(workspaceInfo.rootDir, pkg.path), silent, report);
+    const projectPath = path.join(workspaceInfo.rootDir, pkg.path);
+    wrapLazyPluginsInViteConfig(projectPath, silent, report);
+    migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }
   // set package manager
   setPackageManager(workspaceInfo.rootDir, workspaceInfo.downloadPackageManager);
@@ -617,5 +622,6 @@ export function rewriteMonorepoProject(
 
   if (!deferLazyPluginWrapping) {
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
+    migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }
 }

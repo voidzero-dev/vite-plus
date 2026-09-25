@@ -3770,6 +3770,12 @@ export interface MigrateArgs {
   full?: boolean;
 }
 
+/**
+ * Move `env`, `untrackedEnv`, `input`, and `output` from the top level of
+ * each static `run.tasks` entry into its `cache` object.
+ */
+export declare function migrateTaskCacheConfig(viteConfigPath: string): TaskCacheConfigResult;
+
 export declare function parseConfigArgs(argv: Array<string>): ParseConfigArgsOutcome;
 
 export type ParseConfigArgsOutcome =
@@ -4012,6 +4018,16 @@ export interface StagedArgs {
   revert?: boolean;
   stash?: boolean;
   verbose?: boolean;
+}
+
+/** Result of moving task cache settings under `cache` */
+export interface TaskCacheConfigResult {
+  /** The updated vite config content */
+  content: string;
+  /** Whether any changes were made */
+  updated: boolean;
+  /** Tasks that set cache settings outside `cache` but could not be updated */
+  manualTasks: Array<string>;
 }
 
 /**

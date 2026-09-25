@@ -291,6 +291,31 @@ pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResu
     })
 }
 
+/// Result of moving task cache settings under `cache`
+#[napi(object)]
+pub struct TaskCacheConfigResult {
+    /// The updated vite config content
+    pub content: String,
+    /// Whether any changes were made
+    pub updated: bool,
+    /// Tasks that set cache settings outside `cache` but could not be updated
+    pub manual_tasks: Vec<String>,
+}
+
+/// Move `env`, `untrackedEnv`, `input`, and `output` from the top level of
+/// each static `run.tasks` entry into its `cache` object.
+#[napi]
+pub fn migrate_task_cache_config(vite_config_path: String) -> Result<TaskCacheConfigResult> {
+    let result = vp_migration::migrate_task_cache_config(Path::new(&vite_config_path))
+        .map_err(anyhow::Error::from)?;
+
+    Ok(TaskCacheConfigResult {
+        content: result.content,
+        updated: result.updated,
+        manual_tasks: result.manual_tasks,
+    })
+}
+
 /// Rewrite imports in all TypeScript/JavaScript files under a directory
 ///
 /// This function finds all TypeScript and JavaScript files in the specified directory
