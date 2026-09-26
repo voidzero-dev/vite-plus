@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import module from 'node:module';
+import path from 'node:path';
 
 import { cac } from 'cac';
 import {
@@ -155,7 +156,8 @@ cli
 
       const configDeps = new Set<string>();
       if (viteConfig?.configFile) {
-        configDeps.add(viteConfig.configFile);
+        // Vite uses forward slashes, but watcher events use native path separators.
+        configDeps.add(path.normalize(viteConfig.configFile));
       }
 
       const configs: ResolvedConfig[] = [];
