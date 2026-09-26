@@ -33,6 +33,26 @@ pub(super) struct SetupState {
 }
 
 impl SetupState {
+    /// Serialize external setup before reading or changing preferences and shims.
+    pub(super) async fn lock(&self) -> Result<std::fs::File, Error> {
+        let parent = self.path.parent().expect("setup state has a parent");
+        tokio::fs::create_dir_all(parent).await?;
+        let path = parent.join("setup.lock");
+        tokio::task::spawn_blocking(move || {
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(path)?;
+            file.lock()?;
+            Ok::<_, std::io::Error>(file)
+        })
+        .await
+        .map_err(|error| Error::Other(error.to_string().into()))?
+        .map_err(Into::into)
+    }
+
     pub(super) fn new(binary: &Path, local_version: Option<&str>) -> Result<Self, Error> {
         let metadata = std::fs::metadata(binary)?;
         let mut hash = rustc_hash::FxHasher::default();
@@ -54,7 +74,7 @@ impl SetupState {
 
     pub(super) async fn completed_binary(
         &self,
-        bundled: bool,
+        retains_binary: bool,
     ) -> Result<Option<AbsolutePathBuf>, Error> {
         let data = match tokio::fs::read(&self.path).await {
             Ok(data) => data,
@@ -66,7 +86,7 @@ impl SetupState {
         if receipt.source != self.source || !receipt.binary.is_file() {
             return Ok(None);
         }
-        let complete = if bundled {
+        let complete = if retains_binary {
             receipt.binary == self.source.path
         } else {
             receipt.binary != self.source.path
@@ -79,16 +99,57 @@ impl SetupState {
     }
 
     pub(super) async fn save(self, binary: &AbsolutePath) -> Result<(), Error> {
-        tokio::fs::create_dir_all(self.path.parent().ok_or(Error::CliBinaryNotFound)?).await?;
+        let parent = self.path.parent().ok_or(Error::CliBinaryNotFound)?;
+        tokio::fs::create_dir_all(parent).await?;
         let receipt = Receipt { source: self.source, binary: binary.as_path().to_path_buf() };
-        tokio::fs::write(&self.path, serde_json::to_vec(&receipt)?).await?;
+        let temporary = tempfile::NamedTempFile::new_in(parent)?;
+        tokio::fs::write(temporary.path(), serde_json::to_vec(&receipt)?).await?;
+        temporary.persist(&self.path).map_err(|error| error.error)?;
         Ok(())
     }
+}
+
+pub(super) const PACKAGE_MARKER: &str = ".vp-deps-complete";
+
+pub(super) fn package_complete(package: &AbsolutePath) -> bool {
+    package.join(PACKAGE_MARKER).as_path().is_file() && package_matches_binary(package)
+}
+
+pub(super) fn package_matches_binary(package: &AbsolutePath) -> bool {
+    package.join("node_modules/vite-plus/dist/bin.js").as_path().is_file()
+        && std::fs::read(package.join("node_modules/vite-plus/package.json"))
+            .ok()
+            .and_then(|data| serde_json::from_slice::<serde_json::Value>(&data).ok())
+            .is_some_and(|manifest| {
+                manifest.get("version").and_then(serde_json::Value::as_str)
+                    == Some(env!("CARGO_PKG_VERSION"))
+            })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dependency_completion_requires_the_matching_package_and_entrypoint() {
+        EnvConfig::scoped(|env| {
+            let directory = env.dirs.cli_package(env!("CARGO_PKG_VERSION"), "test-platform");
+            let package = directory.join("node_modules/vite-plus");
+            std::fs::create_dir_all(package.join("dist")).unwrap();
+            let manifest = package.join("package.json");
+            std::fs::write(
+                &manifest,
+                serde_json::json!({"version": env!("CARGO_PKG_VERSION")}).to_string(),
+            )
+            .unwrap();
+            std::fs::write(package.join("dist/bin.js"), b"// CLI").unwrap();
+            assert!(!package_complete(&directory));
+            std::fs::write(directory.join(PACKAGE_MARKER), b"").unwrap();
+            assert!(package_complete(&directory));
+            std::fs::write(&manifest, br#"{"version":"0.0.0"}"#).unwrap();
+            assert!(!package_complete(&directory));
+        });
+    }
 
     #[tokio::test]
     async fn bundled_receipt_is_per_user_and_invalidated_when_source_changes() {

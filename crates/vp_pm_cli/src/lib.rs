@@ -25,11 +25,12 @@ pub use dispatch::{
 pub use error::Error;
 pub use package_manager::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerBuilder,
-    PackageManagerResolution, PackageManagerSource, PackageManagerType, download_package_manager,
-    ensure_package_manager_bin, fetch_package_manager_versions,
-    get_package_manager_type_and_version, package_manager_bin_path, package_manager_install_dir,
-    resolve_environment_package_manager, resolve_environment_package_manager_spec,
-    resolve_package_manager_from_package_json, resolve_package_manager_version,
+    PackageManagerResolution, PackageManagerSource, PackageManagerType, bootstrap_pnpm,
+    configure_npm_command, download_package_manager, ensure_package_manager_bin,
+    fetch_package_manager_versions, get_package_manager_type_and_version, package_manager_bin_path,
+    package_manager_install_dir, resolve_environment_package_manager,
+    resolve_environment_package_manager_spec, resolve_package_manager_from_package_json,
+    resolve_package_manager_version,
 };
 pub use request::HttpClient;
 pub use resolution::{

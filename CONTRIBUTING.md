@@ -204,6 +204,8 @@ A propagation timeout fails the release job and stops subsequent steps. This doe
 
 Once the packages become available, open the failed workflow run in GitHub Actions and select **Re-run failed jobs**. The workflow skips versions that npm has published and checks availability again before continuing. Keep the same version.
 
+Every stable version change, including manual bumps, also requires an update to `HomebrewFormula/vp.rb`. After publication, the `update-homebrew` job verifies the release archives and npm packages, then opens `release/homebrew-vX.Y.Z` with matching URLs and checksums. Complete its review and merge before marking the tap release complete. Keep the previous formula during release preparation; prereleases and preview builds do not advance it. See the [release-manager instructions](.claude/skills/release-manager/SKILL.md#homebrew-tap) for verification and recovery.
+
 ## Pull upstream dependencies
 
 > [!NOTE]

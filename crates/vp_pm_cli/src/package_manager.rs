@@ -1,6 +1,8 @@
 #![allow(clippy::disallowed_macros)]
 #![cfg_attr(test, allow(clippy::print_stdout))]
 
+mod bootstrap;
+
 use std::{
     collections::HashMap,
     env, fmt,
@@ -10,6 +12,7 @@ use std::{
     time::Duration,
 };
 
+pub use bootstrap::{bootstrap_pnpm, configure_npm_command};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use tokio::fs::remove_dir_all;

@@ -41,18 +41,35 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         return Ok(ExitStatus::default());
     }
 
-    if crate::homebrew::owns_current_exe() {
-        if options.check && !options.rollback {
+    if let Some(homebrew) = crate::homebrew::current() {
+        let check = options.check && !options.rollback;
+        let action = if check { "outdated" } else { "upgrade" };
+        let purpose = if check { "check for updates" } else { "update it" };
+        let mut message = format!(
+            "{} manages this installation. Run `brew {action} {}` to {purpose}.",
+            homebrew.source_label(),
+            homebrew.formula,
+        );
+        if homebrew.source == crate::homebrew::Source::Core && !options.silent {
+            message.push_str(&format!(
+                concat!(
+                    "\n\nTo switch to the official Vite+ tap while keeping your settings:\n\n",
+                    "  brew uninstall {}\n",
+                    "  brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus\n",
+                    "  brew install voidzero-dev/vite-plus/vp\n",
+                    "  \"$(brew --prefix)/bin/vp\" env setup --refresh\n",
+                    "  hash -r",
+                ),
+                homebrew.formula,
+            ));
+        }
+        if check {
             if !options.silent {
-                output::info(
-                    "Homebrew manages this installation. Run `brew outdated vite-plus` to check for updates.",
-                );
+                output::info(&message);
             }
             return Ok(ExitStatus::default());
         }
-        return Err(Error::Upgrade(
-            "Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.".into(),
-        ));
+        return Err(Error::Upgrade(message.into()));
     }
 
     let config = vp_shared::EnvConfig::get();

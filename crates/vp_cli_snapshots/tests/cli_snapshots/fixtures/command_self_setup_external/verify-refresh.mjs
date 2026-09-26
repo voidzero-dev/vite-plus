@@ -56,12 +56,72 @@ function createEnvironment(directory) {
 
 function run(binary, args, cwd, env, expectedStatus = 0) {
   const result = spawnSync(binary, args, { cwd, env, encoding: 'utf8', timeout: 30000 });
-  assert.equal(result.status, expectedStatus, result.error?.message ?? result.stdout + result.stderr);
+  assert.equal(
+    result.status,
+    expectedStatus,
+    result.error?.message ?? result.stdout + result.stderr,
+  );
   return result.stdout;
 }
 
 function readSettings(env) {
   return JSON.parse(fs.readFileSync(path.join(env.VP_HOME, 'config.json'), 'utf8'));
+}
+
+function verifyHomebrewSources(source) {
+  for (const [label, tap, name, sourceLabel] of [
+    ['core', 'homebrew/core', 'vite-plus', 'Homebrew Core'],
+    ['official', 'voidzero-dev/vite-plus', 'vp', 'Vite+ Homebrew tap'],
+    ['other', 'example/tools', 'vp', 'Homebrew'],
+    ['unknown', null, 'vite-plus', 'Homebrew'],
+  ]) {
+    const directory = path.resolve(`source-${label}`);
+    const prefix = path.join(directory, 'Cellar', name, 'test');
+    const binary = createBundle(source, prefix, 'bundled CLI');
+    const formula = tap && tap !== 'homebrew/core' ? `${tap}/${name}` : name;
+    fs.writeFileSync(
+      path.join(prefix, 'INSTALL_RECEIPT.json'),
+      JSON.stringify({
+        homebrew_version: '7.0.2',
+        source: { tap, path: `/tap/Formula/${name}.rb` },
+      }),
+    );
+    const env = createEnvironment(directory);
+    run(binary, ['--help'], directory, { ...env, VP_NODE_MANAGER: 'no', VP_PM_MANAGER: 'no' });
+    const invoke = (args, expectedStatus = 0) => {
+      const result = spawnSync(binary, args, { cwd: directory, env, encoding: 'utf8' });
+      const text = (result.stdout + result.stderr).replace(/\u001b\[[0-9;]*m/g, '').trim();
+      assert.equal(result.status, expectedStatus, text);
+      return text;
+    };
+    console.log(`${label} installation`);
+    const doctor = invoke(['env', 'doctor', 'node']);
+    assert.ok(doctor.includes(sourceLabel), doctor);
+    console.log(
+      doctor
+        .split('\n')
+        .filter((line) => /CLI source|CLI formula/.test(line))
+        .join('\n'),
+    );
+    for (const [args, status, action] of [
+      [['upgrade'], 1, 'upgrade'],
+      [['upgrade', '--check'], 0, 'outdated'],
+    ]) {
+      const text = invoke(args, status);
+      assert.ok(text.includes(`${sourceLabel} manages this installation`), text);
+      assert.ok(text.includes(`brew ${action} ${formula}`), text);
+      assert.equal(text.includes('To switch to the official Vite+ tap'), label === 'core', text);
+      console.log(text);
+    }
+    assert.equal(invoke(['upgrade', '--check', '--silent']), '');
+    assert.ok(!invoke(['upgrade', '--silent'], 1).includes('To switch'));
+    const removed = invoke(['implode', '--yes']);
+    const notice = `The ${sourceLabel} package remains installed. Run \`brew uninstall ${formula}\` to remove it.`;
+    assert.ok(removed.includes(notice), removed);
+    assert.ok(fs.existsSync(binary));
+    assert.ok(!fs.existsSync(env.VP_HOME));
+    console.log(notice);
+  }
 }
 
 function verifyDoctor(source) {
@@ -189,6 +249,125 @@ function verifyReplacement(source) {
   console.log('mixed preferences survive a new package path');
 }
 
+function verifyHomebrewCollision(source) {
+  for (const layout of ['direct', 'directory-alias', 'fallback-alias']) {
+    for (const refresh of [false, true]) {
+      const directory = path.resolve(`${layout}-${refresh}`);
+      const prefix = path.join(directory, 'brew/Cellar/vite-plus/old');
+      createBundle(source, prefix, 'bundled CLI');
+      fs.writeFileSync(path.join(prefix, 'INSTALL_RECEIPT.json'), '{"homebrew_version":"7.0.2"}');
+      const publicBin = path.join(directory, 'brew/bin');
+      const publicBinary = path.join(publicBin, 'vp');
+      const link = '../Cellar/vite-plus/old/bin/vp';
+      fs.mkdirSync(publicBin, { recursive: true });
+      fs.symlinkSync(link, publicBinary);
+      const env = { ...createEnvironment(directory), ...mixed };
+      const data = path.join(directory, 'data');
+      fs.mkdirSync(data);
+      const splitEnv = {
+        ...env,
+        VP_HOME: undefined,
+        VP_BIN_DIR: path.join(directory, 'user-bin'),
+        VP_DATA_DIR: data,
+        VP_CACHE_DIR: path.join(directory, 'cache'),
+      };
+      if (refresh) run(publicBinary, ['--help'], directory, splitEnv);
+      let bin = publicBin;
+      if (layout === 'directory-alias') {
+        bin = path.join(directory, 'bin-alias');
+        fs.symlinkSync(publicBin, bin);
+      } else if (layout === 'fallback-alias') {
+        bin = splitEnv.VP_BIN_DIR;
+        fs.rmSync(path.join(data, 'fallback-bin'), { recursive: true, force: true });
+        fs.symlinkSync(publicBin, path.join(data, 'fallback-bin'));
+      }
+      const result = spawnSync(publicBinary, refresh ? ['env', 'setup', '--refresh'] : ['--help'], {
+        cwd: directory,
+        env: { ...splitEnv, VP_BIN_DIR: bin },
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+      assert.equal(fs.readlinkSync(publicBinary), link, 'Homebrew entrypoint was replaced');
+      assert.equal(result.status, 1, result.error?.message ?? result.stdout + result.stderr);
+      assert.ok(result.stderr.includes('shim directories'), result.stderr);
+      run(publicBinary, ['--help'], directory, env);
+    }
+    console.log(`${layout}: first setup and refresh preserve Homebrew's entrypoint`);
+  }
+}
+
+function verifyHomebrewMigration(source) {
+  for (const refresh of [false, true]) {
+    const directory = path.resolve(`migration-${refresh}`);
+    const old = path.join(directory, 'brew/Cellar/vite-plus/old');
+    const next = path.join(directory, 'brew/Cellar/vp/new');
+    const previous = createBundle(source, old, 'old CLI');
+    const replacement = createBundle(source, next, 'new CLI');
+    for (const prefix of [old, next]) {
+      fs.writeFileSync(path.join(prefix, 'INSTALL_RECEIPT.json'), '{"homebrew_version":"7.0.2"}');
+    }
+    const publicBinary = path.join(directory, 'brew/bin/vp');
+    fs.mkdirSync(path.dirname(publicBinary), { recursive: true });
+    fs.symlinkSync(previous, publicBinary);
+    const env = { ...createEnvironment(directory), ...mixed };
+    run(publicBinary, ['--help'], directory, env);
+    fs.unlinkSync(publicBinary);
+    fs.symlinkSync(replacement, publicBinary);
+    if (refresh) run(publicBinary, ['--help'], directory, env);
+
+    const bin = path.join(env.VP_HOME, 'bin');
+    const configs = path.join(env.VP_HOME, 'bins');
+    fs.mkdirSync(configs);
+    const links = {
+      absolute: previous,
+      relative: path.relative(bin, previous),
+      foreign: path.join(directory, 'system/bin/node'),
+      dangling: path.join(directory, 'missing/tool'),
+      npm: previous,
+      untracked: previous,
+    };
+    for (const name of [...Object.keys(links), 'file', 'directory', 'absent']) {
+      if (name !== 'untracked') {
+        fs.writeFileSync(
+          path.join(configs, `${name}.json`),
+          JSON.stringify({
+            name,
+            package: 'fixture',
+            version: '1.0.0',
+            nodeVersion: process.versions.node,
+            source: name === 'npm' ? 'npm' : 'vp',
+          }),
+        );
+      }
+    }
+    for (const [name, target] of Object.entries(links))
+      fs.symlinkSync(target, path.join(bin, name));
+    fs.writeFileSync(path.join(bin, 'file'), 'foreign executable');
+    fs.mkdirSync(path.join(bin, 'directory'));
+    fs.rmSync(old, { recursive: true });
+    for (const name of ['absolute', 'relative']) assert.ok(!fs.existsSync(path.join(bin, name)));
+
+    run(publicBinary, refresh ? ['env', 'setup', '--refresh'] : ['--help'], directory, env);
+    for (const name of ['absolute', 'relative']) {
+      assert.equal(fs.readlinkSync(path.join(bin, name)), publicBinary);
+      assert.equal(fs.realpathSync(path.join(bin, name)), fs.realpathSync(replacement));
+      assert.ok(fs.existsSync(path.join(configs, `${name}.json`)));
+    }
+    for (const name of ['foreign', 'dangling', 'npm', 'untracked']) {
+      assert.equal(fs.readlinkSync(path.join(bin, name)), links[name]);
+    }
+    assert.equal(fs.readFileSync(path.join(bin, 'file'), 'utf8'), 'foreign executable');
+    assert.ok(fs.statSync(path.join(bin, 'directory')).isDirectory());
+    assert.ok(!fs.existsSync(path.join(bin, 'absent')));
+    console.log(
+      `${refresh ? 'Explicit refresh' : 'First launch'} repairs owned links after core keg removal`,
+    );
+  }
+  console.log(
+    'Foreign files, directories, package links, npm-owned links, and untracked links stay unchanged',
+  );
+}
+
 function main() {
   // These actions run between commands in the same Bash session.
   if (action === 'switch') {
@@ -201,7 +380,19 @@ function main() {
     return;
   }
 
-  const source = path.join(process.env.VP_HOME, 'bin/vp');
+  const source = process.env.TEST_VP_BINARY ?? path.join(process.env.VP_HOME, 'bin/vp');
+  if (action === 'homebrew-sources') {
+    verifyHomebrewSources(source);
+    return;
+  }
+  if (action === 'homebrew-collision') {
+    verifyHomebrewCollision(source);
+    return;
+  }
+  if (action === 'homebrew-migration') {
+    verifyHomebrewMigration(source);
+    return;
+  }
   if (action === 'preferences') {
     verifyPreferences(source);
     return;

@@ -25,6 +25,7 @@ When given a release PR (URL or number), do not start from step 1. First audit t
 - Does `main` have commits the release branch lacks? (`git log origin/release/vX.Y.Z..origin/main`, step 5)
 - What is CI status? (`gh pr checks <PR#>`, step 5)
 - Already merged? Check the Release workflow (`gh run list --workflow Release --repo voidzero-dev/vite-plus`) and whether the GitHub release body is still the generated stub, then continue at step 7 or 8.
+- For a published stable release, is its Homebrew formula update merged and does `HomebrewFormula/vp.rb` select that release? (steps 2 and 8)
 
 Report the detected state before making changes, so the previous release manager's work is not redone or overwritten.
 
@@ -35,7 +36,7 @@ Before post-release work, fetch `origin/main` and read its copy of this skill (`
 1. `Prepare Release` workflow bumps versions and opens the release PR (`release/vX.Y.Z` -> `main`).
 2. Release manager: sync `binding/index.cjs` and the release versions in the documentation and prompts, write the changelog PR description, offer the preview-build smoke test (recommend it when the release has more than 10 commits since the previous tag), get CI green.
 3. Merging the PR pushes a `packages/cli/package.json` change to `main`, which triggers `release.yml`: build, manual approval gate, npm publish, GitHub release, Docker image, Discord notification.
-4. Release manager: polish the GitHub release notes, verify installs, announce.
+4. Release manager: complete the Homebrew formula update for stable releases, polish the GitHub release notes, verify installs, announce.
 
 Canonical sources: `.github/workflows/prepare_release.yml`, `.github/workflows/release.yml`, `.github/workflows/publish-preview.yml`.
 
@@ -45,7 +46,7 @@ Canonical sources: `.github/workflows/prepare_release.yml`, `.github/workflows/r
 gh workflow run prepare_release.yml --repo voidzero-dev/vite-plus -f version=X.Y.Z
 ```
 
-The workflow bumps `packages/cli/package.json`, `packages/core/package.json`, `packages/cli/binding/Cargo.toml`, and `crates/vp_global_cli/Cargo.toml`, refreshes `Cargo.lock`, and opens a PR titled `release: vX.Y.Z` from branch `release/vX.Y.Z`. The PR body ends with `Merging this PR will trigger the release workflow.` and that line must survive every later edit.
+The workflow bumps `packages/cli/package.json`, `packages/core/package.json`, `packages/prompts/package.json`, `packages/cli/binding/Cargo.toml`, and `crates/vp_global_cli/Cargo.toml`, refreshes `Cargo.lock`, and opens a PR titled `release: vX.Y.Z` from branch `release/vX.Y.Z`. The PR body ends with `Merging this PR will trigger the release workflow.` and that line must survive every later edit.
 
 ## 2. Sync release versions (required every release)
 
@@ -96,6 +97,14 @@ Preserve historical versions such as the migration's source version and the rele
 Commit these updates on the release branch with the binding sync or in a separate release-version sync commit. Recheck both files and the binding after a target-version change or a merge from `main`. Before merging, confirm that the guide and all three prompts use the target release in both package-manager commands and their matching prose, then run `git diff --check`.
 
 Only these release-version sync commits go directly on the release branch. Everything else goes through `main` (see step 5).
+
+### Homebrew tap
+
+Every stable version change, including a manual bump or a changed release target, also requires an update to `HomebrewFormula/vp.rb`. Keep its current release URLs and checksums during preparation: the new archive checksums do not exist yet.
+
+After publication, `release.yml` runs `.github/scripts/update-homebrew-formula.mjs` and opens `release/homebrew-vX.Y.Z`. The script verifies all four release archives and matching npm packages before updating the formula. Review and merge that PR through the normal review process; an open update PR does not complete the tap release. Follow step 8 for verification and recovery.
+
+Prereleases and preview builds do not advance the stable formula. Test a published preview with `HOMEBREW_VP_PR_VERSION=<full-commit-sha>` as described in `docs/guide/homebrew.md`.
 
 ## 3. Write the release PR description
 
@@ -381,6 +390,7 @@ Auto-merge being enabled is not a completed merge. Confirm `mergedAt` and the me
 5. `publish-docker`: multi-arch toolchain image to `ghcr.io/voidzero-dev/vite-plus`, after npm publish (the image installs vp from npm).
 6. `deploy-docs`: deploys the production docs after a stable release is published.
 7. `discord-notify`: announces to Discord after Docker publishing and docs deployment succeed (docs are skipped for prereleases).
+8. `update-homebrew`: after a stable release is published, verifies its archives and npm packages, then opens the Homebrew formula update PR.
 
 **A successful publish command does not mean the packages are installable.** `pnpm publish` prints `✅ Published package <name>@X.Y.Z` as soon as the registry accepts the request, and the registry can then take tens of minutes to actually serve that version. This has shipped a broken release: `vite-plus@X.Y.Z` went live on `latest` with an exact dependency on `@voidzero-dev/vite-plus-core@X.Y.Z` that was invisible for about 35 minutes, so every `npm install vite-plus` failed with `ETARGET` and both `publish-docker` and `Deploy docs` failed on `ERR_PNPM_NO_MATCHING_VERSION`. The downstream job failures are the symptom, not the cause; do not re-run them until the registry has the package.
 
@@ -428,6 +438,10 @@ The full package document can update before npm's separately cached installation
    - Keep the review draft, body-only notes file, and live release aligned after requested edits. Read back the live title and body to verify the update. Normalize CRLF and LF before comparing the approved file with the live body, because GitHub can change line endings. Re-run the step 3 validation greps, plus `grep -c 'Merging this PR'` (must be 0).
 
 2. **Verify**:
+
+   For each stable release, confirm that `release/homebrew-vX.Y.Z` merged and `HomebrewFormula/vp.rb` has the target version in all four release URLs, with their matching checksums. If the job failed, fix the publication problem and rerun `update-homebrew`. For manual recovery, run `node .github/scripts/update-homebrew-formula.mjs X.Y.Z` from current `main` and submit the resulting formula and guide changes for review. Do not replace version strings while retaining old checksums.
+
+   In an isolated Homebrew installation, update the tap, install or upgrade `voidzero-dev/vite-plus/vp`, and run `brew test voidzero-dev/vite-plus/vp`. Unset `HOMEBREW_VP_PR_VERSION` for stable verification. Confirm `"$(brew --prefix)/bin/vp" --version` reports the target version, so a script-install shim cannot mask the result. Keep the tap release pending if the formula update or these checks are incomplete.
 
    ```bash
    npm view vite-plus version                       # X.Y.Z
@@ -517,6 +531,7 @@ After the release ships and announcements are approved or confirmed complete, re
 - [ ] Smoke test offered to the release manager at both levels (local sweep and fork-PR CI), with the commit count stated and a recommendation to run it when that count is above 10; if accepted, forks synced to upstream first, preview build published, and the full ecosystem-ci catalog verified via `test-pkg-pr-new-migrate` (following TESTING.md), with every failure triaged and regressions ruled out against the previous release
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved by someone other than the merger; npm + GitHub release + Docker image all published
+- [ ] For a stable release, `HomebrewFormula/vp.rb` updated to the target version and verified archive checksums; formula PR merged; Homebrew installation and `brew test` verified without the preview selector
 - [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
 - [ ] Installs verified (npm versions + latest tag, `vp upgrade`, `vp --version` output inside the ghcr Docker image)
 - [ ] Announcements handed over in chat (Discord and any requested X drafts), or confirmed complete by the release manager

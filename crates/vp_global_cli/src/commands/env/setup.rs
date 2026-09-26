@@ -121,7 +121,6 @@ pub(crate) async fn execute_for_binary(
     let (created, skipped) =
         refresh_shims(current_exe, &settings, refresh, refresh_entrypoints).await?;
 
-    #[cfg(windows)]
     if refresh {
         if let Err(e) = refresh_package_shims(current_exe, bin_dir).await {
             tracing::warn!("Failed to refresh package shims: {}", e);
@@ -409,6 +408,24 @@ async fn setup_vp_wrapper(
 pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
 ) -> Result<std::path::PathBuf, Error> {
+    if let Some(homebrew) = crate::homebrew::current()
+        && same_file::is_same_file(current_exe, homebrew.binary.as_path()).unwrap_or(false)
+        && let Some(public) = homebrew.public_binary()
+    {
+        let dirs = &vp_shared::EnvConfig::get().dirs;
+        if unix::passes_through_shims(public.as_path(), dirs.bin.as_path())
+            || unix::passes_through_shims(public.as_path(), dirs.fallback_bin().as_path())
+        {
+            return Err(Error::ConfigError(
+                format!(
+                    "Vite+ shim directories must not contain the Homebrew entrypoint {}. Choose separate VP_BIN_DIR and VP_DATA_DIR paths.",
+                    public.as_path().display()
+                )
+                .into(),
+            ));
+        }
+        return Ok(public.as_path().to_path_buf());
+    }
     let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
     let current_vp = crate::commands::global::install::package_shim_target();
     if let Some(binary) = &current_exe_canon
@@ -579,6 +596,29 @@ async fn refresh_package_shims(
         tracing::debug!("Refreshed package trampoline shim {:?}", shim_path);
     }
 
+    Ok(())
+}
+
+/// Move existing managed package shims to the active installation during migration.
+#[cfg(unix)]
+async fn refresh_package_shims(
+    current_exe: &std::path::Path,
+    bin_dir: &vt_path::AbsolutePath,
+) -> Result<(), Error> {
+    let target = resolve_unix_vp_shim_target(current_exe).await?;
+    for name in BinConfig::find_all_vp_source().await? {
+        if crate::commands::global::install::is_protected_shim(&name, true) {
+            continue;
+        }
+        let shim = bin_dir.join(&name);
+        // The saved Vp source and a link to vp identify an owned package shim even
+        // after its old installation is removed. Keep foreign files and direct package links.
+        let Ok(previous) = tokio::fs::read_link(&shim).await else { continue };
+        if previous.file_name().is_some_and(|name| name == "vp") && previous != target {
+            tokio::fs::remove_file(&shim).await?;
+            tokio::fs::symlink(&target, &shim).await?;
+        }
+    }
     Ok(())
 }
 
