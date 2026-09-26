@@ -11,7 +11,7 @@ steps = [
 name = "npm_global_update_notifier"
 vp = "global"
 comment = "Global installs disable npm update notifications in the child process."
-steps = [["vp", "install", "-g", "./global-package"]]
+steps = [["vp", "install", "-g", "./global-package", "--run-scripts"]]
 
 [[case]]
 name = "npm12_update_notifier"

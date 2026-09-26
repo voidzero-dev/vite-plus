@@ -654,6 +654,7 @@ async fn run_package_manager_command(
         }
         Some(ManagedGlobalCommand::Update {
             packages,
+            ignore_scripts,
             latest,
             concurrency,
             reinstall_node_mismatch,
@@ -667,6 +668,7 @@ async fn run_package_manager_command(
             }
             return managed_update(
                 packages,
+                ignore_scripts,
                 latest,
                 concurrency,
                 reinstall_node_mismatch,
@@ -813,6 +815,7 @@ struct NodeMismatchPackage {
 
 async fn managed_update(
     packages: &[String],
+    ignore_scripts: bool,
     latest: bool,
     concurrency: Option<usize>,
     reinstall_node_mismatch: bool,
@@ -966,7 +969,7 @@ async fn managed_update(
         global::install::InstallOptions {
             node_version: Some(&current_node_version),
             force: false,
-            ignore_scripts: false,
+            ignore_scripts,
             concurrency,
             update: true,
         },

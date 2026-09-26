@@ -64,6 +64,8 @@ Options:
           Node.js version to use for global installation (only with -g)
       --concurrency <CONCURRENCY>
           Number of global package installs to run in parallel (only with -g)
+      --run-scripts
+          Run all lifecycle scripts (only with -g)
   -h, --help
           Print help
 ```

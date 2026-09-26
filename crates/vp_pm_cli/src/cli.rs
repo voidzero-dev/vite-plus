@@ -178,6 +178,7 @@ pub enum ManagedGlobalCommand<'a> {
     /// Update packages in the managed global store.
     Update {
         packages: &'a [String],
+        ignore_scripts: bool,
         latest: bool,
         concurrency: Option<usize>,
         reinstall_node_mismatch: bool,
@@ -239,14 +240,14 @@ impl PackageManagerCommand {
                 packages: &args.packages,
                 node: args.node.as_deref(),
                 force: args.force,
-                ignore_scripts: args.ignore_scripts,
+                ignore_scripts: !args.run_scripts,
                 concurrency: args.concurrency,
             }),
             Self::Add(args) if args.global => Some(ManagedGlobalCommand::Install {
                 packages: &args.packages,
                 node: args.node.as_deref(),
                 force: false,
-                ignore_scripts: args.ignore_scripts,
+                ignore_scripts: !args.run_scripts,
                 concurrency: args.concurrency,
             }),
             Self::Remove(args) if args.global => Some(ManagedGlobalCommand::Remove {
@@ -255,6 +256,7 @@ impl PackageManagerCommand {
             }),
             Self::Update(args) if args.global => Some(ManagedGlobalCommand::Update {
                 packages: &args.packages,
+                ignore_scripts: !args.run_scripts,
                 latest: args.latest,
                 concurrency: args.concurrency,
                 reinstall_node_mismatch: args.reinstall_node_mismatch,
@@ -595,6 +597,8 @@ mod tests {
                 vec![command, "-g", "react"],
                 vec![command, "-g", "--ignore-scripts", "react"],
                 vec![command, "-g", "react", "--ignore-scripts"],
+                vec![command, "-g", "react", "--run-scripts"],
+                vec![command, "--run-scripts", "-g", "react"],
             ] {
                 let parsed = parse(&input).unwrap();
                 let Some(ManagedGlobalCommand::Install { ignore_scripts, .. }) =
@@ -602,7 +606,7 @@ mod tests {
                 else {
                     panic!("expected managed install command: {input:?}");
                 };
-                assert_eq!(ignore_scripts, input.contains(&"--ignore-scripts"), "{input:?}");
+                assert_eq!(ignore_scripts, !input.contains(&"--run-scripts"), "{input:?}");
             }
         }
     }
@@ -630,6 +634,13 @@ mod tests {
     fn validates_managed_global_options() {
         assert!(parse(&["install", "-g"]).is_err());
         assert!(parse(&["add", "--node", "22", "react"]).is_err());
+        for command in ["install", "add", "update"] {
+            assert!(parse(&[command, "--run-scripts", "react"]).is_err());
+            assert!(parse(&[command, "-g", "--ignore-scripts=false", "react"]).is_err());
+        }
+        for command in ["install", "add"] {
+            assert!(parse(&[command, "-g", "--run-scripts", "--ignore-scripts", "react"]).is_err());
+        }
 
         let install =
             parse(&["install", "-g", "--node", "22", "--concurrency", "2", "tsx"]).unwrap();

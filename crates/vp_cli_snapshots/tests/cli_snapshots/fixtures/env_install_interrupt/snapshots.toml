@@ -2,7 +2,7 @@
 name = "env_install_interrupt"
 vp = "global"
 steps = [
-  { argv = ["vp", "install", "-g", "./long-time-install-package"], continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "./long-time-install-package", "--run-scripts"], continue-on-failure = true },
   { argv = ["long-time-install-package"], continue-on-failure = true },
   # snapshot = false: the killed install's partial screen is timing-dependent
   # (which spinner frame was live when the process tree was terminated). ConPTY
@@ -11,7 +11,7 @@ steps = [
   { argv = ["node", "test-reinstall-interrupt.js"], comment = "Reinstall but interrupt", snapshot = false, continue-on-failure = true },
   { argv = ["long-time-install-package"], comment = "Original package should be still runnable", continue-on-failure = true },
   { argv = ["node", "check-stale-packages.js", "--expect-stale"], comment = "Interrupted reinstall should leave stale package", continue-on-failure = true },
-  { argv = ["vp", "install", "-g", "./long-time-install-package"], comment = "Successful reinstall should clean stale packages", continue-on-failure = true },
+  { argv = ["vp", "install", "-g", "./long-time-install-package", "--run-scripts"], comment = "Successful reinstall should clean stale packages", continue-on-failure = true },
   { argv = ["node", "check-stale-packages.js"], continue-on-failure = true },
 ]
 after = [

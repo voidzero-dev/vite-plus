@@ -1,6 +1,6 @@
 # env_install_interrupt
 
-## `vp install -g ./long-time-install-package`
+## `vp install -g ./long-time-install-package --run-scripts`
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -37,7 +37,7 @@ Interrupted reinstall should leave stale package
 interrupted stale package exists
 ```
 
-## `vp install -g ./long-time-install-package`
+## `vp install -g ./long-time-install-package --run-scripts`
 
 Successful reinstall should clean stale packages
 

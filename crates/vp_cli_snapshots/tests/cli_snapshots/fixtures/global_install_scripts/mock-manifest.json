@@ -1,0 +1,60 @@
+{
+  "my-cli": {
+    "name": "my-cli",
+    "dist-tags": {
+      "latest": "2.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "my-cli",
+        "version": "1.0.0",
+        "bin": {
+          "my-cli": "check.cjs"
+        },
+        "scripts": {
+          "postinstall": "node -e \"require('node:fs').writeFileSync('postinstall-ran', process.version)\""
+        },
+        "dependencies": {
+          "native-addon": "1.0.0"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/my-cli/-/my-cli-1.0.0.tgz"
+        }
+      },
+      "2.0.0": {
+        "name": "my-cli",
+        "version": "2.0.0",
+        "bin": {
+          "my-cli": "check.cjs"
+        },
+        "scripts": {
+          "postinstall": "node -e \"require('node:fs').writeFileSync('postinstall-ran', process.version)\""
+        },
+        "dependencies": {
+          "native-addon": "1.0.0"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/my-cli/-/my-cli-2.0.0.tgz"
+        }
+      }
+    }
+  },
+  "native-addon": {
+    "name": "native-addon",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "native-addon",
+        "version": "1.0.0",
+        "scripts": {
+          "postinstall": "node -e \"require('node:fs').writeFileSync('postinstall-ran', process.version)\""
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/native-addon/-/native-addon-1.0.0.tgz"
+        }
+      }
+    }
+  }
+}

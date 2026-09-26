@@ -105,6 +105,10 @@ pub struct AddArgs {
     #[arg(long, requires = "global", value_parser = parse_positive_usize)]
     pub(crate) concurrency: Option<usize>,
 
+    /// Run all lifecycle scripts (only with -g)
+    #[arg(long, requires = "global", conflicts_with = "ignore_scripts")]
+    pub(crate) run_scripts: bool,
+
     /// Packages to add
     #[arg(required = true)]
     pub(crate) packages: Vec<String>,

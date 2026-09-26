@@ -33,7 +33,7 @@ steps = [
 [[case]]
 name = "global_install_ignore_scripts"
 vp = "global"
-comment = "Managed global install and add skip dependency lifecycle scripts when requested. Without the flag, scripts still run. The installed binary works in either case."
+comment = "Managed global install and add skip dependency lifecycle scripts, including by default. The installed binary works in either case."
 env = { npm_config_ignore_scripts = "false", npm_config_audit = "false", npm_config_fund = "false" }
 steps = [
   { argv = ["npm", "pack", "./scripted-dep", "--ignore-scripts"], snapshot = false },
@@ -43,8 +43,8 @@ steps = [
   { argv = ["vp", "add", "-g", "--ignore-scripts", "./scripted-dep-1.0.0.tgz"], snapshot = false },
   ["scripted-dep", "skipped"],
   { argv = ["vp", "remove", "-g", "scripted-dep"], snapshot = false },
-  { argv = ["vp", "install", "-g", "./scripted-dep-1.0.0.tgz"], snapshot = false },
-  ["scripted-dep", "ran"],
+  ["vp", "install", "-g", "./scripted-dep-1.0.0.tgz"],
+  ["scripted-dep", "skipped"],
 ]
 after = [
   { argv = ["vp", "remove", "-g", "scripted-dep"], continue-on-failure = true },

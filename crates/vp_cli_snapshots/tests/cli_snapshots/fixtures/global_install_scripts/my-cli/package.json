@@ -1,0 +1,13 @@
+{
+  "name": "my-cli",
+  "version": "1.0.0",
+  "bin": {
+    "my-cli": "check.cjs"
+  },
+  "scripts": {
+    "postinstall": "node -e \"require('node:fs').writeFileSync('postinstall-ran', process.version)\""
+  },
+  "dependencies": {
+    "native-addon": "1.0.0"
+  }
+}

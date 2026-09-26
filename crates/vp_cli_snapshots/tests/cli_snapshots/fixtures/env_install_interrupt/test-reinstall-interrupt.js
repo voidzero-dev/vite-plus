@@ -25,7 +25,7 @@ const vpBinary = path.join(
   'bin',
   process.platform === 'win32' ? 'vp.exe' : 'vp',
 );
-const child = spawn(vpBinary, ['install', '-g', './long-time-install-package'], {
+const child = spawn(vpBinary, ['install', '-g', './long-time-install-package', '--run-scripts'], {
   env: { ...process.env, VP_TEST_INTERRUPT_INSTALL: '1' },
   stdio: 'inherit',
 });
