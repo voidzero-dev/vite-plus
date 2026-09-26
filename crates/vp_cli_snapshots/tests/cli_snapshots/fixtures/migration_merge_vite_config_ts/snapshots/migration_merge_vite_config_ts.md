@@ -129,13 +129,6 @@ check package.json
     "vitest": "catalog:",
     "playwright": "*",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

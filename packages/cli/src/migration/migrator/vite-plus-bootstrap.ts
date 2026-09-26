@@ -44,7 +44,6 @@ import {
   rewritePnpmWorkspaceYaml,
   rewriteYarnrcYml,
   setDirectViteEdge,
-  setPackageManager,
   takePnpmWorkspaceSettings,
   vitestEcosystemCatalogReferencesPending,
   workspaceUsesVitestDirectly,
@@ -183,10 +182,6 @@ export function overridesSatisfyVitePlus(
       catalogDependencyResolver,
     ),
   );
-}
-
-function hasPackageManagerPin(pkg: BootstrapPackageJson): boolean {
-  return Boolean(pkg.packageManager || pkg.devEngines?.packageManager);
 }
 
 function pinnedPackageManagerVersion(pkg: BootstrapPackageJson): string | undefined {
@@ -654,7 +649,7 @@ export function detectVitePlusBootstrapPending(
   // vite-plus counts as installed when it's a direct dependency/devDependency,
   // so a project that declares it in `dependencies` isn't reported as pending a
   // (duplicate) devDependencies entry.
-  if (!hasDirectVitePlusInstallEntry(pkg) || !hasPackageManagerPin(pkg)) {
+  if (!hasDirectVitePlusInstallEntry(pkg)) {
     return true;
   }
 
@@ -662,8 +657,14 @@ export function detectVitePlusBootstrapPending(
     return true;
   }
 
-  const resolvedPackageManagerVersion =
-    packageManagerVersion ?? pinnedPackageManagerVersion(pkg) ?? '';
+  const detectedPackageManagerVersion = packageManagerVersion ?? pinnedPackageManagerVersion(pkg);
+  // A lockfile-only project deliberately has no exact package-manager pin.
+  // Detection reports that source as `latest`, and migration resolves the
+  // current release before writing package-manager-specific configuration.
+  // Model those current capabilities here as well so a completed migration
+  // converges without introducing a new exact requirement solely for the
+  // bootstrap fast path.
+  const resolvedPackageManagerVersion = detectedPackageManagerVersion || 'latest';
   const usePnpmWorkspaceYaml =
     packageManager === PackageManager.pnpm &&
     pnpmSupportsWorkspaceSettings(resolvedPackageManagerVersion);
@@ -1271,11 +1272,7 @@ export function ensureVitePlusBootstrap(
     result.packageJson = result.packageJson || before !== after;
   }
 
-  const beforePackageManager = fs.readFileSync(packageJsonPath, 'utf-8');
-  setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
-  const afterPackageManager = fs.readFileSync(packageJsonPath, 'utf-8');
-  result.packageManagerField = beforePackageManager !== afterPackageManager;
-  result.changed = result.packageJson || result.packageManagerConfig || result.packageManagerField;
+  result.changed = result.packageJson || result.packageManagerConfig;
   if (result.changed && report) {
     report.packageManagerBootstrapConfigured = true;
   }

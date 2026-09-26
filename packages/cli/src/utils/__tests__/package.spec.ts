@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { checkNpmPackageExists } from '../package.js';
+import { checkNpmPackageExists, hasPackageManagerDeclaration } from '../package.js';
 
 // Pin the registry: getNpmRegistry reads the developer's real `.npmrc`, so
 // the URL assertions below would fail for anyone using a mirror registry.
@@ -63,5 +63,26 @@ describe('checkNpmPackageExists', () => {
       'https://registry.npmjs.org/@tanstack/create-start',
       expect.objectContaining({ method: 'HEAD' }),
     );
+  });
+});
+
+describe('hasPackageManagerDeclaration', () => {
+  it('detects both supported package manager declarations', () => {
+    expect(hasPackageManagerDeclaration({ packageManager: 'pnpm@10.17.1' })).toBe(true);
+    expect(
+      hasPackageManagerDeclaration({
+        devEngines: { packageManager: { name: 'pnpm', version: '10.17.1' } },
+      }),
+    ).toBe(true);
+  });
+
+  it('reports a lockfile-only manifest as declaration-less', () => {
+    expect(hasPackageManagerDeclaration({})).toBe(false);
+    expect(hasPackageManagerDeclaration({ devEngines: { runtime: { name: 'node' } } })).toBe(false);
+  });
+
+  it('treats an existing field as a declaration even when its value is malformed', () => {
+    expect(hasPackageManagerDeclaration({ packageManager: null })).toBe(true);
+    expect(hasPackageManagerDeclaration({ devEngines: { packageManager: null } })).toBe(true);
   });
 });

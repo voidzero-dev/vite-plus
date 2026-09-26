@@ -938,6 +938,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       workspaceInfo.packages,
     );
     rewriteMonorepo(workspaceInfo, skipStagedMigration, compactOutput);
+    setPackageManager(fullPath, workspaceInfo.downloadPackageManager);
     if (bundled?.monorepo) {
       // Wire `create.defaultTemplate: '<scope>'` into the new workspace's
       // vite.config.ts so a bare `vp create` from inside it opens the
@@ -1288,6 +1289,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       workspaceInfo.packageManager,
     );
     rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    setPackageManager(fullPath, workspaceInfo.downloadPackageManager);
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);

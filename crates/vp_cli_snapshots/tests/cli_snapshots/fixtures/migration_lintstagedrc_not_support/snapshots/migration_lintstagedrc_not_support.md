@@ -60,13 +60,6 @@ check Husky prepare and dependencies are preserved
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
