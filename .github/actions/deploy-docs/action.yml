@@ -76,6 +76,7 @@ runs:
       working-directory: docs
       env:
         DOCS_SITE_ORIGIN: ${{ inputs.site-origin }}
+        DOCS_GIT_SHA: ${{ inputs.cache-sha }}
 
     - name: Save docs Vite Task cache
       if: success() && steps.vite-task-cache.outputs.cache-hit != 'true'

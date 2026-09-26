@@ -296,25 +296,49 @@ await test('requires an explicit origin when Wrangler cannot create a branch ali
   }
 });
 
-await test('uses each deploy origin for shell and PowerShell installer links', async (t) => {
+await test('uses each deploy origin for installers and copies the matching agent skill', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'docs-preview-installers-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const snapshots = [];
+  const revisions = ['a', 'b', 'c'].map((character) => character.repeat(40));
   const cases = [
-    { env: { DOCS_SITE_ORIGIN: previewUrl(2684) }, origin: previewUrl(2684) },
-    { env: { DOCS_SITE_ORIGIN: previewUrl(2685) }, origin: previewUrl(2685) },
     {
-      env: { WORKERS_CI: '1', WORKERS_CI_BRANCH: 'rfc/vitest-v5-upgrade' },
-      origin: 'https://rfc-vitest-v5-upgrade-viteplus-dev.voidzero-docs.workers.dev',
+      env: { DOCS_SITE_ORIGIN: previewUrl(2684), DOCS_GIT_SHA: revisions[0] },
+      origin: previewUrl(2684),
+      skillSource: `https://github.com/voidzero-dev/vite-plus/tree/${revisions[0]}/skills/vite-plus`,
     },
-    { env: {}, origin: 'https://viteplus.dev' },
+    {
+      env: {
+        DOCS_SITE_ORIGIN: previewUrl(2685),
+        DOCS_GIT_SHA: revisions[1],
+        DOCS_SKILL_REPOSITORY: 'contributor/vite-plus',
+      },
+      origin: previewUrl(2685),
+      skillSource: `https://github.com/contributor/vite-plus/tree/${revisions[1]}/skills/vite-plus`,
+    },
+    {
+      env: {
+        WORKERS_CI: '1',
+        WORKERS_CI_BRANCH: 'rfc/vitest-v5-upgrade',
+        WORKERS_CI_COMMIT_SHA: revisions[2],
+      },
+      origin: 'https://rfc-vitest-v5-upgrade-viteplus-dev.voidzero-docs.workers.dev',
+      skillSource: `https://github.com/voidzero-dev/vite-plus/tree/${revisions[2]}/skills/vite-plus`,
+    },
+    {
+      env: {},
+      origin: 'https://viteplus.dev',
+      skillSource: 'https://github.com/voidzero-dev/vite-plus/tree/main/skills/vite-plus',
+    },
   ];
-  for (const [index, { env, origin }] of cases.entries()) {
+  for (const [index, { env, origin, skillSource }] of cases.entries()) {
     const root = join(directory, String(index));
     const scripts = join(root, 'docs', '.vitepress', 'scripts');
+    const templates = join(root, 'docs', '.vitepress', 'templates');
     const output = join(root, 'docs', 'public');
     const installers = join(root, 'packages', 'cli');
-    for (const path of [scripts, output, installers]) {
+    const skills = join(root, 'skills', 'vite-plus');
+    for (const path of [scripts, templates, output, installers, skills]) {
       await mkdir(path, { recursive: true });
     }
     const script = join(scripts, 'copy-installers.mjs');
@@ -326,12 +350,18 @@ await test('uses each deploy origin for shell and PowerShell installer links', a
       new URL('../../../docs/.vitepress/site-origin.ts', import.meta.url),
       join(scripts, '..', 'site-origin.ts'),
     );
+    await copyFile(
+      new URL('../../../docs/.vitepress/templates/agent-setup-prompt.md', import.meta.url),
+      join(templates, 'agent-setup-prompt.md'),
+    );
     for (const name of ['install.sh', 'install.ps1', 'install-legacy.sh', 'install-legacy.ps1']) {
       await copyFile(
         new URL(`../../../packages/cli/${name}`, import.meta.url),
         join(installers, name),
       );
     }
+    const skill = `---\nname: vite-plus\ndescription: fixture ${index}\n---\n`;
+    await writeFile(join(skills, 'SKILL.md'), skill);
     execFileSync(process.execPath, [script], {
       env: {
         ...process.env,
@@ -343,9 +373,16 @@ await test('uses each deploy origin for shell and PowerShell installer links', a
     });
     const shell = await readFile(join(output, 'install.sh'), 'utf8');
     const powershell = await readFile(join(output, 'install.ps1'), 'utf8');
+    const prompt = await readFile(join(output, 'agent-setup', 'prompt.md'), 'utf8');
+    assert.equal(
+      await readFile(join(output, 'agent-setup', 'vite-plus', 'SKILL.md'), 'utf8'),
+      skill,
+    );
     assert.ok(shell.includes(`${origin}/install-legacy.sh`));
     assert.ok(powershell.includes(`${origin}/install-legacy.ps1`));
-    snapshots.push({ origin, shell, powershell });
+    assert.ok(prompt.includes(`vp dlx skills add ${skillSource} --global --yes`));
+    assert.ok(!prompt.includes('__VITE_PLUS_SKILL_SOURCE__'));
+    snapshots.push({ origin, shell, powershell, prompt });
   }
   assert.equal(new Set(snapshots.map((snapshot) => snapshot.origin)).size, cases.length);
   for (const snapshot of snapshots) {

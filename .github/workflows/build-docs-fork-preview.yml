@@ -13,6 +13,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - 'docs/**'
+      - 'skills/vite-plus/**'
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
       - 'packages/cli/install-legacy.sh'
@@ -99,6 +100,8 @@ jobs:
           # Use the PR's stable alias for absolute links and piped installers.
           # Keep this origin aligned with previewUrl in docs-fork-preview.mjs.
           DOCS_SITE_ORIGIN: https://pr-${{ github.event.pull_request.number }}-viteplus-dev.voidzero-docs.workers.dev
+          DOCS_GIT_SHA: ${{ github.event.pull_request.head.sha }}
+          DOCS_SKILL_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
 
       # This job has no deployment secrets or write token. Its artifact is
       # untrusted static content, never executable input to the deploy job.
