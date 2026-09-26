@@ -16,7 +16,7 @@ test('Preview shares runtime and browser context across public entry points', as
   expect(page).toBe(providerAliasPage);
   document.body.innerHTML = '<button type="button">Increment</button><output>0</output>';
   document.querySelector('button').addEventListener('click', () => { document.querySelector('output').textContent = '1'; });
-  // Upstream #9891 regressed Preview real timers in 4.1.1, also affecting 5.0.1.
+  // Upstream #9891 regressed Preview real timers in 4.1.1, also affecting 5.0.2.
   // The separate upstream_real_timers case records this pre-existing failure.
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   try {
