@@ -8,9 +8,9 @@ should install packages first
 VITE+ - The Unified Toolchain for the Web
 ```
 
-## `vp pm audit`
+## `vp pm audit --production`
 
-should audit dependencies
+should audit production dependencies
 
 ```
 bun audit <version> (<hash>)

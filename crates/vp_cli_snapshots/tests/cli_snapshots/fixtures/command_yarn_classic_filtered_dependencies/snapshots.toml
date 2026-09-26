@@ -4,8 +4,8 @@ vp = "global"
 steps = [
   { argv = ["vp", "add", "react", "--filter", "@example/app"], comment = "Classic filtered add reports an unsupported option instead of invoking foreach", continue-on-failure = true },
   { argv = ["vp", "install", "react", "--filter", "@example/app"], comment = "install with packages uses the same add guard", continue-on-failure = true },
-  { argv = ["vp", "remove", "lodash", "--filter", "@example/app"], comment = "Classic filtered remove fails before changing dependencies", continue-on-failure = true },
-  { argv = ["vp", "remove", "lodash", "--filter", "@example/*", "--filter", "other", "--recursive"], comment = "recursive remove must not silently discard Classic filters", continue-on-failure = true },
+  { argv = ["vp", "remove", "lodash", "--filter", "@example/app", "--filter", "other"], comment = "Classic remove rejects multiple filters before changing dependencies", continue-on-failure = true },
+  { argv = ["vp", "remove", "lodash", "--filter", "@example/*", "--recursive"], comment = "recursive remove is rejected before the Classic filter translation", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json", "packages/web/package.json"], comment = "root and workspace manifests remain unchanged", continue-on-failure = true },
   ["vpt", "stat-file", "yarn.lock", "--assert", "missing"],
   ["vpt", "stat-file", "node_modules", "--assert", "missing"],

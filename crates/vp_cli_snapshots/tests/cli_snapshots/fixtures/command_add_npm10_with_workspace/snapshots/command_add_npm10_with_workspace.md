@@ -35,12 +35,12 @@ added 3 packages in <duration>
 
 ## `vp add @vite-plus-test/utils --workspace -- --no-audit`
 
-should add @vite-plus-test/utils to workspace root
+reject unsupported --workspace without adding packages to the root
+
+**Exit code:** 1
 
 ```
-warn: npm does not support --workspace.
-
-up to date in <duration>
+npm does not support --workspace.
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -55,9 +55,6 @@ up to date in <duration>
   "packageManager": "npm@10.9.4",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0"
   }
 }
 {
@@ -91,9 +88,6 @@ added 1 package in <duration>
   "packageManager": "npm@10.9.4",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0"
   }
 }
 {
@@ -112,12 +106,12 @@ added 1 package in <duration>
 
 ## `vp add @vite-plus-test/utils --workspace --filter app -- --no-audit`
 
-should add @vite-plus-test/utils to packages/app
+reject unsupported --workspace without adding packages to app
+
+**Exit code:** 1
 
 ```
-warn: npm does not support --workspace.
-
-up to date in <duration>
+npm does not support --workspace.
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -132,15 +126,11 @@ up to date in <duration>
   "packageManager": "npm@10.9.4",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0"
   }
 }
 {
   "name": "app",
   "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
     "test-vite-plus-install": "^1.0.0",
     "testnpm2": "^1.0.1"
   }
@@ -173,15 +163,11 @@ up to date in <duration>
   "packageManager": "npm@10.9.4",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0"
   }
 }
 {
   "name": "app",
   "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
     "test-vite-plus-install": "^1.0.0",
     "testnpm2": "^1.0.1"
   }
@@ -220,14 +206,12 @@ up to date in <duration>
     "testnpm2": "1.0.1"
   },
   "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
     "test-vite-plus-install": "1.0.0"
   }
 }
 {
   "name": "app",
   "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
     "test-vite-plus-install": "1.0.0",
     "testnpm2": "1.0.1"
   }
@@ -267,7 +251,6 @@ added 1 package in <duration>
     "testnpm2": "1.0.1"
   },
   "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
     "test-vite-plus-install": "1.0.0",
     "test-vite-plus-package": "^1.0.0"
   }
@@ -275,7 +258,6 @@ added 1 package in <duration>
 {
   "name": "app",
   "dependencies": {
-    "@vite-plus-test/utils": "^1.0.0",
     "test-vite-plus-install": "1.0.0",
     "test-vite-plus-package": "^1.0.0",
     "testnpm2": "1.0.1"

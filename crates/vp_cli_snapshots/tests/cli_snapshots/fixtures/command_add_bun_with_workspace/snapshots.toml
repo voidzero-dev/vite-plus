@@ -7,4 +7,6 @@ steps = [
   { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
   { argv = ["vp", "add", "test-vite-plus-package", "--save-catalog", "--", "--silent"], comment = "should add package to the default catalog" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2", "--save-catalog-name", "testing", "--", "--silent"], comment = "should add package to a named catalog" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
 ]

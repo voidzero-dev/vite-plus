@@ -3,7 +3,7 @@ name = "command_remove_yarn4"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "remove", "testnpm2", "-D"], comment = "should error when remove not exists package" },
+  { argv = ["vp", "remove", "testnpm2", "-D"], comment = "reject unsupported --save-dev even when the package is absent", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "add", "testnpm2"], comment = "should add packages to dependencies" },
   ["vp", "add", "-D", "test-vite-plus-install"],
@@ -11,8 +11,9 @@ steps = [
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "remove", "testnpm2", "test-vite-plus-install"], comment = "should remove packages from dependencies" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
-  { argv = ["vp", "remove", "-D", "test-vite-plus-package-optional"], comment = "support ignore -O flag and remove package from optional dependencies" },
+  { argv = ["vp", "remove", "-O", "test-vite-plus-package-optional"], comment = "reject unsupported --save-optional without removing the optional dependency", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "remove", "test-vite-plus-package-optional"], comment = "remove optional dependencies without a section selector" },
+  ["vpt", "print-file", "package.json"],
   { argv = ["vp", "remove", "-g", "--dry-run", "testnpm2"], comment = "support remove global package with dry-run" },
-  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
 ]

@@ -1,0 +1,11 @@
+[[case]]
+name = "stage_versioned_routing_preserves_options"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "--", "--mode=skip-build"], snapshot = false, timeout = 120000 },
+  { argv = ["vp", "pm", "stage", "publish", "--dry-run", "--json"], envs = [["YARN_NPM_PUBLISH_REGISTRY", "http://127.0.0.1:9"]], comment = "Yarn 4.16.0 retains native staged publishing without contacting the registry." },
+  ["vpt", "stat-file", ".stage-prepack-ran", "--assert", "file"],
+  { argv = ["vp", "pm", "stage", "publish", ".", "--recursive", "--filter", "vp-stage-yarn-a", "--dry-run", "--registry", "http://127.0.0.1:9", "--", "--ignore-scripts", "--loglevel", "error", "--fetch-retries", "0"], envs = [["PATH", "${workspace}/node_modules/.bin${PATH_SEPARATOR}${PATH}"]], comment = "An explicit target falls back to npm and preserves workspace selection." },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.15.0"], snapshot = false },
+  { argv = ["vp", "pm", "stage", "publish", "--recursive", "--filter", "vp-stage-yarn-a", "--dry-run", "--registry", "http://127.0.0.1:9", "--", "--ignore-scripts", "--loglevel", "error", "--fetch-retries", "0"], envs = [["PATH", "${workspace}/node_modules/.bin${PATH_SEPARATOR}${PATH}"]], comment = "Yarn 4.15.0 falls back to npm instead of invoking its unsupported staged command." },
+]

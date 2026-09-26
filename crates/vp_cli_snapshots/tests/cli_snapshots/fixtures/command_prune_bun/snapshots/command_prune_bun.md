@@ -31,10 +31,9 @@ bun prune <version> (<hash>)
 
 ## `vp pm prune --no-optional`
 
-should warn because bun prune has no optional flag
+should prune optional dependencies using bun --omit=optional
 
 ```
-warn: bun does not support --no-optional.
 bun prune <version> (<hash>)
 
 Done! Checked 1 package across 1 folder (nothing to prune) [<duration>]

@@ -5,3 +5,12 @@ skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "outdated", "--", "-h"], comment = "should show yarn upgrade-interactive help", continue-on-failure = true },
 ]
+
+[[case]]
+name = "managed_global_outdated_preserves_formats"
+vp = "global"
+steps = [
+  { argv = ["vp", "outdated", "-g", "--format", "table"], comment = "Managed global operations bypass project Yarn support checks.", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-g", "--format", "list"], continue-on-failure = true },
+  { argv = ["vp", "outdated", "-g", "--format", "json"], continue-on-failure = true },
+]

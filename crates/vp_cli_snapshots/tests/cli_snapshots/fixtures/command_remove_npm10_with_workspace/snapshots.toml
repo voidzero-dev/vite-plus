@@ -10,7 +10,7 @@ steps = [
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
   { argv = ["vp", "remove", "testnpm2", "-r", "--", "--no-audit"], comment = "should remove package from all workspaces and root" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
-  { argv = ["vp", "remove", "-O", "test-vite-plus-package-optional", "-r", "--", "--no-audit"], comment = "should remove optional package from all workspaces" },
+  { argv = ["vp", "remove", "-O", "test-vite-plus-package-optional", "-r", "--", "--no-audit"], comment = "preserve npm's save-optional behavior across workspaces" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
   { argv = ["vp", "remove", "test-vite-plus-install", "--filter=app", "--", "--no-audit"], comment = "should remove package by filter=app" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },

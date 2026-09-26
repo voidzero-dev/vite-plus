@@ -1,0 +1,9 @@
+{
+  "name": "command-update-yarn1-with-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "workspaces": ["packages/*"],
+  "dependencies": { "is-number": "6.0.0" },
+  "devDependencies": { "yocto-queue": "0.1.0" }
+}

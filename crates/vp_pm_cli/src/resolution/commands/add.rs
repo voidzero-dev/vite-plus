@@ -16,7 +16,7 @@ pub struct AddArgs {
     pub(crate) save_exact: bool,
 
     /// Save the new dependency to the specified catalog name
-    #[arg(long, value_name = "CATALOG_NAME", not_supported(npm, yarn, bun))]
+    #[arg(long, value_name = "CATALOG_NAME", not_supported(npm, yarn, bun < "1.4"))]
     pub(crate) save_catalog_name: Option<String>,
 
     /// Save the new dependency to the default catalog
@@ -35,12 +35,12 @@ pub struct AddArgs {
     #[arg(long, conflicts_with = "global", not_supported(yarn >= "2"))]
     pub(crate) no_optional: bool,
 
-    /// Fail if lockfile needs to be updated
+    /// Don't update lockfile
     #[arg(
         long,
         conflicts_with = "global",
         overrides_with = "no_frozen_lockfile",
-        not_supported(npm, pnpm, yarn)
+        not_supported(npm, pnpm, yarn >= "2")
     )]
     pub(crate) frozen_lockfile: bool,
 
@@ -58,11 +58,11 @@ pub struct AddArgs {
     pub(crate) lockfile_only: bool,
 
     /// Use cached packages when available
-    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun < "1.4.1"))]
     pub(crate) prefer_offline: bool,
 
     /// Only use packages already in cache
-    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun < "1.4.1"))]
     pub(crate) offline: bool,
 
     /// Force reinstall all dependencies
@@ -82,7 +82,7 @@ pub struct AddArgs {
     pub(crate) silent: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(bun < "1.4"))]
+    #[arg(long, value_name = "PATTERN", not_supported(yarn < "2", bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Add to workspace root
@@ -275,13 +275,6 @@ impl Resolve<AddArgs> for Yarn {
 
         let mut cmd = CommandBuilder::new("yarn");
         if !args.filter.is_empty() {
-            if !self.is_berry() {
-                return CommandResolution::InvalidArgument(
-                    "Invalid argument: `--filter` is not supported by Yarn Classic `add`."
-                        .to_string(),
-                );
-            }
-
             cmd.arg("workspaces").arg("foreach").arg("--all");
             cmd.repeated("--include", args.filter.iter());
         }
@@ -302,7 +295,8 @@ impl Resolve<AddArgs> for Yarn {
         if self.is_berry() {
             Self::apply_berry_install_mode(&mut cmd, args.lockfile_only, args.ignore_scripts, diag);
         } else {
-            cmd.arg_if("--ignore-scripts", args.ignore_scripts)
+            cmd.arg_if("--frozen-lockfile", args.frozen_lockfile)
+                .arg_if("--ignore-scripts", args.ignore_scripts)
                 .arg_if("--ignore-optional", args.no_optional)
                 .arg_if("--prefer-offline", args.prefer_offline)
                 .arg_if("--offline", args.offline)
@@ -334,10 +328,19 @@ impl Resolve<AddArgs> for Bun {
             }
             Some(SaveDependencyTarget::Production) | None => {}
         }
+        if let Some(name) = &args.save_catalog_name {
+            if name.is_empty() {
+                cmd.arg("--catalog");
+            } else {
+                cmd.arg(vt_str::format!("--catalog={name}"));
+            }
+        }
         cmd.arg_if("--exact", args.save_exact)
             .arg_if("--catalog", args.save_catalog)
             .arg_if("--ignore-scripts", args.ignore_scripts)
             .arg_if("--lockfile-only", args.lockfile_only)
+            .arg_if("--prefer-offline", args.prefer_offline)
+            .arg_if("--offline", args.offline)
             .arg_if("--force", args.force)
             .arg_if("--silent", args.silent);
         if args.no_optional {
@@ -358,7 +361,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         DiagnosticKind, resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     fn add_args(packages: &[&str]) -> AddArgs {
@@ -542,14 +545,27 @@ mod tests {
             options.filter = filters;
             let resolution = resolve(&yarn("1.22.22"), options);
 
-            assert_eq!(
-                resolution.outcome,
-                CommandResolution::InvalidArgument(
-                    "Invalid argument: `--filter` is not supported by Yarn Classic `add`."
-                        .to_string()
-                )
-            );
+            expect_unsupported(resolution, &["yarn < 2 does not support --filter."]);
         }
+    }
+
+    #[test]
+    fn test_yarn_classic_add_aggregates_unsupported_options() {
+        let args =
+            parse_args::<AddArgs>(["react", "--filter", "app", "--save-catalog", "--workspace"])
+                .unwrap();
+        expect_unsupported(
+            resolve(&yarn("1.22.22"), args),
+            &[
+                "yarn does not support --save-catalog.",
+                "yarn < 2 does not support --filter.",
+                "yarn does not support --workspace.",
+            ],
+        );
+        let args = parse_args::<AddArgs>(["react", "--", "--filter", "app"]).unwrap();
+        let resolution = resolve(&yarn("1.22.22"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, vec!["add", "--filter", "app", "react"]);
     }
 
     #[test]
@@ -645,22 +661,21 @@ mod tests {
     }
 
     #[test]
-    fn yarn_add_drops_frozen_lockfile_options() {
-        for version in ["1.22.22", "4.0.0"] {
-            for flag in ["--frozen-lockfile", "--no-frozen-lockfile"] {
-                let args = parse_args::<AddArgs>([flag, "react"]).unwrap();
-                let resolution = resolve(&yarn(version), args);
-                assert_eq!(expect_run(resolution.outcome).args, ["add", "react"]);
-                assert_eq!(resolution.diagnostics.len(), 1);
-                assert_eq!(
-                    resolution.diagnostics[0].kind,
-                    DiagnosticKind::UnsupportedOptionDropped
-                );
-                assert_eq!(
-                    resolution.diagnostics[0].message,
-                    vt_str::format!("yarn does not support {flag}.").as_str(),
-                );
-            }
+    fn yarn_add_frozen_lockfile_options_follow_native_support() {
+        let args = parse_args::<AddArgs>(["--frozen-lockfile", "react"]).unwrap();
+        let resolution = resolve(&yarn("1.22.22"), args.clone());
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, ["add", "--frozen-lockfile", "react"]);
+        expect_unsupported(
+            resolve(&yarn("2.0.0"), args),
+            &["yarn >= 2 does not support --frozen-lockfile."],
+        );
+        for version in ["1.22.22", "2.0.0"] {
+            let args = parse_args::<AddArgs>(["--no-frozen-lockfile", "react"]).unwrap();
+            expect_unsupported(
+                resolve(&yarn(version), args),
+                &["yarn does not support --no-frozen-lockfile."],
+            );
         }
     }
 
@@ -717,43 +732,69 @@ mod tests {
     }
 
     #[test]
-    fn yarn_berry_drops_unsupported_workspace_root() {
+    fn yarn_berry_rejects_unsupported_workspace_root() {
         let mut args = add_args(&["react"]);
         args.workspace_root = true;
         let resolution = resolve(&yarn("4.1.0"), args);
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["add", "react"]);
-        assert_eq!(resolution.diagnostics.len(), 1);
-        assert_eq!(
-            resolution.diagnostics[0].message,
-            "yarn >=2 does not support --workspace-root."
-        );
+        expect_unsupported(resolution, &["yarn >= 2 does not support --workspace-root."]);
     }
 
     #[test]
-    fn bun_warns_for_unsupported_options() {
+    fn bun_rejects_all_unsupported_options() {
         let mut options = add_args(&["react"]);
         options.filter = vec!["app".to_string()];
         options.workspace_root = true;
         options.workspace = true;
         options.save_catalog = true;
         options.allow_build = Some("react".to_string());
+        options.prefer_offline = true;
+        options.offline = true;
         let resolution = resolve(&bun("1.3.11"), options);
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.args, vec!["add", "react"]);
-        assert_eq!(
-            resolution.diagnostics.iter().map(|entry| entry.message.as_str()).collect::<Vec<_>>(),
-            vec![
-                "bun <1.4 does not support --save-catalog.",
+        expect_unsupported(
+            resolution,
+            &[
+                "bun < 1.4 does not support --save-catalog.",
                 "bun does not support --allow-build.",
-                "bun <1.4 does not support --filter.",
+                "bun < 1.4.1 does not support --prefer-offline.",
+                "bun < 1.4.1 does not support --offline.",
+                "bun < 1.4 does not support --filter.",
                 "bun does not support --workspace-root.",
-                "bun does not support --workspace."
-            ]
+                "bun does not support --workspace.",
+            ],
         );
+    }
+
+    #[test]
+    fn bun_1_4_1_forwards_offline_options() {
+        // https://bun.sh/blog/bun-v1.4.1
+        let mut options = add_args(&["react"]);
+        options.prefer_offline = true;
+        options.offline = true;
+        let resolution = resolve(&bun("1.4.1"), options);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            vec!["add", "--prefer-offline", "--offline", "react"]
+        );
+    }
+
+    #[test]
+    fn bun_1_4_supports_named_catalog() {
+        for (name, flag) in [("testing", "--catalog=testing"), ("", "--catalog")] {
+            let mut options = add_args(&["react"]);
+            options.save_catalog_name = Some(name.to_string());
+            let resolution = resolve(&bun("1.4.0"), options);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, vec!["add", flag, "react"]);
+        }
+    }
+
+    #[test]
+    fn bun_before_1_4_does_not_support_named_catalog() {
+        let mut options = add_args(&["react"]);
+        options.save_catalog_name = Some("testing".to_string());
+        let resolution = resolve(&bun("1.3.14"), options);
+        expect_unsupported(resolution, &["bun < 1.4 does not support --save-catalog-name."]);
     }
 
     #[test]

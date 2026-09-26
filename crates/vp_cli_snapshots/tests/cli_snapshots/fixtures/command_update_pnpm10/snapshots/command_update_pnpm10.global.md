@@ -24,10 +24,10 @@ Options:
   -r, --recursive              Update recursively in all workspace packages
   --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root         Include workspace root
-  -D, --dev                    Update only devDependencies
-  -P, --prod                   Update only dependencies (production)
+  -D, --dev                    Update devDependencies
+  -P, --prod                   Update dependencies (production)
   -i, --interactive            Interactive mode
-  --no-optional                Don't update optionalDependencies
+  --no-optional                Exclude optionalDependencies
   --no-save                    Update lockfile only, don't modify package.json
   --workspace                  Only update if package exists in workspace (pnpm-specific)
   -h, --help                   Print help

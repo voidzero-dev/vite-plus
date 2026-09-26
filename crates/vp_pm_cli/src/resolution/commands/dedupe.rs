@@ -71,7 +71,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, pnpm, yarn},
     };
 
     #[test]
@@ -130,20 +130,16 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_classic_dedupe_falls_back_to_install() {
+    fn test_yarn_classic_check_rejects_before_install_fallback() {
         let resolution = resolve(&yarn("1.22.0"), DedupeArgs { check: true, ..Default::default() });
-        let command = expect_run(resolution.outcome);
+        expect_unsupported(resolution, &["yarn < 2 does not support --check."]);
+    }
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["install"]);
-        assert_eq!(resolution.diagnostics.len(), 2);
-        assert_eq!(resolution.diagnostics[0].message, "yarn <2 does not support --check.");
-        assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::UnsupportedOptionDropped);
-        assert_eq!(
-            resolution.diagnostics[1].message,
-            "Yarn Classic dedupes during install, falling back to yarn install"
-        );
-        assert_eq!(resolution.diagnostics[1].kind, DiagnosticKind::FallbackCommand);
+    #[test]
+    fn test_yarn_classic_dedupe_still_falls_back_without_check() {
+        let resolution = resolve(&yarn("1.22.0"), DedupeArgs::default());
+        assert_eq!(expect_run(resolution.outcome).args, vec!["install"]);
+        assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::FallbackCommand);
     }
 
     #[test]
@@ -162,21 +158,9 @@ mod tests {
     }
 
     #[test]
-    fn test_bun_dedupe_check_warns_and_falls_back_to_install() {
+    fn test_bun_dedupe_check_rejects_before_install_fallback() {
         let resolution = resolve(&bun("1.3.11"), DedupeArgs { check: true, ..Default::default() });
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "bun");
-        assert_eq!(command.args, vec!["install"]);
-        let messages =
-            resolution.diagnostics.iter().map(|entry| entry.message.as_str()).collect::<Vec<_>>();
-        assert_eq!(
-            messages,
-            vec![
-                "bun <1.4 does not support --check.",
-                "bun dedupe requires bun >= 1.4, falling back to bun install"
-            ]
-        );
+        expect_unsupported(resolution, &["bun < 1.4 does not support --check."]);
     }
 
     #[test]

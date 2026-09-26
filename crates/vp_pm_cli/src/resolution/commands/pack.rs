@@ -112,10 +112,9 @@ impl Resolve<PackArgs> for Bun {
 mod tests {
     use super::*;
     use crate::resolution::{
-        DiagnosticKind,
         command::PreRunAction,
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -300,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_pack_unsupported_options_warn_and_drop() {
+    fn test_npm_pack_rejects_unsupported_options() {
         let resolution = resolve(
             &npm("11.0.0"),
             PackArgs {
@@ -309,14 +308,10 @@ mod tests {
                 ..Default::default()
             },
         );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.args, vec!["pack"]);
-        assert_eq!(resolution.diagnostics.len(), 2);
-        assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::UnsupportedOptionDropped);
-        assert_eq!(resolution.diagnostics[0].message, "npm does not support --out.");
-        assert_eq!(resolution.diagnostics[1].kind, DiagnosticKind::UnsupportedOptionDropped);
-        assert_eq!(resolution.diagnostics[1].message, "npm does not support --pack-gzip-level.");
+        expect_unsupported(
+            resolution,
+            &["npm does not support --out.", "npm does not support --pack-gzip-level."],
+        );
     }
 
     #[test]
@@ -328,13 +323,10 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn1_pack_recursive_ignored() {
+    fn test_yarn1_pack_recursive_is_rejected() {
         let resolution =
             resolve(&yarn("1.22.0"), PackArgs { recursive: true, ..Default::default() });
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.args, vec!["pack"]);
-        assert_eq!(resolution.diagnostics.len(), 1);
+        expect_unsupported(resolution, &["yarn < 2 does not support --recursive."]);
     }
 
     #[test]
@@ -360,15 +352,12 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn1_pack_with_filter_ignored() {
+    fn test_yarn1_pack_filter_is_rejected() {
         let resolution = resolve(
             &yarn("1.22.0"),
             PackArgs { filter: vec!["app".to_string()], ..Default::default() },
         );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.args, vec!["pack"]);
-        assert_eq!(resolution.diagnostics.len(), 1);
+        expect_unsupported(resolution, &["yarn < 2 does not support --filter."]);
     }
 
     #[test]
@@ -462,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_pack_unsupported_options_warn_and_drop() {
+    fn test_yarn_pack_rejects_unsupported_options() {
         let resolution = resolve(
             &yarn("4.0.0"),
             PackArgs {
@@ -471,14 +460,13 @@ mod tests {
                 ..Default::default()
             },
         );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.args, vec!["pack"]);
-        assert_eq!(resolution.diagnostics.len(), 2);
-        assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::UnsupportedOptionDropped);
-        assert_eq!(resolution.diagnostics[0].message, "yarn does not support --pack-destination.");
-        assert_eq!(resolution.diagnostics[1].kind, DiagnosticKind::UnsupportedOptionDropped);
-        assert_eq!(resolution.diagnostics[1].message, "yarn does not support --pack-gzip-level.");
+        expect_unsupported(
+            resolution,
+            &[
+                "yarn does not support --pack-destination.",
+                "yarn does not support --pack-gzip-level.",
+            ],
+        );
     }
 
     #[test]
@@ -526,7 +514,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bun_pack_unsupported_options_warn_and_drop() {
+    fn test_bun_pack_rejects_unsupported_options() {
         let resolution = resolve(
             &bun("1.3.11"),
             PackArgs {
@@ -536,16 +524,14 @@ mod tests {
                 ..Default::default()
             },
         );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.args, vec!["pm", "pack"]);
-        assert_eq!(resolution.diagnostics.len(), 3);
-        assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::UnsupportedOptionDropped);
-        assert_eq!(resolution.diagnostics[0].message, "bun does not support --recursive.");
-        assert_eq!(resolution.diagnostics[1].kind, DiagnosticKind::UnsupportedOptionDropped);
-        assert_eq!(resolution.diagnostics[1].message, "bun does not support --filter.");
-        assert_eq!(resolution.diagnostics[2].kind, DiagnosticKind::UnsupportedOptionDropped);
-        assert_eq!(resolution.diagnostics[2].message, "bun does not support --json.");
+        expect_unsupported(
+            resolution,
+            &[
+                "bun does not support --recursive.",
+                "bun does not support --filter.",
+                "bun does not support --json.",
+            ],
+        );
     }
 
     #[test]

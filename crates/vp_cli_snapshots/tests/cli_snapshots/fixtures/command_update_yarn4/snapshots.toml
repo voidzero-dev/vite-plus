@@ -3,13 +3,13 @@ name = "command_update_yarn4"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "update", "testnpm2", "--no-save"], comment = "warn that --no-save is unsupported and continue with yarn up" },
+  { argv = ["vp", "update", "testnpm2", "--no-save"], comment = "reject unsupported --no-save without updating dependencies", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "rm", "testnpm2"], comment = "should to absolute latest version" },
   ["vp", "add", "testnpm2@1.0.0", "-D"],
   ["vp", "update", "testnpm2", "--latest"],
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
-  { argv = ["vp", "update", "-D"], comment = "should update and ignore -D options" },
+  { argv = ["vp", "update", "-D"], comment = "reject unsupported dev-only updates", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "update", "--recursive"], comment = "should update all packages but won't change the package.json" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },

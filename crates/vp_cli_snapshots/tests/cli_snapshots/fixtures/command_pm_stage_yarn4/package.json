@@ -1,0 +1,13 @@
+{
+  "name": "vp-stage-yarn-root",
+  "version": "1.0.0",
+  "packageManager": "yarn@4.16.0",
+  "workspaces": ["packages/*"],
+  "files": ["package.json"],
+  "scripts": {
+    "prepack": "node -e \"require('node:fs').writeFileSync('.stage-prepack-ran', 'ran')\""
+  },
+  "devDependencies": {
+    "npm": "11.16.0"
+  }
+}

@@ -2,7 +2,7 @@
 
 ## `vp remove testnpm2 -D -- --no-audit`
 
-should pass when remove not exists package
+delegate removal of an absent package to npm
 
 ```
 
@@ -85,7 +85,7 @@ removed 2 packages in <duration>
 
 ## `vp remove -D test-vite-plus-package-optional -- --loglevel=warn --no-audit`
 
-support ignore -O flag and remove package from optional dependencies
+npm removes the optional dependency even with --save-dev
 
 ```
 

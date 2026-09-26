@@ -24,7 +24,13 @@ where
     A: Diagnosis,
 {
     let mut diagnostics = Diagnostics::default();
-    let args = args.diagnose(dialect, &mut diagnostics);
+    args.diagnose(dialect, &mut diagnostics);
+    if let Some(message) = diagnostics.unsupported_options_error() {
+        return Resolution {
+            outcome: CommandResolution::InvalidArgument(message),
+            diagnostics: Diagnostics::default(),
+        };
+    }
     let outcome = dialect.resolve(&args, &mut diagnostics);
     Resolution { outcome, diagnostics }
 }
@@ -103,6 +109,34 @@ fn parse_version(manager: &PackageManager) -> Result<Version, Error> {
 mod tests {
     use super::*;
     use crate::resolution::{ApproveBuildsArgs, DlxArgs, InstallArgs};
+
+    #[test]
+    fn unsupported_options_stop_before_lowering_and_report_every_option() {
+        #[vp_pm_cli_macros::pm_args]
+        #[derive(clap::Args)]
+        struct UnsupportedArgs {
+            #[arg(long, not_supported(npm))]
+            first: bool,
+            #[arg(long, not_supported(npm))]
+            second: Option<String>,
+        }
+
+        impl Resolve<UnsupportedArgs> for Npm {
+            fn resolve(&self, _: &UnsupportedArgs, _: &mut Diagnostics) -> CommandResolution {
+                panic!("unsupported options must be rejected before lowering");
+            }
+        }
+
+        let result = resolve(
+            &Npm::new(Version::new(11, 16, 0)),
+            UnsupportedArgs { first: true, second: Some("value".to_string()) },
+        );
+        let CommandResolution::InvalidArgument(message) = result.outcome else {
+            panic!("expected an unsupported-option error");
+        };
+        assert_eq!(message, "npm does not support --first.\nnpm does not support --second.");
+        assert!(result.diagnostics.is_empty(), "errors must not also be rendered as warnings");
+    }
 
     fn package_manager(client: PackageManagerType, version: &str) -> PackageManager {
         let workspace_root = vt_path::current_dir().unwrap();

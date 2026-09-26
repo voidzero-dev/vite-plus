@@ -7,6 +7,6 @@ serial = true
 cwd = "bun"
 steps = [
   { argv = ["vp", "install", "--", "--silent"], comment = "should install packages first", continue-on-failure = true },
-  { argv = ["vp", "pm", "audit"], comment = "should audit dependencies" },
+  { argv = ["vp", "pm", "audit", "--production"], comment = "should audit production dependencies" },
   { argv = ["vp", "pm", "audit", "--fix"], comment = "bun 1.4 runs bun audit fix" },
 ]

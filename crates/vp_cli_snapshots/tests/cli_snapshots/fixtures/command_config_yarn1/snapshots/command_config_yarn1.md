@@ -25,36 +25,30 @@ Documentation: https://viteplus.dev/guide/install
 
 ## `vp pm config set vite-plus-pm-config-test-key test-value --location project`
 
-should set config value in project scope (shows warning for yarn@1)
+reject project writes instead of changing the home config
+
+**Exit code:** 1
 
 ```
-warn: yarn@1 does not support --location, ignoring flag
-yarn config <version>
-warning package.json: No license field
-success Set "vite-plus-pm-config-test-key" to "test-value".
-
-Done in <duration>.
+Yarn Classic does not support --location project.
 ```
 
 ## `vp pm config get vite-plus-pm-config-test-key --location project`
 
-should get config value from project scope (shows warning for yarn@1)
+reject unsupported project location
+
+**Exit code:** 1
 
 ```
-warn: yarn@1 does not support --location, ignoring flag
-warning package.json: No license field
-test-value
+Yarn Classic does not support --location project.
 ```
 
 ## `vp pm config delete vite-plus-pm-config-test-key --location project`
 
-should delete config key from project scope (shows warning for yarn@1)
+reject project deletion instead of deleting from the home config
+
+**Exit code:** 1
 
 ```
-warn: yarn@1 does not support --location, ignoring flag
-yarn config <version>
-warning package.json: No license field
-success Deleted "vite-plus-pm-config-test-key".
-
-Done in <duration>.
+Yarn Classic does not support --location project.
 ```

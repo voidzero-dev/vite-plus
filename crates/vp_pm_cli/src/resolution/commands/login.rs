@@ -8,11 +8,11 @@ use crate::resolution::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct LoginArgs {
     /// Registry URL
-    #[arg(long, value_name = "URL")]
+    #[arg(long, value_name = "URL", not_supported(yarn))]
     pub(crate) registry: Option<String>,
 
     /// Scope for the login
-    #[arg(long, value_name = "SCOPE")]
+    #[arg(long, value_name = "SCOPE", not_supported(yarn < "2"))]
     pub(crate) scope: Option<String>,
 
     /// Additional arguments
@@ -41,7 +41,9 @@ impl Resolve<LoginArgs> for Npm {
 impl Resolve<LoginArgs> for Yarn {
     fn resolve(&self, args: &LoginArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if self.is_berry() {
-            resolve_login("yarn", &["npm", "login"], args)
+            // Berry takes the scope name without "@": https://yarnpkg.com/cli/npm/login
+            let scope = args.scope.as_ref().map(|scope| scope.trim_start_matches('@').to_string());
+            resolve_login("yarn", &["npm", "login"], &LoginArgs { scope, ..args.clone() })
         } else {
             resolve_login("yarn", &["login"], args)
         }
@@ -70,7 +72,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -134,6 +136,39 @@ mod tests {
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["login"]);
+    }
+
+    #[test]
+    fn test_yarn_login_rejects_unsupported_selectors() {
+        let args = parse_args::<LoginArgs>([
+            "--registry",
+            "https://registry.example.com",
+            "--scope",
+            "company",
+        ])
+        .unwrap();
+        expect_unsupported(
+            resolve(&yarn("1.22.22"), args),
+            &["yarn does not support --registry.", "yarn < 2 does not support --scope."],
+        );
+    }
+
+    #[test]
+    fn test_yarn_berry_login_selector_support() {
+        let registry =
+            parse_args::<LoginArgs>(["--registry", "https://registry.example.com"]).unwrap();
+        expect_unsupported(
+            resolve(&yarn("4.18.0"), registry),
+            &["yarn does not support --registry."],
+        );
+
+        let scope = parse_args::<LoginArgs>(["--scope", "@company", "--", "--publish"]).unwrap();
+        let resolution = resolve(&yarn("4.18.0"), scope);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            vec!["npm", "login", "--scope", "company", "--publish"]
+        );
     }
 
     #[test]

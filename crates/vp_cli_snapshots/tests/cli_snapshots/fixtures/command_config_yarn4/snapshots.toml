@@ -7,3 +7,24 @@ steps = [
   { argv = ["vp", "pm", "config", "get", "vite-plus-pm-config-test-key", "--location", "project"], comment = "should get config value from project scope", continue-on-failure = true },
   { argv = ["vp", "pm", "config", "delete", "vite-plus-pm-config-test-key", "--location", "project"], comment = "should delete config key from project scope (uses yarn config unset)", continue-on-failure = true },
 ]
+
+[[case]]
+name = "berry_user_config_preserves_project"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.18.0"], snapshot = false },
+  { argv = ["vp", "pm", "config", "set", "npmRegistryServer", "https://home.example.com", "--location", "user"], comment = "User writes target the home config without creating a project config." },
+  ["vpt", "stat-file", ".yarnrc.yml", "--assert", "missing"],
+  ["vp", "pm", "config", "get", "npmRegistryServer", "--location", "user"],
+  { argv = ["vp", "pm", "config", "get", "npmRegistryServer", "--global"], comment = "Global reads stay merged because yarn config get has no --home." },
+  ["vp", "pm", "config", "set", "npmRegistryServer", "https://project.example.com", "--location", "project"],
+  { argv = ["vp", "pm", "config", "set", "npmRegistryServer", "https://updated-home.example.com", "--location", "user"], comment = "The home value changes, but Yarn reports the effective project value." },
+  { argv = ["vp", "pm", "config", "get", "npmRegistryServer", "--location", "user"], comment = "Reads retain project precedence, matching npm and pnpm." },
+  ["vp", "pm", "config", "delete", "npmRegistryServer", "--location", "project"],
+  { argv = ["vp", "pm", "config", "get", "npmRegistryServer", "--location", "user"], comment = "Removing the project override reveals the updated home value." },
+  ["vp", "pm", "config", "set", "npmRegistryServer", "https://project.example.com", "--location", "project"],
+  { argv = ["vp", "pm", "config", "delete", "npmRegistryServer", "--location", "user"], comment = "Deleting from home must not remove the project setting." },
+  ["vpt", "print-file", ".yarnrc.yml"],
+  ["vp", "pm", "config", "delete", "npmRegistryServer", "--location", "project"],
+  { argv = ["vp", "pm", "config", "get", "npmRegistryServer", "--location", "user"], comment = "With both settings deleted, the native default is restored." },
+]

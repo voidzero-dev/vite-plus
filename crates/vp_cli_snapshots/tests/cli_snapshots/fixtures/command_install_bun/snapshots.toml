@@ -1,0 +1,10 @@
+[[case]]
+name = "bun_install_preserves_native_dev"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-D"], comment = "Bun's native dev option does not exclude production dependencies" },
+  ["vpt", "stat-file", "node_modules/prod-only-fixture/package.json", "--assert", "file"],
+  { argv = ["vp", "install", "--dev", "--frozen-lockfile"], comment = "preserve the dev option in frozen-lockfile mode too" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

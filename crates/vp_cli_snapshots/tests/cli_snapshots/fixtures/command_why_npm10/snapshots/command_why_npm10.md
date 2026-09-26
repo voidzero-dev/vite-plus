@@ -89,46 +89,42 @@ node_modules/test-vite-plus-package
 
 ## `vp why testnpm2 --long`
 
-should warn that --long not supported by npm
+should reject --long because npm does not support it
+
+**Exit code:** 1
 
 ```
-warn: npm does not support --long.
-testnpm2@1.0.1
-node_modules/testnpm2
-  testnpm2@"1.0.1" from the root project
+npm does not support --long.
 ```
 
 ## `vp why testnpm2 --parseable`
 
-should warn that --parseable not supported by npm
+should reject --parseable because npm does not support it
+
+**Exit code:** 1
 
 ```
-warn: npm does not support --parseable.
-testnpm2@1.0.1
-node_modules/testnpm2
-  testnpm2@"1.0.1" from the root project
+npm does not support --parseable.
 ```
 
 ## `vp why testnpm2 -P`
 
-should warn that --prod not supported by npm
+should reject --prod because npm does not support it
+
+**Exit code:** 1
 
 ```
-warn: npm does not support --prod.
-testnpm2@1.0.1
-node_modules/testnpm2
-  testnpm2@"1.0.1" from the root project
+npm does not support --prod.
 ```
 
 ## `vp why testnpm2 --find-by customFinder`
 
-should warn that --find-by not supported by npm
+should reject --find-by because npm does not support it
+
+**Exit code:** 1
 
 ```
-warn: npm does not support --find-by.
-testnpm2@1.0.1
-node_modules/testnpm2
-  testnpm2@"1.0.1" from the root project
+npm does not support --find-by.
 ```
 
 ## `vp why testnpm2 -- --omit=dev`

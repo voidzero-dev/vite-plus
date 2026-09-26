@@ -10,9 +10,23 @@ steps = [
   { argv = ["vp", "pm", "list", "--depth", "0", "--json"], comment = "should list packages with depth limit", continue-on-failure = true },
   { argv = ["vp", "pm", "list", "--long", "--json"], comment = "should list packages with extended info", continue-on-failure = true },
   { argv = ["vp", "pm", "list", "--parseable", "--json"], comment = "should list packages in parseable format", continue-on-failure = true },
-  { argv = ["vp", "pm", "list", "--prod", "--json"], comment = "should list production dependencies only (uses --include prod --include peer)", continue-on-failure = true },
-  { argv = ["vp", "pm", "list", "--dev", "--json"], comment = "should list development dependencies only (uses --include dev)", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--prod", "--json"], comment = "should exclude dev dependencies using --omit dev", continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "--dev", "--json"], envs = [["NODE_ENV", "production"]], comment = "include installed dev dependencies in a production environment" },
   { argv = ["vp", "pm", "list", "--no-optional", "--json"], comment = "should exclude optional dependencies (uses --omit optional)", continue-on-failure = true },
   { argv = ["vp", "pm", "list", "--exclude-peers", "--json"], comment = "should exclude peer dependencies (uses --omit peer)", continue-on-failure = true },
   { argv = ["vp", "pm", "list", "--", "--loglevel=warn", "--json"], comment = "should support pass through arguments", continue-on-failure = true },
+]
+
+[[case]]
+name = "npm_list_dependency_selection"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "optionalDependencies.yocto-queue", "\"0.1.0\""], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "pm", "list", "--prod", "--json"], comment = "production listing excludes dev but keeps optional and peer dependencies" },
+  { argv = ["vp", "pm", "list", "--prod", "--no-optional", "--exclude-peers", "--json"], comment = "production listing respects both exclusions" },
+  { argv = ["vp", "pm", "list", "--dev", "--json"], envs = [["NODE_ENV", "production"]], comment = "include installed dev dependencies without excluding other dependency types" },
+  { argv = ["vp", "pm", "list", "--", "--include=dev", "--json"], comment = "raw native include remains available and lists all four dependency types" },
 ]

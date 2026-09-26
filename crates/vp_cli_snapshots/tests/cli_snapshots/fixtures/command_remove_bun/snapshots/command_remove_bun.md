@@ -46,11 +46,12 @@ For more information, try '--help'.
 
 ## `vp remove testnpm2 -D`
 
-should error when remove not exists package from dev dependencies
+reject unsupported --save-dev even when the package is absent
+
+**Exit code:** 1
 
 ```
-bun remove <version> (<hash>)
-package.json doesn't have dependencies, there's nothing to remove!
+bun does not support --save-dev.
 ```
 
 ## `vpt print-file package.json`
@@ -141,15 +142,12 @@ bun remove <version> (<hash>)
 
 ## `vp remove -O test-vite-plus-package-optional`
 
-should remove package from optional dependencies
+reject --save-optional without removing the dependency
+
+**Exit code:** 1
 
 ```
-bun remove <version> (<hash>)
-
-package.json has no dependencies! Deleted empty lockfile
-
-- test-vite-plus-package-optional
-1 package removed [<duration>]
+bun does not support --save-optional.
 ```
 
 ## `vpt print-file package.json`
@@ -158,6 +156,9 @@ package.json has no dependencies! Deleted empty lockfile
 {
   "name": "command-remove-bun",
   "version": "1.0.0",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  },
   "packageManager": "bun@1.3.11"
 }
 ```

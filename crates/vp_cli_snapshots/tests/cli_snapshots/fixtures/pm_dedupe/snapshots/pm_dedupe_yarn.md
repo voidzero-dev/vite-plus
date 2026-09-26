@@ -10,16 +10,17 @@ warn: Yarn Classic dedupes during install, falling back to yarn install
 
 ## `vp dedupe --check -- --silent`
 
-warns about unsupported --check and still falls back to install
+reject unsupported --check without falling back to install
+
+**Exit code:** 1
 
 ```
-warn: yarn <2 does not support --check.
-warn: Yarn Classic dedupes during install, falling back to yarn install
+yarn < 2 does not support --check.
 ```
 
 ## `vpt print-file package.json`
 
-verify Yarn Classic completed
+verify Yarn Classic manifest is unchanged
 
 ```
 {

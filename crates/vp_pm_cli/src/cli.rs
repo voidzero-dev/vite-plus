@@ -404,7 +404,7 @@ mod tests {
     use clap::{FromArgMatches, Subcommand};
 
     use super::*;
-    use crate::{PackageManagerType, resolution::CommandResolution};
+    use crate::{PackageManagerType, resolution::test_utils::expect_run};
 
     fn parse(args: &[&str]) -> Result<PackageManagerCommand, clap::Error> {
         let command = PackageManagerCommand::augment_subcommands(clap::Command::new("vp"));
@@ -495,25 +495,52 @@ mod tests {
 
     #[test]
     fn install_uses_install_or_add_resolver_from_packages() {
-        let manager = package_manager(PackageManagerType::Pnpm, "10.0.0");
-        let install = parse(&["install", "--frozen-lockfile"]).unwrap();
-        let add = parse(&["install", "-D", "react"]).unwrap();
+        for (client, version, install_args, add_args) in [
+            (
+                PackageManagerType::Pnpm,
+                "10.0.0",
+                vec!["install", "--frozen-lockfile"],
+                vec!["add", "--save-dev", "react"],
+            ),
+            (
+                PackageManagerType::Npm,
+                "11.16.0",
+                vec!["ci"],
+                vec!["install", "--save-dev", "react"],
+            ),
+            (
+                PackageManagerType::Bun,
+                "1.4.0",
+                vec!["install", "--frozen-lockfile"],
+                vec!["add", "--dev", "react"],
+            ),
+            (
+                PackageManagerType::Yarn,
+                "1.22.22",
+                vec!["install", "--frozen-lockfile"],
+                vec!["add", "--dev", "react"],
+            ),
+            (
+                PackageManagerType::Yarn,
+                "4.16.0",
+                vec!["install", "--immutable"],
+                vec!["add", "--dev", "react"],
+            ),
+        ] {
+            let manager = package_manager(client, version);
+            let install = parse(&["install", "--frozen-lockfile"]).unwrap();
+            let add = parse(&["install", "-D", "react"]).unwrap();
 
-        let CommandResolution::Run(install) =
-            install.resolve_for_manager(&manager).unwrap().outcome
-        else {
-            panic!("expected install command");
-        };
-        let CommandResolution::Run(add) = add.resolve_for_manager(&manager).unwrap().outcome else {
-            panic!("expected add command");
-        };
+            let install = expect_run(install.resolve_for_manager(&manager).unwrap().outcome);
+            let add = expect_run(add.resolve_for_manager(&manager).unwrap().outcome);
 
-        assert_eq!(install.args, vec!["install", "--frozen-lockfile"]);
-        assert_eq!(add.args, vec!["add", "--save-dev", "react"]);
+            assert_eq!(install.args, install_args);
+            assert_eq!(add.args, add_args);
+        }
     }
 
     #[test]
-    fn yarn_before_3_drops_lockfile_only_when_adding_packages() {
+    fn yarn_before_3_rejects_lockfile_only_when_adding_packages() {
         for version in ["2.4.2", "2.0.0", "1.22.22"] {
             let manager = package_manager(PackageManagerType::Yarn, version);
             for command in ["add", "install", "i"] {
@@ -521,13 +548,9 @@ mod tests {
                     .unwrap()
                     .resolve_for_manager(&manager)
                     .unwrap();
-                let resolved = crate::resolution::test_utils::expect_run(resolution.outcome);
-
-                assert_eq!(resolved.args, ["add", "./dep"], "yarn@{version}: {command}");
-                assert_eq!(resolution.diagnostics.len(), 1);
-                assert_eq!(
-                    resolution.diagnostics[0].message,
-                    "yarn <3 does not support --lockfile-only."
+                crate::resolution::test_utils::expect_unsupported(
+                    resolution,
+                    &["yarn < 3 does not support --lockfile-only."],
                 );
             }
         }

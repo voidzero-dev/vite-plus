@@ -115,7 +115,7 @@ removed 1 package in <duration>
 
 ## `vp remove -O test-vite-plus-package-optional -r -- --no-audit`
 
-should remove optional package from all workspaces
+preserve npm's save-optional behavior across workspaces
 
 ```
 

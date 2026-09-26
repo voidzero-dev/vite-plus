@@ -25,7 +25,7 @@ impl Resolve<PatchCommitArgs> for Pnpm {
 
 impl Resolve<PatchCommitArgs> for Npm {
     fn resolve(&self, args: &PatchCommitArgs, diag: &mut Diagnostics) -> CommandResolution {
-        if !self.is_npm_12_or_newer() {
+        if !self.supports_v12_commands() {
             diag.warn(
                 DiagnosticKind::UnsupportedCommandNoop,
                 "npm does not have a 'patch-commit' command.",

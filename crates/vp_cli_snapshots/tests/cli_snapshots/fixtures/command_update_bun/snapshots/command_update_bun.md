@@ -24,10 +24,10 @@ Options:
   -r, --recursive              Update recursively in all workspace packages
   --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root         Include workspace root
-  -D, --dev                    Update only devDependencies
-  -P, --prod                   Update only dependencies (production)
+  -D, --dev                    Update devDependencies
+  -P, --prod                   Update dependencies (production)
   -i, --interactive            Interactive mode
-  --no-optional                Don't update optionalDependencies
+  --no-optional                Exclude optionalDependencies
   --no-save                    Update lockfile only, don't modify package.json
   --workspace                  Only update if package exists in workspace (pnpm-specific)
   -h, --help                   Print help
@@ -37,18 +37,12 @@ Documentation: https://viteplus.dev/guide/install
 
 ## `vp update testnpm2 --workspace-root`
 
-warns about unsupported --workspace-root and updates within semver range
+reject unsupported --workspace-root without updating dependencies
+
+**Exit code:** 1
 
 ```
-warn: bun does not support --workspace-root.
-bun update <version> (<hash>)
-
- test-vite-plus-package@1.0.0
- test-vite-plus-package-optional@1.0.0
-
-installed testnpm2@1.0.1
-
-3 packages installed [<duration>]
+bun does not support --workspace-root.
 ```
 
 ## `vpt print-file package.json`
@@ -58,7 +52,7 @@ installed testnpm2@1.0.1
   "name": "command-update-bun",
   "version": "1.0.0",
   "dependencies": {
-    "testnpm2": "^1.0.1"
+    "testnpm2": "*"
   },
   "devDependencies": {
     "test-vite-plus-package": "*"
@@ -77,9 +71,12 @@ should update to absolute latest version
 ```
 bun update <version> (<hash>)
 
+ test-vite-plus-package@1.0.0
+ test-vite-plus-package-optional@1.0.0
+
 installed testnpm2@1.0.1
 
-[<duration>] done
+3 packages installed [<duration>]
 ```
 
 ## `vpt print-file package.json`

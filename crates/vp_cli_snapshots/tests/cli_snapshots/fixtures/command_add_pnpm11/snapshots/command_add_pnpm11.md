@@ -26,7 +26,7 @@ Options:
   --allow-build <NAMES>               A list of package names allowed to run postinstall
   --ignore-scripts                    Do not run lifecycle scripts
   --no-optional                       Do not install optionalDependencies
-  --frozen-lockfile                   Fail if lockfile needs to be updated
+  --frozen-lockfile                   Don't update lockfile
   --no-frozen-lockfile                Allow lockfile updates
   --lockfile-only                     Only update lockfile, don't install
   --prefer-offline                    Use cached packages when available

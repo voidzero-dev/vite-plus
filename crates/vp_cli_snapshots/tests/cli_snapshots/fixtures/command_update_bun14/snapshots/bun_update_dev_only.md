@@ -1,0 +1,75 @@
+# bun_update_dev_only
+
+## `vp install --ignore-scripts`
+
+
+## `vpt json-edit package.json dependencies.is-number '>=6.0.0 <=7.0.0'`
+
+
+## `vpt json-edit package.json devDependencies.yocto-queue '>=0.1.0 <=1.0.0'`
+
+
+## `vpt json-edit package.json optionalDependencies.isarray '>=1.0.0 <=2.0.0'`
+
+
+## `vp update -D -- --ignore-scripts`
+
+only the dev dependency advances although all three groups allow newer versions
+
+```
+bun update <version> (<hash>)
+
+↑ yocto-queue 0.1.0 → 1.0.0 (<version> available)
+
+1 package installed [<duration>]
+```
+
+## `vpt print-file package.json`
+
+```
+{
+  "dependencies": {
+    "is-number": ">=6.0.0 <=7.0.0"
+  },
+  "devDependencies": {
+    "yocto-queue": ">=0.1.0 <=1.0.0"
+  },
+  "name": "command-update-bun14",
+  "optionalDependencies": {
+    "isarray": ">=1.0.0 <=2.0.0"
+  },
+  "packageManager": "bun@1.4.0",
+  "private": true,
+  "version": "1.0.0"
+}
+```
+
+## `vpt print-file bun.lock`
+
+```
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "command-update-bun14",
+      "dependencies": {
+        "is-number": ">=6.0.0 <=7.0.0",
+      },
+      "devDependencies": {
+        "yocto-queue": ">=0.1.0 <=1.0.0",
+      },
+      "optionalDependencies": {
+        "isarray": ">=1.0.0 <=2.0.0",
+      },
+    },
+  },
+  "packages": {
+    "is-number": ["is-number@6.0.0", "http://127.0.0.1:<port>/is-number/-/is-number-6.0.0.tgz", {}, "sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg=="],
+
+    "isarray": ["isarray@1.0.0", "http://127.0.0.1:<port>/isarray/-/isarray-1.0.0.tgz", {}, "sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ=="],
+
+    "yocto-queue": ["yocto-queue@1.0.0", "", {}, "sha512-9bnSc/HEW2uRy67wc+T8UwauLuPJVn28jb+GtJY16iiKWyvmYJRXVT4UamsAEGQfPohgr2q4Tq0sQbQlxTfi1g=="],
+  }
+}
+```

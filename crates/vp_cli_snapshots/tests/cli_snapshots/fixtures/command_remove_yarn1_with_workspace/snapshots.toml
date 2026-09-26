@@ -1,0 +1,10 @@
+[[case]]
+name = "classic_workspace_remove"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "remove", "--filter", "app", "is-number", "--", "--ignore-scripts"], comment = "a single filter removes only from the selected workspace via yarn workspace" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/web/package.json"],
+]
