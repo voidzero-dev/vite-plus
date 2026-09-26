@@ -1,17 +1,17 @@
-# installation_progress_ci
+# installation_progress_no_color
 
-## `CI=1 node install.mjs`
+## `node install.mjs`
 
 ```
 Before installation: preserve this output.
-\x1b[94;1minfo: installing vite-plus@<version>...
-\x1b[94;1minfo: Preparing Node.js and pnpm...
-\x1b[94;1minfo: Installing dependencies...
-\x1b[32m\xe2\x9c\x93 Dependencies installed.
-\x1b[94;1mSetup:
+info: installing vite-plus@<version>...
+info: Preparing Node.js and pnpm...
+info: Installing dependencies...
+\xe2\x9c\x93 Dependencies installed.
+Setup:
   Preparing vite-plus environment.
 
-\x1b[94;1mCreated Shims:
+Created Shims:
   <workspace>/home/fallback-bin/node
   <workspace>/home/bin/npm
   <workspace>/home/bin/npx
@@ -26,14 +26,14 @@ Before installation: preserve this output.
   <workspace>/home/bin/vpx
   <workspace>/home/bin/vpr
 
-\x1b[94;1mNext Steps:
+Next Steps:
   Activate Vite+ in this terminal:
   . \"<workspace>/home/env\"
 
   Add the command to your .zshrc file to activate future Zsh terminals.
 
-  Restart an already-running IDE to load its environment. Run `\x1b[94mvp env doctor` to verify.
-\x1b[32m\xe2\x9c\x93 Vite+ setup complete.
+  Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
+\xe2\x9c\x93 Vite+ setup complete.
 Bootstrap stdout contains only shell assignments.
 After installation.
 ```
