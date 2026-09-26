@@ -8,5 +8,5 @@ Global installs disable npm update notifications in the child process.
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed global-update-notifier-test 1.0.0
+ Installed global-update-notifier-test 1.0.0
 ```

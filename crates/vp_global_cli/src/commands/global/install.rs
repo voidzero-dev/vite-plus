@@ -522,8 +522,9 @@ pub async fn install(
         drop(lock_file);
 
         // 5.7 Print success message
-        output::success(&format!(
-            "{} {} {}{}",
+        output::raw(&format!(
+            "{} {} {} {}{}",
+            style("+").green(),
             operation_past,
             style(&package_name).bold(),
             if update { "to " } else { "" },
@@ -1044,7 +1045,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     // Remove metadata file
     PackageMetadata::delete(&package_name).await?;
 
-    output::raw(&format!("Uninstalled {}", package_name));
+    output::raw(&format!("{} Uninstalled {}", style("-").red(), style(&package_name).bold()));
 
     Ok(())
 }

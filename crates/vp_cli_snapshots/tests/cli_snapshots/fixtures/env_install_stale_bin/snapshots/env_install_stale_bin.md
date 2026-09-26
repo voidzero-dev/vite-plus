@@ -8,7 +8,7 @@ Install package with two binaries
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed env-install-stale-bin-pkg 1.0.0
+ Installed env-install-stale-bin-pkg 1.0.0
   Bins: env-install-stale-drop, env-install-stale-keep
 ```
 
@@ -34,7 +34,7 @@ Reinstall package version that removed one binary
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed env-install-stale-bin-pkg 2.0.0
+ Installed env-install-stale-bin-pkg 2.0.0
   Bins: env-install-stale-keep
 ```
 
