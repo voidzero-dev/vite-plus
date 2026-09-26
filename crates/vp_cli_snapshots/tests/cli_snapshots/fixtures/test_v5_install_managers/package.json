@@ -2,5 +2,5 @@
   "name": "test-v5-install-managers",
   "private": true,
   "type": "module",
-  "devDependencies": { "vite-plus": "latest", "vitest": "5.0.1" }
+  "devDependencies": { "vite-plus": "latest", "vitest": "5.0.2" }
 }

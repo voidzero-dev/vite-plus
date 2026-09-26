@@ -2,7 +2,7 @@
 
 `vp test` runs tests with [Vitest](https://vitest.dev).
 
-The bundled runner uses Vitest `5.0.1` and requires Node `^22.18.0 || ^24.11.0 || >=26.0.0`. For existing projects, follow [Upgrade to Vitest 5](./vitest-v5.md) before updating dependencies.
+The bundled runner uses Vitest `5.0.2` and requires Node `^22.18.0 || ^24.11.0 || >=26.0.0`. For existing projects, follow [Upgrade to Vitest 5](./vitest-v5.md) before updating dependencies.
 
 ## Overview
 

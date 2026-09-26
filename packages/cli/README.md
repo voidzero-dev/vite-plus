@@ -203,7 +203,7 @@ Add package-manager overrides so that other packages use the Vite+ versions. Ali
 ```json
 "overrides": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "5.0.1"
+  "vitest": "5.0.2"
 }
 ```
 
@@ -212,7 +212,7 @@ If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 ```yaml
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: 5.0.1
+  vitest: 5.0.2
 ```
 
 Or, if you are using Yarn:
@@ -220,7 +220,7 @@ Or, if you are using Yarn:
 ```json
 "resolutions": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "5.0.1"
+  "vitest": "5.0.2"
 }
 ```
 

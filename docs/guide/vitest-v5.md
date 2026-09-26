@@ -1,6 +1,6 @@
 # Upgrade to Vitest 5
 
-Vite+ bundles Vitest `5.0.1`. Use Node `^22.18.0 || ^24.11.0 || >=26.0.0` for the CLI and tests.
+Vite+ bundles Vitest `5.0.2`. Use Node `^22.18.0 || ^24.11.0 || >=26.0.0` for the CLI and tests.
 
 ## Before you migrate
 
@@ -126,7 +126,7 @@ Review calls with benchmark options, imported or reassigned callbacks, callback 
 
 ## Entry points and packages
 
-Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage providers and `@vitest/ui` at the bundled runner's exact version, `5.0.1`. Keep `@vitest/web-worker` aligned when your project uses it.
+Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage providers and `@vitest/ui` at the bundled runner's exact version, `5.0.2`. Keep `@vitest/web-worker` aligned when your project uses it.
 
 | v4 import                                | v5 import or action                                                         |
 | ---------------------------------------- | --------------------------------------------------------------------------- |
