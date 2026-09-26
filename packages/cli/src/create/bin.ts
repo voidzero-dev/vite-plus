@@ -7,6 +7,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
 import {
   addFrameworkShim,
+  createCatalogDependencyResolver,
   detectEslintProject,
   detectFramework,
   detectPrettierProject,
@@ -87,6 +88,7 @@ import {
 import { BuiltinTemplate, TemplateType } from './templates/types.ts';
 import {
   deriveDefaultPackageName,
+  ensurePnpmCreateCatalogEntries,
   ensureDefaultGitignoreEntries,
   ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
@@ -1242,7 +1244,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       workspaceInfo.packageManager,
       skipStagedMigration,
       compactOutput,
+      undefined,
+      workspaceInfo.packageManager === PackageManager.pnpm
+        ? createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager)
+        : undefined,
     );
+    if (workspaceInfo.packageManager === PackageManager.pnpm) {
+      ensurePnpmCreateCatalogEntries(workspaceInfo.rootDir, fullPath);
+    }
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);
