@@ -1,0 +1,182 @@
+name: Config Performance
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'bench/config-performance/**'
+      - 'packages/**'
+      - 'crates/**'
+      - '.github/actions/**'
+      - '.github/workflows/config-performance.yml'
+      - '.node-version'
+      - '.cargo/**'
+      - 'Cargo.*'
+      - 'rust-toolchain.toml'
+      - 'pnpm-*.yaml'
+      - 'package.json'
+
+concurrency:
+  group: config-performance-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  benchmark:
+    name: Config loading benchmark
+    runs-on: namespace-profile-linux-x64-default
+    timeout-minutes: 30
+    outputs:
+      report-ready: ${{ steps.measure.outputs.report-ready }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main
+        with:
+          save-cache: false
+          cache-key: config-performance
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main
+      - uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      # Prefer the base branch of a stacked PR, then an earlier run of this PR.
+      - name: Find previous measurements
+        id: baseline
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const repo = context.repo;
+            const current = await github.rest.actions.getWorkflowRun({ ...repo, run_id: context.runId });
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              ...repo, workflow_id: current.data.workflow_id, status: 'success', per_page: 100,
+            });
+            const runs = data.workflow_runs.filter(run => run.id !== context.runId);
+            const pr = context.payload.pull_request;
+            const baseBranch = pr.base.ref !== 'main' ? runs.filter(run =>
+              run.event === 'pull_request' && run.head_branch === pr.base.ref &&
+              run.head_repository?.full_name === pr.base.repo.full_name
+            ) : [];
+            const previousPR = pr ? runs.filter(run =>
+              run.event === 'pull_request' && run.head_branch === pr.head.ref &&
+              run.head_repository?.full_name === pr.head.repo.full_name
+            ) : [];
+            // A rerun can compare with the retained artifact of its own last
+            // successful attempt. Upload replaces that artifact only at the end.
+            const previousAttempt = [];
+            const attemptNumber = Number(process.env.GITHUB_RUN_ATTEMPT);
+            if (attemptNumber > 1) {
+              const attempt = await github.request(
+                'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}',
+                { ...repo, run_id: context.runId, attempt_number: attemptNumber - 1 },
+              );
+              if (attempt.data.conclusion === 'success') previousAttempt.push(current.data);
+            }
+            core.info(`Attempt ${attemptNumber}: ${baseBranch.length} base branch, ${previousAttempt.length} previous attempt, ${previousPR.length} PR baseline candidates.`);
+            for (const run of [...baseBranch, ...previousAttempt, ...previousPR]) {
+              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({ ...repo, run_id: run.id });
+              if (artifacts.data.artifacts.some(artifact => artifact.name === 'config-performance' && !artifact.expired)) {
+                core.setOutput('run-id', String(run.id));
+                core.info(`Using baseline from ${run.html_url}`);
+                return;
+              }
+            }
+            core.info('No previous measurements; this run establishes a baseline.');
+
+      - name: Download previous measurements
+        if: steps.baseline.outputs.run-id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: config-performance
+          path: ${{ runner.temp }}/config-performance-baseline
+          run-id: ${{ steps.baseline.outputs.run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Run benchmark
+        id: measure
+        env:
+          BASELINE_RUN: ${{ steps.baseline.outputs.run-id }}
+        run: |
+          args=()
+          if [[ -n "$BASELINE_RUN" ]]; then
+            args+=(--baseline "$RUNNER_TEMP/config-performance-baseline/results.json")
+          fi
+          node bench/config-performance/run.ts --output "$RUNNER_TEMP/config-performance" "${args[@]}"
+
+      - name: Upload measurements
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: config-performance
+          path: ${{ runner.temp }}/config-performance
+          if-no-files-found: warn
+          retention-days: 90
+          overwrite: true
+
+  comment:
+    name: Report config performance changes
+    needs: benchmark
+    # Report timing regressions even when the benchmark fails its timing gate.
+    # Fork tokens cannot write comments; their reports stay in the job summary.
+    if: >-
+      always() && !cancelled() &&
+      needs.benchmark.outputs.report-ready == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download measurements
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: config-performance
+          path: ${{ runner.temp }}/config-performance
+
+      - name: Update PR comment for changes beyond five percent
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          REPORT_DIR: ${{ runner.temp }}/config-performance
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const pr = context.payload.pull_request;
+            const { data: latest } = await github.rest.pulls.get({
+              ...context.repo, pull_number: pr.number,
+            });
+            if (latest.state !== 'open' || latest.head.sha !== pr.head.sha) {
+              core.info('The PR closed or its head changed; skip this older report.');
+              return;
+            }
+            const marker = '<!-- vp-config-performance -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number: pr.number,
+            });
+            const existing = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker)
+            );
+            const report = fs.readFileSync(path.join(process.env.REPORT_DIR, 'comment.md'), 'utf8');
+            if (!report) {
+              if (existing) {
+                await github.rest.issues.deleteComment({ ...context.repo, comment_id: existing.id });
+              }
+              core.info('No comparable median change beyond ±5%; no PR comment needed.');
+              return;
+            }
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`;
+            const body = `${marker}\n\n[Benchmark run](${runUrl}) for PR head \`${pr.head.sha}\`.\n\n${report}`;
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: pr.number, body });
+            }
