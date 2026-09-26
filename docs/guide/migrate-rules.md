@@ -90,6 +90,8 @@ The transform does not evaluate configuration code. It leaves a task unchanged a
 - a moved setting that already exists in `cache`;
 - a `cache` value other than `true` or an object literal.
 
+It also warns about tasks in a `vite.config.*` object that is not the exported config itself, such as a variable the config refers to or an object passed to `mergeConfig`. Tasks created in other modules, for example by a shared helper function, are not detected. Move their settings by hand; `vp run` lists every task that still needs it.
+
 With `cache: false`, the moved settings would have no effect, so decide whether to remove them or enable caching. On a project that is otherwise up to date, `vp migrate` prints these warnings without running the rest of the migration.
 
 ## Dependency Rules

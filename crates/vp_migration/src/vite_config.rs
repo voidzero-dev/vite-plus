@@ -674,7 +674,7 @@ fn is_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
     }
 }
 
-fn is_define_config_call<D: Doc>(call_node: &Node<'_, D>) -> bool {
+pub(crate) fn is_define_config_call<D: Doc>(call_node: &Node<'_, D>) -> bool {
     call_node.kind() == "call_expression"
         && call_node.field("function").is_some_and(|f| f.text() == "defineConfig")
 }
