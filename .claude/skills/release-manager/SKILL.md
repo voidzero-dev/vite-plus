@@ -244,15 +244,15 @@ git -C ~/git/github.com/vite-plus-ecosystem-ci/$repo checkout "$branch"
 
 The `.github` repo also ships `scripts/setup-local.sh <repo>` (or `--all`), which does the clone, tracked-branch checkout, remotes, and fork base-repo pinning from the manifest in one step.
 
-**Sync every fork to upstream before you test anything.** The forks drift, often by hundreds of commits, so a checkout straight from `origin` validates stale code and any PR you open against it carries all that drift instead of just the upgrade. For each fork, fetch `source` and fast-forward the tracked branch, skipping any fork whose branch has commits upstream does not have rather than clobbering it:
+**Sync every fork to upstream before you test anything.** The forks drift, often by hundreds of commits, so a checkout straight from `origin` validates stale code and any PR you open against it carries all that drift instead of just the upgrade. From the `.github` checkout, run the safe sync command before the local sweep:
 
 ```bash
-git -C "$dir" fetch source
-git -C "$dir" rev-list --left-right --count "origin/$branch...source/$branch"   # left must be 0 to fast-forward
-git -C "$dir" push --no-verify origin "source/$branch:refs/heads/$branch"
+scripts/sync-forks.sh --all
 ```
 
-Do this before both the local sweep and the fork PRs. If PRs were already opened against a stale base, GitHub will not recompute their merge base when the base branch moves; close and reopen each one to force it (a reopened draft stays a draft). TESTING.md carries the full procedure.
+The command fast-forwards only forks with no fork-only commits. Exit code `2` means that at least one fork needs a sync or manual work. Resolve or explicitly skip each reported fork. Never overwrite a divergent tracked branch.
+
+Run `scripts/sync-forks.sh "$repo"` again immediately before you open each fork PR. If it prints `REOPEN`, close and reopen the current release PR so GitHub calculates a new merge base. Close superseded PRs and delete their branches. TESTING.md carries the full procedure.
 
 **Validate in the project's own CI.** Beyond the local `vp migrate`, exercise the prerelease in the fork's real CI by opening a draft PR on the fork, following "Smoke-test via a fork PR" in TESTING.md: branch `update-vite-plus-prerelease-test-<version>` synced from `source`, apply the upgrade, open a **draft** PR on the fork (never upstream) **assigned to the release manager**, then watch its checks for upgrade-related failures. Offer this alongside the local sweep rather than treating it as an afterthought; it is the only level that exercises each project's own build and tests. Some projects' CIs install with a non-standard tool that cannot resolve preview builds through the bridge `.npmrc` (e.g. cnpmcore's `utoo`), so check the install step before trusting fork-CI results.
 
@@ -426,6 +426,7 @@ The full package document can update before npm's separately cached installation
      ```
 
    - Keep the review draft, body-only notes file, and live release aligned after requested edits. Read back the live title and body to verify the update. Normalize CRLF and LF before comparing the approved file with the live body, because GitHub can change line endings. Re-run the step 3 validation greps, plus `grep -c 'Merging this PR'` (must be 0).
+   - For a SemVer prerelease, confirm that GitHub marks the release as a prerelease. The automated release can create a prerelease tag without setting that flag. Add `--prerelease` when applying the approved notes, then verify `isPrerelease` with `gh release view vX.Y.Z --json isPrerelease`.
 
 2. **Verify**:
 
@@ -441,7 +442,9 @@ The full package document can update before npm's separately cached installation
 
    `vp upgrade` requires a standalone installation; `vp update` is not a substitute because it updates project dependencies. Resolve the intended binary and query its roots with `VP_DUMP_DIRS=1`; installations can use split XDG/platform roots, an explicit `VP_HOME`, or the legacy `~/.vite-plus` directory. Remove temporary overrides left by preview/control runs, while preserving the intended installation's configuration.
 
-   If the user's installation points to `local-dev-*` or is managed by another tool, test an isolated copy of the previous published installation under an explicit `VP_HOME`. Repoint any absolute symlinks in the copy to the copied root before testing. Label the result as an isolated upgrade; preserve the development installation and the original control used for regression tests. Run the selected binary outside a project so a local CLI cannot take over:
+   If the user's installation points to `local-dev-*` or is managed by another tool, test an isolated copy of the previous published installation under an explicit `VP_HOME`. Repoint any absolute symlinks in the copy to the copied root before testing. Label the result as an isolated upgrade; preserve the development installation and the original control used for regression tests.
+
+   Isolate shell startup as well as Vite+ storage. `VP_HOME` alone does not prevent setup from editing the user's real shell profiles, and an upgrade handoff can start a shell that selects another installation from those profiles. Set temporary `HOME` and `ZDOTDIR` values for the installer and every verification command. After the test, confirm that the user's profiles and intended installation's `current` link are unchanged. Run the selected binary outside a project so a local CLI cannot take over:
 
    ```bash
    release_vp=/absolute/path/to/vp
@@ -517,7 +520,7 @@ After the release ships and announcements are approved or confirmed complete, re
 - [ ] Smoke test offered to the release manager at both levels (local sweep and fork-PR CI), with the commit count stated and a recommendation to run it when that count is above 10; if accepted, forks synced to upstream first, preview build published, and the full ecosystem-ci catalog verified via `test-pkg-pr-new-migrate` (following TESTING.md), with every failure triaged and regressions ruled out against the previous release
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved by someone other than the merger; npm + GitHub release + Docker image all published
-- [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block
+- [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block; the prerelease flag matches the version
 - [ ] Installs verified (npm versions + latest tag, `vp upgrade`, `vp --version` output inside the ghcr Docker image)
 - [ ] Announcements handed over in chat (Discord and any requested X drafts), or confirmed complete by the release manager
 - [ ] Skill reviewed for durable learnings; any that generalize folded in and a `docs(skill)` PR proposed
