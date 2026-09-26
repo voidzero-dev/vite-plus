@@ -14,3 +14,13 @@ Run with `tool <name>`:
   platform data directory.
 - brand-vite: Apply Vite+ branding patches to the synced vite source (also runs at the end of sync-remote)
 - local-npm-registry: Serve locally packed checkout packages behind a real registry HTTP interface for snapshot tests, ecosystem e2e, and local `vp migrate`/`vp create` iteration
+
+## Local npm registry
+
+See the [contributing guide](../../CONTRIBUTING.md#test-vp-migrate--vp-create-through-a-local-npm-registry) for local build and usage commands.
+
+[`src/local-npm-registry.ts`](src/local-npm-registry.ts) packs the checkout, serves its tarballs through a registry HTTP interface, and proxies other packages upstream.
+
+- Served versions use an old publish time so package-manager minimum-release-age checks allow local builds immediately.
+- Wrapped commands use temporary Yarn Berry and bun caches to avoid reusing stale local builds with the same package version.
+- The server also backs [PTY snapshot cases](../../crates/vp_cli_snapshots/tests/cli_snapshots/README.md) with `local-registry = true` and [ecosystem e2e tests](../../ecosystem-ci/patch-project.ts).
