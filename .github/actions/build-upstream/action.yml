@@ -138,8 +138,10 @@ runs:
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       run: |
         pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET} -x
+      # No TARGET_CC: cc-rs would prefer it over cargo-zigbuild's zig cc, and host
+      # clang compiles C deps (aws-lc-sys) against glibc headers, leaving glibc-only
+      # symbols such as __isoc23_sscanf that do not exist in musl.
       env:
-        TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
@@ -169,8 +171,10 @@ runs:
       shell: bash
       run: |
         pnpm exec napi build -x --target ${INPUTS_TARGET} --release -p vp_global_cli
+      # No TARGET_CC: cc-rs would prefer it over cargo-zigbuild's zig cc, and host
+      # clang compiles C deps (aws-lc-sys) against glibc headers, leaving glibc-only
+      # symbols such as __isoc23_sscanf that do not exist in musl.
       env:
-        TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
