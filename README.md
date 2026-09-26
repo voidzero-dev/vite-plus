@@ -1,9 +1,9 @@
 <p align="center">
   <a href="https://viteplus.dev" target="_blank" rel="noopener noreferrer">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="/logo-dark.svg">
-      <source media="(prefers-color-scheme: light)" srcset="/logo.svg">
-      <img alt="Vite+" src="/logo.svg" height="60">
+      <source media="(prefers-color-scheme: dark)" srcset="./docs/public/logo-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="./docs/public/logo.svg">
+      <img alt="Vite+" src="./docs/public/logo.svg" height="60">
     </picture>
   </a>
 </p>
