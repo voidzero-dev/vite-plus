@@ -1,0 +1,14 @@
+[[case]]
+name = "migration_missing_package_json"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent"], comment = "An empty directory gets an actionable project error", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_missing_package_json_path"
+vp = "global"
+steps = [
+  { argv = ["vpt", "mkdir", "empty"], snapshot = false },
+  { argv = ["vp", "migrate", "empty", "--no-interactive", "--no-hooks", "--no-agent"], comment = "An explicit path without package.json gets the same error", continue-on-failure = true },
+]
