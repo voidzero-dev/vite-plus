@@ -4,7 +4,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { type OxlintConfig } from 'oxlint';
-import semver from 'semver';
+import { compareReversed, isLessThanOrEqual, normalize } from 'verkit';
 
 import { rewriteEslint } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
@@ -127,9 +127,9 @@ export async function resolveOxlintMigrateVersion(oxlintVersion: string): Promis
       return oxlintVersion;
     }
     const candidates = Object.keys(packument.versions ?? {}).filter(
-      (version) => semver.valid(version) && semver.lte(version, oxlintVersion),
+      (version) => normalize(version) && isLessThanOrEqual(version, oxlintVersion),
     );
-    return candidates.length > 0 ? candidates.toSorted(semver.rcompare)[0] : oxlintVersion;
+    return candidates.length > 0 ? candidates.toSorted(compareReversed)[0] : oxlintVersion;
   } catch {
     return oxlintVersion;
   }

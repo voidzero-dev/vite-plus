@@ -366,7 +366,6 @@
     "@napi-rs/cli": "catalog:",
     "@nkzw/safe-word-list": "catalog:",
     "@types/cross-spawn": "catalog:",
-    "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "@vitest/browser-webdriverio": "catalog:",
@@ -382,9 +381,9 @@
     "minimatch": "catalog:",
     "nanotar": "catalog:",
     "picocolors": "catalog:",
-    "semver": "catalog:",
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",
+    "verkit": "catalog:",
     "yaml": "catalog:",
     "zod": "catalog:"
   },

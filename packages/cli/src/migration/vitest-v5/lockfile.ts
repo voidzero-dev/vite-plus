@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
-import semver from 'semver';
+import { normalize, normalizeRange, satisfies } from 'verkit';
 import { parseDocument } from 'yaml';
 
 import { PackageManager } from '../../types/index.ts';
@@ -39,15 +39,15 @@ export function lockedVitestVersion(
   spec: string,
 ): string | undefined {
   const range = spec.replace(/^npm:vitest@/, '');
-  const validRange = semver.validRange(range);
+  const validRange = normalizeRange(range);
   if (!validRange && !/^[\w.-]+$/.test(range)) {
     return undefined;
   }
   function valid(version: unknown): string | undefined {
-    if (typeof version !== 'string' || !semver.valid(version)) {
+    if (typeof version !== 'string' || !normalize(version)) {
       return undefined;
     }
-    return !validRange || semver.satisfies(version, range, { includePrerelease: true })
+    return !validRange || satisfies(version, range, { includePrerelease: true })
       ? version
       : undefined;
   }
