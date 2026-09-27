@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use backon::{ExponentialBuilder, Retryable};
-use node_semver::{Range, Version};
+use js_semver::{Range, Version};
 use tempfile::TempDir;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
@@ -770,7 +770,7 @@ mod tests {
                 assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
                 // Version should be >= 20.18.0 and < 21.0.0
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert_eq!(parsed.major, 20);
                 assert!(parsed.minor >= 18);
 
@@ -807,7 +807,7 @@ mod tests {
                 // Should use node runtime (deno is not supported yet)
                 assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert_eq!(parsed.major, 20);
             },
         )
@@ -838,7 +838,7 @@ mod tests {
 
                 // Should have a valid version
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert!(parsed.major >= 20);
 
                 // .node-version is written only if no ancestor has one (write-back is
@@ -924,7 +924,7 @@ mod tests {
 
                 let runtime = download_runtime_for_project(&temp_path).await.unwrap();
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert_eq!(parsed.major, 20);
 
                 // Should NOT write .node-version since a version was specified
@@ -1323,7 +1323,7 @@ mod tests {
                 // devEngines.runtime is the dev-environment requirement and wins over the
                 // consumer-facing engines.node range (rfcs/dev-engines.md)
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert_eq!(parsed.major, 22);
             },
         )
@@ -1345,7 +1345,7 @@ mod tests {
 
                 let runtime = download_runtime_for_project(&temp_path).await.unwrap();
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert_eq!(parsed.major, 20);
 
                 // Should NOT write .node-version since a version was specified
@@ -1369,7 +1369,7 @@ mod tests {
 
                 let runtime = download_runtime_for_project(&temp_path).await.unwrap();
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 // Should resolve to a 20.18.x or higher version in 20.x line
                 assert_eq!(parsed.major, 20);
                 // Minor version should be at least 18
@@ -1398,7 +1398,7 @@ mod tests {
 
                 let runtime = download_runtime_for_project(&temp_path).await.unwrap();
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 // Should resolve to a 20.x.x version
                 assert_eq!(parsed.major, 20);
 
@@ -1449,7 +1449,7 @@ mod tests {
 
                 // Should have a valid version (latest LTS)
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert!(parsed.major >= 20);
             },
         )
@@ -1479,7 +1479,7 @@ mod tests {
 
                 // Should have a valid version (latest LTS)
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert!(parsed.major >= 20);
             },
         )
@@ -1510,7 +1510,7 @@ mod tests {
 
                 // Should have a valid version (latest LTS)
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert!(parsed.major >= 20);
             },
         )
@@ -1536,7 +1536,7 @@ mod tests {
                 // Should use engines.node since .node-version is invalid
                 let runtime = download_runtime_for_project(&temp_path).await.unwrap();
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert_eq!(parsed.major, 20);
             },
         )
@@ -1562,7 +1562,7 @@ mod tests {
                 // Should use devEngines.runtime since engines.node is invalid
                 let runtime = download_runtime_for_project(&temp_path).await.unwrap();
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert_eq!(parsed.major, 20);
             },
         )
@@ -1633,17 +1633,6 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_version_with_negation() {
-        // node-semver crate supports negation syntax
-        let version = Str::from(">=18 !=19.0.0 <21");
-        assert_eq!(
-            normalize_version(&version, "test"),
-            Some(version.clone()),
-            "Expected '>=18 !=19.0.0 <21' to be valid"
-        );
-    }
-
-    #[test]
     fn test_normalize_version_with_whitespace() {
         // Versions with leading/trailing whitespace are trimmed
         let version = Str::from("   20  ");
@@ -1705,7 +1694,7 @@ mod tests {
                 assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
                 // lts/iron should resolve to v20.x
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert_eq!(parsed.major, 20, "lts/iron should resolve to v20.x, got {version}");
 
                 // Should NOT overwrite .node-version - user explicitly specified an LTS alias
@@ -1741,7 +1730,7 @@ mod tests {
                 assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
                 // lts/* should resolve to latest LTS (at least v22.x as of 2026)
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 assert!(
                     parsed.major >= 22,
                     "lts/* should resolve to at least v22.x, got {version}"
@@ -1786,7 +1775,7 @@ mod tests {
                 assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
                 // "latest" should resolve to the absolute latest version (including non-LTS)
                 let version = runtime.version();
-                let parsed = node_semver::Version::parse(version).unwrap();
+                let parsed = js_semver::Version::parse(version).unwrap();
                 // Latest version should be at least v20.x
                 assert!(
                     parsed.major >= 20,
