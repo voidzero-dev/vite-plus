@@ -2,7 +2,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use node_semver::{Range, Version};
+use js_semver::{Range, Version};
 use serde::{Deserialize, Serialize};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;

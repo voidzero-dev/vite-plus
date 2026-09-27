@@ -990,8 +990,8 @@ async fn nvmrc_conflict_finding(
 
     let project_root = resolution.project_root.as_ref()?;
     let declared = vp_js_runtime::read_nvmrc_file(project_root).await?;
-    let version = node_semver::Version::parse(&resolution.version).ok()?;
-    let range = node_semver::Range::parse(declared.as_str()).ok()?;
+    let version = js_semver::Version::parse(&resolution.version).ok()?;
+    let range = js_semver::Range::parse(declared.as_str()).ok()?;
     if range.satisfies(&version) {
         return None;
     }
@@ -1057,9 +1057,9 @@ async fn collect_dev_engines_findings(
     if check_node
         && let Ok(Some(resolution)) = vp_js_runtime::resolve_node_version(cwd, true).await
         && resolution.source == vp_js_runtime::VersionSource::NodeVersionFile
-        && let Ok(version) = node_semver::Version::parse(&resolution.version)
+        && let Ok(version) = js_semver::Version::parse(&resolution.version)
         && let Some(declared) = find_nearest_dev_engines_node_version(cwd).await
-        && let Ok(range) = node_semver::Range::parse(declared.as_str())
+        && let Ok(range) = js_semver::Range::parse(declared.as_str())
         && !range.satisfies(&version)
     {
         findings.push(DevEnginesFinding::warn(
@@ -1075,8 +1075,8 @@ async fn collect_dev_engines_findings(
     if check_node
         && let Some(resolution) = resolution
         && let Some(engines_node) = pkg.engines.as_ref().and_then(|e| e.node.as_ref())
-        && let Ok(version) = node_semver::Version::parse(&resolution.version)
-        && let Ok(range) = node_semver::Range::parse(engines_node.as_str())
+        && let Ok(version) = js_semver::Version::parse(&resolution.version)
+        && let Ok(range) = js_semver::Range::parse(engines_node.as_str())
         && !range.satisfies(&version)
     {
         findings.push(DevEnginesFinding::warn(
@@ -1096,7 +1096,7 @@ async fn collect_dev_engines_findings(
         let Some(field) = field else { continue };
         for entry in field.entries() {
             if let Some(version) = &entry.version
-                && node_semver::Range::parse(version.as_str()).is_err()
+                && js_semver::Range::parse(version.as_str()).is_err()
             {
                 findings.push(DevEnginesFinding::warn(
                     "Spec",
@@ -1148,8 +1148,8 @@ async fn collect_dev_engines_findings(
             }
             Some(entry) => {
                 if let Some(required) = &entry.version
-                    && let Ok(range) = node_semver::Range::parse(required.as_str())
-                    && let Ok(version) = node_semver::Version::parse(pm_version)
+                    && let Ok(range) = js_semver::Range::parse(required.as_str())
+                    && let Ok(version) = js_semver::Version::parse(pm_version)
                     && !range.satisfies(&version)
                 {
                     findings.push(DevEnginesFinding::warn_with_hint(

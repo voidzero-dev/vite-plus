@@ -479,7 +479,7 @@ fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
     if is_preview_version(local) || is_preview_version(global) {
         return local != global;
     }
-    match (node_semver::Version::parse(local), node_semver::Version::parse(global)) {
+    match (js_semver::Version::parse(local), js_semver::Version::parse(global)) {
         (Ok(local_v), Ok(global_v)) => local_v < global_v,
         _ => false,
     }

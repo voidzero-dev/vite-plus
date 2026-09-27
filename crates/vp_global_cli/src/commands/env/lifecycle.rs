@@ -97,11 +97,9 @@ pub(crate) async fn uninstall(specs: Vec<String>) -> Result<ExitStatus, Error> {
     let package_manager = specs
         .package_manager
         .map(|(kind, version, _)| {
-            node_semver::Version::parse(&version)
-                .map(|version| (kind, version.to_string()))
-                .map_err(|_| {
-                    Error::Other("uninstall requires exact package-manager versions".into())
-                })
+            js_semver::Version::parse(&version).map(|version| (kind, version.to_string())).map_err(
+                |_| Error::Other("uninstall requires exact package-manager versions".into()),
+            )
         })
         .transpose()?;
     let node = match specs.node {

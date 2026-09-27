@@ -166,7 +166,7 @@ fn status_for_versions(current: &str, latest: &str) -> UpgradeCheckStatus {
         return UpgradeCheckStatus::Current;
     }
 
-    match (node_semver::Version::parse(current), node_semver::Version::parse(latest)) {
+    match (js_semver::Version::parse(current), js_semver::Version::parse(latest)) {
         (Ok(current), Ok(latest)) if latest > current => UpgradeCheckStatus::Available,
         (Ok(_), Ok(_)) => UpgradeCheckStatus::Current,
         _ => UpgradeCheckStatus::Unknown,
