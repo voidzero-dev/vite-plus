@@ -44,6 +44,6 @@ steps = [
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
   ["vpt", "print-file", "package.json"],
   ["vpt", "print-file", "vite.config.ts"],
-  { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"5.0.1\"}"], comment = "simulate the upgraded runner because snapshot fixtures skip install", snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"5.0.2\"}"], comment = "simulate the upgraded runner because snapshot fixtures skip install", snapshot = false },
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
 ]

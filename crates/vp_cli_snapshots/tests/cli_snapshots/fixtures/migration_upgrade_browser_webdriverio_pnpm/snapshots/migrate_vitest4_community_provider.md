@@ -51,7 +51,7 @@ export default defineConfig({
 });
 ```
 
-## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"5.0.1"}'`
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"5.0.2"}'`
 
 simulate the upgraded runner because snapshot fixtures skip install
 
