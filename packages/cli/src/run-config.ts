@@ -26,6 +26,16 @@ base: InputBase, };
 
 export type InputBase = "package" | "workspace";
 
+export type RemoteCacheConfig = {
+/**
+ * HTTP or HTTPS namespace endpoint. Overridden by `VP_REMOTE_CACHE_URL`.
+ *
+ * In a GitHub Actions job with `permissions: id-token: write`, uploads
+ * authenticate with a GitHub Actions OIDC token whose audience is the
+ * endpoint without a trailing slash.
+ */
+url: string, };
+
 export type Task = {
 /**
  * Command to run, or an array of commands to run in order.
@@ -87,7 +97,18 @@ input?: Array<string | GlobWithBase | AutoTracking>,
  * - `{auto: true}` enables automatic output tracking
  * - Negative patterns (e.g. `"!dist/cache/**"`) exclude matched files
  */
-output?: Array<string | GlobWithBase | AutoTracking>, };
+output?: Array<string | GlobWithBase | AutoTracking>,
+/**
+ * Whether this task can use the remote cache. Defaults to `true`.
+ *
+ * The remote cache is used only when these also hold:
+ * - Caching isn't turned off by `--no-cache` or the workspace root's `cache` setting.
+ * - An endpoint is set with `cache.remote.url` in the workspace root config or with
+ *   `VP_REMOTE_CACHE_URL`.
+ * - Remote access isn't set to `off` with `--remote-cache` or `VP_REMOTE_CACHE`. It
+ *   defaults to `read`, which downloads cached results without uploading new ones.
+ */
+remote?: boolean, };
 
 export type TaskDefinition = Task | Command;
 
@@ -111,7 +132,11 @@ scripts?: boolean,
  *
  * Default: `true`
  */
-tasks?: boolean, };
+tasks?: boolean,
+/**
+ * Remote cache shared by tasks in the workspace.
+ */
+remote?: RemoteCacheConfig, };
 
 export type UserPackageDependency = {
 /**
