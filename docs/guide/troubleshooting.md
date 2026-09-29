@@ -3,7 +3,7 @@
 Use this page when something in Vite+ is not behaving the way you expect.
 
 ::: info
-Vite+ is in beta: stable, but not yet complete. We are adding features on the road to 1.0 and prioritize community feedback, so please [reach out](#asking-for-help) if something does not work as expected.
+Vite+ 1.0 is available. We continue to improve it and welcome community feedback, so please [reach out](#asking-for-help) if something does not work as expected.
 :::
 
 ## Supported Tool Versions

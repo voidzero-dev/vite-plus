@@ -41,29 +41,27 @@ import rolldownIcon from '@assets/icons/rolldown-light.svg';
           <div class="text-white">$ vp pack</div>
           <div class="h-4" />
           <div class="text-grey">
-            CLI Building entry:
+            ℹ entry:
             <span class="terminal-blue">src/index.ts</span>
           </div>
           <div class="text-grey">
-            CLI Using config:
-            <span class="text-white">tsdown.config.ts</span>
+            ℹ tsconfig:
+            <span class="text-white">tsconfig.json</span>
           </div>
-          <div class="text-grey">
-            CLI tsdown <span class="text-white">0.14.1</span> powered by Rolldown
-          </div>
+          <div class="text-grey">ℹ Build start</div>
           <div class="h-4" />
           <div class="text-grey">
-            ESM <span class="text-white">dist/index.js</span>
+            ℹ <span class="text-white">dist/index.mjs</span>
             <span class="inline-block w-2" aria-hidden="true"></span>
             <span class="terminal-blue">4.8 kB</span>
           </div>
           <div class="text-grey">
-            DTS <span class="text-white">dist/index.d.ts</span>
+            ℹ <span class="text-white">dist/index.d.mts</span>
             <span class="inline-block w-2" aria-hidden="true"></span>
             <span class="terminal-blue">1.2 kB</span>
           </div>
           <div class="text-grey">
-            <span class="text-zest">✓</span> Pack completed in <span class="text-white">128ms</span>
+            <span class="text-zest">✔</span> Build complete in <span class="text-white">128ms</span>
           </div>
         </div>
       </div>
