@@ -5,7 +5,7 @@
   "packageManager": "pnpm@11.24.0",
   "devDependencies": {
     "vite-plus": "latest",
-    "@vitest/browser-playwright": "5.0.1",
+    "@vitest/browser-playwright": "5.0.2",
     "playwright": "1.57.0",
     "typescript": "7.0.2"
   }

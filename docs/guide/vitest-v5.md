@@ -1,6 +1,6 @@
 # Upgrade to Vitest 5
 
-Vite+ bundles Vitest `5.0.1`. Use Node `^22.18.0 || ^24.11.0 || >=26.0.0` for the CLI and tests.
+Vite+ bundles Vitest `5.0.2`. Use Node `^22.18.0 || ^24.11.0 || >=26.0.0` for the CLI and tests.
 
 ## Before you migrate
 
@@ -126,7 +126,7 @@ Review calls with benchmark options, imported or reassigned callbacks, callback 
 
 ## Entry points and packages
 
-Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage providers and `@vitest/ui` at the bundled runner's exact version, `5.0.1`. Keep `@vitest/web-worker` aligned when your project uses it.
+Use `vite-plus/test` for assertions and supported runner APIs. Keep coverage providers and `@vitest/ui` at the bundled runner's exact version, `5.0.2`. Keep `@vitest/web-worker` aligned when your project uses it.
 
 | v4 import                                | v5 import or action                                                         |
 | ---------------------------------------- | --------------------------------------------------------------------------- |
@@ -188,7 +188,7 @@ Use the file locations in the migration report to review these changes. Run brow
 
 For jest-dom matcher types, load `@testing-library/jest-dom/vitest` in `compilerOptions.types` or import it from a TypeScript setup file that your `tsconfig.json` includes. The root `@testing-library/jest-dom` type entry augments Jest. A JavaScript setup file excluded by `allowJs: false` does not load the Vitest augmentation for type checking. Review shared Jest/Vitest configs before changing their type entries.
 
-With `vitest@5.0.1`, loading browser declarations first can also make TypeScript reject valid Node jest-dom assertions: `toHaveTextContent(/pattern/)` and CSS custom properties in `toHaveStyle()`. We reproduced this conflict with upstream imports and with Vite+ imports. Both `@testing-library/jest-dom@6.9.1` and `7.0.1` reproduce it. Check the declarations loaded by each test `tsconfig.json`; adding the jest-dom type entry alone might not resolve the conflict. Keep the affected project on the v4-based release until its Node and browser matcher types pass separate checks.
+With `vitest@5.0.2`, loading browser declarations first can also make TypeScript reject valid Node jest-dom assertions: `toHaveTextContent(/pattern/)` and CSS custom properties in `toHaveStyle()`. We reproduced this conflict with upstream imports and with Vite+ imports. Both `@testing-library/jest-dom@6.9.1` and `7.0.1` reproduce it. Check the declarations loaded by each test `tsconfig.json`; adding the jest-dom type entry alone might not resolve the conflict. Keep the affected project on the v4-based release until its Node and browser matcher types pass separate checks.
 
 | Area                  | Required review                                                                                                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

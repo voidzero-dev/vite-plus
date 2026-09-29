@@ -7,21 +7,22 @@ import { sanitizeMigratedOxlintConfig } from '../migrator.ts';
 import { createMigrationReport } from '../report.ts';
 
 describe('React Refresh option migration', () => {
-  it('keeps the workaround tied to the bundled Oxlint schema', () => {
+  it('matches the bundled Oxlint schema, which supports the option', () => {
     const schema = JSON.parse(
       fs.readFileSync(
         new URL('configuration_schema.json', import.meta.resolve('oxlint/package.json')),
         'utf8',
       ),
     );
-    // When Oxlint implements this option, preserve it during migration.
-    expect(schema.definitions.OnlyExportComponentsConfig.properties).not.toHaveProperty(
+    // The bundled Oxlint implements this option, so migration preserves it.
+    // If a future Oxlint removes it, reinstate the stripping workaround.
+    expect(schema.definitions.OnlyExportComponentsConfig.properties).toHaveProperty(
       'allowCompoundComponents',
     );
   });
 
-  it.each([true, false])('removes the unsupported option when it is %s', (value) => {
-    // Model the invalid JSON emitted by @oxlint/migrate.
+  it.each([true, false])('preserves the supported option when it is %s', (value) => {
+    // Model the JSON emitted by @oxlint/migrate.
     const config = {
       rules: {
         'react/only-export-components': [
@@ -44,13 +45,13 @@ describe('React Refresh option migration', () => {
 
     expect(config.rules?.['react/only-export-components']).toEqual([
       'warn',
-      { allowConstantExport: true, checkJS: true },
+      { allowCompoundComponents: value, allowConstantExport: true, checkJS: true },
     ]);
-    expect(config.overrides?.[0].rules?.['react/only-export-components']).toEqual(['error', {}]);
-    expect(report.warnings).toEqual([
-      'The bundled Oxlint does not support react/only-export-components.allowCompoundComponents. ' +
-        'Removed this option from the migrated config; compound component exports may now report lint errors.',
+    expect(config.overrides?.[0].rules?.['react/only-export-components']).toEqual([
+      'error',
+      { allowCompoundComponents: value },
     ]);
+    expect(report.warnings).toEqual([]);
   });
 
   it('preserves supported options, other rules, and rules without options', () => {
