@@ -1,0 +1,21 @@
+packages/cli/src/__tests__/bin-config-laziness.spec.ts
+  s_ad705be907c738::t_7c0166a8cf10fa 1-49
+packages/cli/src/bin.ts
+  s_ad705be907c738::t_45e73e1215820d 155-161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8e7057030476f7f6f12ad71c3dd4136057e714de",
+  "prompts": {},
+  "sessions": {
+    "s_ad705be907c738": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0edab-dbb0-7ca1-8a29-e2a6e0ca700b",
+        "model": "unknown"
+      },
+      "human_author": "Cameron <cclark@cloudflare.com>"
+    }
+  }
+}
