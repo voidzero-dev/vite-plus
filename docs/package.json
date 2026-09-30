@@ -26,5 +26,5 @@
     "vitepress": "2.0.0-alpha.17",
     "wrangler": "^4.127.1"
   },
-  "packageManager": "pnpm@11.24.0"
+  "packageManager": "pnpm@12.7.0"
 }
