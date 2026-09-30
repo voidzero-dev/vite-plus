@@ -23,7 +23,7 @@
 **Exit code:** 1
 
 ```
-error: Upgrade error: Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.
+error: Upgrade error: Homebrew manages this installation. Run `brew upgrade fengmk2/core/vite-plus` to update it.
 ```
 
 ## `VP_HOME=${workspace}/home ./home/bin/vp upgrade --force`
@@ -31,7 +31,7 @@ error: Upgrade error: Homebrew manages this installation. Run `brew upgrade vite
 **Exit code:** 1
 
 ```
-error: Upgrade error: Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.
+error: Upgrade error: Homebrew manages this installation. Run `brew upgrade fengmk2/core/vite-plus` to update it.
 ```
 
 ## `VP_HOME=${workspace}/home ./home/bin/vp upgrade 0.0.1 --registry http://127.0.0.1:9`
@@ -39,7 +39,7 @@ error: Upgrade error: Homebrew manages this installation. Run `brew upgrade vite
 **Exit code:** 1
 
 ```
-error: Upgrade error: Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.
+error: Upgrade error: Homebrew manages this installation. Run `brew upgrade fengmk2/core/vite-plus` to update it.
 ```
 
 ## `VP_HOME=${workspace}/home ./home/bin/vp upgrade --rollback`
@@ -47,7 +47,7 @@ error: Upgrade error: Homebrew manages this installation. Run `brew upgrade vite
 **Exit code:** 1
 
 ```
-error: Upgrade error: Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.
+error: Upgrade error: Homebrew manages this installation. Run `brew upgrade fengmk2/core/vite-plus` to update it.
 ```
 
 ## `VP_HOME=${workspace}/home ./home/bin/vp upgrade --silent`
@@ -55,13 +55,13 @@ error: Upgrade error: Homebrew manages this installation. Run `brew upgrade vite
 **Exit code:** 1
 
 ```
-error: Upgrade error: Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.
+error: Upgrade error: Homebrew manages this installation. Run `brew upgrade fengmk2/core/vite-plus` to update it.
 ```
 
 ## `VP_HOME=${workspace}/home ./home/bin/vp upgrade --check`
 
 ```
-info: Homebrew manages this installation. Run `brew outdated vite-plus` to check for updates.
+info: Homebrew manages this installation. Run `brew outdated fengmk2/core/vite-plus` to check for updates.
 ```
 
 ## `VP_HOME=${workspace}/home ./home/bin/vp upgrade --check --silent`
@@ -113,7 +113,7 @@ Cleanup removes user data and leaves the Homebrew package installed
 ✓ Removed <workspace>/home
 
 ✓ Vite+ removed its managed files and shell entries from your system.
-note: The Homebrew package remains installed. Run `brew uninstall vite-plus` to remove it.
+note: The Homebrew package remains installed. Run `brew uninstall fengmk2/core/vite-plus` to remove it.
 note: To run `vp` again, restart your terminal or run `hash -r` in Bash. The remaining Homebrew package will start setup again.
 note: Restart your terminal to apply shell changes.
 ```

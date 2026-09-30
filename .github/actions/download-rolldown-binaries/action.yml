@@ -20,32 +20,26 @@ runs:
     - name: Install previous release
       shell: bash
       run: |
-        # Always download the binding that matches the runner OS (not the
+        # Always download the binding that matches the running Node (not the
         # Rust cross-compilation target). The rolldown binding is loaded by
         # Node.js on the host to run JS build steps, not cross-compiled.
-        if ${{ runner.os == 'Windows' }}; then
-          export TARGET="win32-x64-msvc"
-        elif ${{ runner.os == 'Linux' }}; then
-          export TARGET="linux-x64-gnu"
-        elif ${{ runner.os == 'macOS' }}; then
-          export TARGET="darwin-arm64"
-        fi
+        rolldown_host=$(node -p 'process.platform + "-" + process.arch + (process.platform === "linux" ? "-gnu" : process.platform === "win32" ? "-msvc" : "")')
 
         # Pin to the version from checked-out rolldown source to avoid mismatch
         # between JS code (built from source) and native binary (downloaded from npm).
         # Falls back to npm latest only when rolldown source isn't cloned yet
         # (e.g., the standalone download-previous-rolldown-binaries job).
         if [ -f "./rolldown/packages/rolldown/package.json" ]; then
-          export VERSION=$(node -p "require('./rolldown/packages/rolldown/package.json').version")
-          echo "Using rolldown version from source: ${VERSION}"
+          rolldown_version=$(node -p "require('./rolldown/packages/rolldown/package.json').version")
+          echo "Using rolldown version from source: ${rolldown_version}"
         else
-          export VERSION=$(npm view --json rolldown | jq -r '.version')
-          echo "Warning: rolldown source not found, using npm latest: ${VERSION}"
+          rolldown_version=$(npm view --json rolldown | jq -r '.version')
+          echo "Warning: rolldown source not found, using npm latest: ${rolldown_version}"
         fi
-        npm pack "@rolldown/binding-${TARGET}@${VERSION}"
-        tar -xzf "rolldown-binding-${TARGET}-${VERSION}.tgz"
+        npm pack "@rolldown/binding-${rolldown_host}@${rolldown_version}"
+        tar -xzf "rolldown-binding-${rolldown_host}-${rolldown_version}.tgz"
         if [ -d "./rolldown/packages/rolldown/src" ]; then
-          cp "./package/rolldown-binding.${TARGET}.node" ./rolldown/packages/rolldown/src
+          cp "./package/rolldown-binding.${rolldown_host}.node" ./rolldown/packages/rolldown/src
           ls ./rolldown/packages/rolldown/src
         fi
       env:

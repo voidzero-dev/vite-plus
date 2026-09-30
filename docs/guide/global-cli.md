@@ -352,7 +352,7 @@ For example, `VP_VERSION=1.0.0 vp-setup.exe --version 2.0.0` installs version 2.
 
 ### Homebrew
 
-For a Homebrew installation, the first `vp` command sets up your shell, shims, and environment-management preferences. It reuses Homebrew's binary and bundled JavaScript. Setup stores its completion state in your user directories and does not need write access to the Homebrew prefix.
+The [official Homebrew tap](/guide/homebrew) installs the native CLI. The first `vp` command installs matching JavaScript dependencies in your data directory and sets up your shell, shims, and environment-management preferences. Setup stores its completion state in your user directories and does not need write access to the Homebrew prefix.
 
 Later commands reuse that setup while the installed binary remains unchanged. Generated shims follow Homebrew's public `vp` entrypoint when Homebrew replaces a version. Setup preserves your saved management preferences during this replacement.
 
@@ -366,7 +366,9 @@ After setup, use `vp env off` to change this preference. Commands that need miss
 
 Use Homebrew to [upgrade](/guide/upgrade#homebrew) or [remove](/guide/implode#homebrew) its package.
 
-`vp env doctor` identifies the Homebrew installation and its binary path. It checks the `vp` command and the user shim directory on `PATH` separately. If only the shim directory is missing, follow its shell setup instructions to enable the shims.
+`vp env doctor` identifies the official tap, formula name, and binary path. It checks the `vp` command and the user shim directory on `PATH` separately. If only the shim directory is missing, follow its shell setup instructions to enable the shims.
+
+See the [official tap guide](/guide/homebrew) for availability, registry configuration, and migration instructions.
 
 ## Use It Without a Local Package
 

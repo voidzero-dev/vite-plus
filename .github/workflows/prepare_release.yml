@@ -35,6 +35,8 @@ jobs:
 
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
+      # release.yml updates HomebrewFormula/vp.rb after the release archives and
+      # their checksums are published. Do not point the tap at unpublished assets.
       - name: Bump versions
         env:
           VERSION: ${{ inputs.version }}
@@ -77,6 +79,8 @@ jobs:
           sign-commits: true
           body: |
             Release vite-plus v${{ inputs.version }}.
+
+            For a stable release, complete the `HomebrewFormula/vp.rb` update after publication by merging the generated `release/homebrew-v${{ inputs.version }}` PR.
 
             Merging this PR will trigger the release workflow.
           assignees: ${{ github.actor }}

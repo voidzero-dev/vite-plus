@@ -94,10 +94,12 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
     // Section: Installation
     vp_shared::output::print_stdout_line(format_args!("{}", style("Installation").bold()));
-    if crate::homebrew::owns_current_exe() {
-        print_check(" ", "CLI source", "Homebrew");
-        if let Ok(binary) = std::env::current_exe().and_then(std::fs::canonicalize) {
-            print_check(" ", "CLI binary", &abbreviate_home(&binary.display().to_string()));
+    if let Some(homebrew) = crate::homebrew::current() {
+        print_check(" ", "CLI source", homebrew.source_label());
+        print_check(" ", "CLI formula", &homebrew.formula);
+        print_check(" ", "CLI binary", &abbreviate_home(&homebrew.binary.to_string()));
+        if let Some(package) = crate::homebrew::user_package_dir()? {
+            print_check(" ", "CLI dependencies", &abbreviate_home(&package.to_string()));
         }
     }
     has_errors |= !check_dirs().await;
