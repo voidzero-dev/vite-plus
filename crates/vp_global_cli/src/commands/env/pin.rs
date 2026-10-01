@@ -565,10 +565,10 @@ async fn check_dev_engines_sync(
         return Ok(());
     };
     // An invalid declared range is reported by `vp env doctor`, not here
-    let Ok(range) = node_semver::Range::parse(&declared) else {
+    let Ok(range) = js_semver::Range::parse(&declared) else {
         return Ok(());
     };
-    let Ok(version) = node_semver::Version::parse(resolved_version) else {
+    let Ok(version) = js_semver::Version::parse(resolved_version) else {
         return Ok(());
     };
     if range.satisfies(&version) {

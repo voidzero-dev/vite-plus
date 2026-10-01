@@ -388,9 +388,9 @@ The version resolution is optimized to minimize network requests:
 | Empty/None         | Match found | **No**          | Use latest cached version  |
 | Empty/None         | No match    | **Yes**         | Get latest LTS version     |
 
-**Exact versions** (e.g., `20.18.0`, `v20.18.0`) are detected using `node_semver::Version::parse()` and used directly without network validation. The `v` prefix is normalized (stripped) since download URLs already add it.
+**Exact versions** (e.g., `20.18.0`, `v20.18.0`) are detected using `js_semver::Version::parse()` and used directly without network validation. The `v` prefix is normalized (stripped) since download URLs already add it.
 
-**Partial versions** like `20` or `20.18` are treated as ranges by the `node-semver` crate.
+**Partial versions** like `20` or `20.18` are treated as ranges by the `js-semver` crate.
 
 **Semver ranges** (e.g., `^24.4.0`) trigger version resolution:
 
@@ -398,7 +398,7 @@ The version resolution is optimized to minimize network requests:
 2. If a matching cached version exists, use the highest one (no network request)
 3. Otherwise, fetch the version index from `https://nodejs.org/dist/index.json`
 4. Cache the index locally with 1-hour TTL (supports ETag-based conditional requests)
-5. Use `node-semver` crate for npm-compatible range matching
+5. Use `js-semver` crate for npm-compatible range matching
 6. Return the highest version that satisfies the range
 
 ### Mismatch Detection
@@ -595,7 +595,7 @@ pub enum Error {
     Reqwest(reqwest::Error),
     JoinError(tokio::task::JoinError),
     Json(serde_json::Error),
-    SemverRange(node_semver::SemverError),
+    SemverRange(js_semver::SemverError),
 }
 ```
 
@@ -658,7 +658,7 @@ pub enum Error {
 - Mirrors the established `packageManager` format for exact versions
 - Semver ranges provide flexibility for automatic updates within constraints
 - Version index is cached locally (1-hour TTL) to minimize network requests
-- Uses `node-semver` crate for npm-compatible range parsing
+- Uses `js-semver` crate for npm-compatible range parsing
 - `download_runtime()` takes exact versions; `download_runtime_for_project()` handles range resolution
 
 ### 4. Initial Node.js Only

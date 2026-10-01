@@ -10,7 +10,7 @@ rust-version.workspace = true
 [dependencies]
 base64-simd = { workspace = true }
 flate2 = { workspace = true }
-node-semver = { workspace = true }
+js-semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

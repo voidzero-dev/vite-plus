@@ -206,6 +206,7 @@ infer = "0.19.0"
 insta = "1.43.1"
 itertools = "0.15.0"
 itoa = "1.0.15"
+js-semver = "1.0.0"
 json-escape-simd = "3"
 json-strip-comments = "3"
 jsonschema = { version = "0.55.0", default-features = false }
@@ -260,7 +261,6 @@ rustls = { version = "0.23.45", default-features = false, features = ["ring", "s
 same-file = "1.0.6"
 schemars = "1.0.0"
 self_cell = "1.2.0"
-node-semver = "2.2.0"
 semver = "1.0.26"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"

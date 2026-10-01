@@ -307,7 +307,7 @@ fn build_node_versions(
 }
 
 fn build_package_manager_versions(
-    mut versions: Vec<node_semver::Version>,
+    mut versions: Vec<js_semver::Version>,
     pattern: Option<&str>,
     show_all: bool,
     sort: &SortingMethod,
@@ -315,10 +315,13 @@ fn build_package_manager_versions(
     current: Option<&str>,
     default: Option<&str>,
 ) -> Vec<PackageManagerVersionJson> {
-    let latest =
-        versions.iter().rev().find(|version| !version.is_prerelease()).map(ToString::to_string);
+    let latest = versions
+        .iter()
+        .rev()
+        .find(|version| version.pre_release.is_empty())
+        .map(ToString::to_string);
     versions.retain(|version| {
-        !version.is_prerelease() && matches_pattern(&version.to_string(), pattern)
+        version.pre_release.is_empty() && matches_pattern(&version.to_string(), pattern)
     });
     if !show_all && pattern.is_none() {
         let recent_majors = versions

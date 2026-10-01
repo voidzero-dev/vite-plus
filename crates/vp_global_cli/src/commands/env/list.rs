@@ -35,7 +35,7 @@ pub(super) fn list_installed_versions(directory: &std::path::Path) -> Vec<String
             (!name.starts_with('.') && entry.path().is_dir()).then_some(name)
         })
         .collect::<Vec<_>>();
-    versions.sort_by_cached_key(|version| node_semver::Version::parse(version).ok());
+    versions.sort_by_cached_key(|version| js_semver::Version::parse(version).ok());
     versions
 }
 

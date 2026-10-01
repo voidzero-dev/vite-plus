@@ -47,14 +47,11 @@ pub fn is_commit_preview_version(version: &str) -> bool {
 /// they contain code from the current branch.
 #[must_use]
 pub fn supports_split_layout(version: &str) -> bool {
-    let Ok(version) = node_semver::Version::parse(version) else {
+    let Ok(version) = js_semver::Version::parse(version) else {
         return false;
     };
     if version.major == 0 && version.minor == 0 && version.patch == 0 {
-        return matches!(
-            version.pre_release.as_slice(),
-            [node_semver::Identifier::AlphaNumeric(label), _, ..] if label == "commit"
-        );
+        return version.pre_release.to_string().starts_with("commit.");
     }
     version.major > 0 || version.minor >= 3
 }
