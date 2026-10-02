@@ -31,13 +31,6 @@ husky/lint-staged should remain in devDeps, prepare should stay as husky
     "lint-staged": "^15.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

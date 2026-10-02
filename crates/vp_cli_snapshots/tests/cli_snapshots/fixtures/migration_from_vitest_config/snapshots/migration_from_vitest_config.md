@@ -84,13 +84,6 @@ check package.json
     "webdriverio": "*",
     "playwright": "*",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
