@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { Writable } from 'node:stream';
+import { stripVTControlCharacters } from 'node:util';
 import { defineConfig } from 'vite-plus';
 import { createVitest, resolveConfig } from 'vite-plus/test/node';
 
@@ -24,12 +26,19 @@ for (const staticParse of [true, false]) {
   }
 }
 
+let reportOutput = '';
+const reportStream = new Writable({
+  write(chunk, _encoding, callback) {
+    reportOutput += chunk.toString();
+    callback();
+  },
+});
 const runner = await createVitest({
   ...base,
   include: ['runtime.test.js'],
   benchmark: { enabled: true, include: ['benchmark.test.js'] },
   reporters: ['json', 'junit', 'blob'],
-}, defineConfig({}));
+}, defineConfig({}), { stdout: reportStream });
 try {
   const result = await runner.start();
   assert.equal(result.unhandledErrors.length, 0, JSON.stringify(result.unhandledErrors));
@@ -45,6 +54,19 @@ try {
 } finally {
   await runner.close();
 }
+
+// Reporters finish concurrently. Verify every announcement, then print them in
+// a fixed order so filesystem timing cannot change the terminal snapshot.
+const reportMessages = stripVTControlCharacters(reportOutput).trim().split('\n');
+const reportOrder = ['JSON report written to ', 'blob report written to ', 'JUNIT report written to '];
+assert.equal(reportMessages.length, reportOrder.length, reportOutput);
+for (const prefix of reportOrder) {
+  assert.equal(reportMessages.filter((message) => message.startsWith(prefix)).length, 1, reportOutput);
+}
+reportMessages.sort((a, b) =>
+  reportOrder.findIndex((prefix) => a.startsWith(prefix)) - reportOrder.findIndex((prefix) => b.startsWith(prefix)),
+);
+for (const message of reportMessages) console.log(message);
 
 const reports = '.vitest';
 const json = JSON.parse(readFileSync(join(reports, 'json/output.json'), 'utf8'));

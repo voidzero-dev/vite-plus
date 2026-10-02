@@ -7,7 +7,7 @@ the real tsdown-migrate package should migrate all workspace-only tsup configs
 ```
 VITE+ - The Unified Toolchain for the Web
 
-tsup configuration detected. Auto-migrating to tsdown...
+●  tsup configuration detected. Auto-migrating to tsdown...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 5 config updates applied, 2 files had imports rewritten

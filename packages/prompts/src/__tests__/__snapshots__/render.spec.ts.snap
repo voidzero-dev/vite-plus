@@ -6,7 +6,7 @@ exports[`prompt renderers > renders autocomplete multiselect with pointer marker
     ◻ Alpha
       Second line
   › ◼ Beta
-  ↑/↓ to navigate • Space/Tab: select • Enter: confirm • Type: to search"
+  ↑/↓ navigate · Space/Tab select · Enter confirm · Type to search"
 `;
 
 exports[`prompt renderers > renders autocomplete with pointer markers and focused hint 1`] = `
@@ -15,34 +15,30 @@ exports[`prompt renderers > renders autocomplete with pointer markers and focuse
   › Alpha (recommended)
     Second line
     Beta
-  ↑/↓ to select • Enter: confirm • Type: to search
-"
+  ↑/↓ navigate · Enter confirm · Type to search"
 `;
 
 exports[`prompt renderers > renders confirm and select-key in pointer style 1`] = `
 "› Proceed?
   › Yes /   No
 
-
 ---
 › Pick shortcut
-  ›  a  Add item
-     r  Remove item
-
+  › [a] Add item
+    [r] Remove item
 "
 `;
 
 exports[`prompt renderers > renders grouped multiselect with marker, tree branch, and checkbox alignment 1`] = `
 "› Grouped choices
-
-  ◻ Fruits
-    │ ◻ Apple (fresh)
-      Green
+    ◻ Fruits
+    │ ◻ Apple
+        Green
   › └ ◼ Banana
 
-  ◻ Tools
+    ◻ Tools
     └ ◻ Hammer
-
+  ↑/↓ navigate · Space select · Enter confirm
 "
 `;
 
@@ -52,8 +48,7 @@ exports[`prompt renderers > renders multiselect with cursor marker plus checkbox
       Second line
   › ◼ Beta
     ◻ Gamma
-  Press  space  to select,  enter  to submit
-
+  ↑/↓ navigate · Space select · Enter confirm
 "
 `;
 
@@ -62,7 +57,7 @@ exports[`prompt renderers > renders select with pointer markers and aligned mult
   › Alpha: recommended
     Second line
     Beta
-
+  ↑/↓ navigate · Enter confirm
 "
 `;
 
