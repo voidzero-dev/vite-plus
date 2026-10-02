@@ -41,10 +41,10 @@ beforeEach(() => { expect(Promise.resolve(1)).resolves.toBe(1); });
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
+▲  Vitest v5: 1 review item
 
-setup.js
-  1:1 REVIEW [global-api-ownership] Resolve the Vitest project ownership of this file before migrating its affected global APIs. Global API edits were not applied because config selection, file scope, or globals settings are unresolved or conflicting.
-    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
+   setup.js
+     1:1 REVIEW [global-api-ownership] Resolve the Vitest project ownership of this file before migrating its affected global APIs. Global API edits were not applied because config selection, file scope, or globals settings are unresolved or conflicting.
+       Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 This project is already using Vite+! Happy coding!
 ```

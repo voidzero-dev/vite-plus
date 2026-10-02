@@ -26,6 +26,14 @@ function capture(columns = 52, isTTY = false) {
   return { output, raw: () => content, text: () => stripVTControlCharacters(content) };
 }
 
+function expectNoTerminalControls(output: string) {
+  // Forced colors are valid in CI and pipes; cursor movement and erasure are not.
+  // oxlint-disable-next-line no-control-regex
+  const withoutColors = output.replace(/\x1b\[[\d;]*m/g, '');
+  expect(withoutColors).not.toContain('\x1b');
+  expect(withoutColors).not.toContain('\r');
+}
+
 afterEach(() => {
   updateSettings({ withGuide: false });
   vi.useRealTimers();
@@ -104,7 +112,7 @@ describe('output identity', () => {
     task.error('Build failed');
     expect(c.text()).toContain('■  Build failed');
     expect(c.text()).toContain('Building modules');
-    expect(c.raw()).not.toContain('\x1b[');
+    expectNoTerminalControls(c.raw());
   });
 });
 
@@ -119,7 +127,7 @@ describe('spinner', () => {
     s.message('Uploading');
     s.stop('Deployed');
     expect(c.text()).toBe('◒  Building...\n◇ Deployed\n');
-    expect(c.raw()).not.toContain('\x1b[');
+    expectNoTerminalControls(c.raw());
     expect(c.text()).not.toContain('\n\n');
   });
 
