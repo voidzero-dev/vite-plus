@@ -1,8 +1,15 @@
+import type { CANCEL_SYMBOL } from '@clack/core';
 import { GroupMultiSelectPrompt } from '@clack/core';
 import color from 'picocolors';
 
 import {
   type CommonOptions,
+  getGuide,
+  formatInstructionFooter,
+  MULTISELECT_INSTRUCTIONS,
+  promptTitle,
+  optionText,
+  wrapTextWithPrefix,
   S_BAR,
   S_BAR_END,
   S_CHECKBOX_ACTIVE,
@@ -10,8 +17,8 @@ import {
   S_CHECKBOX_SELECTED,
   S_POINTER_ACTIVE,
   S_POINTER_INACTIVE,
-  symbol,
 } from './common.js';
+import { limitOptions } from './limit-options.js';
 import type { Option } from './select.js';
 
 export interface GroupMultiSelectOptions<Value> extends CommonOptions {
@@ -22,31 +29,26 @@ export interface GroupMultiSelectOptions<Value> extends CommonOptions {
   cursorAt?: Value;
   selectableGroups?: boolean;
   groupSpacing?: number;
+  maxItems?: number;
+  showInstructions?: boolean;
 }
 export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) => {
   const { selectableGroups = true, groupSpacing = 0 } = opts;
-  const hasGuide = opts.withGuide ?? false;
+  const hasGuide = getGuide(opts);
   const nestedPrefix = '  ';
   // eslint-disable-next-line unicorn/consistent-function-scoping -- kept inline for readability
   const withMarkerAndPrefix = (
     marker: string,
     prefix: string,
-    prefixWidth: number,
+    _prefixWidth: number,
     label: string,
     format: (text: string) => string,
     firstLineSuffix = '',
     spacingPrefix = '',
   ) => {
-    const lines = label.split('\n');
-    const continuationPrefix = `${S_POINTER_INACTIVE} ${' '.repeat(prefixWidth)}`;
-    if (lines.length === 1) {
-      return `${spacingPrefix}${marker} ${prefix}${format(lines[0])}${firstLineSuffix}`;
-    }
-    const [firstLine, ...rest] = lines;
-    return [
-      `${spacingPrefix}${marker} ${prefix}${format(firstLine)}${firstLineSuffix}`,
-      ...rest.map((line) => `${continuationPrefix}${format(line)}`),
-    ].join('\n');
+    return (
+      spacingPrefix + optionText(opts.output, `${marker} ${prefix}`, label, format, firstLineSuffix)
+    );
   };
 
   const opt = (
@@ -63,7 +65,10 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
     options: (Option<Value> & { group: string | boolean })[] = [],
   ) => {
     const label = option.label ?? String(option.value);
-    const hint = option.hint ? ` ${color.gray(`(${option.hint})`)}` : '';
+    const hint =
+      option.hint && (state === 'active' || state === 'active-selected')
+        ? ` ${color.gray(`(${option.hint})`)}`
+        : '';
     const isItem = typeof option.group === 'string';
     const next = isItem && (options[options.indexOf(option) + 1] ?? { group: true });
     const isLast = isItem && next && next.group === true;
@@ -73,10 +78,8 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
         : '  '
       : '';
     let spacingPrefix = '';
-    if (groupSpacing > 0 && !isItem) {
-      const spacingPrefixText = hasGuide ? `\n${color.blue(S_BAR)}` : '\n';
-      const spacingSuffix = hasGuide ? ' ' : '';
-      spacingPrefix = `${spacingPrefixText.repeat(groupSpacing - 1)}${spacingPrefixText}${spacingSuffix}`;
+    if (groupSpacing > 0 && !isItem && options.indexOf(option) > 0) {
+      spacingPrefix = '\n'.repeat(groupSpacing);
     }
 
     if (state === 'cancelled') {
@@ -129,6 +132,7 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
     options: opts.options,
     signal: opts.signal,
     input: opts.input,
+    accessible: opts.accessible,
     output: opts.output,
     initialValues: opts.initialValues,
     required,
@@ -136,18 +140,12 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
     selectableGroups,
     validate(selected: Value[] | undefined) {
       if (required && (selected === undefined || selected.length === 0)) {
-        return `Please select at least one option.\n${color.reset(
-          color.dim(
-            `Press ${color.gray(color.bgWhite(color.inverse(' space ')))} to select, ${color.gray(
-              color.bgWhite(color.inverse(' enter ')),
-            )} to submit`,
-          ),
-        )}`;
+        return 'Please select at least one option.';
       }
       return undefined;
     },
     render() {
-      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
+      const title = promptTitle(opts.message, this.state, opts);
       const value = this.value ?? [];
 
       switch (this.state) {
@@ -158,7 +156,7 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           const optionsText =
             selectedOptions.length === 0 ? '' : selectedOptions.join(color.dim(', '));
-          return `${title}${submitPrefix}${optionsText}\n\n`;
+          return `${title}${submitPrefix}${optionsText}\n`;
         }
         case 'cancel': {
           const label = this.options
@@ -166,81 +164,69 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
             .map((option) => opt(option, 'cancelled'))
             .join(color.dim(', '));
           if (!label.trim()) {
-            return hasGuide ? `${title}${color.gray(S_BAR)}\n\n` : `${title.trimEnd()}\n\n`;
+            return hasGuide ? `${title}${color.gray(S_BAR)}\n` : `${title.trimEnd()}\n`;
           }
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           return hasGuide
-            ? `${title}${cancelPrefix}${label}\n${color.gray(S_BAR)}\n\n`
-            : `${title}${cancelPrefix}${label}\n\n`;
-        }
-        case 'error': {
-          const prefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;
-          const footer = hasGuide
-            ? this.error
-                .split('\n')
-                .map((ln, i) =>
-                  i === 0 ? `${color.yellow(S_BAR_END)} ${color.yellow(ln)}` : `  ${ln}`,
-                )
-                .join('\n')
-            : `${nestedPrefix}${color.yellow(this.error)}`;
-          return `${title}${prefix}${this.options
-            .map((option, i, options) => {
-              const selected =
-                value.includes(option.value) ||
-                (option.group === true && this.isGroupSelected(String(option.value)));
-              const active = i === this.cursor;
-              const groupActive =
-                !active &&
-                typeof option.group === 'string' &&
-                this.options[this.cursor].value === option.group;
-              if (groupActive) {
-                return opt(option, selected ? 'group-active-selected' : 'group-active', options);
-              }
-              if (active && selected) {
-                return opt(option, 'active-selected', options);
-              }
-              if (selected) {
-                return opt(option, 'selected', options);
-              }
-              return opt(option, active ? 'active' : 'inactive', options);
-            })
-            .join(`\n${prefix}`)}\n${footer}\n`;
+            ? `${title}${cancelPrefix}${label}\n${color.gray(S_BAR)}\n`
+            : `${title}${cancelPrefix}${label}\n`;
         }
         default: {
-          const optionsText = this.options
-            .map((option, i, options) => {
+          const prefix = hasGuide
+            ? `${this.state === 'error' ? color.yellow(S_BAR) : color.blue(S_BAR)} `
+            : nestedPrefix;
+          const footer =
+            opts.showInstructions === false
+              ? []
+              : formatInstructionFooter(MULTISELECT_INSTRUCTIONS, hasGuide, opts.output);
+          if (this.state === 'error') {
+            footer.push(
+              wrapTextWithPrefix(
+                opts.output,
+                color.yellow(this.error),
+                hasGuide ? `${color.yellow(S_BAR_END)} ` : nestedPrefix,
+              ),
+            );
+          } else if (hasGuide) {
+            footer.push(color.blue(S_BAR_END));
+          }
+          const optionsText = limitOptions({
+            output: opts.output,
+            options: this.options,
+            cursor: this.cursor,
+            maxItems: opts.maxItems,
+            columnPadding: 2,
+            rowPadding: title.split('\n').length + footer.length + 1,
+            style: (option, active) => {
               const selected =
                 value.includes(option.value) ||
                 (option.group === true && this.isGroupSelected(String(option.value)));
-              const active = i === this.cursor;
               const groupActive =
                 !active &&
                 typeof option.group === 'string' &&
-                this.options[this.cursor].value === option.group;
-              let optionText = '';
-              if (groupActive) {
-                optionText = opt(
-                  option,
-                  selected ? 'group-active-selected' : 'group-active',
-                  options,
-                );
-              } else if (active && selected) {
-                optionText = opt(option, 'active-selected', options);
-              } else if (selected) {
-                optionText = opt(option, 'selected', options);
-              } else {
-                optionText = opt(option, active ? 'active' : 'inactive', options);
-              }
-              const prefix = i !== 0 && !optionText.startsWith('\n') ? '  ' : '';
-              return `${prefix}${optionText}`;
-            })
-            .join(hasGuide ? `\n${color.blue(S_BAR)}` : '\n');
-          const optionsPrefix = optionsText.startsWith('\n') ? '' : nestedPrefix;
-          const defaultPrefix = hasGuide ? color.blue(S_BAR) : '';
-          const defaultSuffix = hasGuide ? color.blue(S_BAR_END) : '';
-          return `${title}${defaultPrefix}${optionsPrefix}${optionsText}\n${defaultSuffix}\n`;
+                this.options[this.cursor]?.value === option.group;
+              return opt(
+                option,
+                groupActive
+                  ? selected
+                    ? 'group-active-selected'
+                    : 'group-active'
+                  : active
+                    ? selected
+                      ? 'active-selected'
+                      : 'active'
+                    : selected
+                      ? 'selected'
+                      : 'inactive',
+                this.options,
+              );
+            },
+          })
+            .map((line) => `${line ? prefix : hasGuide ? prefix.trimEnd() : ''}${line}`)
+            .join('\n');
+          return `${title}${optionsText}\n${footer.join('\n')}\n`;
         }
       }
     },
-  }).prompt() as Promise<Value[] | symbol>;
+  }).prompt() as Promise<Value[] | typeof CANCEL_SYMBOL>;
 };

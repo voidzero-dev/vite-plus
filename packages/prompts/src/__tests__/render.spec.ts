@@ -95,22 +95,12 @@ class PasswordPrompt {
   }
 }
 
-vi.mock('@clack/core', () => {
+vi.mock('@clack/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@clack/core')>();
   return {
-    settings: { withGuide: true },
-    wrapTextWithPrefix: (
-      _output: unknown,
-      text: string,
-      firstPrefix: string,
-      nextPrefix = firstPrefix,
-    ) => {
-      return text
-        .split('\n')
-        .map((line, index) => `${index === 0 ? firstPrefix : nextPrefix}${line}`)
-        .join('\n');
-    },
-    getColumns: () => 80,
-    getRows: () => 24,
+    ...actual,
+    getColumns: (output?: { columns?: number }) => output?.columns ?? 80,
+    getRows: (output?: { rows?: number }) => output?.rows ?? 24,
     SelectPrompt,
     MultiSelectPrompt,
     GroupMultiSelectPrompt,
@@ -331,5 +321,62 @@ describe('prompt renderers', () => {
     });
 
     expect(`${multiselectOutput}\n---\n${confirmOutput}\n---\n${textOutput}`).toMatchSnapshot();
+  });
+});
+
+describe('renderer edge cases', () => {
+  it('hides inactive hints and supports hiding keyboard instructions', async () => {
+    const { select } = await import('../select.js');
+    const options = [
+      { value: 'a', label: 'Alpha', hint: 'Focused hint' },
+      { value: 'b', label: 'Beta', hint: 'Hidden hint' },
+    ];
+    void select({ message: 'Choose', options, showInstructions: false });
+    const result = renderWith(captured.select, { state: 'active', options, cursor: 0 });
+    expect(result).toContain('Focused hint');
+    expect(result).not.toContain('Hidden hint');
+    expect(result).not.toContain('Enter');
+  });
+
+  it('wraps headings, labels, and instructions within visible columns with guides', async () => {
+    const { select } = await import('../select.js');
+    const { Writable } = await import('node:stream');
+    const output = Object.assign(
+      new Writable({
+        write(_chunk, _encoding, done) {
+          done();
+        },
+      }),
+      { columns: 24 },
+    );
+    const options = [{ value: 'a', label: '日本語 long option label', hint: 'Long focused hint' }];
+    void select({
+      message: 'A very long question with 日本語 text?',
+      options,
+      output,
+      withGuide: true,
+    });
+    const result = renderWith(captured.select, { state: 'active', options, cursor: 0 });
+    const { default: width } = await import('fast-string-width');
+    expect(result.split('\n').every((line) => width(line) <= 24)).toBe(true);
+    expect(result).toContain('│');
+    expect(result).toContain('›');
+  });
+
+  it('renders empty lists on submit and cancellation without dereferencing a missing option', async () => {
+    const [{ select }, { selectKey }, { groupMultiselect }] = await Promise.all([
+      import('../select.js'),
+      import('../select-key.js'),
+      import('../group-multi-select.js'),
+    ]);
+    void select({ message: 'Choose', options: [] });
+    void selectKey({ message: 'Choose', options: [] });
+    void groupMultiselect({ message: 'Choose', options: {}, required: false });
+    for (const state of ['submit', 'cancel', 'active']) {
+      const ctx = { state, options: [], cursor: 0, value: [], isGroupSelected: () => false };
+      expect(() => renderWith(captured.select, ctx)).not.toThrow();
+      expect(() => renderWith(captured.selectKey, ctx)).not.toThrow();
+      expect(() => renderWith(captured.groupMultiSelect, ctx)).not.toThrow();
+    }
   });
 });
