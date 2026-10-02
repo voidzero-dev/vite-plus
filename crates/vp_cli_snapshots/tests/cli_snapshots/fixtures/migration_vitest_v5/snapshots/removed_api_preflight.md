@@ -19,15 +19,15 @@ await expect.poll(() => 42).toBe(42);
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 2 review items (1 block dependency updates)
+▲  Vitest v5: 2 review items (1 block dependency updates)
 
-custom-runner.ts
-  1:10 BLOCK [removed-api] Migrate startTests from @vitest/runner manually; no reviewed root v5 replacement exists.
-    Docs: https://vitest.dev/guide/migration/#removed-deprecated-entrypoints
+   custom-runner.ts
+     1:10 BLOCK [removed-api] Migrate startTests from @vitest/runner manually; no reviewed root v5 replacement exists.
+       Docs: https://vitest.dev/guide/migration/#removed-deprecated-entrypoints
 
-review.test.ts
-  2:7 REVIEW [poll-timeout] Review the configured expect.poll timeout; v5 rejects assertions that finish after it.
-    Docs: https://vitest.dev/guide/migration/#expect-poll-fails-when-it-times-out
+   review.test.ts
+     2:7 REVIEW [poll-timeout] Review the configured expect.poll timeout; v5 rejects assertions that finish after it.
+       Docs: https://vitest.dev/guide/migration/#expect-poll-fails-when-it-times-out
 Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.
 ```
 

@@ -9,9 +9,8 @@ migrate pins the toolchain through the workspace catalog
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Formatting code...
-
-Code formatted
+●  Formatting code...
+●  Code formatted
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>
@@ -46,6 +45,7 @@ nothing to update, yet the bare key still resolves the catalog reference away
 
 ```
 ✓ Lockfile passes supply-chain policies (verified <duration> ago)
+[WARN] 24 deprecated subdependencies found: @yuku-codegen/binding-android-arm64@0.9.5, @yuku-codegen/binding-darwin-arm64@0.9.5, @yuku-codegen/binding-darwin-x64@0.9.5, @yuku-codegen/binding-freebsd-x64@0.9.5, @yuku-codegen/binding-linux-arm-gnu@0.9.5, @yuku-codegen/binding-linux-arm-musl@0.9.5, @yuku-codegen/binding-linux-arm64-gnu@0.9.5, @yuku-codegen/binding-linux-arm64-musl@0.9.5, @yuku-codegen/binding-linux-x64-gnu@0.9.5, @yuku-codegen/binding-linux-x64-musl@0.9.5, @yuku-codegen/binding-win32-arm64@0.9.5, @yuku-codegen/binding-win32-x64@0.9.5, @yuku-parser/binding-android-arm64@0.9.5, @yuku-parser/binding-darwin-arm64@0.9.5, @yuku-parser/binding-darwin-x64@0.9.5, @yuku-parser/binding-freebsd-x64@0.9.5, @yuku-parser/binding-linux-arm-gnu@0.9.5, @yuku-parser/binding-linux-arm-musl@0.9.5, @yuku-parser/binding-linux-arm64-gnu@0.9.5, @yuku-parser/binding-linux-arm64-musl@0.9.5, @yuku-parser/binding-linux-x64-gnu@0.9.5, @yuku-parser/binding-linux-x64-musl@0.9.5, @yuku-parser/binding-win32-arm64@0.9.5, @yuku-parser/binding-win32-x64@0.9.5
 Already up to date
 
 Done in <duration> using pnpm <version>
@@ -74,9 +74,8 @@ the bare key reads as pending, so one migrate repairs it
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Formatting code...
-
-Code formatted
+●  Formatting code...
+●  Code formatted
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>
@@ -106,6 +105,7 @@ update is now a no-op on the catalog reference
 
 ```
 ✓ Lockfile passes supply-chain policies (verified <duration> ago)
+[WARN] 24 deprecated subdependencies found: @yuku-codegen/binding-android-arm64@0.9.5, @yuku-codegen/binding-darwin-arm64@0.9.5, @yuku-codegen/binding-darwin-x64@0.9.5, @yuku-codegen/binding-freebsd-x64@0.9.5, @yuku-codegen/binding-linux-arm-gnu@0.9.5, @yuku-codegen/binding-linux-arm-musl@0.9.5, @yuku-codegen/binding-linux-arm64-gnu@0.9.5, @yuku-codegen/binding-linux-arm64-musl@0.9.5, @yuku-codegen/binding-linux-x64-gnu@0.9.5, @yuku-codegen/binding-linux-x64-musl@0.9.5, @yuku-codegen/binding-win32-arm64@0.9.5, @yuku-codegen/binding-win32-x64@0.9.5, @yuku-parser/binding-android-arm64@0.9.5, @yuku-parser/binding-darwin-arm64@0.9.5, @yuku-parser/binding-darwin-x64@0.9.5, @yuku-parser/binding-freebsd-x64@0.9.5, @yuku-parser/binding-linux-arm-gnu@0.9.5, @yuku-parser/binding-linux-arm-musl@0.9.5, @yuku-parser/binding-linux-arm64-gnu@0.9.5, @yuku-parser/binding-linux-arm64-musl@0.9.5, @yuku-parser/binding-linux-x64-gnu@0.9.5, @yuku-parser/binding-linux-x64-musl@0.9.5, @yuku-parser/binding-win32-arm64@0.9.5, @yuku-parser/binding-win32-x64@0.9.5
 Already up to date
 
 Done in <duration> using pnpm <version>
