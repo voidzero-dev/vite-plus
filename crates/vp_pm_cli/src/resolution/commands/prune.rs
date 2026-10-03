@@ -8,11 +8,11 @@ use crate::resolution::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct PruneArgs {
     /// Remove devDependencies
-    #[arg(long)]
+    #[arg(long, not_supported(yarn, bun < "1.4"))]
     pub(crate) prod: bool,
 
     /// Remove optional dependencies
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(yarn, bun < "1.4"))]
     pub(crate) no_optional: bool,
 
     /// Additional arguments
@@ -60,7 +60,10 @@ impl Resolve<PruneArgs> for Bun {
         }
 
         let mut cmd = CommandBuilder::new("bun");
-        cmd.arg("prune").arg_if("--production", args.prod).extend(args.pass_through_args.iter());
+        cmd.arg("prune")
+            .arg_if("--production", args.prod)
+            .arg_if("--omit=optional", args.no_optional)
+            .extend(args.pass_through_args.iter());
         cmd.into()
     }
 }
@@ -77,7 +80,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -194,6 +197,27 @@ mod tests {
     }
 
     #[test]
+    fn test_yarn_prune_rejects_named_options() {
+        for version in ["1.22.22", "2.4.2", "3.6.0", "4.18.0"] {
+            let args =
+                parse_args::<PruneArgs>(["--prod", "--no-optional", "--", "--help"]).unwrap();
+            expect_unsupported(
+                resolve(&yarn(version), args),
+                &["yarn does not support --prod.", "yarn does not support --no-optional."],
+            );
+        }
+    }
+
+    #[test]
+    fn test_old_bun_prune_rejects_named_options() {
+        let args = parse_args::<PruneArgs>(["--prod", "--no-optional", "--", "--help"]).unwrap();
+        expect_unsupported(
+            resolve(&bun("1.3.14"), args),
+            &["bun < 1.4 does not support --prod.", "bun < 1.4 does not support --no-optional."],
+        );
+    }
+
+    #[test]
     fn test_bun_prune() {
         let result = resolve(&bun("1.4.0"), PruneArgs::default());
         let command = expect_run(result.outcome);
@@ -213,14 +237,18 @@ mod tests {
     }
 
     #[test]
-    fn test_bun_prune_no_optional_not_supported() {
+    fn test_bun_prune_no_optional() {
         let result = resolve(&bun("1.4.0"), PruneArgs { no_optional: true, ..Default::default() });
+        assert!(result.diagnostics.is_empty());
         let command = expect_run(result.outcome);
-
         assert_eq!(command.program, "bun");
-        assert_eq!(command.args, vec!["prune"]);
-        assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.diagnostics[0].message, "bun does not support --no-optional.");
+        assert_eq!(command.args, vec!["prune", "--omit=optional"]);
+    }
+
+    #[test]
+    fn test_bun_prune_no_optional_before_1_4() {
+        let result = resolve(&bun("1.3.14"), PruneArgs { no_optional: true, ..Default::default() });
+        expect_unsupported(result, &["bun < 1.4 does not support --no-optional."]);
     }
 
     #[test]
