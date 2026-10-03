@@ -22,7 +22,7 @@ Options:
 Examples:
   vpx eslint .                                           # Run local eslint (or download)
   vpx create-vue my-app                                  # Download and run create-vue
-  vpx typescript@5.5.4 tsc --version                     # Run specific version
+  vpx cowsay@1.6.0 hello                                 # Run specific version
   vpx -p cowsay -c 'echo "hi" | cowsay'                  # Shell mode with package
 ```
 
