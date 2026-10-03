@@ -16,6 +16,7 @@ Arguments:
 Options:
   -L, --latest                     Update to latest version (ignore semver range)
   -g, --global                     Update global packages
+      --run-scripts                Run all lifecycle scripts (only with -g)
       --concurrency <CONCURRENCY>  Number of global package updates to run in parallel (only with -g)
       --reinstall-node-mismatch    Reinstall up-to-date global packages installed with a different Node.js version
       --ignore-node-mismatch       Skip up-to-date global packages installed with a different Node.js version

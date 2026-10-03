@@ -108,6 +108,10 @@ pub struct InstallArgs {
     #[arg(long, requires = "global", value_parser = parse_positive_usize)]
     pub(crate) concurrency: Option<usize>,
 
+    /// Run all lifecycle scripts (only with -g)
+    #[arg(long, requires = "global", conflicts_with = "ignore_scripts")]
+    pub(crate) run_scripts: bool,
+
     /// Packages to add (if provided, acts as `vp add`)
     pub(crate) packages: Vec<String>,
 
@@ -208,6 +212,7 @@ impl InstallArgs {
             save_catalog: self.save_catalog,
             allow_build: None,
             ignore_scripts: self.ignore_scripts,
+            run_scripts: self.run_scripts,
             no_optional: self.no_optional,
             frozen_lockfile: self.frozen_lockfile,
             no_frozen_lockfile: self.no_frozen_lockfile,

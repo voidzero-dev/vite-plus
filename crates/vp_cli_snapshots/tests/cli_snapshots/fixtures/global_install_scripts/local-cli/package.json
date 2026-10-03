@@ -1,0 +1,10 @@
+{
+  "name": "local-cli",
+  "version": "1.0.0",
+  "bin": {
+    "local-cli": "cli.cjs"
+  },
+  "scripts": {
+    "postinstall": "node -e \"require('node:fs').writeFileSync('postinstall-ran', '')\""
+  }
+}

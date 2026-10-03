@@ -1,7 +1,9 @@
 //! Global package installation handling.
 
+#![deny(clippy::print_stdout)]
+
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs::{File, OpenOptions, TryLockError},
     io::{Read, Write},
     process::Stdio,
@@ -44,6 +46,7 @@ struct InstalledPackage {
     js_bins: HashSet<String>,
     install_id: String,
     install_dir: AbsolutePathBuf,
+    skipped_scripts: Vec<String>,
 }
 
 type InstallError = (Option<String>, Box<Error>);
@@ -134,6 +137,7 @@ pub async fn install(
     options: InstallOptions<'_>,
 ) -> Result<(), InstallError> {
     let InstallOptions { node_version, force, ignore_scripts, concurrency, update } = options;
+    let explicit_node = node_version.is_some() && !update;
     if package_specs.is_empty() {
         return Ok(());
     }
@@ -275,6 +279,7 @@ pub async fn install(
 
     // 5. Finalize installed packages.
     let mut bin_owners = HashMap::<String, String>::new();
+    let mut script_warnings = Vec::new();
     for (index, (package_name, Package { spec, install })) in packages.into_iter().enumerate() {
         let lock_file = install_locks.remove(&package_name);
         let Some(InstalledPackage {
@@ -283,6 +288,7 @@ pub async fn install(
             mut js_bins,
             install_id,
             install_dir,
+            skipped_scripts,
         }) = install
         else {
             continue;
@@ -540,9 +546,34 @@ pub async fn install(
         if index + 1 < packages_count {
             output::raw("");
         }
+        if !skipped_scripts.is_empty() {
+            script_warnings.push((spec.to_string(), skipped_scripts));
+        }
+    }
+
+    // Keep recovery instructions after every package's installation summary.
+    let node_argument =
+        if explicit_node { format!(" --node {node_version}") } else { String::new() };
+    for (spec, skipped) in script_warnings {
+        let spec = quote_install_argument(&spec);
+        output::raw_stderr(&format!(
+            "{} Lifecycle scripts were skipped for: {}.\nTo allow them, reinstall with:\n  vp install -g {spec}{node_argument} --run-scripts",
+            style("warning:").for_stderr().yellow().bold(),
+            skipped.join(", "),
+        ));
     }
 
     if let Some(error) = first_error { Err(error) } else { Ok(()) }
+}
+
+fn quote_install_argument(argument: &str) -> String {
+    if argument.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"@/.,:_-".contains(&byte)) {
+        argument.to_string()
+    } else if cfg!(windows) {
+        format!("\"{}\"", argument.replace('"', "\\\""))
+    } else {
+        format!("'{}'", argument.replace('\'', "'\\''"))
+    }
 }
 
 /// Install one package into a unique final prefix.
@@ -565,8 +596,10 @@ async fn install_one(
     env.prepend(node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
     let mut command = Command::new(npm_path.as_path());
     command.args(["install", "-g", "--no-fund", &package_spec]);
-    if ignore_scripts {
-        command.arg("--ignore-scripts");
+    command.arg(if ignore_scripts { "--ignore-scripts" } else { "--ignore-scripts=false" });
+    if !ignore_scripts {
+        // npm 12 also gates scripts by package approval; older npm ignores this setting.
+        command.env("npm_config_dangerously_allow_all_scripts", "true");
     }
     let output = command
         .env("npm_config_prefix", install_dir.as_path())
@@ -591,7 +624,21 @@ async fn install_one(
         return Err(Error::Other(format!("npm install failed with {}", output.status).into()));
     }
 
+    // 3. Inspect the installed packages for skipped scripts and binary metadata.
     let node_modules_dir = get_node_modules_dir(&install_dir, package_name);
+    let skipped_scripts = if ignore_scripts {
+        // --ignore-scripts suppresses npm's blocked-script report, so inspect the installed tree.
+        collect_skipped_scripts(&get_node_modules_dir(&install_dir, "")).await
+    } else {
+        Ok(Vec::new())
+    };
+    let skipped_scripts = match skipped_scripts {
+        Ok(skipped) => skipped,
+        Err(error) => {
+            cleanup_failed_install(&install_dir).await?;
+            return Err(error);
+        }
+    };
     let package_json_path = node_modules_dir.join("package.json");
 
     if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
@@ -634,9 +681,82 @@ async fn install_one(
     }
 
     Ok((
-        InstalledPackage { installed_version, bin_names, js_bins, install_id, install_dir },
+        InstalledPackage {
+            installed_version,
+            bin_names,
+            js_bins,
+            install_id,
+            install_dir,
+            skipped_scripts,
+        },
         lock_file,
     ))
+}
+
+async fn collect_skipped_scripts(node_modules: &AbsolutePath) -> Result<Vec<String>, Error> {
+    let mut pending = vec![node_modules.to_absolute_path_buf()];
+    let mut visited = HashSet::new();
+    let mut skipped = BTreeSet::new();
+    while let Some(directory) = pending.pop() {
+        let mut entries = match tokio::fs::read_dir(&directory).await {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.into()),
+        };
+        while let Some(entry) = entries.next_entry().await? {
+            let file_type = entry.file_type().await?;
+            if !file_type.is_dir() && !file_type.is_symlink() {
+                continue;
+            }
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with('.') {
+                continue;
+            }
+            let package_dir = directory.join(name.as_ref());
+            if name.starts_with('@') {
+                pending.push(package_dir);
+                continue;
+            }
+            // Linked local packages can form cycles through their node_modules.
+            let real_path = match tokio::fs::canonicalize(&package_dir).await {
+                Ok(real_path) => real_path,
+                // Local packages can retain dangling dependency links unrelated to this install.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.into()),
+            };
+            if !visited.insert(real_path) {
+                continue;
+            }
+            let manifest = match tokio::fs::read(package_dir.join("package.json")).await {
+                Ok(manifest) => manifest,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.into()),
+            };
+            let manifest: serde_json::Value =
+                serde_json::from_slice(&manifest).map_err(|error| {
+                    Error::Other(format!("Failed to read installed package: {error}").into())
+                })?;
+            let scripts = &manifest["scripts"];
+            let has_script =
+                |event: &str| scripts[event].as_str().is_some_and(|script| !script.is_empty());
+            let lifecycle =
+                ["preinstall", "install", "postinstall"].iter().any(|event| has_script(event));
+            let prepare = file_type.is_symlink() && has_script("prepare");
+            // npm implicitly runs node-gyp when there is no custom preinstall/install hook.
+            let node_gyp = manifest["gypfile"] != false
+                && !has_script("preinstall")
+                && !has_script("install")
+                && tokio::fs::try_exists(package_dir.join("binding.gyp")).await?;
+            if (lifecycle || prepare || node_gyp)
+                && let Some(name) = manifest["name"].as_str()
+            {
+                skipped.insert(name.to_string());
+            }
+            pending.push(package_dir.join("node_modules"));
+        }
+    }
+    Ok(skipped.into_iter().collect())
 }
 
 fn new_install_id() -> String {

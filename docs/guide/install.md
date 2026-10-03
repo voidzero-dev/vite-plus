@@ -126,6 +126,22 @@ Use these commands when you want package-manager-managed tools available outside
 - `vp list -g`
 - `vp outdated -g`
 
+::: details Lifecycle scripts for global packages
+
+Global installs and updates disable lifecycle scripts by default, including scripts of transitive dependencies. If scripts were skipped, Vite+ prints a warning at the end with a reinstall command.
+
+Use `--run-scripts` to enable all lifecycle scripts for that invocation, including scripts of transitive dependencies:
+
+```bash
+vp install -g my-cli --run-scripts
+vp add -g my-cli --run-scripts
+vp update -g my-cli --run-scripts
+```
+
+This uses the selected Node.js runtime and its bundled npm. The setting is not saved, so repeat it when updating. To repair an already-installed package, use `vp install -g --run-scripts` again, since `vp update -g` skips packages that are already up to date.
+
+:::
+
 #### Add and Remove
 
 Use `vp add` and `vp remove` for day-to-day dependency edits instead of editing `package.json` by hand.

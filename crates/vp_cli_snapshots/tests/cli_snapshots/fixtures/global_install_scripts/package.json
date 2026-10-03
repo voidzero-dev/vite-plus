@@ -1,0 +1,5 @@
+{
+  "name": "global-install-scripts",
+  "private": true,
+  "packageManager": "npm@12.0.2"
+}

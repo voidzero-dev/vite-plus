@@ -1,6 +1,6 @@
 # global_install_ignore_scripts
 
-Managed global install and add skip dependency lifecycle scripts when requested. Without the flag, scripts still run. The installed binary works in either case.
+Managed global install and add skip dependency lifecycle scripts, including by default. The installed binary works in either case.
 
 ## `npm pack ./scripted-dep --ignore-scripts`
 
@@ -31,9 +31,19 @@ postinstall: skipped
 
 ## `vp install -g ./scripted-dep-1.0.0.tgz`
 
+```
+VITE+ - The Unified Toolchain for the Web
 
-## `scripted-dep ran`
+info: Installing 1 global package with Node.js <version>
+✓ Installed scripted-dep 1.0.0
+  Bins: scripted-dep
+warning: Lifecycle scripts were skipped for: scripted-dep.
+To allow them, reinstall with:
+  vp install -g ./scripted-dep-1.0.0.tgz --run-scripts
+```
+
+## `scripted-dep skipped`
 
 ```
-postinstall: ran
+postinstall: skipped
 ```
