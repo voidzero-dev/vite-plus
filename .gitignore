@@ -10,6 +10,7 @@ rolldown-vite
 vite
 /crates/vp_global_cli/vp
 .void/
+.direnv
 
 # PTY snapshot runner failure artifacts (reviewed via the diff, never committed)
 crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/*/snapshots/*.md.new

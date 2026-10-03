@@ -42,6 +42,17 @@ Initial setup to install dependencies for Vite+:
 just init
 ```
 
+### Nix (optional)
+
+If you use [Nix](https://nixos.org/) with flakes enabled, you can use the dev shell defined in [`flake.nix`](flake.nix) instead of installing the tools above manually:
+
+```bash
+nix develop
+just init
+```
+
+Known limitation: on NixOS, the browser-mode cases of `just snapshot-test` do not run because the Chromium binary downloaded by `playwright install` cannot start without its system libraries. These cases are covered by CI; every other check works in the dev shell.
+
 ### Windows
 
 If you haven't installed Node.js and pnpm, we recommend installing them with Vite+:
