@@ -2,7 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { applyEdits, modify, parse } from 'jsonc-parser';
-import semver from 'semver';
+import {
+  findMinimumForRange,
+  isGreaterThanOrEqual,
+  normalize,
+  normalizeRange,
+  rangeToComparators,
+  rangesIntersect,
+} from 'verkit';
 import { parseDocument } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
@@ -27,22 +34,21 @@ export function webdriverioMigrationSpec(spec: string): string | undefined {
     const migrated = webdriverioMigrationSpec(spec.slice(REGISTRY_ALIAS.length));
     return migrated === undefined ? undefined : `${REGISTRY_ALIAS}${migrated}`;
   }
-  if (!semver.validRange(spec)) {
+  if (!normalizeRange(spec)) {
     return undefined;
   }
-  const range = new semver.Range(spec);
-  const branches = range.set.map((set) => set.map((item) => item.value).join(' '));
+  const branches = rangeToComparators(spec).map((set) => set.join(' '));
   if (
     branches.every((branch) => {
-      const min = semver.minVersion(branch);
-      return min && semver.gte(min, MIN_VERSION);
+      const min = findMinimumForRange(branch);
+      return min && isGreaterThanOrEqual(min, MIN_VERSION);
     })
   ) {
     return spec;
   }
   const narrowed = branches
     .map((branch) => `${branch} >=${MIN_VERSION}`.trim())
-    .filter((branch) => semver.minVersion(branch) !== null);
+    .filter((branch) => findMinimumForRange(branch) !== null);
   return narrowed.length ? narrowed.join(' || ') : DEFAULT_SPEC;
 }
 
@@ -182,8 +188,8 @@ export function migrateWebdriverioDependencies(
         if (
           pkg.name === WEBDRIVERIO_PROVIDER &&
           typeof pkg.version === 'string' &&
-          semver.valid(pkg.version) &&
-          semver.gte(pkg.version, MIN_VERSION)
+          normalize(pkg.version) &&
+          isGreaterThanOrEqual(pkg.version, MIN_VERSION)
         ) {
           return;
         }
@@ -245,7 +251,7 @@ export function migrateWebdriverioDependencies(
         }
         const entry = spec.startsWith('catalog:') ? catalogEntry(spec, name) : undefined;
         const resolved = entry ? get(entry.file, entry.keys) : spec;
-        if (typeof resolved === 'string' && semver.validRange(resolved)) {
+        if (typeof resolved === 'string' && normalizeRange(resolved)) {
           peer = name === 'webdriverio' ? spec : resolved;
           break;
         }
@@ -253,7 +259,7 @@ export function migrateWebdriverioDependencies(
       // An existing installed framework is another safe fallback, e.g. a
       // WebDriverIO CLI that brings its framework transitively.
       const metadata = peer === '*' ? detectPackageMetadata(directory, 'webdriverio') : undefined;
-      if (metadata && semver.valid(metadata.version)) {
+      if (metadata && normalize(metadata.version)) {
         const metadataFile = path.join(metadata.path, 'package.json');
         inputs.set(metadataFile, fs.readFileSync(metadataFile, 'utf8'));
         peer = `^${metadata.version}`;
@@ -304,14 +310,14 @@ export function migrateWebdriverioDependencies(
         const pin = catalog ? get(catalog.file, catalog.keys) : before;
         const pinnedRange =
           typeof pin === 'string'
-            ? semver.validRange(
+            ? normalizeRange(
                 pin.startsWith(REGISTRY_ALIAS) ? pin.slice(REGISTRY_ALIAS.length) : pin,
               )
             : null;
         // An old forcing pin must not override a newer direct declaration.
         // Remove v4-only pins and let the migrated dependency choose its version.
         // Preserve the children of npm's long-form override objects.
-        if (pinnedRange && !semver.intersects(pinnedRange, `>=${MIN_VERSION}`)) {
+        if (pinnedRange && !rangesIntersect(pinnedRange, `>=${MIN_VERSION}`)) {
           set(file, versionPath, undefined);
           continue;
         }
@@ -345,9 +351,9 @@ export function migrateWebdriverioDependencies(
               continue;
             } else if (
               typeof direct === 'string' &&
-              semver.validRange(direct) &&
-              semver.validRange(after) &&
-              semver.intersects(direct, after)
+              normalizeRange(direct) &&
+              normalizeRange(after) &&
+              rangesIntersect(direct, after)
             ) {
               set(rootManifest, [field, WEBDRIVERIO_PROVIDER], after);
               set(file, versionPath, `$${WEBDRIVERIO_PROVIDER}`);
