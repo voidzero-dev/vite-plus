@@ -49,8 +49,6 @@ const ZED_SETTINGS = {
         settings: {
           run: 'onType',
           fixKind: 'safe_fix',
-          typeAware: true,
-          unusedDisableDirectives: 'deny',
         },
       },
     },
