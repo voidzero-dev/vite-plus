@@ -30,7 +30,10 @@ pub use dirs::{
 pub use documentation::documentation_url;
 pub use env_config::EnvConfig;
 pub use error::format_error_chain;
-pub use http::{HttpClientError, download_timeout, shared_http_client};
+pub use http::{
+    HttpClientError, download_timeout, request_timeout, shared_http_client,
+    shared_http_client_without_redirects,
+};
 pub use interactivity::{
     is_ci_environment, is_interactive_terminal, is_stderr_terminal, is_stdin_terminal,
     is_stdout_terminal,

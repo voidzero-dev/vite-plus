@@ -9,7 +9,8 @@ use vt_path::AbsolutePath;
 
 use crate::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerType,
-    cli::PackageManagerCommand, download_package_manager, error::Error, resolution::run_resolution,
+    cli::PackageManagerCommand, download_package_manager_for_cwd, error::Error,
+    resolution::run_resolution,
 };
 
 #[derive(Debug)]
@@ -68,7 +69,7 @@ async fn dispatch_with_manager(
                 .await?
         }
         ManagerSource::Environment(package_manager) => {
-            build_selected_package_manager(package_manager).await?
+            build_selected_package_manager(cwd, package_manager).await?
         }
         ManagerSource::Resolved(manager) => manager,
     };
@@ -80,9 +81,11 @@ async fn dispatch_with_manager(
 }
 
 async fn build_selected_package_manager(
+    cwd: &AbsolutePath,
     package_manager: &EnvironmentPackageManagerResolution,
 ) -> Result<PackageManager, Error> {
-    let (install_dir, _, version) = download_package_manager(
+    let (install_dir, _, version) = download_package_manager_for_cwd(
+        cwd,
         package_manager.package_manager_type,
         &package_manager.version,
         package_manager.hash.as_deref(),

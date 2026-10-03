@@ -1,11 +1,12 @@
-//! Process-wide shared `reqwest::Client`.
+//! Process-wide shared `reqwest::Client` instances.
 //!
-//! Built once, lazily, and reused for every HTTP call vp makes. The single
-//! instance lets us configure proxy honoring and custom-CA injection in one
-//! place so HTTPS-intercepting tools like Socket Firewall Free (sfw) and
-//! corporate MITM proxies work without per-call setup.
+//! Built lazily and reused for HTTP calls vp makes. The default client follows
+//! redirects; a second client lets package-registry callers recheck credentials
+//! on each redirect. Both use the same proxy and custom-CA setup so
+//! HTTPS-intercepting tools like Socket Firewall Free (sfw) and corporate MITM
+//! proxies work without per-call setup.
 //!
-//! Configuration sources (all read at first call):
+//! Configuration sources (read when the pair is first built):
 //! - `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY` — honored automatically by
 //!   reqwest. With the `system-proxy` feature enabled, macOS System Settings
 //!   proxies and Windows registry proxies are also picked up.
@@ -28,10 +29,9 @@
 //! debug-level trace. A populated system store is used as-is; the bundled
 //! roots are never merged over it.
 //!
-//! Note: env vars are read exactly once at the first HTTP call. In long-lived
+//! Note: both clients read env vars once when first built. In long-lived
 //! processes (e.g. the NAPI binding embedded in Node), later
-//! `process.env.SSL_CERT_FILE = ...` mutations do *not* re-configure the
-//! client.
+//! `process.env.SSL_CERT_FILE = ...` mutations do *not* re-configure them.
 
 use std::{ffi::OsStr, path::Path, sync::OnceLock, time::Duration};
 
@@ -60,6 +60,12 @@ pub struct HttpClientError {
 /// constrained CI runners, short enough that a single stuck stream doesn't
 /// silently hang a build.
 const REQUEST_TIMEOUT: Duration = Duration::from_mins(2);
+
+/// Total time budget for a metadata request, including redirects.
+#[must_use]
+pub const fn request_timeout() -> Duration {
+    REQUEST_TIMEOUT
+}
 
 /// TCP connect timeout. Distinct from the request timeout above — without
 /// this, a black-holed proxy can stall every HTTP call for kernel-level
@@ -123,11 +129,21 @@ pub fn download_timeout() -> Duration {
 /// `HTTPS_PROXY`, bad `SSL_CERT_FILE`, …). The outcome is cached, so later
 /// calls report the same error without retrying.
 pub fn shared_http_client() -> Result<&'static reqwest::Client, HttpClientError> {
-    static CLIENT: OnceLock<Result<reqwest::Client, HttpClientError>> = OnceLock::new();
-    CLIENT.get_or_init(build_client).as_ref().map_err(Clone::clone)
+    Ok(&shared_clients()?.0)
 }
 
-fn build_client() -> Result<reqwest::Client, HttpClientError> {
+/// Shared client for callers that must inspect each redirect before sending another request.
+pub fn shared_http_client_without_redirects() -> Result<&'static reqwest::Client, HttpClientError> {
+    Ok(&shared_clients()?.1)
+}
+
+fn shared_clients() -> Result<&'static (reqwest::Client, reqwest::Client), HttpClientError> {
+    static CLIENTS: OnceLock<Result<(reqwest::Client, reqwest::Client), HttpClientError>> =
+        OnceLock::new();
+    CLIENTS.get_or_init(build_clients).as_ref().map_err(Clone::clone)
+}
+
+fn build_clients() -> Result<(reqwest::Client, reqwest::Client), HttpClientError> {
     crate::ensure_tls_provider();
 
     let extra_certs = extra_certs_from_env();
@@ -140,9 +156,9 @@ fn build_client() -> Result<reqwest::Client, HttpClientError> {
         );
     }
 
-    match build_with(extra_certs.clone(), insecure) {
-        Ok(client) => Ok(client),
-        Err(err) => build_with_bundled_roots(extra_certs, insecure)
+    match build_pair(extra_certs.clone(), insecure) {
+        Ok(clients) => Ok(clients),
+        Err(err) => build_pair_with_bundled_roots(extra_certs, insecure)
             .ok_or_else(|| HttpClientError { cause: format_error_chain(&err).into() }),
     }
 }
@@ -189,9 +205,19 @@ fn extra_certs_from_env() -> Vec<reqwest::Certificate> {
     extra_certs
 }
 
+fn build_pair(
+    extra_certs: Vec<reqwest::Certificate>,
+    insecure: bool,
+) -> Result<(reqwest::Client, reqwest::Client), reqwest::Error> {
+    let default = build_with(extra_certs.clone(), insecure, true)?;
+    let without_redirects = build_with(extra_certs, insecure, false)?;
+    Ok((default, without_redirects))
+}
+
 fn build_with(
     extra_certs: Vec<reqwest::Certificate>,
     insecure: bool,
+    follow_redirects: bool,
 ) -> Result<reqwest::Client, reqwest::Error> {
     let mut builder =
         reqwest::Client::builder().timeout(REQUEST_TIMEOUT).connect_timeout(CONNECT_TIMEOUT);
@@ -200,6 +226,9 @@ fn build_with(
     }
     if insecure {
         builder = builder.tls_danger_accept_invalid_certs(true);
+    }
+    if !follow_redirects {
+        builder = builder.redirect(reqwest::redirect::Policy::none());
     }
     builder.build()
 }
@@ -212,26 +241,26 @@ fn build_with(
 /// `SSL_CERT_FILE`) is still present on the retry, so the caller reports the
 /// original error.
 #[cfg(not(target_os = "windows"))]
-fn build_with_bundled_roots(
+fn build_pair_with_bundled_roots(
     mut extra_certs: Vec<reqwest::Certificate>,
     insecure: bool,
-) -> Option<reqwest::Client> {
+) -> Option<(reqwest::Client, reqwest::Client)> {
     extra_certs.extend(bundled_root_certs());
-    let client = build_with(extra_certs, insecure).ok()?;
+    let clients = build_pair(extra_certs, insecure).ok()?;
     tracing::debug!(
         "system CA store is empty; using the bundled Mozilla root certificates for TLS \
          verification"
     );
-    Some(client)
+    Some(clients)
 }
 
 /// Windows uses native-tls over SChannel, whose store is never empty; the
 /// bundled roots stay out of the binary there.
 #[cfg(target_os = "windows")]
-fn build_with_bundled_roots(
+fn build_pair_with_bundled_roots(
     _extra_certs: Vec<reqwest::Certificate>,
     _insecure: bool,
-) -> Option<reqwest::Client> {
+) -> Option<(reqwest::Client, reqwest::Client)> {
     None
 }
 
@@ -323,7 +352,7 @@ mod tests {
 
     /// The bundled-roots retry must not paper over failures the bundle cannot
     /// fix: a bad `SSL_CERT_FILE` poisons the retry as well, and the original
-    /// error surfaces. Exercises `build_client` directly because
+    /// error surfaces. Exercises `build_clients` directly because
     /// `shared_http_client` caches its first outcome process-wide.
     ///
     /// Non-Windows only, like the fallback itself: native-tls rejects the bad
@@ -333,7 +362,7 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn bundled_roots_fallback_does_not_mask_other_build_failures() {
-        let result = with_invalid_ssl_cert_file("fallback", build_client);
+        let result = with_invalid_ssl_cert_file("fallback", build_clients);
 
         assert!(
             result.is_err(),
