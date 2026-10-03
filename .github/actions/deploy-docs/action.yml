@@ -84,7 +84,8 @@ runs:
         path: docs/node_modules/.vite/task-cache
         key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
 
-    - run: vpx void deploy --dir docs/.vitepress/dist
+    # void 0.24 requires a platform connection that these deploy jobs do not configure.
+    - run: vpx void@0.23.0 deploy --dir docs/.vitepress/dist
       shell: bash
       env:
         VOID_PROJECT: ${{ inputs.void-project }}
