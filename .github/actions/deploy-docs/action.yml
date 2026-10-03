@@ -83,7 +83,9 @@ runs:
         path: docs/node_modules/.vite/task-cache
         key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
 
-    - run: vpx void deploy --dir docs/.vitepress/dist
+    # void 0.24 requires an explicit platform connection. Keep the release that
+    # supports this workflow's VOID_TOKEN and VOID_PROJECT configuration.
+    - run: vpx void@0.23.0 deploy --dir docs/.vitepress/dist
       shell: bash
       env:
         VOID_PROJECT: ${{ inputs.void-project }}
