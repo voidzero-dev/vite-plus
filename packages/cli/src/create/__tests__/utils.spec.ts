@@ -114,10 +114,38 @@ describe('deriveDefaultPackageName', () => {
   });
 
   it('should fallback to random name when directory name is invalid', () => {
-    const result = deriveDefaultPackageName('/home/user/.hidden', undefined, 'vite-plus-app');
-    // directory name starts with '.', so a random name is generated instead
-    expect(result).not.toBe('.hidden');
+    const result = deriveDefaultPackageName('/home/user/!!!', undefined, 'vite-plus-app');
+    // nothing in the directory name survives sanitization, so a random name is generated instead
+    expect(result).not.toContain('!');
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('should sanitize a directory name rather than inventing an unrelated one', () => {
+    expect(
+      deriveDefaultPackageName(
+        '/home/user/ComfyUI-DenoiseHQNodes.feat-1-save-image-node',
+        undefined,
+        'vite-plus-app',
+      ),
+    ).toBe('comfyui-denoisehqnodes.feat-1-save-image-node');
+  });
+
+  it('should replace characters that are not valid in a package name', () => {
+    expect(deriveDefaultPackageName('/home/user/My App (v2)!', undefined, 'vite-plus-app')).toBe(
+      'my-app-v2',
+    );
+  });
+
+  it('should strip leading characters npm forbids instead of generating a name', () => {
+    expect(deriveDefaultPackageName('/home/user/.hidden', undefined, 'vite-plus-app')).toBe(
+      'hidden',
+    );
+  });
+
+  it('should sanitize the directory name while keeping the scope', () => {
+    expect(deriveDefaultPackageName('/home/user/My-App', '@my-scope', 'vite-plus-app')).toBe(
+      '@my-scope/my-app',
+    );
   });
 
   it('should fallback when directory is filesystem root', () => {
