@@ -175,9 +175,9 @@ jobs:
       # exact version like a real release. The vp binary was built before the
       # pack step pinned the package versions, so align the version explicitly.
       VP_VERSION: '0.0.0'
-      # Force full dependency rewriting so the library template's existing
-      # vite-plus dep gets overridden with the local build
-      VP_FORCE_MIGRATE: '1'
+      # Built-in templates must select the local version without forced migration.
+      # Keep the separate remote migration scenario in its existing force mode.
+      VP_FORCE_MIGRATE: ${{ matrix.template.verify-migration == 'true' && '1' || '' }}
       # yarn 4 quarantines packages published within `npmMinimalAgeGate`
       # (default 1440 min / 24h). When an oxlint bump landed <24h ago, the
       # migration step's `vp dlx @oxlint/migrate@<bundled oxlint>` fails with
@@ -350,15 +350,7 @@ jobs:
       - name: Verify local packages installed
         working-directory: ${{ runner.temp }}/test-project
         run: |
-          node -e "
-            const path = require('path');
-            const pkg = require(path.resolve('node_modules/vite-plus/package.json'));
-            if (pkg.version !== '0.0.0') {
-              console.error('Expected vite-plus@0.0.0, got ' + pkg.version);
-              process.exit(1);
-            }
-            console.log('✓ vite-plus@' + pkg.version + ' installed correctly');
-          "
+          node "$GITHUB_WORKSPACE/crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/create_library_npm/assert-version.mjs" . 0.0.0
 
       - name: Verify monorepo sub-package deps
         if: matrix.template.name == 'monorepo'
@@ -367,8 +359,8 @@ jobs:
           PACKAGE_MANAGER: ${{ matrix.package-manager }}
         run: |
           # Issue 1: packages/utils inherits `vite-plus: ^x.y.z` from the
-          # library template. In catalog-supporting monorepos (pnpm/yarn/bun)
-          # the migrator must normalize it so siblings don't drift.
+          # library template. Creation must align it with the CLI before
+          # integration optionally converts the version to a catalog reference.
           # Issue 2: apps/website is scaffolded by create-vite which ships
           # `vite` (and sometimes `vitest`) in devDependencies. After
           # migration the scripts are rewritten to `vp ...` and `vite-plus`
@@ -418,7 +410,7 @@ jobs:
               process.exit(1);
             }
 
-            if (pm !== 'npm' && appDev['vite-plus'] !== utilsDev['vite-plus']) {
+            if (appDev['vite-plus'] !== utilsDev['vite-plus']) {
               console.error('✗ vite-plus spec drift: apps/website=' + appDev['vite-plus'] + ' packages/utils=' + utilsDev['vite-plus']);
               process.exit(1);
             }
@@ -498,3 +490,29 @@ jobs:
             exit 1
           fi
           echo "✓ 100% cache hit verified"
+
+      - name: Verify library added to existing workspace
+        if: matrix.template.name == 'monorepo'
+        working-directory: ${{ runner.temp }}/test-project
+        run: |
+          workspace_configs=(package.json)
+          for file in pnpm-workspace.yaml .yarnrc.yml; do
+            if [ -f "$file" ]; then
+              workspace_configs+=("$file")
+            fi
+          done
+          for file in "${workspace_configs[@]}"; do
+            cp "$file" "$RUNNER_TEMP/$file.before-library"
+          done
+
+          vp create vite:library --directory packages/additional \
+            --no-interactive --no-hooks --no-agent --no-editor
+
+          for file in "${workspace_configs[@]}"; do
+            cmp "$file" "$RUNNER_TEMP/$file.before-library"
+          done
+          assert_script="$GITHUB_WORKSPACE/crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/create_library_npm/assert-version.mjs"
+          node "$assert_script" . 0.0.0
+          node "$assert_script" packages/additional 0.0.0
+          cd packages/additional
+          vp test run
