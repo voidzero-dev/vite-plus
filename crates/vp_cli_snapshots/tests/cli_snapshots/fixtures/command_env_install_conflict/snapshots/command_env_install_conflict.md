@@ -9,7 +9,7 @@ VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
 warn: Package 'conflict-pkg' provides 'node' binary, but it conflicts with a built-in shim. Skipping.
-✓ Installed conflict-pkg 1.0.0
+ Installed conflict-pkg 1.0.0
   Bins: conflict-cli
 ```
 
@@ -18,7 +18,7 @@ warn: Package 'conflict-pkg' provides 'node' binary, but it conflicts with a bui
 Cleanup
 
 ```
-Uninstalled conflict-pkg
+- Uninstalled conflict-pkg
 ```
 
 ## `vp install -g --node 20 ./conflict-pkg`
@@ -30,7 +30,7 @@ VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
 warn: Package 'conflict-pkg' provides 'node' binary, but it conflicts with a built-in shim. Skipping.
-✓ Installed conflict-pkg 1.0.0
+ Installed conflict-pkg 1.0.0
   Bins: conflict-cli
 ```
 
@@ -39,5 +39,5 @@ warn: Package 'conflict-pkg' provides 'node' binary, but it conflicts with a bui
 Cleanup
 
 ```
-Uninstalled conflict-pkg
+- Uninstalled conflict-pkg
 ```

@@ -52,7 +52,7 @@ Install a global package via vp
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed cowsay 1.6.0
+ Installed cowsay 1.6.0
   Bins: cowsay, cowthink
 ```
 
@@ -75,7 +75,7 @@ VITE+ - The Unified Toolchain for the Web
 Cleanup
 
 ```
-Uninstalled cowsay
+- Uninstalled cowsay
 ```
 
 ## `vp env which unknown-tool`
