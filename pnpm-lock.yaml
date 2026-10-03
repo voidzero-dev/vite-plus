@@ -353,6 +353,9 @@ importers:
       oxlint-tsgolint:
         specifier: 'catalog:'
         version: 7.0.2003
+      playwright:
+        specifier: '*'
+        version: 1.62.1
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: link:../core

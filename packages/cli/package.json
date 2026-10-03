@@ -390,13 +390,17 @@
   },
   "peerDependencies": {
     "@vitest/browser-playwright": "catalog:",
-    "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0"
+    "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0",
+    "playwright": "*"
   },
   "peerDependenciesMeta": {
     "@vitest/browser-playwright": {
       "optional": true
     },
     "@vitest/browser-webdriverio": {
+      "optional": true
+    },
+    "playwright": {
       "optional": true
     }
   },
