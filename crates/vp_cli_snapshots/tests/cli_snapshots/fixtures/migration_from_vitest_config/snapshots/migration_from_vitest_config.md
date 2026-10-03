@@ -112,7 +112,7 @@ allowBuilds:
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'
-  '@vitest/browser@*': 5.0.3
+  '@vitest/browser@*': <version>
 peerDependencyRules:
   allowAny:
     - vite

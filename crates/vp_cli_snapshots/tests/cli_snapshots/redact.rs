@@ -184,11 +184,11 @@ static VP_UPGRADE_TARGET_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // (`vitest: 4.1.10` in a pnpm catalog, `"@vitest/coverage-v8": "4.1.10"` in a
 // resolutions block), which bumps whenever the bundle refreshes. Mask it by
 // key context like the vite-plus version, matching the YAML (`key: ver`) and
-// JSON (`"key": "ver"`) spellings; the `\d` anchor keeps `vitest: catalog:`
-// verbatim.
+// JSON (`"key": "ver"`) spellings, including wildcard override keys such as
+// `'@vitest/browser@*'`. The `\d` anchor keeps `vitest: catalog:` verbatim.
 static MANAGED_TEST_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?m)^(\s*['"]?(?:vitest|@vitest/[a-z0-9-]+)['"]?\s*:\s*['"]?)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+        r#"(?m)^(\s*['"]?(?:vitest|@vitest/[a-z0-9-]+)(?:@\*)?['"]?\s*:\s*['"]?)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
     )
     .unwrap()
 });
