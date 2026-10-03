@@ -621,6 +621,9 @@ export function rewriteMonorepoProject(
   }
 
   if (!deferLazyPluginWrapping) {
+    // Direct callers (including workspace creation) do not run the root's
+    // import/config migration pass, which also upgrades legacy pack options.
+    rewriteAllImports(projectPath, silent, report);
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }

@@ -1,0 +1,5 @@
+packages:
+  - packages/*
+catalog:
+  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@latest
