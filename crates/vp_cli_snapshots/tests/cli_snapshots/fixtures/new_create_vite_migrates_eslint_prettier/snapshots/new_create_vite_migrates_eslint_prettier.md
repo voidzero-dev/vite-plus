@@ -144,6 +144,7 @@ export default defineConfig({
             "error",
             {
               allowConstantExport: true,
+              allowCompoundComponents: true,
             },
           ],
         },

@@ -5,8 +5,7 @@ Known upstream regression introduced in Vitest 4.1.1 and still present in 5.0.1,
 ## `node verify.mjs --real-timers`
 
 ```
-Plugin "vitest:mocks:interceptor" defines Vite-specific hooks (configureServer) in a plugin returned from applyToEnvironment. These hooks will be ignored.
 Browser runner started at http://localhost:<port>/__vitest_test__/?sessionId=<uuid>
 
-Known upstream regression since Vitest 4.1.1: Preview locator clicks fail with real timers in 5.0.1
+Known upstream regression since Vitest 4.1.1: Preview locator clicks fail with real timers in 5.0.3
 ```

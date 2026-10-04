@@ -320,7 +320,7 @@ xxhash-rust = "0.8.15"
 zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
-oxc = { version = "0.151.0", features = [
+oxc = { version = "0.152.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -332,23 +332,23 @@ oxc = { version = "0.151.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.151.0", features = ["pool"] }
-oxc_ast = "0.151.0"
-oxc_ecmascript = "0.151.0"
-oxc_parser = "0.151.0"
-oxc_span = "0.151.0"
-oxc_napi = "0.151.0"
-oxc_str = "0.151.0"
-oxc_minify_napi = "0.151.0"
-oxc_parser_napi = "0.151.0"
-oxc_transform_napi = "0.151.0"
-oxc_traverse = "0.151.0"
+oxc_allocator = { version = "0.152.0", features = ["pool"] }
+oxc_ast = "0.152.0"
+oxc_ecmascript = "0.152.0"
+oxc_parser = "0.152.0"
+oxc_span = "0.152.0"
+oxc_napi = "0.152.0"
+oxc_str = "0.152.0"
+oxc_minify_napi = "0.152.0"
+oxc_parser_napi = "0.152.0"
+oxc_transform_napi = "0.152.0"
+oxc_traverse = "0.152.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "5", features = ["rayon", "serde"] }
 oxc_resolver = { version = "11.24.3", features = ["yarn_pnp"] }
 oxc_resolver_napi = { version = "11.24.3", default-features = false, features = ["yarn_pnp"] }
-oxc_sourcemap = "8.1.0"
+oxc_sourcemap = "9.0.0"
 
 # rolldown crates
 rolldown = { path = "./rolldown/crates/rolldown" }
