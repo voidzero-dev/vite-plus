@@ -249,7 +249,7 @@ The JSON output for `current`, `list`, and `list-remote` is organized by compone
     "source": "devEngines.runtime",
     "source_path": "/project/package.json",
     "project_root": "/project",
-    "bin_path": "/home/.vite-plus/js_runtime/node/22.0.0/bin/node",
+    "bin_path": "/home/.local/share/vite-plus/js_runtime/node/22.0.0/bin/node",
     "installed": true,
     "mode": "managed"
   },
@@ -260,8 +260,8 @@ The JSON output for `current`, `list`, and `list-remote` is organized by compone
     "source_path": "/project/package.json",
     "project_root": "/project",
     "bin_paths": {
-      "pnpm": "/home/.vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpm",
-      "pnpx": "/home/.vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpx"
+      "pnpm": "/home/.local/share/vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpm",
+      "pnpx": "/home/.local/share/vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpx"
     },
     "installed": true,
     "mode": "managed"
