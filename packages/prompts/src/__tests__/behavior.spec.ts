@@ -36,10 +36,13 @@ function terminal() {
   return { input, output, text: () => stripVTControlCharacters(content) };
 }
 function files() {
-  const root = mkdtempSync(join(tmpdir(), 'vite-prompts-'));
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), 'vite-prompts-'));
+  // Directory mode scans the parent, so keep it separate from other temporary files.
+  const root = join(temporaryDirectory, 'project');
+  mkdirSync(root);
   mkdirSync(join(root, 'child'));
   writeFileSync(join(root, 'file.txt'), '');
-  cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+  cleanup.push(() => rmSync(temporaryDirectory, { recursive: true, force: true }));
   return root;
 }
 beforeEach(() => {
