@@ -259,6 +259,58 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
 
+  update-homebrew:
+    name: Update Homebrew formula
+    runs-on: ubuntu-latest
+    needs: [check, Release]
+    if: >-
+      needs.check.outputs.version_changed == 'true' &&
+      !contains(needs.check.outputs.version, '-')
+    concurrency:
+      group: update-homebrew-formula
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.18.0'
+          package-manager-cache: false
+
+      - name: Check publication and update formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/update-homebrew-formula.mjs "$VERSION"
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          add-paths: |
+            HomebrewFormula/vp.rb
+            docs/guide/homebrew.md
+          commit-message: 'chore: update Homebrew vp to ${{ env.VERSION }}'
+          title: 'chore: update Homebrew vp to ${{ env.VERSION }}'
+          branch: release/homebrew-v${{ env.VERSION }}
+          base: main
+          sign-commits: true
+          body: |
+            Update the official Homebrew tap to `vp@${{ env.VERSION }}`.
+
+            The formula downloads the native CLI from GitHub Releases. On first use, `vp` installs each user's matching dependencies.
+
   # Deploy viteplus.dev from the release commit after the npm packages and the
   # GitHub release are published, so the site and the install scripts always
   # match the released vp. Skipped for prereleases: production docs must keep
