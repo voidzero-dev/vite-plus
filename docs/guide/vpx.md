@@ -31,7 +31,7 @@ vpx <pkg[@version]> [args...]
 ```bash
 vpx eslint .
 vpx create-vue my-app
-vpx cowsay@1.6.0 hello
+vpx oxlint@1.85.0 --version
 vpx -p cowsay -c 'echo "hi" | cowsay'
 ```
 
@@ -62,5 +62,5 @@ Examples:
 
 ```bash
 vp dlx create-vite
-vp dlx cowsay@1.6.0 hello
+vp dlx oxlint@1.85.0 --version
 ```
