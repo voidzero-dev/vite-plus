@@ -14,14 +14,13 @@ Run `vp migrate` to replace exact `voidzero-dev/setup-vp@v1` references in GitHu
 
 ## GitHub Actions
 
-The GitHub Action sets up Vite+, the required Node.js version, and the package manager. This means you usually do not need separate `setup-node`, package-manager setup, or manual dependency caching steps in your workflow.
+The GitHub Action sets up Vite+, the required Node.js version, and the package manager. This means you usually do not need separate `setup-node`, package-manager setup, installing dependencies or manual dependency caching steps in your workflow.
 
 ```yaml [.github/workflows/ci.yml]
 - uses: voidzero-dev/setup-vp@<setup-vp-version>
   with:
     node-version: '24'
     cache: true
-- run: vp install
 - run: vp check
 - run: vp test
 - run: vp build
@@ -151,7 +150,7 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
     node-version: '24'
     cache: true
 
-- run: vp install && vp run dev:setup
+- run: vp run dev:setup
 - run: vp check
 - run: vp test
 ```
