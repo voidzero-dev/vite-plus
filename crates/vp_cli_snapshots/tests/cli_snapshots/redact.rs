@@ -251,6 +251,14 @@ static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+// Bun emits this warning based on filesystem timing, sometimes after a
+// same-line lifecycle progress indicator. Neither is part of the build result.
+static BUN_SLOW_FILESYSTEM_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^[ \t]*(?:⚙\u{FE0F}?[ \t]+\S+[ \t]+\[\d+/\d+\][ \t]+)?warn: Slow filesystem detected\. If [^\n]+ is a network drive, consider setting \$BUN_INSTALL_CACHE_DIR to a local folder\.(?:\n|$)",
+    )
+    .unwrap()
+});
 // pnpm reads a removed package's manifest concurrently with unlinking the
 // package, so its removal summary may omit the version. Strip that version
 // within dependency sections of pnpm output; keep names and added versions.
@@ -646,13 +654,14 @@ pub fn redact_output(
     output = STASH_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
 
     // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
-    // log name, live spinner frames, and pnpm's nondeterministic progress lines
+    // log name, live spinner frames, and timing-dependent pnpm/Bun diagnostics
     output = LOCAL_REGISTRY_URL_RE.replace_all(&output, "http://127.0.0.1:<port>").into_owned();
     output = VITEST_API_PORT_RE.replace_all(&output, "${1}<port>").into_owned();
     output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
     output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
+    output = BUN_SLOW_FILESYSTEM_RE.replace_all(&output, "").into_owned();
 
     if output.contains("Done in <duration> using pnpm <version>")
         || PNPM_REMOVAL_COUNT_RE.is_match(&output)
