@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import semver from 'semver';
+import { coerce, isGreaterThanOrEqual } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
@@ -77,9 +77,9 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
 // only when it is one of the given dist-tags, which always point at a current
 // (feature-capable) release.
 function versionAtLeast(version: string, minVersion: string, tags: string[]): boolean {
-  const coerced = semver.coerce(version);
+  const coerced = coerce(version);
   if (coerced) {
-    return semver.gte(coerced, minVersion);
+    return isGreaterThanOrEqual(coerced, minVersion);
   }
   return tags.includes(version);
 }

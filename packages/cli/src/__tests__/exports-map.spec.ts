@@ -13,6 +13,7 @@
  */
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import url from 'node:url';
 
@@ -58,6 +59,59 @@ function typeDiagnostics(source: string, separator: string = path.sep): string[]
 }
 
 describe('package.json exports map', () => {
+  it('checks Playwright options with only declared dependencies available', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vite-plus-provider-types-'));
+    try {
+      const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
+      const installed = path.join(directory, 'node_modules/vite-plus');
+      fs.mkdirSync(installed, { recursive: true });
+      fs.writeFileSync(path.join(installed, 'package.json'), JSON.stringify(pkg));
+      fs.cpSync(path.join(cliPkgDir, 'dist/test'), path.join(installed, 'dist/test'), {
+        recursive: true,
+      });
+      // Keep the copied declarations outside the workspace so hoisted dependencies
+      // cannot hide missing peers, as in pnpm's global virtual store (#2854).
+      for (const name of Object.keys({ ...pkg.dependencies, ...pkg.peerDependencies })) {
+        const target = path.join(directory, 'node_modules', name);
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.symlinkSync(
+          fs.realpathSync(path.join(cliPkgDir, 'node_modules', name)),
+          target,
+          'junction',
+        );
+      }
+      const filename = path.join(directory, 'config.mts');
+      fs.writeFileSync(
+        filename,
+        `
+import { playwright } from 'vite-plus/test/browser-playwright';
+import { playwright as alias } from 'vite-plus/test/browser/providers/playwright';
+playwright({ contextOptions: { reducedMotion: 'reduce' } });
+alias({ contextOptions: { reducedMotion: 'no-preference' } });
+// @ts-expect-error Invalid Playwright options must not become unchecked under skipLibCheck.
+playwright({ contextOptions: { reducedMotion: 'bogus' } });
+// @ts-expect-error The compatibility alias must retain the same option types.
+alias({ contextOptions: { reducedMotion: 'bogus' } });
+`,
+      );
+      const program = ts.createProgram([filename], {
+        noEmit: true,
+        strict: true,
+        skipLibCheck: true,
+        types: [],
+        module: ts.ModuleKind.NodeNext,
+        target: ts.ScriptTarget.ESNext,
+      });
+      expect(
+        ts
+          .getPreEmitDiagnostics(program)
+          .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n')),
+      ).toEqual([]);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('provides the bundled Vitest Vite peer without relying on project dependencies', () => {
     const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
     expect(pkg.dependencies.vite).toBe('workspace:@voidzero-dev/vite-plus-core@*');

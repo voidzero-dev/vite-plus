@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -691,18 +691,33 @@ async function mergePackageJson() {
   const rolldownPkg = JSON.parse(await readFile(rolldownPkgPath, 'utf-8'));
   const vitePkg = JSON.parse(await readFile(vitePkgPath, 'utf-8'));
   const destPkg = JSON.parse(await readFile(destPkgPath, 'utf-8'));
+  // Read the `rolldown-plugin-dts` that tsdown depends on, which is the copy
+  // bundled into `dist/tsdown/`, rather than core's own devDependency.
+  const dtsPkg = createRequire(join(realpathSync(tsdownSourceDir), 'package.json'))(
+    'rolldown-plugin-dts/package.json',
+  );
 
-  // Merge peerDependencies from tsdown and vite
+  // Merge peerDependencies from rolldown-plugin-dts, tsdown and vite. The bundled
+  // dts plugin still resolves `vue-tsc`, `@volar/typescript`,
+  // `@vue/language-core` and `@typescript/native-preview` from core at runtime,
+  // and its declarations import their types, so isolated installs need them
+  // declared here.
   destPkg.peerDependencies = {
+    ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
   };
 
-  // Merge peerDependenciesMeta from tsdown and vite
+  // Merge peerDependenciesMeta from rolldown-plugin-dts, tsdown and vite
   destPkg.peerDependenciesMeta = {
+    ...dtsPkg.peerDependenciesMeta,
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,
   };
+
+  // `rolldown` is bundled into core (see bundleRolldown).
+  delete destPkg.peerDependencies.rolldown;
+  delete destPkg.peerDependenciesMeta.rolldown;
 
   // `@tsdown/exe` and `@tsdown/css` are bundled into core (see bundleTsdown), so
   // they must not be advertised as peers anymore. `lightningcss` (which the
