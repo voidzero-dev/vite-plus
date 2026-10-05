@@ -125,6 +125,7 @@
     "@oxc-node/cli": "catalog:",
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
+    "@typescript/native-preview": "catalog:",
     "@vitejs/devtools": "^0.7.6",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
@@ -147,7 +148,10 @@
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
     "@types/node": "^20.19.0 || >=22.12.0",
+    "@typescript/native-preview": "*",
     "@vitejs/devtools": "^0.7.1",
+    "@volar/typescript": "~2.4.0",
+    "@vue/language-core": "~3.2.0 || ~3.3.0",
     "esbuild": "^0.27.0 || ^0.28.0",
     "jiti": ">=1.21.0",
     "less": "^4.0.0",
@@ -161,9 +165,25 @@
     "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "unplugin-unused": ">=0.5.0",
     "unrun": "*",
+    "vue-tsc": "~3.2.0 || ~3.3.0",
     "yaml": "^2.4.2"
   },
   "peerDependenciesMeta": {
+    "@typescript/native-preview": {
+      "optional": true
+    },
+    "@volar/typescript": {
+      "optional": true
+    },
+    "@vue/language-core": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    },
+    "vue-tsc": {
+      "optional": true
+    },
     "@arethetypeswrong/core": {
       "optional": true
     },
@@ -174,9 +194,6 @@
       "optional": true
     },
     "tsx": {
-      "optional": true
-    },
-    "typescript": {
       "optional": true
     },
     "unplugin-unused": {
