@@ -44,12 +44,6 @@ peerDependencyRules:
 
 nothing to update, yet the bare key still resolves the catalog reference away
 
-```
-✓ Lockfile passes supply-chain policies (verified <duration> ago)
-Already up to date
-
-Done in <duration> using pnpm <version>
-```
 
 ## `vpt print-file package.json`
 
@@ -104,12 +98,6 @@ peerDependencyRules:
 
 update is now a no-op on the catalog reference
 
-```
-✓ Lockfile passes supply-chain policies (verified <duration> ago)
-Already up to date
-
-Done in <duration> using pnpm <version>
-```
 
 ## `vpt print-file package.json`
 

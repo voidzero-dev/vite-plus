@@ -506,6 +506,26 @@ fn masks_vitest_ecosystem_versions_but_not_unrelated_deps() {
 }
 
 #[test]
+fn masks_vitest_wildcard_override_versions_but_preserves_selectors_and_ranges() {
+    for version in ["5.0.3", "5.1.0", "6.0.0-beta.1"] {
+        let input = format!("  '@vitest/browser@*': {version}\n  \"vitest@*\": \"{version}\"\n");
+        assert_eq!(
+            redact_output(input, &[], true),
+            "  '@vitest/browser@*': <version>\n  \"vitest@*\": \"<version>\"\n"
+        );
+    }
+    let input = concat!(
+        "  '@vitest/browser@*': 'catalog:'\n",
+        "  '@vitest/browser@4.0.0': 4.0.13\n",
+        "  '@vitest/browser@^4': 4.0.13\n",
+        "  '@vitest/browser@*': ^5.0.0\n",
+        "  '@vitest/browser-webdriverio': ^5.0.0\n",
+        "  'typescript@*': 5.4.0\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
+}
+
+#[test]
 fn replaces_paths_with_labels() {
     let input = "built /tmp/stage-1/dist in 3ms\n".to_owned();
     assert_eq!(
