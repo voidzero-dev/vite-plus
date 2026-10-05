@@ -3739,7 +3739,6 @@ export interface JsCommandResolvedResult {
  * Returns a `MergeJsonConfigResult` containing:
  * - `content`: The updated vite config content
  * - `updated`: Whether any changes were made
- * - `usesFunctionCallback`: Whether the config uses a function callback
  *
  * # Example
  *
@@ -3762,8 +3761,6 @@ export interface MergeJsonConfigResult {
   content: string;
   /** Whether any changes were made */
   updated: boolean;
-  /** Whether the config uses a function callback */
-  usesFunctionCallback: boolean;
 }
 
 /**
@@ -3782,7 +3779,6 @@ export interface MergeJsonConfigResult {
  * Returns a `MergeJsonConfigResult` containing:
  * - `content`: The updated vite config content
  * - `updated`: Whether any changes were made
- * - `usesFunctionCallback`: Whether the config uses a function callback
  *
  * # Example
  *
