@@ -58,4 +58,4 @@ vp migrate
 
 Migrate writes the bridge registry to `.npmrc`. For Yarn Berry, it writes the registry to `.yarnrc.yml`. It pins `vite-plus` and the `vite` alias to the matching `0.0.0-commit.<sha>` version. The `vite` alias points to `@voidzero-dev/vite-plus-core`. Commit the registry line if the project CI must test the preview.
 
-After the install, run `vp toolchain` to show the selected versions. After testing, set `vite-plus` to `latest`. Remove the bridge `registry` line from `.npmrc` or `.yarnrc.yml`. Then run `vp install`.
+After the install, run `vp toolchain` to show the selected versions. After testing, set `vite-plus` to `latest` and the `vite` alias to `npm:@voidzero-dev/vite-plus-core@latest` wherever they are declared. Remove the preview bridge setting from `.npmrc` or `.yarnrc.yml`, restoring any previous registry. Then run `vp install`.
