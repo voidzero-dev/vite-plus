@@ -61,7 +61,7 @@ vp run lint # should print "cache hit"
 
 ## 2. Restore The Cache After Install
 
-Restore `node_modules/.vite/task-cache` after `vp install`, because package installation can recreate or modify `node_modules`.
+Restore `node_modules/.vite/task-cache` after the `setup-vp` step, because package installation can recreate or modify `node_modules`.
 
 Set `<setup-vp-version>` below to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead.
 
@@ -88,8 +88,6 @@ jobs:
         with:
           node-version: '24'
           cache: true
-
-      - run: vp install
 
       - name: Restore Vite Task cache
         id: vite-task-cache
