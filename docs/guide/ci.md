@@ -26,7 +26,7 @@ The GitHub Action sets up Vite+, the required Node.js version, and the package m
 - run: vp build
 ```
 
-With `cache: true`, `setup-vp` handles dependency caching for you automatically.
+`setup-vp` runs `vp install` by default. If you set `run-install: false`, make sure to add a `vp install` step before running other commands. With `cache: true`, `setup-vp` handles dependency caching for you automatically.
 
 ::: tip
 `setup-vp` caches package-manager data. To reuse Vite Task results across CI runs, add a separate [GitHub Actions cache for Vite Task](/guide/github-actions-cache).
