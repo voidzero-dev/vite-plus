@@ -1,0 +1,7 @@
+{
+  "name": "vite-task-lifecycle-env",
+  "private": true,
+  "scripts": {
+    "check-env": "node check-env.js"
+  }
+}
