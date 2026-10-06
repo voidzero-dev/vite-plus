@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-// Keep this host aligned with docs/wrangler.jsonc and the Workers subdomain.
+// Keep this host aligned with docs/cloudflare.config.ts and the Workers subdomain.
 const workersHost = 'viteplus-dev.voidzero-docs.workers.dev';
 
 export function resolveDocsSiteOrigin(env: NodeJS.ProcessEnv = process.env): string | undefined {

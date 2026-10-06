@@ -172,8 +172,15 @@ await test('uses the package preview build and protected deployment pattern', as
   assert.match(job, /ref: \$\{\{ github\.sha \}\}/);
   const approval = job.indexOf('await requireDeploymentApproval({ github, context });');
   assert.ok(approval >= 0);
-  assert.ok(approval < job.indexOf('- name: Install Wrangler'));
+  assert.ok(approval < job.indexOf('- name: Install Cloudflare CLI'));
   assert.ok(approval < job.indexOf('- uses: actions/download-artifact@'));
+  assert.ok(
+    job.indexOf('- name: Validate static assets') <
+      job.indexOf('- name: Prepare static build output'),
+  );
+  assert.match(job, /working-directory: \$\{\{ runner\.temp \}\}\/docs-preview-tools/);
+  assert.match(job, /\.bin\/cf" workers versions create \\\n\s+--prebuilt/);
+  assert.doesNotMatch(job, /\.bin\/wrangler|--assets|--config/);
   assert.match(job, /artifact-ids: \$\{\{ needs\.authorize\.outputs\.artifact-id \}\}/);
   assert.match(job, /run-id: \$\{\{ github\.event\.workflow_run\.id \}\}/);
   assert.ok(job.indexOf('await isCurrentPreview(') < job.indexOf('- name: Upload preview version'));
@@ -845,7 +852,7 @@ await test('updates one preview comment with the same PR URL across commits and 
   }
 });
 
-await test('reads the PR alias from Wrangler JSONL with other records and blank lines', async () => {
+await test('reads the PR alias from cf JSONL with other records and blank lines', async () => {
   const f = fixture();
   await commentPreview(f, 2684, `\n${JSON.stringify({ type: 'other' })}\n${uploadOutput()}\n`);
   assert.ok(f.state.writes[0].body.includes(previewUrl(2684)));
@@ -875,7 +882,7 @@ for (const [name, output] of [
   ],
   ['another host', uploadOutput({ preview_url: 'https://example.com' })],
 ]) {
-  await test(`does not comment for Wrangler output with ${name}`, async () => {
+  await test(`does not comment for cf output with ${name}`, async () => {
     const f = fixture();
     await assert.rejects(commentPreview(f, 2684, output));
     assert.deepEqual(f.state.writes, []);

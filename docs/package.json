@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "vitepress dev",
     "build": "node .vitepress/scripts/copy-installers.mjs && vp run build:site",
-    "build:cloudflare": "node .vitepress/scripts/copy-installers.mjs && vitepress build",
+    "build:cloudflare": "node .vitepress/scripts/copy-installers.mjs && vitepress build && node .vitepress/scripts/prepare-cloudflare.mjs",
     "build:netlify": "node .vitepress/scripts/copy-installers.mjs && vitepress build",
+    "deploy:cloudflare": "cf deploy --prebuilt",
     "preview": "vitepress preview",
+    "test:cloudflare": "node --test .vitepress/scripts/__tests__/prepare-cloudflare.mjs",
     "update-trusted-stack-stats": "node .vitepress/theme/data/fetch-trusted-stack-stats.ts"
   },
   "dependencies": {
@@ -20,11 +22,12 @@
     "vue": "^3.5.27"
   },
   "devDependencies": {
+    "@cloudflare/build-output-utils": "0.8.5",
     "@voidzero-dev/vitepress-theme": "4.8.4",
+    "cf": "1.0.0-beta.12",
     "oxc-minify": "^0.120.0",
     "tailwindcss": "^4.1.18",
-    "vitepress": "2.0.0-alpha.17",
-    "wrangler": "^4.127.1"
+    "vitepress": "2.0.0-alpha.17"
   },
   "packageManager": "pnpm@11.24.0"
 }

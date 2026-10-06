@@ -108,8 +108,11 @@ jobs:
 
       # Install only the deployment tool, outside both the checkout and the
       # artifact. No PR dependencies, scripts, config, or caches are used here.
-      - name: Install Wrangler
-        run: npm install --prefix "$RUNNER_TEMP/docs-preview-tools" --ignore-scripts --no-package-lock wrangler@4.127.1
+      - name: Install Cloudflare CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/docs-preview-tools"
+          printf '%s\n' '{"private":true,"type":"module"}' > "$RUNNER_TEMP/docs-preview-tools/package.json"
+          npm install --prefix "$RUNNER_TEMP/docs-preview-tools" --ignore-scripts --no-package-lock cf@1.0.0-beta.12 @cloudflare/build-output-utils@0.8.5
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -121,6 +124,13 @@ jobs:
 
       - name: Validate static assets
         run: node .github/scripts/docs-fork-preview.mjs validate-assets "$RUNNER_TEMP/docs-preview-assets"
+
+      - name: Prepare static build output
+        run: |
+          cp docs/cloudflare.config.ts "$RUNNER_TEMP/docs-preview-tools/cloudflare.config.ts"
+          mkdir -p "$RUNNER_TEMP/docs-preview-tools/.vitepress/scripts"
+          cp docs/.vitepress/scripts/prepare-cloudflare.mjs "$RUNNER_TEMP/docs-preview-tools/.vitepress/scripts/prepare-cloudflare.mjs"
+          node "$RUNNER_TEMP/docs-preview-tools/.vitepress/scripts/prepare-cloudflare.mjs" "$RUNNER_TEMP/docs-preview-assets"
 
       - name: Recheck the PR before upload
         id: current
@@ -134,22 +144,23 @@ jobs:
 
       - name: Upload preview version
         if: steps.current.outputs.current == 'true'
+        working-directory: ${{ runner.temp }}/docs-preview-tools
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           PR_NUMBER: ${{ needs.authorize.outputs.pr }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           PREVIEW_ALIAS: ${{ needs.authorize.outputs.preview-alias }}
-          WRANGLER_SEND_METRICS: 'false'
+          CF_SEND_TELEMETRY: 'false'
+          # cf's version-upload records still use this legacy output variable.
           WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/docs-preview-upload.jsonl
         run: |
           if [[ -z "$CLOUDFLARE_ACCOUNT_ID" || -z "$CLOUDFLARE_API_TOKEN" ]]; then
             echo '::error::Configure the CLOUDFLARE_ACCOUNT_ID variable and CLOUDFLARE_API_TOKEN secret in the docs-preview environment.'
             exit 1
           fi
-          "$RUNNER_TEMP/docs-preview-tools/node_modules/.bin/wrangler" versions upload \
-            --config "$GITHUB_WORKSPACE/docs/wrangler.jsonc" \
-            --assets "$RUNNER_TEMP/docs-preview-assets" \
+          "$RUNNER_TEMP/docs-preview-tools/node_modules/.bin/cf" workers versions create \
+            --prebuilt \
             --preview-alias "$PREVIEW_ALIAS" \
             --message "Docs preview for PR #$PR_NUMBER ($HEAD_SHA)"
 
