@@ -96,6 +96,14 @@ With `cache: false`, the moved settings would have no effect, so decide whether 
 
 ## Dependency Rules
 
+Migration preserves the project's package-manager declaration policy. An
+existing `packageManager` or `devEngines.packageManager` field remains the
+source of truth, while a project that relies only on its lockfile remains
+unpinned. In particular, migration does not turn the package-manager version
+used for its own install into a new exact requirement for contributors or CI.
+When migration infers an undeclared package manager, it prints a warning and
+points to `vp env pin` for projects that want to opt into an explicit pin.
+
 What happens to each toolchain dependency, at a glance:
 
 | Dependency                     | What happens                                                                                                                                                                |

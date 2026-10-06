@@ -163,9 +163,9 @@ If you are migrating manually, update all the imports to `vite-plus/test*` inste
 
 ```ts
 // before
-import { defineConfig } from 'vitest/config';
-import { describe, expect, it, vi } from 'vitest';
 import { playwright } from '@vitest/browser-playwright';
+import { describe, expect, it, vi } from 'vitest';
+import { defineConfig } from 'vitest/config';
 
 const { page } = await import('@vitest/browser/context');
 

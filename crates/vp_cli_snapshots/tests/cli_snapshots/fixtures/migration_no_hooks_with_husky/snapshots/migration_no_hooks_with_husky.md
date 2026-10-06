@@ -34,13 +34,6 @@ prepare script, lint-staged config, check-staged script, and deps should all be 
   },
   "lint-staged": {
     "*.ts": "eslint --fix"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

@@ -34,13 +34,6 @@ lint-staged config, scripts, and simple-git-hooks config should all be preserved
   },
   "lint-staged": {
     "*.ts": "eslint --fix"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

@@ -36,13 +36,6 @@ eslint, @nuxt/eslint, and eslint.config.mjs are preserved
     "eslint": "^9.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
