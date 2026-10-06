@@ -162,10 +162,10 @@ For WebDriverIO, import from the community-maintained `@vitest/browser-webdriver
 If you are migrating manually, update all the imports to `vite-plus/test*` instead:
 
 ```ts
+import { playwright } from '@vitest/browser-playwright';
+import { describe, expect, it, vi } from 'vitest';
 // before
 import { defineConfig } from 'vitest/config';
-import { describe, expect, it, vi } from 'vitest';
-import { playwright } from '@vitest/browser-playwright';
 
 const { page } = await import('@vitest/browser/context');
 

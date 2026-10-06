@@ -1750,6 +1750,7 @@ vp build
 #!/usr/bin/env node
 // tools/generators/ui-lib/bin/index.js
 import { runTemplate } from 'bingo';
+
 import template from '../src/template.js';
 
 runTemplate(template);
@@ -1874,6 +1875,7 @@ vp create @company/generator-ui-lib --name=hooks --deps=@company/utils  # Pre-se
 // tools/generators/ui-lib/src/template.test.ts
 import { testTemplate } from 'bingo/testers';
 import { describe, expect, it } from 'vitest';
+
 import template from './template.js';
 
 describe('UI Library Generator', () => {
@@ -2008,6 +2010,7 @@ Testing can leverage bingo's own test utilities:
 // Template authors test using bingo's testing tools
 import { testTemplate } from 'bingo/testers';
 import { expect, test } from 'vitest';
+
 import template from './template';
 
 test('generates React app', async () => {
@@ -2024,6 +2027,7 @@ Vite+ template runner logic is also tested using TypeScript/Vitest:
 ```typescript
 // In vite_generator package
 import { describe, expect, it } from 'vitest';
+
 import { detectBingoTemplate, loadWorkspacePackages } from './discovery';
 
 describe('Template Detection', () => {
