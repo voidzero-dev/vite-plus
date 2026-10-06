@@ -971,6 +971,15 @@ pub async fn resolve_package_manager_version(
     package_manager_type: PackageManagerType,
     version: &str,
 ) -> Result<Str, Error> {
+    if version.is_empty() {
+        return Err(Error::InvalidArgument(
+            format!(
+                "invalid {package_manager_type} version {version:?}: expected a version or range"
+            )
+            .into(),
+        ));
+    }
+
     match version {
         "default" => match package_manager_type {
             PackageManagerType::Npm => {
