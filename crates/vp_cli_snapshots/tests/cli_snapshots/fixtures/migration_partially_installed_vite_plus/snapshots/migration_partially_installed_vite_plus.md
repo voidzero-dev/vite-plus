@@ -7,6 +7,7 @@ should finish core rewrites even when vite-plus is already installed in a pnpm p
 ```
 VITE+ - The Unified Toolchain for the Web
 
+No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
@@ -45,13 +46,6 @@ scripts should be rewritten without adding package.json overrides
     "typescript": "~6.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

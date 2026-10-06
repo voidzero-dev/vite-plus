@@ -28,13 +28,6 @@ check prettier removed, scripts rewritten, lint-staged rewritten
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

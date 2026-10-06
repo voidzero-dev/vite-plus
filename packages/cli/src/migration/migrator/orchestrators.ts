@@ -47,7 +47,6 @@ import {
   rewriteTsconfigTypes,
   rewriteYarnrcYml,
   setDirectViteEdge,
-  setPackageManager,
   sourceTreeReferencesRetainedVitestModule,
   takePnpmWorkspaceSettings,
   usesVitestBrowserMode,
@@ -342,8 +341,6 @@ export function rewriteStandaloneProject(
   dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages, originalOxlintDependencies);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
-  // set package manager
-  setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
 }
 
 /**
@@ -500,8 +497,6 @@ export function rewriteMonorepo(
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }
-  // set package manager
-  setPackageManager(workspaceInfo.rootDir, workspaceInfo.downloadPackageManager);
 }
 
 /**
