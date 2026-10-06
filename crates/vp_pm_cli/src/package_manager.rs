@@ -614,7 +614,12 @@ pub fn package_manager_install_dir(
 #[must_use]
 pub fn package_manager_bin_path(install_dir: &AbsolutePath, bin_name: &str) -> AbsolutePathBuf {
     let bin_path = install_dir.join("bin").join(bin_name);
-    if cfg!(windows) { bin_path.with_extension("cmd") } else { bin_path }
+    if cfg!(windows) {
+        let exe = bin_path.with_extension("exe");
+        if exe.as_path().is_file() { exe } else { bin_path.with_extension("cmd") }
+    } else {
+        bin_path
+    }
 }
 
 /// Return a managed package-manager binary, downloading its release when needed.
@@ -639,7 +644,9 @@ pub async fn ensure_package_manager_bin(
     {
         let bin_path = package_manager_bin_path(&install_dir, bin_name);
         if bin_path.as_path().exists() {
-            return Ok(bin_path);
+            #[cfg(windows)]
+            ensure_native_windows_bins(package_manager_type, &install_dir).await?;
+            return Ok(package_manager_bin_path(&install_dir, bin_name));
         }
     }
 
@@ -1149,6 +1156,64 @@ async fn resolve_package_manager_range(
 /// Download the package manager and extract it to the vite-plus home directory.
 /// Return the install directory, e.g. `<DATA>/package_manager/pnpm/10.0.0/pnpm`
 pub async fn download_package_manager(
+    package_manager_type: PackageManagerType,
+    version_or_latest: &str,
+    expected_hash: Option<&str>,
+) -> Result<(AbsolutePathBuf, Str, Str), Error> {
+    let installed =
+        download_package_manager_inner(package_manager_type, version_or_latest, expected_hash)
+            .await?;
+    #[cfg(windows)]
+    ensure_native_windows_bins(package_manager_type, &installed.0).await?;
+    Ok(installed)
+}
+
+/// Expose native package managers under their real command names. A `.cmd`
+/// wrapper in the child's PATH would reintroduce the batch termination prompt
+/// when a package script invokes bun/pnpm, even if vp starts the outer command
+/// through PowerShell. Both runtimes recognize their executable aliases
+/// (`bunx.exe` and `pnpx.exe`) without injected arguments.
+///
+/// Also runs on cached installs so upgrading vp repairs existing installations
+/// without downloading the runtime again. Hard links are atomic and avoid
+/// duplicating the binary; filesystems without hard links use an atomic copy.
+#[cfg(windows)]
+async fn ensure_native_windows_bins(
+    package_manager_type: PackageManagerType,
+    install_dir: &AbsolutePath,
+) -> Result<(), Error> {
+    if !matches!(package_manager_type, PackageManagerType::Bun | PackageManagerType::Pnpm) {
+        return Ok(());
+    }
+    let bin_dir = install_dir.join("bin");
+    let native = bin_dir.join(format!("{package_manager_type}.native.exe"));
+    if !is_exists_file(&native)? {
+        // pnpm <= 11 still uses the JavaScript launcher.
+        return Ok(());
+    }
+    for name in package_manager_type.bin_names() {
+        let executable = bin_dir.join(format!("{name}.exe"));
+        if is_exists_file(&executable)? {
+            continue;
+        }
+        match tokio::fs::hard_link(&native, &executable).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(_) => {
+                let temp = tempfile::NamedTempFile::new_in(&bin_dir)?;
+                tokio::fs::copy(&native, temp.path()).await?;
+                match temp.persist_noclobber(&executable) {
+                    Ok(_) => {}
+                    Err(error) if error.error.kind() == io::ErrorKind::AlreadyExists => {}
+                    Err(error) => return Err(error.error.into()),
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn download_package_manager_inner(
     package_manager_type: PackageManagerType,
     version_or_latest: &str,
     expected_hash: Option<&str>,
@@ -4298,6 +4363,73 @@ mod tests {
             name.ends_with("-musl"),
             "On musl targets, package name should end with -musl, got: {name}"
         );
+    }
+
+    #[tokio::test]
+    #[cfg(windows)]
+    async fn cached_native_managers_gain_executable_aliases_without_download() {
+        let temp_dir = create_temp_dir();
+        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.as_path())], |_| async {
+            for (kind, version) in
+                [(PackageManagerType::Bun, "1.4.2"), (PackageManagerType::Pnpm, "12.8.1")]
+            {
+                write_pm_install(&vp_home, &kind.to_string(), version, InstallState::Complete);
+                let install = package_manager_install_dir(kind, version).unwrap();
+                let bin = install.join("bin");
+                let native = bin.join(format!("{kind}.native.exe"));
+                fs::write(&native, "cached native executable").unwrap();
+
+                // Exercise both public cache entrypoints. These exact versions
+                // must not require a registry request or replace the native file.
+                let primary = ensure_package_manager_bin(kind, version, None, kind.bin_names()[0])
+                    .await
+                    .unwrap();
+                assert_eq!(primary, bin.join(format!("{kind}.exe")));
+                let alias = bin.join(format!("{}.exe", kind.bin_names()[1]));
+                fs::remove_file(&alias).unwrap();
+                let (cached, _, _) = download_package_manager(kind, version, None).await.unwrap();
+                assert_eq!(cached, install);
+                for name in kind.bin_names() {
+                    let path = package_manager_bin_path(&install, name);
+                    assert_eq!(path, bin.join(format!("{name}.exe")));
+                    assert_eq!(fs::read_to_string(&path).unwrap(), "cached native executable");
+                }
+                assert_eq!(fs::read_to_string(&native).unwrap(), "cached native executable");
+            }
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[cfg(windows)]
+    async fn native_windows_bins_are_safe_to_prepare_concurrently() {
+        let temp_dir = create_temp_dir();
+        let install = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin = install.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(bin.join("bun.native.exe"), "native executable").unwrap();
+        let (first, second) = tokio::join!(
+            ensure_native_windows_bins(PackageManagerType::Bun, &install),
+            ensure_native_windows_bins(PackageManagerType::Bun, &install),
+        );
+        first.unwrap();
+        second.unwrap();
+        assert_eq!(fs::read_to_string(bin.join("bun.exe")).unwrap(), "native executable");
+        assert_eq!(fs::read_to_string(bin.join("bunx.exe")).unwrap(), "native executable");
+    }
+
+    #[tokio::test]
+    #[cfg(windows)]
+    async fn javascript_package_managers_keep_their_script_launchers() {
+        let temp_dir = create_temp_dir();
+        let install = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin = install.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(bin.join("pnpm.cmd"), "JavaScript launcher").unwrap();
+        ensure_native_windows_bins(PackageManagerType::Pnpm, &install).await.unwrap();
+        assert_eq!(package_manager_bin_path(&install, "pnpm"), bin.join("pnpm.cmd"));
+        assert!(!bin.join("pnpm.exe").as_path().exists());
     }
 
     #[tokio::test]

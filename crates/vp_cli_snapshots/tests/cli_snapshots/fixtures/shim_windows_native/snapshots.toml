@@ -1,0 +1,24 @@
+[[case]]
+name = "cached_bun_exposes_native_commands"
+vp = "global"
+skip-platforms = ["linux", "macos"]
+env = { SHIM_TEST_VALUE = "inherited value" }
+steps = [
+  { argv = ["node", "prepare.cjs", "bun"], snapshot = false },
+  { argv = ["bun", "probe.cjs", "nested", "bun", "value with spaces", 'path\file'], comment = "An existing Bun cache gains .exe commands before they enter a package script's PATH." },
+  ["bunx", "probe.cjs", "args", "bunx", "value with spaces", 'path\file'],
+  ["vpt", "pipe-stdin", "piped input", "--", "bun", "probe.cjs", "stdin", "bun"],
+  { argv = ["bun", "probe.cjs", "args", "bun", "value with spaces", 'path\file'], envs = [["SHIM_TEST_EXIT_CODE", "7"]], continue-on-failure = true },
+]
+
+[[case]]
+name = "cached_pnpm_exposes_native_commands"
+vp = "global"
+skip-platforms = ["linux", "macos"]
+env = { SHIM_TEST_VALUE = "inherited value" }
+steps = [
+  { argv = ["node", "prepare.cjs", "pnpm"], snapshot = false },
+  ["pnpm", "probe.cjs", "nested", "pnpm", "value with spaces", 'path\file'],
+  ["pnpx", "probe.cjs", "args", "pnpx", "value with spaces", 'path\file'],
+  ["vpt", "pipe-stdin", "piped input", "--", "pnpm", "probe.cjs", "stdin", "pnpm"],
+]

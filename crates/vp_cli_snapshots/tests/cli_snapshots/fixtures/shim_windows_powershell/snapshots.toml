@@ -24,3 +24,41 @@ steps = [
   { argv = ["npm", "--flag", "value with spaces", 'path\file'], comment = "The npm.exe proxy shares the same managed launcher policy." },
   { argv = ["npm", "--flag", "value with spaces", 'path\file'], tty = false, comment = "Non-interactive npm calls retain the batch launcher." },
 ]
+
+[[case]]
+name = "run_rewrites_managed_pnpm"
+vp = "local"
+requires = ["pwsh"]
+skip-platforms = ["linux", "macos"]
+env = { SHIM_TEST_VALUE = "inherited value" }
+steps = [
+  { argv = ["node", "prepare.cjs", "pnpm"], snapshot = false },
+  { argv = ["vp", "run", "probe"], comment = "Task planning also rewrites managed shims outside the workspace." },
+  { argv = ["vp", "run", "probe"], tty = false, comment = "Piped task stdin retains the batch launcher." },
+  { argv = ["vp", "run", "probe"], envs = [["SHIM_TEST_EXIT_CODE", "7"]], continue-on-failure = true },
+  { argv = ["node", "prepare.cjs", "pnpm", "alias"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "rm", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx.ps1"], snapshot = false },
+  { argv = ["vp", "run", "probe"], comment = "A missing PowerShell sibling retains the batch launcher." },
+]
+
+[[case]]
+name = "run_rewrites_managed_npm"
+vp = "local"
+requires = ["pwsh"]
+skip-platforms = ["linux", "macos"]
+env = { SHIM_TEST_VALUE = "inherited value" }
+steps = [
+  { argv = ["node", "prepare.cjs", "npm"], snapshot = false },
+  ["vp", "run", "probe"],
+]
+
+[[case]]
+name = "run_rewrites_managed_yarn"
+vp = "local"
+requires = ["pwsh"]
+skip-platforms = ["linux", "macos"]
+env = { SHIM_TEST_VALUE = "inherited value" }
+steps = [
+  { argv = ["node", "prepare.cjs", "yarn"], snapshot = false },
+  ["vp", "run", "probe"],
+]
