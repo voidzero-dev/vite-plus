@@ -2,6 +2,8 @@ import color from 'picocolors';
 
 import {
   type CommonOptions,
+  getGuide,
+  wrapTextWithPrefix,
   S_BAR,
   S_ERROR,
   S_INFO,
@@ -21,18 +23,19 @@ export const log = {
   message: (
     message: string | string[] = [],
     {
-      symbol = color.gray(S_BAR),
+      symbol,
       secondarySymbol = color.gray(S_BAR),
       output = process.stdout,
-      spacing = 1,
+      spacing = 0,
       withGuide,
     }: LogMessageOptions = {},
   ) => {
     const parts: string[] = [];
-    const hasGuide = withGuide ?? false;
+    const hasGuide = getGuide({ withGuide });
     const spacingString = !hasGuide ? '' : secondarySymbol;
-    const prefix = !hasGuide ? '' : `${symbol}  `;
-    const secondaryPrefix = !hasGuide ? '' : `${secondarySymbol}  `;
+    const prefix = symbol ? `${symbol}  ` : hasGuide ? `${secondarySymbol}  ` : '';
+    const marker = symbol ?? secondarySymbol;
+    const secondaryPrefix = hasGuide ? `${secondarySymbol}  ` : symbol ? '   ' : '';
 
     for (let i = 0; i < spacing; i++) {
       parts.push(spacingString);
@@ -42,13 +45,13 @@ export const log = {
     if (messageParts.length > 0) {
       const [firstLine, ...lines] = messageParts;
       if (firstLine.length > 0) {
-        parts.push(`${prefix}${firstLine}`);
+        parts.push(wrapTextWithPrefix(output, firstLine, secondaryPrefix, prefix));
       } else {
-        parts.push(hasGuide ? symbol : '');
+        parts.push(hasGuide || symbol ? marker : '');
       }
       for (const ln of lines) {
         if (ln.length > 0) {
-          parts.push(`${secondaryPrefix}${ln}`);
+          parts.push(wrapTextWithPrefix(output, ln, secondaryPrefix));
         } else {
           parts.push(hasGuide ? secondarySymbol : '');
         }

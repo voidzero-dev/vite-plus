@@ -16,14 +16,13 @@ a failed automatic migration should show manual options
 ```
 VITE+ - The Unified Toolchain for the Web
 
-tsup configuration detected. Auto-migrating to tsdown...
+●  tsup configuration detected. Auto-migrating to tsdown...
+●  Automatic tsup migration failed.
 
-Automatic tsup migration failed.
-
-Choose one of these manual migration methods:
-  1. Run `vp dlx tsdown-migrate` in the project root.
-  2. Use the tsdown migration skill:
-     https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
+   Choose one of these manual migration methods:
+     1. Run `vp dlx tsdown-migrate` in the project root.
+     2. Use the tsdown migration skill:
+        https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
 
 Complete the tsup migration manually, then re-run `vp migrate`.
 ```

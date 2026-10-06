@@ -12,11 +12,11 @@ bench('\''old benchmark'\'', () => 20 + 22, { time: 10 });
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item (1 block dependency updates)
+▲  Vitest v5: 1 review item (1 block dependency updates)
 
-example.bench.ts
-  1:10 BLOCK [benchmark-api] Migrate these bench references manually: automatic migration requires direct calls with inline or locally resolved zero-argument callbacks and no benchmark options. Review wrappers, comparison groups, and escaped references.
-    Docs: https://vitest.dev/guide/migration/#benchmarking-api-rewrite
+   example.bench.ts
+     1:10 BLOCK [benchmark-api] Migrate these bench references manually: automatic migration requires direct calls with inline or locally resolved zero-argument callbacks and no benchmark options. Review wrappers, comparison groups, and escaped references.
+       Docs: https://vitest.dev/guide/migration/#benchmarking-api-rewrite
 Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.
 ```
 
