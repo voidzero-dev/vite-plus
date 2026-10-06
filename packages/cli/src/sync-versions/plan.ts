@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser';
-import semver from 'semver';
+import { normalizeRange } from 'verkit';
 import { isScalar, parseDocument, Scalar } from 'yaml';
 import { z } from 'zod';
 
@@ -163,7 +163,7 @@ function alignedNpmAlias(current: string, toolchain: SyncVersionsToolchain): str
   if (
     target === undefined ||
     currentVersion === target ||
-    semver.validRange(currentVersion) === null
+    normalizeRange(currentVersion) === null
   ) {
     return current;
   }
@@ -180,7 +180,7 @@ function alignedSpec(name: string, current: string, toolchain: SyncVersionsToolc
     current === target ||
     current.startsWith('$') ||
     /^[a-z][a-z+.-]*:/i.test(current) ||
-    semver.validRange(current) === null
+    normalizeRange(current) === null
   ) {
     return current;
   }

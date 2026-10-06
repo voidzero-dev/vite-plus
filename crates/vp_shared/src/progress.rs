@@ -96,6 +96,7 @@ mod tests {
 
     use console::{Term, measure_text_width};
     use indicatif::{InMemoryTerm, ProgressDrawTarget, TermLike};
+    use vt_str::Str;
 
     use super::*;
 
@@ -111,8 +112,16 @@ mod tests {
         )
     }
 
-    fn assert_single_row(term: &InMemoryTerm) {
-        let screen = term.contents();
+    fn contents(bar: &ProgressBar, term: &InMemoryTerm) -> Str {
+        let mut screen = Str::default();
+        // `update` holds the same lock as the background ticker. Reading the
+        // terminal directly can catch a redraw between clearing and writing.
+        bar.update(|_| screen = term.contents().into());
+        screen
+    }
+
+    fn assert_single_row(bar: &ProgressBar, term: &InMemoryTerm) {
+        let screen = contents(bar, term);
         let lines: Vec<_> = screen.lines().collect();
         assert_eq!(lines.len(), 2, "{screen}");
         assert_eq!(lines[0], "A");
@@ -129,7 +138,7 @@ mod tests {
             let progress = spinner(&term);
             progress.bar.set_elapsed(Duration::from_secs(8));
             progress.bar.force_draw();
-            assert_single_row(&term);
+            assert_single_row(&progress.bar, &term);
 
             progress
                 .run(async {
@@ -138,13 +147,14 @@ mod tests {
                         download.bar.set_length(100);
                         download.bar.set_position(70);
                         download.bar.force_draw();
-                        assert_single_row(&term);
-                        assert!(term.contents().contains(message));
-                        assert!(!term.contents().contains("Preparing"));
+                        assert_single_row(&download.bar, &term);
+                        let screen = contents(&download.bar, &term);
+                        assert!(screen.contains(message));
+                        assert!(!screen.contains("Preparing"));
                         drop(download);
-                        assert_single_row(&term);
-                        assert!(term.contents().contains("Preparing Node.js and pnpm..."));
                         ACTIVE_PROGRESS.with(|bar| {
+                            assert_single_row(bar, &term);
+                            assert!(contents(bar, &term).contains("Preparing Node.js and pnpm..."));
                             assert!(bar.elapsed() >= Duration::from_secs(8));
                         });
                     }
@@ -176,12 +186,14 @@ mod tests {
     fn cancellation_clears_progress() {
         let term = InMemoryTerm::new(10, 80);
         term.write_line("Earlier output").unwrap();
-        let mut future = Box::pin(spinner(&term).run(async {
+        let progress = spinner(&term);
+        let bar = progress.bar.clone();
+        let mut future = Box::pin(progress.run(async {
             let _download = Progress::download("Downloading Node.js...").unwrap();
             std::future::pending::<()>().await;
         }));
         assert_eq!(future.as_mut().poll(&mut Context::from_waker(Waker::noop())), Poll::Pending);
-        assert!(term.contents().contains("Downloading Node.js..."));
+        assert!(contents(&bar, &term).contains("Downloading Node.js..."));
         drop(future);
         assert_eq!(term.contents(), "Earlier output");
         assert!(ACTIVE_PROGRESS.try_with(|_| ()).is_err());

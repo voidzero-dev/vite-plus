@@ -43,13 +43,6 @@ prepare and the Husky dependency should remain
     "husky": "^9.1.7",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

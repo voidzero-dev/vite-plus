@@ -14,7 +14,7 @@ First install via vp (creates managed shim)
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed npm-global-linked-pkg 1.0.0
+ Installed npm-global-linked-pkg 1.0.0
   Bins: npm-global-linked-cli
 ```
 
@@ -41,7 +41,7 @@ Skipped 'npm-global-linked-cli': managed by `vp install -g npm-global-linked-pkg
 Cleanup
 
 ```
-Uninstalled npm-global-linked-pkg
+- Uninstalled npm-global-linked-pkg
 ```
 
 ## `vpt stat-file $VP_HOME/bin/npm-global-linked-cli`

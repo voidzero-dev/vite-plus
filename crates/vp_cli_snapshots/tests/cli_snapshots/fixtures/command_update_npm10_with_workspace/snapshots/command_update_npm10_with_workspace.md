@@ -25,12 +25,11 @@ added 5 packages in <duration>
 }
 ```
 
-## `vp update testnpm2 --latest --filter app -- --no-audit`
+## `vp update testnpm2 --filter app -- --no-audit`
 
 should update in specific package
 
 ```
-warn: npm does not support --latest.
 
 up to date in <duration>
 ```
@@ -52,7 +51,7 @@ up to date in <duration>
 
 ## `vp up -D --filter app -- --no-audit`
 
-should update dev dependencies in app
+include dev dependencies using npm's native behavior in the selected workspace
 
 ```
 npm warn workspaces app in filter set, but no workspace folder present
@@ -147,11 +146,12 @@ up to date in <duration>
 
 ## `vp update --workspace --filter app @vite-plus-test/utils -- --no-audit`
 
-should update workspace dependency
+reject pnpm-specific workspace dependency selection
+
+**Exit code:** 1
 
 ```
-
-up to date in <duration>
+npm does not support --workspace.
 ```
 
 ## `vpt print-file packages/app/package.json`

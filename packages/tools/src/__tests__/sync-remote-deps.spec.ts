@@ -3,7 +3,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import * as semver from 'semver';
+import * as verkit from 'verkit';
 import { describe, expect, test } from 'vitest';
 import * as yaml from 'yaml';
 
@@ -109,7 +109,7 @@ describe('vendored Vitest dependency alignment', () => {
       { catalog: { vitest: '5.0.0' } },
       { catalog: { vitest: '^4.1.6' } },
       { catalog: { vitest: '^4.1.10' } },
-      semver,
+      verkit,
     );
     expect(merged.catalog?.vitest).toBe('5.0.0');
   });
@@ -121,7 +121,7 @@ describe('vendored Vitest dependency alignment', () => {
         { catalog: { vitest: '5.0.0' } },
         { catalog: { vitest: upstream } },
         {},
-        semver,
+        verkit,
       );
       expect(merged.catalog?.vitest).toBe('5.0.0');
     },
@@ -155,7 +155,7 @@ describe('vendored Vitest dependency alignment', () => {
           '@vitest/web-worker': '4.1.11',
         },
       },
-      semver,
+      verkit,
     );
     expect(merged.catalog).toEqual({
       vitest: '5.1.2',
@@ -173,14 +173,14 @@ describe('vendored Vitest dependency alignment', () => {
   test.each(['^5.0.0', '=5.0.0', '4.1.11', '6.0.0', '5.1.0-beta.1'])(
     'rejects an unreviewed root runner version %s',
     (vitest) => {
-      expect(() => mergePnpmWorkspaces({ catalog: { vitest } }, {}, {}, semver)).toThrow(
+      expect(() => mergePnpmWorkspaces({ catalog: { vitest } }, {}, {}, verkit)).toThrow(
         'The root Vitest catalog entry must be an exact stable v5 version',
       );
     },
   );
 
   test('does not infer a missing root pin from an upstream catalog', () => {
-    expect(() => mergePnpmWorkspaces({}, { catalog: { vitest: '^4.1.6' } }, {}, semver)).toThrow(
+    expect(() => mergePnpmWorkspaces({}, { catalog: { vitest: '^4.1.6' } }, {}, verkit)).toThrow(
       'The root Vitest catalog entry must be an exact stable v5 version',
     );
   });
@@ -190,7 +190,7 @@ describe('vendored Vitest dependency alignment', () => {
       { catalog: { tinybench: '^6.0.0' } },
       { catalog: { tinybench: '^2.9.0' } },
       {},
-      semver,
+      verkit,
     );
     expect(merged.catalog?.tinybench).toBe('^6.0.0');
   });
@@ -336,7 +336,7 @@ describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
     };
     const rolldownVite = {};
 
-    const result = mergePnpmWorkspaces(main, rolldown, rolldownVite, semver);
+    const result = mergePnpmWorkspaces(main, rolldown, rolldownVite, verkit);
 
     // Nothing redundant should survive; the original broad rules plus the
     // genuinely-specific `lodash-es@4.18.1` pin remain.
@@ -360,7 +360,7 @@ describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
       minimumReleaseAgeExclude: ['some-pkg@1.2.3'],
     };
 
-    const result = mergePnpmWorkspaces(main, rolldown, {}, semver);
+    const result = mergePnpmWorkspaces(main, rolldown, {}, verkit);
 
     expect(result.minimumReleaseAgeExclude).toContain('lodash-es@4.18.1');
     expect(result.minimumReleaseAgeExclude).toContain('some-pkg@1.2.3');
@@ -374,7 +374,7 @@ describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
       minimumReleaseAgeExclude: ['oxc-parser', '@oxc-parser/*'],
     };
 
-    const result = mergePnpmWorkspaces(main, rolldown, {}, semver);
+    const result = mergePnpmWorkspaces(main, rolldown, {}, verkit);
 
     expect(result.minimumReleaseAgeExclude).toEqual(['@oxc-parser/*', 'oxc-parser']);
   });

@@ -25,7 +25,7 @@ impl Resolve<PatchArgs> for Pnpm {
 
 impl Resolve<PatchArgs> for Npm {
     fn resolve(&self, args: &PatchArgs, diag: &mut Diagnostics) -> CommandResolution {
-        if !self.is_npm_12_or_newer() {
+        if !self.supports_v12_commands() {
             diag.warn(
                 DiagnosticKind::UnsupportedCommandNoop,
                 "npm does not have a 'patch' command.",

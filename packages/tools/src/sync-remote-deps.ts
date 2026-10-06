@@ -387,7 +387,7 @@ function mergeSemverVersions(
   v1: string,
   v2: string,
   packageName: string,
-  semver: typeof import('semver'),
+  verkit: typeof import('verkit'),
 ): string {
   // Handle special cases
   if (v1 === v2) {
@@ -403,8 +403,8 @@ function mergeSemverVersions(
       if (syncedPackages(packageName)) {
         const ver1 = v1.slice(1); // Remove '=' prefix
         const ver2 = v2.slice(1);
-        if (semver.valid(ver1) && semver.valid(ver2)) {
-          const higher = semver.gt(ver1, ver2) ? v1 : v2;
+        if (verkit.normalize(ver1) && verkit.normalize(ver2)) {
+          const higher = verkit.isGreaterThan(ver1, ver2) ? v1 : v2;
           log(`Resolving ${packageName} version conflict: ${v1} vs ${v2} -> ${higher}`);
           return higher;
         }
@@ -424,8 +424,8 @@ function mergeSemverVersions(
     return v1;
   }
 
-  const range1 = semver.validRange(v1);
-  const range2 = semver.validRange(v2);
+  const range1 = verkit.normalizeRange(v1);
+  const range2 = verkit.normalizeRange(v2);
 
   if (!range1 || !range2) {
     log(`Warning: Could not parse semver for ${packageName}: ${v1}, ${v2}. Using ${v1}`);
@@ -454,13 +454,13 @@ function mergeSemverVersions(
 
   // Both have same major version, return the higher one
   // Compare the minimum versions
-  const minVersion1 = semver.minVersion(range1);
-  const minVersion2 = semver.minVersion(range2);
+  const minVersion1 = verkit.findMinimumForRange(range1);
+  const minVersion2 = verkit.findMinimumForRange(range2);
 
   if (minVersion1 && minVersion2) {
-    if (semver.gt(minVersion1, minVersion2)) {
+    if (verkit.isGreaterThan(minVersion1, minVersion2)) {
       return v1;
-    } else if (semver.gt(minVersion2, minVersion1)) {
+    } else if (verkit.isGreaterThan(minVersion2, minVersion1)) {
       return v2;
     }
   }
@@ -483,7 +483,7 @@ function parseExcludeEntry(entry: string): { name: string; version?: string } {
 // Build a matcher for a version-less name pattern. The exclude list only ever
 // uses the `*` wildcard, so a tiny *-only glob (escape regex specials, `*` ->
 // `.*`, anchored) is enough and keeps `minimatch` out of this module: it is
-// loaded via dynamic import before the yaml/semver install fallback runs, so a
+// loaded via dynamic import before the yaml/verkit install fallback runs, so a
 // top-level dependency import could fail on a clean clone.
 function globToRegExp(pattern: string): RegExp {
   const escaped = pattern.replaceAll(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*');
@@ -520,7 +520,7 @@ export function mergePnpmWorkspaces(
   main: PnpmWorkspace,
   rolldown: PnpmWorkspace,
   rolldownVite: PnpmWorkspace,
-  semver: typeof import('semver'),
+  verkit: typeof import('verkit'),
 ): PnpmWorkspace {
   const result: PnpmWorkspace = { ...main };
 
@@ -549,7 +549,7 @@ export function mergePnpmWorkspaces(
         if (
           !vitestVersion ||
           !/^5\.\d+\.\d+$/.test(vitestVersion) ||
-          semver.valid(vitestVersion) !== vitestVersion
+          verkit.normalize(vitestVersion) !== vitestVersion
         ) {
           throw new Error('The root Vitest catalog entry must be an exact stable v5 version');
         }
@@ -559,7 +559,7 @@ export function mergePnpmWorkspaces(
         catalog[pkg] = main.catalog[pkg];
       } else {
         catalog[pkg] = catalog[pkg]
-          ? mergeSemverVersions(catalog[pkg], version, pkg, semver)
+          ? mergeSemverVersions(catalog[pkg], version, pkg, verkit)
           : version;
       }
     }
@@ -680,7 +680,7 @@ export function mergeWorkspaceYaml(
   rolldownSrc: string,
   rolldownViteSrc: string,
   yaml: typeof import('yaml'),
-  semver: typeof import('semver'),
+  verkit: typeof import('verkit'),
 ): string {
   const mainDoc = yaml.parseDocument(mainSrc);
   const rolldown = yaml.parse(rolldownSrc) as PnpmWorkspace | null;
@@ -690,7 +690,7 @@ export function mergeWorkspaceYaml(
     (mainDoc.toJSON() as PnpmWorkspace) ?? {},
     rolldown ?? {},
     rolldownVite ?? {},
-    semver,
+    verkit,
   );
 
   const stringifyOptions = { lineWidth: -1, singleQuote: true } as const;
@@ -885,17 +885,17 @@ export async function syncRemote() {
   // Dynamically import dependencies after git clone. Capture the whole `yaml`
   // module (we need `yaml.parseDocument` to preserve comments).
   let yaml: typeof import('yaml');
-  let semver: typeof import('semver');
+  let verkit: typeof import('verkit');
 
   try {
     yaml = await import('yaml');
-    semver = await import('semver');
+    verkit = await import('verkit');
   } catch {
     log('Dependencies not found, running pnpm install...');
     execCommand('pnpm install --no-frozen-lockfile', rootDir);
     log('Retrying imports...');
     yaml = await import('yaml');
-    semver = await import('semver');
+    verkit = await import('verkit');
   }
 
   log('Reading pnpm-workspace.yaml files...');
@@ -911,10 +911,10 @@ export async function syncRemote() {
   log('Merging pnpm-workspace.yaml files...');
 
   // Merge upstream catalogs into the main workspace while preserving its comments.
-  const yamlContent = mergeWorkspaceYaml(mainSrc, rolldownSrc, rolldownViteSrc, yaml, semver);
+  const yamlContent = mergeWorkspaceYaml(mainSrc, rolldownSrc, rolldownViteSrc, yaml, verkit);
 
   const vitestVersion = (yaml.parse(yamlContent) as PnpmWorkspace).catalog?.vitest;
-  if (!vitestVersion || !semver.valid(vitestVersion)) {
+  if (!vitestVersion || !verkit.normalize(vitestVersion)) {
     throw new Error('The Vitest catalog entry must be an exact version');
   }
   writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');

@@ -11,11 +11,11 @@ pub struct ListArgs {
     pub(crate) pattern: Option<String>,
 
     /// Maximum depth of dependency tree
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(yarn >= "2", bun))]
     pub(crate) depth: Option<u32>,
 
     /// Output in JSON format
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(yarn >= "2", bun))]
     pub(crate) json: bool,
 
     /// Show extended information
@@ -27,11 +27,11 @@ pub struct ListArgs {
     pub(crate) parseable: bool,
 
     /// Only production dependencies
-    #[arg(short = 'P', long, not_supported(yarn, bun))]
+    #[arg(short = 'P', long, not_supported(yarn >= "2", bun))]
     pub(crate) prod: bool,
 
-    /// Only dev dependencies
-    #[arg(short = 'D', long, not_supported(yarn, bun))]
+    /// Include dev dependencies
+    #[arg(short = 'D', long, not_supported(yarn >= "2", bun))]
     pub(crate) dev: bool,
 
     /// Exclude optional dependencies
@@ -103,7 +103,7 @@ impl Npm {
         cmd.option("--depth", args.depth).arg_if("--json", args.json);
         cmd.arg_if("--long", args.long).arg_if("--parseable", args.parseable);
         if args.prod {
-            cmd.arg("--include").arg("prod").arg("--include").arg("peer");
+            cmd.arg("--omit").arg("dev");
         }
         if args.dev {
             cmd.arg("--include").arg("dev");
@@ -148,7 +148,10 @@ impl Resolve<ListArgs> for Yarn {
         if let Some(pattern) = &args.pattern {
             cmd.arg(pattern);
         }
-        cmd.option("--depth", args.depth).arg_if("--json", args.json);
+        cmd.option("--depth", args.depth)
+            .arg_if("--json", args.json)
+            .arg_if("--production", args.prod)
+            .arg_if("--production=false", args.dev);
         cmd.extend(args.pass_through_args.iter());
         cmd.into()
     }
@@ -175,7 +178,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     fn list_args(pattern: Option<&str>) -> ListArgs {
@@ -236,15 +239,29 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn1_list_recursive_ignored() {
+    fn test_yarn1_list_recursive_is_rejected() {
         let resolution =
             resolve(&yarn("1.22.0"), ListArgs { recursive: true, ..Default::default() });
-        let command = expect_run(resolution.outcome);
+        expect_unsupported(resolution, &["yarn does not support --recursive."]);
+    }
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["list"]);
-        assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::UnsupportedOptionDropped);
-        assert_eq!(resolution.diagnostics[0].message, "yarn does not support --recursive.");
+    #[test]
+    fn test_yarn2_list_rejects_depth_and_json() {
+        for version in ["2.4.2", "3.6.0", "4.18.0"] {
+            let args = parse_args::<ListArgs>(["--depth", "0", "--json", "--", "--help"]).unwrap();
+            expect_unsupported(
+                resolve(&yarn(version), args),
+                &["yarn >= 2 does not support --depth.", "yarn >= 2 does not support --json."],
+            );
+        }
+    }
+
+    #[test]
+    fn test_yarn1_list_preserves_depth_and_json() {
+        let args = parse_args::<ListArgs>(["--depth", "0", "--json"]).unwrap();
+        let resolution = resolve(&yarn("1.22.22"), args);
+        assert_eq!(expect_run(resolution.outcome).args, vec!["list", "--depth", "0", "--json"]);
+        assert!(resolution.diagnostics.is_empty());
     }
 
     #[test]
@@ -363,16 +380,12 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn1_list_with_filter_ignored() {
+    fn test_yarn1_list_filter_is_rejected() {
         let resolution = resolve(
             &yarn("1.22.0"),
             ListArgs { filter: vec!["app".to_string()], ..Default::default() },
         );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["list"]);
-        assert_eq!(resolution.diagnostics[0].message, "yarn does not support --filter.");
+        expect_unsupported(resolution, &["yarn does not support --filter."]);
     }
 
     #[test]
@@ -392,17 +405,27 @@ mod tests {
         );
 
         assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["list", "--include", "prod", "--include", "peer"]);
+        assert_eq!(command.args, vec!["list", "--omit", "dev"]);
     }
 
     #[test]
-    fn test_yarn1_list_prod_ignored() {
-        let command = expect_run(
-            resolve(&yarn("1.22.0"), ListArgs { prod: true, ..Default::default() }).outcome,
+    fn test_npm_list_prod_respects_exclusions() {
+        let args = parse_args::<ListArgs>(["--prod", "--no-optional", "--exclude-peers"]).unwrap();
+        let resolution = resolve(&npm("12.0.2"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            vec!["list", "--omit", "dev", "--omit", "optional", "--omit", "peer"]
         );
+    }
 
+    #[test]
+    fn test_yarn1_list_prod() {
+        let resolution = resolve(&yarn("1.22.22"), ListArgs { prod: true, ..Default::default() });
+        assert!(resolution.diagnostics.is_empty());
+        let command = expect_run(resolution.outcome);
         assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["list"]);
+        assert_eq!(command.args, vec!["list", "--production"]);
     }
 
     #[test]
@@ -416,23 +439,32 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_list_dev() {
-        let command = expect_run(
-            resolve(&npm("11.0.0"), ListArgs { dev: true, ..Default::default() }).outcome,
-        );
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["list", "--include", "dev"]);
+    fn test_npm_list_dev_includes_dev_dependencies() {
+        let args = parse_args::<ListArgs>(["--dev", "--json"]).unwrap();
+        let command = expect_run(resolve(&npm("11.16.0"), args).outcome);
+        assert_eq!(command.args, vec!["list", "--json", "--include", "dev"]);
     }
 
     #[test]
-    fn test_yarn1_list_dev_ignored() {
-        let command = expect_run(
-            resolve(&yarn("1.22.0"), ListArgs { dev: true, ..Default::default() }).outcome,
+    fn test_npm_list_unsupported_errors_aggregate_and_raw_flags_are_preserved() {
+        let args =
+            parse_args::<ListArgs>(["--dev", "--only-projects", "--find-by", "finder"]).unwrap();
+        expect_unsupported(
+            resolve(&npm("12.0.2"), args),
+            &["npm does not support --only-projects.", "npm does not support --find-by."],
         );
+        let args = parse_args::<ListArgs>(["--", "--include=dev", "--json"]).unwrap();
+        let resolution = resolve(&npm("12.0.2"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, vec!["list", "--include=dev", "--json"]);
+    }
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["list"]);
+    #[test]
+    fn test_yarn_list_dev_follows_native_support() {
+        let args = ListArgs { dev: true, ..Default::default() };
+        let command = expect_run(resolve(&yarn("1.22.22"), args.clone()).outcome);
+        assert_eq!(command.args, vec!["list", "--production=false"]);
+        expect_unsupported(resolve(&yarn("4.18.0"), args), &["yarn >= 2 does not support --dev."]);
     }
 
     #[test]
@@ -456,13 +488,11 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn1_list_no_optional_ignored() {
-        let command = expect_run(
-            resolve(&yarn("1.22.0"), ListArgs { no_optional: true, ..Default::default() }).outcome,
+    fn test_yarn1_list_no_optional_is_rejected() {
+        expect_unsupported(
+            resolve(&yarn("1.22.0"), ListArgs { no_optional: true, ..Default::default() }),
+            &["yarn does not support --no-optional."],
         );
-
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["list"]);
     }
 
     #[test]
@@ -477,25 +507,18 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_list_only_projects_ignored() {
+    fn test_npm_list_only_projects_is_rejected() {
         let resolution =
             resolve(&npm("11.0.0"), ListArgs { only_projects: true, ..Default::default() });
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["list"]);
-        assert_eq!(resolution.diagnostics[0].message, "npm does not support --only-projects.");
+        expect_unsupported(resolution, &["npm does not support --only-projects."]);
     }
 
     #[test]
-    fn test_yarn1_list_only_projects_ignored() {
-        let command = expect_run(
-            resolve(&yarn("1.22.0"), ListArgs { only_projects: true, ..Default::default() })
-                .outcome,
+    fn test_yarn1_list_only_projects_is_rejected() {
+        expect_unsupported(
+            resolve(&yarn("1.22.0"), ListArgs { only_projects: true, ..Default::default() }),
+            &["yarn does not support --only-projects."],
         );
-
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["list"]);
     }
 
     #[test]
@@ -520,14 +543,11 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn1_list_exclude_peers_ignored() {
-        let command = expect_run(
-            resolve(&yarn("1.22.0"), ListArgs { exclude_peers: true, ..Default::default() })
-                .outcome,
+    fn test_yarn1_list_exclude_peers_is_rejected() {
+        expect_unsupported(
+            resolve(&yarn("1.22.0"), ListArgs { exclude_peers: true, ..Default::default() }),
+            &["yarn does not support --exclude-peers."],
         );
-
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["list"]);
     }
 
     #[test]
@@ -545,30 +565,23 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_list_find_by_ignored() {
+    fn test_npm_list_find_by_is_rejected() {
         let resolution = resolve(
             &npm("11.0.0"),
             ListArgs { find_by: Some("customFinder".to_string()), ..Default::default() },
         );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["list"]);
-        assert_eq!(resolution.diagnostics[0].message, "npm does not support --find-by.");
+        expect_unsupported(resolution, &["npm does not support --find-by."]);
     }
 
     #[test]
-    fn test_yarn1_list_find_by_ignored() {
-        let command = expect_run(
+    fn test_yarn1_list_find_by_is_rejected() {
+        expect_unsupported(
             resolve(
                 &yarn("1.22.0"),
                 ListArgs { find_by: Some("customFinder".to_string()), ..Default::default() },
-            )
-            .outcome,
+            ),
+            &["yarn does not support --find-by."],
         );
-
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["list"]);
     }
 
     #[test]
@@ -580,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bun_list_unsupported_flags_warn_and_drop() {
+    fn test_bun_list_rejects_all_unsupported_flags() {
         let resolution = resolve(
             &bun("1.3.11"),
             ListArgs {
@@ -599,13 +612,23 @@ mod tests {
                 ..Default::default()
             },
         );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "bun");
-        assert_eq!(command.args, vec!["pm", "ls"]);
-        assert_eq!(resolution.diagnostics.len(), 12);
-        assert_eq!(resolution.diagnostics[0].message, "bun does not support --depth.");
-        assert_eq!(resolution.diagnostics[11].message, "bun does not support --filter.");
+        expect_unsupported(
+            resolution,
+            &[
+                "bun does not support --depth.",
+                "bun does not support --json.",
+                "bun does not support --long.",
+                "bun does not support --parseable.",
+                "bun does not support --prod.",
+                "bun does not support --dev.",
+                "bun does not support --no-optional.",
+                "bun does not support --exclude-peers.",
+                "bun does not support --only-projects.",
+                "bun does not support --find-by.",
+                "bun does not support --recursive.",
+                "bun does not support --filter.",
+            ],
+        );
     }
 
     #[test]

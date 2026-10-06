@@ -36,8 +36,10 @@ warn: yarn (v1) runs lifecycle scripts by default. To restrict them, set `ignore
 
 ## `vp pm approve-builds --all`
 
-warn and exit 0 (no-op on yarn)
+reject the unsupported named option instead of succeeding through a Noop
+
+**Exit code:** 1
 
 ```
-warn: yarn (v1) runs lifecycle scripts by default. To restrict them, set `ignore-scripts=true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.
+yarn does not support --all.
 ```

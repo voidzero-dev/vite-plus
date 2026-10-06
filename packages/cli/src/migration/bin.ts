@@ -1,8 +1,9 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import semver from 'semver';
+import { satisfies } from 'verkit';
 
 import { parseMigrateArgs } from '../../binding/index.js';
 import {
@@ -15,7 +16,11 @@ import { writeAgentInstructions } from '../utils/agent.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
 import { isForceOverrideMode, SETUP_VP_VERSION, VITE_PLUS_VERSION } from '../utils/constants.ts';
 import { writeEditorConfigs } from '../utils/editor.ts';
-import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.ts';
+import {
+  hasPackageManagerDeclaration,
+  hasVitePlusDependency,
+  readNearestPackageJson,
+} from '../utils/package.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
@@ -672,13 +677,13 @@ async function downloadSupportedPackageManager(options: {
 
   if (
     packageManager === PackageManager.yarn &&
-    semver.satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
+    satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
   ) {
     updateMigrationProgress('Upgrading Yarn');
     await upgradeYarn(rootDir, interactive, true);
   } else if (
     packageManager === PackageManager.pnpm &&
-    semver.satisfies(downloadResult.version, '< 9.5.0')
+    satisfies(downloadResult.version, '< 9.5.0')
   ) {
     failMigrationProgress('Migration failed');
     prompts.log.error(
@@ -687,7 +692,7 @@ async function downloadSupportedPackageManager(options: {
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   } else if (
     packageManager === PackageManager.npm &&
-    semver.satisfies(downloadResult.version, '< 8.3.0')
+    satisfies(downloadResult.version, '< 8.3.0')
   ) {
     failMigrationProgress('Migration failed');
     prompts.log.error(
@@ -1014,6 +1019,14 @@ async function main() {
 
   printHeader();
 
+  if (!fs.existsSync(path.join(projectPath, 'package.json'))) {
+    const target = displayRelative(projectPath) || '.';
+    cancelAndExit(
+      `Cannot migrate ${target}: no package.json found. Run vp migrate from a project root or pass its path explicitly.`,
+      1,
+    );
+  }
+
   const workspaceInfoOptional = await detectWorkspace(projectPath);
   if (
     workspaceInfoOptional.isMonorepo &&
@@ -1039,9 +1052,14 @@ async function main() {
 
   // Early return if already using Vite+ (only finalization/setup migrations may be needed)
   // In force-override mode (file: tgz overrides), skip this check and run full migration
-  const rootPkg = readNearestPackageJson(
-    workspaceInfoOptional.rootDir,
-  ) as PackageDependencies | null;
+  const rootPkg = readNearestPackageJson(workspaceInfoOptional.rootDir) as
+    | (PackageDependencies & { packageManager?: unknown; devEngines?: unknown })
+    | null;
+  if (workspaceInfoOptional.packageManager && !hasPackageManagerDeclaration(rootPkg)) {
+    prompts.log.warn(
+      `No package manager is declared in package.json; using ${workspaceInfoOptional.packageManager} for this migration without adding a pin. Run \`vp env pin\` to declare it explicitly.`,
+    );
+  }
   if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
     // Runs with the detected package manager, which may be undefined for an
     // existing Vite+ project that has no lockfile/`packageManager` pin. In that

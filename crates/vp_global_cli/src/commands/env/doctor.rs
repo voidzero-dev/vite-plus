@@ -10,6 +10,7 @@ use vt_path::{AbsolutePathBuf, current_dir};
 use super::{
     config::{self, ShimMode, get_bin_dir, load_config, resolve_version},
     package_manager,
+    setup::shim_filename,
     spec::EnvScope,
 };
 use crate::{
@@ -257,20 +258,6 @@ async fn check_shims(scope: EnvScope) -> bool {
         );
         print_hint("Run 'vp env setup' to create missing shims.");
         false
-    }
-}
-
-/// Get the filename for a shim (platform-specific).
-fn shim_filename(tool: &str) -> String {
-    #[cfg(windows)]
-    {
-        // All tools use trampoline .exe files on Windows
-        format!("{tool}.exe")
-    }
-
-    #[cfg(not(windows))]
-    {
-        tool.to_string()
     }
 }
 

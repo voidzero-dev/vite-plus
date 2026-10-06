@@ -1,0 +1,9 @@
+{
+  "name": "command-install-bun",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "prod-only-fixture": "file:prod-dep"
+  },
+  "packageManager": "bun@1.4.0"
+}
