@@ -1,0 +1,26 @@
+[[case]]
+name = "pnpm_uses_powershell_for_interactive_shim"
+vp = "global"
+requires = ["pwsh"]
+skip-platforms = ["linux", "macos"]
+env = { SHIM_TEST_VALUE = "inherited value" }
+steps = [
+  { argv = ["node", "prepare.cjs", "pnpm"], snapshot = false },
+  { argv = ["pnpm", "--flag", "value with spaces", 'path\file'], comment = "The pnpm.exe proxy uses the sibling PowerShell launcher to avoid a batch termination prompt on Ctrl+C." },
+  { argv = ["pnpm", "--flag", "value with spaces", 'path\file'], tty = false, comment = "Piped stdin keeps the batch launcher, since package-manager PowerShell wrappers may read from stdin." },
+  { argv = ["pnpm", "--flag", "value with spaces", 'path\file'], envs = [["SHIM_TEST_EXIT_CODE", "7"]], continue-on-failure = true, comment = "The PowerShell launcher preserves the child's exit code." },
+  { argv = ["vpt", "rm", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm.ps1"], snapshot = false, continue-on-failure = true },
+  { argv = ["pnpm", "--flag", "value with spaces", 'path\file'], comment = "A managed launcher without a sibling .ps1 still uses .cmd." },
+]
+
+[[case]]
+name = "npm_uses_powershell_for_interactive_shim"
+vp = "global"
+requires = ["pwsh"]
+skip-platforms = ["linux", "macos"]
+env = { SHIM_TEST_VALUE = "inherited value" }
+steps = [
+  { argv = ["node", "prepare.cjs", "npm"], snapshot = false },
+  { argv = ["npm", "--flag", "value with spaces", 'path\file'], comment = "The npm.exe proxy shares the same managed launcher policy." },
+  { argv = ["npm", "--flag", "value with spaces", 'path\file'], tty = false, comment = "Non-interactive npm calls retain the batch launcher." },
+]
