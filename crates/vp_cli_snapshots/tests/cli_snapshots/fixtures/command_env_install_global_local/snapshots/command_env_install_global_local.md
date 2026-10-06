@@ -6,7 +6,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed just-a-normal-package 0.0.0
+ Installed just-a-normal-package 0.0.0
   Bins: just-a-normal-package
 ```
 
@@ -16,7 +16,7 @@ info: Installing 1 global package with Node.js <version>
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed another-normal-package 0.0.1
+ Installed another-normal-package 0.0.1
   Bins: another-normal-package
 ```
 

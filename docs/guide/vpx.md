@@ -31,7 +31,7 @@ vpx <pkg[@version]> [args...]
 ```bash
 vpx eslint .
 vpx create-vue my-app
-vpx typescript@5.5.4 tsc --version
+vpx oxlint@1.85.0 --version
 vpx -p cowsay -c 'echo "hi" | cowsay'
 ```
 
@@ -62,5 +62,5 @@ Examples:
 
 ```bash
 vp dlx create-vite
-vp dlx typescript tsc --version
+vp dlx oxlint@1.85.0 --version
 ```
