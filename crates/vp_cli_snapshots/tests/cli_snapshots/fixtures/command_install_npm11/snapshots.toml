@@ -1,0 +1,16 @@
+[[case]]
+name = "npm_install_includes_dev"
+vp = "global"
+env = { npm_config_audit = "false", npm_config_fund = "false", NODE_ENV = "production" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.prod-only-fixture", "file:./prod-dep"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.dev-only-fixture", "file:./dev-dep"], snapshot = false },
+  { argv = ["vp", "install", "--dev", "--ignore-scripts"], comment = "include dev dependencies despite NODE_ENV=production without excluding production dependencies" },
+  ["vpt", "stat-file", "node_modules/prod-only-fixture/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "file"],
+  { argv = ["vpt", "write-file", "node_modules/preserved.txt", "keep"], snapshot = false },
+  { argv = ["vp", "install", "--dev", "--frozen-lockfile", "--ignore-scripts", "--silent"], comment = "npm ci also includes dev dependencies and performs its native cleanup" },
+  ["vpt", "stat-file", "node_modules/preserved.txt", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "file"],
+  ["vpt", "print-file", "package.json", "package-lock.json"],
+]

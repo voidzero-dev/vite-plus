@@ -25,13 +25,6 @@ check package.json has no prepare script and no lint-staged config
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

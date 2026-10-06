@@ -7,9 +7,8 @@ workspace packages get the SAME aggressive cleanup as the root (deps, configs, l
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged .oxlintrc.json into vite.config.ts
+◆  ✔ Created vite.config.ts in vite.config.ts
+◆  ✔ Merged .oxlintrc.json into vite.config.ts
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 3 config updates applied

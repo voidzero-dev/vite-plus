@@ -2,20 +2,12 @@
 
 ## `vp update testnpm2 --no-save`
 
-warn that --no-save is unsupported and continue with yarn up
+reject unsupported --no-save without updating dependencies
+
+**Exit code:** 1
 
 ```
-warn: yarn does not support --no-save.
-➤ YN0000: · Yarn <version>
-➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0, test-vite-plus-package@npm:1.0.0, testnpm2@npm:1.0.1
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0013: │ 3 packages were added to the project (+ <size> KiB).
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration>
+yarn does not support --no-save.
 ```
 
 ## `vpt print-file package.json`
@@ -25,7 +17,7 @@ warn: yarn does not support --no-save.
   "name": "command-update-yarn4",
   "version": "1.0.0",
   "dependencies": {
-    "testnpm2": "^1.0.1"
+    "testnpm2": "*"
   },
   "devDependencies": {
     "test-vite-plus-package": "*"
@@ -44,9 +36,10 @@ should to absolute latest version
 ```
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
-➤ YN0085: │ - testnpm2@npm:1.0.1
+➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0, test-vite-plus-package@npm:1.0.0
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
+➤ YN0013: │ 2 packages were added to the project (+ <size> KiB).
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
@@ -77,6 +70,7 @@ should to absolute latest version
 ➤ YN0085: │ - testnpm2@npm:1.0.0
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
+➤ YN0013: │ A package was added to the project (+ <size> KiB).
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
@@ -102,17 +96,12 @@ should to absolute latest version
 
 ## `vp update -D`
 
-should update and ignore -D options
+reject unsupported dev-only updates
+
+**Exit code:** 1
 
 ```
-➤ YN0000: · Yarn <version>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration>
+yarn does not support --dev.
 ```
 
 ## `vpt print-file package.json`

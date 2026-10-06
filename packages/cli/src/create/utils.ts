@@ -2,11 +2,59 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import validateNpmPackageName from 'validate-npm-package-name';
+import { parseDocument } from 'yaml';
 
-import { editJsonFile } from '../utils/json.ts';
+import {
+  VITE_PLUS_NAME,
+  VITE_PLUS_OVERRIDE_PACKAGES,
+  VITE_PLUS_VERSION,
+} from '../utils/constants.ts';
+import { editJsonFile, readJsonFile } from '../utils/json.ts';
 import { getRandomProjectName } from './random-name.ts';
 
 export type CreateEditorOption = string | false | undefined;
+
+/** Complete only the managed catalog references of a newly created workspace member.
+ * Running the full root migrator here would also change unrelated packages and overrides.
+ */
+export function ensurePnpmCreateCatalogEntries(rootDir: string, projectDir: string): void {
+  const workspacePath = path.join(rootDir, 'pnpm-workspace.yaml');
+  const packageJsonPath = path.join(projectDir, 'package.json');
+  if (!fs.existsSync(workspacePath) || !fs.existsSync(packageJsonPath)) {
+    return;
+  }
+  const doc = parseDocument(fs.readFileSync(workspacePath, 'utf8'));
+  const pkg = readJsonFile(packageJsonPath) as Partial<
+    Record<'dependencies' | 'devDependencies' | 'optionalDependencies', Record<string, string>>
+  >;
+  const versions: Record<string, string> = {
+    ...VITE_PLUS_OVERRIDE_PACKAGES,
+    [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+  };
+  let changed = false;
+  for (const field of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
+    for (const [name, spec] of Object.entries(pkg[field] ?? {})) {
+      if (!Object.hasOwn(versions, name) || !spec.startsWith('catalog:')) {
+        continue;
+      }
+      const catalogName = spec.slice('catalog:'.length);
+      const catalogPath =
+        catalogName && catalogName !== 'default'
+          ? ['catalogs', catalogName]
+          : doc.has('catalog') || !doc.hasIn(['catalogs', 'default'])
+            ? ['catalog']
+            : ['catalogs', 'default'];
+      const entryPath = [...catalogPath, name];
+      if (!doc.hasIn(entryPath)) {
+        doc.setIn(entryPath, versions[name]);
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    fs.writeFileSync(workspacePath, doc.toString({ singleQuote: true }));
+  }
+}
 
 function hasExplicitEditorOptIn(editor: CreateEditorOption): boolean {
   return typeof editor === 'string' && editor.trim() !== '';

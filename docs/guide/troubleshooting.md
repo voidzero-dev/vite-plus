@@ -93,8 +93,8 @@ When `vite.config.ts` imports plugins at the top level, they are evaluated for e
 Use `lazyPlugins` to skip the plugin factory when vite-plus loads your config only to read a metadata block (`lint`, `fmt`, `check`, `staged`, `pack`, `create`, the `run`/`cache` task lookup, and editor tooling). The plugins still load whenever Vite actually runs, `dev`, `build`, `test`, `preview`, and any build your own scripts spawn (a `vp run` task, `vp exec`):
 
 ```ts [vite.config.ts]
-import { defineConfig, lazyPlugins } from 'vite-plus';
 import myPlugin from 'vite-plugin-foo';
+import { defineConfig, lazyPlugins } from 'vite-plus';
 
 export default defineConfig({
   plugins: lazyPlugins(() => [myPlugin()]),

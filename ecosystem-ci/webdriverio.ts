@@ -36,6 +36,15 @@ export async function prepareWebdriverioProject(
   }
 
   if (project === 'sqlocal') {
+    // This test creates and exports four databases sequentially. Its explicit
+    // 1.5/3-second timeout can expire on CI and overrides --testTimeout.
+    // Remove when upstream allows enough time for these browser operations.
+    await replaceOnce(
+      join(root, 'test', 'get-database-file.test.ts'),
+      "{ timeout: ['local', 'session'].includes(type) ? 3000 : 1500 }",
+      '{ timeout: 10000 }',
+    );
+
     // Vitest 5's browser server does not run the SQLocal plugin's middleware.
     // Keep the same isolation headers explicitly; OPFS tests assert isolation.
     // Remove when the upstream plugin supports the separate browser server.

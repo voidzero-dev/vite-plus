@@ -1,5 +1,5 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import semver from 'semver';
+import { coerce, isGreaterThanOrEqual } from 'verkit';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
@@ -36,11 +36,11 @@ export function shouldIgnoreScriptsForAutoInstall(
   if (packageManager !== PackageManager.pnpm) {
     return false;
   }
-  const coerced = packageManagerVersion ? semver.coerce(packageManagerVersion)?.version : undefined;
+  const coerced = packageManagerVersion ? coerce(packageManagerVersion) : undefined;
   if (!coerced) {
     return false;
   }
-  return semver.gte(coerced, '11.0.0');
+  return isGreaterThanOrEqual(coerced, '11.0.0');
 }
 
 export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): never {

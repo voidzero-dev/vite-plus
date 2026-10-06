@@ -16,6 +16,8 @@ If you decide Vite+ is not for you, please [share your feedback with us](https:/
 vp implode
 ```
 
+Review the directories and shell profiles listed by the command, then type `boom` to confirm removal. Any other input cancels the operation.
+
 Skip the confirmation prompt with:
 
 ```bash

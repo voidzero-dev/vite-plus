@@ -188,6 +188,37 @@ fn masks_bun_build_hash_only_in_bun_banners() {
 }
 
 #[test]
+fn drops_bun_slow_filesystem_warning_with_optional_progress() {
+    let result = concat!(
+        "\n./node_modules/core-js @3.39.0\n",
+        " ✓ [postinstall]: node -e \"try{require('./postinstall')}catch(e){}\"\n",
+        "\n 1 script ran across 1 package [12ms]\n",
+    );
+    let expected = redact_output(format!("bun pm trust v1.4.0 (34cbb9a40)\n{result}"), &[], true);
+    for prefix in ["", "  ⚙️  core-js [1/1] ", "  ⚙ @scope/pkg [12/34] "] {
+        for cache in ["/private/tmp/vp-local-registry-bun-PXkDcD", "C:/cache with spaces/bun"] {
+            let input = format!(
+                "bun pm trust v1.4.0 (34cbb9a40)\n\
+                 {prefix}warn: Slow filesystem detected. If {cache} is a network drive, consider setting $BUN_INSTALL_CACHE_DIR to a local folder.\n\
+                 {result}"
+            );
+            assert_eq!(redact_output(input, &[], true), expected);
+        }
+    }
+}
+
+#[test]
+fn preserves_other_bun_warnings_and_script_failures() {
+    let input = concat!(
+        "warn: install failed for core-js\n",
+        "  ⚙️  core-js [1/1] warn: postinstall failed\n",
+        "warn: Slow filesystem detected. Custom diagnostic.\n",
+        "error: postinstall script from \"core-js\" exited with 1\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
+}
+
+#[test]
 fn masks_lint_staged_backup_hashes() {
     let input = concat!(
         "✔ Backed up original state in git stash (a1b2c3d)\n",

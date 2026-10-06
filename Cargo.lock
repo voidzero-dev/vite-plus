@@ -8778,6 +8778,7 @@ dependencies = [
  "indoc",
  "node-semver",
  "oxc_resolver",
+ "pty_terminal_test_client",
  "rustc-hash",
  "same-file",
  "serde",
