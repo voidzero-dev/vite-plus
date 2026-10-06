@@ -68,9 +68,29 @@ pub(crate) fn preserve_legacy_defaults(file: &Path, root: &Path, standalone: boo
     let Some(directory) = file.parent() else { return true };
     let standalone_version = || {
         let package = installed_package(directory, root, "tsdown")?;
-        semver::Version::parse(package.get("version")?.as_str()?).ok()
+        node_semver::Version::parse(package.get("version")?.as_str()?).ok()
     };
     let bundled_version = || {
+        // Use the same manifest reader and tool lookup as `vp --version`.
+        // Read the project's installed CLI, never the CLI running migration.
+        for current in directory.ancestors().take_while(|directory| directory.starts_with(root)) {
+            let package_dir = current.join("node_modules/vite-plus");
+            let manifest_path = package_dir.join("dist/toolchain.json");
+            if let Ok(manifest_path) = std::fs::canonicalize(&manifest_path)
+                && let Some(manifest_path) = vt_path::AbsolutePath::new(&manifest_path)
+                && let Ok(manifest) = vp_toolchain::load_manifest(manifest_path)
+            {
+                return vp_toolchain::node_by_id(&manifest, "tsdown")
+                    .and_then(|node| node.version.as_deref())
+                    .and_then(|version| node_semver::Version::parse(version).ok());
+            }
+            if package_dir.join("package.json").is_file() {
+                // An older local installation must not inherit another CLI's
+                // toolchain manifest from a parent workspace package.
+                break;
+            }
+        }
+        // Older releases do not ship a toolchain manifest.
         for current in directory.ancestors().take_while(|directory| directory.starts_with(root)) {
             for name in ["vite", "@voidzero-dev/vite-plus-core", "vite-plus/node_modules/vite"] {
                 let Some(package) = installed_package(current, current, name) else { continue };
@@ -84,7 +104,7 @@ pub(crate) fn preserve_legacy_defaults(file: &Path, root: &Path, standalone: boo
                     .get("bundledVersions")?
                     .get("tsdown")?
                     .as_str()
-                    .and_then(|version| semver::Version::parse(version).ok());
+                    .and_then(|version| node_semver::Version::parse(version).ok());
             }
         }
         None
@@ -94,7 +114,7 @@ pub(crate) fn preserve_legacy_defaults(file: &Path, root: &Path, standalone: boo
     } else {
         bundled_version().or_else(standalone_version)
     };
-    version.is_none_or(|version| version < semver::Version::new(0, 23, 0))
+    version.is_none_or(|version| version < node_semver::Version::new(0, 23, 0))
 }
 
 fn indent_compatibility_defaults(source: &str, object_indentation: &str) -> String {

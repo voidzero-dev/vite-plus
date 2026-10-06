@@ -183,7 +183,7 @@ const { page } = await import('vite-plus/test/browser/context');
 
 `vp migrate` updates supported static options in `pack` blocks and `tsdown.config.*` for tsdown 0.23. This also runs for existing Vite+ projects and workspace packages without `--full`. See [Pack Configuration](./migrate-rules.md#pack-configuration) for the option mappings and cases that require manual review.
 
-When the project's installed tsdown version is older than 0.23 or cannot be determined, the transform preserves earlier defaults by inserting `deps.resolveDepSubpath: true` and, when ATTW checks are enabled, `attw.profile: 'strict'` if these settings are absent. It also reads the bundled tsdown version from an installed Vite+ core package. Projects already using tsdown 0.23 or later do not receive these defaults. Each inserted setting includes a `tsdown <0.23 compatibility` comment with a documentation link and removal guidance. Explicit settings remain unchanged.
+When the project's installed tsdown version is older than 0.23 or cannot be determined, the transform preserves earlier defaults by inserting `deps.resolveDepSubpath: true` and, when ATTW checks are enabled, `attw.profile: 'strict'` if these settings are absent. For Vite+ projects, it reads the installed `vite-plus/dist/toolchain.json`, with Vite+ core package metadata as a fallback for older installations. Projects already using tsdown 0.23 or later do not receive these defaults. Each inserted setting includes a `tsdown <0.23 compatibility` comment with a documentation link and removal guidance. Explicit settings remain unchanged.
 
 Keep these settings for the first `vp pack` run. After validation, review whether your package can adopt the new defaults:
 

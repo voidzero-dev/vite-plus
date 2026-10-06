@@ -2557,11 +2557,93 @@ mod tests {
         std::fs::write(file, content).unwrap();
     }
 
+    fn write_toolchain_fixture(root: &Path, version: &str) {
+        write_pack_fixture(root, "node_modules/vite-plus/package.json", r#"{"version":"1.0.0"}"#);
+        write_pack_fixture(
+            root,
+            "node_modules/vite-plus/dist/toolchain.json",
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "nodes": [{
+                    "id": "tsdown", "name": "tsdown", "version": version,
+                    "kind": "tool", "delivery": ["bundled"]
+                }],
+                "edges": []
+            })
+            .to_string(),
+        );
+    }
+
+    #[test]
+    fn pack_defaults_prefer_the_installed_toolchain_manifest() {
+        for (version, legacy) in [("0.22.0", true), ("0.23.0", false), ("invalid", true)] {
+            let temp = tempdir().unwrap();
+            let root = temp.path();
+            write_pack_fixture(root, ".gitignore", "node_modules/\n");
+            write_toolchain_fixture(root, version);
+            // Conflicting metadata must not override the installed CLI's manifest.
+            let core_version = if legacy { "0.23.0" } else { "0.22.0" };
+            write_pack_fixture(
+                root,
+                "node_modules/vite/package.json",
+                &serde_json::json!({
+                    "name": "@voidzero-dev/vite-plus-core",
+                    "bundledVersions": { "tsdown": core_version }
+                })
+                .to_string(),
+            );
+            write_pack_fixture(root, "apps/server-v2/package.json", "{}");
+            write_pack_fixture(
+                root,
+                "apps/server-v2/vite.config.ts",
+                "export default { pack: { entry: ['src/main.ts'], attw: true } };",
+            );
+            assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+            let actual =
+                std::fs::read_to_string(root.join("apps/server-v2/vite.config.ts")).unwrap();
+            assert_eq!(actual.contains("resolveDepSubpath: true"), legacy, "{actual}");
+            assert_eq!(actual.contains("profile: 'strict'"), legacy, "{actual}");
+        }
+    }
+
+    #[test]
+    fn pack_defaults_do_not_inherit_a_manifest_past_a_local_cli() {
+        for local_manifest in [false, true] {
+            let temp = tempdir().unwrap();
+            let root = temp.path();
+            let package = root.join("packages/legacy");
+            write_pack_fixture(root, ".gitignore", "node_modules/\n");
+            write_toolchain_fixture(root, "0.23.0");
+            write_pack_fixture(&package, "package.json", "{}");
+            if local_manifest {
+                write_toolchain_fixture(&package, "0.22.0");
+            } else {
+                write_pack_fixture(
+                    &package,
+                    "node_modules/vite-plus/package.json",
+                    r#"{"version":"0.2.0"}"#,
+                );
+                write_pack_fixture(
+                    &package,
+                    "node_modules/vite/package.json",
+                    r#"{"name":"@voidzero-dev/vite-plus-core","bundledVersions":{"tsdown":"0.22.0"}}"#,
+                );
+            }
+            write_pack_fixture(&package, "vite.config.ts", "export default { pack: {} };");
+            assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+            let actual = std::fs::read_to_string(package.join("vite.config.ts")).unwrap();
+            assert!(actual.contains("resolveDepSubpath: true"), "{actual}");
+        }
+    }
+
     #[test]
     fn pack_defaults_follow_the_installed_tsdown_version() {
         for (version, legacy) in [
             ("0.22.9", true),
             ("0.23.0", false),
+            ("v0.23.0", false),
+            ("0.23.0+build.1", false),
+            ("0.23.0-beta.1", true),
             ("0.24.0", false),
             ("1.0.0", false),
             ("invalid", true),
@@ -2667,6 +2749,7 @@ mod tests {
     #[test]
     fn pack_defaults_do_not_read_installs_outside_the_migration_root() {
         let temp = tempdir().unwrap();
+        write_toolchain_fixture(temp.path(), "0.23.0");
         write_pack_fixture(
             temp.path(),
             "node_modules/vite/package.json",

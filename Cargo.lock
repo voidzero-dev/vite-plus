@@ -8821,13 +8821,15 @@ dependencies = [
  "ast-grep-language",
  "brush-parser 0.3.0",
  "ignore",
+ "node-semver",
  "oxc",
  "rayon",
  "regex",
- "semver 1.0.28",
  "serde_json",
  "tempfile",
  "vp_error",
+ "vp_toolchain",
+ "vt_path",
 ]
 
 [[package]]
