@@ -595,6 +595,33 @@ function ruleKeyMatchesNamespace(key: string, namespaces: Set<string>): boolean 
   return false;
 }
 
+// Mirror the native aliases accepted by the Oxlint version bundled with Vite+.
+const OXLINT_PLUGIN_ALIASES = new Map([
+  ['@typescript-eslint', 'typescript'],
+  ['typescript-eslint', 'typescript'],
+  ['typescript_eslint', 'typescript'],
+  ['react-hooks', 'react'],
+  ['react_hooks', 'react'],
+  ['deepscan', 'oxc'],
+  ['import-x', 'import'],
+  ['jsx-a11y-x', 'jsx-a11y'],
+  ['jsx_a11y-x', 'jsx-a11y'],
+  ['jsx_a11y', 'jsx-a11y'],
+  ['react_perf', 'react-perf'],
+  ['@next', 'nextjs'],
+  ['@next/next', 'nextjs'],
+]);
+
+function normalizeOxlintRuleNamespace(key: string): string {
+  const separator = key.startsWith('@') ? key.lastIndexOf('/') : key.indexOf('/');
+  if (separator < 0) {
+    return key;
+  }
+  const plugin = deriveJsPluginNamespace(key.slice(0, separator));
+  const namespace = OXLINT_PLUGIN_ALIASES.get(plugin) ?? plugin;
+  return `${namespace}${key.slice(separator)}`;
+}
+
 /** Filter a rules object to only entries whose namespace is recognized. */
 function filterRulesAgainstNamespaces(
   rules: Record<string, unknown>,
@@ -602,7 +629,10 @@ function filterRulesAgainstNamespaces(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(rules)) {
-    if (ruleKeyMatchesNamespace(key, namespaces)) {
+    if (
+      ruleKeyMatchesNamespace(key, namespaces) ||
+      ruleKeyMatchesNamespace(normalizeOxlintRuleNamespace(key), namespaces)
+    ) {
       out[key] = value;
     }
   }
