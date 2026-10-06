@@ -7,3 +7,22 @@ steps = [
   { argv = ["vp", "remove", "testnpm2", "--filter", "app", "--", "--silent"], comment = "should remove package from packages/app" },
   { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "bun_remove_workspace_scope"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", '{"name":"root","private":true,"packageManager":"bun@1.4.0","workspaces":["packages/*"],"dependencies":{"testnpm2":"1.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/package.json", '{"name":"app","version":"1.0.0","dependencies":{"testnpm2":"1.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "mkdir", "packages/utils"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/utils/package.json", '{"name":"utils","version":"1.0.0","dependencies":{"testnpm2":"1.0.0"}}'], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "remove", "--filter", "app", "--filter", "utils", "testnpm2", "--", "--ignore-scripts"], cwd = "packages/app", comment = "preserve native filtering without recursive removal" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json", "bun.lock"],
+  { argv = ["node", "-e", "require('node:assert/strict').equal(require('testnpm2/package.json').version, '1.0.0')"], snapshot = false },
+  { argv = ["vp", "remove", "--filter", "root", "testnpm2", "--", "--ignore-scripts"], cwd = "packages/app", comment = "an explicit root name also works from a child directory" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"],
+  ["vpt", "stat-file", "node_modules/testnpm2", "--assert", "missing"],
+]

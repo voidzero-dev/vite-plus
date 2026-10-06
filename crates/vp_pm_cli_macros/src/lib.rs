@@ -66,13 +66,11 @@ fn pm_args_struct_impl(mut input: ItemStruct) -> Result<TokenStream2> {
 
         impl #impl_generics crate::resolution::Diagnosis for #struct_ident #ty_generics #where_clause {
             fn diagnose<#dialect_ident: crate::resolution::PackageManagerDialect>(
-                mut self,
+                &self,
                 dialect: &#dialect_ident,
                 diag: &mut crate::resolution::Diagnostics,
-            ) -> Self
-            {
+            ) {
                 #(#diagnose_statements)*
-                self
             }
         }
     })
@@ -151,15 +149,13 @@ fn pm_args_enum_impl(mut input: ItemEnum) -> Result<TokenStream2> {
 
         impl #impl_generics crate::resolution::Diagnosis for #enum_ident #ty_generics #where_clause {
             fn diagnose<#dialect_ident: crate::resolution::PackageManagerDialect>(
-                mut self,
+                &self,
                 dialect: &#dialect_ident,
                 diag: &mut crate::resolution::Diagnostics,
-            ) -> Self
-            {
-                match &mut self {
+            ) {
+                match self {
                     #(#variant_diagnosis),*
                 }
-                self
             }
         }
     })
@@ -420,20 +416,14 @@ impl FieldSupport {
         let cfg_attrs = &self.cfg_attrs;
         let display_name = &self.display_name;
         let clauses = self.clauses.iter().map(Clause::to_tokens);
-        let violation = quote! {
-            crate::resolution::PmSupportRule::first_matching(&rules, dialect).map(|rule| {
-                diag.unsupported_option(#display_name, rule);
-            })
-        };
-
         quote! {
             #(#cfg_attrs)*
             {
                 let rules = [#(#clauses),*];
                 if crate::resolution::ArgActivation::is_active(&#target)
-                    && (#violation).is_some()
+                    && let Some(rule) = crate::resolution::PmSupportRule::first_matching(&rules, dialect)
                 {
-                    #target = Default::default();
+                    diag.unsupported_option(#display_name, rule);
                 }
             }
         }
@@ -645,7 +635,8 @@ mod tests {
 
         assert!(!output.contains("not_supported"));
         assert!(output.contains("impl crate :: resolution :: Diagnosis for Demo"));
-        assert!(output.contains("match & mut self"));
+        assert!(output.contains("match self"));
+        assert!(!output.contains("Default :: default"));
         assert!(output.contains("Self :: Ping"));
         assert!(output.contains("Self :: List"));
     }

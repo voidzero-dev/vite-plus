@@ -35,12 +35,6 @@ the migrated project references the catalog
 
 #2309: update must not resolve the catalog reference away
 
-```
-✓ Lockfile passes supply-chain policies (verified <duration> ago)
-Already up to date
-
-Done in <duration> using pnpm <version>
-```
 
 ## `vpt print-file package.json`
 

@@ -57,8 +57,15 @@ impl Npm {
         Self { version: None }
     }
 
-    /// Whether npm is v12 or newer, treating unknown versions as current.
-    pub(crate) fn is_npm_12_or_newer(&self) -> bool {
+    /// `approve-scripts` and `deny-scripts` landed in npm 11.16.0.
+    /// Unknown versions are treated as current.
+    pub(crate) fn supports_v11_16_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(11, 16, 0))
+    }
+
+    /// `patch add`, `patch commit`, and enforced script approvals landed in npm 12.
+    /// Unknown versions are treated as current.
+    pub(crate) fn supports_v12_commands(&self) -> bool {
         self.version.as_ref().is_none_or(|version| version >= &Version::new(12, 0, 0))
     }
 }
@@ -71,13 +78,31 @@ impl PackageManagerDialect for Npm {
     }
 }
 
+impl Pnpm {
+    /// `approve-builds !<pkg>` deny syntax landed in pnpm 11.
+    pub(crate) fn supports_v11_commands(&self) -> bool {
+        self.version >= Version::new(11, 0, 0)
+    }
+}
+
 impl Yarn {
     pub(crate) fn is_berry(&self) -> bool {
         crate::package_manager::is_yarn_berry(&self.version)
     }
+
+    /// `npm publish --staged` and `npm stage list/approve/reject` landed in Yarn 4.16.0.
+    /// https://github.com/yarnpkg/berry/releases/tag/%40yarnpkg/cli/4.16.0
+    pub(crate) fn supports_v4_16_commands(&self) -> bool {
+        self.version >= Version::new(4, 16, 0)
+    }
 }
 
 impl Bun {
+    /// `bun pm version` landed in Bun 1.2.18.
+    pub(crate) fn supports_v1_2_18_commands(&self) -> bool {
+        self.version >= Version::new(1, 2, 18)
+    }
+
     /// `dedupe`, `prune`, and `audit fix` landed in bun 1.4.
     pub(crate) fn supports_v1_4_commands(&self) -> bool {
         self.version >= Version::new(1, 4, 0)

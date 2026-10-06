@@ -197,7 +197,8 @@ jobs:
               # FIXME: Failed to load JS plugin: ./plugins/debugger.js
               # vp run ready
               vp fmt
-              vp test
+              # Avoid Windows dynamic port reservations around Vitest's default 63315.
+              vp test --api.port=3000
               vp run build
           # FIXME: TypeError: Failed to fetch dynamically imported module
           # - name: skeleton

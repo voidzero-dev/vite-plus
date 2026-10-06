@@ -2,7 +2,9 @@ use std::ffi::OsString;
 
 use semver::Version;
 
-use crate::resolution::{Bun, CommandResolution, Npm, Pnpm, Yarn, command::ResolvedCommand};
+use crate::resolution::{
+    Bun, CommandResolution, Npm, Pnpm, Resolution, Yarn, command::ResolvedCommand,
+};
 
 #[track_caller]
 pub(crate) fn expect_run(outcome: CommandResolution) -> ResolvedCommand {
@@ -10,6 +12,13 @@ pub(crate) fn expect_run(outcome: CommandResolution) -> ResolvedCommand {
         CommandResolution::Run(command) => command,
         other => panic!("expected command resolution, got {other:?}"),
     }
+}
+
+#[track_caller]
+pub(crate) fn expect_unsupported(resolution: Resolution, messages: &[&str]) {
+    let expected = messages.join("\n");
+    assert_eq!(resolution.outcome, CommandResolution::InvalidArgument(expected));
+    assert!(resolution.diagnostics.is_empty());
 }
 
 pub(crate) fn npm(version: &str) -> Npm {

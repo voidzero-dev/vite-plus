@@ -1,4 +1,3 @@
-use semver::Version;
 use vp_pm_cli_macros::pm_args;
 
 use crate::resolution::{
@@ -60,7 +59,7 @@ impl Resolve<VersionArgs> for Bun {
         if args.json {
             return unsupported_json("Bun");
         }
-        if self.version().is_some_and(|version| !bun_supports_version_command(version)) {
+        if !self.supports_v1_2_18_commands() {
             diag.warn(
                 DiagnosticKind::BehaviorChange,
                 vt_str::format!(
@@ -105,12 +104,10 @@ fn is_yarn_classic_increment(value: &str) -> bool {
     )
 }
 
-fn bun_supports_version_command(version: &Version) -> bool {
-    version >= &Version::new(1, 2, 18)
-}
-
 #[cfg(test)]
 mod tests {
+    use semver::Version;
+
     use super::*;
     use crate::resolution::{
         PackageManagerDialect, resolve,

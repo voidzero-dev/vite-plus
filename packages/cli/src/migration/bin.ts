@@ -2,7 +2,7 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import semver from 'semver';
+import { satisfies } from 'verkit';
 
 import { parseMigrateArgs } from '../../binding/index.js';
 import {
@@ -672,13 +672,13 @@ async function downloadSupportedPackageManager(options: {
 
   if (
     packageManager === PackageManager.yarn &&
-    semver.satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
+    satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
   ) {
     updateMigrationProgress('Upgrading Yarn');
     await upgradeYarn(rootDir, interactive, true);
   } else if (
     packageManager === PackageManager.pnpm &&
-    semver.satisfies(downloadResult.version, '< 9.5.0')
+    satisfies(downloadResult.version, '< 9.5.0')
   ) {
     failMigrationProgress('Migration failed');
     prompts.log.error(
@@ -687,7 +687,7 @@ async function downloadSupportedPackageManager(options: {
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   } else if (
     packageManager === PackageManager.npm &&
-    semver.satisfies(downloadResult.version, '< 8.3.0')
+    satisfies(downloadResult.version, '< 8.3.0')
   ) {
     failMigrationProgress('Migration failed');
     prompts.log.error(
