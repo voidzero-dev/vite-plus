@@ -1,6 +1,8 @@
 [[case]]
 name = "stage_versioned_routing_preserves_options"
 vp = "global"
+# Use pipes for lifecycle output so Yarn cannot spawn before its log file opens.
+env = { YARN_ENABLE_INLINE_BUILDS = "1" }
 steps = [
   { argv = ["vp", "install", "--", "--mode=skip-build"], snapshot = false, timeout = 120000 },
   { argv = ["vp", "pm", "stage", "publish", "--dry-run", "--json"], envs = [["YARN_NPM_PUBLISH_REGISTRY", "http://127.0.0.1:9"]], comment = "Yarn 4.16.0 retains native staged publishing without contacting the registry." },
