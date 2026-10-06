@@ -101,7 +101,7 @@ impl Resolve<ConfigCommand> for Bun {
             DiagnosticKind::FallbackCommand,
             "bun uses bunfig.toml for configuration, not a config command. Falling back to npm config.",
         );
-        resolve_npm_like_config("bun", args)
+        resolve_npm_like_config("npm", args)
     }
 }
 
@@ -526,15 +526,24 @@ mod tests {
     }
 
     #[test]
-    fn test_bun_config_fallback_keeps_bun_program() {
+    fn test_bun_config_set_falls_back_to_npm() {
         let Resolution { outcome, diagnostics } = resolve(&bun("1.3.11"), set_config(None));
         let command = expect_run(outcome);
 
-        assert_eq!(command.program, "bun");
+        assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["config", "set", "registry", "https://registry.npmjs.org"]);
         assert_eq!(
             diagnostics[0].message,
             "bun uses bunfig.toml for configuration, not a config command. Falling back to npm config."
         );
+    }
+
+    #[test]
+    fn test_bun_config_get_falls_back_to_npm() {
+        let args = parse_subcommand::<ConfigCommand>(["get", "registry"]).unwrap();
+        let command = expect_run(resolve(&bun("1.3.11"), args).outcome);
+
+        assert_eq!(command.program, "npm");
+        assert_eq!(command.args, vec!["config", "get", "registry"]);
     }
 }

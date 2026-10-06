@@ -30,6 +30,7 @@ tracing = { workspace = true }
 console = { workspace = true }
 same-file = { workspace = true }
 oxc_resolver = { workspace = true }
+pty_terminal_test_client = { workspace = true, features = ["testing"] }
 rustc-hash = { workspace = true }
 crossterm = { workspace = true }
 indexmap = { workspace = true }

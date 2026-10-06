@@ -46,13 +46,6 @@ volta field must remain intact
     "node": "18.0.0",
     "npm": "9.0.0"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
-  },
   "scripts": {
     "prepare": "vp config"
   }

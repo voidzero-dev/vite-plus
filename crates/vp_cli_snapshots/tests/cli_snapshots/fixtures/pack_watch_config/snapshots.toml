@@ -1,0 +1,5 @@
+[[case]]
+name = "pack_watch_reloads_config"
+vp = "local"
+comment = "Changing pack.minify while watching applies the new configuration, including on Windows."
+steps = [["node", "verify.mjs"]]

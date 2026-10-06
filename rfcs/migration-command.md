@@ -226,18 +226,14 @@ migration; migration does not persist the mutable `latest` tag.
     "vite": "catalog:",
     "@vitejs/plugin-react": "^4.2.0",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<semver>",
-      "onFail": "download"
-    }
   }
 }
 ```
 
-> Projects that already declare a top-level `packageManager` field keep that field updated instead (compatibility-first rule, see [RFC: devEngines Support](./dev-engines.md)).
+> Migration preserves an existing `packageManager` or
+> `devEngines.packageManager` declaration. Projects that rely only on a
+> lockfile remain unpinned; use `vp env pin` when an exact package-manager
+> requirement is desired (see [RFC: devEngines Support](./dev-engines.md)).
 
 **After (pnpm, no existing `pnpm` config) -- `pnpm-workspace.yaml`:**
 

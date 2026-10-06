@@ -34,13 +34,6 @@ lint-staged config should still be in package.json
   },
   "lint-staged": {
     "*.{js,ts}": "eslint --fix"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
