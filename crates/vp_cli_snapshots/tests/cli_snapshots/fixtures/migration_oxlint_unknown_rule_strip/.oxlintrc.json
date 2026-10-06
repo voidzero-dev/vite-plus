@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "camelcase": "error",
+    "array-bracket-newline": "error",
+    "no-invalid-this": "error",
+    "no-console": "error"
+  }
+}
