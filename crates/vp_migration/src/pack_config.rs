@@ -66,11 +66,16 @@ pub(crate) fn preserve_legacy_defaults(file: &Path, root: &Path, standalone: boo
     }
 
     let Some(directory) = file.parent() else { return true };
-    let standalone_version = || {
-        let package = installed_package(directory, root, "tsdown")?;
-        node_semver::Version::parse(package.get("version")?.as_str()?).ok()
+    let legacy_version = |version: &str| {
+        node_semver::Version::parse(version)
+            .ok()
+            .map(|version| version < node_semver::Version::new(0, 23, 0))
     };
-    let bundled_version = || {
+    let standalone_defaults = || {
+        let package = installed_package(directory, root, "tsdown")?;
+        legacy_version(package.get("version")?.as_str()?)
+    };
+    let bundled_defaults = || {
         // Use the same manifest reader and tool lookup as `vp --version`.
         // Read the project's installed CLI, never the CLI running migration.
         for current in directory.ancestors().take_while(|directory| directory.starts_with(root)) {
@@ -80,41 +85,25 @@ pub(crate) fn preserve_legacy_defaults(file: &Path, root: &Path, standalone: boo
                 && let Some(manifest_path) = vt_path::AbsolutePath::new(&manifest_path)
                 && let Ok(manifest) = vp_toolchain::load_manifest(manifest_path)
             {
-                return vp_toolchain::node_by_id(&manifest, "tsdown")
+                let legacy = vp_toolchain::node_by_id(&manifest, "tsdown")
                     .and_then(|node| node.version.as_deref())
-                    .and_then(|version| node_semver::Version::parse(version).ok());
+                    .and_then(legacy_version);
+                return Some(legacy.unwrap_or(true));
             }
             if package_dir.join("package.json").is_file() {
-                // An older local installation must not inherit another CLI's
-                // toolchain manifest from a parent workspace package.
-                break;
-            }
-        }
-        // Older releases do not ship a toolchain manifest.
-        for current in directory.ancestors().take_while(|directory| directory.starts_with(root)) {
-            for name in ["vite", "@voidzero-dev/vite-plus-core", "vite-plus/node_modules/vite"] {
-                let Some(package) = installed_package(current, current, name) else { continue };
-                if package.get("name").and_then(|name| name.as_str())
-                    != Some("@voidzero-dev/vite-plus-core")
-                {
-                    continue;
-                }
-                // The core package version is the Vite+ version, not tsdown's.
-                return package
-                    .get("bundledVersions")?
-                    .get("tsdown")?
-                    .as_str()
-                    .and_then(|version| node_semver::Version::parse(version).ok());
+                // Releases without a toolchain manifest bundle tsdown <0.23.
+                // Do not inherit a parent CLI's manifest or a direct tsdown version.
+                return Some(true);
             }
         }
         None
     };
-    let version = if standalone {
-        standalone_version().or_else(bundled_version)
+    let legacy = if standalone {
+        standalone_defaults().or_else(bundled_defaults)
     } else {
-        bundled_version().or_else(standalone_version)
+        bundled_defaults().or_else(standalone_defaults)
     };
-    version.is_none_or(|version| version < node_semver::Version::new(0, 23, 0))
+    legacy.unwrap_or(true)
 }
 
 fn indent_compatibility_defaults(source: &str, object_indentation: &str) -> String {

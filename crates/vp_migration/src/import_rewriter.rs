@@ -2581,14 +2581,13 @@ mod tests {
             let root = temp.path();
             write_pack_fixture(root, ".gitignore", "node_modules/\n");
             write_toolchain_fixture(root, version);
-            // Conflicting metadata must not override the installed CLI's manifest.
-            let core_version = if legacy { "0.23.0" } else { "0.22.0" };
+            // A direct tsdown installation must not override the CLI's manifest.
+            let standalone_version = if legacy { "0.23.0" } else { "0.22.0" };
             write_pack_fixture(
                 root,
-                "node_modules/vite/package.json",
+                "node_modules/tsdown/package.json",
                 &serde_json::json!({
-                    "name": "@voidzero-dev/vite-plus-core",
-                    "bundledVersions": { "tsdown": core_version }
+                    "name": "tsdown", "version": standalone_version
                 })
                 .to_string(),
             );
@@ -2623,12 +2622,12 @@ mod tests {
                     "node_modules/vite-plus/package.json",
                     r#"{"version":"0.2.0"}"#,
                 );
-                write_pack_fixture(
-                    &package,
-                    "node_modules/vite/package.json",
-                    r#"{"name":"@voidzero-dev/vite-plus-core","bundledVersions":{"tsdown":"0.22.0"}}"#,
-                );
             }
+            write_pack_fixture(
+                &package,
+                "node_modules/tsdown/package.json",
+                r#"{"name":"tsdown","version":"0.23.0"}"#,
+            );
             write_pack_fixture(&package, "vite.config.ts", "export default { pack: {} };");
             assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
             let actual = std::fs::read_to_string(package.join("vite.config.ts")).unwrap();
@@ -2648,28 +2647,21 @@ mod tests {
             ("1.0.0", false),
             ("invalid", true),
         ] {
-            for package in
-                ["vite", "@voidzero-dev/vite-plus-core", "vite-plus/node_modules/vite", "tsdown"]
-            {
+            for package in ["vite-plus", "tsdown"] {
                 let temp = tempdir().unwrap();
                 let root = temp.path();
                 write_pack_fixture(root, ".gitignore", "node_modules/\n");
                 write_pack_fixture(root, "package.json", "{}");
-                let manifest = if package == "tsdown" {
-                    serde_json::json!({ "name": "tsdown", "version": version })
+                if package == "tsdown" {
+                    write_pack_fixture(
+                        root,
+                        "node_modules/tsdown/package.json",
+                        &serde_json::json!({ "name": "tsdown", "version": version }).to_string(),
+                    );
                 } else {
-                    serde_json::json!({
-                        "name": "@voidzero-dev/vite-plus-core",
-                        "version": "1.0.0",
-                        "bundledVersions": { "tsdown": version }
-                    })
-                };
-                write_pack_fixture(
-                    root,
-                    &format!("node_modules/{package}/package.json"),
-                    &manifest.to_string(),
-                );
-                // Match Sigle's catalog-based workspace and root-hoisted core.
+                    write_toolchain_fixture(root, version);
+                }
+                // Cover catalog dependencies with packages installed at the workspace root.
                 write_pack_fixture(
                     root,
                     "apps/server-v2/package.json",
@@ -2711,16 +2703,8 @@ mod tests {
         let root = temp.path();
         write_pack_fixture(root, ".gitignore", "node_modules/\n");
         write_pack_fixture(root, "package.json", "{}");
-        write_pack_fixture(
-            root,
-            "node_modules/vite/package.json",
-            r#"{"name":"@voidzero-dev/vite-plus-core","bundledVersions":{"tsdown":"0.23.0"}}"#,
-        );
-        write_pack_fixture(
-            root,
-            "packages/legacy/node_modules/@voidzero-dev/vite-plus-core/package.json",
-            r#"{"name":"@voidzero-dev/vite-plus-core","bundledVersions":{"tsdown":"0.22.0"}}"#,
-        );
+        write_toolchain_fixture(root, "0.23.0");
+        write_toolchain_fixture(&root.join("packages/legacy"), "0.22.0");
         write_pack_fixture(
             root,
             "node_modules/tsdown/package.json",
@@ -2750,11 +2734,6 @@ mod tests {
     fn pack_defaults_do_not_read_installs_outside_the_migration_root() {
         let temp = tempdir().unwrap();
         write_toolchain_fixture(temp.path(), "0.23.0");
-        write_pack_fixture(
-            temp.path(),
-            "node_modules/vite/package.json",
-            r#"{"name":"@voidzero-dev/vite-plus-core","bundledVersions":{"tsdown":"0.23.0"}}"#,
-        );
         write_pack_fixture(temp.path(), "project/package.json", "{}");
         write_pack_fixture(
             temp.path(),

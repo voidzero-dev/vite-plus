@@ -1,6 +1,6 @@
 # migration_pack_tsdown_defaults_legacy
 
-An installed tsdown older than 0.23 still receives compatibility defaults, while explicit values and the second migration remain unchanged.
+An older Vite+ installation without a toolchain manifest receives compatibility defaults, while explicit values and the second migration remain unchanged.
 
 ## `vpt replace-file-content pnpm-workspace.yaml @1.0.0 @0.2.0`
 
@@ -8,7 +8,10 @@ An installed tsdown older than 0.23 still receives compatibility defaults, while
 ## `vpt replace-file-content pnpm-workspace.yaml 'vite-plus: 1.0.0' 'vite-plus: 0.2.0'`
 
 
-## `vpt write-file node_modules/vite/package.json '{"name":"@voidzero-dev/vite-plus-core","version":"0.2.0","bundledVersions":{"vite":"8.0.0","tsdown":"0.22.0"}}'`
+## `vpt write-file node_modules/vite/package.json '{"name":"@voidzero-dev/vite-plus-core","version":"0.2.0","bundledVersions":{"vite":"8.0.0"}}'`
+
+
+## `vpt write-file node_modules/vite-plus/package.json '{"name":"vite-plus","version":"0.2.0"}'`
 
 
 ## `vp migrate --no-interactive`
