@@ -8824,6 +8824,7 @@ dependencies = [
  "oxc",
  "rayon",
  "regex",
+ "semver 1.0.28",
  "serde_json",
  "tempfile",
  "vp_error",
