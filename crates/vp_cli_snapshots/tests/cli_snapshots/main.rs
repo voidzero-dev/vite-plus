@@ -154,12 +154,14 @@ impl Step {
     /// Shell-escaped command line including any env-var prefix and non-default
     /// cwd, without the comment (e.g. `cd packages/a && MY_ENV=1 vp check`).
     fn display_command_line(&self, default_cwd: &str) -> String {
+        // Headings are display-only: keep them identical across platforms and
+        // shells instead of letting shell_escape::escape inspect MSYSTEM.
         let argv_str = self
             .argv
             .iter()
             .map(|s| {
                 if s.contains(|c: char| c.is_whitespace() || c == '"') {
-                    shell_escape::escape(s.as_str().into()).into_owned()
+                    shell_escape::unix::escape(s.as_str().into()).into_owned()
                 } else {
                     s.clone()
                 }
@@ -178,7 +180,7 @@ impl Step {
             command
         } else {
             let cwd = if cwd.is_empty() { "." } else { cwd };
-            format!("cd {} && {command}", shell_escape::escape(cwd.into()))
+            format!("cd {} && {command}", shell_escape::unix::escape(cwd.into()))
         }
     }
 

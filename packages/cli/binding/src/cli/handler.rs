@@ -42,6 +42,8 @@ impl CommandHandler for VitePlusCommandHandler {
         // `vpr build`, etc. are synthesized in-session rather than spawning a new CLI process.
         let program = command.program.as_str();
         if program != "vp" && program != "vpr" {
+            #[cfg(windows)]
+            rewrite_managed_script_command(command);
             return Ok(HandledCommand::Verbatim);
         }
 
@@ -109,6 +111,33 @@ impl CommandHandler for VitePlusCommandHandler {
             }
         }
     }
+}
+
+/// Vite Task rewrites workspace `.bin` shims. Managed package managers live
+/// outside the workspace, so apply Vite+'s launcher policy before the plan is
+/// fingerprinted. This also preserves the normal non-TTY and missing-.ps1
+/// fallbacks and leaves system tools to the task runner.
+#[cfg(windows)]
+fn rewrite_managed_script_command(command: &mut ScriptCommand) {
+    let path_env = vt::get_path_env(&command.envs).map(|path| path.as_ref());
+    let Ok(resolved) = vp_command::resolve_bin(&command.program, path_env, &command.cwd) else {
+        return;
+    };
+    if !resolved.as_path().starts_with(&vp_shared::EnvConfig::get().dirs.data) {
+        return;
+    }
+    let Some((host, prefix_args)) = vp_command::rewrite_cmd_to_powershell(&resolved) else {
+        return;
+    };
+    let Some(program) = host.as_path().to_str() else { return };
+    let Some(mut args) =
+        prefix_args.iter().map(|arg| arg.to_str().map(Str::from)).collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    args.extend(command.args.iter().cloned());
+    command.program = program.into();
+    command.args = args.into();
 }
 
 /// User config loader that resolves vite.config.ts via JavaScript callback

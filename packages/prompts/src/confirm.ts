@@ -1,13 +1,15 @@
+import type { CANCEL_SYMBOL } from '@clack/core';
 import { ConfirmPrompt } from '@clack/core';
 import color from 'picocolors';
 
 import {
   type CommonOptions,
+  getGuide,
+  promptTitle,
   S_BAR,
   S_BAR_END,
   S_POINTER_ACTIVE,
   S_POINTER_INACTIVE,
-  symbol,
 } from './common.js';
 import { promptMilestone } from './milestone.js';
 
@@ -26,12 +28,13 @@ export const confirm = (opts: ConfirmOptions) => {
     inactive,
     signal: opts.signal,
     input: opts.input,
+    accessible: opts.accessible,
     output: opts.output,
     initialValue: opts.initialValue ?? true,
     render() {
-      const hasGuide = opts.withGuide ?? false;
+      const hasGuide = getGuide(opts);
       const nestedPrefix = '  ';
-      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
+      const title = promptTitle(opts.message, this.state, opts);
       const value = this.value ? active : inactive;
 
       switch (this.state) {
@@ -62,9 +65,9 @@ export const confirm = (opts: ConfirmOptions) => {
             !this.value
               ? `${color.blue(S_POINTER_ACTIVE)} ${color.bold(inactive)}`
               : `${color.dim(S_POINTER_INACTIVE)} ${color.dim(inactive)}`
-          }\n${defaultPrefixEnd}\n${promptMilestone('confirm', opts.testId, this.value ? 'yes' : 'no')}`;
+          }${hasGuide ? `\n${defaultPrefixEnd}` : ''}\n${promptMilestone('confirm', opts.testId, this.value ? 'yes' : 'no')}`;
         }
       }
     },
-  }).prompt() as Promise<boolean | symbol>;
+  }).prompt() as Promise<boolean | typeof CANCEL_SYMBOL>;
 };
