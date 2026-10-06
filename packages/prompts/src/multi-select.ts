@@ -1,8 +1,15 @@
-import { MultiSelectPrompt, wrapTextWithPrefix } from '@clack/core';
+import type { CANCEL_SYMBOL } from '@clack/core';
+import { MultiSelectPrompt } from '@clack/core';
 import color from 'picocolors';
 
 import {
   type CommonOptions,
+  getGuide,
+  formatInstructionFooter,
+  MULTISELECT_INSTRUCTIONS,
+  promptTitle,
+  optionText,
+  wrapTextWithPrefix,
   S_BAR,
   S_BAR_END,
   S_CHECKBOX_ACTIVE,
@@ -10,8 +17,6 @@ import {
   S_CHECKBOX_SELECTED,
   S_POINTER_ACTIVE,
   S_POINTER_INACTIVE,
-  symbol,
-  symbolBar,
 } from './common.js';
 import { limitOptions } from './limit-options.js';
 import type { Option } from './select.js';
@@ -23,6 +28,7 @@ export interface MultiSelectOptions<Value> extends CommonOptions {
   maxItems?: number;
   required?: boolean;
   cursorAt?: Value;
+  showInstructions?: boolean;
 }
 const computeLabel = (label: string, format: (text: string) => string) => {
   return label
@@ -31,27 +37,15 @@ const computeLabel = (label: string, format: (text: string) => string) => {
     .join('\n');
 };
 
-const withMarkerAndCheckbox = (
-  marker: string,
-  checkbox: string,
-  checkboxWidth: number,
-  label: string,
-  format: (text: string) => string,
-  firstLineSuffix = '',
-) => {
-  const lines = label.split('\n');
-  const continuationPrefix = `${S_POINTER_INACTIVE} ${' '.repeat(checkboxWidth)} `;
-  if (lines.length === 1) {
-    return `${marker} ${checkbox} ${format(lines[0])}${firstLineSuffix}`;
-  }
-  const [firstLine, ...rest] = lines;
-  return [
-    `${marker} ${checkbox} ${format(firstLine)}${firstLineSuffix}`,
-    ...rest.map((line) => `${continuationPrefix}${format(line)}`),
-  ].join('\n');
-};
-
 export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
+  const withMarkerAndCheckbox = (
+    marker: string,
+    checkbox: string,
+    _width: number,
+    label: string,
+    format: (text: string) => string,
+    suffix = '',
+  ) => optionText(opts.output, `${marker} ${checkbox} `, label, format, suffix);
   const opt = (
     option: Option<Value>,
     state:
@@ -92,7 +86,6 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
         S_CHECKBOX_SELECTED.length,
         label,
         color.dim,
-        hint,
       );
     }
     if (state === 'cancelled') {
@@ -120,49 +113,32 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
     );
   };
   const required = opts.required ?? true;
-  const hint =
-    '  ' +
-    color.reset(
-      color.dim(
-        `Press ${color.gray(color.bgWhite(color.inverse(' space ')))} to select, ${color.gray(
-          color.bgWhite(color.inverse(' enter ')),
-        )} to submit`,
-      ),
-    );
 
   return new MultiSelectPrompt({
     options: opts.options,
     signal: opts.signal,
     input: opts.input,
+    accessible: opts.accessible,
     output: opts.output,
     initialValues: opts.initialValues,
     required,
     cursorAt: opts.cursorAt,
     validate(selected: Value[] | undefined) {
       if (required && (selected === undefined || selected.length === 0)) {
-        return `Please select at least one option.\n${hint}`;
+        return 'Please select at least one option.';
       }
       return undefined;
     },
     render() {
-      const hasGuide = opts.withGuide ?? false;
+      const hasGuide = getGuide(opts);
       const nestedPrefix = '  ';
-      const formatMessageLines = (message: string) => {
-        const lines = message.split('\n');
-        return lines
-          .map((line, index) => `${index === 0 ? `${symbol(this.state)} ` : nestedPrefix}${line}`)
-          .join('\n');
-      };
-      const wrappedMessage = hasGuide
-        ? wrapTextWithPrefix(
-            opts.output,
-            opts.message,
-            `${symbolBar(this.state)} `,
-            `${symbol(this.state)} `,
-          )
-        : formatMessageLines(opts.message);
-      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${wrappedMessage}\n`;
+      const title = promptTitle(opts.message, this.state, opts);
       const value = this.value ?? [];
+      const instructions =
+        opts.showInstructions === false
+          ? []
+          : formatInstructionFooter(MULTISELECT_INSTRUCTIONS, hasGuide, opts.output);
+      const hint = instructions.join('\n');
 
       const styleOption = (option: Option<Value>, active: boolean) => {
         if (option.disabled) {
@@ -205,23 +181,20 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
         }
         case 'error': {
           const prefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;
-          const footer = hasGuide
-            ? this.error
-                .split('\n')
-                .map((ln, i) =>
-                  i === 0 ? `${color.yellow(S_BAR_END)} ${color.yellow(ln)}` : `  ${ln}`,
-                )
-                .join('\n')
-            : `${nestedPrefix}${color.yellow(this.error)}`;
+          const footer = wrapTextWithPrefix(
+            opts.output,
+            color.yellow(this.error),
+            hasGuide ? `${color.yellow(S_BAR_END)} ` : nestedPrefix,
+          );
           // Calculate rowPadding: title lines + footer lines (error message + trailing newline)
           const titleLineCount = title.split('\n').length;
-          const footerLineCount = footer.split('\n').length + 1; // footer + trailing newline
+          const footerLineCount = footer.split('\n').length + instructions.length + 1; // footer + trailing newline
           return `${title}${prefix}${limitOptions({
             output: opts.output,
             options: this.options,
             cursor: this.cursor,
             maxItems: opts.maxItems,
-            columnPadding: prefix.length,
+            columnPadding: 2,
             rowPadding: titleLineCount + footerLineCount,
             style: styleOption,
           }).join(`\n${prefix}`)}\n${hint}\n${footer}\n`;
@@ -230,18 +203,18 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
           const prefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
           // Calculate rowPadding: title lines + footer lines (S_BAR_END + trailing newline)
           const titleLineCount = title.split('\n').length;
-          const footerLineCount = hasGuide ? 2 : 1; // S_BAR_END + trailing newline
+          const footerLineCount = instructions.length + (hasGuide ? 2 : 1); // S_BAR_END + trailing newline
           return `${title}${prefix}${limitOptions({
             output: opts.output,
             options: this.options,
             cursor: this.cursor,
             maxItems: opts.maxItems,
-            columnPadding: prefix.length,
+            columnPadding: 2,
             rowPadding: titleLineCount + footerLineCount,
             style: styleOption,
-          }).join(`\n${prefix}`)}\n${hint}\n${hasGuide ? color.blue(S_BAR_END) : ''}\n`;
+          }).join(`\n${prefix}`)}\n${hint}${hasGuide ? `\n${color.blue(S_BAR_END)}` : ''}\n`;
         }
       }
     },
-  }).prompt() as Promise<Value[] | symbol>;
+  }).prompt() as Promise<Value[] | typeof CANCEL_SYMBOL>;
 };

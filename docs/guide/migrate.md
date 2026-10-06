@@ -95,21 +95,21 @@ Upgrade the [global CLI](./upgrade.md#global-vp) to your target 1.0 release, the
 
 ### Without the Global CLI
 
-Use an existing Node.js runtime that satisfies `^22.18.0 || ^24.11.0 || >=26.0.0`. Run the target migrator through your package manager without adding it to the project first. For the `1.0.0-rc.1` release:
+Use an existing Node.js runtime that satisfies `^22.18.0 || ^24.11.0 || >=26.0.0`. Run the target migrator through your package manager without adding it to the project first. For the `1.0.0` release:
 
 ::: code-group
 
 ```bash [pnpm]
-pnpm dlx --package=vite-plus@1.0.0-rc.1 vp migrate --no-interactive
+pnpm dlx --package=vite-plus@1.0.0 vp migrate --no-interactive
 ```
 
 ```bash [npm]
-npx --package=vite-plus@1.0.0-rc.1 vp migrate --no-interactive
+npx --package=vite-plus@1.0.0 vp migrate --no-interactive
 ```
 
 :::
 
-Replace `1.0.0-rc.1` with your target release. For a preview, use the version from the PR and pass `--registry=https://registry-bridge.viteplus.dev` to `pnpm` or `npx` before the `vp` command. Keep the version in `--package` explicit so you run the target migrator rather than the old local CLI.
+Replace `1.0.0` with your target release. For a preview, use the version from the PR and pass `--registry=https://registry-bridge.viteplus.dev` to `pnpm` or `npx` before the `vp` command. Keep the version in `--package` explicit so you run the target migrator rather than the old local CLI.
 
 After migration, finish dependency installation and validate with the updated local CLI:
 
@@ -151,7 +151,7 @@ View and copy this prompt into your coding agent to upgrade an existing Vite+ 0.
 
 ### Vitest
 
-Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@5.0.1` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
+Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@5.0.3` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
 
 For browser mode, you can use the base browser runtime (`@vitest/browser`) and Preview provider (`@vitest/browser-preview`) included in `vite-plus`. To use Playwright or WebDriverIO, you also need the opt-in provider (`@vitest/browser-playwright` or `@vitest/browser-webdriverio`) and its framework peer (`playwright` or `webdriverio`).
 
@@ -163,9 +163,9 @@ If you are migrating manually, update all the imports to `vite-plus/test*` inste
 
 ```ts
 // before
-import { defineConfig } from 'vitest/config';
-import { describe, expect, it, vi } from 'vitest';
 import { playwright } from '@vitest/browser-playwright';
+import { describe, expect, it, vi } from 'vitest';
+import { defineConfig } from 'vitest/config';
 
 const { page } = await import('@vitest/browser/context');
 

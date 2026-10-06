@@ -1,6 +1,5 @@
 use std::{borrow::Cow, path::Path, sync::LazyLock};
 
-use ast_grep_config::{GlobalRules, RuleConfig, from_yaml_string};
 use ast_grep_core::{Doc, Node};
 use ast_grep_language::{LanguageExt, SupportLang};
 use regex::Regex;
@@ -15,8 +14,6 @@ pub struct MergeResult {
     pub content: String,
     /// Whether any changes were made
     pub updated: bool,
-    /// Whether the config uses a function callback
-    pub uses_function_callback: bool,
 }
 
 /// Merge a JSON configuration file into vite.config.ts or vite.config.js
@@ -38,7 +35,6 @@ pub struct MergeResult {
 /// Returns a `MergeResult` containing:
 /// - `content`: The updated vite config content
 /// - `updated`: Whether any changes were made
-/// - `uses_function_callback`: Whether the config uses a function callback
 ///
 /// # Example
 ///
@@ -99,9 +95,6 @@ fn merge_json_config_content(
     ts_config: &str,
     config_key: &str,
 ) -> Result<MergeResult, Error> {
-    // Check if the config uses a function callback (for informational purposes)
-    let uses_function_callback = check_function_callback(vite_config_content)?;
-
     // Strip "$schema" property — it's a JSON Schema annotation not valid in OxlintConfig
     let ts_config = strip_schema_property(ts_config);
 
@@ -111,7 +104,7 @@ fn merge_json_config_content(
     // Apply the transformation
     let (content, updated) = ast_grep::apply_rules(vite_config_content, &rule_yaml)?;
 
-    Ok(MergeResult { content, updated, uses_function_callback })
+    Ok(MergeResult { content, updated })
 }
 
 /// Set the value of a top-level config key in vite.config.ts/js (upsert).
@@ -165,9 +158,6 @@ fn upsert_json_config_content(
     ts_config: &str,
     config_key: &str,
 ) -> Result<MergeResult, Error> {
-    // Check if the config uses a function callback (for informational purposes)
-    let uses_function_callback = check_function_callback(vite_config_content)?;
-
     // Strip "$schema" property — it's a JSON Schema annotation not valid in the config type.
     let ts_config = strip_schema_property(ts_config);
 
@@ -229,11 +219,7 @@ fn upsert_json_config_content(
     }
 
     if edits.is_empty() {
-        return Ok(MergeResult {
-            content: vite_config_content.to_owned(),
-            updated: false,
-            uses_function_callback,
-        });
+        return Ok(MergeResult { content: vite_config_content.to_owned(), updated: false });
     }
 
     edits.sort_by_key(|(start, _, _)| std::cmp::Reverse(*start));
@@ -242,7 +228,7 @@ fn upsert_json_config_content(
         content.replace_range(start..end, &replacement);
     }
 
-    Ok(MergeResult { content, updated: true, uses_function_callback })
+    Ok(MergeResult { content, updated: true })
 }
 
 /// If `parent_object` is a tracked direct config object, mark it as already
@@ -333,7 +319,6 @@ pub fn remove_config_key(
     vite_config_content: &str,
     config_key: &str,
 ) -> Result<MergeResult, Error> {
-    let uses_function_callback = check_function_callback(vite_config_content)?;
     let grep = SupportLang::TypeScript.ast_grep(vite_config_content);
     let root = grep.root();
     let mut edits = Vec::new();
@@ -369,7 +354,7 @@ pub fn remove_config_key(
         content.replace_range(start..end, "");
     }
 
-    Ok(MergeResult { content, updated, uses_function_callback })
+    Ok(MergeResult { content, updated })
 }
 
 /// Wrap safe inline Vite plugin arrays with `lazyPlugins(() => [...])`.
@@ -386,16 +371,10 @@ fn wrap_lazy_plugins_content(
     vite_config_content: &str,
     vite_config_path: Option<&Path>,
 ) -> Result<MergeResult, Error> {
-    let uses_function_callback = check_function_callback(vite_config_content)?;
-
     if is_commonjs_config(vite_config_content, vite_config_path)
         || has_conflicting_lazy_plugins_binding(vite_config_content)
     {
-        return Ok(MergeResult {
-            content: vite_config_content.to_owned(),
-            updated: false,
-            uses_function_callback,
-        });
+        return Ok(MergeResult { content: vite_config_content.to_owned(), updated: false });
     }
 
     let grep = SupportLang::TypeScript.ast_grep(vite_config_content);
@@ -436,11 +415,7 @@ fn wrap_lazy_plugins_content(
     }
 
     if replacements.is_empty() {
-        return Ok(MergeResult {
-            content: vite_config_content.to_owned(),
-            updated: false,
-            uses_function_callback,
-        });
+        return Ok(MergeResult { content: vite_config_content.to_owned(), updated: false });
     }
 
     replacements.sort_by_key(|(start, _, _)| std::cmp::Reverse(*start));
@@ -450,7 +425,7 @@ fn wrap_lazy_plugins_content(
     }
     content = ensure_lazy_plugins_import(&content);
 
-    Ok(MergeResult { content, updated: true, uses_function_callback })
+    Ok(MergeResult { content, updated: true })
 }
 
 pub(crate) fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
@@ -822,40 +797,6 @@ fn strip_import_comments(input: &str) -> String {
     output
 }
 
-/// Check if the vite config uses a function callback pattern
-fn check_function_callback(vite_config_content: &str) -> Result<bool, Error> {
-    // Match both sync and async arrow functions
-    let check_rule = r"
----
-id: check-function-callback
-language: TypeScript
-rule:
-  any:
-    - pattern: defineConfig(($PARAMS) => $BODY)
-    - pattern: defineConfig(async ($PARAMS) => $BODY)
-";
-
-    let globals = GlobalRules::default();
-    let rules: Vec<RuleConfig<SupportLang>> =
-        from_yaml_string::<SupportLang>(check_rule, &globals)?;
-
-    for rule in &rules {
-        if rule.language != SupportLang::TypeScript {
-            continue;
-        }
-
-        let grep = rule.language.ast_grep(vite_config_content);
-        let root = grep.root();
-        let matcher = &rule.matcher;
-
-        if root.find(matcher).is_some() {
-            return Ok(true);
-        }
-    }
-
-    Ok(false)
-}
-
 /// Generate the ast-grep rules YAML for merging JSON config
 ///
 /// This generates six rules:
@@ -1008,15 +949,9 @@ fn merge_tsdown_config_content(
     vite_config_content: &str,
     tsdown_config_path: &str,
 ) -> Result<MergeResult, Error> {
-    let uses_function_callback = check_function_callback(vite_config_content)?;
-
     // Check if already migrated (idempotency check)
     if vite_config_content.contains("import tsdownConfig from") {
-        return Ok(MergeResult {
-            content: vite_config_content.to_string(),
-            updated: false,
-            uses_function_callback,
-        });
+        return Ok(MergeResult { content: vite_config_content.to_string(), updated: false });
     }
 
     // Step 1: Add import statement at the beginning
@@ -1038,7 +973,7 @@ fn merge_tsdown_config_content(
     let pack_rule = generate_merge_rule("tsdownConfig", "pack");
     let (final_content, _) = ast_grep::apply_rules(&content_with_import, &pack_rule)?;
 
-    Ok(MergeResult { content: final_content, updated: true, uses_function_callback })
+    Ok(MergeResult { content: final_content, updated: true })
 }
 
 #[cfg(test)]
@@ -1376,30 +1311,6 @@ export default defineConfig({
     }
 
     #[test]
-    fn test_check_function_callback() {
-        let simple_config = r#"
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  plugins: [],
-});
-"#;
-        assert!(!check_function_callback(simple_config).unwrap());
-
-        let function_config = r#"
-import { defineConfig } from 'vite';
-
-export default defineConfig((env) => ({
-  plugins: [],
-  server: {
-    port: env.mode === 'production' ? 8080 : 3000,
-  },
-}));
-"#;
-        assert!(check_function_callback(function_config).unwrap());
-    }
-
-    #[test]
     fn test_merge_json_config_content_simple() {
         let vite_config = r#"import { defineConfig } from 'vite';
 
@@ -1426,7 +1337,6 @@ export default defineConfig({
 });"#
         );
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
     }
 
     #[test]
@@ -1470,7 +1380,6 @@ export default defineConfig((env) => ({
 }"#;
 
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
-        assert!(result.uses_function_callback);
         // Function callbacks are now supported
         assert!(result.updated);
         assert!(result.content.contains("lint:"));
@@ -1506,8 +1415,6 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
 
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
-        // Detected as function callback
-        assert!(result.uses_function_callback);
         // Now can be auto-migrated using return statement matching
         assert!(result.updated);
         // Both return statements should have lint config added
@@ -1542,8 +1449,6 @@ export default defineConfig(({ mode }) => {
 
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
-        // Detected as function callback
-        assert!(result.uses_function_callback);
         // Now can be auto-migrated using return statement matching
         assert!(result.updated);
         assert!(result.content.contains("'no-console': 'warn'"));
@@ -1560,8 +1465,6 @@ export default defineConfig(async ({ command, mode }) => {
 
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
-        // Detected as function callback
-        assert!(result.uses_function_callback);
         // Now can be auto-migrated using return statement matching
         assert!(result.updated);
         assert!(result.content.contains("'no-console': 'warn'"));
@@ -1617,7 +1520,6 @@ export default () =>
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert!(result.content.contains("lint: {"));
         assert!(result.content.contains("'no-console': 'warn'"));
     }
@@ -1641,7 +1543,6 @@ export default () =>
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert!(result.content.contains("lint: {"));
         assert!(result.content.contains("'no-console': 'warn'"));
         assert!(result.content.contains("server: {"));
@@ -1659,7 +1560,6 @@ export default {
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert!(result.content.contains("lint: {"));
         assert!(result.content.contains("'no-console': 'warn'"));
         assert!(result.content.contains("server: {"));
@@ -1717,7 +1617,6 @@ export default defineConfig(({ mode }) => {
 })"#
         );
         assert!(result.updated);
-        assert!(result.uses_function_callback);
     }
 
     #[test]
@@ -2465,7 +2364,6 @@ export default defineConfig({
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         // TypeScript files use .js extension in imports
         assert_eq!(
             result.content,
@@ -2491,7 +2389,6 @@ export default defineConfig({
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert_eq!(
             result.content,
             r#"import tsdownConfig from './tsdown.config.js';
@@ -2516,7 +2413,6 @@ export default defineConfig((env) => ({
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
         assert!(result.updated);
-        assert!(result.uses_function_callback);
         assert_eq!(
             result.content,
             r#"import tsdownConfig from './tsdown.config.js';
@@ -2582,7 +2478,6 @@ export default defineConfig({
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert_eq!(
             result.content,
             r#"import tsdownConfig from './tsdown.config.js';
@@ -2678,7 +2573,6 @@ export default defineConfig({
         // Rest of the file is untouched.
         assert!(result.content.contains("plugins: []"));
         assert!(!result.content.contains(r#""@a""#));
-        assert!(!result.uses_function_callback);
     }
 
     #[test]
@@ -2875,7 +2769,6 @@ export default defineConfig((env) => ({
             upsert_json_config_content(vite_config, r#"{ defaultTemplate: "@b" }"#, "create")
                 .unwrap();
         assert!(result.updated);
-        assert!(result.uses_function_callback);
         assert!(result.content.contains(r#"create: { defaultTemplate: "@b" }"#));
         assert!(!result.content.contains(r#""@a""#));
         assert!(result.content.contains("(env) =>"));

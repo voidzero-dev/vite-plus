@@ -21,6 +21,8 @@ use vt_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
 mod ps1_shim;
 
+pub use ps1_shim::rewrite_cmd_to_powershell;
+
 /// Result of running a command with fspy tracking.
 #[derive(Debug)]
 pub struct FspyCommandResult {
@@ -61,7 +63,7 @@ fn resolve_program(
 ) -> Result<(AbsolutePathBuf, Vec<OsString>), Error> {
     let path_env = envs.get("PATH").map(|p| OsStr::new(p.as_str()));
     let bin_path = resolve_bin(bin_name, path_env, cwd)?;
-    Ok(match ps1_shim::rewrite_cmd_to_powershell(&bin_path) {
+    Ok(match rewrite_cmd_to_powershell(&bin_path) {
         Some(rewritten) => rewritten,
         None => (bin_path, Vec::new()),
     })

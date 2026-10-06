@@ -127,7 +127,7 @@ order:
    onboarding: a single image pins Node.js + package managers + vp so the toolchain
    matches the repo with zero host setup.
 4. **Ad-hoc / evaluation (secondary).** `docker run --rm -v $PWD:/app -w /app
-ghcr.io/voidzero-dev/vite-plus vp <cmd>` to try vp or reproduce a bug report
+   ghcr.io/voidzero-dev/vite-plus vp <cmd>` to try vp or reproduce a bug report
    on a clean toolchain.
 5. **Platform / monorepo builders (secondary).** Internal PaaS and buildpack-style
    systems standardizing on a canonical vp builder; monorepo single-app builds

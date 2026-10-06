@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import semver from 'semver';
+import { isRangeSubset, satisfies } from 'verkit';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse as yaml } from 'yaml';
 
@@ -64,9 +64,9 @@ describe('WebDriverIO migration floor', () => {
     'narrows %s without allowing v4',
     (spec) => {
       const result = webdriverioMigrationSpec(spec)!;
-      expect(semver.subset(result, '>=5.0.0')).toBe(true);
+      expect(isRangeSubset(result, '>=5.0.0')).toBe(true);
       for (const version of ['5.0.0', '5.2.0', '6.1.0', '7.0.0']) {
-        expect(semver.satisfies(version, result)).toBe(semver.satisfies(version, spec));
+        expect(satisfies(version, result)).toBe(satisfies(version, spec));
       }
       expect(webdriverioMigrationSpec(result)).toBe(result);
     },
@@ -132,7 +132,7 @@ describe('WebDriverIO migration floor', () => {
     });
     migrate(root);
     expect(read(root).peerDependencies[provider]).toBe('^4 || ^5');
-    expect(semver.subset(read(root).devDependencies[provider], '>=5.0.0')).toBe(true);
+    expect(isRangeSubset(read(root).devDependencies[provider], '>=5.0.0')).toBe(true);
   });
   it('reuses a newer peer-only provider without downgrading it', () => {
     const root = project({

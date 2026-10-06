@@ -22,19 +22,17 @@ unsupported config paths should stop automatic migration before any files change
 ```
 VITE+ - The Unified Toolchain for the Web
 
-tsup configuration detected. Auto-migrating to tsdown...
+●  tsup configuration detected. Auto-migrating to tsdown...
+▲  Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:
+     package.json#build -> configs/legacy.ts
+     package.json#irregular -> ././tsup.config.ts
+●  Resolve these config paths manually:
+     1. Migrate each listed config into `pack` in `vite.config.*`.
+     2. Update each listed script.
+     3. Do not run `tsdown-migrate`. It cannot safely resolve these config paths.
 
-Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:
-  package.json#build -> configs/legacy.ts
-  package.json#irregular -> ././tsup.config.ts
-
-Resolve these config paths manually:
-  1. Migrate each listed config into `pack` in `vite.config.*`.
-  2. Update each listed script.
-  3. Do not run `tsdown-migrate`. It cannot safely resolve these config paths.
-
-Use the tsdown migration skill for guidance:
-  https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
+   Use the tsdown migration skill for guidance:
+     https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md
 Complete the tsup migration manually, then re-run `vp migrate`.
 ```
 

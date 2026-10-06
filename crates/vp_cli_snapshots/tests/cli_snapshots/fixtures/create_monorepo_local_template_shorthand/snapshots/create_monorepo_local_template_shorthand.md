@@ -5,21 +5,14 @@
 run the local create.templates entry; generated pkg declares fmt/lint via shorthand
 
 ```
-
-Generating project…
-
-Running: node <workspace>/packages/starter-template/bin/index.mjs --directory my-app
+◇  Generating project…
+●  Running: node <workspace>/packages/starter-template/bin/index.mjs --directory my-app
 cloned starter-template to my-app
-
-Monorepo integration...
-
-lint config already present in packages/my-app/vite.config.ts — removed redundant packages/my-app/.oxlintrc.json
-
-fmt config already present in packages/my-app/vite.config.ts — removed redundant packages/my-app/.oxfmtrc.json
-
-Formatting code...
-
-Code formatted
+◇  Monorepo integration...
+●  lint config already present in packages/my-app/vite.config.ts — removed redundant packages/my-app/.oxlintrc.json
+●  fmt config already present in packages/my-app/vite.config.ts — removed redundant packages/my-app/.oxfmtrc.json
+●  Formatting code...
+●  Code formatted
 ◇ Scaffolded packages/my-app
 • Node <version>  pnpm <version>
 → Next: cd packages/my-app && vp run

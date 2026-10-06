@@ -107,7 +107,7 @@ should override a recorded version spec with --latest
 
 ```
 info: Updating 1 global package with Node.js <version>
-✓ Updated testnpm2 to 1.0.1
+ Updated testnpm2 to 1.0.1
 ```
 
 ## `vpt grep-file $VP_HOME/packages/testnpm2.json versionSpec`

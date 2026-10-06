@@ -4,8 +4,9 @@ vp = "global"
 serial = true
 skip-platforms = ["windows"]
 steps = [
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.test-vite-plus-top-package", "\"1.0.0\""], snapshot = false },
   { argv = ["vp", "install"], continue-on-failure = true },
   { argv = ["vp", "why", "testnpm2", "--filter", "app"], comment = "should check why in specific workspace using --workspace", continue-on-failure = true },
   { argv = ["vp", "why", "test-vite-plus-package", "--filter", "app"], comment = "should check why dev dependencies in app workspace", continue-on-failure = true },
-  { argv = ["vp", "why", "testnpm2", "--filter", "app", "--json"], comment = "should support json output with workspace filter", continue-on-failure = true },
+  { argv = ["vp", "why", "test-vite-plus-top-package", "test-vite-plus-install", "--recursive", "--json"], comment = "recursive workspace selection excludes the root-only dependency" },
 ]

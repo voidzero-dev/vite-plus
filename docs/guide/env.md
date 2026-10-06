@@ -174,6 +174,7 @@ In CI, `vp env use` can run without shell initialization. It writes a temporary 
 ### Manage
 
 - `vp env default` shows the global Node.js default and each configured package-manager version. Bare versions set Node.js; qualified specs such as `pnpm@10.18.0` set that package manager's shim default without replacing the defaults for Bun, Yarn, or npm. `--unset` clears all defaults unless scoped.
+- `vp env default <lts|latest>` and `<package-manager>@latest` re-resolve on each use, so the default follows new releases, including new majors. Other versions and ranges, such as `24` or `pnpm@10`, resolve to an exact version when set.
 - `vp env pin` shows or writes project pins. Existing `.node-version` and top-level `packageManager` fields keep being updated for compatibility. An existing `.nvmrc` is updated when it is the effective Node source in the current directory; its comments and other non-version content are preserved. Otherwise Vite+ writes the matching `devEngines` entry. Use `--target node-version`, `--target nvmrc`, `--target dev-engines`, or `--target package-manager` to choose explicitly. Pinning in a child directory does not modify an inherited `.nvmrc`.
 - `vp env unpin` removes both effective pins by default; append a selector to remove one. Lower-priority declarations are not deleted.
 - `vp env use` activates the complete project environment. Explicit specs override selected components; `--unset` clears both unless scoped.
@@ -208,13 +209,17 @@ vp env off pnpm               # Prefer system pnpm only
 vp env print                  # Print PATH setup for both components
 
 # Manage
+vp env pin lts                # Pin Node.js only to an exact version
 vp env pin lts pnpm@10        # Pin both project components to exact versions
 vp env install                # Install the complete resolved environment
-vp env default node@24        # Set the global Node.js default
-vp env default pnpm@10        # Set pnpm's global default version
 vp env use 20 pnpm@10         # Override both components for this shell
 vp env use --unset pnpm       # Remove only the pnpm session version
 vp env use --unset pm         # Remove all package-manager session versions
+
+# Manage (global)
+vp env default lts            # Always use the latest LTS, including new majors
+vp env default node@24        # Pin the Node.js default to an exact version
+vp env default pnpm@10        # Pin the pnpm default to an exact version
 vp env clean                  # Remove unused managed Node.js and package manager versions
 
 # Inspect
@@ -244,7 +249,7 @@ The JSON output for `current`, `list`, and `list-remote` is organized by compone
     "source": "devEngines.runtime",
     "source_path": "/project/package.json",
     "project_root": "/project",
-    "bin_path": "/home/.vite-plus/js_runtime/node/22.0.0/bin/node",
+    "bin_path": "/home/.local/share/vite-plus/js_runtime/node/22.0.0/bin/node",
     "installed": true,
     "mode": "managed"
   },
@@ -255,8 +260,8 @@ The JSON output for `current`, `list`, and `list-remote` is organized by compone
     "source_path": "/project/package.json",
     "project_root": "/project",
     "bin_paths": {
-      "pnpm": "/home/.vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpm",
-      "pnpx": "/home/.vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpx"
+      "pnpm": "/home/.local/share/vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpm",
+      "pnpx": "/home/.local/share/vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpx"
     },
     "installed": true,
     "mode": "managed"

@@ -8,7 +8,7 @@ use crate::resolution::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct WhoamiArgs {
     /// Registry URL
-    #[arg(long, value_name = "URL")]
+    #[arg(long, value_name = "URL", not_supported(yarn))]
     pub(crate) registry: Option<String>,
 
     /// Additional arguments
@@ -68,7 +68,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -123,6 +123,41 @@ mod tests {
     }
 
     #[test]
+    fn test_yarn_whoami_rejects_named_registry() {
+        for version in ["1.22.22", "2.4.2", "3.6.0", "4.18.0"] {
+            let args = parse_args::<WhoamiArgs>([
+                "--registry",
+                "https://registry.example.com",
+                "--",
+                "--help",
+            ])
+            .unwrap();
+            expect_unsupported(
+                resolve(&yarn(version), args),
+                &["yarn does not support --registry."],
+            );
+        }
+    }
+
+    #[test]
+    fn test_yarn_whoami_preserves_raw_registry_selection() {
+        for raw_args in [
+            vec!["--registry", "https://registry.example.com"],
+            vec!["--publish"],
+            vec!["--scope", "company"],
+        ] {
+            let args =
+                parse_args::<WhoamiArgs>(std::iter::once("--").chain(raw_args.clone())).unwrap();
+            let resolution = resolve(&yarn("4.18.0"), args);
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                [vec!["npm", "whoami"], raw_args].concat()
+            );
+            assert!(resolution.diagnostics.is_empty());
+        }
+    }
+
+    #[test]
     fn test_bun_whoami() {
         let command = expect_run(resolve(&bun("1.3.11"), WhoamiArgs::default()).outcome);
 
@@ -132,18 +167,27 @@ mod tests {
 
     #[test]
     fn test_whoami_with_registry() {
-        let command = expect_run(
-            resolve(
-                &npm("11.0.0"),
-                WhoamiArgs {
-                    registry: Some("https://registry.example.com".to_string()),
-                    ..Default::default()
-                },
-            )
-            .outcome,
-        );
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["whoami", "--registry", "https://registry.example.com"]);
+        let args = WhoamiArgs {
+            registry: Some("https://registry.example.com".to_string()),
+            ..Default::default()
+        };
+        for resolution in
+            [resolve(&npm("11.16.0"), args.clone()), resolve(&pnpm("11.3.0"), args.clone())]
+        {
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, "npm");
+            assert_eq!(command.args, vec!["whoami", "--registry", "https://registry.example.com"]);
+            assert!(resolution.diagnostics.is_empty());
+        }
+        for version in ["1.3.11", "1.4.0"] {
+            let resolution = resolve(&bun(version), args.clone());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, "bun");
+            assert_eq!(
+                command.args,
+                vec!["pm", "whoami", "--registry", "https://registry.example.com"]
+            );
+            assert!(resolution.diagnostics.is_empty());
+        }
     }
 }

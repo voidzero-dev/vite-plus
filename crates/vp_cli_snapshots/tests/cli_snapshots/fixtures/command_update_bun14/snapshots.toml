@@ -1,0 +1,44 @@
+[[case]]
+name = "bun_update_dev_only"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.is-number", ">=6.0.0 <=7.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.yocto-queue", ">=0.1.0 <=1.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "optionalDependencies.isarray", ">=1.0.0 <=2.0.0"], snapshot = false },
+  { argv = ["vp", "update", "-D", "--", "--ignore-scripts"], comment = "only the dev dependency advances although all three groups allow newer versions" },
+  { argv = ["vpt", "print-file", "package.json"] },
+  { argv = ["vpt", "print-file", "bun.lock"] },
+]
+
+[[case]]
+name = "bun_update_prod_includes_optional"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.is-number", ">=6.0.0 <=7.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.yocto-queue", ">=0.1.0 <=1.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "optionalDependencies.isarray", ">=1.0.0 <=2.0.0"], snapshot = false },
+  { argv = ["vp", "update", "-P", "--", "--ignore-scripts"], comment = "Bun updates production and optional dependencies while dev dependencies remain unchanged" },
+  { argv = ["vpt", "print-file", "package.json"] },
+  { argv = ["vpt", "print-file", "bun.lock"] },
+]
+
+[[case]]
+name = "bun_update_no_optional"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.is-number", ">=6.0.0 <=7.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.yocto-queue", ">=0.1.0 <=1.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "optionalDependencies.isarray", ">=1.0.0 <=2.0.0"], snapshot = false },
+  { argv = ["vp", "update", "--no-optional", "--", "--ignore-scripts"], comment = "production and dev dependencies advance while optional dependencies remain unchanged" },
+  { argv = ["vpt", "print-file", "package.json"] },
+  { argv = ["vpt", "print-file", "bun.lock"] },
+]

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import semver from 'semver';
+import { coerce, satisfies } from 'verkit';
 
 import { VITEST_VERSION, VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
@@ -251,7 +251,7 @@ function checkPackageVersion(projectPath: string, name: string, minVersion: stri
   if (!metadata || metadata.name !== name) {
     return true;
   }
-  if (semver.satisfies(metadata.version, `<${minVersion}`)) {
+  if (satisfies(metadata.version, `<${minVersion}`)) {
     const packageJsonFilePath = path.join(projectPath, 'package.json');
     prompts.log.error(
       `✘ ${name}@${metadata.version} in ${displayRelative(packageJsonFilePath)} is not supported by auto migration`,
@@ -304,8 +304,7 @@ export function readPackageJsonIfExists(packageJsonPath: string): DependencyBag 
 // `package.json`'s `pnpm` field — vp migrate writes to whichever sink the
 // rest of the migration is already touching.
 export function pnpmMajor(version: string | undefined): number | undefined {
-  const coerced = version ? semver.coerce(version)?.version : undefined;
-  return coerced ? semver.major(coerced) : undefined;
+  return version ? coerce(version)?.major : undefined;
 }
 
 // Packages that own the Oxlint JS-plugin authoring API as a published contract.

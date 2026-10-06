@@ -12,7 +12,7 @@ pub struct WhyArgs {
     pub(crate) packages: Vec<String>,
 
     /// Output in JSON format
-    #[arg(long, not_supported(yarn, bun))]
+    #[arg(long, not_supported(bun))]
     pub(crate) json: bool,
 
     /// Show extended information
@@ -24,7 +24,7 @@ pub struct WhyArgs {
     pub(crate) parseable: bool,
 
     /// Check recursively across all workspaces
-    #[arg(short = 'r', long, not_supported(bun))]
+    #[arg(short = 'r', long, not_supported(yarn < "2", bun))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
@@ -32,7 +32,7 @@ pub struct WhyArgs {
     pub(crate) filter: Vec<String>,
 
     /// Check in workspace root
-    #[arg(short = 'w', long, not_supported(yarn, bun))]
+    #[arg(short = 'w', long, not_supported(npm, yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Only production dependencies
@@ -44,15 +44,15 @@ pub struct WhyArgs {
     pub(crate) dev: bool,
 
     /// Limit tree depth
-    #[arg(long, not_supported(npm))]
+    #[arg(long, not_supported(npm, yarn))]
     pub(crate) depth: Option<u32>,
 
     /// Exclude optional dependencies
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(npm, yarn, bun))]
     pub(crate) no_optional: bool,
 
     /// Exclude peer dependencies
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(npm, yarn < "2", bun))]
     pub(crate) exclude_peers: bool,
 
     /// Use a finder function defined in .pnpmfile.cjs
@@ -108,6 +108,7 @@ impl Resolve<WhyArgs> for Npm {
     fn resolve(&self, args: &WhyArgs, _diag: &mut Diagnostics) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg("explain")
+            .arg_if("--workspaces", args.recursive)
             .repeated("--workspace", args.filter.iter())
             .arg_if("--json", args.json)
             .extend(args.packages.iter())
@@ -126,7 +127,7 @@ impl Resolve<WhyArgs> for Yarn {
                 "yarn only supports checking one package at a time, using first package",
             );
         }
-        cmd.arg(&args.packages[0]);
+        cmd.arg(&args.packages[0]).arg_if("--json", args.json);
         if self.is_berry() {
             cmd.arg_if("--recursive", args.recursive).arg_if("--peers", !args.exclude_peers);
         }
@@ -149,7 +150,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, pnpm, yarn},
     };
 
     fn why_args(packages: &[&str]) -> WhyArgs {
@@ -291,7 +292,129 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_fields_are_dropped_for_yarn_npm_and_bun() {
+    fn test_yarn_why_json() {
+        for version in ["1.22.22", "4.18.0"] {
+            let mut options = why_args(&["react"]);
+            options.json = true;
+            let resolution = resolve(&yarn(version), options);
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, "yarn");
+            if version.starts_with("1.") {
+                assert_eq!(command.args, vec!["why", "react", "--json"]);
+            } else {
+                assert_eq!(command.args, vec!["why", "react", "--json", "--peers"]);
+            }
+        }
+    }
+
+    #[test]
+    fn yarn_rejects_depth_and_optional_filtering() {
+        let args = WhyArgs { depth: Some(0), no_optional: true, ..why_args(&["react"]) };
+        expect_unsupported(
+            resolve(&yarn("4.18.0"), args),
+            &["yarn does not support --depth.", "yarn does not support --no-optional."],
+        );
+    }
+
+    #[test]
+    fn classic_rejects_recursive_and_peer_options() {
+        let args = WhyArgs { recursive: true, exclude_peers: true, ..why_args(&["react"]) };
+        expect_unsupported(
+            resolve(&yarn("1.22.22"), args),
+            &[
+                "yarn < 2 does not support --recursive.",
+                "yarn < 2 does not support --exclude-peers.",
+            ],
+        );
+    }
+
+    #[test]
+    fn berry_preserves_recursive_and_peer_options() {
+        let args = WhyArgs { recursive: true, exclude_peers: true, ..why_args(&["react"]) };
+        let resolution = resolve(&yarn("4.18.0"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, vec!["why", "react", "--recursive"]);
+    }
+
+    #[test]
+    fn classic_preserves_raw_recursive_and_peer_options() {
+        let args = WhyArgs {
+            pass_through_args: vec!["--recursive".to_string(), "--exclude-peers".to_string()],
+            ..why_args(&["react"])
+        };
+        let resolution = resolve(&yarn("1.22.22"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            vec!["why", "react", "--recursive", "--exclude-peers"]
+        );
+    }
+
+    #[test]
+    fn workspace_selectors_preserve_native_and_raw_arguments() {
+        let args = WhyArgs { recursive: true, workspace_root: true, ..why_args(&["react"]) };
+        let resolution = resolve(&pnpm("11.3.0"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            vec!["why", "--recursive", "--workspace-root", "react"]
+        );
+
+        let args = WhyArgs { recursive: true, ..why_args(&["react"]) };
+        let resolution = resolve(&npm("11.16.0"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, vec!["explain", "--workspaces", "react"]);
+
+        let args = WhyArgs {
+            pass_through_args: [
+                "--recursive",
+                "--workspace-root",
+                "--no-optional",
+                "--exclude-peers",
+            ]
+            .map(str::to_string)
+            .to_vec(),
+            ..why_args(&["react"])
+        };
+        let resolution = resolve(&npm("12.0.2"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            vec![
+                "explain",
+                "react",
+                "--recursive",
+                "--workspace-root",
+                "--no-optional",
+                "--exclude-peers"
+            ]
+        );
+    }
+
+    #[test]
+    fn supported_depth_and_optional_filtering_are_preserved() {
+        let args = WhyArgs {
+            depth: Some(0),
+            no_optional: true,
+            exclude_peers: true,
+            ..why_args(&["react"])
+        };
+        let resolution = resolve(&pnpm("11.3.0"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            vec!["why", "--depth", "0", "--no-optional", "--exclude-peers", "react"]
+        );
+
+        let args = WhyArgs { depth: Some(0), ..why_args(&["react"]) };
+        let resolution = resolve(&bun("1.4.0"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, vec!["why", "react", "--depth", "0"]);
+    }
+
+    #[test]
+    fn unsupported_fields_are_rejected_for_yarn_npm_and_bun() {
         let mut yarn_options = why_args(&["react"]);
         yarn_options.json = true;
         yarn_options.long = true;
@@ -301,23 +424,44 @@ mod tests {
         yarn_options.dev = true;
         yarn_options.find_by = Some("customFinder".to_string());
         let yarn_resolution = resolve(&yarn("1.22.0"), yarn_options);
-        let yarn_command = expect_run(yarn_resolution.outcome);
-
-        assert_eq!(yarn_command.args, vec!["why", "react"]);
-        assert_eq!(yarn_resolution.diagnostics.len(), 7);
+        expect_unsupported(
+            yarn_resolution,
+            &[
+                "yarn does not support --long.",
+                "yarn does not support --parseable.",
+                "yarn does not support --filter.",
+                "yarn does not support --prod.",
+                "yarn does not support --dev.",
+                "yarn does not support --find-by.",
+            ],
+        );
 
         let mut npm_options = why_args(&["react"]);
         npm_options.long = true;
         npm_options.parseable = true;
+        npm_options.recursive = true;
+        npm_options.workspace_root = true;
         npm_options.prod = true;
         npm_options.dev = true;
         npm_options.depth = Some(2);
+        npm_options.no_optional = true;
+        npm_options.exclude_peers = true;
         npm_options.find_by = Some("customFinder".to_string());
         let npm_resolution = resolve(&npm("11.0.0"), npm_options);
-        let npm_command = expect_run(npm_resolution.outcome);
-
-        assert_eq!(npm_command.args, vec!["explain", "react"]);
-        assert_eq!(npm_resolution.diagnostics.len(), 6);
+        expect_unsupported(
+            npm_resolution,
+            &[
+                "npm does not support --long.",
+                "npm does not support --parseable.",
+                "npm does not support --workspace-root.",
+                "npm does not support --prod.",
+                "npm does not support --dev.",
+                "npm does not support --depth.",
+                "npm does not support --no-optional.",
+                "npm does not support --exclude-peers.",
+                "npm does not support --find-by.",
+            ],
+        );
 
         let mut bun_options = why_args(&["react"]);
         bun_options.json = true;
@@ -332,9 +476,21 @@ mod tests {
         bun_options.exclude_peers = true;
         bun_options.find_by = Some("customFinder".to_string());
         let bun_resolution = resolve(&bun("1.3.11"), bun_options);
-        let bun_command = expect_run(bun_resolution.outcome);
-
-        assert_eq!(bun_command.args, vec!["why", "react"]);
-        assert_eq!(bun_resolution.diagnostics.len(), 11);
+        expect_unsupported(
+            bun_resolution,
+            &[
+                "bun does not support --json.",
+                "bun does not support --long.",
+                "bun does not support --parseable.",
+                "bun does not support --recursive.",
+                "bun does not support --filter.",
+                "bun does not support --workspace-root.",
+                "bun does not support --prod.",
+                "bun does not support --dev.",
+                "bun does not support --no-optional.",
+                "bun does not support --exclude-peers.",
+                "bun does not support --find-by.",
+            ],
+        );
     }
 }

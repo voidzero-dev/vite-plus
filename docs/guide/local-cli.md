@@ -45,27 +45,27 @@ If you are manually migrating a project to Vite+, install these dev dependencies
 vp install -D vite-plus
 ```
 
-You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
+Add overrides to your package manager so that other packages resolve the Vite+ versions. Alias `vite` to `@voidzero-dev/vite-plus-core`, setting `<vite-plus-version>` to the installed `vite-plus` version. Pin `vitest` to `<vitest-version>`, using the bundled version shown by `vp toolchain vitest` so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
 
 ::: code-group
 
 ```yaml [pnpm-workspace.yaml]
 overrides:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: 5.0.1
+  vite@*: npm:@voidzero-dev/vite-plus-core@<vite-plus-version> # Match the installed vite-plus version
+  vitest@*: <vitest-version> # Match the version from vp toolchain vitest
 ```
 
 ```json [npm / Bun package.json]
 "overrides": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "5.0.1"
+  "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+  "vitest": "<vitest-version>"
 }
 ```
 
 ```json [Yarn package.json]
 "resolutions": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "5.0.1"
+  "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+  "vitest": "<vitest-version>"
 }
 ```
 

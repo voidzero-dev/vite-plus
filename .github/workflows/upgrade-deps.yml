@@ -78,7 +78,7 @@ jobs:
       - name: Check upgrade dependencies with Kimi K3
         id: check-upgrade-dependencies
         timeout-minutes: 180
-        uses: anthropics/claude-code-action@a4f54ef2c58884867281bd8e2f8d63352ad019a9 # v1.0.229
+        uses: anthropics/claude-code-action@97c53473391bff1901034d4b454b5bac7ab7a029 # v1.0.239
         env:
           ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
           CLI_HELP_DIFF_CHANGED: ${{ steps.cli-help-diff.outputs.has-changes }}
@@ -244,7 +244,7 @@ jobs:
       - name: Enhance PR description with Kimi K3
         id: enhance-pr-description
         continue-on-error: true
-        uses: anthropics/claude-code-action@a4f54ef2c58884867281bd8e2f8d63352ad019a9 # v1.0.229
+        uses: anthropics/claude-code-action@97c53473391bff1901034d4b454b5bac7ab7a029 # v1.0.239
         env:
           ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
         with:

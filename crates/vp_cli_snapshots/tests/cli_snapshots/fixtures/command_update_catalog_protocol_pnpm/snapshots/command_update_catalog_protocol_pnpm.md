@@ -7,9 +7,8 @@ migrate pins the toolchain through the workspace catalog
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Formatting code...
-
-Code formatted
+●  Formatting code...
+●  Code formatted
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>
@@ -35,12 +34,6 @@ the migrated project references the catalog
 
 #2309: update must not resolve the catalog reference away
 
-```
-✓ Lockfile passes supply-chain policies (verified <duration> ago)
-Already up to date
-
-Done in <duration> using pnpm <version>
-```
 
 ## `vpt print-file package.json`
 

@@ -24,7 +24,17 @@ fn sync_child_pwd(cmd: &mut std::process::Command) {
 /// Unlike `exec_tool()`, this does NOT replace the current process on Unix,
 /// allowing the caller to run code after the tool exits.
 pub fn spawn_tool(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 {
-    let mut cmd = std::process::Command::new(path.as_path());
+    // Use the same managed .cmd policy as vp_command. Otherwise an interactive
+    // package-manager shim leaves cmd.exe waiting at its batch termination
+    // prompt after Ctrl+C, even though the trampoline and vp have exited.
+    let mut cmd = match vp_command::rewrite_cmd_to_powershell(path) {
+        Some((program, prefix_args)) => {
+            let mut cmd = std::process::Command::new(program.as_path());
+            cmd.args(prefix_args);
+            cmd
+        }
+        None => std::process::Command::new(path.as_path()),
+    };
     cmd.args(args).envs(env.into_envs());
     sync_child_pwd(&mut cmd);
     match cmd.status() {

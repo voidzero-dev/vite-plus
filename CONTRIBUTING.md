@@ -2,12 +2,31 @@
 
 ## Initial Setup
 
-### macOS / Linux
-
 You'll need the following tools installed on your system:
 
+- Node.js (version specified in [`.node-version`](.node-version))
+- pnpm (version specified in the `packageManager` field of [`package.json`](package.json))
+- Just
+- CMake
+- Rust and Cargo
+- cargo-binstall
+
+If you haven't installed Node.js and pnpm, we recommend using Vite+ to manage them. See [environment management](https://viteplus.dev/guide/env) for details.
+
+### macOS / Linux
+
+If you haven't installed Node.js and pnpm, we recommend installing them with Vite+:
+
 ```bash
-brew install pnpm node just cmake
+curl -fsSL https://vite.plus | VP_NODE_MANAGER=yes VP_PM_MANAGER=yes bash
+```
+
+After installing Vite+, restart your terminal to activate the `node` and `pnpm` shims.
+
+You'll also need Just and CMake:
+
+```bash
+brew install just cmake
 ```
 
 Install Rust & Cargo using rustup:
@@ -25,10 +44,20 @@ just init
 
 ### Windows
 
-You'll need the following tools installed on your system. You can use [winget](https://learn.microsoft.com/en-us/windows/package-manager/).
+If you haven't installed Node.js and pnpm, we recommend installing them with Vite+:
 
 ```powershell
-winget install pnpm.pnpm OpenJS.NodeJS.LTS Casey.Just Kitware.CMake
+$env:VP_NODE_MANAGER = "yes"
+$env:VP_PM_MANAGER = "yes"
+irm https://viteplus.dev/install.ps1 | iex
+```
+
+After installing Vite+, restart your terminal to activate the `node` and `pnpm` shims.
+
+You'll also need Just and CMake. You can install them using [winget](https://learn.microsoft.com/en-us/windows/package-manager/):
+
+```powershell
+winget install Casey.Just Kitware.CMake
 ```
 
 Install Rust & Cargo from [rustup.rs](https://rustup.rs/), then install `cargo-binstall`:
@@ -104,7 +133,7 @@ Verify the link with `ls -l node_modules/vite-plus` (it should be a symlink into
 
 ### Test `vp migrate` / `vp create` through a local npm registry
 
-`pnpm link` swaps the code inside an existing project, but `vp migrate` and `vp create` pin the exact CLI version and then _install_ it, so the checkout's `vite-plus` / `@voidzero-dev/vite-plus-core` must be resolvable from a registry. `packages/tools/src/local-npm-registry.ts` provides that: it packs the checkout, serves the tarballs behind a real registry HTTP interface, and proxies every other package upstream. This replaces the old pkg.pr.new publish + registry-bridge round-trip for local iteration; you can verify migrate/create logic immediately after a build.
+`pnpm link` swaps the code inside an existing project, but `vp migrate` and `vp create` pin the exact CLI version and then _install_ it. Use the local npm registry to make your built checkout available to these commands.
 
 ```bash
 pnpm build   # the served packages are built artifacts; rebuild after JS changes
@@ -119,20 +148,11 @@ pnpm local-registry --pack --serve
 # copy the printed `export ...` lines into the shell where you run vp
 ```
 
-Notes:
-
-- The served versions carry an old publish time, so `minimumReleaseAge` gates never quarantine them, and wrapped runs get throwaway Yarn Berry / bun caches (both cache registry state in ways that would otherwise leak stale local builds between runs).
-- The same server backs PTY snapshot cases with `local-registry = true` and ecosystem e2e (`ecosystem-ci/patch-project.ts`), so a flow that works here works there too.
-- `pnpm local-registry:ps` lists any registry processes still running (e.g. a `--serve` you forgot, or a wrapper that was killed mid-run); `pnpm local-registry:kill` stops them all and removes their leftover temp caches.
+`pnpm local-registry:ps` lists any registry processes still running; `pnpm local-registry:kill` stops them all and removes their leftover temp caches. See the [tool documentation](packages/tools/README.md#local-npm-registry) for implementation details and test integration.
 
 ### Global CLI (Rust) changes
 
-`pnpm link` only swaps the JS side; the `vp` binary on `PATH` (and the Rust-backed commands it handles directly, such as package-manager commands) is still whatever is installed in `~/.vite-plus`. For changes to the Rust global CLI (`crates/`), install it from source, and combine with `pnpm link` when the change spans both layers:
-
-```bash
-pnpm bootstrap-cli
-vp --version
-```
+`pnpm link` only swaps the JS side; the `vp` binary on `PATH` (and the Rust-backed commands it handles directly, such as package-manager commands) is still the installed binary. For changes to the Rust global CLI (`crates/`), follow [the source installation steps](#install-the-vite-global-cli-from-source-code), and combine with `pnpm link` when the change spans both layers.
 
 ## Workflow for build and test
 
@@ -161,48 +181,7 @@ The full case/step/interaction reference (including the `vpt` helper tool and mi
 
 ## Submitting Pull Requests
 
-Prioritize stacked pull requests when your work splits into reviewable layers, for example a refactor PR with the feature PR that depends on it stacked on top. Reviewers handle a stack of small PRs faster than one large PR, and each layer merges on its own.
-
-GitHub has built-in stacked pull requests ([public preview](https://github.blog/changelog/2026-07-30-stacked-pull-requests-are-now-in-public-preview/), rolling out to all repositories). Create stacks on github.com, or from the terminal:
-
-```bash
-gh extension install github/gh-stack
-```
-
-Stacked pull requests require all branches to be in this repository; GitHub does not support cross-fork stacks ([reference](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests)). If you contribute from a fork, split large work into a sequence of standalone PRs instead.
-
-## Verified Commits
-
-All commits in PR branches should be GitHub-verified so reviewers can confirm commit authenticity.
-
-Set up local commit signing and GitHub verification first:
-
-- Follow GitHub's guide for GPG commit signature verification: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#gpg-commit-signature-verification
-
-After setup, re-sign any existing commits in your branch so the full branch is verified:
-
-```bash
-# Re-sign each commit on your branch (replace origin/main with your branch base if needed)
-git rebase -i origin/main
-# At each stop:
-git commit --amend --date=now --no-edit -S
-# Then continue:
-git rebase --continue
-```
-
-When done, force-push the updated branch history:
-
-```bash
-git push --force-with-lease
-```
-
-## Release and recovery
-
-The [release workflow](.github/workflows/release.yml) publishes packages in dependency order: platform packages → `@voidzero-dev/vite-plus-core` → `vite-plus`. After each tier, it waits up to 10 minutes for the exact versions and their tarballs to become available. It then waits another 60 seconds for CDN propagation.
-
-A propagation timeout fails the release job and stops subsequent steps. This does not mean npm rejected the upload; npm may have accepted it and still be scanning the packages.
-
-Once the packages become available, open the failed workflow run in GitHub Actions and select **Re-run failed jobs**. The workflow skips versions that npm has published and checks availability again before continuing. Keep the same version.
+Keep pull requests small and focused. Split changes that can be reviewed and merged independently into separate PRs. If one change depends on another, submit the dependent PR after its prerequisite has merged.
 
 ## Pull upstream dependencies
 

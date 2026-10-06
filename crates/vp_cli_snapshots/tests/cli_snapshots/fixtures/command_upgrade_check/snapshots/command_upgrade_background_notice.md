@@ -29,7 +29,29 @@ Machine-readable output does not consume the pending notice.
 
 ## `vp add ./dep --silent --save-catalog --lockfile-only`
 
-Silent add suppresses compatibility diagnostics and leaves the cached update notice pending.
+Silent add reports unsupported options without consuming the cached update notice.
+
+**Exit code:** 1
+
+```
+npm does not support --save-catalog.
+```
+
+## `vpt stat-file package-lock.json --assert missing`
+
+```
+package-lock.json: missing
+```
+
+## `vpt stat-file node_modules --assert missing`
+
+```
+node_modules: missing
+```
+
+## `vp add ./dep --silent --lockfile-only`
+
+Supported silent add succeeds without consuming the cached update notice.
 
 ```
 ```

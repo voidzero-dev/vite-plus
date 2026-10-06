@@ -1,24 +1,73 @@
 import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import type { CANCEL_SYMBOL, Validate } from '@clack/core';
+import { runValidation } from '@clack/core';
+
 import { autocomplete } from './autocomplete.js';
 import type { CommonOptions } from './common.js';
 
+/**
+ * Options for the {@link path} prompt.
+ */
 export interface PathOptions extends CommonOptions {
-  root?: string;
-  directory?: boolean;
-  initialValue?: string;
+  /**
+   * The message or question shown to the user above the input.
+   */
   message: string;
-  validate?: (value: string | undefined) => string | Error | undefined;
+
+  /**
+   * The starting directory for path suggestions (defaults to current working directory).
+   */
+  root?: string;
+
+  /**
+   * When `true` only **directories** appear in suggestions while you navigate.
+   */
+  directory?: boolean;
+
+  /**
+   * The starting path shown when the prompt first renders, which users can edit
+   * before submitting. If not provided it will fall back to the given `root`,
+   * or the current working directory.
+   *
+   * In `directory` mode, if the initial value points to a directory that exists,
+   * pressing enter will submit the input instead of jumping to the first child.
+   */
+  initialValue?: string;
+
+  /**
+   * A function or a [Standard Schema](https://github.com/standard-schema/standard-schema)
+   * that validates user input. If a custom function is given, you should return a `string` or `Error`
+   * to show as a validation error, or `undefined` to accept the result.
+   */
+  validate?: Validate<string>;
 }
 
-export const path = (opts: PathOptions) => {
+/**
+ * The `path` prompt extends `autocomplete` to provide file and directory suggestions.
+ *
+ * @see https://bomb.sh/docs/clack/packages/prompts/#path-selection
+ *
+ * @example
+ * ```ts
+ * import { path } from '@voidzero-dev/vite-plus-prompts';
+ *
+ * const result = await path({
+ *   message: 'Select a file:',
+ *   root: process.cwd(),
+ *   directory: false,
+ * });
+ * ```
+ */
+export const path = (opts: PathOptions): Promise<string | typeof CANCEL_SYMBOL> => {
   const validate = opts.validate;
 
   return autocomplete({
     ...opts,
     initialUserInput: opts.initialValue ?? opts.root ?? process.cwd(),
     maxItems: 5,
+    completeOnTab: true,
     validate(value) {
       if (Array.isArray(value)) {
         // Shouldn't ever happen since we don't enable `multiple: true`
@@ -28,7 +77,7 @@ export const path = (opts: PathOptions) => {
         return 'Please select a path';
       }
       if (validate) {
-        return validate(value);
+        return runValidation(validate, value);
       }
       return undefined;
     },
@@ -45,12 +94,16 @@ export const path = (opts: PathOptions) => {
           searchPath = dirname(userInput);
         } else {
           const stat = lstatSync(userInput);
-          if (stat.isDirectory()) {
+          if (stat.isDirectory() && (!opts.directory || userInput.endsWith('/'))) {
             searchPath = userInput;
           } else {
             searchPath = dirname(userInput);
           }
         }
+
+        // Strip trailing slash so startsWith matches the directory itself among its siblings
+        const prefix =
+          userInput.length > 1 && userInput.endsWith('/') ? userInput.slice(0, -1) : userInput;
 
         const items = readdirSync(searchPath)
           .map((item) => {
@@ -63,9 +116,9 @@ export const path = (opts: PathOptions) => {
             };
           })
           .filter(
-            ({ path, isDirectory }) =>
-              path.startsWith(userInput) && (opts.directory || !isDirectory),
+            ({ path, isDirectory }) => path.startsWith(prefix) && (isDirectory || !opts.directory),
           );
+
         return items.map((item) => ({
           value: item.path,
         }));

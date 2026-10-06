@@ -26,13 +26,6 @@ oxlint and @oxlint/plugins are both gone from devDependencies, and nothing repla
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

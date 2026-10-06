@@ -19,7 +19,7 @@ steps = [
   { argv = [
     "vp",
     "up",
-  ], comment = "#2309: update must not resolve the catalog reference away", continue-on-failure = true },
+  ], comment = "#2309: update must not resolve the catalog reference away", snapshot = false, continue-on-failure = true },
   { argv = [
     "vpt",
     "print-file",

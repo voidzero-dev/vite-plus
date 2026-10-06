@@ -52,10 +52,8 @@ core-js recorded under dependenciesMeta.built
 default run surfaces the gated build with guidance, leaving it disabled
 
 ```
-
-Build scripts were not run for: core-js.
-
-These dependencies may not work until built. Enable them in the workspace root package.json (dependenciesMeta.<pkg>.built: true) and reinstall, or re-create with --approve-builds.
+▲  Build scripts were not run for: core-js.
+●  These dependencies may not work until built. Enable them in the workspace root package.json (dependenciesMeta.<pkg>.built: true) and reinstall, or re-create with --approve-builds.
 ◇ Scaffolded default-app
 • Node <version>  yarn <version>
 ✓ Dependencies installed in <duration>

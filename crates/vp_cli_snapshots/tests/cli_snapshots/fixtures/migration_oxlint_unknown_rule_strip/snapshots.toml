@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_oxlint_unknown_rule_strip"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "unknown rules in an existing Oxlint config should be stripped with report", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "vite.config.ts should omit unsupported `camelcase` and preserve supported `no-console`", continue-on-failure = true },
+]
