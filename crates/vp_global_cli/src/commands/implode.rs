@@ -315,7 +315,7 @@ fn collect_affected_profiles(
     affected
 }
 
-/// Show confirmation prompt and require the user to type "uninstall".
+/// Show confirmation prompt and require the user to type "boom".
 /// Returns `Ok(true)` if confirmed, `Ok(false)` if aborted.
 fn confirm_implode(
     delete_set: &[AbsolutePathBuf],
@@ -349,7 +349,11 @@ fn confirm_implode(
         }
     }
     output::raw("");
-    output::raw(&vt_str::format!("Type {} to confirm:", style("uninstall").bold()));
+    output::raw(&vt_str::format!("Type {} to confirm:", style("boom").bold()));
+
+    if std::env::var(vp_shared::env_vars::VP_EMIT_MILESTONES).as_deref() == Ok("1") {
+        pty_terminal_test_client::mark_milestone("text:implode:ready");
+    }
 
     // String is needed here for read_line
     #[expect(clippy::disallowed_types)]
@@ -357,7 +361,7 @@ fn confirm_implode(
     std::io::stdout().flush()?;
     std::io::stdin().read_line(&mut input)?;
 
-    if input.trim() != "uninstall" {
+    if input.trim() != "boom" {
         output::info("Aborted.");
         return Ok(false);
     }
