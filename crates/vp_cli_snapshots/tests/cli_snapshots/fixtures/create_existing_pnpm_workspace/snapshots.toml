@@ -1,0 +1,13 @@
+[[case]]
+name = "create_existing_pnpm_workspace"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Adding an application to a plain pnpm workspace supplies the catalog entries needed for installation."
+steps = [
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--package-manager", "pnpm", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false },
+  { argv = ["vpt", "stat-file", "pnpm-lock.yaml", "--assert", "file"] },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"] },
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]
