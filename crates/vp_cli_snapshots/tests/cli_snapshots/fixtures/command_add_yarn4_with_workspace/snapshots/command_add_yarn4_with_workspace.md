@@ -2,20 +2,12 @@
 
 ## `vp add testnpm2 -D -w`
 
-should add package to workspace root
+reject unsupported --workspace-root without adding packages
+
+**Exit code:** 1
 
 ```
-warn: yarn >=2 does not support --workspace-root.
-➤ YN0000: · Yarn <version>
-➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + testnpm2@npm:1.0.1
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0013: │ A package was added to the project (+ <size> KiB).
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration>
+yarn >= 2 does not support --workspace-root.
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -27,10 +19,7 @@ warn: yarn >=2 does not support --workspace-root.
   "workspaces": [
     "packages/*"
   ],
-  "packageManager": "yarn@4.10.3",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  }
+  "packageManager": "yarn@4.10.3"
 }
 {
   "name": "app"
@@ -44,19 +33,13 @@ warn: yarn >=2 does not support --workspace-root.
 
 ## `vp add @vite-plus-test/utils --workspace -w`
 
-should add @vite-plus-test/utils to workspace root
+report both unsupported workspace options without adding packages
+
+**Exit code:** 1
 
 ```
-warn: yarn >=2 does not support --workspace-root.
-warn: yarn does not support --workspace.
-➤ YN0000: · Yarn <version>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration>
+yarn >= 2 does not support --workspace-root.
+yarn does not support --workspace.
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -68,13 +51,7 @@ warn: yarn does not support --workspace.
   "workspaces": [
     "packages/*"
   ],
-  "packageManager": "yarn@4.10.3",
-  "devDependencies": {
-    "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "workspace:^"
-  }
+  "packageManager": "yarn@4.10.3"
 }
 {
   "name": "app"
@@ -84,6 +61,23 @@ warn: yarn does not support --workspace.
   "version": "1.0.0",
   "private": true
 }
+```
+
+## `vp add testnpm2 -D`
+
+add to the root without --workspace-root and initialize the lockfile for filtered operations
+
+```
+➤ YN0000: · Yarn <version>
+➤ YN0000: ┌ Resolution step
+➤ YN0085: │ + testnpm2@npm:1.0.1
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Fetch step
+➤ YN0013: │ A package was added to the project (+ <size> KiB).
+➤ YN0000: └ Completed
+➤ YN0000: ┌ Link step
+➤ YN0000: └ Completed
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vp add testnpm2 test-vite-plus-install@1.0.0 --filter app`
@@ -119,9 +113,6 @@ Done in <duration>
   "packageManager": "yarn@4.10.3",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "workspace:^"
   }
 }
 {
@@ -140,22 +131,12 @@ Done in <duration>
 
 ## `vp add @vite-plus-test/utils --workspace --filter app`
 
-should add @vite-plus-test/utils to packages/app
+reject unsupported --workspace without adding packages to app
+
+**Exit code:** 1
 
 ```
-warn: yarn does not support --workspace.
-[app]: Process started
-[app]: ➤ YN0000: · Yarn <version>
-[app]: ➤ YN0000: ┌ Resolution step
-[app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: ┌ Fetch step
-[app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: ┌ Link step
-[app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration>
-[app]: Process exited (exit code 0), completed in <duration>
-
-Done in <duration>
+yarn does not support --workspace.
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -170,15 +151,11 @@ Done in <duration>
   "packageManager": "yarn@4.10.3",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "@vite-plus-test/utils": "workspace:^"
   }
 }
 {
   "name": "app",
   "dependencies": {
-    "@vite-plus-test/utils": "workspace:^",
     "test-vite-plus-install": "1.0.0",
     "testnpm2": "^1.0.1"
   }
@@ -256,14 +233,12 @@ Done in <duration>
     "testnpm2": "^1.0.1"
   },
   "dependencies": {
-    "@vite-plus-test/utils": "workspace:^",
     "test-vite-plus-install": "1.0.0"
   }
 }
 {
   "name": "app",
   "dependencies": {
-    "@vite-plus-test/utils": "workspace:^",
     "test-vite-plus-install": "1.0.0",
     "testnpm2": "^1.0.1"
   }
@@ -345,7 +320,6 @@ Done in <duration>
     "testnpm2": "^1.0.1"
   },
   "dependencies": {
-    "@vite-plus-test/utils": "workspace:^",
     "test-vite-plus-install": "1.0.0"
   },
   "optionalDependencies": {
@@ -355,7 +329,6 @@ Done in <duration>
 {
   "name": "app",
   "dependencies": {
-    "@vite-plus-test/utils": "workspace:^",
     "test-vite-plus-install": "1.0.0",
     "testnpm2": "^1.0.1"
   },

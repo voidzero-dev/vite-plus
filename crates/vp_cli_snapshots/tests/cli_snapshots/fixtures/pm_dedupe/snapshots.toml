@@ -22,8 +22,8 @@ vp = "global"
 cwd = "yarn"
 steps = [
   { argv = ["vp", "dedupe", "--", "--silent"], comment = "Yarn Classic falls back to install because install already deduplicates dependencies" },
-  { argv = ["vp", "dedupe", "--check", "--", "--silent"], comment = "warns about unsupported --check and still falls back to install" },
-  { argv = ["vpt", "print-file", "package.json"], comment = "verify Yarn Classic completed" },
+  { argv = ["vp", "dedupe", "--check", "--", "--silent"], comment = "reject unsupported --check without falling back to install", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify Yarn Classic manifest is unchanged" },
 ]
 
 [[case]]
@@ -42,8 +42,8 @@ vp = "global"
 cwd = "bun"
 steps = [
   { argv = ["vp", "dedupe", "--", "--silent"], comment = "Bun falls back to install because it does not support dedupe" },
-  { argv = ["vp", "dedupe", "--check", "--", "--silent"], comment = "warns about unsupported --check and still falls back to install" },
-  { argv = ["vpt", "print-file", "package.json"], comment = "verify Bun completed" },
+  { argv = ["vp", "dedupe", "--check", "--", "--silent"], comment = "reject unsupported --check without falling back to install", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "verify Bun manifest is unchanged" },
 ]
 
 [[case]]
