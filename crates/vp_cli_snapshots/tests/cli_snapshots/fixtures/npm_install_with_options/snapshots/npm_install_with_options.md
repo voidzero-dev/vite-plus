@@ -15,7 +15,7 @@ Arguments:
 
 Options:
   -P, --prod                       Do not install devDependencies
-  -D, --dev                        Only install devDependencies (install) / Save to devDependencies (add)
+  -D, --dev                        Install devDependencies (install) / Save to devDependencies (add)
       --no-optional                Do not install optionalDependencies
       --frozen-lockfile            Fail if lockfile needs to be updated (CI mode)
       --no-frozen-lockfile         Allow lockfile updates (opposite of --frozen-lockfile)

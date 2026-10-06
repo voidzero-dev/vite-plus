@@ -10,16 +10,17 @@ warn: bun dedupe requires bun >= 1.4, falling back to bun install
 
 ## `vp dedupe --check -- --silent`
 
-warns about unsupported --check and still falls back to install
+reject unsupported --check without falling back to install
+
+**Exit code:** 1
 
 ```
-warn: bun <1.4 does not support --check.
-warn: bun dedupe requires bun >= 1.4, falling back to bun install
+bun < 1.4 does not support --check.
 ```
 
 ## `vpt print-file package.json`
 
-verify Bun completed
+verify Bun manifest is unchanged
 
 ```
 {

@@ -1,0 +1,20 @@
+[[case]]
+name = "yarn_classic_update_preserves_install_options"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.is-number", "6.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.yocto-queue", "0.1.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "optionalDependencies.isarray", "1.0.0"], snapshot = false },
+  ["vp", "install", "--ignore-scripts"],
+  { argv = ["vp", "update", "is-number@7.0.0", "--prod", "--", "--ignore-scripts"], comment = "Classic production mode excludes dev dependencies from installation during a named update" },
+  ["node", "-p", "require('./node_modules/is-number/package.json').version"],
+  ["vpt", "stat-file", "node_modules/yocto-queue", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/isarray/package.json", "--assert", "file"],
+  ["vp", "install", "--ignore-scripts"],
+  { argv = ["vp", "update", "is-number@6.0.0", "--no-optional", "--", "--ignore-scripts"], comment = "optional dependencies are excluded from installation without removing their manifest entries" },
+  ["node", "-p", "require('./node_modules/is-number/package.json').version"],
+  ["vpt", "stat-file", "node_modules/yocto-queue/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/isarray", "--assert", "missing"],
+  ["vpt", "print-file", "package.json"],
+]

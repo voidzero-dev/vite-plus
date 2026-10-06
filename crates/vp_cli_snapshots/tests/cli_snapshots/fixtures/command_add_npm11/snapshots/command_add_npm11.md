@@ -26,7 +26,7 @@ Options:
   --allow-build <NAMES>               A list of package names allowed to run postinstall
   --ignore-scripts                    Do not run lifecycle scripts
   --no-optional                       Do not install optionalDependencies
-  --frozen-lockfile                   Fail if lockfile needs to be updated
+  --frozen-lockfile                   Don't update lockfile
   --no-frozen-lockfile                Allow lockfile updates
   --lockfile-only                     Only update lockfile, don't install
   --prefer-offline                    Use cached packages when available
@@ -70,12 +70,12 @@ added 1 package in <duration>
 
 ## `vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install -- --no-audit`
 
-should add packages to dependencies
+reject unsupported --allow-build without adding packages
+
+**Exit code:** 1
 
 ```
-warn: npm does not support --allow-build.
-
-added 1 package in <duration>
+npm does not support --allow-build.
 ```
 
 ## `vpt print-file package.json`
@@ -87,9 +87,6 @@ added 1 package in <duration>
   "packageManager": "npm@11.6.2",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
   }
 }
 ```
@@ -113,9 +110,6 @@ added 1 package in <duration>
   "packageManager": "npm@11.6.2",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package": "^1.0.0"
@@ -141,9 +135,6 @@ added 1 package in <duration>
   "packageManager": "npm@11.6.2",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package": "^1.0.0"
@@ -172,9 +163,6 @@ up to date in <duration>
   "packageManager": "npm@11.6.2",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package": "^1.0.0"

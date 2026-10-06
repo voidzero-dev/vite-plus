@@ -1,8 +1,7 @@
 use vp_pm_cli_macros::pm_args;
 
 use crate::resolution::{
-    Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm,
-    PackageManagerDialect, Pnpm, Resolve, Yarn,
+    Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm, Resolve, Yarn,
 };
 
 const NPM_ADVISORY_NOTE: &str = "npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. npm 12 enforces the policy.";
@@ -18,7 +17,7 @@ pub struct ApproveBuildsArgs {
 
     /// Approve every package currently pending approval (pnpm >= 10.32.0, npm >= 11.16.0).
     /// Mutually exclusive with positional packages.
-    #[arg(long, conflicts_with = "packages")]
+    #[arg(long, conflicts_with = "packages", not_supported(yarn, npm < "11.16.0", pnpm < "10.32.0"))]
     pub(crate) all: bool,
 
     /// Additional arguments to pass through to the package manager
@@ -31,15 +30,8 @@ impl Resolve<ApproveBuildsArgs> for Pnpm {
         if let Some(error) = validate_all(args) {
             return error;
         }
-        if args.all
-            && self.version().is_some_and(|version| !version_satisfies(version, ">=10.32.0"))
-        {
-            return invalid_argument(
-                "`--all` requires pnpm >= 10.32.0. Upgrade pnpm or pass package names explicitly.",
-            );
-        }
         if args.packages.iter().any(|package| package.starts_with('!'))
-            && self.version().is_some_and(|version| !version_satisfies(version, ">=11.0.0"))
+            && !self.supports_v11_commands()
         {
             return invalid_argument(
                 "`!<pkg>` deny syntax requires pnpm >= 11.0.0. Upgrade pnpm or omit the `!` entries.",
@@ -70,7 +62,7 @@ impl Resolve<ApproveBuildsArgs> for Bun {
                 .map(|package| package.strip_prefix('!').unwrap_or(package))
                 .collect::<Vec<_>>();
             diag.warn(
-                DiagnosticKind::UnsupportedOptionDropped,
+                DiagnosticKind::BehaviorChange,
                 vt_str::format!(
                     "bun does not support denylisting build scripts. Packages outside `trustedDependencies` in package.json are already denied by default. Skipping: {}",
                     names.join(", ")
@@ -104,7 +96,7 @@ impl Resolve<ApproveBuildsArgs> for Npm {
         if let Some(error) = validate_all(args) {
             return error;
         }
-        if self.version().is_some_and(|version| !version_satisfies(version, ">=11.16.0")) {
+        if !self.supports_v11_16_commands() {
             diag.warn(
                 DiagnosticKind::UnsupportedCommandNoop,
                 "npm runs lifecycle scripts by default. Upgrade to npm >= 11.16.0 for `npm approve-scripts`/`deny-scripts`, or set `ignore-scripts=true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.",
@@ -155,7 +147,7 @@ impl Resolve<ApproveBuildsArgs> for Npm {
             // npm 12 enforces allowScripts (skipped scripts stay skipped until a
             // rebuild); 11.16 - 11.x only warn. An unknown version is treated as
             // current, matching the version-gate default above.
-            if self.version().is_none_or(|version| version_satisfies(version, ">=12.0.0")) {
+            if self.supports_v12_commands() {
                 // An approval takes effect on the next rebuild; a denial keeps
                 // the enforced default and needs no follow-up.
                 if !has_denies {
@@ -200,15 +192,6 @@ fn invalid_argument(message: &str) -> CommandResolution {
     CommandResolution::InvalidArgument(message.to_string())
 }
 
-fn version_satisfies(version: &semver::Version, range: &'static str) -> bool {
-    let (operator, operand) = range.split_at(2);
-    let operand = semver::Version::parse(operand).expect("static version");
-    match operator {
-        ">=" => version >= &operand,
-        _ => unreachable!("static range operator"),
-    }
-}
-
 fn is_positional_arg(token: &str) -> bool {
     !token.starts_with('-')
 }
@@ -216,7 +199,7 @@ fn is_positional_arg(token: &str) -> bool {
 fn warn_dropped_pass_through(extras: &[String], diag: &mut Diagnostics) {
     if !extras.is_empty() {
         diag.warn(
-            DiagnosticKind::UnsupportedOptionDropped,
+            DiagnosticKind::UnsupportedCommandNoop,
             vt_str::format!(
                 "Ignoring pass-through args ({}): this package manager has no native approve-builds command to forward them to.",
                 extras.join(" ")
@@ -230,7 +213,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -330,22 +313,14 @@ mod tests {
     fn pnpm_all_rejected_below_v10_32() {
         let resolution =
             resolve(&pnpm("10.31.0"), ApproveBuildsArgs { all: true, ..Default::default() });
-        let CommandResolution::InvalidArgument(message) = resolution.outcome else {
-            panic!("expected invalid argument");
-        };
-
-        assert!(message.contains("requires pnpm >= 10.32.0"));
+        expect_unsupported(resolution, &["pnpm < 10.32.0 does not support --all."]);
     }
 
     #[test]
     fn pnpm_all_rejects_prerelease() {
         let resolution =
             resolve(&pnpm("10.32.0-rc.0"), ApproveBuildsArgs { all: true, ..Default::default() });
-        let CommandResolution::InvalidArgument(message) = resolution.outcome else {
-            panic!("expected invalid argument");
-        };
-
-        assert!(message.contains("requires pnpm >= 10.32.0"));
+        expect_unsupported(resolution, &["pnpm < 10.32.0 does not support --all."]);
     }
 
     #[test]
@@ -458,6 +433,37 @@ mod tests {
 
         assert_eq!(resolution.outcome, CommandResolution::Noop);
         assert!(resolution.diagnostics[0].message.contains("Upgrade to npm >= 11.16.0"));
+    }
+
+    #[test]
+    fn npm_all_is_rejected_before_11_16() {
+        for version in ["10.8.2", "11.15.0", "11.16.0-rc.0"] {
+            let args = parse_args::<ApproveBuildsArgs>(["--all", "--", "--help"]).unwrap();
+            expect_unsupported(
+                resolve(&npm(version), args),
+                &["npm < 11.16.0 does not support --all."],
+            );
+        }
+    }
+
+    #[test]
+    fn npm_unknown_version_preserves_all() {
+        let resolution =
+            resolve(&Npm::unknown_version(), ApproveBuildsArgs { all: true, ..Default::default() });
+        assert_eq!(expect_run(resolution.outcome).args, vec!["approve-scripts", "--all"]);
+        assert_eq!(resolution.diagnostics[0].message, NPM_ENFORCED_NOTE);
+    }
+
+    #[test]
+    fn raw_all_keeps_existing_behavior() {
+        let args = parse_args::<ApproveBuildsArgs>(["--", "--all"]).unwrap();
+        let resolution = resolve(&pnpm("10.31.0"), args.clone());
+        assert_eq!(expect_run(resolution.outcome).args, vec!["approve-builds", "--all"]);
+        assert!(resolution.diagnostics.is_empty());
+        for resolution in [resolve(&npm("11.15.0"), args.clone()), resolve(&yarn("4.18.0"), args)] {
+            assert_eq!(resolution.outcome, CommandResolution::Noop);
+            assert!(resolution.diagnostics.unsupported_options_error().is_none());
+        }
     }
 
     #[test]
@@ -627,20 +633,27 @@ mod tests {
     }
 
     #[test]
-    fn yarn_berry_warns_and_noop() {
-        let resolution =
-            resolve(&yarn("4.0.0"), ApproveBuildsArgs { all: true, ..Default::default() });
-
-        assert_eq!(resolution.outcome, CommandResolution::Noop);
-        assert!(resolution.diagnostics[0].message.contains("dependenciesMeta"));
+    fn yarn_berry_rejects_all() {
+        for version in ["2.4.2", "3.6.0", "4.18.0"] {
+            let resolution =
+                resolve(&yarn(version), ApproveBuildsArgs { all: true, ..Default::default() });
+            expect_unsupported(resolution, &["yarn does not support --all."]);
+        }
     }
 
     #[test]
-    fn yarn1_warns_and_noop() {
+    fn yarn_without_named_options_keeps_noop() {
+        for version in ["1.22.22", "4.18.0"] {
+            let resolution = resolve(&yarn(version), ApproveBuildsArgs::default());
+            assert_eq!(resolution.outcome, CommandResolution::Noop);
+            assert_eq!(resolution.diagnostics[0].kind, DiagnosticKind::UnsupportedCommandNoop);
+        }
+    }
+
+    #[test]
+    fn yarn1_rejects_all() {
         let resolution =
             resolve(&yarn("1.22.22"), ApproveBuildsArgs { all: true, ..Default::default() });
-
-        assert_eq!(resolution.outcome, CommandResolution::Noop);
-        assert!(resolution.diagnostics[0].message.contains("yarn (v1) runs lifecycle scripts"));
+        expect_unsupported(resolution, &["yarn does not support --all."]);
     }
 }

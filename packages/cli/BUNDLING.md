@@ -440,6 +440,8 @@ Provider `.d.ts` shims are NOT plain `export * from '@vitest/browser-playwright'
 
 This avoids a pnpm-edge type-identity split: when the upstream `.d.ts` is loaded by reference (`export * from '@vitest/browser-playwright'`), TypeScript resolves its internal `import { BrowserProvider } from 'vitest/node'` through the provider package's own pnpm-edge, which can be a different vitest copy than the one a user's `vite.config.ts` sees through `vite-plus`. The mismatch produces two structurally identical but nominally distinct `BrowserProvider` types, so `provider: playwright()` fails the user's typecheck. Rewriting the specifiers routes every type import through vite-plus's own subpath shims, guaranteeing a single vitest identity across the user's whole config.
 
+The copied Playwright declarations still import `playwright` directly. Declare it as an optional peer of `vite-plus`, matching the provider's upstream peer range, so isolated dependency layouts can resolve these types from the copied files.
+
 ### Conditional Export Handling
 
 The sync handles complex conditional exports with `import`/`require`/`node`/`types` conditions.

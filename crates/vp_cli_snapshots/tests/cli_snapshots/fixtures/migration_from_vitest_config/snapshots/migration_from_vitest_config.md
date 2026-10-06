@@ -84,13 +84,6 @@ check package.json
     "webdriverio": "*",
     "playwright": "*",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -112,7 +105,7 @@ allowBuilds:
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'
-  '@vitest/browser@*': 5.0.1
+  '@vitest/browser@*': <version>
 peerDependencyRules:
   allowAny:
     - vite

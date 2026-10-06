@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
 import { defineConfig } from 'vite-plus';
 import { createVitest, resolveConfig } from 'vite-plus/test/node';
 
@@ -24,12 +25,13 @@ for (const staticParse of [true, false]) {
   }
 }
 
+const reportOutput = new PassThrough();
 const runner = await createVitest({
   ...base,
   include: ['runtime.test.js'],
   benchmark: { enabled: true, include: ['benchmark.test.js'] },
   reporters: ['json', 'junit', 'blob'],
-}, defineConfig({}));
+}, defineConfig({}), { stdout: reportOutput });
 try {
   const result = await runner.start();
   assert.equal(result.unhandledErrors.length, 0, JSON.stringify(result.unhandledErrors));
@@ -46,6 +48,8 @@ try {
   await runner.close();
 }
 
+// Reporters write files concurrently, so their completion messages can arrive in any order.
+console.log(reportOutput.read().toString().trimEnd().split('\n').sort().join('\n'));
 const reports = '.vitest';
 const json = JSON.parse(readFileSync(join(reports, 'json/output.json'), 'utf8'));
 assert.equal(json.numPassedTests, 4);

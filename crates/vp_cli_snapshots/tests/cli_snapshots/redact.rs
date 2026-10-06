@@ -184,11 +184,11 @@ static VP_UPGRADE_TARGET_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // (`vitest: 4.1.10` in a pnpm catalog, `"@vitest/coverage-v8": "4.1.10"` in a
 // resolutions block), which bumps whenever the bundle refreshes. Mask it by
 // key context like the vite-plus version, matching the YAML (`key: ver`) and
-// JSON (`"key": "ver"`) spellings; the `\d` anchor keeps `vitest: catalog:`
-// verbatim.
+// JSON (`"key": "ver"`) spellings, including wildcard override keys such as
+// `'@vitest/browser@*'`. The `\d` anchor keeps `vitest: catalog:` verbatim.
 static MANAGED_TEST_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?m)^(\s*['"]?(?:vitest|@vitest/[a-z0-9-]+)['"]?\s*:\s*['"]?)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+        r#"(?m)^(\s*['"]?(?:vitest|@vitest/[a-z0-9-]+)(?:@\*)?['"]?\s*:\s*['"]?)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
     )
     .unwrap()
 });
@@ -248,6 +248,14 @@ static PNPM_PROGRESS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
         r"(?m)^Packages are (?:cloned|copied|hard linked) from the content-addressable store to the virtual store\.\n  Content-addressable store is at: .*\n  Virtual store is at:\s+.*\n?",
+    )
+    .unwrap()
+});
+// Bun emits this warning based on filesystem timing, sometimes after a
+// same-line lifecycle progress indicator. Neither is part of the build result.
+static BUN_SLOW_FILESYSTEM_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^[ \t]*(?:⚙\u{FE0F}?[ \t]+\S+[ \t]+\[\d+/\d+\][ \t]+)?warn: Slow filesystem detected\. If [^\n]+ is a network drive, consider setting \$BUN_INSTALL_CACHE_DIR to a local folder\.(?:\n|$)",
     )
     .unwrap()
 });
@@ -646,13 +654,14 @@ pub fn redact_output(
     output = STASH_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
 
     // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
-    // log name, live spinner frames, and pnpm's nondeterministic progress lines
+    // log name, live spinner frames, and timing-dependent pnpm/Bun diagnostics
     output = LOCAL_REGISTRY_URL_RE.replace_all(&output, "http://127.0.0.1:<port>").into_owned();
     output = VITEST_API_PORT_RE.replace_all(&output, "${1}<port>").into_owned();
     output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
     output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
+    output = BUN_SLOW_FILESYSTEM_RE.replace_all(&output, "").into_owned();
 
     if output.contains("Done in <duration> using pnpm <version>")
         || PNPM_REMOVAL_COUNT_RE.is_match(&output)

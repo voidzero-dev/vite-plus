@@ -1,0 +1,6 @@
+[[case]]
+name = "logout_scope_prefix_stripped"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "logout", "--scope", "@company"], comment = "Berry rejects an @-prefixed scope, so the prefix is stripped before forwarding." },
+]

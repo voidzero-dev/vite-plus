@@ -1952,7 +1952,7 @@ describe('ensureVitePlusBootstrap', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('adds missing npm overrides and package manager pin for existing Vite+ projects', () => {
+  it('adds missing npm overrides without introducing a package manager pin', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
@@ -1969,13 +1969,13 @@ describe('ensureVitePlusBootstrap', () => {
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       overrides: Record<string, string>;
-      devEngines: { packageManager: { name: string } };
+      devEngines?: { packageManager: { name: string } };
     };
     expect(pkg.overrides.vite).toContain('@voidzero-dev/vite-plus-core');
     // Common case (no @vitest/* dep, no vitest source): `vitest` is NOT managed —
     // it arrives transitively through vite-plus, so no override is written.
     expect(pkg.overrides.vitest).toBeUndefined();
-    expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
+    expect(pkg.devEngines).toBeUndefined();
   });
 
   it('creates the pnpm-workspace.yaml catalog on a standalone pnpm 9.5-10.6.1 upgrade and converges', () => {
@@ -4435,10 +4435,14 @@ describe('ensureVitePlusBootstrap', () => {
 
     const firstPackageJson = fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8');
     const firstYarnrc = fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8');
-    const pkg = JSON.parse(firstPackageJson) as { devDependencies: Record<string, string> };
+    const pkg = JSON.parse(firstPackageJson) as {
+      devDependencies: Record<string, string>;
+      devEngines?: unknown;
+    };
     expect(pkg.devDependencies.vite).toBe('catalog:');
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
     expect(pkg.devDependencies.vitest).toBeUndefined();
+    expect(pkg.devEngines).toBeUndefined();
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
 
     rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);

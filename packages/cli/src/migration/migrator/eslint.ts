@@ -4,7 +4,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { type OxlintConfig } from 'oxlint';
-import semver from 'semver';
+import { compareReversed, isLessThanOrEqual, normalize } from 'verkit';
 
 import { rewriteEslint } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
@@ -127,9 +127,9 @@ export async function resolveOxlintMigrateVersion(oxlintVersion: string): Promis
       return oxlintVersion;
     }
     const candidates = Object.keys(packument.versions ?? {}).filter(
-      (version) => semver.valid(version) && semver.lte(version, oxlintVersion),
+      (version) => normalize(version) && isLessThanOrEqual(version, oxlintVersion),
     );
-    return candidates.length > 0 ? candidates.toSorted(semver.rcompare)[0] : oxlintVersion;
+    return candidates.length > 0 ? candidates.toSorted(compareReversed)[0] : oxlintVersion;
   } catch {
     return oxlintVersion;
   }
@@ -595,6 +595,33 @@ function ruleKeyMatchesNamespace(key: string, namespaces: Set<string>): boolean 
   return false;
 }
 
+// Mirror the native aliases accepted by the Oxlint version bundled with Vite+.
+const OXLINT_PLUGIN_ALIASES = new Map([
+  ['@typescript-eslint', 'typescript'],
+  ['typescript-eslint', 'typescript'],
+  ['typescript_eslint', 'typescript'],
+  ['react-hooks', 'react'],
+  ['react_hooks', 'react'],
+  ['deepscan', 'oxc'],
+  ['import-x', 'import'],
+  ['jsx-a11y-x', 'jsx-a11y'],
+  ['jsx_a11y-x', 'jsx-a11y'],
+  ['jsx_a11y', 'jsx-a11y'],
+  ['react_perf', 'react-perf'],
+  ['@next', 'nextjs'],
+  ['@next/next', 'nextjs'],
+]);
+
+function normalizeOxlintRuleNamespace(key: string): string {
+  const separator = key.startsWith('@') ? key.lastIndexOf('/') : key.indexOf('/');
+  if (separator < 0) {
+    return key;
+  }
+  const plugin = deriveJsPluginNamespace(key.slice(0, separator));
+  const namespace = OXLINT_PLUGIN_ALIASES.get(plugin) ?? plugin;
+  return `${namespace}${key.slice(separator)}`;
+}
+
 /** Filter a rules object to only entries whose namespace is recognized. */
 function filterRulesAgainstNamespaces(
   rules: Record<string, unknown>,
@@ -602,7 +629,10 @@ function filterRulesAgainstNamespaces(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(rules)) {
-    if (ruleKeyMatchesNamespace(key, namespaces)) {
+    if (
+      ruleKeyMatchesNamespace(key, namespaces) ||
+      ruleKeyMatchesNamespace(normalizeOxlintRuleNamespace(key), namespaces)
+    ) {
       out[key] = value;
     }
   }
@@ -662,27 +692,6 @@ function jsPluginsToNamespaces(entries: NonNullable<OxlintConfig['jsPlugins']>):
   return ns;
 }
 
-function stripUnsupportedReactRefreshOption(rules: OxlintConfig['rules']): boolean {
-  const rule = rules?.['react/only-export-components'];
-  if (!Array.isArray(rule)) {
-    return false;
-  }
-  const options = rule[1];
-  if (
-    !options ||
-    typeof options !== 'object' ||
-    Array.isArray(options) ||
-    !('allowCompoundComponents' in options)
-  ) {
-    return false;
-  }
-  // eslint-plugin-react-refresh 0.5.7 enables this in its Vite preset, but
-  // @oxlint/migrate copies it into a native rule that rejects the option.
-  // Remove this workaround when the bundled Oxlint supports the option.
-  delete options.allowCompoundComponents;
-  return true;
-}
-
 /**
  * Sanitize the `.oxlintrc.json` produced by `@oxlint/migrate` (in-place)
  * before it gets merged into `vite.config.ts`. Drop references that
@@ -709,7 +718,6 @@ export function sanitizeMigratedOxlintConfig(
   // Track everything we strip so we can warn the user.
   const allDroppedJsPlugins = new Set<string>();
   const allDroppedPlugins = new Set<string>();
-  let droppedReactRefreshOption = stripUnsupportedReactRefreshOption(config.rules);
 
   // 1. Sanitize base-level jsPlugins.
   const baseSplit = partitionJsPlugins(config.jsPlugins ?? [], availablePackages);
@@ -761,9 +769,6 @@ export function sanitizeMigratedOxlintConfig(
   // namespace are still valid inside the override).
   if (Array.isArray(config.overrides)) {
     for (const override of config.overrides) {
-      if (stripUnsupportedReactRefreshOption(override.rules)) {
-        droppedReactRefreshOption = true;
-      }
       // Override jsPlugins.
       let overrideSurvivors: NonNullable<OxlintConfig['jsPlugins']> = [];
       if (override.jsPlugins) {
@@ -808,13 +813,6 @@ export function sanitizeMigratedOxlintConfig(
   }
 
   // 6. Warn.
-  if (droppedReactRefreshOption) {
-    warnMigration(
-      'The bundled Oxlint does not support react/only-export-components.allowCompoundComponents. ' +
-        'Removed this option from the migrated config; compound component exports may now report lint errors.',
-      report,
-    );
-  }
   //
   // We deliberately don't try to distinguish "we just removed this
   // package as part of the ESLint-ecosystem cleanup" from "the user

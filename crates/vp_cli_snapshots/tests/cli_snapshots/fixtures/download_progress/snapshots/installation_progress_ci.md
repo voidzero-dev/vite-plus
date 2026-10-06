@@ -4,14 +4,14 @@
 
 ```
 Before installation: preserve this output.
-info: installing vite-plus@<version>...
-info: Preparing Node.js and pnpm...
-info: Installing dependencies...
-✓ Dependencies installed.
-Setup:
+\x1b[94;1minfo: installing vite-plus@<version>...
+\x1b[94;1minfo: Preparing Node.js and pnpm...
+\x1b[94;1minfo: Installing dependencies...
+\x1b[32m\xe2\x9c\x93 Dependencies installed.
+\x1b[94;1mSetup:
   Preparing vite-plus environment.
 
-Created Shims:
+\x1b[94;1mCreated Shims:
   <workspace>/home/fallback-bin/node
   <workspace>/home/bin/npm
   <workspace>/home/bin/npx
@@ -26,14 +26,14 @@ Created Shims:
   <workspace>/home/bin/vpx
   <workspace>/home/bin/vpr
 
-Next Steps:
+\x1b[94;1mNext Steps:
   Activate Vite+ in this terminal:
-  . "<workspace>/home/env"
+  . \"<workspace>/home/env\"
 
   Add the command to your .zshrc file to activate future Zsh terminals.
 
-  Restart an already-running IDE to load its environment. Run `vp env doctor` to verify.
-✓ Vite+ setup complete.
+  Restart an already-running IDE to load its environment. Run `\x1b[94mvp env doctor` to verify.
+\x1b[32m\xe2\x9c\x93 Vite+ setup complete.
 Bootstrap stdout contains only shell assignments.
 After installation.
 ```
