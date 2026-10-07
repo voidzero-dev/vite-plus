@@ -469,7 +469,7 @@ pub fn resolve_package_manager_from_package_json(
     let version_req = version_req.unwrap_or_else(|| "*".into());
     let version = if Version::parse(&version_req).is_ok() {
         version_req
-    } else if let Ok(range) = node_semver::Range::parse(version_req.as_str())
+    } else if let Ok(range) = js_semver::Range::parse(version_req.as_str())
         && let Some(cached) = find_cached_package_manager_version(package_manager_type, &range)?
     {
         cached
@@ -724,7 +724,7 @@ fn get_package_manager_from_dev_engines(
         // surfaced as a warning here and by `vp env doctor`
         let version_req = entry.version.clone().filter(|version| {
             let valid = Version::parse(version).is_ok()
-                || node_semver::Range::parse(version.as_str()).is_ok();
+                || js_semver::Range::parse(version.as_str()).is_ok();
             if !valid {
                 vp_shared::output::warn(&format!(
                     "invalid devEngines.packageManager version {version:?} for \
@@ -797,8 +797,8 @@ fn dev_engines_package_manager_conflict_message(
         );
     };
     if let Some(required) = &entry.version
-        && let Ok(range) = node_semver::Range::parse(required.as_str())
-        && let Ok(version) = node_semver::Version::parse(resolution.version.as_str())
+        && let Ok(range) = js_semver::Range::parse(required.as_str())
+        && let Ok(version) = js_semver::Version::parse(resolution.version.as_str())
         && !range.satisfies(&version)
     {
         return Some(
@@ -978,6 +978,15 @@ pub async fn resolve_package_manager_version(
     package_manager_type: PackageManagerType,
     version: &str,
 ) -> Result<Str, Error> {
+    if version.is_empty() {
+        return Err(Error::InvalidArgument(
+            format!(
+                "invalid {package_manager_type} version {version:?}: expected a version or range"
+            )
+            .into(),
+        ));
+    }
+
     match version {
         "default" => match package_manager_type {
             PackageManagerType::Npm => {
@@ -1007,21 +1016,21 @@ struct RegistryPackument {
 /// smaller than the full packument (KBs instead of MBs for popular packages).
 const NPM_ABBREVIATED_METADATA_ACCEPT: &str = "application/vnd.npm.install-v1+json";
 
-async fn fetch_registry_versions(package_name: &str) -> Result<Vec<node_semver::Version>, Error> {
+async fn fetch_registry_versions(package_name: &str) -> Result<Vec<js_semver::Version>, Error> {
     let url = get_npm_package_metadata_url(package_name);
     let packument: RegistryPackument =
         HttpClient::new().get_json_with_accept(&url, NPM_ABBREVIATED_METADATA_ACCEPT).await?;
     Ok(packument
         .versions
         .keys()
-        .filter_map(|version| node_semver::Version::parse(version).ok())
+        .filter_map(|version| js_semver::Version::parse(version).ok())
         .collect())
 }
 
 /// Fetch all published versions for a supported package manager.
 pub async fn fetch_package_manager_versions(
     package_manager_type: PackageManagerType,
-) -> Result<Vec<node_semver::Version>, Error> {
+) -> Result<Vec<js_semver::Version>, Error> {
     let mut versions = fetch_registry_versions(&package_manager_type.to_string()).await?;
     if matches!(package_manager_type, PackageManagerType::Yarn) {
         versions.extend(fetch_registry_versions("@yarnpkg/cli-dist").await?);
@@ -1049,7 +1058,7 @@ fn requirement_requests_prerelease(version_req: &str) -> bool {
 /// satisfies the range.
 async fn resolve_latest_satisfying_version(
     package_manager_type: PackageManagerType,
-    range: &node_semver::Range,
+    range: &js_semver::Range,
     version_req: &str,
 ) -> Result<Str, Error> {
     let package_name = package_manager_type.to_string();
@@ -1061,7 +1070,7 @@ async fn resolve_latest_satisfying_version(
 
     let best = versions
         .iter()
-        .filter(|version| !version.is_prerelease() && range.satisfies(version))
+        .filter(|version| version.pre_release.is_empty() && range.satisfies(version))
         .max()
         .or_else(|| {
             // a range only prereleases can satisfy (e.g. "^12.0.0-0" before a
@@ -1086,7 +1095,7 @@ async fn resolve_latest_satisfying_version(
 /// under `<DATA>/package_manager/<name>/`.
 fn find_cached_package_manager_version(
     package_manager_type: PackageManagerType,
-    range: &node_semver::Range,
+    range: &js_semver::Range,
 ) -> Result<Option<Str>, Error> {
     let bin_name = package_manager_type.to_string();
     let versions_dir =
@@ -1097,11 +1106,11 @@ fn find_cached_package_manager_version(
         Err(e) => return Err(e.into()),
     };
 
-    let mut best: Option<node_semver::Version> = None;
+    let mut best: Option<js_semver::Version> = None;
     for entry in entries.flatten() {
         let file_name = entry.file_name();
         let Some(name) = file_name.to_str() else { continue };
-        let Ok(version) = node_semver::Version::parse(name) else { continue };
+        let Ok(version) = js_semver::Version::parse(name) else { continue };
         if !range.satisfies(&version) {
             continue;
         }
@@ -1130,7 +1139,7 @@ async fn resolve_package_manager_range(
     package_manager_type: PackageManagerType,
     version_req: &str,
 ) -> Result<Str, Error> {
-    let range = node_semver::Range::parse(version_req).map_err(|_| {
+    let range = js_semver::Range::parse(version_req).map_err(|_| {
         Error::InvalidArgument(
             format!(
                 "invalid {package_manager_type} version {version_req:?}: expected semver \
@@ -2155,7 +2164,7 @@ mod tests {
     }
 
     fn find_cached_pnpm(vp_home: &AbsolutePath) -> Option<Str> {
-        let range = node_semver::Range::parse("^11.0.0").unwrap();
+        let range = js_semver::Range::parse("^11.0.0").unwrap();
         EnvConfig::with_vars([(env_vars::VP_HOME, vp_home.as_path())], |_| {
             find_cached_package_manager_version(PackageManagerType::Pnpm, &range)
         })

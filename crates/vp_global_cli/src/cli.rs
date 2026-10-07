@@ -751,7 +751,7 @@ async fn system_package_manager(
         return None;
     }
     let version = std::str::from_utf8(&output.stdout).ok()?.trim();
-    node_semver::Version::parse(version).ok()?;
+    js_semver::Version::parse(version).ok()?;
     let bin_prefix = executable.parent()?.to_absolute_path_buf();
     Some(vp_pm_cli::PackageManager::from_bin_prefix(kind, version, bin_prefix))
 }

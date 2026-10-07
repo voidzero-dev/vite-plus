@@ -17,7 +17,7 @@ futures-util = { workspace = true }
 hex = { workspace = true }
 indicatif = { workspace = true }
 indoc = { workspace = true }
-node-semver = { workspace = true }
+js-semver = { workspace = true }
 pathdiff = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

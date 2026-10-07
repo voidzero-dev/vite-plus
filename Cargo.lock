@@ -1193,7 +1193,7 @@ checksum = "e96a4956774c13c126a8b5af4daa79384f4d826534c95a02d76afb39e2ab64e3"
 dependencies = [
  "encode_unicode",
  "libc",
- "unicode-width 0.2.2",
+ "unicode-width",
  "windows-sys 0.61.2",
 ]
 
@@ -3230,7 +3230,7 @@ checksum = "9433806cd6b4ec1aba79c021c7e4c58fb4c3b9977c085062e611ac929998fb0c"
 dependencies = [
  "console",
  "portable-atomic",
- "unicode-width 0.2.2",
+ "unicode-width",
  "unit-prefix",
  "vt100",
  "web-time",
@@ -3436,6 +3436,12 @@ dependencies = [
  "getrandom 0.4.3",
  "libc",
 ]
+
+[[package]]
+name = "js-semver"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "184eee2d5d2fb957106f8f6779c4ad7d0ce0cc12825f1d152ddff7fab80abc74"
 
 [[package]]
 name = "js-sys"
@@ -3848,28 +3854,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a86d3146ed3995b5913c414f6664344b9617457320782e64f0bb44afd49d74"
 
 [[package]]
-name = "miette"
-version = "7.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f98efec8807c63c752b5bd61f862c165c115b0a35685bdcfd9238c7aeb592b7"
-dependencies = [
- "cfg-if",
- "miette-derive",
- "unicode-width 0.1.14",
-]
-
-[[package]]
-name = "miette-derive"
-version = "7.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db5b29714e950dbb20d5e6f74f9dcec4edbcc1067bb7f8ed198c097b8c1a818b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "mimalloc-safe"
 version = "0.1.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4053,19 +4037,6 @@ dependencies = [
  "cfg_aliases 0.2.2",
  "libc",
  "memoffset",
-]
-
-[[package]]
-name = "node-semver"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b1a233ea5dc37d2cfba31cfc87a5a56cc2a9c04e3672c15d179ca118dae40a7"
-dependencies = [
- "bytecount",
- "miette",
- "nom 7.1.3",
- "serde",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -4624,7 +4595,7 @@ dependencies = [
  "smallvec 1.16.1",
  "textwrap",
  "unicode-segmentation",
- "unicode-width 0.2.2",
+ "unicode-width",
 ]
 
 [[package]]
@@ -6122,7 +6093,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee296fe9ac0007f2c0eff04d55c980de537aa3d736e873d70c9c47d4c737ea44"
 dependencies = [
- "unicode-width 0.2.2",
+ "unicode-width",
  "yansi",
 ]
 
@@ -8015,7 +7986,7 @@ checksum = "6ecfad6c3abc80a577f2b91c1e412ee57e7a060d430b553c1b0c940974ebcd49"
 dependencies = [
  "icu_segmenter",
  "smawk",
- "unicode-width 0.2.2",
+ "unicode-width",
 ]
 
 [[package]]
@@ -8475,12 +8446,6 @@ checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
 
 [[package]]
 name = "unicode-width"
-version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
-
-[[package]]
-name = "unicode-width"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
@@ -8776,7 +8741,7 @@ dependencies = [
  "indexmap",
  "indicatif",
  "indoc",
- "node-semver",
+ "js-semver",
  "oxc_resolver",
  "pty_terminal_test_client",
  "rustc-hash",
@@ -8830,7 +8795,7 @@ dependencies = [
  "futures-util",
  "hex",
  "httpmock",
- "node-semver",
+ "js-semver",
  "pgp",
  "reqwest",
  "serde",
@@ -8878,7 +8843,7 @@ dependencies = [
  "httpmock",
  "indicatif",
  "indoc",
- "node-semver",
+ "js-semver",
  "pathdiff",
  "reqwest",
  "semver 1.0.28",
@@ -8918,8 +8883,8 @@ dependencies = [
  "base64-simd",
  "flate2",
  "httpmock",
+ "js-semver",
  "junction",
- "node-semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -9053,7 +9018,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "054ff75fb8fa83e609e685106df4faeffdf3a735d3c74ebce97ec557d5d36fd9"
 dependencies = [
  "itoa",
- "unicode-width 0.2.2",
+ "unicode-width",
  "vte",
 ]
 

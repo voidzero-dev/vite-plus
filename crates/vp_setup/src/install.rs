@@ -480,7 +480,7 @@ pub async fn cleanup_old_versions(
         // Only consider entries that parse as semver. Forced-reinstall dirs use
         // semver build metadata (see `forced_reinstall_dir_name`), so they pass
         // this filter and get garbage-collected like any other version dir.
-        if node_semver::Version::parse(&name_str).is_ok() {
+        if js_semver::Version::parse(&name_str).is_ok() {
             let metadata = entry.metadata().await?;
             // Use creation time (birth time), fallback to modified time
             let time = metadata.created().unwrap_or_else(|_| {
@@ -590,7 +590,7 @@ mod tests {
         let dir = target_install_dir_name("0.1.23", Some("0.1.23"), true);
 
         assert!(dir.starts_with("0.1.23+force."));
-        assert!(node_semver::Version::parse(&dir).is_ok(), "{dir} should remain semver-compatible");
+        assert!(js_semver::Version::parse(&dir).is_ok(), "{dir} should remain semver-compatible");
     }
 
     #[test]
