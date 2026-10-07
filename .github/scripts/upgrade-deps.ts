@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -575,7 +576,16 @@ async function upgradeDependencies(): Promise<void> {
     oxcTransform: oxcTransformVersion,
   });
   await updateVitestVersionConstant(vitestVersion);
+  // Keep the selected versions available if installation or upstream sync fails.
   writeMetaFiles();
+
+  for (const args of [['install', '--no-frozen-lockfile'], ['tool', 'sync-remote'], ['dedupe']]) {
+    execFileSync('pnpm', args, { cwd: ROOT, stdio: 'inherit' });
+  }
+  // sync-remote installs the merged workspace. Dedupe can select a newer dts
+  // plugin, so mirror its external ranges only after both operations finish.
+  syncBundledDependencies();
+  execFileSync('pnpm', ['install', '--no-frozen-lockfile'], { cwd: ROOT, stdio: 'inherit' });
 
   console.log('Done!');
 }
