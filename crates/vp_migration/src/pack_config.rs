@@ -54,7 +54,12 @@ pub(crate) fn rewrite_pack_config(
 /// Read the source toolchain before the migration's final install. Restrict
 /// lookup to this workspace so the CLI's own installation cannot supply the
 /// version. Unknown versions retain the previous conservative behavior.
-pub(crate) fn preserve_legacy_defaults(file: &Path, root: &Path, standalone: bool) -> bool {
+pub(crate) fn preserve_legacy_defaults(
+    file: &Path,
+    root: &Path,
+    standalone: bool,
+    original_content: &str,
+) -> bool {
     fn installed_package(start: &Path, root: &Path, name: &str) -> Option<serde_json::Value> {
         for directory in start.ancestors().take_while(|directory| directory.starts_with(root)) {
             let manifest = directory.join("node_modules").join(name).join("package.json");
@@ -98,12 +103,38 @@ pub(crate) fn preserve_legacy_defaults(file: &Path, root: &Path, standalone: boo
         }
         None
     };
-    let legacy = if standalone {
+    // Migration retains tsdown.config.* files imported by vite.config.pack.
+    // Their original vite-plus/pack import identifies the bundled toolchain;
+    // newly rewritten tsdown imports must not affect this decision.
+    let legacy = if standalone && !imports_bundled_pack(original_content) {
         standalone_defaults().or_else(bundled_defaults)
     } else {
         bundled_defaults().or_else(standalone_defaults)
     };
     legacy.unwrap_or(true)
+}
+
+fn imports_bundled_pack(content: &str) -> bool {
+    let grep = SupportLang::TypeScript.ast_grep(content);
+    grep.root().dfs().any(|node| {
+        let source = match node.kind().as_ref() {
+            "import_statement" | "export_statement" => node.field("source"),
+            "call_expression"
+                if node.field("function").is_some_and(|function| {
+                    function.kind() == "import" || function.text() == "require"
+                }) =>
+            {
+                node.field("arguments").and_then(|args| {
+                    args.children().find(|child| child.is_named() && child.kind() != "comment")
+                })
+            }
+            _ => None,
+        };
+        source.is_some_and(|source| {
+            source.kind() == "string"
+                && matches!(source.text().as_ref(), "'vite-plus/pack'" | "\"vite-plus/pack\"")
+        })
+    })
 }
 
 fn indent_compatibility_defaults(source: &str, object_indentation: &str) -> String {
