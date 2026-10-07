@@ -67,6 +67,8 @@ export default defineConfig([
       // `vpx <script>` loader: `--import` entry and its off-thread ESM hooks.
       'script-register': './src/script-register.ts',
       'script-esm-hooks': './src/script-esm-hooks.ts',
+      // Project-local `vpx` bin; kept apart from bin.js so it loads no binding.
+      'vpx-bin': './src/vpx-bin.ts',
     },
     outDir: 'dist',
     format: 'esm',
