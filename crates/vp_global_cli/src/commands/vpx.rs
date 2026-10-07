@@ -6,10 +6,14 @@
 //! 2. Global vp packages (installed via `vp install -g`)
 //! 3. System PATH (excluding vite-plus bin directory)
 //! 4. Remote download via `vp dlx`
+//!
+//! A script file (`vpx ./seed.ts`) or leading Node.js options run Node.js with
+//! the script loader instead; see [`super::vpx_script`].
 
 use vp_shared::{PrependOptions, ToolPathEnv, exit_code_from_status, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
+use super::vpx_script;
 use crate::{commands::env::config, shim::dispatch};
 
 /// Parsed vpx flags.
@@ -21,31 +25,38 @@ pub struct VpxFlags {
     pub shell_mode: bool,
     /// Suppress output (-s/--silent)
     pub silent: bool,
+    /// tsconfig for script mode (--tsconfig)
+    pub tsconfig: Option<String>,
     /// Show help (-h/--help)
     pub help: bool,
 }
 
 /// Help text for vpx.
 const VPX_HELP: &str = "\
-Execute a command from a local or remote npm package
+Execute a command from a local or remote npm package, or run a script file
 
 Usage: vpx [OPTIONS] <pkg[@version]> [args...]
+       vpx [OPTIONS] [NODE_OPTIONS] <script> [args...]
 
 Arguments:
   <pkg[@version]>  Package binary to execute
-  [args...]        Arguments to pass to the command
+  <script>         Script file to run (.ts, .mts, .cts, .tsx, .js, .mjs, .cjs, .jsx)
+  [args...]        Arguments to pass to the command or script
 
 Options:
   -p, --package <NAME>  Package(s) to install if not found locally
   -c, --shell-mode      Execute the command within a shell environment
   -s, --silent          Suppress all output except the command's output
+      --tsconfig <PATH> tsconfig.json to use when running a script
   -h, --help            Print help
 
 Examples:
   vpx eslint .                                           # Run local eslint (or download)
   vpx create-vue my-app                                  # Download and run create-vue
   vpx oxlint@1.85.0 --version                             # Run specific version
-  vpx -p cowsay -c 'echo \"hi\" | cowsay'                  # Shell mode with package";
+  vpx -p cowsay -c 'echo \"hi\" | cowsay'                  # Shell mode with package
+  vpx ./scripts/seed.ts --dry-run                        # Run a TypeScript script
+  vpx --watch ./server.ts                                # Pass Node.js options before the script";
 
 /// A globally installed binary found via `vp install -g`.
 struct GlobalBinary {
@@ -79,6 +90,30 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
     }
 
     let cmd_spec = &positional[0];
+
+    // Script mode is decided before package-spec parsing: script paths can contain `@`.
+    if flags.packages.is_empty() && !flags.shell_mode {
+        match vpx_script::detect(&positional, cwd) {
+            Ok(Some(invocation)) => {
+                return vpx_script::execute(invocation, flags.tsconfig, cwd).await;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                output::error(&format!("vpx: {error}"));
+                return 1;
+            }
+        }
+    } else if !cmd_spec.starts_with('-')
+        && matches!(vpx_script::detect(&positional, cwd), Ok(Some(_)))
+    {
+        let flag = if flags.shell_mode { "--shell-mode" } else { "--package" };
+        output::error(&format!("vpx: {flag} cannot be used when running a script"));
+        return 1;
+    }
+    if flags.tsconfig.is_some() {
+        output::error("vpx: --tsconfig can only be used when running a script");
+        return 1;
+    }
 
     // Extract the command name (binary to look for in node_modules/.bin)
     let cmd_name = extract_command_name(cmd_spec);
@@ -222,7 +257,7 @@ fn find_on_path(cmd: &str) -> Option<AbsolutePathBuf> {
 ///
 /// Walks up from cwd and prepends each existing `node_modules/.bin` directory
 /// to PATH so that sub-processes also resolve local binaries first.
-fn prepend_node_modules_bin_to_path(
+pub(crate) fn prepend_node_modules_bin_to_path(
     cwd: &AbsolutePath,
     env: &mut ToolPathEnv,
 ) -> std::io::Result<()> {
@@ -352,6 +387,12 @@ pub fn parse_vpx_args(args: &[String]) -> (VpxFlags, Vec<String>) {
             "-s" | "--silent" => {
                 flags.silent = true;
             }
+            "--tsconfig" => {
+                i += 1;
+                if i < args.len() {
+                    flags.tsconfig = Some(args[i].clone());
+                }
+            }
             "-h" | "--help" => {
                 flags.help = true;
             }
@@ -361,6 +402,8 @@ pub fn parse_vpx_args(args: &[String]) -> (VpxFlags, Vec<String>) {
                     flags.packages.push(value.to_string());
                 } else if let Some(value) = other.strip_prefix("-p=") {
                     flags.packages.push(value.to_string());
+                } else if let Some(value) = other.strip_prefix("--tsconfig=") {
+                    flags.tsconfig = Some(value.to_string());
                 } else {
                     // Unknown flag — treat as start of positional args
                     positional.extend_from_slice(&args[i..]);
