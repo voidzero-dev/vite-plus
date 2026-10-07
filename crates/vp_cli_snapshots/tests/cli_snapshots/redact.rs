@@ -96,6 +96,12 @@ static WINDOWS_MANAGED_NODE_PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+// A file URL keeps the slash before a Windows drive letter (`file:///D:/ws`), so
+// it redacts to `file:///<workspace>`, while a Unix path supplies that slash
+// itself (`file:///ws` → `file://<workspace>`). Use the Unix spelling so both
+// platforms share one snapshot.
+static WINDOWS_FILE_URL_LABEL_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"file:///(<[A-Za-z_-]+>)").unwrap());
 static WINDOWS_MANAGED_PM_BIN_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(<home>/.vite-plus/package_manager/[^"\r\n]+/bin/[A-Za-z0-9._-]+)\.cmd\b"#)
         .unwrap()
@@ -519,6 +525,7 @@ pub fn redact_output(
     output = WINDOWS_MANAGED_NODE_BIN_RE.replace_all(&output, "${1}/bin/${2}").into_owned();
     output = WINDOWS_MANAGED_NODE_PATH_RE.replace_all(&output, "${1}/bin${2}").into_owned();
     output = WINDOWS_MANAGED_PM_BIN_RE.replace_all(&output, "${1}").into_owned();
+    output = WINDOWS_FILE_URL_LABEL_RE.replace_all(&output, "file://${1}").into_owned();
     output = COMMAND_NOT_FOUND_RE.replace_all(&output, "${1}program not found").into_owned();
 
     // Redact UUIDs to "<uuid>"
