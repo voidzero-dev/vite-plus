@@ -132,7 +132,7 @@ Options:
   --concurrency <CONCURRENCY>  Number of global package installs to run in parallel (only with -g)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp add -h`
@@ -178,7 +178,7 @@ Options:
   --concurrency <CONCURRENCY>         Number of global package installs to run in parallel (only with -g)
   -h, --help                          Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp remove -h`
@@ -207,7 +207,7 @@ Options:
   --dry-run             Preview what would be removed without actually removing (only with -g)
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp update -h`
@@ -242,7 +242,7 @@ Options:
   --workspace                  Only update if package exists in workspace (pnpm-specific)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp link -h`
@@ -263,7 +263,7 @@ Arguments:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp unlink -h`
@@ -285,7 +285,7 @@ Options:
   -r, --recursive  Unlink in every workspace package
   -h, --help       Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp dedupe -h`
@@ -306,7 +306,7 @@ Options:
   --check     Check if deduplication would make changes
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp outdated -h`
@@ -339,7 +339,7 @@ Options:
   --concurrency <CONCURRENCY>  Number of global package checks to run in parallel (only with -g)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp why -h`
@@ -372,7 +372,7 @@ Options:
   --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help               Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp info -h`
@@ -395,7 +395,7 @@ Options:
   --json      Output in JSON format
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm -h`
@@ -439,7 +439,7 @@ Commands:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm ci -h`
@@ -459,7 +459,7 @@ Arguments:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp env`

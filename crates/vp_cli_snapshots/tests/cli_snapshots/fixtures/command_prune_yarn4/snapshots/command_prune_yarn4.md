@@ -19,7 +19,7 @@ Options:
   --no-optional  Remove optional dependencies
   -h, --help     Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm prune`

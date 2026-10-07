@@ -20,7 +20,7 @@ Commands:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm config set vite-plus-pm-config-test-key test-value --location project`

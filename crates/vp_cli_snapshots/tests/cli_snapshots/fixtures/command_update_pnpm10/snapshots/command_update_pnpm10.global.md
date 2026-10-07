@@ -32,7 +32,7 @@ Options:
   --workspace                  Only update if package exists in workspace (pnpm-specific)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp update testnpm2`

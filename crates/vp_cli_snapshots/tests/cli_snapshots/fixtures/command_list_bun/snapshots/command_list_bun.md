@@ -47,7 +47,7 @@ Options:
   -g, --global             List global packages
   -h, --help               Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm list`

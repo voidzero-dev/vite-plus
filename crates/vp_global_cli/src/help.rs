@@ -25,7 +25,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<String> {
             "install" | "add" | "remove" | "update" | "dedupe" | "outdated" | "list" | "ls" | "why"
             | "info" | "view" | "show" | "link" | "unlink" | "rebuild" | "pm",
             ..,
-        ] => "/guide/install",
+        ] => "/guide/package-management",
         ["dlx"] => "/guide/vpx",
         ["env", ..] => "/guide/env",
         ["toolchain" | "upgrade"] => "/guide/upgrade",
@@ -725,7 +725,7 @@ Options:
     fn docs_url_is_mapped_for_grouped_commands() {
         assert_eq!(
             documentation_url_for_command_path(&["add"]),
-            Some(vp_shared::documentation_url("/guide/install"))
+            Some(vp_shared::documentation_url("/guide/package-management"))
         );
         assert_eq!(
             documentation_url_for_command_path(&["env", "list"]),

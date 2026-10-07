@@ -22,7 +22,7 @@ Commands:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm stage publish --help`
@@ -52,7 +52,7 @@ Options:
   --registry <URL>    Registry URL
   -h, --help          Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm stage approve --help`
@@ -75,5 +75,5 @@ Options:
   --registry <URL>  Registry URL
   -h, --help        Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
