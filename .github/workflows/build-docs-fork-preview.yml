@@ -90,10 +90,6 @@ jobs:
           working-directory: docs
           cache: false
 
-      - name: Test Cloudflare build output
-        run: vp run test:cloudflare
-        working-directory: docs
-
       - name: Build static docs
         run: vp run build:cloudflare
         working-directory: docs

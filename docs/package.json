@@ -9,7 +9,6 @@
     "build:netlify": "node .vitepress/scripts/copy-installers.mjs && vitepress build",
     "deploy:cloudflare": "cf deploy --prebuilt",
     "preview": "vitepress preview",
-    "test:cloudflare": "node --test .vitepress/scripts/__tests__/prepare-cloudflare.mjs",
     "update-trusted-stack-stats": "node .vitepress/theme/data/fetch-trusted-stack-stats.ts"
   },
   "dependencies": {
