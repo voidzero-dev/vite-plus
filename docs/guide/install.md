@@ -115,6 +115,10 @@ Use `vp install` when you want to install exactly what the current `package.json
 - `vp install --filter <pattern>` scopes install work in monorepos
 - `vp install -w` installs in the workspace root
 
+::: info
+Option support depends on the detected package manager and its version. Unsupported options cause `vp` to exit with an error before running the package-manager command.
+:::
+
 ##### Git and remote tarball dependencies (npm v12+)
 
 npm v12 stops resolving git dependencies (`github:`, `git+https:`) and remote tarball URLs by default; such installs fail with `EALLOWGIT` / `EALLOWREMOTE`. Opt back in per project with npm's `allow-git` / `allow-remote` config.
