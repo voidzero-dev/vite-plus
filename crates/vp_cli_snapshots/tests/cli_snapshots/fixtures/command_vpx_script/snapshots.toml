@@ -1,0 +1,38 @@
+[[case]]
+name = "vpx_script_ts_syntax"
+vp = ["local", "global"]
+comment = "TypeScript syntax that Node.js type stripping rejects runs through the oxc-node loader."
+steps = [
+  { argv = ["vpx", "./src/syntax.ts"], comment = "Enums, namespaces, parameter properties, decorators, and a lowered class field" },
+]
+
+[[case]]
+name = "vpx_script_resolution"
+vp = ["local", "global"]
+comment = "Module resolution matches tsx: tsconfig paths, .js to .ts, extensionless imports, JSON, and CommonJS."
+steps = [
+  { argv = ["vpx", "src/resolution.ts"], comment = "A bare relative path runs when the file exists" },
+  { argv = ["vpx", "--tsconfig", "tsconfig.alt.json", "src/resolution.ts"], comment = "--tsconfig replaces per-file tsconfig selection" },
+  { argv = ["vpx", "--no-warnings", "--tsconfig=tsconfig.alt.json", "src/resolution.ts"], comment = "--tsconfig is also recognized among Node.js options" },
+]
+
+[[case]]
+name = "vpx_script_args_and_options"
+vp = ["local", "global"]
+comment = "Script arguments, Node.js options, and the exit code pass through unchanged."
+steps = [
+  { argv = ["vpx", "./src/args.ts", "a", "--", "--flag"], comment = "Arguments after the script belong to it; exit code 7 propagates", continue-on-failure = true },
+  { argv = ["vpx", "--env-file", ".env", "--import", "./src/setup.ts", "./src/args.ts"], comment = "Node.js options before the script, including a TypeScript --import preload", continue-on-failure = true },
+  { argv = ["vpx", "--eval", "console.log('eval without a script')"], comment = "Node.js invocations without a script still run Node.js" },
+]
+
+[[case]]
+name = "vpx_script_errors"
+vp = ["local", "global"]
+comment = "Script paths never fall back to a remote package download."
+steps = [
+  { argv = ["vpx", "./src/missing.ts"], comment = "Missing explicit path", continue-on-failure = true },
+  { argv = ["vpx", "seed.ts"], comment = "Missing bare name with a TypeScript extension", continue-on-failure = true },
+  { argv = ["vpx", "--tsconfig", "missing.json", "./src/syntax.ts"], comment = "Missing tsconfig", continue-on-failure = true },
+  { argv = ["vpx", "-p", "cowsay", "./src/syntax.ts"], comment = "--package selects package mode", continue-on-failure = true },
+]
