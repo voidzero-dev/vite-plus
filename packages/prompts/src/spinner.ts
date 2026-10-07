@@ -170,12 +170,12 @@ export const spinner = ({
       let outputMessage: string;
 
       if (isCI) {
-        outputMessage = `${frame}  ${_message}...`;
+        outputMessage = `${frame} ${_message}...`;
       } else if (indicator === 'timer') {
-        outputMessage = `${frame}  ${_message} ${formatTimer(getElapsedMs())}`;
+        outputMessage = `${frame} ${_message} ${formatTimer(getElapsedMs())}`;
       } else {
         const loadingDots = '.'.repeat(Math.floor(indicatorTimer)).slice(0, 3);
-        outputMessage = `${frame}  ${_message}${loadingDots}`;
+        outputMessage = `${frame} ${_message}${loadingDots}`;
       }
 
       const wrapped = wrapAnsi(outputMessage, columns, {
