@@ -16,6 +16,10 @@
 #[cfg(feature = "rolldown")]
 pub extern crate rolldown_binding;
 
+// Script loader hooks for `vpx <script>`, exported under the `oxcNode` namespace.
+#[cfg(feature = "oxc-node")]
+pub extern crate oxc_node;
+
 mod check;
 mod cli;
 mod exec;
