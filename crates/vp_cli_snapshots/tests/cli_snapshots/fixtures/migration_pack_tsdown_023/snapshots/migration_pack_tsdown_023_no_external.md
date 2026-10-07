@@ -190,6 +190,5 @@ export { bundledValue };
 ## `vpt print-file dist/control/index.mjs`
 
 ```
-import { bundledValue } from "@fixture/pack-bundled";
-export { bundledValue };
+export { bundledValue } from "@fixture/pack-bundled";
 ```
