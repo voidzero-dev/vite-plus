@@ -52,6 +52,8 @@ jobs:
           pnpm install --no-frozen-lockfile
           pnpm tool sync-remote
           pnpm install --no-frozen-lockfile
+          node .github/scripts/upgrade-deps.ts --sync-bundled-deps
+          pnpm install --no-frozen-lockfile
 
       - name: Build
         uses: ./.github/actions/build-upstream
@@ -124,6 +126,13 @@ jobs:
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
             - Package manager: `pnpm`. Do not downgrade a dependency selected by the
               upgrade script. Use the latest version that its compatibility policy allows.
+            - After changing tsdown or rolldown-plugin-dts, run
+              `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
+              `pnpm install --no-frozen-lockfile`. Core's external Yuku dependencies
+              must follow the plugin resolved through tsdown. The sync command also
+              copies Vite's postcss and optional fsevents ranges into core and
+              updates the upgrade metadata. `@oxlint/plugins` uses its own published
+              version, selected by the upgrade script.
 
             ### Outcomes from earlier steps (both ran with continue-on-error)
             - Sync remote and build: ${{ steps.build.outcome }}
@@ -231,6 +240,8 @@ jobs:
         run: |
           pnpm install --no-frozen-lockfile
           pnpm dedupe
+          node .github/scripts/upgrade-deps.ts --sync-bundled-deps
+          pnpm install --no-frozen-lockfile
 
       - name: Format code
         # `pnpm fmt` runs `vp fmt`, which loads the freshly built NAPI binding. When
