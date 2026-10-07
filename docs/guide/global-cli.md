@@ -403,7 +403,7 @@ To see which toolchain is selected for your current project, run `vp toolchain`.
 ## Next Steps
 
 - [Environment](/guide/env) covers Node.js and package-manager selection, pinning, shims, and managed installations.
-- [Package Management](/guide/install) covers pnpm, npm, Yarn, and Bun workflows.
+- [Package Management](/guide/package-management) covers pnpm, npm, Yarn, and Bun workflows.
 - [Run](/guide/run) covers package scripts and cached workspace tasks.
 - [Upgrading Vite+](/guide/upgrade) explains global CLI upgrades. See [Update Vite+](/guide/upgrade-project) for project-local upgrades.
 - [Removing Vite+](/guide/implode) removes the global binary and its managed data.

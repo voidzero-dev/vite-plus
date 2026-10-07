@@ -111,7 +111,7 @@ The project-local CLI can be used independently for:
 - [`vp pack`](/guide/pack) with tsdown
 - [`vp toolchain`](/guide/upgrade#show-the-toolchain) for inspecting the versions bundled with the project-local package
 - [`vp run`](/guide/run) and task caching across workspaces
-- [package-manager commands](/guide/install) using the Node.js runtime already active in your shell
+- [package-manager commands](/guide/package-management) using the Node.js runtime already active in your shell
 - [`vp create`](/guide/create), [`vp migrate`](/guide/migrate), and project configuration commands
 
 The local package cannot manage the machine-level Vite+ installation. The `vp env`, `vp upgrade`, and `vp implode` commands require the [global CLI](/guide/global-cli). Upgrade or remove a local-only installation through your package manager.
