@@ -1174,6 +1174,55 @@ describe('collectInstalledPackageNames', () => {
   });
 });
 
+describe('sanitizeMigratedOxlintConfig', () => {
+  it('removes unsupported rules', () => {
+    const config: import('oxlint').OxlintConfig = {
+      rules: {
+        // unsupported
+        camelcase: 'error',
+        // supported
+        'no-console': 'error',
+      },
+    };
+    const report = createMigrationReport();
+
+    sanitizeMigratedOxlintConfig(config, new Set(), report);
+
+    expect(config.rules).toEqual({ 'no-console': 'error' });
+    expect(report.warnings).toEqual([
+      'Stripped unsupported Oxlint rule(s) from the generated lint config: camelcase. ' +
+        'These rule(s) are not available in Oxlint.',
+    ]);
+  });
+
+  it('preserves Oxlint rules', () => {
+    const rules = {
+      'eslint/no-console': 'error',
+      '@typescript-eslint/no-unused-vars': 'error',
+      'typescript/no-unused-vars': 'error',
+      'typescript-eslint/no-unused-vars': 'error',
+      'typescript_eslint/no-unused-vars': 'error',
+      'react-hooks/rules-of-hooks': 'error',
+      'react_hooks/rules-of-hooks': 'error',
+      'deepscan/no-barrel-file': 'error',
+      'import-x/no-cycle': 'error',
+      'jsx_a11y/alt-text': 'error',
+      'jsx-a11y-x/alt-text': 'error',
+      'jsx_a11y-x/alt-text': 'error',
+      'react_perf/jsx-no-new-object-as-prop': 'error',
+      '@next/next/no-img-element': 'error',
+      'filename-case': 'error',
+    } as const;
+    const config: import('oxlint').OxlintConfig = {
+      rules: { ...rules },
+    };
+
+    sanitizeMigratedOxlintConfig(config, new Set());
+
+    expect(config.rules).toEqual(rules);
+  });
+});
+
 describe('ensureSvelteRuneGlobals', () => {
   it('adds all built-in runes to Svelte overrides', () => {
     const config: import('oxlint').OxlintConfig = {

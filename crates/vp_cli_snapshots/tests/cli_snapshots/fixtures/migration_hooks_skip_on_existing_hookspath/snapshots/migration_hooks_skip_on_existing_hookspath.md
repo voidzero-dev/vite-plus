@@ -13,7 +13,7 @@ should skip hooks because core.hooksPath is already set
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ core.hooksPath is already set to ".custom-hooks" — leaving the existing hook setup unchanged.
+▲  ⚠ core.hooksPath is already set to ".custom-hooks" — leaving the existing hook setup unchanged.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied

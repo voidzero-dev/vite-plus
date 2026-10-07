@@ -14,7 +14,7 @@ tsup config should migrate automatically
 ```
 VITE+ - The Unified Toolchain for the Web
 
-tsup configuration detected. Auto-migrating to tsdown...
+●  tsup configuration detected. Auto-migrating to tsdown...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied, 1 file had imports rewritten

@@ -7,9 +7,8 @@ migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✔ Merged .oxlintrc.json into vite.config.ts
-
-✔ Merged .oxfmtrc.json into vite.config.ts
+◆  ✔ Merged .oxlintrc.json into vite.config.ts
+◆  ✔ Merged .oxfmtrc.json into vite.config.ts
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 4 config updates applied, 1 file had imports rewritten

@@ -50,14 +50,14 @@ test('normal control', { concurrent: false }, () => { expect(() => { throw new E
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 2 review items
+▲  Vitest v5: 2 review items
 
-src/add.js
-  1:1 REVIEW [global-api-ownership] Resolve the Vitest project ownership of this file before migrating its affected global APIs. Global API edits were not applied because config selection, file scope, or globals settings are unresolved or conflicting.
-    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
+   src/add.js
+     1:1 REVIEW [global-api-ownership] Resolve the Vitest project ownership of this file before migrating its affected global APIs. Global API edits were not applied because config selection, file scope, or globals settings are unresolved or conflicting.
+       Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 
-vite.config.ts
-  10:37 REVIEW [global-api-ownership] Resolve test.includeSource patterns before migrating in-source global APIs. In-source test ownership is not statically known.
-    Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
+   vite.config.ts
+     10:37 REVIEW [global-api-ownership] Resolve test.includeSource patterns before migrating in-source global APIs. In-source test ownership is not statically known.
+       Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 This project is already using Vite+! Happy coding!
 ```

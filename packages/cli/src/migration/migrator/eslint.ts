@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -44,6 +45,45 @@ const OXLINT_NATIVE_PLUGINS = new Set<string>([
   'promise',
   'node',
   'vue',
+]);
+
+const OXLINT_SCHEMA_PATH = fileURLToPath(
+  new URL('configuration_schema.json', import.meta.resolve('oxlint/package.json')),
+);
+
+const OXLINT_SCHEMA = readJsonFile(OXLINT_SCHEMA_PATH) as {
+  definitions: { DummyRuleMap: { properties: Record<string, unknown> } };
+};
+
+// Oxlint generates `DummyRuleMap.properties` from its built-in `RULES` table.
+// Defined in `oxc_linter/src/generated/rules_enum.rs`;
+// schema generation is in `oxc_linter/src/config/rules.rs`.
+const OXLINT_BUILTIN_RULES = new Set<string>(
+  Object.keys(OXLINT_SCHEMA.definitions.DummyRuleMap.properties),
+);
+
+// Oxlint accepts these TypeScript rule names as aliases for the corresponding
+// built-in ESLint rules. Keep this list aligned with
+// `TYPESCRIPT_COMPATIBLE_ESLINT_RULES` in `oxc_linter/src/utils/mod.rs`.
+const TYPESCRIPT_COMPATIBLE_ESLINT_RULES = new Set([
+  'class-methods-use-this',
+  'default-param-last',
+  'init-declarations',
+  'max-params',
+  'no-array-constructor',
+  'no-dupe-class-members',
+  'no-empty-function',
+  'no-invalid-this',
+  'no-loop-func',
+  'no-loss-of-precision',
+  'no-magic-numbers',
+  'no-redeclare',
+  'no-restricted-imports',
+  'no-shadow',
+  'no-unused-expressions',
+  'no-unused-vars',
+  'no-use-before-define',
+  'no-useless-constructor',
 ]);
 
 export function detectEslintProject(
@@ -583,7 +623,7 @@ export function collectInstalledPackageNames(
  */
 function ruleKeyMatchesNamespace(key: string, namespaces: Set<string>): boolean {
   if (!key.includes('/')) {
-    return true;
+    return false;
   }
   let idx = key.indexOf('/');
   while (idx !== -1) {
@@ -622,18 +662,50 @@ function normalizeOxlintRuleNamespace(key: string): string {
   return `${namespace}${key.slice(separator)}`;
 }
 
-/** Filter a rules object to only entries whose namespace is recognized. */
+function isBuiltinOxlintRule(key: string): boolean {
+  const normalizedKey = normalizeOxlintRuleNamespace(key);
+  const firstSlash = normalizedKey.indexOf('/');
+  if (firstSlash === -1) {
+    return (
+      OXLINT_BUILTIN_RULES.has(normalizedKey) ||
+      [...OXLINT_BUILTIN_RULES].some((rule) => rule.endsWith(`/${normalizedKey}`))
+    );
+  }
+  const separator = normalizedKey.startsWith('@') ? normalizedKey.lastIndexOf('/') : firstSlash;
+  const plugin = normalizedKey.slice(0, separator);
+  const rule = normalizedKey.slice(separator + 1);
+  if (
+    plugin === 'eslint' ||
+    (plugin === 'typescript' && TYPESCRIPT_COMPATIBLE_ESLINT_RULES.has(rule))
+  ) {
+    return OXLINT_BUILTIN_RULES.has(rule);
+  }
+  return OXLINT_BUILTIN_RULES.has(`${plugin}/${rule}`);
+}
+
+function hasBuiltinOxlintNamespace(key: string): boolean {
+  if (!key.includes('/')) {
+    return true;
+  }
+  return ruleKeyMatchesNamespace(normalizeOxlintRuleNamespace(key), OXLINT_NATIVE_PLUGINS);
+}
+
+/** Filter a rules object to Oxlint rules or rules under a configured JS plugin namespace. */
 function filterRulesAgainstNamespaces(
   rules: Record<string, unknown>,
-  namespaces: Set<string>,
+  jsPluginNamespaces: Set<string>,
+  droppedRules: Set<string>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(rules)) {
     if (
-      ruleKeyMatchesNamespace(key, namespaces) ||
-      ruleKeyMatchesNamespace(normalizeOxlintRuleNamespace(key), namespaces)
+      isBuiltinOxlintRule(key) ||
+      ruleKeyMatchesNamespace(key, jsPluginNamespaces) ||
+      ruleKeyMatchesNamespace(normalizeOxlintRuleNamespace(key), jsPluginNamespaces)
     ) {
       out[key] = value;
+    } else if (hasBuiltinOxlintNamespace(key)) {
+      droppedRules.add(key);
     }
   }
   return out;
@@ -718,6 +790,7 @@ export function sanitizeMigratedOxlintConfig(
   // Track everything we strip so we can warn the user.
   const allDroppedJsPlugins = new Set<string>();
   const allDroppedPlugins = new Set<string>();
+  const allDroppedRules = new Set<string>();
 
   // 1. Sanitize base-level jsPlugins.
   const baseSplit = partitionJsPlugins(config.jsPlugins ?? [], availablePackages);
@@ -729,8 +802,9 @@ export function sanitizeMigratedOxlintConfig(
   }
 
   // 2. Base namespaces = native plugins + surviving jsPlugins' namespaces.
+  const jsPluginNamespaces = jsPluginsToNamespaces(baseSplit.kept);
   const baseNamespaces = new Set<string>(OXLINT_NATIVE_PLUGINS);
-  for (const ns of jsPluginsToNamespaces(baseSplit.kept)) {
+  for (const ns of jsPluginNamespaces) {
     baseNamespaces.add(ns);
   }
 
@@ -754,7 +828,11 @@ export function sanitizeMigratedOxlintConfig(
   // `rules: undefined` property that would shift downstream key
   // emission in the merged vite.config.ts.
   if (config.rules) {
-    const filtered = filterRulesAgainstNamespaces(config.rules, baseNamespaces);
+    const filtered = filterRulesAgainstNamespaces(
+      config.rules,
+      jsPluginNamespaces,
+      allDroppedRules,
+    );
     if (Object.keys(filtered).length !== Object.keys(config.rules).length) {
       config.rules = filtered as typeof config.rules;
     }
@@ -781,10 +859,14 @@ export function sanitizeMigratedOxlintConfig(
         }
         overrideSurvivors = split.kept;
       }
-      const overrideNamespaces = new Set<string>(baseNamespaces);
+      const overrideJsPluginNamespaces = new Set<string>(jsPluginNamespaces);
       for (const ns of jsPluginsToNamespaces(overrideSurvivors)) {
-        overrideNamespaces.add(ns);
+        overrideJsPluginNamespaces.add(ns);
       }
+      const overrideNamespaces = new Set<string>([
+        ...OXLINT_NATIVE_PLUGINS,
+        ...overrideJsPluginNamespaces,
+      ]);
 
       // Override plugins[].
       if (override.plugins) {
@@ -804,7 +886,11 @@ export function sanitizeMigratedOxlintConfig(
 
       // Override rules.
       if (override.rules) {
-        const filtered = filterRulesAgainstNamespaces(override.rules, overrideNamespaces);
+        const filtered = filterRulesAgainstNamespaces(
+          override.rules,
+          overrideJsPluginNamespaces,
+          allDroppedRules,
+        );
         if (Object.keys(filtered).length !== Object.keys(override.rules).length) {
           override.rules = filtered as typeof override.rules;
         }
@@ -834,6 +920,13 @@ export function sanitizeMigratedOxlintConfig(
     warnMigration(
       `Stripped unknown plugin reference(s) from the generated lint config: ${[...allDroppedPlugins].join(', ')}. ` +
         "These aren't native Oxlint plugins and no surviving JS plugin contributes them.",
+      report,
+    );
+  }
+  if (allDroppedRules.size > 0) {
+    warnMigration(
+      `Stripped unsupported Oxlint rule(s) from the generated lint config: ${[...allDroppedRules].join(', ')}. ` +
+        'These rule(s) are not available in Oxlint.',
       report,
     );
   }

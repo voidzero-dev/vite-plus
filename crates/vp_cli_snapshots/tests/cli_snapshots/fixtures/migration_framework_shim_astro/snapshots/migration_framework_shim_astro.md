@@ -7,9 +7,8 @@ migration should add Astro shim when astro dependency is detected
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Formatting code...
-
-Code formatted
+●  Formatting code...
+●  Code formatted
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>

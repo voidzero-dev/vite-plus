@@ -1,14 +1,19 @@
-import { SelectPrompt, wrapTextWithPrefix } from '@clack/core';
+import type { CANCEL_SYMBOL } from '@clack/core';
+import { SelectPrompt } from '@clack/core';
 import color from 'picocolors';
 
 import {
   type CommonOptions,
+  getGuide,
+  formatInstructionFooter,
+  SELECT_INSTRUCTIONS,
+  promptTitle,
+  optionText,
+  wrapTextWithPrefix,
   S_BAR,
   S_BAR_END,
   S_POINTER_ACTIVE,
   S_POINTER_INACTIVE,
-  symbol,
-  symbolBar,
 } from './common.js';
 import { limitOptions } from './limit-options.js';
 import { promptMilestone } from './milestone.js';
@@ -72,6 +77,8 @@ export interface SelectOptions<Value> extends CommonOptions {
   options: Option<Value>[];
   initialValue?: Value;
   maxItems?: number;
+  /** Show keyboard instructions (default: true). */
+  showInstructions?: boolean;
 }
 
 const computeLabel = (label: string, format: (text: string) => string) => {
@@ -84,28 +91,20 @@ const computeLabel = (label: string, format: (text: string) => string) => {
     .join('\n');
 };
 
-const withMarker = (
-  marker: string,
-  label: string,
-  format: (text: string) => string,
-  firstLineSuffix = '',
-) => {
-  const lines = label.split('\n');
-  if (lines.length === 1) {
-    return `${marker} ${format(lines[0])}${firstLineSuffix}`;
-  }
-  const [firstLine, ...rest] = lines;
-  return [
-    `${marker} ${format(firstLine)}${firstLineSuffix}`,
-    ...rest.map((line) => `${S_POINTER_INACTIVE} ${format(line)}`),
-  ].join('\n');
-};
-
 export const select = <Value>(opts: SelectOptions<Value>) => {
+  const withMarker = (
+    marker: string,
+    label: string,
+    format: (text: string) => string,
+    suffix = '',
+  ) => optionText(opts.output, `${marker} `, label, format, suffix);
   const opt = (
-    option: Option<Value>,
+    option: Option<Value> | undefined,
     state: 'inactive' | 'active' | 'selected' | 'cancelled' | 'disabled',
   ) => {
+    if (!option) {
+      return '';
+    }
     const label = option.label ?? String(option.value);
     const hint = option.hint ? `: ${color.gray(option.hint)}` : '';
     switch (state) {
@@ -128,7 +127,7 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
       case 'cancelled':
         return computeLabel(label, (str) => color.strikethrough(color.dim(str)));
       default:
-        return withMarker(color.dim(S_POINTER_INACTIVE), label, (text) => text, hint);
+        return withMarker(color.dim(S_POINTER_INACTIVE), label, color.dim);
     }
   };
 
@@ -136,31 +135,13 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
     options: opts.options,
     signal: opts.signal,
     input: opts.input,
+    accessible: opts.accessible,
     output: opts.output,
     initialValue: opts.initialValue,
     render() {
-      const hasGuide = opts.withGuide ?? false;
+      const hasGuide = getGuide(opts);
       const nestedPrefix = '  ';
-      const formatMessageLines = (message: string) => {
-        const lines = message.split('\n');
-        return lines
-          .map((line, index) => `${index === 0 ? `${symbol(this.state)} ` : nestedPrefix}${line}`)
-          .join('\n');
-      };
-      const hasMessage = opts.message.trim().length > 0;
-      const messageLines = !hasMessage
-        ? ''
-        : hasGuide
-          ? wrapTextWithPrefix(
-              opts.output,
-              opts.message,
-              `${symbolBar(this.state)} `,
-              `${symbol(this.state)} `,
-            )
-          : formatMessageLines(opts.message);
-      const title = hasMessage
-        ? `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${messageLines}\n`
-        : '';
+      const title = promptTitle(opts.message, this.state, opts);
 
       switch (this.state) {
         case 'submit': {
@@ -183,16 +164,23 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
         }
         default: {
           const prefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
-          const prefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
+          const footer =
+            opts.showInstructions === false
+              ? []
+              : formatInstructionFooter(SELECT_INSTRUCTIONS, hasGuide, opts.output);
+          if (hasGuide) {
+            footer.push(color.blue(S_BAR_END));
+          }
+          const prefixEnd = footer.join('\n');
           // Calculate rowPadding: title lines + footer lines (S_BAR_END + trailing newline)
           const titleLineCount = title ? title.split('\n').length : 0;
-          const footerLineCount = hasGuide ? 2 : 1; // S_BAR_END + trailing newline (or just trailing newline)
+          const footerLineCount = footer.length + 1; // S_BAR_END + trailing newline (or just trailing newline)
           return `${title}${prefix}${limitOptions({
             output: opts.output,
             cursor: this.cursor,
             options: this.options,
             maxItems: opts.maxItems,
-            columnPadding: prefix.length,
+            columnPadding: 2,
             rowPadding: titleLineCount + footerLineCount,
             style: (item, active) =>
               opt(item, item.disabled ? 'disabled' : active ? 'active' : 'inactive'),
@@ -202,5 +190,5 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
         }
       }
     },
-  }).prompt() as Promise<Value | symbol>;
+  }).prompt() as Promise<Value | typeof CANCEL_SYMBOL>;
 };
