@@ -59,7 +59,6 @@ type PnpmWorkspaceVersions = {
   oxcNodeCore: string;
   oxfmt: string;
   oxlint: string;
-  oxlintPlugins: string;
   oxlintTsgolint: string;
   oxcProjectRuntime: string;
   oxcProjectTypes: string;
@@ -312,10 +311,12 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.oxlint,
     },
     {
+      // Oxc versions this package in the same release group as oxlint.
+      // See https://github.com/oxc-project/oxc/blob/main/oxc_release.toml
       name: '@oxlint/plugins',
       pattern: /'@oxlint\/plugins': =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `'@oxlint/plugins': =${versions.oxlintPlugins}`,
-      newVersion: versions.oxlintPlugins,
+      replacement: `'@oxlint/plugins': =${versions.oxlint}`,
+      newVersion: versions.oxlint,
     },
     {
       name: 'oxlint-tsgolint',
@@ -514,7 +515,6 @@ async function upgradeDependencies(): Promise<void> {
     oxcNodeCoreVersion,
     oxfmtVersion,
     oxlintVersion,
-    oxlintPluginsVersion,
     oxlintTsgolintVersion,
     oxcProjectRuntimeVersion,
     oxcProjectTypesVersion,
@@ -531,8 +531,6 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNpmVersion('@oxc-node/core'),
     getLatestNpmVersion('oxfmt'),
     getLatestNpmVersion('oxlint'),
-    // The plugin API has its own releases; it need not match oxlint's version.
-    getLatestNpmVersion('@oxlint/plugins'),
     getLatestNpmVersion('oxlint-tsgolint'),
     getLatestNpmVersion('@oxc-project/runtime'),
     getLatestNpmVersion('@oxc-project/types'),
@@ -549,7 +547,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
   console.log(`oxfmt: ${oxfmtVersion}`);
   console.log(`oxlint: ${oxlintVersion}`);
-  console.log(`@oxlint/plugins: ${oxlintPluginsVersion}`);
+  console.log(`@oxlint/plugins (from oxlint): ${oxlintVersion}`);
   console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
   console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
@@ -567,7 +565,6 @@ async function upgradeDependencies(): Promise<void> {
     oxcNodeCore: oxcNodeCoreVersion,
     oxfmt: oxfmtVersion,
     oxlint: oxlintVersion,
-    oxlintPlugins: oxlintPluginsVersion,
     oxlintTsgolint: oxlintTsgolintVersion,
     oxcProjectRuntime: oxcProjectRuntimeVersion,
     oxcProjectTypes: oxcProjectTypesVersion,

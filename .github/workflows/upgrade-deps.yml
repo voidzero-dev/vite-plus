@@ -123,8 +123,8 @@ jobs:
               `pnpm install --no-frozen-lockfile`. Core's external Yuku dependencies
               must follow the plugin resolved through tsdown. The sync command also
               copies Vite's postcss and optional fsevents ranges into core and
-              updates the upgrade metadata. `@oxlint/plugins` uses its own published
-              version, selected by the upgrade script.
+              updates the upgrade metadata. `@oxlint/plugins` shares Oxlint's release
+              version and must use the exact same version selected by the upgrade script.
 
             ### Outcomes from earlier steps (both ran with continue-on-error)
             - Upgrade dependencies and sync upstream: ${{ steps.build.outcome }}
