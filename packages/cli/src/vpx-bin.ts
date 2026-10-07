@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process';
 import { realpathSync, statSync } from 'node:fs';
 import { constants } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 
 import { detectScript, parseVpxArgs, ScriptError } from './vpx-script.ts';
@@ -118,8 +119,20 @@ if (invocation) {
     }
     env.VP_SCRIPT_TSCONFIG = file;
   }
-  const loader = new URL('./script-register.js', import.meta.url).href;
-  runAndExit(process.execPath, ['--import', loader, ...invocation.nodeArgs], env);
+  // The preload registers the hooks before any user `--require`; the `--import`
+  // registers the off-thread hooks on older Node.js and routes the entry point
+  // through the ESM loader.
+  runAndExit(
+    process.execPath,
+    [
+      '--require',
+      fileURLToPath(new URL('./script-preload.cjs', import.meta.url)),
+      '--import',
+      new URL('./script-register.js', import.meta.url).href,
+      ...invocation.nodeArgs,
+    ],
+    env,
+  );
 } else {
   const globalVpx = findGlobalVpx(process.env);
   if (!globalVpx) {

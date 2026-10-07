@@ -2,9 +2,9 @@
 //! loader that is compiled into the Vite+ native binding.
 //!
 //! See `rfcs/vpx-script-execution.md`. The CLI/loader contract is
-//! `node --import <file URL of dist/script-register.js>` plus the
-//! `VP_SCRIPT_TSCONFIG` environment variable; keep it stable, because the global
-//! `vp` may run a newer or older project-local `vite-plus` loader.
+//! `node --require <dist/script-preload.cjs> --import <file URL of dist/script-register.js>`
+//! plus the `VP_SCRIPT_TSCONFIG` environment variable; keep it stable, because the
+//! global `vp` may run a newer or older project-local `vite-plus` loader.
 
 use std::io::Read as _;
 
@@ -13,8 +13,9 @@ use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::js_executor::JsExecutor;
 
-/// `vite-plus/dist` entry passed to `node --import`.
-const LOADER_ENTRY: &str = "script-register.js";
+/// `vite-plus/dist` entries: the CommonJS `--require` preload and the `--import`.
+const PRELOAD_ENTRY: &str = "script-preload.cjs";
+const IMPORT_ENTRY: &str = "script-register.js";
 
 /// Extensions that make a token a script.
 const SCRIPT_EXTENSIONS: &[&str] = &[".ts", ".mts", ".cts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"];
@@ -215,17 +216,21 @@ fn has_vpx_shebang(path: &AbsolutePath) -> bool {
     })
 }
 
-/// Find `dist/script-register.js`: the project's `vite-plus` first, so teams run
-/// the loader version pinned in their lockfile, then the global install.
-fn resolve_loader(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+/// Find the `vite-plus/dist` directory holding the loader entries: the project's
+/// `vite-plus` first, so teams run the loader version pinned in their lockfile, then
+/// the global install.
+fn resolve_loader_dir(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let has_loader = |dir: &AbsolutePath| {
+        dir.join(PRELOAD_ENTRY).as_path().is_file() && dir.join(IMPORT_ENTRY).as_path().is_file()
+    };
     if let Some(package_dir) = JsExecutor::resolve_local_vite_plus_package_dir(cwd) {
-        let entry = package_dir.join("dist").join(LOADER_ENTRY);
-        if entry.as_path().is_file() {
-            return Some(entry);
+        let dist = package_dir.join("dist");
+        if has_loader(&dist) {
+            return Some(dist);
         }
     }
-    let entry = JsExecutor::new(None).get_scripts_dir().ok()?.join(LOADER_ENTRY);
-    entry.as_path().is_file().then_some(entry)
+    let dist = JsExecutor::new(None).get_scripts_dir().ok()?;
+    has_loader(&dist).then_some(dist)
 }
 
 /// Run Node.js with the script loader through the core `node` shim, so the
@@ -235,14 +240,15 @@ pub async fn execute(
     tsconfig: Option<String>,
     cwd: &AbsolutePath,
 ) -> i32 {
-    let Some(loader) = resolve_loader(cwd) else {
+    let Some(loader_dir) = resolve_loader_dir(cwd) else {
         output::error(
             "vpx: The script loader was not found. Upgrade vite-plus to run script files with vpx.",
         );
         return 1;
     };
-    let Ok(loader_url) = url::Url::from_file_path(loader.as_path()) else {
-        output::error(&format!("vpx: Invalid loader path: {}", loader.as_path().display()));
+    let preload = loader_dir.join(PRELOAD_ENTRY);
+    let Ok(import_url) = url::Url::from_file_path(loader_dir.join(IMPORT_ENTRY).as_path()) else {
+        output::error(&format!("vpx: Invalid loader path: {}", loader_dir.as_path().display()));
         return 1;
     };
 
@@ -271,9 +277,14 @@ pub async fn execute(
         return 1;
     }
 
-    let mut args = Vec::with_capacity(invocation.node_args.len() + 2);
+    let mut args = Vec::with_capacity(invocation.node_args.len() + 4);
+    // The preload registers the hooks before any user `--require`; the `--import`
+    // registers the off-thread hooks on older Node.js and routes the entry point
+    // through the ESM loader.
+    args.push("--require".to_owned());
+    args.push(preload.as_path().display().to_string());
     args.push("--import".to_owned());
-    args.push(loader_url.to_string());
+    args.push(import_url.to_string());
     args.extend(invocation.node_args);
 
     // stdout belongs to the script; route vp's own output to stderr.

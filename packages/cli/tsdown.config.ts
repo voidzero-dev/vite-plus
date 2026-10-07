@@ -64,7 +64,8 @@ export default defineConfig([
       'config/bin': './src/config/bin.ts',
       'hooks/bin': './src/hooks/bin.ts',
       'staged/bin': './src/staged/bin.ts',
-      // `vpx <script>` loader: `--import` entry and its off-thread ESM hooks.
+      // `vpx <script>` loader: `--import` entry and its off-thread ESM hooks
+      // (the `--require` preload is built as CommonJS below).
       'script-register': './src/script-register.ts',
       'script-esm-hooks': './src/script-esm-hooks.ts',
       // Project-local `vpx` bin; kept apart from bin.js so it loads no binding.
@@ -87,6 +88,25 @@ export default defineConfig([
       },
     },
     plugins: [fixVersionsPathPlugin, inlineLintStagedVersionPlugin],
+  },
+
+  // `vpx <script>` `--require` preload. CommonJS, so it loads before any user
+  // `--require` without going through `require(esm)`; see src/script-preload.ts.
+  {
+    name: 'script-preload',
+    entry: {
+      'script-preload': './src/script-preload.ts',
+    },
+    outDir: 'dist',
+    format: 'cjs',
+    fixedExtension: true,
+    shims: true,
+    dts: false,
+    clean: false,
+    deps: { neverBundle: [/\.\.\/binding\/index\.(js|cjs)/] },
+    outputOptions: {
+      codeSplitting: false,
+    },
   },
 
   // Standalone machine protocol shipped with the prebuilt `vp` archive.
