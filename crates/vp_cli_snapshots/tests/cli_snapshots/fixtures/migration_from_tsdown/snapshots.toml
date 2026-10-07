@@ -24,3 +24,22 @@ steps = [
   { argv = ["vp", "migrate", "--no-interactive"] },
   { argv = ["vpt", "print-file", "tsdown.config.ts"], comment = "check the migrated config is unchanged" },
 ]
+
+[[case]]
+name = "migration_from_tsdown_023"
+vp = "global"
+comment = "Migrate standalone tsdown 0.23.0 without adding legacy dependency or ATTW defaults, and preserve the result on a second migration."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.23.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.build", "tsdown --copy public"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/tsdown/package.json", '{"name":"tsdown","version":"0.23.0"}'], snapshot = false },
+  { argv = ["vpt", "cp", "modern.config.txt", "tsdown.config.ts"], snapshot = false },
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "tsdown.config.ts"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "print-file", "package.json"],
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "tsdown.config.ts"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "print-file", "package.json"],
+]
