@@ -36,3 +36,57 @@ steps = [
   { argv = ["vpx", "--tsconfig", "missing.json", "./src/syntax.ts"], comment = "Missing tsconfig", continue-on-failure = true },
   { argv = ["vpx", "-p", "cowsay", "./src/syntax.ts"], comment = "--package selects package mode", continue-on-failure = true },
 ]
+
+[[case]]
+name = "vpx_script_module_formats"
+vp = ["local", "global"]
+comment = "CommonJS and ESM interop, preloads, child processes, and node:test."
+steps = [
+  { argv = ["vpx", "./src/both.cts"], comment = "A .cts entry that uses export runs as an ES module (no output, exit 0)" },
+  { argv = ["vpx", "./src/import-cts.ts"], comment = "Its named exports import from ESM" },
+  { argv = ["vpx", "--require", "./src/setup.cts", "./src/print-setup.ts"], comment = "A TypeScript --require preload runs after the loader" },
+  { argv = ["vpx", "./src/fork.ts"], comment = "fork() and Worker inherit the loader" },
+  { argv = ["vpx", "--test", "--test-reporter=dot", "./tests/enum.test.ts"], comment = "node:test runs .ts test files" },
+]
+
+[[case]]
+name = "vpx_script_ts_dependency"
+vp = ["local", "global"]
+comment = "TypeScript published in node_modules is transformed, which Node.js type stripping refuses."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules/ts-dep"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-dep/package.json", "{ \"name\": \"ts-dep\", \"type\": \"module\", \"exports\": \"./index.ts\" }\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-dep/index.ts", "export enum Level { High = 'high' }\nexport const level: Level = Level.High;\n"], snapshot = false },
+  { argv = ["vpx", "./src/ts-dependency.ts"] },
+]
+
+[[case]]
+name = "vpx_script_tsconfig_transforms"
+vp = ["local", "global"]
+comment = "tsconfig options that change the transform, and the decorator error."
+steps = [
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-classic", comment = "\"jsx\": \"react\" with jsxFactory and jsxFragmentFactory" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-automatic", comment = "\"jsx\": \"react-jsx\" with a jsxImportSource mapped by paths" },
+  { argv = ["vpx", "./main.ts"], cwd = "plain", comment = "Native class fields without legacy decorators; verbatimModuleSyntax keeps the side-effect import" },
+  { argv = ["vpx", "./decorators.ts"], cwd = "plain", comment = "Decorators without experimentalDecorators fail with a clear error", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_script_shebang"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+comment = "#!/usr/bin/env vpx works for executable script files."
+steps = [
+  { argv = ["vpt", "chmod", "+x", "bin/tool.ts"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "bin/tool"], snapshot = false },
+  { argv = ["vpx", "sh", "-c", "./bin/tool.ts"], comment = "An executable .ts file" },
+  { argv = ["vpx", "sh", "-c", "./bin/tool"], comment = "An extensionless file runs as JavaScript instead of re-entering vpx" },
+]
+
+[[case]]
+name = "vpx_script_watch"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "watch"
+comment = "Node.js --watch restarts when an imported .ts file changes."
+steps = [["node", "verify-watch.mjs"]]
