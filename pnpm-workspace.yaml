@@ -25,7 +25,8 @@ catalog:
   '@oxc-node/core': ^0.1.3
   '@oxc-project/runtime': =0.153.0
   '@oxc-project/types': =0.153.0
-  '@oxlint/plugins': =1.79.0
+  # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
+  '@oxlint/plugins': =1.87.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
   '@rollup/plugin-commonjs': ^29.0.0

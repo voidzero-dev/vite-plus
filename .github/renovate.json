@@ -31,6 +31,7 @@
         "/^oxc-.*/",
         "@oxc-node/*",
         "@oxc-project/*",
+        "@oxlint/plugins",
         "@tsdown/css",
         "@tsdown/exe",
         "@vitejs/devtools",
@@ -54,8 +55,25 @@
         "tsdown",
         "vite",
         "vitest",
-        "vitest-dev"
+        "vitest-dev",
+        "yuku-codegen",
+        "yuku-parser"
       ],
+      "enabled": false
+    },
+    {
+      "description": "Core's postcss and fsevents ranges follow the bundled Vite version through upgrade-deps.ts --sync-bundled-deps.",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["packages/core/package.json"],
+      "matchPackageNames": ["postcss", "fsevents"],
+      "matchDepTypes": ["dependencies", "optionalDependencies"],
+      "enabled": false
+    },
+    {
+      "description": "Core's peer dependency ranges are generated from the bundled upstream packages by packages/core/build.ts.",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["packages/core/package.json"],
+      "matchDepTypes": ["peerDependencies"],
       "enabled": false
     },
     {
