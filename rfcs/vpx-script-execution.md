@@ -1,6 +1,6 @@
 # RFC: Run TypeScript Scripts with `vpx`
 
-- Status: Draft (for review)
+- Status: Draft (for review); Phase 0 prototype implemented
 - Related: [`vpx` command](./vpx-command.md), [JavaScript runtime management](./js-runtime.md), [CLI bundling](../packages/cli/BUNDLING.md), [Core binding resolution](./core-binding-resolution.md)
 - Upstream: [oxc-project/oxc-node](https://github.com/oxc-project/oxc-node) (`@oxc-node/core` 0.1.3; source vendored and compiled into the Vite+ native binding, as Rolldown is)
 - Prior art: [tsx](https://github.com/privatenumber/tsx) 4.23.15
@@ -111,11 +111,11 @@ Stripping is on by default since 22.18 / 23.6 and stable since 24.12 / 25.2. `--
 vpx [VPX_OPTIONS] [NODE_OPTIONS] <script> [args...]
 ```
 
-- `VPX_OPTIONS`: the existing `vpx` options, plus `--tsconfig <path>` and `-v/--version`. `-p/--package` and `-c/--shell-mode` select package mode, so combining them with a script is an error. `-s/--silent` is accepted; script mode prints no Vite+ output in either case.
+- `VPX_OPTIONS`: the existing `vpx` options, plus `--tsconfig <path>`. `-p/--package` and `-c/--shell-mode` select package mode, so combining them with a script is an error. `-s/--silent` is accepted; script mode prints no Vite+ output in either case.
 - `NODE_OPTIONS`: tokens starting with `-` between the `vpx` options and the script. They are forwarded to Node.js verbatim, before the script.
 - `<script>` and `[args...]`: passed to Node.js unchanged, as with `node <script> [args...]`. Tokens after the script, including `--`, belong to the script.
 
-`vpx` options are parsed first, so short options that Node.js also defines (`-p`, `-c`, `-h`, `-v`) keep their `vpx` meaning. Node.js equivalents are available as long options (`--print`, `--check`, `--help`, `--version`). `vpx --version` prints the Vite+ version, as `vp --version` does; today it reaches `pnpm dlx --version`, which nobody can rely on.
+`vpx` options are parsed first, so short options that Node.js also defines (`-p`, `-c`, `-h`) keep their `vpx` meaning. Node.js equivalents are available as long options (`--print`, `--check`, `--help`). `vpx --version` is a Node.js option like any other and prints the Node.js version; today it reaches `pnpm dlx --version`, which nobody can rely on (see [Open Questions](#open-questions)).
 
 `--tsconfig` is recognized anywhere before the script, not only before the first Node.js option, because `vpx --watch --tsconfig x.json ./a.ts` is a natural way to write it. The other `vpx` options keep the current rule: they must come first, and the first unrecognized option starts the Node.js options.
 
@@ -218,11 +218,11 @@ The project-local `vpx` bin (see [Design Decision 8](#8-why-ship-a-project-local
 
 ### Loader Entry
 
-`vite-plus` gains an internal entry point, `dist/script-register.js` (built from `packages/cli/src/script-hooks/register.ts`). `vpx` passes it to `--import` as a `file://` URL, which is required for Windows drive paths. The entry point:
+`vite-plus` gains an internal entry point, `dist/script-register.js` (built from `packages/cli/src/script-register.ts`). `vpx` passes it to `--import` as a `file://` URL, which is required for Windows drive paths. The entry point:
 
 1. Checks the Node.js version and exits with a Vite+ error if the version is outside the supported range (see [Open Questions](#open-questions)). Node.js older than 20.6 has no `--import`, so those versions fail earlier with Node.js's own `bad option` message.
 2. Loads the Vite+ native binding through `packages/cli/binding/index.js`, the same loader the CLI uses, and registers the hooks: the pirates CommonJS hook, then `module.registerHooks()` on Node.js ≥ 26.2 or `module.register('./script-esm-hooks.js')` below it. The ESM hooks module loads the binding again inside the loader worker thread; the binding loads in about 2 ms, so this is not a concern.
-3. Maps runtime helper imports to `@oxc-project/runtime`, which `@voidzero-dev/vite-plus-core` already depends on (see [Native Hooks in the Binding](#3-native-hooks-in-the-binding)).
+3. Resolves oxc-node's runtime helpers from `@oxc-project/runtime`, a `vite-plus` dependency (see [Fixed in the Loader](#fixed-in-the-loader)).
 
 The contract between the CLI and the loader is `--import <file URL of dist/script-register.js>` plus the `VP_SCRIPT_TSCONFIG` environment variable. Because the global `vp` may be newer or older than the project's `vite-plus`, this contract must stay stable across versions; new behavior goes into the loader entry, not into new argv.
 
@@ -265,99 +265,118 @@ The loader is resolved from the project first and the global install second, fol
 
 ## Upstream Status and Vendored Changes
 
-These items in oxc-node were found by reading the 0.1.3 source and testing it. Because the source is vendored, Vite+ can fix each one in its copy and send the fix upstream; the vendored copy should carry as few patches as possible, so the default is upstream first and sync after.
+These items in oxc-node were found by reading the source (0.1.3 and main at `89651b8`) and by running the prototype. Because the source is vendored, Vite+ can fix each one in its copy or in its loader JavaScript and send the fix upstream; the vendored copy should carry as few patches as possible, so the default is upstream first and sync after.
 
-### Fixed by Vendoring
+### Fixed in the Loader
 
 1. **Runtime helper resolution.** oxc-node always lowers class fields, static blocks, and `using`, and it lowers legacy decorators when enabled. Lowered code imports helpers such as `@oxc-node/core/helpers/defineProperty`. These resolve relative to the user's file, so a project that does not depend on `@oxc-node/core` fails with `ERR_MODULE_NOT_FOUND`. Because class fields are lowered unconditionally, any script that declares `class X { count = 0 }` hits this; it is the common case, not an edge case. This reproduces on 0.1.3, and the upstream tests work around it by symlinking the package into fixtures.
 
-   In the vendored copy, `HelperLoaderOptions::module_name` becomes `@oxc-project/runtime`, which `@voidzero-dev/vite-plus-core` already depends on at the oxc version pinned in the catalog. The resolve hook rewrites `@oxc-project/runtime/helpers/*` specifiers to absolute `file://` URLs under core's package directory, computed once at register time, so helper resolution never depends on the user's `node_modules`. The same fix (resolve helpers relative to the loader, not the importer) is proposed upstream.
+   The Rust `module_name` stays `@oxc-node/core`: changing it alone would not help, because the specifier would still resolve from the user's file. The loader JavaScript maps the helpers to `@oxc-project/runtime`, now a `vite-plus` dependency, resolved from `vite-plus` itself:
+   - ESM: the resolve hook calls `nextResolve('@oxc-project/runtime/helpers/<name>', { parentURL: <vite-plus dist URL> })`, on both the sync and the async hook paths.
+   - CommonJS: see item 2.
 
-### Verify, Then Fix
+   The same fix (resolve helpers relative to the loader, not the importer) is proposed upstream.
 
-2. **Helpers in CommonJS output.** The CJS (pirates) path emits helper imports as ESM `import` statements. If that holds for `.cts` and CJS-scoped `.ts` files, any class field in a CJS file is a syntax error, and CJS cannot be a v1 feature until it is fixed. Fix in the vendored copy and upstream.
+2. **Helpers in CommonJS output.** The prototype showed that the CommonJS (pirates) transform emits `require("@oxc-node/core/helpers/…")`, not `import`, but leaves ESM `import`/`export` in place: oxc has no ESM-to-CommonJS module transform. Node.js then runs such a file as an ES module (`require(esm)` syntax detection), where `require` is not defined. So a `require()`d `.cts` file, or a `.ts` file in a CommonJS package, that combines `export` with a class field fails with `ReferenceError: require is not defined in ES module scope`. Upstream has the same failure.
+
+   The pirates hook rewrites each emitted helper `require("@oxc-node/core/helpers/<name>")` to `process.getBuiltinModule("node:module").createRequire(<vite-plus dist URL>)("@oxc-project/runtime/helpers/<name>")`, which runs in both module systems. No `Module._resolveFilename` patch is needed.
+
+   **Remaining limitation:** a `.cts` _entry point_ that uses `export` fails with `ERR_REQUIRE_CYCLE_MODULE`, because Node.js retries the entry as `require(esm)` of itself. Upstream fails the same way, and Node.js type stripping rejects the file outright. Fixing it needs an ESM-to-CommonJS transform in oxc.
+
+### Fixed by Vendoring
+
+3. **Enum evaluation.** oxc's enum lowering reads member values that only `SemanticBuilder::with_enum_eval(true)` computes, and oxc-node never enables it. Release builds silently miscompile string enums (oxc#21667); debug builds of oxc 0.152 panic on a `debug_assert!`. The vendored copy enables it, and the fix goes upstream.
 
 ### Upstream First, Then Sync
 
-3. **Do not lower what Node.js already supports.** Class fields, private members, static blocks, and `using` are lowered regardless of the running Node.js, which changes `Function.prototype.toString()`, stack frames, and performance, and is the source of item 1. Lower only syntax the target Node.js lacks.
-4. Node.js 25.9–26.1 emit DEP0205 for `module.register()`, and Vite+ supports `>=26.0.0`. Use `registerHooks()` wherever it is safe, or avoid the warning.
-5. Map tsconfig `jsx` values (`react`, `react-jsx`, `react-jsxdev`, `preserve`). Only the strings `automatic` and `classic` are matched today, so the classic runtime cannot be selected with valid TypeScript values.
-6. Honor `verbatimModuleSyntax` (`only_remove_type_imports` is hard-coded to `false`).
-7. Lower TC39 standard decorators. Node.js has no native decorators, so these currently throw a `SyntaxError`.
-8. Transform `.ts/.mts/.cts/.tsx` inside `node_modules` without `OXC_TRANSFORM_ALL`, which transforms every file there.
-9. Support Yarn PnP. Enable the `yarn_pnp` feature of oxc_resolver, as Vite+ already does.
-10. Stop freezing the resolver's `condition_names` from the first resolve call.
+4. **Do not lower what Node.js already supports.** Class fields, private members, static blocks, and `using` are lowered regardless of the running Node.js, which changes `Function.prototype.toString()`, stack frames, and performance, and is the source of item 1. Lower only syntax the target Node.js lacks.
+5. Node.js 25.9–26.1 emit DEP0205 for `module.register()`, and Vite+ supports `>=26.0.0`. Use `registerHooks()` wherever it is safe, or avoid the warning.
+6. Map tsconfig `jsx` values (`react`, `react-jsx`, `react-jsxdev`, `preserve`). Only the strings `automatic` and `classic` are matched today, so the classic runtime cannot be selected with valid TypeScript values.
+7. Honor `verbatimModuleSyntax` (`only_remove_type_imports` is hard-coded to `false`).
+8. Lower TC39 standard decorators. Node.js has no native decorators, so these currently throw a `SyntaxError`.
+9. Transform `.ts/.mts/.cts/.tsx` inside `node_modules` without `OXC_TRANSFORM_ALL`, which transforms every file there.
+10. Support Yarn PnP. In the binding, Cargo unifies `oxc_resolver` with the workspace's `yarn_pnp` feature, but oxc-node never turns PnP on in its `ResolveOptions`.
+11. Stop freezing the resolver's `condition_names` from the first resolve call.
+12. ESM-to-CommonJS output for the CommonJS transform (item 2's remaining limitation).
 
 ### Nice to Have
 
-11. Transform TypeScript in `--eval`, stdin, and the REPL.
-12. An opt-in persistent transform cache.
-13. TypeScript syntax in extensionless entry files, for shebang scripts without `.ts`.
-14. Split the crate into a NAPI-free core and a thin NAPI layer, so the vendored copy shrinks to the glue and the patches in [Native Hooks in the Binding](#3-native-hooks-in-the-binding) become unnecessary.
+13. Transform TypeScript in `--eval`, stdin, and the REPL.
+14. An opt-in persistent transform cache.
+15. TypeScript syntax in extensionless entry files, for shebang scripts without `.ts`.
+16. Split the crate into a NAPI-free core and a thin NAPI layer, so the vendored copy shrinks to the glue and the patches in [Native Hooks in the Binding](#3-native-hooks-in-the-binding) become unnecessary.
 
 ## Implementation Architecture
 
 ### 1. Detection and Dispatch
 
-**File**: `crates/vp_global_cli/src/commands/vpx.rs`
+**Files**: `crates/vp_global_cli/src/commands/vpx.rs`, `crates/vp_global_cli/src/commands/vpx_script.rs`
 
-- `parse_vpx_args`: add `-v/--version`, and `--tsconfig <path>` / `--tsconfig=<path>`. `--tsconfig` is also extracted from among the Node.js options.
-- New `detect_script(&positional, cwd) -> Result<ScriptMode, ScriptError>`, called in `execute_vpx` before `extract_command_name` and `has_version_spec`. `ScriptMode` is `Package`, `Script(token)`, or `NodeOnly`.
-- New `execute_script(invocation, flags, cwd)`. It builds `["--import", loader_url, ...positional]` and the child `ToolPathEnv`, then calls the core `node` shim dispatch.
+- `parse_vpx_args` accepts `--tsconfig <path>` and `--tsconfig=<path>`.
+- `vpx_script::detect(&positional, cwd) -> Result<Option<ScriptInvocation>, ScriptError>` runs in `execute_vpx` before `extract_command_name` and `has_version_spec`. `None` means package mode. A `ScriptInvocation` carries the Node.js arguments with any `--tsconfig` among the Node.js options removed.
+- `vpx_script::execute` resolves the loader and sets or clears `VP_SCRIPT_TSCONFIG`. It prepends `node_modules/.bin`, then calls the core `node` shim dispatch with `["--import", loader_url, ...node_args]`. The call is boxed, because shim dispatch is also what routes `vpx` there.
 
 The detection rules are pure functions over `(tokens, cwd)` and are unit tested in the same module.
 
 ### 1b. Project-Local `vpx` Bin
 
-**Files**: `packages/cli/bin/vpx`, `packages/cli/src/bin.ts`, `packages/cli/package.json`
+**Files**: `packages/cli/bin/vpx`, `packages/cli/src/vpx-bin.ts`, `packages/cli/src/vpx-script.ts`, `packages/cli/package.json`
 
-- Add `"vpx": "./bin/vpx"` next to `vp` and `vpr`. The shim imports `dist/bin.js`, which detects `argv0 === 'vpx'` the way it detects `vpr` today.
-- Script mode in JS: the same detection rules, then `spawn(process.execPath, ['--import', loaderUrl, ...rest], { stdio: 'inherit' })` with signal forwarding and exit-code propagation. `process.execPath` is already the project-resolved Node.js when the bin was started through the `node` shim or a package manager script.
-- Package mode delegates to the global `vp` through `VP_CLI_BIN` when it is set, and otherwise prints a new hint that package execution with `vpx` requires the global CLI (`vp exec` in `packages/cli/binding/src/exec/workspace.rs` already points users at `vpx` for remote commands, so the two messages must agree).
-- The detection rules live in one place per language; the Rust and TS unit tests share the table in this RFC.
+- `"vpx": "./bin/vpx"` sits next to `vp` and `vpr`. The shim imports `dist/vpx-bin.js`, a separate entry that loads neither the CLI bundle nor the native binding; the script's own Node.js process loads the binding through `script-register.js`.
+- Script mode: the same detection rules (`vpx-script.ts`), then `spawn(process.execPath, ['--import', loaderUrl, ...nodeArgs], { stdio: 'inherit' })`. The parent ignores `SIGINT`, which reaches the child through the process group, and forwards `SIGTERM` and `SIGHUP`. When the child dies from a signal, the parent re-raises it on Unix, so callers see `128 + signal`.
+- Package mode hands the original arguments to the global `vpx` found on `PATH`, skipping `node_modules/.bin` directories. Without one, it prints that running package binaries needs the global CLI. Inside `vp run` and package manager scripts, where `node_modules/.bin/vpx` shadows the global shim, `vpx eslint .` therefore behaves as before.
+- A unit test checks that the Rust and TypeScript lists of script extensions and value-taking Node.js options stay identical.
 
 ### 2. Loader Resolution
 
-**File**: `crates/vp_global_cli/src/js_executor.rs`
+**File**: `crates/vp_global_cli/src/commands/vpx_script.rs`
 
-Add `resolve_script_register(cwd) -> Result<AbsolutePathBuf, Error>`. It tries the project's `vite-plus` package and then the global scripts dir, reusing `resolve_local_vite_plus_package_dir` and `get_scripts_dir`.
+`resolve_loader(cwd)` tries the project's `vite-plus` package and then the global scripts dir, reusing `JsExecutor::resolve_local_vite_plus_package_dir` and `JsExecutor::get_scripts_dir`. A project `vite-plus` too old to ship `dist/script-register.js` falls back to the global one.
 
 ### 3. Native Hooks in the Binding
 
-**Files**: `packages/tools/.upstream-versions.json`, `packages/tools/src/sync-remote-deps.ts`, `Cargo.toml`, `packages/cli/binding/Cargo.toml`, `packages/cli/binding/src/lib.rs`, `packages/cli/build.ts`
+**Files**: `packages/tools/.upstream-versions.json`, `packages/tools/src/sync-remote-deps.ts`, `packages/tools/src/patch-oxc-node.ts`, `.github/actions/clone/action.yml`, `.github/workflows/security.yml`, `Cargo.toml`, `packages/cli/binding/Cargo.toml`, `packages/cli/binding/src/lib.rs`, `packages/cli/build.ts`
 
-oxc-node is vendored the way Rolldown is. `sync-remote` already clones `rolldown` and `vite` into gitignored directories at the commit pinned in `.upstream-versions.json`; it gains an `oxc-node` entry that clones into `oxc-node/`. The workspace adds `oxc_node = { path = "./oxc-node" }`, and the binding does `pub extern crate oxc_node;` next to `rolldown_binding`, so every `#[napi]` export of oxc-node (`transform`, `transformAsync`, `createResolve`, `load`, `OxcTransformer`) lands in `vite-plus.<platform>.node`.
+oxc-node is vendored the way Rolldown is:
+
+- `.upstream-versions.json` pins oxc-node, and `sync-remote` clones it into the gitignored `oxc-node/` and patches it after the Cargo oxc sync.
+- CI checks it out in the shared clone action and the security workflow. Both run `npx tsx packages/tools/src/patch-oxc-node.ts` before any cargo command, because `Cargo.lock` records the patched manifest.
+- The patch script is part of the native cache key.
+- The root `Cargo.toml` adds `oxc-node = { path = "./oxc-node" }` and excludes `oxc-node/` from the workspace, so upstream code is not held to `--deny warnings` workspace lints, like the nested rolldown workspace.
+- The binding has an optional `oxc-node` feature and does `pub extern crate oxc_node;` next to `rolldown_binding`.
+- `build.ts` enables `rolldown,oxc-node` for every build. napi-rs passes each `features` entry as a separate cargo argument, so the list is joined into one.
 
 What the binding already contains makes this cheap. Through `rolldown_binding`, the release binding links the same crates oxc-node uses (`oxc` with transformer, codegen, and semantic; `oxc_resolver` 11.24.3; `oxc_sourcemap` 9) and already exports `transform`, `transformSync`, `resolveTsconfig`, and `ResolverFactory`. oxc-node's `src/lib.rs` (about 1,550 lines) and `src/windows_file_url.rs` (about 1,170 lines) are glue over those crates. The binding grows by well under 1 MB.
 
-The vendored copy needs these patches, applied by `sync-remote` after checkout so that the upstream tree stays diffable:
+`packages/tools/src/patch-oxc-node.ts` applies these patches. Each is idempotent and fails loudly when upstream no longer matches; `git diff` inside `oxc-node/` shows the full delta:
 
-| Patch                                                                                     | Reason                                                                                                                                                              |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Remove `#[global_allocator]` (`src/lib.rs`)                                               | `rolldown_binding` already declares one; two in one `cdylib` fail to link                                                                                           |
-| Remove the `module_init` that installs a `tracing_subscriber` from `OXC_LOG`              | Vite+ owns tracing; a second global subscriber panics on install                                                                                                    |
-| Point `oxc`, `oxc_resolver`, `oxc_sourcemap`, `napi`, `napi-derive` at `workspace = true` | One `Cargo.lock`: oxc-node tracks oxc head (0.153.0 today) while Rolldown and Vite+ are on 0.152.0; the vendored commit must compile against the workspace versions |
-| `HelperLoaderOptions::module_name` → `@oxc-project/runtime`                               | See Fixed by Vendoring item 1                                                                                                                                       |
-| Read `VP_SCRIPT_TSCONFIG` instead of `OXC_TSCONFIG_PATH` / `TS_NODE_PROJECT`              | See [Environment](#environment)                                                                                                                                     |
-| Enable `oxc_resolver`'s `yarn_pnp` feature                                                | Already on in the workspace; oxc-node leaves it off                                                                                                                 |
+| Patch                                                                                                       | Reason                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crate-type = ["rlib"]` and `build = false`                                                                 | Linked into the host cdylib; the napi build script only emits cdylib link args, which the host binding's build script already sets                                                          |
+| `oxc` follows the workspace version                                                                         | One copy of oxc. oxc-node main tracks 0.153.0 while Rolldown and Vite+ are on 0.152.0, and it compiled against 0.152.0 unchanged. `workspace = true` is not an option for an excluded crate |
+| Remove `#[global_allocator]` with its `cfg`                                                                 | `rolldown_binding` already declares one; two in one binary do not link                                                                                                                      |
+| Remove the tracing `module_init`                                                                            | It always claims the global subscriber that `VP_LOG` relies on, and panics when another is already installed                                                                                |
+| Read `VP_SCRIPT_TSCONFIG` instead of `TS_NODE_PROJECT` / `OXC_TSCONFIG_PATH`                                | See [Environment](#environment)                                                                                                                                                             |
+| `SemanticBuilder::new().with_enum_eval(true)`                                                               | Fixed by Vendoring item 3                                                                                                                                                                   |
+| Every top-level `#[napi]` item goes under `namespace = "oxcNode"`; `TransformTask` → `OxcNodeTransformTask` | Rolldown already exports `transform` and `TransformTask` from the same binding; duplicate NAPI exports silently overwrite each other                                                        |
 
-The `rolldown` Cargo feature is release-only, so `pnpm build` produces a binding without oxc. oxc-node must be in dev builds too, or `vpx ./x.ts` and the local-flavor snapshot tests do not work on a development checkout. The binding gets an `oxc-node` feature that is on by default and compiles oxc-node in both build types; the cost is the oxc crates in dev builds (see [Open Questions](#open-questions)).
+Before this change, `BUNDLING.md` said the `rolldown` feature was release-only, but `build.ts` enables it for every build, so development builds already compile oxc. The `oxc-node` feature costs dev builds no extra crates.
 
 ### 3b. Loader JavaScript
 
-**Files**: `packages/cli/src/script-hooks/register.ts`, `packages/cli/src/script-hooks/esm.ts`, `packages/cli/package.json`, `packages/cli/build.ts`
+**Files**: `packages/cli/src/script-register.ts`, `packages/cli/src/script-esm-hooks.ts`, `packages/cli/src/script-hooks.ts`, `packages/cli/package.json`, `packages/cli/tsdown.config.ts`
 
-- `register.ts` and `esm.ts` are adapted from oxc-node's `packages/core/register.mjs` (160 lines) and `esm.mjs` (26 lines). They import the native functions from `../binding/index.js` instead of `@oxc-node/core`, add the Node.js version check, and add the helper specifier rewrite.
-- `pirates` (the CommonJS `Module._extensions` hook, pure JavaScript, no dependencies) is added to `vite-plus` `dependencies` or inlined by the bundler.
-- Build outputs: `dist/script-register.js` (the `--import` entry) and `dist/script-esm-hooks.js` (passed to `module.register()` on Node.js < 26.2).
-- `@oxc-project/runtime` stays a dependency of `@voidzero-dev/vite-plus-core`; the loader resolves its directory once from core's package root. The catalog pins `@oxc-project/runtime` and `@oxc-project/types` to one exact version, which must equal the `oxc` crate version compiled into the binding. `sync-remote` already resolves oxc-related version conflicts toward the higher version; this adds the Rust side to that check.
+- `script-register.ts` and `script-esm-hooks.ts` are adapted from oxc-node's `packages/core/register.mjs` (160 lines) and `esm.mjs` (26 lines). They import `oxcNode` from `../binding/index.js` instead of `@oxc-node/core`, and they add the Node.js version check and the helper mapping (`script-hooks.ts`). They sit at the top of `src/` because the bundle flattens into `dist/` and the binding import stays relative.
+- `pirates` is a `devDependency`, bundled into `dist`.
+- `@oxc-project/runtime` is a `dependency` of `vite-plus`, so helpers resolve from `vite-plus` under strict layouts such as pnpm. The catalog pins it at 0.153.0 while the Rust `oxc` crate is 0.152.0. The helpers are stable across these releases, but the versions should move in lockstep; adding the runtime to `sync-remote`'s oxc version sync is a follow-up.
+- Build outputs: `dist/script-register.js` (the `--import` entry), `dist/script-esm-hooks.js` (passed to `module.register()` on Node.js < 26.2), and `dist/vpx-bin.js` (the project-local bin).
 
 ### 4. Toolchain Metadata and Docs
 
-- `packages/cli/toolchain.config.json`: register `oxc-node` with `delivery: ["compiled"]`, as Rolldown's compiled half is, so `vp --version` and `vp toolchain` report it with the vendored commit's version.
-- `packages/cli/BUNDLING.md`: add an "oxc-node Native Binding Integration" section parallel to the Rolldown one (feature flag, vendored patches, export list).
-- `docs/guide/vpx.md`: add a "Running scripts" section. `docs/guide/env.md`: contrast `vp node` (plain Node.js) with `vpx <script>`.
-- Update the `vpx --help` text (`VPX_HELP`).
+- `packages/cli/BUNDLING.md`: an "oxc-node Script Loader" section, plus the corrected feature description.
+- `docs/guide/vpx.md`: a "Running Scripts" section.
+- The `vpx --help` text (`VPX_HELP`) and the `command_vpx_pnpm*` snapshots that record it.
+- **Follow-up:** `packages/cli/toolchain.config.json` cannot describe oxc-node yet. It is a path dependency pinned by a hash in `.upstream-versions.json`, so it needs a new `versionSource` type before `vp --version` and `vp toolchain` can report it.
 
 ## CLI Help Output
 
@@ -378,7 +397,6 @@ Options:
   -c, --shell-mode      Execute the command within a shell environment
   -s, --silent          Suppress all output except the command's output
       --tsconfig <PATH> tsconfig.json to use when running a script
-  -v, --version         Print the Vite+ version
   -h, --help            Print help
 
 Examples:
@@ -483,7 +501,7 @@ Errors raised in the script, including transform errors, come from Node.js and o
 - The crates are already there. Through `rolldown_binding`, the release binding links `oxc` (transformer, codegen, semantic), `oxc_resolver`, and `oxc_sourcemap` and exports `transform`, `resolveTsconfig`, and `ResolverFactory`. oxc-node adds about 2,700 lines of glue and no new crates.
 - No new packages. `@oxc-node/core` would add a 17-target platform matrix (about 4 MB per platform) next to Vite+'s 8-target one, with its own install, version-check, and WASI-fallback paths.
 - Load cost is negligible. Measured on this machine (Node.js 22.18, macOS arm64): the 42 MB release binding loads in 2.3–3.2 ms warm and 17.9 ms cold; the 4.2 MB `@oxc-node/core` binding loads in 0.7–1.1 ms warm. Transform speed is identical, since it is the same oxc.
-- The blocking helper bug stops being an upstream dependency. With the hooks in Vite+, helper imports map to `@oxc-project/runtime`, which core already ships.
+- The blocking helper bug stops being an upstream dependency. The loader maps helper imports to `@oxc-project/runtime`, a `vite-plus` dependency, and the vendored copy carries fixes such as enum evaluation until they land upstream.
 - One oxc version for the whole toolchain. Rolldown, `vp lint`'s type-aware parsing, the static config extractor, and the script loader cannot drift apart.
 - The vendoring mechanism (`sync-remote`, `.upstream-versions.json`, workspace path deps, a Cargo feature, publish-time platform injection) exists and is exercised on every release.
 
@@ -524,7 +542,7 @@ Add `@oxc-node/core` to `vite-plus` `dependencies`, as `oxlint` and `oxfmt` are,
 - **Pros**: no vendoring, no Rust changes, upstream fixes arrive with a version bump.
 - **Cons**:
   - A second native addon with its own 17-target platform matrix, install path, and version checks, next to the binding that already links the same oxc crates. About 4 MB per platform.
-  - The helper-resolution bug (Fixed by Vendoring item 1) blocks shipping until upstream fixes it, and the workaround from JavaScript is uncertain because of hook ordering.
+  - Helper resolution (Fixed in the Loader item 1) would still need the same loader-side mapping, plus coordination with a separately versioned package.
   - oxc-node's oxc version floats independently of the rest of the toolchain.
 
 Rejected in favor of Design Decision 9. This was the RFC's first draft.
@@ -548,7 +566,7 @@ Kept as the fallback if vendoring proves harder than expected.
 
 `#!/usr/bin/env vpx` makes the kernel run `vpx /abs/path/tool.ts args`. The absolute path is explicit, so script mode applies. This is the supported form: the file keeps its `.ts` extension and is made executable.
 
-An extensionless executable with that shebang (`bin/tool`) does not work for TypeScript in v1. Node.js treats extensionless files as JavaScript, and oxc-node's hooks only claim known extensions, so the file runs as plain JavaScript (Nice to Have item 13). The shebang check in `is_script` exists only to stop a loop: without it, `vpx /abs/bin/tool` would go through the `PATH` lookup, exec the file, and re-enter `vpx` forever. Options in a shebang need `#!/usr/bin/env -S vpx --tsconfig …`.
+An extensionless executable with that shebang (`bin/tool`) does not work for TypeScript in v1. Node.js treats extensionless files as JavaScript, and oxc-node's hooks only claim known extensions, so the file runs as plain JavaScript (Nice to Have item 15). The shebang check in `is_script` exists only to stop a loop: without it, `vpx /abs/bin/tool` would go through the `PATH` lookup, exec the file, and re-enter `vpx` forever. Options in a shebang need `#!/usr/bin/env -S vpx --tsconfig …`.
 
 ### Scripts Outside the Current Directory
 
@@ -574,41 +592,45 @@ With the global CLI installed, `node_modules/.bin/vpx` (the project-local bin) s
 
 ### Unit Tests
 
-The detection table and option parsing in `crates/vp_global_cli/src/commands/vpx.rs` get unit tests, and the version check in `script-register.ts` gets a `pnpm test:unit` test.
+- `crates/vp_global_cli/src/commands/vpx_script.rs`: the detection table, option-value skipping, `--tsconfig` extraction, and the shebang guard.
+- `packages/cli/src/__tests__/vpx-script.spec.ts`: the TypeScript port of the same rules; a check that the Rust and TypeScript lists match; the Node.js range check, which must equal `engines.node`; and the helper mapping and `require()` rewrite.
+- `packages/tools/src/__tests__/patch-oxc-node.spec.ts`: each vendored patch, idempotency, and failure on upstream drift.
 
 ### Snapshot Tests
 
-A new fixture, `crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_vpx_script/`, declares its cases for both flavors (`vp = ["local", "global"]`), so the global shim and the project-local bin are checked against the same snapshots. Unlike `command_vpx_pnpm10`, these cases need a built `packages/cli/dist` and a dev-built binding with the `oxc-node` feature in both flavors: the runner installs the checkout package into each case home, and script mode loads `dist/script-register.js` and the native binding from it. The runner's stale-`dist` guard covers only the local flavor, so `just snapshot-test-global` cannot run these cases without a prior `pnpm build`; the fixture README notes this. Cases:
+The fixture `crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_vpx_script/` runs every case in both flavors (`vp = ["local", "global"]`), so the global shim and the project-local bin record identical snapshots. These cases need a built `packages/cli` (dist and binding) in both flavors, because script mode loads `dist/script-register.js` and the binding from the installed checkout package. The fixture pins Node.js 22.18.0, the repository version that CI prewarms, which exercises the `module.register()` path.
 
-| Case                               | Covers                                                                                                     |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `vpx_script_ts_syntax`             | Enum, namespace, parameter property, class field initializer (helper regression), decorators with metadata |
-| `vpx_script_resolution`            | `.js` → `.ts`, extensionless import, tsconfig `paths`, `.mts`/`.cts`, JSON, `require()` of `.ts`           |
-| `vpx_script_jsx`                   | `.tsx` with `jsxImportSource` pointing at a fixture-local runtime                                          |
-| `vpx_script_args_and_exit_code`    | `process.argv`, arguments after `--`, `process.exitCode = 7` propagation                                   |
-| `vpx_script_node_options`          | `--env-file=.env`, `--env-file .env`, `--import ./setup.ts ./main.ts`, `--eval` without a script           |
-| `vpx_script_tsconfig`              | `--tsconfig` first and after `--watch`, override of per-file selection, the missing-file error             |
-| `vpx_script_errors`                | Missing script, `-p` with a script, unsupported Node.js version                                            |
-| `vpx_script_shebang` (non-Windows) | `chmod +x` with `./tool.ts`, and the extensionless recursion guard                                         |
-| `vpx_script_watch`                 | PTY: `--watch`, edit an imported `.ts` file, restart milestone                                             |
-| `vpx_package_mode_unchanged`       | `vpx --help`, bare package names, `pkg@version`                                                            |
+| Case                          | Covers                                                                                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vpx_script_ts_syntax`        | Enum, namespace, parameter properties, legacy decorator, private field, lowered class field (helper)                                                 |
+| `vpx_script_resolution`       | tsconfig `paths`, `.js` → `.ts`, extensionless import, JSON, `require()` of a `.cts` with `export` and a class field; `--tsconfig` in both positions |
+| `vpx_script_args_and_options` | Arguments and `--` after the script, exit code 7, `--env-file .env`, a TypeScript `--import` preload, `--eval` without a script                      |
+| `vpx_script_errors`           | Missing explicit path, missing bare `.ts`, missing tsconfig, `-p` with a script                                                                      |
+
+`command_vpx_pnpm10` and `command_vpx_pnpm11` re-record the new help text; package mode is otherwise unchanged.
+
+Not yet covered by snapshots: `--watch` (PTY restart milestone), the shebang form, JSX, and the `registerHooks()` path on Node.js ≥ 26.2, which needs a runtime CI does not prewarm.
 
 ### Prototype Verification Checklist
 
-These need confirmation on Node.js 22.18, 24, and 26 before implementation:
+Verified by the Phase 0 prototype on Node.js 22.18, macOS arm64:
 
-- The vendored crate links into the binding: allocator and `module_init` patches applied, one `oxc` version in `Cargo.lock`, `cargo build` time for dev builds measured.
-- The helper specifier rewrite to `@oxc-project/runtime` works for class fields, `using`, and legacy decorators, from ESM and from CommonJS files.
-- Class fields in `.cts` and CJS-scoped `.ts` files: do helper imports produce a syntax error (Verify, Then Fix item 2)?
-- `VP_SCRIPT_TSCONFIG` drives both the resolver and the transform tsconfig.
-- The binding loads inside the `module.register()` worker thread on Node.js < 26.2 through `packages/cli/binding/index.js`.
-- `--watch` restarts when an imported `.ts` file changes, on both the sync (`registerHooks`) and async (`register`) hook paths.
-- `--test` with `.ts` test files, where each file runs in a subprocess that inherits `execArgv`.
-- `require('./x.ts')` from CJS, and `require()` of ESM `.ts` files.
-- The pirates CJS hook combined with Node.js's own `.ts` handling on Node.js ≥ 22.18.
-- `child_process.fork('./w.ts')` and `new Worker('./w.ts')`.
-- Signal forwarding and `128 + signal` exit codes through the project-local bin.
-- Windows: loader URL, Ctrl+C, and exit codes.
+- [x] The vendored crate compiles against the workspace's oxc 0.152.0 without source changes, and `Cargo.lock` holds one `oxc`.
+- [x] The `oxcNode` namespace removes the export collisions; Rolldown's `transform` and `TransformTask` are unchanged.
+- [x] The helper mapping works for class fields from ESM, from CommonJS, and from a `require()`d `.cts` file that uses `export` (Fixed in the Loader item 2).
+- [x] `VP_SCRIPT_TSCONFIG` drives both resolution (`paths`) and per-process tsconfig selection.
+- [x] The binding loads inside the `module.register()` worker thread through `packages/cli/binding/index.js`.
+- [x] `require()` of `.cts` from CommonJS and from ESM (`createRequire`).
+- [x] Exit codes, and `128 + signal` through the project-local bin (SIGTERM gives 143).
+
+Still to verify:
+
+- [ ] Node.js 24 and 26, including the sync `registerHooks()` path on ≥ 26.2.
+- [ ] `--watch` restarts when an imported `.ts` file changes, on both hook paths.
+- [ ] `--test` with `.ts` test files, where each file runs in a subprocess that inherits `execArgv`.
+- [ ] `child_process.fork('./w.ts')` and `new Worker('./w.ts')`.
+- [ ] Windows: loader URL, Ctrl+C, and exit codes.
+- [ ] Release-build binary size growth.
 
 ## Performance
 
@@ -621,7 +643,7 @@ Preliminary startup medians for a hello-world `.ts` on Node.js 22.18 (async hook
 | `node --import @oxc-node/core/register hello.ts` | 46.6 ms |
 | `tsx hello.ts`                                   | 59.1 ms |
 
-The prototype will re-measure on Node.js 22, 24, and 26, including the overhead of the Vite+ shim (version resolution is cached) and a graph of about 1,000 modules. The second measurement decides whether a transform cache (Nice to Have item 12) is needed.
+The prototype will re-measure on Node.js 22, 24, and 26, including the overhead of the Vite+ shim (version resolution is cached) and a graph of about 1,000 modules. The second measurement decides whether a transform cache (Nice to Have item 14) is needed.
 
 Binding load cost, measured by `require()` of the `.node` file alone on Node.js 22.18, macOS arm64:
 
@@ -635,7 +657,7 @@ The 2 ms difference is within the noise of the startup numbers above, so compili
 ## Security Considerations
 
 1. **No remote fallback for files**: explicit paths, and bare names with TypeScript extensions, never reach `vp dlx`.
-2. **Trusted loader**: the hooks are compiled into the `vite-plus` binding and its `dist`; nothing is loaded from the project's `node_modules` except `@oxc-project/runtime` helpers from core's own dependency tree.
+2. **Trusted loader**: the hooks are compiled into the `vite-plus` binding and its `dist`; runtime helpers resolve from `vite-plus`'s own `@oxc-project/runtime` dependency, never from the project's `node_modules`.
 3. **Shebang recursion guard**: prevents an exec loop for extensionless `#!/usr/bin/env vpx` files.
 4. **No new environment surface**: `VP_SCRIPT_TSCONFIG` is set only when `--tsconfig` is passed, and the hooks ignore `TS_NODE_PROJECT` and `OXC_TSCONFIG_PATH`.
 
@@ -645,13 +667,13 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 
 - `vpx <existing file with a script extension>` now runs the file. Previously an executable file with a shebang was exec'd through the `PATH` lookup, and a non-executable file fell through to `vp dlx`, which failed.
 - A bare name that matches both a local file and a package (`vpx highlight.js` with `./highlight.js` present) now runs the file, as `node` and `tsx` would.
-- Invocations whose first token after the `vpx` options starts with `-` previously reached `vp dlx` with that token as the package name and never ran a package. They now run Node.js. `vpx --version` previously printed the package manager's version through `pnpm dlx --version`; it now prints the Vite+ version.
+- Invocations whose first token after the `vpx` options starts with `-` previously reached `vp dlx` with that token as the package name and never ran a package. They now run Node.js. `vpx --version` previously printed the package manager's version through `pnpm dlx --version`; it now prints the Node.js version.
 - `vite-plus` gains a `vpx` bin. Projects that already have a different `vpx` in `node_modules/.bin` (there is no such package on npm today) would see a bin conflict warning from their package manager.
-- No new packages. The platform binding grows by well under 1 MB; `vite-plus` gains `pirates` (pure JavaScript) as a dependency unless it is inlined.
+- No new platform packages. The platform binding grows by well under 1 MB. `vite-plus` gains `@oxc-project/runtime` (pure JavaScript helpers) as a dependency; `pirates` is bundled.
 
 ## Rollout
 
-1. **Phase 0, vendor and prototype**: add `oxc-node` to `sync-remote` at a commit that compiles against the workspace's oxc, apply the patch set, link it into the binding, port the two hook files, run the verification checklist, and benchmark. Send the helper-resolution fix upstream.
+1. **Phase 0, vendor and prototype** (implemented): oxc-node in `sync-remote` and CI, the patch set, the binding feature, the loader JavaScript, detection and execution in both CLIs, unit and snapshot tests, and docs. Remaining: the rest of the verification checklist, benchmarks, and upstream fixes for the enum evaluation, CommonJS helper, and helper resolution findings.
 2. **Phase 1, experimental**: detection, execution, `--tsconfig`, the project-local bin, snapshot tests, and docs marked experimental.
 3. **Phase 2, stable**: remove the experimental label and teach `vp migrate` to rewrite `tsx`, `ts-node`, and `esno` usages in `package.json` scripts.
 4. **Phase 3**: see Future Enhancements.
@@ -666,10 +688,10 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 6. **Local bin scope**: Design Decision 8 ships a project-local `vpx` that handles script mode and delegates package mode. Should it instead implement the full lookup chain in JS, so that `vpx eslint .` also works without the global CLI? (Proposed: delegate; keep one implementation of the chain.)
 7. **`--require` ordering**: should the loader also be preloaded with `--require`, so that `--require ./setup.ts` works? That requires a CJS-loadable entry.
 8. **Extensionless TypeScript in shebang scripts**: wait for upstream support, or document the `.ts` requirement? (Proposed: document; see Edge Cases.)
-9. **oxc version lockstep**: oxc-node follows oxc head; Rolldown and Vite+ lag by a release or two. Pin the vendored oxc-node commit to whatever compiles against the workspace's oxc, or let `sync-remote` rewrite its `oxc*` dependencies to `workspace = true` and carry compile fixes when oxc's API moved? (Proposed: rewrite to workspace versions; pick commits that need no compile fixes.)
+9. **oxc version lockstep**: oxc-node follows oxc head; Rolldown and Vite+ lag by a release or two. The prototype rewrites oxc-node's `oxc` version to the workspace's and picks commits that compile unchanged. Should the daily `upgrade-deps` workflow also bump oxc-node, or should bumps stay manual? (Proposed: manual, until oxc-node and Rolldown track oxc together.)
 10. **Maturity**: oxc-node is marked experimental. Should v1 ship behind an "experimental" docs label, or wait for an oxc-node 1.0?
-11. **`--version`**: should `vpx --version` print the Vite+ version (proposed), or should it stay a Node.js option so that `vpx --version` prints the Node.js version like tsx's second line?
-12. **Dev builds**: compile oxc-node into dev builds by default (slower `cargo build`, but `vpx ./x.ts` works from a checkout), or keep it release-only like Rolldown and have dev builds fall back to the `@oxc-node/core` npm package that the workspace already installs? (Proposed: default on; measure the build-time cost in Phase 0.)
+11. **`--version`**: the prototype leaves it a Node.js option, so `vpx --version` prints the Node.js version, like tsx's second line. Should it print the Vite+ version instead, as `vp --version` does?
+12. **Dev builds** (resolved): `build.ts` already compiles Rolldown, and therefore oxc, into every build, so the `oxc-node` feature is on for all builds at no extra crate cost.
 
 ## Future Enhancements
 
