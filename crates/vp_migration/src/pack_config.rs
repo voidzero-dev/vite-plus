@@ -57,61 +57,63 @@ pub(crate) fn rewrite_pack_config(
 pub(crate) fn preserve_legacy_defaults(
     file: &Path,
     root: &Path,
-    standalone: bool,
+    is_tsdown_config: bool,
     original_content: &str,
 ) -> bool {
-    fn installed_package(start: &Path, root: &Path, name: &str) -> Option<serde_json::Value> {
-        for directory in start.ancestors().take_while(|directory| directory.starts_with(root)) {
-            let manifest = directory.join("node_modules").join(name).join("package.json");
-            if manifest.exists() {
-                return serde_json::from_str(&std::fs::read_to_string(manifest).ok()?).ok();
-            }
-        }
-        None
-    }
-
     let Some(directory) = file.parent() else { return true };
-    let legacy_version = |version: &str| {
-        js_semver::Version::parse(version)
-            .ok()
-            .map(|version| version < js_semver::Version::new(0, 23, 0))
-    };
-    let standalone_defaults = || {
-        let package = installed_package(directory, root, "tsdown")?;
-        legacy_version(package.get("version")?.as_str()?)
-    };
-    let bundled_defaults = || {
-        // Use the same manifest reader and tool lookup as `vp --version`.
-        // Read the project's installed CLI, never the CLI running migration.
-        for current in directory.ancestors().take_while(|directory| directory.starts_with(root)) {
-            let package_dir = current.join("node_modules/vite-plus");
-            let manifest_path = package_dir.join("dist/toolchain.json");
-            if let Ok(manifest_path) = std::fs::canonicalize(&manifest_path)
-                && let Some(manifest_path) = vt_path::AbsolutePath::new(&manifest_path)
-                && let Ok(manifest) = vp_toolchain::load_manifest(manifest_path)
-            {
-                let legacy = vp_toolchain::node_by_id(&manifest, "tsdown")
-                    .and_then(|node| node.version.as_deref())
-                    .and_then(legacy_version);
-                return Some(legacy.unwrap_or(true));
-            }
-            if package_dir.join("package.json").is_file() {
-                // Releases without a toolchain manifest bundle tsdown <0.23.
-                // Do not inherit a parent CLI's manifest or a direct tsdown version.
-                return Some(true);
-            }
-        }
-        None
-    };
     // Migration retains tsdown.config.* files imported by vite.config.pack.
     // Their original vite-plus/pack import identifies the bundled toolchain;
     // newly rewritten tsdown imports must not affect this decision.
-    let legacy = if standalone && !imports_bundled_pack(original_content) {
-        standalone_defaults().or_else(bundled_defaults)
+    let legacy = if is_tsdown_config && !imports_bundled_pack(original_content) {
+        standalone_legacy_defaults(directory, root)
+            .or_else(|| bundled_legacy_defaults(directory, root))
     } else {
-        bundled_defaults().or_else(standalone_defaults)
+        bundled_legacy_defaults(directory, root)
+            .or_else(|| standalone_legacy_defaults(directory, root))
     };
     legacy.unwrap_or(true)
+}
+
+fn standalone_legacy_defaults(directory: &Path, root: &Path) -> Option<bool> {
+    for current in directory.ancestors().take_while(|directory| directory.starts_with(root)) {
+        let manifest_path = current.join("node_modules/tsdown/package.json");
+        if manifest_path.exists() {
+            let content = std::fs::read_to_string(manifest_path).ok()?;
+            let package: serde_json::Value = serde_json::from_str(&content).ok()?;
+            return legacy_defaults_for_version(package.get("version")?.as_str()?);
+        }
+    }
+    None
+}
+
+fn bundled_legacy_defaults(directory: &Path, root: &Path) -> Option<bool> {
+    // Use the same manifest reader and tool lookup as `vp --version`.
+    // Read the project's installed CLI, never the CLI running migration.
+    for current in directory.ancestors().take_while(|directory| directory.starts_with(root)) {
+        let package_dir = current.join("node_modules/vite-plus");
+        let manifest_path = package_dir.join("dist/toolchain.json");
+        if let Ok(manifest_path) = std::fs::canonicalize(&manifest_path)
+            && let Some(manifest_path) = vt_path::AbsolutePath::new(&manifest_path)
+            && let Ok(manifest) = vp_toolchain::load_manifest(manifest_path)
+        {
+            let legacy = vp_toolchain::node_by_id(&manifest, "tsdown")
+                .and_then(|node| node.version.as_deref())
+                .and_then(legacy_defaults_for_version);
+            return Some(legacy.unwrap_or(true));
+        }
+        if package_dir.join("package.json").is_file() {
+            // Releases without a toolchain manifest bundle tsdown <0.23.
+            // Do not inherit a parent CLI's manifest or a direct tsdown version.
+            return Some(true);
+        }
+    }
+    None
+}
+
+fn legacy_defaults_for_version(version: &str) -> Option<bool> {
+    js_semver::Version::parse(version)
+        .ok()
+        .map(|version| version < js_semver::Version::new(0, 23, 0))
 }
 
 fn imports_bundled_pack(content: &str) -> bool {
@@ -538,7 +540,7 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>, preserve_legacy_defaults: bool)
             config.replace_value(name, updated);
         }
     });
-    let source = edit_object(&source, |config| {
+    let mut source = edit_object(&source, |config| {
         config.rename("outExtension", "outExtensions");
         config.rename("publicDir", "copy");
         for (old, new, replacement) in
@@ -561,25 +563,21 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>, preserve_legacy_defaults: bool)
             config.replace_value("attw", format!("{{ {ATTW_PROFILE_DEFAULT} }}"));
         }
     });
-    let source =
-        move_option(&source, "injectStyle", "css", "inject", false, preserve_legacy_defaults);
-    let source =
-        move_option(&source, "inlineOnly", "deps", "onlyBundle", false, preserve_legacy_defaults);
-    let source =
-        move_option(&source, "noExternal", "deps", "alwaysBundle", false, preserve_legacy_defaults);
-    let source = move_option(
-        &source,
-        "skipNodeModulesBundle",
-        "deps",
-        "neverBundle",
-        true,
-        preserve_legacy_defaults,
-    );
-    edit_object(&source, |config| {
-        if preserve_legacy_defaults {
+    for (old, group, new, boolean_only) in [
+        ("injectStyle", "css", "inject", false),
+        ("inlineOnly", "deps", "onlyBundle", false),
+        ("noExternal", "deps", "alwaysBundle", false),
+        ("skipNodeModulesBundle", "deps", "neverBundle", true),
+    ] {
+        source = move_option(&source, old, group, new, boolean_only, preserve_legacy_defaults);
+    }
+    if preserve_legacy_defaults {
+        edit_object(&source, |config| {
             config.set_default("deps", &format!("deps: {{ {RESOLVE_DEP_SUBPATH_DEFAULT} }}"));
-        }
-    })
+        })
+    } else {
+        source
+    }
 }
 
 fn move_option(
@@ -587,13 +585,13 @@ fn move_option(
     old: &str,
     group: &str,
     new: &str,
-    boolean: bool,
+    boolean_only: bool,
     preserve_legacy_defaults: bool,
 ) -> String {
     edit_object(source, |config| {
         let Some(property) = config.property(old) else { return };
         let value = config.value(old);
-        if boolean {
+        if boolean_only {
             let Some(value) = &value else { return };
             match value.kind().as_ref() {
                 "false" => {

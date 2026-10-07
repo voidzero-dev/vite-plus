@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use vp_error::Error;
 
-use crate::{ast_grep, file_walker};
+use crate::{ast_grep, file_walker, pack_config};
 
 /// ast-grep rules for rewriting vite imports and declare module statements
 ///
@@ -2385,12 +2385,14 @@ fn rewrite_import(
     skip_packages: &SkipPackages,
     preserve_vitest_in_nuxt_package: bool,
 ) -> Result<RewriteResult, Error> {
-    // Read the file
     let content = std::fs::read_to_string(file_path)?;
-    let standalone = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
-    let preserve_defaults = (!skip_packages.skip_tsdown
-        && (standalone || is_vite_config_file(file_path)))
-    .then(|| crate::pack_config::preserve_legacy_defaults(file_path, root, standalone, &content));
+    let is_tsdown_config = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
+    let is_vite_config = is_vite_config_file(file_path);
+    let preserve_defaults = if !skip_packages.skip_tsdown && (is_tsdown_config || is_vite_config) {
+        Some(pack_config::preserve_legacy_defaults(file_path, root, is_tsdown_config, &content))
+    } else {
+        None
+    };
 
     // Issue #2004: `vite` specifiers are rewritten only in config entry files;
     // everything else keeps its `vite` imports (they still resolve through the
@@ -2404,14 +2406,14 @@ fn rewrite_import(
         &content,
         skip_packages,
         preserve_vitest_in_nuxt_package,
-        is_vite_config_file(file_path),
+        is_vite_config,
     )?;
     if let Some(preserve_defaults) = preserve_defaults {
         let rewritten =
-            crate::pack_config::rewrite_pack_config(&result.content, standalone, preserve_defaults);
+            pack_config::rewrite_pack_config(&result.content, is_tsdown_config, preserve_defaults);
         result.updated |= rewritten != result.content;
         result.content = rewritten;
-        result.warnings = crate::pack_config::pack_config_warnings(&result.content, standalone);
+        result.warnings = pack_config::pack_config_warnings(&result.content, is_tsdown_config);
     }
     Ok(result)
 }
@@ -2558,6 +2560,14 @@ mod tests {
         std::fs::write(file, content).unwrap();
     }
 
+    fn write_tsdown_fixture(root: &Path, version: &str) {
+        write_pack_fixture(
+            root,
+            "node_modules/tsdown/package.json",
+            &serde_json::json!({ "name": "tsdown", "version": version }).to_string(),
+        );
+    }
+
     fn write_toolchain_fixture(root: &Path, version: &str) {
         write_pack_fixture(root, "node_modules/vite-plus/package.json", r#"{"version":"1.0.0"}"#);
         write_pack_fixture(
@@ -2584,14 +2594,7 @@ mod tests {
             write_toolchain_fixture(root, version);
             // A direct tsdown installation must not override the CLI's manifest.
             let standalone_version = if legacy { "0.23.0" } else { "0.22.0" };
-            write_pack_fixture(
-                root,
-                "node_modules/tsdown/package.json",
-                &serde_json::json!({
-                    "name": "tsdown", "version": standalone_version
-                })
-                .to_string(),
-            );
+            write_tsdown_fixture(root, standalone_version);
             write_pack_fixture(root, "apps/server-v2/package.json", "{}");
             write_pack_fixture(
                 root,
@@ -2624,11 +2627,7 @@ mod tests {
                     r#"{"version":"0.2.0"}"#,
                 );
             }
-            write_pack_fixture(
-                &package,
-                "node_modules/tsdown/package.json",
-                r#"{"name":"tsdown","version":"0.23.0"}"#,
-            );
+            write_tsdown_fixture(&package, "0.23.0");
             write_pack_fixture(&package, "vite.config.ts", "export default { pack: {} };");
             assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
             let actual = std::fs::read_to_string(package.join("vite.config.ts")).unwrap();
@@ -2673,11 +2672,7 @@ mod tests {
                 "node_modules/vite/package.json",
                 r#"{"name":"@voidzero-dev/vite-plus-core","version":"0.2.0"}"#,
             );
-            write_pack_fixture(
-                root,
-                "node_modules/tsdown/package.json",
-                r#"{"name":"tsdown","version":"0.23.0"}"#,
-            );
+            write_tsdown_fixture(root, "0.23.0");
             write_pack_fixture(
                 root,
                 "packages/standalone/package.json",
@@ -2735,11 +2730,7 @@ mod tests {
                 write_pack_fixture(root, ".gitignore", "node_modules/\n");
                 write_pack_fixture(root, "package.json", "{}");
                 if package == "tsdown" {
-                    write_pack_fixture(
-                        root,
-                        "node_modules/tsdown/package.json",
-                        &serde_json::json!({ "name": "tsdown", "version": version }).to_string(),
-                    );
+                    write_tsdown_fixture(root, version);
                 } else {
                     write_toolchain_fixture(root, version);
                 }
@@ -2787,11 +2778,7 @@ mod tests {
         write_pack_fixture(root, "package.json", "{}");
         write_toolchain_fixture(root, "0.23.0");
         write_toolchain_fixture(&root.join("packages/legacy"), "0.22.0");
-        write_pack_fixture(
-            root,
-            "node_modules/tsdown/package.json",
-            r#"{"name":"tsdown","version":"0.22.0"}"#,
-        );
+        write_tsdown_fixture(root, "0.22.0");
         for package in ["modern", "legacy"] {
             write_pack_fixture(root, &format!("packages/{package}/package.json"), "{}");
             write_pack_fixture(
