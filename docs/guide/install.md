@@ -230,8 +230,8 @@ vp pm stage reject <stage-id>    # discard a staged version (2FA)
 ```
 
 - pnpm (`pnpm stage`, requires pnpm ≥ 11.3) and npm (`npm stage`, requires npm ≥ 11.15 and Node ≥ 22.14) pass through directly.
-- yarn (Berry) uses its npm plugin (`yarn npm publish --staged`, `yarn npm stage …`); `view`/`download` fall back to npm.
-- yarn Classic and bun have no staged-publishing support and fall back to `npm stage`.
+- Yarn 4.16.0 and later uses its npm plugin (`yarn npm publish --staged`, `yarn npm stage …`). The `view` and `download` subcommands, and `publish` with an explicit tarball or folder target, fall back to `npm stage`.
+- Yarn versions earlier than 4.16.0 and Bun fall back to `npm stage`.
 
 ## Package-Manager Integrity Verification
 
