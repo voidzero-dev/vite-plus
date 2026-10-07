@@ -1362,7 +1362,7 @@ jobs:
               rm -rf package *.tgz
 
               pnpm bootstrap-cli:ci
-              export PATH=\"/root/.vite-plus/bin:\$PATH\"
+              . \"\$HOME/.vite-plus/env\"
 
               vp --version
               vp -h
