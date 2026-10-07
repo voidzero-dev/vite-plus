@@ -43,6 +43,7 @@ describe('toolchain export', () => {
       'vite-task',
       'oxc',
       'oxc-resolver',
+      'oxc-node',
     ]);
     for (const node of nodes.values()) {
       if (node.id === 'vite-task') {
@@ -50,6 +51,7 @@ describe('toolchain export', () => {
       }
       expect(node.version, `${node.id} should have an exact version`).toMatch(/^\d+\.\d+\.\d+/);
     }
+    expect(nodes.get('oxc-node')?.revision).toMatch(/^[0-9a-f]{40}$/);
     expect(nodes.get('vite-task')?.version).toBeUndefined();
     expect(nodes.get('vite-task')?.revision).toMatch(/^[0-9a-f]{40}$/);
     const nativeBuildTimePath = path.join(cliPkgDir, 'binding', 'vite-plus.build-time');
