@@ -4123,6 +4123,10 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@oxlint/plugins@1.79.0':
+    resolution: {integrity: sha512-S0uyoxakDINJ4DPgqxGlEEvrdSMeQb7Z2lKVjxoY2gwsbZbfg2Xr8Klfeo5ZeraHmmdBCELFUHkSe6KEmBpMvg==}
+    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
+
   '@oxlint/plugins@1.87.0':
     resolution: {integrity: sha512-OtSZ6NxNkS7bkVy7zk9zGnajz2hVIu0uRPP/dJvJesGRaXtimpA4lpxap7FaIJndG2UIoKhnBU4DxyDQIWv6yg==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
@@ -11080,6 +11084,9 @@ snapshots:
     optional: true
 
   '@oxlint/binding-win32-x64-msvc@1.87.0':
+    optional: true
+
+  '@oxlint/plugins@1.79.0':
     optional: true
 
   '@oxlint/plugins@1.87.0': {}
