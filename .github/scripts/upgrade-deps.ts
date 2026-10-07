@@ -48,6 +48,9 @@ type UpstreamVersions = {
   vite: {
     hash: string;
   };
+  'oxc-node': {
+    hash: string;
+  };
 };
 
 type PnpmWorkspaceVersions = {
@@ -60,7 +63,6 @@ type PnpmWorkspaceVersions = {
   oxfmt: string;
   oxlint: string;
   oxlintTsgolint: string;
-  oxcProjectRuntime: string;
   oxcProjectTypes: string;
   oxcMinify: string;
   oxcParser: string;
@@ -197,14 +199,19 @@ async function updateUpstreamVersions(): Promise<void> {
 
   const oldRolldownHash = data.rolldown.hash;
   const oldViteHash = data.vite.hash;
-  const [rolldown, vite] = await Promise.all([
+  const oldOxcNodeHash = data['oxc-node'].hash;
+  const [rolldown, vite, oxcNode] = await Promise.all([
     getLatestTag('rolldown', 'rolldown'),
     getLatestTag('vitejs', 'vite', { stableOnly: true }),
+    // Vendored into the native binding; `sync-remote` re-applies its patch.
+    getLatestTag('oxc-project', 'oxc-node', { stableOnly: true }),
   ]);
   data.rolldown.hash = rolldown.sha;
   data.vite.hash = vite.sha;
+  data['oxc-node'].hash = oxcNode.sha;
   recordChange('rolldown', oldRolldownHash, rolldown.sha, rolldown.tag);
   recordChange('vite', oldViteHash, vite.sha, vite.tag);
+  recordChange('oxc-node', oldOxcNodeHash, oxcNode.sha, oxcNode.tag);
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
   console.log('Updated .upstream-versions.json');
@@ -324,12 +331,6 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
       replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
       newVersion: versions.oxlintTsgolint,
-    },
-    {
-      name: '@oxc-project/runtime',
-      pattern: /'@oxc-project\/runtime': =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `'@oxc-project/runtime': =${versions.oxcProjectRuntime}`,
-      newVersion: versions.oxcProjectRuntime,
     },
     {
       name: '@oxc-project/types',
@@ -517,7 +518,6 @@ async function upgradeDependencies(): Promise<void> {
     oxfmtVersion,
     oxlintVersion,
     oxlintTsgolintVersion,
-    oxcProjectRuntimeVersion,
     oxcProjectTypesVersion,
     oxcMinifyVersion,
     oxcParserVersion,
@@ -533,7 +533,6 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNpmVersion('oxfmt'),
     getLatestNpmVersion('oxlint'),
     getLatestNpmVersion('oxlint-tsgolint'),
-    getLatestNpmVersion('@oxc-project/runtime'),
     getLatestNpmVersion('@oxc-project/types'),
     getLatestNpmVersion('oxc-minify'),
     getLatestNpmVersion('oxc-parser'),
@@ -550,7 +549,6 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxlint: ${oxlintVersion}`);
   console.log(`@oxlint/plugins (from oxlint): ${oxlintVersion}`);
   console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
-  console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
   console.log(`oxc-minify: ${oxcMinifyVersion}`);
   console.log(`oxc-parser: ${oxcParserVersion}`);
@@ -567,7 +565,6 @@ async function upgradeDependencies(): Promise<void> {
     oxfmt: oxfmtVersion,
     oxlint: oxlintVersion,
     oxlintTsgolint: oxlintTsgolintVersion,
-    oxcProjectRuntime: oxcProjectRuntimeVersion,
     oxcProjectTypes: oxcProjectTypesVersion,
     oxcMinify: oxcMinifyVersion,
     oxcParser: oxcParserVersion,

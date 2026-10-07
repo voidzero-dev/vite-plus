@@ -114,6 +114,24 @@ describe('vendored Vitest dependency alignment', () => {
     expect(merged.catalog?.vitest).toBe('5.0.0');
   });
 
+  test('pins @oxc-project/runtime to the oxc release Rolldown compiles against', () => {
+    const merged = mergePnpmWorkspaces(
+      {
+        catalog: {
+          vitest: '5.0.0',
+          '@oxc-project/runtime': '=0.153.0',
+          '@oxc-project/types': '=0.153.0',
+        },
+      },
+      { catalog: { '@oxc-project/runtime': '=0.152.0', '@oxc-project/types': '=0.152.0' } },
+      {},
+      verkit,
+    );
+    expect(merged.catalog?.['@oxc-project/runtime']).toBe('=0.152.0');
+    // Other oxc packages keep the higher version.
+    expect(merged.catalog?.['@oxc-project/types']).toBe('=0.153.0');
+  });
+
   test.each(['=4.1.11', '^5.1.0', '5.2.0', '^6.0.0'])(
     'preserves the selected exact runner version against upstream %s',
     (upstream) => {

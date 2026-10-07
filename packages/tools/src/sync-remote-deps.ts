@@ -42,6 +42,7 @@ const ROLLDOWN_DIR = 'rolldown';
 const VITE_DIR = 'vite';
 const CORE_PACKAGE_PATH = 'packages/core';
 const VITE_DEVTOOLS_PACKAGE = '@vitejs/devtools';
+const OXC_RUNTIME_PACKAGE = '@oxc-project/runtime';
 
 function log(message: string) {
   console.log(`[sync-rolldown] ${message}`);
@@ -568,6 +569,15 @@ export function mergePnpmWorkspaces(
 
   // Remove vite from catalog
   delete catalog.vite;
+
+  // `@oxc-project/runtime` provides the helpers that the oxc transformer compiled into
+  // the native binding (Rolldown's and the vendored oxc-node's) imports. Follow
+  // Rolldown's pin, which matches the oxc crates the binding links, rather than the
+  // higher version.
+  const rolldownOxcRuntime = rolldown.catalog?.[OXC_RUNTIME_PACKAGE];
+  if (rolldownOxcRuntime) {
+    catalog[OXC_RUNTIME_PACKAGE] = rolldownOxcRuntime;
+  }
 
   // Sort catalog keys alphabetically
   result.catalog = Object.keys(catalog)
