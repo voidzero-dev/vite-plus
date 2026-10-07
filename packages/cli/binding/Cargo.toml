@@ -8,6 +8,7 @@ publish = false
 rust-version.workspace = true
 
 [features]
+oxc-node = ["dep:oxc-node"]
 rolldown = ["dep:rolldown_binding"]
 
 [dependencies]
@@ -42,6 +43,7 @@ vt = { workspace = true }
 vt_casefold = { workspace = true }
 vt_workspace = { workspace = true }
 rolldown_binding = { workspace = true, optional = true, features = ["disable_panic_hook"] }
+oxc-node = { workspace = true, optional = true }
 
 [build-dependencies]
 napi-build = { workspace = true }

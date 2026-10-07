@@ -4473,6 +4473,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxc-node"
+version = "0.0.0"
+dependencies = [
+ "idna",
+ "memchr",
+ "mimalloc-safe",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "oxc",
+ "oxc_resolver",
+ "oxc_sourcemap",
+ "phf 0.14.0",
+ "serde_json",
+ "simdutf8",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "oxc_allocator"
 version = "0.153.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8642,6 +8662,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "oxc-node",
  "petgraph 0.8.3",
  "pretty_assertions",
  "rolldown_binding",

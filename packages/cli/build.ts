@@ -146,7 +146,7 @@ async function buildNapiBinding() {
 
   const cli = new NapiCli();
 
-  const bindingFeatures = ['rolldown'];
+  const bindingFeatures = ['rolldown', 'oxc-node'];
   const { dtsHeader } = (
     await import('../../rolldown/packages/rolldown/package.json', { with: { type: 'json' } })
   ).default.napi;
@@ -160,7 +160,8 @@ async function buildNapiBinding() {
     jsBinding: 'index.cjs',
     dts: 'index.d.cts',
     release: process.env.VP_CLI_DEBUG !== '1',
-    features: bindingFeatures,
+    // napi-rs passes each entry as a separate cargo argument after one `--features`.
+    features: [bindingFeatures.join(',')],
   });
 
   const outputs = await task;

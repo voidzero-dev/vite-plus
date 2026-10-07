@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
+import { OXC_NODE_DIR, patchOxcNode } from './patch-oxc-node.ts';
 import {
   alignVendoredVitestDependencies,
   REMOVED_VITEST_PACKAGES,
@@ -860,6 +861,10 @@ export async function syncRemote() {
       });
       log(`Removed ${VITE_DIR}`);
     }
+    if (existsSync(join(rootDir, OXC_NODE_DIR))) {
+      rmSync(join(rootDir, OXC_NODE_DIR), { recursive: true, force: true });
+      log(`Removed ${OXC_NODE_DIR}`);
+    }
     // Clean up legacy 'rolldown-vite' directory (renamed to 'vite')
     const legacyViteDir = join(rootDir, 'rolldown-vite');
     if (existsSync(legacyViteDir)) {
@@ -880,6 +885,12 @@ export async function syncRemote() {
     join(rootDir, VITE_DIR),
     upstreamVersions['vite'].branch,
     upstreamVersions['vite'].hash,
+  );
+  cloneOrResetRepo(
+    upstreamVersions['oxc-node'].repo,
+    join(rootDir, OXC_NODE_DIR),
+    upstreamVersions['oxc-node'].branch,
+    upstreamVersions['oxc-node'].hash,
   );
 
   // Dynamically import dependencies after git clone. Capture the whole `yaml`
@@ -938,6 +949,10 @@ export async function syncRemote() {
   // Keep the root Cargo.toml oxc pins in lockstep with the vendored rolldown.
   log('Syncing Cargo.toml oxc versions with rolldown...');
   syncCargoOxcWithRolldown(rootDir);
+
+  // oxc-node compiles into the native binding; it follows the oxc pins above.
+  log('Patching vendored oxc-node...');
+  patchOxcNode(rootDir);
 
   // Merge package.json exports
   log('Merging package.json exports...');
