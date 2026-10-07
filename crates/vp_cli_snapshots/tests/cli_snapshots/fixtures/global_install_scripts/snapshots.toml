@@ -1,0 +1,57 @@
+[[case]]
+name = "global_scripts_dangling_dependency"
+vp = "global"
+comment = "A dangling dependency link in a local package must not prevent global installation or skipped-script warnings."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "local-cli/node_modules"], snapshot = false },
+  { argv = ["node", "-e", "require('node:fs').symlinkSync(require('node:path').resolve('removed-package'), 'local-cli/node_modules/unused-link', process.platform === 'win32' ? 'junction' : 'dir')"], snapshot = false },
+  ["vp", "install", "-g", "./local-cli"],
+  ["local-cli"],
+  ["vpt", "stat-file", "local-cli/postinstall-ran", "--assert", "missing"],
+]
+
+[[case]]
+name = "global_scripts_default_and_enable"
+vp = "global"
+local-registry = true
+comment = "Global installs and updates skip direct and transitive scripts by default and warn last. --run-scripts runs all scripts with the selected Node.js, including Node 20."
+env = { npm_config_ignore_scripts = "false", npm_config_dangerously_allow_all_scripts = "true", npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "tarballs"], snapshot = false },
+  { argv = ["npm", "pack", "./native-addon", "--ignore-scripts", "--pack-destination", "tarballs"], snapshot = false },
+  { argv = ["npm", "pack", "./my-cli", "--ignore-scripts", "--pack-destination", "tarballs"], snapshot = false },
+  { argv = ["vpt", "json-edit", "my-cli/package.json", "version", "2.0.0"], snapshot = false },
+  { argv = ["npm", "pack", "./my-cli", "--ignore-scripts", "--pack-destination", "tarballs"], snapshot = false },
+  ["vp", "install", "-g", "my-cli@1.0.0", "native-addon@1.0.0"],
+  ["my-cli", "skipped", "skipped"],
+  { argv = ["vp", "install", "-g", "my-cli@1.0.0", "--run-scripts"], envs = [["npm_config_ignore_scripts", "true"], ["npm_config_dangerously_allow_all_scripts", "false"]] },
+  ["my-cli", "ran", "ran"],
+  { argv = ["vp", "env", "install", "node@20.19.6"], snapshot = false },
+  ["vp", "add", "-g", "my-cli@1.0.0", "--node", "20.19.6", "--ignore-scripts"],
+  ["my-cli", "skipped", "skipped"],
+  ["vp", "add", "-g", "my-cli@1.0.0", "--node", "20.19.6", "--run-scripts"],
+  ["my-cli", "ran", "ran"],
+  ["vp", "update", "-g", "my-cli@2.0.0"],
+  ["my-cli", "skipped", "skipped"],
+  ["vp", "update", "-g", "my-cli@1.0.0", "--run-scripts"],
+  ["my-cli", "ran", "ran"],
+]
+
+[[case]]
+name = "global_scripts_npm12"
+vp = "global"
+seed-runtime = false
+local-registry = true
+comment = "A case-owned Node runtime with bundled npm 12 still runs all scripts only when explicitly enabled, without changing Node.js."
+env = { npm_config_ignore_scripts = "true", npm_config_dangerously_allow_all_scripts = "false", npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["node", "setup-npm.cjs"], snapshot = false, timeout = 120000 },
+  ["node", "-p", "require(require('node:path').join(require('node:path').dirname(process.execPath), process.platform === 'win32' ? 'node_modules/npm/package.json' : '../lib/node_modules/npm/package.json')).version"],
+  { argv = ["vpt", "mkdir", "-p", "tarballs"], snapshot = false },
+  { argv = ["npm", "pack", "./native-addon", "--ignore-scripts", "--pack-destination", "tarballs"], snapshot = false },
+  { argv = ["npm", "pack", "./my-cli", "--ignore-scripts", "--pack-destination", "tarballs"], snapshot = false },
+  ["vp", "install", "-g", "my-cli@1.0.0"],
+  ["my-cli", "skipped", "skipped"],
+  ["vp", "install", "-g", "my-cli@1.0.0", "--run-scripts"],
+  ["my-cli", "ran", "ran"],
+]

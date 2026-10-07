@@ -1,0 +1,7 @@
+{
+  "name": "native-addon",
+  "version": "1.0.0",
+  "scripts": {
+    "postinstall": "node -e \"require('node:fs').writeFileSync('postinstall-ran', process.version)\""
+  }
+}

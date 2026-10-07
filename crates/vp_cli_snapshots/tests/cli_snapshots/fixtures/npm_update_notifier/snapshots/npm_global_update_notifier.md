@@ -2,7 +2,7 @@
 
 Global installs disable npm update notifications in the child process.
 
-## `vp install -g ./global-package`
+## `vp install -g ./global-package --run-scripts`
 
 ```
 VITE+ - The Unified Toolchain for the Web
