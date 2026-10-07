@@ -98,7 +98,7 @@ Vite+ provides all the familiar package management commands:
 - `vp rebuild` rebuilds native modules (e.g. after switching Node.js versions)
 - `vp link` and `vp unlink` manage local package links
 - `vp dlx <pkg>` runs a package binary without adding it to the project
-- `vp pm <command>` forwards a raw package-manager-specific command when you need behavior outside the normalized `vp` command set
+- `vp pm <command>` provides additional package-management commands adapted to the detected package manager
 
 ### Command Guide
 
@@ -198,7 +198,7 @@ Use these when you need lower-level package-manager behavior.
 
 - `vp link` and `vp unlink` manage local development links
 - `vp dlx create-vite` runs a package binary without saving it as a dependency
-- `vp pm <command>` forwards directly to the resolved package manager
+- `vp pm <command>` provides additional package-management commands adapted to the detected package manager. Run `vp pm --help` to see available commands.
 
 Examples:
 
