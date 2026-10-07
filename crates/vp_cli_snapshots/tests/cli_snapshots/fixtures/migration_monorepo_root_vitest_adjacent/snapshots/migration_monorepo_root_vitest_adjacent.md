@@ -12,7 +12,7 @@ root with a vitest-adjacent dep but no direct vitest still gets a direct vitest 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-▲  No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
+▲ No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied
