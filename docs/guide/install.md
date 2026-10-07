@@ -61,6 +61,10 @@ vp install -w
 
 ## Global Packages
 
+::: info
+Global package operations with `-g` require the [global CLI](/guide/global-cli).
+:::
+
 Use the `-g` flag for installing, updating or removing globally installed packages:
 
 - `vp install -g <pkg>` installs a package globally
@@ -99,6 +103,10 @@ Vite+ provides all the familiar package management commands:
 - `vp link` and `vp unlink` manage local package links
 - `vp dlx <pkg>` runs a package binary without adding it to the project
 - `vp pm <command>` provides additional package-management commands adapted to the detected package manager
+
+::: info
+The `vp list` and `vp rebuild` shortcuts are available only in the global CLI. With the [project-local CLI](/guide/local-cli), use `vp pm list` and `vp pm rebuild`.
+:::
 
 ### Command Guide
 
