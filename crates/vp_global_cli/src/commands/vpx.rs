@@ -29,6 +29,8 @@ pub struct VpxFlags {
     pub tsconfig: Option<String>,
     /// Show help (-h/--help)
     pub help: bool,
+    /// Show the Vite+ version (-v/--version)
+    pub version: bool,
 }
 
 /// Help text for vpx.
@@ -48,6 +50,7 @@ Options:
   -c, --shell-mode      Execute the command within a shell environment
   -s, --silent          Suppress all output except the command's output
       --tsconfig <PATH> tsconfig.json to use when running a script
+  -v, --version         Print the Vite+ version
   -h, --help            Print help
 
 Examples:
@@ -75,6 +78,17 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
     if flags.help {
         vp_shared::output::print_stdout_line(format_args!("{VPX_HELP}"));
         return 0;
+    }
+
+    // Same report as `vp --version`; `vp node --version` prints the Node.js version.
+    if flags.version {
+        return match super::version::execute(cwd.to_absolute_path_buf()).await {
+            Ok(status) => exit_code_from_status(status),
+            Err(e) => {
+                output::error(&e.to_string());
+                1
+            }
+        };
     }
 
     // No command specified
@@ -396,6 +410,9 @@ pub fn parse_vpx_args(args: &[String]) -> (VpxFlags, Vec<String>) {
             "-h" | "--help" => {
                 flags.help = true;
             }
+            "-v" | "--version" => {
+                flags.version = true;
+            }
             other => {
                 // Handle --package=VALUE
                 if let Some(value) = other.strip_prefix("--package=") {
@@ -566,6 +583,30 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_vpx_args_version() {
+        for flag in ["-v", "--version"] {
+            let args: Vec<String> = vec![flag.into()];
+            let (flags, positional) = parse_vpx_args(&args);
+            assert!(flags.version, "{flag}");
+            assert!(positional.is_empty());
+        }
+        // After the script, `--version` belongs to the script.
+        let args: Vec<String> = vec!["./a.ts".into(), "--version".into()];
+        let (flags, positional) = parse_vpx_args(&args);
+        assert!(!flags.version);
+        assert_eq!(positional, args);
+    }
+
+    #[test]
+    fn test_parse_vpx_args_tsconfig() {
+        let args: Vec<String> =
+            vec!["--tsconfig".into(), "a.json".into(), "--tsconfig=b.json".into(), "./a.ts".into()];
+        let (flags, positional) = parse_vpx_args(&args);
+        assert_eq!(flags.tsconfig.as_deref(), Some("b.json"));
+        assert_eq!(positional, vec!["./a.ts".to_string()]);
+    }
+
+    #[test]
     fn test_parse_vpx_args_no_args() {
         let args: Vec<String> = vec![];
         let (flags, positional) = parse_vpx_args(&args);
@@ -578,10 +619,10 @@ mod tests {
 
     #[test]
     fn test_parse_vpx_args_unknown_flag_becomes_positional() {
-        let args: Vec<String> = vec!["--version".into()];
+        let args: Vec<String> = vec!["--inspect".into()];
         let (flags, positional) = parse_vpx_args(&args);
         assert!(!flags.help);
-        assert_eq!(positional, vec!["--version"]);
+        assert_eq!(positional, vec!["--inspect"]);
     }
 
     // =========================================================================
