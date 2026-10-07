@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  canRegisterSyncHooks,
   isSupportedNodeVersion,
   rewriteHelperRequires,
   runtimeHelperSpecifier,
@@ -135,6 +136,13 @@ describe('script hooks', () => {
       readFileSync(path.join(import.meta.dirname, '../../package.json'), 'utf8'),
     );
     expect(SUPPORTED_NODE_RANGE).toBe(pkg.engines.node);
+  });
+
+  it('uses in-thread hooks on Node.js 26, which deprecates module.register()', () => {
+    expect(canRegisterSyncHooks('22.18.0')).toBe(false);
+    expect(canRegisterSyncHooks('24.15.0')).toBe(false);
+    expect(canRegisterSyncHooks('26.0.0')).toBe(true);
+    expect(canRegisterSyncHooks('26.5.0')).toBe(true);
   });
 
   it('checks the supported Node.js range', () => {

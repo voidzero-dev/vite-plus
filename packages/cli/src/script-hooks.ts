@@ -16,6 +16,23 @@ export function isSupportedNodeVersion(version: string): boolean {
   return major >= 26;
 }
 
+/**
+ * Whether to use the in-thread `module.registerHooks()` instead of the off-thread
+ * `module.register()`, which Node.js deprecates from 25.9 (DEP0205).
+ *
+ * Upstream oxc-node waits for Node.js 26.2 because of two `registerHooks()` defects:
+ * a sync resolve hook had its `conditions` overridden (nodejs/node#59011, fixed in
+ * 22.19 and 24.5) and `require()` inside an imported CommonJS module short-circuited
+ * when a load hook returned its source (nodejs/node#62920, fixed in 26.2). These hooks
+ * never return source for CommonJS, so only the first defect matters, and every
+ * Node.js 26 release has its fix. 22.x and 24.x keep `module.register()`, which they do
+ * not deprecate.
+ */
+export function canRegisterSyncHooks(version: string): boolean {
+  const [major = 0] = version.split('.').map(Number);
+  return major >= 26;
+}
+
 const OXC_NODE_HELPERS = '@oxc-node/core/helpers/';
 const RUNTIME_HELPERS = '@oxc-project/runtime/helpers/';
 
