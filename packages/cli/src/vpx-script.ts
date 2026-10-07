@@ -68,11 +68,18 @@ export interface VpxFlags {
   silent: boolean;
   tsconfig?: string;
   help: boolean;
+  version: boolean;
 }
 
 /** npx-style: flags come before the first positional or unknown flag. */
 export function parseVpxArgs(args: string[]): { flags: VpxFlags; positional: string[] } {
-  const flags: VpxFlags = { packages: [], shellMode: false, silent: false, help: false };
+  const flags: VpxFlags = {
+    packages: [],
+    shellMode: false,
+    silent: false,
+    help: false,
+    version: false,
+  };
   let index = 0;
   for (; index < args.length; index++) {
     const arg = args[index];
@@ -89,6 +96,8 @@ export function parseVpxArgs(args: string[]): { flags: VpxFlags; positional: str
       flags.silent = true;
     } else if (arg === '-h' || arg === '--help') {
       flags.help = true;
+    } else if (arg === '-v' || arg === '--version') {
+      flags.version = true;
     } else if (arg === '--tsconfig') {
       index++;
       if (index < args.length) {

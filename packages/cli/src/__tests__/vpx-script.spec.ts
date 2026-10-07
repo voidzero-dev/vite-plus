@@ -120,12 +120,24 @@ describe('detectScript', () => {
 describe('parseVpxArgs', () => {
   it('stops at the first positional or unknown option', () => {
     expect(parseVpxArgs(['--tsconfig=t.json', '-s', '--watch', './a.ts'])).toEqual({
-      flags: { packages: [], shellMode: false, silent: true, help: false, tsconfig: 't.json' },
+      flags: {
+        packages: [],
+        shellMode: false,
+        silent: true,
+        help: false,
+        version: false,
+        tsconfig: 't.json',
+      },
       positional: ['--watch', './a.ts'],
     });
     expect(parseVpxArgs(['-p', 'cowsay', '-c', 'echo hi | cowsay']).flags).toMatchObject({
       packages: ['cowsay'],
       shellMode: true,
+    });
+    expect(parseVpxArgs(['-v']).flags.version).toBe(true);
+    expect(parseVpxArgs(['./a.ts', '--version'])).toMatchObject({
+      flags: { version: false },
+      positional: ['./a.ts', '--version'],
     });
   });
 });

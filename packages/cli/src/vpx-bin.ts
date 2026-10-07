@@ -11,6 +11,7 @@
 
 import { spawn } from 'node:child_process';
 import { realpathSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { constants } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,7 +94,7 @@ const { flags, positional } = parseVpxArgs(args);
 let invocation;
 try {
   invocation =
-    flags.packages.length === 0 && !flags.shellMode && !flags.help
+    flags.packages.length === 0 && !flags.shellMode && !flags.help && !flags.version
       ? detectScript(positional, cwd)
       : undefined;
 } catch (error) {
@@ -135,6 +136,11 @@ if (invocation) {
   );
 } else {
   const globalVpx = findGlobalVpx(process.env);
+  if (!globalVpx && flags.version) {
+    const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
+    process.stdout.write(`vite-plus v${version}\n`);
+    process.exit(0);
+  }
   if (!globalVpx) {
     errorMsg(
       'vpx: Running package binaries requires the global Vite+ CLI (https://viteplus.dev/guide/). ' +
