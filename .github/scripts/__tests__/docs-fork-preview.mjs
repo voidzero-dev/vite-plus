@@ -6,7 +6,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { resolveDocsSiteOrigin } from '../../../docs/.vitepress/site-origin.ts';
+import {
+  resolveDocsSiteOrigin,
+  resolveWorkersPreviewBranch,
+} from '../../../docs/.vitepress/site-origin.ts';
 import {
   authorizePreview,
   commentPreview,
@@ -179,6 +182,11 @@ await test('uses the package preview build and protected deployment pattern', as
       job.indexOf('- name: Prepare static build output'),
   );
   assert.match(job, /working-directory: \$\{\{ runner\.temp \}\}\/docs-preview-tools/);
+  // prepare-cloudflare.mjs imports site-origin.ts relative to its copied path.
+  assert.match(
+    job,
+    /cp docs\/\.vitepress\/site-origin\.ts "\$RUNNER_TEMP\/docs-preview-tools\/\.vitepress\/site-origin\.ts"/,
+  );
   assert.match(job, /\.bin\/cf" workers versions create \\\n\s+--prebuilt/);
   assert.doesNotMatch(job, /\.bin\/wrangler|--assets|--config/);
   assert.match(job, /artifact-ids: \$\{\{ needs\.authorize\.outputs\.artifact-id \}\}/);
@@ -275,6 +283,21 @@ await test('preserves explicit origins and production defaults', () => {
     { WORKERS_CI: '1', WORKERS_CI_BRANCH: 'main' },
   ]) {
     assert.equal(resolveDocsSiteOrigin(env), undefined);
+  }
+});
+
+await test('packages only Workers Builds non-main branches as Previews', () => {
+  assert.equal(
+    resolveWorkersPreviewBranch({ WORKERS_CI: '1', WORKERS_CI_BRANCH: 'rfc/vitest-v5-upgrade' }),
+    'rfc/vitest-v5-upgrade',
+  );
+  for (const env of [
+    {},
+    { WORKERS_CI_BRANCH: 'rfc/vitest-v5-upgrade' },
+    { WORKERS_CI: '1' },
+    { WORKERS_CI: '1', WORKERS_CI_BRANCH: 'main' },
+  ]) {
+    assert.equal(resolveWorkersPreviewBranch(env), undefined);
   }
 });
 

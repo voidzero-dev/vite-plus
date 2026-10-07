@@ -129,6 +129,7 @@ jobs:
         run: |
           cp docs/cloudflare.config.ts "$RUNNER_TEMP/docs-preview-tools/cloudflare.config.ts"
           mkdir -p "$RUNNER_TEMP/docs-preview-tools/.vitepress/scripts"
+          cp docs/.vitepress/site-origin.ts "$RUNNER_TEMP/docs-preview-tools/.vitepress/site-origin.ts"
           cp docs/.vitepress/scripts/prepare-cloudflare.mjs "$RUNNER_TEMP/docs-preview-tools/.vitepress/scripts/prepare-cloudflare.mjs"
           node "$RUNNER_TEMP/docs-preview-tools/.vitepress/scripts/prepare-cloudflare.mjs" "$RUNNER_TEMP/docs-preview-assets"
 
