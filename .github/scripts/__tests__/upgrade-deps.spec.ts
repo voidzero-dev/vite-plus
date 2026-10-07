@@ -69,6 +69,9 @@ test.each([false, true])(
       if (url === 'https://registry.npmjs.org/@oxlint/plugins/latest') {
         throw new Error('@oxlint/plugins must use the selected oxlint version');
       }
+      if (url === 'https://registry.npmjs.org/oxlint-tsgolint/latest') {
+        return Response.json({ version: '7.0.2004' });
+      }
       if (url.startsWith('https://registry.npmjs.org/') && url.endsWith('/latest')) {
         return Response.json({ version: '1.2.3' });
       }
@@ -111,10 +114,12 @@ test.each([false, true])(
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  lint-staged: ^17.5.1\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain("\n  '@oxlint/plugins': =1.88.0\n");
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint: =1.88.0\n');
+    expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint-tsgolint: =7.0.2004\n');
     const versions = JSON.parse(readFileSync(join(metaDir, 'versions.json'), 'utf8'));
     expect(versions['lint-staged']).toEqual({ old: '16.2.6', new: '17.5.1' });
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);
+    expect(versions['oxlint-tsgolint'].new).toBe('7.0.2004');
     if (!failInstall) {
       expect(versions['yuku-parser']).toEqual({ old: '^0.9.3', new: '^0.11.0' });
     }

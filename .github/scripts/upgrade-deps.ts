@@ -319,6 +319,7 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.oxlint,
     },
     {
+      // Tsgolint has its own release schedule and version series.
       name: 'oxlint-tsgolint',
       pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
       replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
