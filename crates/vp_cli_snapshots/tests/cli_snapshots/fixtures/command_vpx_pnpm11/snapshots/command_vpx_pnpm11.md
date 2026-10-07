@@ -20,6 +20,7 @@ Options:
   -c, --shell-mode      Execute the command within a shell environment
   -s, --silent          Suppress all output except the command's output
       --tsconfig <PATH> tsconfig.json to use when running a script
+  -v, --version         Print the Vite+ version
   -h, --help            Print help
 
 Examples:
