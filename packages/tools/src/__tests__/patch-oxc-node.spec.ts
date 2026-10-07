@@ -1,125 +1,57 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, test } from 'vitest';
 
-import { patchOxcNodeCargoToml, patchOxcNodeLibRs } from '../patch-oxc-node.ts';
+import { OXC_NODE_DIR, OXC_NODE_PATCH, setOxcVersion } from '../patch-oxc-node.ts';
 
-const upstreamCargoToml = `[package]
-name = "oxc-node"
-publish = false
+const rootDir = join(import.meta.dirname, '../../../..');
+const patch = readFileSync(OXC_NODE_PATCH, 'utf-8');
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[dependencies]
+describe('setOxcVersion', () => {
+  const cargoToml = `[dependencies]
 oxc = { version = "0.153.0", features = [
   "codegen",
 ] }
 oxc_resolver = { version = "11.24.3" }
 `;
 
-const upstreamLibRs = `use napi_derive::napi;
-
-#[cfg(all(
-    not(target_arch = "x86"),
-    not(target_arch = "arm"),
-    not(target_family = "wasm"),
-    not(all(target_os = "windows", target_arch = "aarch64"))
-))]
-#[global_allocator]
-static ALLOC: mimalloc_safe::MiMalloc = mimalloc_safe::MiMalloc;
-
-const BUILTIN_MODULES: usize = 1;
-
-#[cfg(not(target_family = "wasm"))]
-#[napi]
-pub fn init_tracing() {}
-
-#[cfg_attr(not(target_family = "wasm"), napi_derive::module_init)]
-fn init() {
-    tracing_subscriber::registry().init();
-}
-
-#[napi]
-pub struct Output {}
-
-#[napi]
-impl Output {
-    #[napi]
-    pub fn source(&self) -> String { String::new() }
-}
-
-pub struct TransformTask {}
-
-#[napi]
-impl Task for TransformTask {}
-
-#[napi(object)]
-pub struct LoadContext {}
-
-fn transform_program() {
-    let scoping = SemanticBuilder::new().build(program).semantic.into_scoping();
-}
-
-fn init_resolver() {
-    let explicit_tsconfig =
-        non_empty_env("TS_NODE_PROJECT").or_else(|| non_empty_env("OXC_TSCONFIG_PATH"));
-}
-`;
-
-describe('patchOxcNodeCargoToml', () => {
-  test('builds only the rlib against the workspace oxc version', () => {
-    const patched = patchOxcNodeCargoToml(upstreamCargoToml, '0.152.0');
-    expect(patched).toContain('crate-type = ["rlib"]');
-    expect(patched).toContain('publish = false\nbuild = false\n');
+  test('follows the workspace oxc version and leaves other crates alone', () => {
+    const patched = setOxcVersion(cargoToml, '0.152.0');
     expect(patched).toContain('oxc = { version = "0.152.0", features = [');
     expect(patched).toContain('oxc_resolver = { version = "11.24.3" }');
-    expect(patchOxcNodeCargoToml(patched, '0.152.0')).toBe(patched);
+    expect(setOxcVersion(patched, '0.152.0')).toBe(patched);
   });
 
-  test('fails when upstream no longer matches', () => {
-    expect(() => patchOxcNodeCargoToml('[package]\nname = "oxc-node"\n', '0.152.0')).toThrow(
-      /Patch failed in oxc-node\/Cargo.toml/,
-    );
+  test('fails without an oxc dependency', () => {
+    expect(() => setOxcVersion('[dependencies]\n', '0.152.0')).toThrow(/`oxc` dependency/);
   });
 });
 
-describe('patchOxcNodeLibRs', () => {
-  const patched = patchOxcNodeLibRs(upstreamLibRs);
-
-  test('leaves the allocator and tracing to the host binding', () => {
-    expect(patched).not.toContain('#[global_allocator]');
-    expect(patched).not.toContain('module_init');
-    // The allocator's cfg must not attach to the next item.
-    expect(patched).toContain(
-      '// Vite+: the host binding declares the global allocator.\n\nconst BUILTIN_MODULES',
-    );
+describe('patches/oxc-node.patch', () => {
+  test('touches only the crate manifest and source', () => {
+    const files = [...patch.matchAll(/^diff --git a\/(\S+) /gm)].map((match) => match[1]);
+    expect(files).toEqual(['Cargo.toml', 'src/lib.rs']);
   });
 
-  test('reads the explicit tsconfig from VP_SCRIPT_TSCONFIG only', () => {
-    expect(patched).toContain('non_empty_env("VP_SCRIPT_TSCONFIG");');
-    expect(patched).not.toContain('TS_NODE_PROJECT');
+  test('keeps the oxc version out of the patch', () => {
+    // `setOxcVersion` owns that line; patch context must not depend on it.
+    expect(patch).not.toMatch(/^[+ -]oxc = \{ version/m);
   });
 
-  test('evaluates enum members for the transformer', () => {
-    expect(patched).toContain('SemanticBuilder::new().with_enum_eval(true).build(program)');
+  test('marks every source change', () => {
+    expect(patch.match(/^\+.*Vite\+:/gm)?.length).toBeGreaterThanOrEqual(10);
   });
 
-  test('namespaces top-level exports and renames TransformTask', () => {
-    expect(patched).toContain('#[napi(namespace = "oxcNode")]\npub fn init_tracing()');
-    expect(patched).toContain('#[napi(namespace = "oxcNode")]\npub struct Output');
-    expect(patched).toContain('#[napi(namespace = "oxcNode")]\nimpl Output');
-    expect(patched).toContain('    #[napi]\n    pub fn source');
-    expect(patched).toContain('#[napi]\nimpl Task for OxcNodeTransformTask');
-    expect(patched).toContain('#[napi(object, namespace = "oxcNode")]\npub struct LoadContext');
-    expect(patched).not.toMatch(/\bTransformTask\b/);
-  });
-
-  test('is idempotent', () => {
-    expect(patchOxcNodeLibRs(patched)).toBe(patched);
-  });
-
-  test('fails when upstream no longer matches', () => {
-    expect(() => patchOxcNodeLibRs(upstreamLibRs.replace('#[global_allocator]', ''))).toThrow(
-      /Patch failed in oxc-node\/src\/lib.rs/,
-    );
-  });
+  test.skipIf(!existsSync(join(rootDir, OXC_NODE_DIR, '.git')))(
+    'is applied to the vendored checkout',
+    () => {
+      // `sync-remote` and the CI clone action run `patchOxcNode` before cargo does.
+      execFileSync('git', ['apply', '--reverse', '--check', OXC_NODE_PATCH], {
+        cwd: join(rootDir, OXC_NODE_DIR),
+        stdio: 'pipe',
+      });
+    },
+  );
 });
