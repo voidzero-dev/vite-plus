@@ -13,7 +13,7 @@ ast-grep-core = { workspace = true }
 ast-grep-language = { workspace = true }
 brush-parser = { workspace = true }
 ignore = { workspace = true }
-node-semver = { workspace = true }
+js-semver = { workspace = true }
 oxc = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }

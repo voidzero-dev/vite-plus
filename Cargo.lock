@@ -8821,7 +8821,7 @@ dependencies = [
  "ast-grep-language",
  "brush-parser 0.3.0",
  "ignore",
- "node-semver",
+ "js-semver",
  "oxc",
  "rayon",
  "regex",

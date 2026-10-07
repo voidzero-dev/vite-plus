@@ -72,9 +72,9 @@ pub(crate) fn preserve_legacy_defaults(
 
     let Some(directory) = file.parent() else { return true };
     let legacy_version = |version: &str| {
-        node_semver::Version::parse(version)
+        js_semver::Version::parse(version)
             .ok()
-            .map(|version| version < node_semver::Version::new(0, 23, 0))
+            .map(|version| version < js_semver::Version::new(0, 23, 0))
     };
     let standalone_defaults = || {
         let package = installed_package(directory, root, "tsdown")?;
