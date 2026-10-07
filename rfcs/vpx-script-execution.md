@@ -485,7 +485,7 @@ Other errors raised in the script, including transform errors, come from Node.js
 
 **Decision**: An explicit path, or a bare name with a TypeScript extension, is never treated as a package spec.
 
-**Rationale**: a typo such as `vpx ./scirpt.ts` should report a missing file. Today it can fall through to `vp dlx`, which runs remote code under an unexpected name.
+**Rationale**: a mistyped path such as `vpx ./sed.ts` (for `./seed.ts`) should report a missing file. Today it can fall through to `vp dlx`, which runs remote code under an unexpected name.
 
 ### 7. Why Resolve the Loader From the Project First
 
