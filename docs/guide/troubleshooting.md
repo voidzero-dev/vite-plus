@@ -8,10 +8,10 @@ Vite+ 1.0 is available. We continue to improve it and welcome community feedback
 
 ## Supported Tool Versions
 
-Vite+ expects modern upstream tool versions.
+Automatic migration requires these minimum versions for existing Vite and Vitest dependencies:
 
-- Vite 8 or newer
-- Vitest 4.1 or newer
+- Vite 7 or newer
+- Vitest 4 or newer
 
 If you are migrating an existing project and it still depends on older Vite or Vitest versions, upgrade those first before adopting Vite+.
 

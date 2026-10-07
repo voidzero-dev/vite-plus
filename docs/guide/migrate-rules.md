@@ -7,7 +7,7 @@ Except for [Before You Migrate](#before-you-migrate), which lists steps you take
 ## Before You Migrate
 
 1. Run `vp upgrade` so the global CLI has the latest migration rules. A stale local `vite-plus` is not a blocker: when the project's local copy is older, migration delegates to the global CLI.
-2. Upgrade the project to Vite 8+ and Vitest 4.1+ when necessary.
+2. Upgrade the project to Vite 7+ and Vitest 4+ when necessary.
 3. Run `vp migrate` from the workspace root. Use `--no-interactive` in automated environments.
 4. Review every changed manifest, package-manager config, source rewrite, and generated lockfile.
 5. Validate with `vp install`, `vp check`, `vp test`, and `vp build`.

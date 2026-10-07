@@ -65,7 +65,7 @@ For the Vitest v5 upgrade, read the [compatibility settings and review checklist
 
 Before running the migration:
 
-- For projects that do not use Vite+ yet, upgrade to Vite 8+ and Vitest 4.1+ first
+- For projects that do not use Vite+ yet, upgrade to Vite 7+ and Vitest 4+ first
 - Make sure you understand any existing lint, format, or test setup that should be preserved
 
 After running the migration:
