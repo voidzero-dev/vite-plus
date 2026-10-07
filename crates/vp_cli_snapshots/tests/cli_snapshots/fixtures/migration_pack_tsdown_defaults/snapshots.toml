@@ -1,0 +1,33 @@
+[[case]]
+name = "migration_pack_tsdown_defaults_modern"
+vp = "global"
+env = { VP_VERSION = "1.0.1" }
+comment = "Read tsdown 0.23 from the installed Vite+ 1.0.0 toolchain manifest and preserve omitted and explicit pack defaults across workspace packages and repeated migrations."
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vite/package.json", '{"name":"@voidzero-dev/vite-plus-core","version":"1.0.0","bundledVersions":{"vite":"8.3.1"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/dist/toolchain.json", '{"schemaVersion":1,"nodes":[{"id":"tsdown","name":"tsdown","version":"0.23.0","kind":"tool","delivery":["bundled"]}],"edges":[]}'], snapshot = false },
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "apps/server-v2/vite.config.ts"],
+  ["vpt", "print-file", "packages/library/vite.config.ts"],
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "apps/server-v2/vite.config.ts"],
+  ["vpt", "print-file", "packages/library/vite.config.ts"],
+]
+
+[[case]]
+name = "migration_pack_tsdown_defaults_legacy"
+vp = "global"
+env = { VP_VERSION = "1.0.1" }
+comment = "An older Vite+ installation without a toolchain manifest receives compatibility defaults, while explicit values and the second migration remain unchanged."
+steps = [
+  { argv = ["vpt", "replace-file-content", "pnpm-workspace.yaml", "@1.0.0", "@0.2.0"], snapshot = false },
+  { argv = ["vpt", "replace-file-content", "pnpm-workspace.yaml", "vite-plus: 1.0.0", "vite-plus: 0.2.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite/package.json", '{"name":"@voidzero-dev/vite-plus-core","version":"0.2.0","bundledVersions":{"vite":"8.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.2.0"}'], snapshot = false },
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "apps/server-v2/vite.config.ts"],
+  ["vpt", "print-file", "packages/library/vite.config.ts"],
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "apps/server-v2/vite.config.ts"],
+  ["vpt", "print-file", "packages/library/vite.config.ts"],
+]
