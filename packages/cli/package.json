@@ -345,6 +345,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@oxc-project/runtime": "catalog:",
     "@oxc-project/types": "catalog:",
     "@oxlint/plugins": "catalog:",
     "@vitest/browser": "catalog:",
@@ -381,6 +382,7 @@
     "minimatch": "catalog:",
     "nanotar": "catalog:",
     "picocolors": "catalog:",
+    "pirates": "catalog:",
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",
     "verkit": "catalog:",
