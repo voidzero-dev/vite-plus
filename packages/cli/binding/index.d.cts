@@ -1669,6 +1669,85 @@ export interface TypeScriptOptions {
   rewriteImportExtensions?: 'rewrite' | 'remove' | boolean;
 }
 
+export interface OxcResolveOptions {
+  getCurrentDirectory?: () => string;
+}
+
+export declare namespace oxcNode {
+  export class Output {
+    /**
+     * Returns the generated code
+     * Cache the result of this function if you need to use it multiple times
+     */
+    source(): string;
+    /**
+     * Returns the source map as a JSON string
+     * Cache the result of this function if you need to use it multiple times
+     */
+    sourceMap(): string | null;
+  }
+  export class OxcTransformer {
+    constructor(cwd?: string | undefined | null);
+    transform(path: string, source: string | Uint8Array): oxcNode.Output;
+    transformAsync(path: string, source: string | Uint8Array | Buffer): Promise<oxcNode.Output>;
+  }
+  export function createResolve(
+    options: OxcResolveOptions,
+    specifier: string,
+    context: oxcNode.ResolveContext,
+    nextResolve: (
+      arg0: string,
+      arg1?: oxcNode.ResolveContext | undefined | null,
+    ) => oxcNode.ResolveFnOutput | Promise<oxcNode.ResolveFnOutput>,
+  ): oxcNode.ResolveFnOutput | Promise<oxcNode.ResolveFnOutput>;
+  export function initTracing(): void;
+  export function load(
+    url: string,
+    context: oxcNode.LoadContext,
+    nextLoad: (
+      arg0: string,
+      arg1?: oxcNode.LoadContext | undefined | null,
+    ) => oxcNode.LoadFnOutput | Promise<oxcNode.LoadFnOutput>,
+  ): oxcNode.LoadFnOutput | Promise<oxcNode.LoadFnOutput>;
+  export interface LoadContext {
+    /** Export conditions of the relevant `package.json` */
+    conditions?: Array<string>;
+    /**
+     * The format optionally supplied by the `resolve` hook chain. Node.js passes it as
+     * `undefined`, not `null`, when the chain reported none — a `.node` or `.wasm` file
+     * resolved without its flag, any extension Node.js does not know — and a required
+     * field would reject the whole context with "Missing field `format`" instead of
+     * letting Node.js raise its own `ERR_UNKNOWN_FILE_EXTENSION`.
+     */
+    format?: string | null;
+    /** An object whose key-value pairs represent the assertions for the module to import */
+    importAttributes: Record<string, string>;
+  }
+  export interface LoadFnOutput {
+    format: string;
+    source?: string | Uint8Array | Buffer | null;
+    responseURL?: string;
+  }
+  export interface ResolveContext {
+    /** Export conditions of the relevant `package.json` */
+    conditions: Array<string>;
+    /** An object whose key-value pairs represent the assertions for the module to import */
+    importAttributes: Record<string, string>;
+    parentURL?: string;
+  }
+  export interface ResolveFnOutput {
+    format?: string | null;
+    shortCircuit?: boolean;
+    url: string;
+    importAttributes?: Record<string, string> | null;
+  }
+  export function transform(path: string, source: string | Uint8Array): oxcNode.Output;
+  export function transformAsync(
+    path: string,
+    source: string | Uint8Array | Buffer,
+  ): Promise<unknown>;
+}
+
 export declare class BindingBundleEndEventData {
   output: string;
   duration: number;

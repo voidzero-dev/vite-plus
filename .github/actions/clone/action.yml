@@ -36,6 +36,7 @@ runs:
       run: |
         node -e "console.log('ROLLDOWN_HASH=' + require('./packages/tools/.upstream-versions.json').rolldown.hash)" >> $GITHUB_OUTPUT
         node -e "console.log('ROLLDOWN_VITE_HASH=' + require('./packages/tools/.upstream-versions.json')['vite'].hash)" >> $GITHUB_OUTPUT
+        node -e "console.log('OXC_NODE_HASH=' + require('./packages/tools/.upstream-versions.json')['oxc-node'].hash)" >> $GITHUB_OUTPUT
 
     - name: Output ecosystem ci project hash
       shell: bash
@@ -61,6 +62,19 @@ runs:
         path: vite
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_VITE_HASH }}
         persist-credentials: false
+
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: oxc-project/oxc-node
+        path: oxc-node
+        ref: ${{ steps.upstream-versions.outputs.OXC_NODE_HASH }}
+        persist-credentials: false
+
+    # oxc-node compiles into the native binding, and Cargo.lock records the
+    # patched manifest, so patch it before any cargo command reads it.
+    - name: Patch vendored oxc-node
+      shell: bash
+      run: npx tsx packages/tools/src/patch-oxc-node.ts
 
     # Match the manifests used by sync-remote when it generated the root lockfile.
     # The later dependency installation uses --frozen-lockfile, so alignment must run first.
