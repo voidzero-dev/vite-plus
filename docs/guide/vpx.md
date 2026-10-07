@@ -27,6 +27,7 @@ vpx <pkg[@version]> [args...]
 - `-c, --shell-mode` executes the command inside a shell
 - `-s, --silent` suppresses Vite+ output and only shows the command output
 - `--tsconfig <path>` selects the tsconfig when running a script
+- `-v, --version` prints the Vite+ version, like `vp --version`
 
 ### Examples
 
@@ -38,6 +39,10 @@ vpx -p cowsay -c 'echo "hi" | cowsay'
 ```
 
 ### Running Scripts
+
+::: warning Experimental
+Running script files with `vpx` is experimental. Its loader, [oxc-node](https://github.com/oxc-project/oxc-node), is experimental too.
+:::
 
 `vpx` also runs TypeScript and JavaScript files directly, without a `tsx` or `ts-node` dependency:
 
@@ -51,13 +56,16 @@ vpx --tsconfig tsconfig.scripts.json ./tools/gen.ts
 
 When the command is a file ending in `.ts`, `.mts`, `.cts`, `.tsx`, `.js`, `.mjs`, `.cjs`, or `.jsx`, `vpx` runs it on the project's Node.js version, the same one [`vp node`](/guide/env) selects, with the [oxc-node](https://github.com/oxc-project/oxc-node) loader that ships with Vite+. The loader supports:
 
-- TypeScript syntax that Node.js type stripping rejects: enums, namespaces, parameter properties, decorators (including `emitDecoratorMetadata`), and JSX
-- tsconfig `paths`, `.js` imports that point at `.ts` files, and extensionless imports
-- ESM and CommonJS, including `require()` of `.ts` files
+- TypeScript syntax that Node.js type stripping rejects: enums, namespaces, parameter properties, and JSX
+- Decorators with `"experimentalDecorators": true`, including `emitDecoratorMetadata`; standard decorators are not supported yet
+- tsconfig `paths` for `import`, `.js` imports that point at `.ts` files, and extensionless imports
+- ESM and CommonJS, including `require()` of `.ts` files; a `.cts` file that uses `import`/`export` runs as an ES module
+- TypeScript published in `node_modules`
+- tsconfig `jsx`, `jsxImportSource`, `jsxFactory`, `jsxFragmentFactory`, `useDefineForClassFields`, and `verbatimModuleSyntax`
 
 Each file uses the nearest tsconfig that includes it, as `tsc` does. `--tsconfig <path>` applies one config to every file instead.
 
-Options before the script, such as `--watch`, `--inspect`, `--env-file`, and `--import`, are passed to Node.js. Everything after the script, including `--`, is passed to the script. A missing script is an error; `vpx` never downloads a package for a path.
+Options before the script, such as `--watch`, `--inspect`, `--test`, `--env-file`, `--require`, and `--import`, are passed to Node.js, and `--require` or `--import` preloads can be TypeScript too. Everything after the script, including `--`, is passed to the script. A missing script is an error; `vpx` never downloads a package for a path.
 
 `vpx` does not type-check. Run [`vp check`](/guide/check) for that.
 
