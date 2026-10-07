@@ -15,7 +15,8 @@
   },
   "bin": {
     "vp": "./bin/vp",
-    "vpr": "./bin/vpr"
+    "vpr": "./bin/vpr",
+    "vpx": "./bin/vpx"
   },
   "files": [
     "AGENTS.md",
