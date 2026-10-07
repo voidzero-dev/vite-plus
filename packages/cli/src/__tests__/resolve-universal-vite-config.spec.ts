@@ -61,7 +61,18 @@ describe('resolveUniversalViteConfig', () => {
       configFile,
       check: { lint: false },
     });
-    expect(resolveConfig).toHaveBeenCalledWith({ root }, 'build');
+    expect(resolveConfig).toHaveBeenCalledWith({ root, configFile }, 'build');
+  });
+
+  it('uses the first supported config when multiple config files exist', async () => {
+    for (const filename of VITE_CONFIG_FILES) {
+      writeFileSync(path.join(root, filename), 'export default {};');
+    }
+    const configFile = path.join(root, VITE_CONFIG_FILES[0]);
+    resolveConfig.mockResolvedValue({ configFile });
+    const { resolveUniversalViteConfig } = await import('../resolve-vite-config.ts');
+    expect(JSON.parse(await resolveUniversalViteConfig(null, root))).toEqual({ configFile });
+    expect(resolveConfig).toHaveBeenCalledWith({ root, configFile }, 'build');
   });
 
   it('observes config creation, changes and removal between calls', async () => {
