@@ -14,8 +14,12 @@ switch (subcommand) {
     brandVite();
     break;
   case 'patch-oxc-node':
-    const { patchOxcNode } = await import('./patch-oxc-node.ts');
-    patchOxcNode();
+    const { patchOxcNode, updateOxcNodePatch } = await import('./patch-oxc-node.ts');
+    if (process.argv.includes('--update')) {
+      updateOxcNodePatch();
+    } else {
+      patchOxcNode();
+    }
     break;
   case 'local-npm-registry':
     // Spawn the script by path instead of importing it, so the child carries
