@@ -22,7 +22,7 @@ Run `vp toolchain` to show the versions from the local Vite+ package. Run `vp to
 - Confirm that `lint.options.typeAware` and `lint.options.typeCheck` are enabled in `vite.config.ts`
 - Check whether your `tsconfig.json` still uses `compilerOptions.baseUrl`
 
-The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`. `vp migrate` and `vp lint --init` try to run the `vp dlx @andrewbranch/ts5to6 --fixBaseUrl .` fix before enabling type-aware linting. If that fix fails or is declined, Vite+ skips `typeAware` and `typeCheck`.
+The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`. `vp migrate` and `vp lint --init` try to run the `vp dlx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` fix before enabling type-aware linting. If that fix fails or is declined, Vite+ skips `typeAware` and `typeCheck`.
 
 ## Nested lint or format config is not applied
 
