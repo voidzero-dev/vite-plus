@@ -1687,7 +1687,7 @@ export declare namespace oxcNode {
     sourceMap(): string | null;
   }
   export class OxcTransformer {
-    constructor(cwd?: string | undefined | null);
+    constructor(cwd?: string | undefined | null, helperModuleName?: string | undefined | null);
     transform(path: string, source: string | Uint8Array): oxcNode.Output;
     transformAsync(path: string, source: string | Uint8Array | Buffer): Promise<oxcNode.Output>;
   }
@@ -1708,6 +1708,7 @@ export declare namespace oxcNode {
       arg0: string,
       arg1?: oxcNode.LoadContext | undefined | null,
     ) => oxcNode.LoadFnOutput | Promise<oxcNode.LoadFnOutput>,
+    helperModuleName?: string | undefined | null,
   ): oxcNode.LoadFnOutput | Promise<oxcNode.LoadFnOutput>;
   export interface LoadContext {
     /** Export conditions of the relevant `package.json` */
