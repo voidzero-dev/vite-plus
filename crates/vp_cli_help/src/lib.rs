@@ -491,7 +491,7 @@ mod tests {
         };
 
         assert_eq!(
-            render_help_doc_with_width(&doc, 36),
+            console::strip_ansi_codes(&render_help_doc_with_width(&doc, 36)),
             concat!(
                 "Usage: vp example\n",
                 "\n",
