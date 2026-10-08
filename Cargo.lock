@@ -2315,7 +2315,7 @@ dependencies = [
 [[package]]
 name = "fspy"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "allocator-api2",
  "anyhow",
@@ -2352,7 +2352,7 @@ dependencies = [
 [[package]]
 name = "fspy_client_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "allocator-api2",
  "anyhow",
@@ -2369,7 +2369,7 @@ dependencies = [
 [[package]]
 name = "fspy_detours_sys"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "cc",
  "winapi",
@@ -2378,7 +2378,7 @@ dependencies = [
 [[package]]
 name = "fspy_ipc_str"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "allocator-api2",
  "bumpalo",
@@ -2391,7 +2391,7 @@ dependencies = [
 [[package]]
 name = "fspy_nostd"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "atoi",
  "bitflags 2.13.2",
@@ -2405,7 +2405,7 @@ dependencies = [
 [[package]]
 name = "fspy_nostd_alloc"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "allocator-api2",
  "bump-scope",
@@ -2415,7 +2415,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "allocator-api2",
  "ctor",
@@ -2432,7 +2432,7 @@ dependencies = [
 [[package]]
 name = "fspy_preload_windows"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "allocator-api2",
  "constcat",
@@ -2452,7 +2452,7 @@ dependencies = [
 [[package]]
 name = "fspy_seccomp_unotify"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "futures-util",
  "libc",
@@ -2469,7 +2469,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "allocator-api2",
  "bitflags 2.13.2",
@@ -2491,7 +2491,7 @@ dependencies = [
 [[package]]
 name = "fspy_shared_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "allocator-api2",
  "anyhow",
@@ -2511,7 +2511,7 @@ dependencies = [
 [[package]]
 name = "fspy_shm"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "fspy_nostd",
  "windows-sys 0.61.2",
@@ -3002,6 +3002,7 @@ checksum = "2c3e324da4c95177d6291d4c8730197c0d1822f8a9766814a4a44fa5ab797c9c"
 dependencies = [
  "atomic-waker",
  "bytes",
+ "futures-channel",
  "futures-core",
  "h2",
  "http 1.5.0",
@@ -3822,7 +3823,7 @@ dependencies = [
 [[package]]
 name = "materialized_artifact"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "materialized_artifact_macros",
  "tempfile",
@@ -3831,7 +3832,7 @@ dependencies = [
 [[package]]
 name = "materialized_artifact_macros"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5725,7 +5726,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "anyhow",
  "portable-pty",
@@ -5735,7 +5736,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal_test"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "anyhow",
  "portable-pty",
@@ -5746,7 +5747,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal_test_client"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.4.3",
@@ -7638,7 +7639,7 @@ dependencies = [
 [[package]]
 name = "snapshot_test"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "serde",
  "serde_json",
@@ -7668,7 +7669,7 @@ dependencies = [
 [[package]]
 name = "socket_ipc"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "nix 0.31.3",
  "tempfile",
@@ -9031,7 +9032,7 @@ checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 [[package]]
 name = "vt"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "anstream",
  "anyhow",
@@ -9093,7 +9094,7 @@ dependencies = [
 [[package]]
 name = "vt_casefold"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "ref-cast",
  "serde",
@@ -9102,7 +9103,7 @@ dependencies = [
 [[package]]
 name = "vt_client"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "fspy_ipc_str",
  "rustc-hash",
@@ -9116,7 +9117,7 @@ dependencies = [
 [[package]]
 name = "vt_client_napi"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "napi",
  "napi-build",
@@ -9128,7 +9129,7 @@ dependencies = [
 [[package]]
 name = "vt_glob"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "globset",
  "thiserror 2.0.21",
@@ -9138,7 +9139,7 @@ dependencies = [
 [[package]]
 name = "vt_graph"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9159,7 +9160,7 @@ dependencies = [
 [[package]]
 name = "vt_graph_ser"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "petgraph 0.8.3",
  "serde",
@@ -9168,7 +9169,7 @@ dependencies = [
 [[package]]
 name = "vt_ipc_shared"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "fspy_ipc_str",
  "rustc-hash",
@@ -9178,7 +9179,7 @@ dependencies = [
 [[package]]
 name = "vt_path"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "diff-struct",
  "os_str_bytes",
@@ -9193,7 +9194,7 @@ dependencies = [
 [[package]]
 name = "vt_plan"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9222,7 +9223,7 @@ dependencies = [
 [[package]]
 name = "vt_powershell"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "vt_path",
  "which",
@@ -9231,7 +9232,7 @@ dependencies = [
 [[package]]
 name = "vt_remote_cache"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -9241,7 +9242,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "url",
  "vt_path",
@@ -9251,7 +9252,7 @@ dependencies = [
 [[package]]
 name = "vt_select"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -9262,7 +9263,7 @@ dependencies = [
 [[package]]
 name = "vt_server"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "fspy_ipc_str",
  "futures",
@@ -9282,7 +9283,7 @@ dependencies = [
 [[package]]
 name = "vt_shell"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "brush-parser 0.4.0",
  "serde",
@@ -9294,7 +9295,7 @@ dependencies = [
 [[package]]
 name = "vt_str"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "compact_str 0.9.1",
  "diff-struct",
@@ -9305,7 +9306,7 @@ dependencies = [
 [[package]]
 name = "vt_workspace"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=8ecec9a535c098165f9cbe921b77ebe8ad302153#8ecec9a535c098165f9cbe921b77ebe8ad302153"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=5e77d9be5fa6bb3d906bea725d30f376ef523245#5e77d9be5fa6bb3d906bea725d30f376ef523245"
 dependencies = [
  "clap",
  "petgraph 0.8.3",
