@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { createTarGzip } from 'nanotar';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OrgManifest } from '../org-manifest.js';
@@ -9,7 +10,7 @@ import {
   cleanupStaleStagingDirs,
   ensureOrgPackageExtracted,
   normalizeEntryName,
-  parseEntryMode,
+  readPackageJsonFromTarball,
   resolveBundledPath,
   resolveExtractionDir,
   sanitizeHostForPath,
@@ -63,6 +64,77 @@ describe('resolveBundledPath', () => {
     const root = tmpExtractedRoot();
     expect(resolveBundledPath(root, './templates/demo/')).toBe(
       path.join(root, 'templates', 'demo'),
+    );
+  });
+});
+
+describe('archive resource limits', () => {
+  const scratchDirs: string[] = [];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const dir of scratchDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('extracts regular templates, preserves executable permissions and reuses the cache', async () => {
+    const archive = await createTarGzip([
+      { name: 'package/package.json', data: '{"name":"@your-org/create"}' },
+      { name: 'package/templates/' },
+      { name: 'package/templates/empty.txt', data: '' },
+      { name: 'package/templates/run.sh', data: '#!/bin/sh\n', attrs: { mode: '104755' } },
+    ]);
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(new Uint8Array(archive)));
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-org-limits-'));
+    scratchDirs.push(cache);
+    mockGetVpDirs.mockReturnValue({ cache });
+    const manifest = manifestFor('1.0.0');
+
+    const dest = await ensureOrgPackageExtracted(manifest);
+    expect(fs.readFileSync(path.join(dest, 'templates/run.sh'), 'utf8')).toBe('#!/bin/sh\n');
+    expect(fs.readFileSync(path.join(dest, 'templates/empty.txt'), 'utf8')).toBe('');
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(path.join(dest, 'templates/run.sh')).mode & 0o7777).toBe(0o755);
+    }
+    expect(await ensureOrgPackageExtracted(manifest)).toBe(dest);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['manifest', 'extraction'])('rejects a compressed bomb during %s', async (operation) => {
+    const archive = await createTarGzip([
+      { name: 'package/package.json', data: '{"name":"@your-org/create"}' },
+      { name: 'package/large.txt', data: new Uint8Array(2 * 1024 * 1024) },
+    ]);
+    expect(archive.byteLength).toBeLessThan(10_000);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Uint8Array(archive)));
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-org-limits-'));
+    scratchDirs.push(cache);
+    mockGetVpDirs.mockReturnValue({ cache });
+    const manifest = manifestFor('1.0.0');
+
+    await expect(
+      operation === 'manifest'
+        ? readPackageJsonFromTarball(manifest.tarballUrl)
+        : ensureOrgPackageExtracted(manifest),
+    ).rejects.toThrow(/decompressed.*limit/);
+
+    if (operation === 'extraction') {
+      const dest = resolveExtractionDir(path.join(cache, 'create-org'), manifest);
+      expect(fs.readdirSync(path.dirname(dest))).toEqual([]);
+    }
+  });
+
+  it('counts entries outside the package root during manifest probing', async () => {
+    const archive = await createTarGzip([
+      { name: 'package/package.json', data: '{}' },
+      ...Array.from({ length: 10_000 }, (_, i) => ({ name: `ignored/${i}`, data: '' })),
+    ]);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Uint8Array(archive)));
+    await expect(readPackageJsonFromTarball(manifestFor('1.0.0').tarballUrl)).rejects.toThrow(
+      /entry count limit/,
     );
   });
 });
@@ -163,24 +235,6 @@ describe('sanitizeHostForPath', () => {
 
   it('strips IPv6 brackets and colons from the literal', () => {
     expect(sanitizeHostForPath('[::1]:4873')).toBe('___1__4873');
-  });
-});
-
-describe('parseEntryMode', () => {
-  it('parses octal `755` as 0o755', () => {
-    expect(parseEntryMode('755')).toBe(0o755);
-  });
-
-  it('parses a longer octal string and masks to permission bits', () => {
-    expect(parseEntryMode('100755')).toBe(0o755);
-    // `104755` carries the setuid bit (0o4000) — drop it.
-    expect(parseEntryMode('104755')).toBe(0o755);
-  });
-
-  it('returns undefined for missing or unparsable modes', () => {
-    expect(parseEntryMode(undefined)).toBeUndefined();
-    expect(parseEntryMode('')).toBeUndefined();
-    expect(parseEntryMode('not-a-number')).toBeUndefined();
   });
 });
 

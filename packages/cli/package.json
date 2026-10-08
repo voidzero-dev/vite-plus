@@ -381,6 +381,7 @@
     "minimatch": "catalog:",
     "nanotar": "catalog:",
     "picocolors": "catalog:",
+    "tar-stream": "catalog:",
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",
     "verkit": "catalog:",
