@@ -290,7 +290,7 @@ parse_platform_distribution_metadata() {
       }
     }
 
-    function parse_string(    result, c, escaped, hex) {
+    function parse_string(    result, c, escaped, hex, code, i) {
       skip_whitespace()
       if (substr(json_text, json_pos, 1) != "\"") {
         fail_json("expected JSON string")
@@ -319,7 +319,18 @@ parse_platform_distribution_metadata() {
             if (length(hex) != 4 || hex ~ /[^0-9A-Fa-f]/) {
               fail_json("invalid JSON unicode escape")
             }
-            result = result "\\u" hex
+            code = 0
+            for (i = 1; i <= 4; i++) {
+              code = code * 16 + index("0123456789abcdef", tolower(substr(hex, i, 1))) - 1
+            }
+            # Decode printable ASCII once, including all SRI characters and
+            # inspected keys. Keep other escapes printable so control characters
+            # cannot inject lines into the extracted metadata.
+            if (code >= 32 && code <= 126) {
+              result = result sprintf("%c", code)
+            } else {
+              result = result "\\u" hex
+            }
             json_pos += 4
           } else {
             fail_json("invalid JSON escape")

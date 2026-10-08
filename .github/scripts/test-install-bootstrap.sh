@@ -49,8 +49,19 @@ case "$scenario" in
 esac
 BINARY
 chmod +x "$test_root/package/vp"
-tar czf "$test_root/payload.tgz" -C "$test_root" package
-fixture_integrity="sha512-$(openssl dgst -sha512 -binary "$test_root/payload.tgz" | openssl base64 -A)"
+# Ensure the fixture digest contains + and / for the JSON escape cases.
+for attempt in {1..100}; do
+  printf '\n# Integrity fixture %s\n' "$attempt" >> "$test_root/package/vp"
+  tar czf "$test_root/payload.tgz" -C "$test_root" package
+  fixture_integrity="sha512-$(openssl dgst -sha512 -binary "$test_root/payload.tgz" | openssl base64 -A)"
+  [[ "$fixture_integrity" == *+* && "$fixture_integrity" == */* ]] && break
+done
+[[ "$fixture_integrity" == *+* && "$fixture_integrity" == */* ]]
+fixture_unicode_integrity="${fixture_integrity//+/\\u002B}"
+fixture_all_unicode_integrity=$(printf '%s' "$fixture_integrity" | awk '
+  BEGIN { for (i = 32; i <= 126; i++) code[sprintf("%c", i)] = i }
+  { for (i = 1; i <= length($0); i++) printf "\\u%04X", code[substr($0, i, 1)] }
+')
 touch "$test_root/package/tampered"
 tar czf "$test_root/tampered.tgz" -C "$test_root" package
 rm "$test_root/package/tampered"
@@ -81,6 +92,15 @@ curl() {
         integrity-wrong-type) integrity_field="\"integrity\":[\"$fixture_integrity\"]," ;;
         integrity-dotted-key) integrity_field="\"dist.integrity\":\"$fixture_integrity\"," ;;
         integrity-duplicate) integrity_field="$integrity_field$integrity_field" ;;
+        integrity-duplicate-escaped) integrity_field="$integrity_field\"integ\\u0072ity\":\"$fixture_unicode_integrity\"," ;;
+        integrity-escaped-newline) integrity_field="\"integrity\":\"$fixture_integrity\\u000Aignored\"," ;;
+        integrity-escaped-null) integrity_field="\"integrity\":\"$fixture_integrity\\u0000\"," ;;
+        integrity-literal-escape) integrity_field="\"integrity\":\"${fixture_integrity//+/\\\\u002B}\"," ;;
+        escaped-integrity|escaped-integrity-pr|integrity-mismatch-escaped*) integrity_field="\"integrity\":\"$fixture_unicode_integrity\"," ;;
+        escaped-integrity-all) integrity_field="\"integrity\":\"$fixture_all_unicode_integrity\"," ;;
+        escaped-integrity-lower) integrity_field="\"integrity\":\"${fixture_integrity//+/\\u002b}\"," ;;
+        escaped-integrity-key) integrity_field="\"integ\\u0072ity\":\"$fixture_unicode_integrity\"," ;;
+        escaped-integrity-slash) integrity_field="\"integrity\":\"${fixture_integrity//\//\\/}\"," ;;
       esac
       local attestations='"attestations":{"provenance":{"predicateType":"https://slsa.dev/provenance/v1"}},'
       if [[ "$scenario" == *pr ]]; then attestations=""; fi
@@ -94,8 +114,10 @@ curl() {
 
 for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failure failure pr supported-pr \
   missing-hash-tools missing-hash-tools-pr \
+  escaped-integrity escaped-integrity-pr escaped-integrity-all escaped-integrity-lower escaped-integrity-key escaped-integrity-slash \
   integrity-missing integrity-malformed integrity-unsupported integrity-noncanonical integrity-wrong-type \
-  integrity-dotted-key integrity-duplicate integrity-mismatch integrity-missing-pr integrity-mismatch-pr; do
+  integrity-dotted-key integrity-duplicate integrity-duplicate-escaped integrity-escaped-newline integrity-escaped-null integrity-literal-escape \
+  integrity-mismatch integrity-missing-pr integrity-mismatch-pr integrity-mismatch-escaped integrity-mismatch-escaped-pr; do
   export scenario
   : > "$test_root/requests"
   rm -f "$test_root/legacy" "$test_root/binary-invoked" "$test_root/binary-probed" "$test_root/extracted"
@@ -135,7 +157,7 @@ for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failur
       integrity-mismatch*)
         grep -q 'Platform package integrity mismatch' "$test_root/output"
         grep -q 'platform.tgz -o' "$test_root/requests" ;;
-      integrity-duplicate) grep -q 'Failed to parse CLI package metadata' "$test_root/output" ;;
+      integrity-duplicate*) grep -q 'Failed to parse CLI package metadata' "$test_root/output" ;;
       *) grep -q 'does not include a valid SHA-512 dist.integrity' "$test_root/output" ;;
     esac
     if [[ "$scenario" != integrity-mismatch* ]]; then
@@ -154,7 +176,7 @@ for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failur
     exit 1
   fi
   case "$scenario" in
-    supported|supported-pr|failure|missing-hash-tools*)
+    supported|supported-pr|failure|missing-hash-tools*|escaped-integrity*)
       test -f "$test_root/binary-invoked"
       test ! -f "$test_root/legacy" ;;
     legacy|legacy-failure|piped-legacy|piped-legacy-failure|pr)
