@@ -33,7 +33,8 @@ function validateTarRecords(tar: Buffer, limits: typeof ORG_TARBALL_LIMITS): voi
     if (tar[offset] === 0) {
       return;
     }
-    if (++entries > limits.entries) {
+    entries++;
+    if (entries > limits.entries) {
       throw new Error(`tarball exceeds ${limits.entries} entry count limit`);
     }
     const rawSize = tar
@@ -59,19 +60,19 @@ function validateTarRecords(tar: Buffer, limits: typeof ORG_TARBALL_LIMITS): voi
       if (metadataBytes > limits.metadataBytes) {
         throw new Error(`tarball exceeds ${limits.metadataBytes} byte metadata size limit`);
       }
-      if (type === 'g') {
-        // nanotar splits PAX fields on newlines. Count before it allocates or merges them.
-        globalMetadataFields++;
-        for (const byte of tar.subarray(dataOffset, dataOffset + size)) {
-          if (byte === 10) {
-            globalMetadataFields++;
-          }
+    }
+    if (type === 'g') {
+      // nanotar splits PAX fields on newlines. Count before it allocates or merges them.
+      globalMetadataFields++;
+      for (const byte of tar.subarray(dataOffset, dataOffset + size)) {
+        if (byte === 10) {
+          globalMetadataFields++;
         }
-        if (globalMetadataFields > limits.globalMetadataFields) {
-          throw new Error(
-            `tarball exceeds ${limits.globalMetadataFields} global metadata field limit`,
-          );
-        }
+      }
+      if (globalMetadataFields > limits.globalMetadataFields) {
+        throw new Error(
+          `tarball exceeds ${limits.globalMetadataFields} global metadata field limit`,
+        );
       }
     }
     offset = nextOffset;

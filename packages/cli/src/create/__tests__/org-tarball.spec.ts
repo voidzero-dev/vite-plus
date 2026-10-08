@@ -250,6 +250,13 @@ describe('archive resource limits', () => {
     }
   });
 
+  function mockCacheDir(): string {
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-org-limits-'));
+    scratchDirs.push(cache);
+    mockGetVpDirs.mockReturnValue({ cache });
+    return cache;
+  }
+
   it('extracts regular templates, preserves executable permissions and reuses the cache', async () => {
     const archive = await createTarGzip([
       { name: 'package/package.json', data: '{"name":"@your-org/create"}' },
@@ -260,9 +267,7 @@ describe('archive resource limits', () => {
     const fetch = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(new Uint8Array(archive)));
-    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-org-limits-'));
-    scratchDirs.push(cache);
-    mockGetVpDirs.mockReturnValue({ cache });
+    mockCacheDir();
     const manifest = manifestFor('1.0.0');
 
     const dest = await ensureOrgPackageExtracted(manifest);
@@ -282,9 +287,7 @@ describe('archive resource limits', () => {
     ]);
     expect(archive.byteLength).toBeLessThan(10_000);
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Uint8Array(archive)));
-    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-org-limits-'));
-    scratchDirs.push(cache);
-    mockGetVpDirs.mockReturnValue({ cache });
+    const cache = mockCacheDir();
     const manifest = manifestFor('1.0.0');
 
     await expect(

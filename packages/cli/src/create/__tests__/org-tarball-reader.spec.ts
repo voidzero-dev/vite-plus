@@ -22,9 +22,10 @@ function archiveWith(files: TestEntry[]): Buffer {
 
 function paxField(key: string, value: string): string {
   const field = ` ${key}=${value}\n`;
-  let length = Buffer.byteLength(field) + 1;
-  while (String(length).length + Buffer.byteLength(field) !== length) {
-    length = String(length).length + Buffer.byteLength(field);
+  const fieldBytes = Buffer.byteLength(field);
+  let length = fieldBytes + 1;
+  while (String(length).length + fieldBytes !== length) {
+    length = String(length).length + fieldBytes;
   }
   return `${length}${field}`;
 }
