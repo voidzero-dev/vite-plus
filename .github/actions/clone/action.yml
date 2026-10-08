@@ -2,6 +2,10 @@ name: 'Clone Repositories'
 description: 'Clone self and upstream repositories'
 
 inputs:
+  setup-node:
+    description: 'Set to false to keep a caller-provided Node.js with native TypeScript support (for example, on Alpine)'
+    required: false
+    default: 'true'
   ecosystem-ci-project:
     description: 'The ecosystem ci project to clone'
     required: false
@@ -17,9 +21,14 @@ runs:
   steps:
     # Run the bootstrap scripts with native TypeScript support before installing dependencies.
     - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      if: ${{ inputs.setup-node != 'false' }}
       with:
         node-version-file: .node-version
         package-manager-cache: false
+
+    - name: Validate bootstrap Node.js
+      shell: bash
+      run: node -e "require('node:assert/strict').ok(process.features.typescript, 'Clone bootstrap requires native TypeScript support')"
 
     - name: Output rolldown and vite hash
       shell: bash

@@ -9,28 +9,52 @@ import { parse } from 'yaml';
 interface Step {
   name?: string;
   uses?: string;
+  if?: string;
   run?: string;
   with?: Record<string, unknown>;
 }
 
 const repoRoot = new URL('../../../../', import.meta.url);
-const { runs } = parse(
+const { inputs, runs } = parse(
   readFileSync(new URL('.github/actions/clone/action.yml', repoRoot), 'utf8'),
 ) as {
+  inputs: Record<string, { default: string }>;
   runs: { steps: Step[] };
 };
 
 test('sets up native TypeScript support before the bootstrap scripts', () => {
   const setupIndex = runs.steps.findIndex((step) => step.uses?.startsWith('actions/setup-node@'));
   expect(setupIndex).toBeGreaterThanOrEqual(0);
+  expect(inputs['setup-node'].default).toBe('true');
+  expect(runs.steps[setupIndex].if).toBe("${{ inputs.setup-node != 'false' }}");
   expect(runs.steps[setupIndex].with).toMatchObject({
     'node-version-file': '.node-version',
     'package-manager-cache': false,
   });
+  const validationIndex = runs.steps.findIndex(
+    (step) => step.name === 'Validate bootstrap Node.js',
+  );
+  expect(validationIndex).toBeGreaterThan(setupIndex);
+  expect(runs.steps[validationIndex].if).toBeUndefined();
   for (const script of ['vendored-vitest.ts', 'ecosystem-ci/clone.ts']) {
     const scriptIndex = runs.steps.findIndex((step) => step.run?.includes(script));
-    expect(scriptIndex).toBeGreaterThan(setupIndex);
+    expect(scriptIndex).toBeGreaterThan(validationIndex);
   }
+});
+
+test('rejects a caller-provided Node.js without native TypeScript support', () => {
+  const step = runs.steps.find((entry) => entry.name === 'Validate bootstrap Node.js');
+  expect(step?.run).toBeDefined();
+  const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-c', step!.run!], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH}`,
+      NODE_OPTIONS: '--no-experimental-strip-types',
+    },
+  });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('Clone bootstrap requires native TypeScript support');
 });
 
 test('runs both bootstrap scripts without installed dependencies or registry access', () => {
@@ -77,8 +101,12 @@ test('runs both bootstrap scripts without installed dependencies or registry acc
     JSON.stringify({ fixture: { repository, hash: git('rev-parse', 'HEAD') } }),
   );
 
-  for (const script of ['vendored-vitest.ts', 'ecosystem-ci/clone.ts']) {
-    const step = runs.steps.find((entry) => entry.run?.includes(script));
+  for (const stepName of [
+    'Validate bootstrap Node.js',
+    "Align vendored Vite's Vitest dependencies",
+    'Clone ecosystem ci project',
+  ]) {
+    const step = runs.steps.find((entry) => entry.name === stepName);
     expect(step?.run).toBeDefined();
     const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-c', step!.run!], {
       cwd: root,
@@ -97,7 +125,7 @@ test('runs both bootstrap scripts without installed dependencies or registry acc
     });
     expect(result.error).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);
-    if (script === 'ecosystem-ci/clone.ts') {
+    if (stepName === 'Clone ecosystem ci project') {
       expect(result.stdout).toContain('Already at correct commit');
     }
   }
