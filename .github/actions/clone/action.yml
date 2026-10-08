@@ -74,7 +74,7 @@ runs:
     # patched manifest, so patch it before any cargo command reads it.
     - name: Patch vendored oxc-node
       shell: bash
-      run: npx tsx packages/tools/src/patch-oxc-node.ts
+      run: node packages/tools/src/patch-oxc-node.ts
 
     # Match the manifests used by sync-remote when it generated the root lockfile.
     # The later dependency installation uses --frozen-lockfile, so alignment must run first.

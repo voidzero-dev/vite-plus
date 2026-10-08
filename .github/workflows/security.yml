@@ -52,9 +52,15 @@ jobs:
           ref: ${{ steps.upstream-versions.outputs.OXC_NODE_HASH }}
           persist-credentials: false
 
+      # Run the patch script with native TypeScript support instead of unpinned `npx tsx`.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
       - name: Patch vendored oxc-node
         shell: bash
-        run: npx tsx packages/tools/src/patch-oxc-node.ts
+        run: node packages/tools/src/patch-oxc-node.ts
 
       - name: Clear git origin for nested checkout
         shell: bash
