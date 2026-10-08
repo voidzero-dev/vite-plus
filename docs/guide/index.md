@@ -82,12 +82,12 @@ This is required because the managed [unofficial-builds](https://unofficial-buil
 With the global CLI installed, create a project, install dependencies, and use the default commands:
 
 ```bash
-vp create # Create a new project
+vp create  # Create a new project
 vp install # Install dependencies
-vp dev # Start the dev server
-vp check # Format, lint, type-check
-vp test # Run JavaScript tests
-vp build # Build for production
+vp dev     # Start the dev server
+vp check   # Format, lint, type-check
+vp test    # Run JavaScript tests
+vp build   # Build for production
 ```
 
 You can also run `vp` on its own to open the interactive command line. In a local-only setup, run the same commands through your package manager, such as `pnpm exec vp check`.

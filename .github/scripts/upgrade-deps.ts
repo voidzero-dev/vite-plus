@@ -1,7 +1,11 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { findLatestStableVersionForMajor } from './upgrade-deps-utils.ts';
+import {
+  findLatestStableVersionForMajor,
+  getBundledDependencyRanges,
+} from './upgrade-deps-utils.ts';
 
 const ROOT = process.cwd();
 const META_DIR = process.env.UPGRADE_DEPS_META_DIR;
@@ -307,6 +311,15 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.oxlint,
     },
     {
+      // Oxc versions this package in the same release group as oxlint.
+      // See https://github.com/oxc-project/oxc/blob/main/oxc_release.toml
+      name: '@oxlint/plugins',
+      pattern: /'@oxlint\/plugins': =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@oxlint/plugins': =${versions.oxlint}`,
+      newVersion: versions.oxlint,
+    },
+    {
+      // Tsgolint has its own release schedule and version series.
       name: 'oxlint-tsgolint',
       pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
       replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
@@ -464,74 +477,119 @@ function writeMetaFiles(): void {
   console.log(`Wrote metadata files to ${META_DIR}`);
 }
 
-console.log('Fetching latest versions…');
+// Run after installation so Yuku follows the plugin actually bundled with
+// tsdown, including transitive updates made by pnpm dedupe.
+function syncBundledDependencies(): void {
+  if (META_DIR) {
+    const versionsPath = path.join(META_DIR, 'versions.json');
+    const previous = readJsonFile(versionsPath) as Record<string, Change>;
+    for (const [name, change] of Object.entries(previous)) {
+      changes.set(name, change);
+    }
+  }
 
-const [
-  vitestVersion,
-  tsdownVersion,
-  lightningcssVersion,
-  lintStagedVersion,
-  oxcNodeCliVersion,
-  oxcNodeCoreVersion,
-  oxfmtVersion,
-  oxlintVersion,
-  oxlintTsgolintVersion,
-  oxcProjectRuntimeVersion,
-  oxcProjectTypesVersion,
-  oxcMinifyVersion,
-  oxcParserVersion,
-  oxcTransformVersion,
-] = await Promise.all([
-  getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
-  getLatestNpmVersion('tsdown'),
-  // Mirror exactly what the bundled @tsdown/css depends on.
-  getNpmDependencyRange('@tsdown/css', 'lightningcss'),
-  getLatestNpmVersion('lint-staged'),
-  getLatestNpmVersion('@oxc-node/cli'),
-  getLatestNpmVersion('@oxc-node/core'),
-  getLatestNpmVersion('oxfmt'),
-  getLatestNpmVersion('oxlint'),
-  getLatestNpmVersion('oxlint-tsgolint'),
-  getLatestNpmVersion('@oxc-project/runtime'),
-  getLatestNpmVersion('@oxc-project/types'),
-  getLatestNpmVersion('oxc-minify'),
-  getLatestNpmVersion('oxc-parser'),
-  getLatestNpmVersion('oxc-transform'),
-]);
+  const ranges = getBundledDependencyRanges(ROOT);
+  const filePath = path.join(ROOT, 'packages/core/package.json');
+  const pkg = readJsonFile(filePath);
+  for (const { name, field, range } of ranges) {
+    const oldRange = pkg[field]?.[name];
+    if (typeof oldRange !== 'string') {
+      throw new Error(`Missing ${field}.${name} in ${filePath}`);
+    }
+    // Preserve the original version if synchronization runs again after fixups.
+    recordChange(name, changes.get(name)?.old ?? oldRange, range);
+    pkg[field][name] = range;
+  }
+  fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
+  writeMetaFiles();
+}
 
-console.log(`vitest: ${vitestVersion}`);
-console.log(`tsdown: ${tsdownVersion}`);
-console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
-console.log(`lint-staged: ${lintStagedVersion}`);
-console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
-console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
-console.log(`oxfmt: ${oxfmtVersion}`);
-console.log(`oxlint: ${oxlintVersion}`);
-console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
-console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
-console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
-console.log(`oxc-minify: ${oxcMinifyVersion}`);
-console.log(`oxc-parser: ${oxcParserVersion}`);
-console.log(`oxc-transform: ${oxcTransformVersion}`);
+async function upgradeDependencies(): Promise<void> {
+  console.log('Fetching latest versions…');
 
-await updateUpstreamVersions();
-await updatePnpmWorkspace({
-  vitest: vitestVersion,
-  tsdown: tsdownVersion,
-  lightningcss: lightningcssVersion,
-  lintStaged: lintStagedVersion,
-  oxcNodeCli: oxcNodeCliVersion,
-  oxcNodeCore: oxcNodeCoreVersion,
-  oxfmt: oxfmtVersion,
-  oxlint: oxlintVersion,
-  oxlintTsgolint: oxlintTsgolintVersion,
-  oxcProjectRuntime: oxcProjectRuntimeVersion,
-  oxcProjectTypes: oxcProjectTypesVersion,
-  oxcMinify: oxcMinifyVersion,
-  oxcParser: oxcParserVersion,
-  oxcTransform: oxcTransformVersion,
-});
-await updateVitestVersionConstant(vitestVersion);
-writeMetaFiles();
+  const [
+    vitestVersion,
+    tsdownVersion,
+    lightningcssVersion,
+    lintStagedVersion,
+    oxcNodeCliVersion,
+    oxcNodeCoreVersion,
+    oxfmtVersion,
+    oxlintVersion,
+    oxlintTsgolintVersion,
+    oxcProjectRuntimeVersion,
+    oxcProjectTypesVersion,
+    oxcMinifyVersion,
+    oxcParserVersion,
+    oxcTransformVersion,
+  ] = await Promise.all([
+    getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
+    getLatestNpmVersion('tsdown'),
+    // Mirror exactly what the bundled @tsdown/css depends on.
+    getNpmDependencyRange('@tsdown/css', 'lightningcss'),
+    getLatestNpmVersion('lint-staged'),
+    getLatestNpmVersion('@oxc-node/cli'),
+    getLatestNpmVersion('@oxc-node/core'),
+    getLatestNpmVersion('oxfmt'),
+    getLatestNpmVersion('oxlint'),
+    getLatestNpmVersion('oxlint-tsgolint'),
+    getLatestNpmVersion('@oxc-project/runtime'),
+    getLatestNpmVersion('@oxc-project/types'),
+    getLatestNpmVersion('oxc-minify'),
+    getLatestNpmVersion('oxc-parser'),
+    getLatestNpmVersion('oxc-transform'),
+  ]);
 
-console.log('Done!');
+  console.log(`vitest: ${vitestVersion}`);
+  console.log(`tsdown: ${tsdownVersion}`);
+  console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
+  console.log(`lint-staged: ${lintStagedVersion}`);
+  console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
+  console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
+  console.log(`oxfmt: ${oxfmtVersion}`);
+  console.log(`oxlint: ${oxlintVersion}`);
+  console.log(`@oxlint/plugins (from oxlint): ${oxlintVersion}`);
+  console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
+  console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
+  console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
+  console.log(`oxc-minify: ${oxcMinifyVersion}`);
+  console.log(`oxc-parser: ${oxcParserVersion}`);
+  console.log(`oxc-transform: ${oxcTransformVersion}`);
+
+  await updateUpstreamVersions();
+  await updatePnpmWorkspace({
+    vitest: vitestVersion,
+    tsdown: tsdownVersion,
+    lightningcss: lightningcssVersion,
+    lintStaged: lintStagedVersion,
+    oxcNodeCli: oxcNodeCliVersion,
+    oxcNodeCore: oxcNodeCoreVersion,
+    oxfmt: oxfmtVersion,
+    oxlint: oxlintVersion,
+    oxlintTsgolint: oxlintTsgolintVersion,
+    oxcProjectRuntime: oxcProjectRuntimeVersion,
+    oxcProjectTypes: oxcProjectTypesVersion,
+    oxcMinify: oxcMinifyVersion,
+    oxcParser: oxcParserVersion,
+    oxcTransform: oxcTransformVersion,
+  });
+  await updateVitestVersionConstant(vitestVersion);
+  // Keep the selected versions available if installation or upstream sync fails.
+  writeMetaFiles();
+
+  for (const args of [['install', '--no-frozen-lockfile'], ['tool', 'sync-remote'], ['dedupe']]) {
+    execFileSync('pnpm', args, { cwd: ROOT, stdio: 'inherit' });
+  }
+  // sync-remote installs the merged workspace. Dedupe can select a newer dts
+  // plugin, so mirror its external ranges only after both operations finish.
+  syncBundledDependencies();
+  execFileSync('pnpm', ['install', '--no-frozen-lockfile'], { cwd: ROOT, stdio: 'inherit' });
+
+  console.log('Done!');
+}
+
+if (process.argv.includes('--sync-bundled-deps')) {
+  syncBundledDependencies();
+} else {
+  await upgradeDependencies();
+}

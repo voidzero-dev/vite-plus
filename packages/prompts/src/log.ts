@@ -33,9 +33,9 @@ export const log = {
     const parts: string[] = [];
     const hasGuide = getGuide({ withGuide });
     const spacingString = !hasGuide ? '' : secondarySymbol;
-    const prefix = symbol ? `${symbol}  ` : hasGuide ? `${secondarySymbol}  ` : '';
+    const prefix = symbol ? `${symbol} ` : hasGuide ? `${secondarySymbol} ` : '';
     const marker = symbol ?? secondarySymbol;
-    const secondaryPrefix = hasGuide ? `${secondarySymbol}  ` : symbol ? '   ' : '';
+    const secondaryPrefix = hasGuide ? `${secondarySymbol} ` : symbol ? '  ' : '';
 
     for (let i = 0; i < spacing; i++) {
       parts.push(spacingString);

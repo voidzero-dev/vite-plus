@@ -56,7 +56,7 @@ Run each task twice:
 vp run build
 vp run build # should print "cache hit"
 vp run lint
-vp run lint # should print "cache hit"
+vp run lint  # should print "cache hit"
 ```
 
 ## 2. Restore The Cache After Install
