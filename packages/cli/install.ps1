@@ -249,13 +249,20 @@ function Get-VerifiedPlatformDistribution {
     if ($integrity -isnot [string] -or $integrity -cnotmatch '\Asha512-[A-Za-z0-9+/]{85}[AQgw]==\z') {
         Write-Error-Exit "CLI package metadata for ${PackageName}@${Version} does not include a valid SHA-512 dist.integrity"
     }
-    return [pscustomobject]@{ TarballUrl = [string]$tarballUrl; Integrity = $integrity }
+    return [pscustomobject]@{
+        TarballUrl = [string]$tarballUrl
+        Integrity = $integrity
+    }
 }
 
 function Assert-ArchiveIntegrity {
-    param([string]$Path, [string]$Integrity)
+    param(
+        [string]$Path,
+        [string]$Integrity
+    )
 
-    $expected = [BitConverter]::ToString([Convert]::FromBase64String($Integrity.Substring(7))).Replace('-', '')
+    $expectedBytes = [Convert]::FromBase64String($Integrity.Substring(7))
+    $expected = [BitConverter]::ToString($expectedBytes).Replace('-', '')
     $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA512 -ErrorAction Stop).Hash
     if ($actual -cne $expected) {
         Write-Error-Exit "Platform package integrity mismatch: the downloaded archive does not match dist.integrity"

@@ -556,20 +556,22 @@ verify_archive_integrity() (
   local archive="$1"
   local integrity="$2"
   local expected actual
+  local -a hash_command
 
   if command -v sha512sum &> /dev/null; then
-    actual=$(sha512sum < "$archive") || error "Failed to hash platform package"
-    actual="${actual%% *}"
+    hash_command=(sha512sum)
   elif command -v shasum &> /dev/null; then
-    actual=$(shasum -a 512 < "$archive") || error "Failed to hash platform package"
-    actual="${actual%% *}"
+    hash_command=(shasum -a 512)
   elif command -v openssl &> /dev/null; then
-    actual=$(openssl dgst -sha512 < "$archive") || error "Failed to hash platform package"
-    actual="${actual##* }"
+    hash_command=(openssl dgst -sha512 -r)
   else
     warn "Skipping platform package integrity verification: sha512sum, shasum, and openssl are unavailable."
     return 0
   fi
+
+  actual=$("${hash_command[@]}" < "$archive") || error "Failed to hash platform package"
+  actual="${actual%% *}"
+
   # base64 -d and od work with macOS, GNU coreutils, and BusyBox.
   if ! expected=$(printf '%s' "${integrity#sha512-}" | base64 -d | od -An -v -tx1 | tr -d ' \n'); then
     error "Failed to decode platform package integrity"

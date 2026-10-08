@@ -78,7 +78,9 @@ if ($scenario -eq 'legacy-failure') { exit 42 }
 Assert ($LASTEXITCODE -eq 0) 'Could not create fixture'
 $fixtureHasher = [Security.Cryptography.SHA512]::Create()
 try {
-    $fixtureIntegrity = 'sha512-' + [Convert]::ToBase64String($fixtureHasher.ComputeHash([IO.File]::ReadAllBytes("$testRoot/payload.tgz")))
+    $fixtureBytes = [IO.File]::ReadAllBytes("$testRoot/payload.tgz")
+    $fixtureDigest = $fixtureHasher.ComputeHash($fixtureBytes)
+    $fixtureIntegrity = 'sha512-' + [Convert]::ToBase64String($fixtureDigest)
 } finally {
     $fixtureHasher.Dispose()
 }
@@ -89,11 +91,11 @@ Remove-Item -LiteralPath "$testRoot/package/tampered"
 $env:TEMP = "$testRoot/tmp"
 
 # Record extraction directory creation: integrity failures must precede it.
-$newItem = Get-Command New-Item
+$newItemCommand = Get-Command New-Item
 function New-Item {
     param($ItemType, $Path, [switch]$Force)
     if ((Split-Path -Leaf $Path) -like 'vite-platform-*') { $script:ExtractionStarted = $true }
-    & $newItem @PSBoundParameters
+    & $newItemCommand @PSBoundParameters
 }
 
 function Invoke-RestMethod {
@@ -117,9 +119,12 @@ function Invoke-RestMethod {
             'integrity-unsupported' { $dist.integrity = $fixtureIntegrity.Replace('sha512-', 'sha256-') }
             'integrity-noncanonical' { $dist.integrity = $fixtureIntegrity.Substring(0, $fixtureIntegrity.Length - 3) + 'B==' }
             'integrity-wrong-type' { $dist.integrity = @($fixtureIntegrity) }
-            'integrity-dotted-key' { $dist.Remove('integrity'); $dist['dist.integrity'] = $fixtureIntegrity }
-            '*pr' { $dist.Remove('attestations') }
+            'integrity-dotted-key' {
+                $dist.Remove('integrity')
+                $dist['dist.integrity'] = $fixtureIntegrity
+            }
         }
+        if ($scenario -like '*pr') { $dist.Remove('attestations') }
         return @{ dist = $dist }
     }
     throw "Unexpected metadata request: $Uri"
@@ -166,6 +171,14 @@ try {
         $script:PackageMetadata = $null
         Remove-Item -LiteralPath "$testRoot/legacy", "$testRoot/binary-invoked", "$testRoot/binary-probed" -ErrorAction SilentlyContinue
         $env:VP_SELF_SETUP_SUPPORT_CHECK = if ($scenario -eq 'supported') { 'original' } else { $null }
+        $isIntegrityFailure = $scenario -like 'integrity-*'
+        $expectedExit = if ($isIntegrityFailure) {
+            1
+        } elseif ($scenario -in @('failure', 'legacy-failure')) {
+            42
+        } else {
+            0
+        }
         try {
             & {
                 $ViteVersion = 'latest'
@@ -182,19 +195,17 @@ try {
                 Assert ($script:StateDir -eq "$testRoot/state") 'StateDir was lost'
             }
         } catch {
-            $expectFailure = $scenario -in @('failure', 'legacy-failure') -or $scenario -like 'integrity-*'
-            if (-not $expectFailure -or -not (Test-IsInstallStopException $_)) { throw }
+            if ($expectedExit -eq 0 -or -not (Test-IsInstallStopException $_)) { throw }
         }
-        $expectedExit = if ($scenario -like 'integrity-*') { 1 } elseif ($scenario -in @('failure', 'legacy-failure')) { 42 } else { 0 }
         Assert ($script:ExitCode -eq $expectedExit) 'Binary exit code was lost'
-        if ($scenario -like 'integrity-*') {
+        Assert (@(Get-ChildItem -LiteralPath "$testRoot/tmp" -Force).Count -eq 0) 'Temporary payload was not cleaned up'
+        if ($isIntegrityFailure) {
             $tarballRequested = @($script:Requests | Where-Object { $_.Contains('platform.tgz') }).Count -gt 0
             Assert ($tarballRequested -eq ($scenario -like 'integrity-mismatch*')) 'Incorrect tarball request before integrity validation'
             Assert (-not $script:ExtractionStarted) 'Unverified archive reached extraction'
             Assert (-not (Test-Path -LiteralPath "$testRoot/binary-probed")) 'Unverified binary was probed'
             Assert (-not (Test-Path -LiteralPath "$testRoot/binary-invoked")) 'Unverified binary was invoked'
             Assert (-not (Test-Path -LiteralPath "$testRoot/legacy")) 'Unverified binary reached legacy setup'
-            Assert (@(Get-ChildItem -LiteralPath "$testRoot/tmp" -Force).Count -eq 0) 'Temporary payload was not cleaned up'
             Write-Host "PASS: $scenario"
             continue
         }
@@ -213,7 +224,6 @@ try {
             Assert ($script:Requests[1] -like "GET https://registry-bridge.viteplus.dev/*/0.0.0-commit.$fixtureSha") 'Preview metadata used a mutable ref or the wrong registry'
             Assert ($script:Requests.Count -eq 3) 'Preview was resolved or downloaded more than once'
         }
-        Assert (@(Get-ChildItem -LiteralPath "$testRoot/tmp" -Force).Count -eq 0) 'Temporary payload was not cleaned up'
         Write-Host "PASS: $scenario"
     }
 } finally {

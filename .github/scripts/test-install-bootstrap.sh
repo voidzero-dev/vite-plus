@@ -74,6 +74,38 @@ tar() {
   command tar "$@"
 }
 
+# Keep JSON escapes literal so the installer decodes them.
+fixture_integrity_fields() {
+  local key=integrity value="$fixture_integrity"
+  case "$scenario" in
+    integrity-missing*) return 0 ;;
+    integrity-malformed) value=sha512-invalid ;;
+    integrity-unsupported) value="sha256-${fixture_integrity#sha512-}" ;;
+    integrity-noncanonical) value="${fixture_integrity%???}B==" ;;
+    integrity-wrong-type)
+      printf '"integrity":["%s"],' "$fixture_integrity"
+      return 0 ;;
+    integrity-dotted-key) key=dist.integrity ;;
+    integrity-duplicate)
+      printf '"integrity":"%s",' "$fixture_integrity" ;;
+    integrity-duplicate-escaped)
+      printf '"integrity":"%s",' "$fixture_integrity"
+      key='integ\u0072ity'
+      value="$fixture_unicode_integrity" ;;
+    integrity-escaped-newline) value="${fixture_integrity}\u000Aignored" ;;
+    integrity-escaped-null) value="${fixture_integrity}\u0000" ;;
+    integrity-literal-escape) value="${fixture_integrity//+/\\\\u002B}" ;;
+    escaped-integrity|escaped-integrity-pr|integrity-mismatch-escaped*) value="$fixture_unicode_integrity" ;;
+    escaped-integrity-all) value="$fixture_all_unicode_integrity" ;;
+    escaped-integrity-lower) value="${fixture_integrity//+/\\u002b}" ;;
+    escaped-integrity-key)
+      key='integ\u0072ity'
+      value="$fixture_unicode_integrity" ;;
+    escaped-integrity-slash) value="${fixture_integrity//\//\\/}" ;;
+  esac
+  printf '"%s":"%s",' "$key" "$value"
+}
+
 # Only transport is substituted; extraction, probing, and dispatch run normally.
 curl() {
   printf '%s\n' "$*" >> "$test_root/requests"
@@ -83,28 +115,9 @@ curl() {
     *'https://custom.example/vite-plus/'*) printf '{"version":"0.2.9"}\n' ;;
     *'/@voidzero-dev%2Fvite-plus-cli-'*)
       # Release payloads must pass the real provenance gate before handoff.
-      local integrity_field="\"integrity\":\"$fixture_integrity\","
-      case "$scenario" in
-        integrity-missing*) integrity_field="" ;;
-        integrity-malformed) integrity_field='"integrity":"sha512-invalid",' ;;
-        integrity-unsupported) integrity_field="\"integrity\":\"sha256-${fixture_integrity#sha512-}\"," ;;
-        integrity-noncanonical) integrity_field="\"integrity\":\"${fixture_integrity%???}B==\"," ;;
-        integrity-wrong-type) integrity_field="\"integrity\":[\"$fixture_integrity\"]," ;;
-        integrity-dotted-key) integrity_field="\"dist.integrity\":\"$fixture_integrity\"," ;;
-        integrity-duplicate) integrity_field="$integrity_field$integrity_field" ;;
-        integrity-duplicate-escaped) integrity_field="$integrity_field\"integ\\u0072ity\":\"$fixture_unicode_integrity\"," ;;
-        integrity-escaped-newline) integrity_field="\"integrity\":\"$fixture_integrity\\u000Aignored\"," ;;
-        integrity-escaped-null) integrity_field="\"integrity\":\"$fixture_integrity\\u0000\"," ;;
-        integrity-literal-escape) integrity_field="\"integrity\":\"${fixture_integrity//+/\\\\u002B}\"," ;;
-        escaped-integrity|escaped-integrity-pr|integrity-mismatch-escaped*) integrity_field="\"integrity\":\"$fixture_unicode_integrity\"," ;;
-        escaped-integrity-all) integrity_field="\"integrity\":\"$fixture_all_unicode_integrity\"," ;;
-        escaped-integrity-lower) integrity_field="\"integrity\":\"${fixture_integrity//+/\\u002b}\"," ;;
-        escaped-integrity-key) integrity_field="\"integ\\u0072ity\":\"$fixture_unicode_integrity\"," ;;
-        escaped-integrity-slash) integrity_field="\"integrity\":\"${fixture_integrity//\//\\/}\"," ;;
-      esac
       local attestations='"attestations":{"provenance":{"predicateType":"https://slsa.dev/provenance/v1"}},'
       if [[ "$scenario" == *pr ]]; then attestations=""; fi
-      printf '{"dist":{%s%s"tarball":"https://custom.example/platform.tgz"}}\n' "$integrity_field" "$attestations" ;;
+      printf '{"dist":{%s%s"tarball":"https://custom.example/platform.tgz"}}\n' "$(fixture_integrity_fields)" "$attestations" ;;
     *)
       local payload=payload
       if [[ "$scenario" == integrity-mismatch* ]]; then payload=tampered; fi
