@@ -48,6 +48,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 PACKAGE_METADATA=""
 PLATFORM_TARBALL_URL=""
+PLATFORM_INTEGRITY=""
 # Legacy is published beside this bootstrap; preview builds rewrite this origin.
 LEGACY_INSTALLER_URL="${VP_LEGACY_INSTALLER_URL:-https://viteplus.dev/install-legacy.sh}"
 INSTALLER_PATH="${BASH_SOURCE[0]:-}"
@@ -260,7 +261,7 @@ get_version_from_metadata() {
   fi
 }
 
-# Extract the platform tarball URL and provenance predicate from npm version
+# Extract the platform tarball URL, integrity, and provenance predicate from npm version
 # metadata. Bootstrap runs before Node.js is available and cannot require jq,
 # so this parser tracks each JSON path segment and container boundary rather
 # than matching key names or dot-joined paths. Keeping segments separate means
@@ -337,6 +338,8 @@ parse_platform_distribution_metadata() {
       if (depth == 2 && is_object_key(1, "dist") && is_object_key(2, "tarball")) {
         if (++tarball_count != 1) fail_json("duplicate dist.tarball")
         tarball = value
+      } else if (depth == 2 && is_object_key(1, "dist") && is_object_key(2, "integrity")) {
+        integrity = value
       } else if (depth == 4 && is_object_key(1, "dist") &&
                  is_object_key(2, "attestations") &&
                  is_object_key(3, "provenance") &&
@@ -467,6 +470,7 @@ parse_platform_distribution_metadata() {
       print tarball
       print predicate_type
       print registry_error
+      print integrity
     }
   '
 }
@@ -476,8 +480,9 @@ parse_platform_distribution_metadata() {
 resolve_platform_distribution() {
   local package_name="$1"
   local package_version="$2"
+  local registry="${3:-$NPM_REGISTRY}"
   local encoded_package_name="${package_name/\//%2F}"
-  local metadata_url="${NPM_REGISTRY}/${encoded_package_name}/${package_version}"
+  local metadata_url="${registry%/}/${encoded_package_name}/${package_version}"
   local metadata parsed registry_error predicate_type
 
   metadata=$(curl_with_error_handling -s "$metadata_url")
@@ -492,6 +497,7 @@ resolve_platform_distribution() {
   PLATFORM_TARBALL_URL=$(printf '%s\n' "$parsed" | sed -n '1p')
   predicate_type=$(printf '%s\n' "$parsed" | sed -n '2p')
   registry_error=$(printf '%s\n' "$parsed" | sed -n '3p')
+  PLATFORM_INTEGRITY=$(printf '%s\n' "$parsed" | sed -n '4p')
 
   if [ -n "$registry_error" ]; then
     error "Failed to fetch CLI package metadata '${package_name}@${package_version}': ${registry_error}\n  URL: $metadata_url"
@@ -510,6 +516,11 @@ resolve_platform_distribution() {
   if [ -z "$PLATFORM_TARBALL_URL" ]; then
     error "CLI package metadata for ${package_name}@${package_version} does not include dist.tarball\n  URL: $metadata_url"
   fi
+  # A SHA-512 digest is 64 bytes, encoded as 86 base64 characters and two padding
+  # characters. Require canonical padding bits as well as the supported algorithm.
+  if [[ ! "$PLATFORM_INTEGRITY" =~ ^sha512-[A-Za-z0-9+/]{85}[AQgw]==$ ]]; then
+    error "CLI package metadata for ${package_name}@${package_version} does not include a valid SHA-512 dist.integrity\n  URL: $metadata_url"
+  fi
 }
 
 # Get platform suffix for CLI package download
@@ -524,9 +535,37 @@ get_platform_suffix() {
   esac
 }
 
+verify_archive_integrity() (
+  set -o pipefail
+  local archive="$1"
+  local integrity="$2"
+  local expected actual
+
+  # base64 -d and od work with macOS, GNU coreutils, and BusyBox.
+  if ! expected=$(printf '%s' "${integrity#sha512-}" | base64 -d | od -An -v -tx1 | tr -d ' \n'); then
+    error "Failed to decode platform package integrity"
+  fi
+  if command -v sha512sum &> /dev/null; then
+    actual=$(sha512sum < "$archive") || error "Failed to hash platform package"
+    actual="${actual%% *}"
+  elif command -v shasum &> /dev/null; then
+    actual=$(shasum -a 512 < "$archive") || error "Failed to hash platform package"
+    actual="${actual%% *}"
+  elif command -v openssl &> /dev/null; then
+    actual=$(openssl dgst -sha512 < "$archive") || error "Failed to hash platform package"
+    actual="${actual##* }"
+  else
+    error "SHA-512 verification requires sha512sum, shasum, or openssl"
+  fi
+  if [ "$actual" != "$expected" ]; then
+    error "Platform package integrity mismatch: the downloaded archive does not match dist.integrity"
+  fi
+)
+
 download_and_extract() (
   local url="$1"
   local dest_dir="$2"
+  local integrity="$3"
 
   # Download to temp file (silent mode)
   local temp_file
@@ -535,7 +574,7 @@ download_and_extract() (
 
   # Run curl and capture exit code for error handling
   set +e
-  curl -sL "$url" -o "$temp_file"
+  curl -fsSL "$url" -o "$temp_file"
   local exit_code=$?
   set -e
 
@@ -544,6 +583,7 @@ download_and_extract() (
     print_curl_error "$exit_code" "$url"
   fi
 
+  verify_archive_integrity "$temp_file" "$integrity" || exit $?
   tar xzf "$temp_file" -C "$dest_dir" --strip-components=1
 
 )
@@ -659,22 +699,17 @@ acquire_and_handoff() (
   if [ -z "$LOCAL_TGZ" ]; then
     # npm registry or registry bridge (when PR_VERSION is set)
     get_platform_suffix "$platform"
-    local platform_url
-    if [ -n "$PR_VERSION" ]; then
-      # The registry bridge redirects this URL to the platform tarball for the
-      # matching commit build (0.0.0-commit.<sha>).
-      platform_url="${BRIDGE_DOWNLOAD_BASE}/@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}@${PR_COMMIT_VERSION#0.0.0-commit.}"
-    else
-      local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
-      resolve_platform_distribution "$package_name" "$VP_VERSION"
-      platform_url="$PLATFORM_TARBALL_URL"
-    fi
+    local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
+    local registry="$NPM_REGISTRY"
+    if [ -n "$PR_VERSION" ]; then registry="$BRIDGE_REGISTRY"; fi
+    # Preview metadata binds the same immutable commit version to its archive.
+    resolve_platform_distribution "$package_name" "$VP_VERSION" "$registry" || exit $?
 
     # Create temp directory for extraction
     platform_temp_dir=$(mktemp -d)
     platform_temp_dir=$(cd "$platform_temp_dir" && pwd -P)
     trap "rm -rf -- $(printf '%q' "$platform_temp_dir")" EXIT
-    download_and_extract "$platform_url" "$platform_temp_dir" || exit $?
+    download_and_extract "$PLATFORM_TARBALL_URL" "$platform_temp_dir" "$PLATFORM_INTEGRITY" || exit $?
     binary_source="$platform_temp_dir/$binary_name"
     [ -f "$binary_source" ] || error "Downloaded package does not contain $binary_name"
     chmod +x "$binary_source"
