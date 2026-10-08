@@ -37,7 +37,8 @@ runs:
         version: 0.0.0-commit.11393b1a9ec1739c5897fefd418bdb095a34db7e
         cache: true
         working-directory: docs
-        cache-dependency-path: docs/pnpm-lock.yaml
+        # Resolved relative to working-directory.
+        cache-dependency-path: pnpm-lock.yaml
 
     # Vite Task shares the docs build through the remote cache. Uploads
     # authenticate with a GitHub Actions OIDC token.
