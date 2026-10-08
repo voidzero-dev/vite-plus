@@ -219,7 +219,48 @@ function deletePrettierConfigFiles(
   });
 }
 
-function rewritePrettierPackageJson(packageJsonPath: string): void {
+// Bare names of packages whose sole purpose is to support Prettier.
+const PRETTIER_ECOSYSTEM_NAMES = new Set<string>(['prettier']);
+
+// Flat name prefixes that mark a Prettier-only package.
+const PRETTIER_ECOSYSTEM_PREFIXES = ['prettier-plugin-', 'prettier-config-'];
+
+// Scopes whose every package is part of the Prettier ecosystem.
+//   @prettier/*  — official Prettier scope (@prettier/plugin-php,
+//                  @prettier/plugin-xml, @prettier/plugin-ruby, @prettier/sync)
+const PRETTIER_ECOSYSTEM_SCOPES = ['@prettier/'];
+
+/**
+ * Decide whether a dependency entry should be removed alongside `prettier`
+ * itself, mirroring `isEslintEcosystemDep` in `eslint.ts`. Plugins and
+ * shareable configs are dead weight once formatting moves to Oxfmt, and
+ * scoped names are as common as flat ones — `@trivago/prettier-plugin-sort-imports`
+ * is not less of a Prettier plugin than `prettier-plugin-tailwindcss`.
+ * `@types/<X>` packages are checked symmetrically with `<X>`.
+ */
+function isPrettierEcosystemDep(name: string): boolean {
+  const stripped = name.startsWith('@types/') ? name.slice('@types/'.length) : name;
+  if (PRETTIER_ECOSYSTEM_NAMES.has(stripped)) {
+    return true;
+  }
+  if (PRETTIER_ECOSYSTEM_PREFIXES.some((p) => stripped.startsWith(p))) {
+    return true;
+  }
+  if (PRETTIER_ECOSYSTEM_SCOPES.some((s) => stripped.startsWith(s))) {
+    return true;
+  }
+  // Scoped plugins/configs, e.g.:
+  //   @trivago/prettier-plugin-sort-imports
+  //   @ianvs/prettier-plugin-sort-imports
+  //   @shopify/prettier-plugin-liquid
+  //   @company/prettier-config
+  if (/^@[^/]+\/prettier-(plugin|config)(-.+)?$/.test(stripped)) {
+    return true;
+  }
+  return false;
+}
+
+export function rewritePrettierPackageJson(packageJsonPath: string): void {
   if (!fs.existsSync(packageJsonPath)) {
     return;
   }
@@ -230,10 +271,10 @@ function rewritePrettierPackageJson(packageJsonPath: string): void {
     'lint-staged'?: Record<string, string | string[]>;
   }>(packageJsonPath, (pkg) => {
     let changed = false;
-    // Remove prettier and prettier-plugin-* dependencies
+    // Remove prettier and its plugins / shareable configs
     if (pkg.devDependencies) {
       for (const dep of Object.keys(pkg.devDependencies)) {
-        if (dep === 'prettier' || dep.startsWith('prettier-plugin-')) {
+        if (isPrettierEcosystemDep(dep)) {
           delete pkg.devDependencies[dep];
           changed = true;
         }
@@ -241,7 +282,7 @@ function rewritePrettierPackageJson(packageJsonPath: string): void {
     }
     if (pkg.dependencies) {
       for (const dep of Object.keys(pkg.dependencies)) {
-        if (dep === 'prettier' || dep.startsWith('prettier-plugin-')) {
+        if (isPrettierEcosystemDep(dep)) {
           delete pkg.dependencies[dep];
           changed = true;
         }
