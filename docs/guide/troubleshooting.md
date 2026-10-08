@@ -30,7 +30,7 @@ When running `vp lint`, `vp fmt`, or `vp check`, configs in subdirectories do no
 
 Keep lint and format settings in the root `vite.config.ts`. Use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) and [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific settings. You can also [import configuration objects](/guide/monorepo#composing-configuration-files) into the root config to keep settings in separate files.
 
-For IDE integration, `disableNestedConfig` and `fmt.disableNestedConfig` disable per-file nested lint and format configs. See [IDE Integration](/guide/ide-integration) for setup instructions for your editor.
+Configure your editor's linting and formatting to use the workspace-root `vite.config.ts`. See [IDE Integration](/guide/ide-integration) for editor-specific setup instructions.
 
 We're holding off on applying nested configs to individual files for now. Some of the factors we're considering are how implicit config discovery affects the predictability of linting and formatting, what context AI agents need to understand the settings that apply, and the potential performance cost of finding and loading multiple configs. At the same time, we recognize that keeping package-specific context close to the code may have benefits. The use cases we've heard so far haven't given us a strong enough reason to commit to those semantics. Waiting leaves room to add support later, and we'd like to hear why your project needs nested configs, especially where root-level overrides fall short.
 
