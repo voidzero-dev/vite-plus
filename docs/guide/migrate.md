@@ -220,7 +220,7 @@ After merging, delete `tsdown.config.ts`. See the [Pack guide](/guide/pack) for 
 
 ### lint-staged
 
-Vite+ replaces lint-staged with its own `staged` block in `vite.config.ts`. Only the `staged` config format is supported. Standalone `.lintstagedrc` in non-JSON format and `lint-staged.config.*` are not migrated automatically.
+Vite+ replaces lint-staged with its own `staged` block in `vite.config.ts`. `vp staged` reads its configuration from the `staged` block in `vite.config.ts`, not from standalone lint-staged configuration files. Standalone `.lintstagedrc` in non-JSON format and `lint-staged.config.*` are not migrated automatically.
 
 Move your lint-staged rules into the `staged` block:
 
