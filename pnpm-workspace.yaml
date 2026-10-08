@@ -121,7 +121,6 @@ catalog:
   source-map: 0.8.0
   source-map-support: ^0.5.21
   strip-comments: ^2.0.1
-  tar-stream: ^3.2.2
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1

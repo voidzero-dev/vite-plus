@@ -5,7 +5,7 @@ import path from 'node:path';
 import { getVpDirs } from '../../binding/index.js';
 import { fetchNpmResource } from '../utils/npm-config.ts';
 import type { OrgManifest } from './org-manifest.ts';
-import { readOrgTarball } from './org-tarball-reader.ts';
+import { parseOrgTarball } from './org-tarball-reader.ts';
 
 function getCacheRoot(): string {
   return path.join(getVpDirs().cache, 'create-org');
@@ -139,20 +139,14 @@ export async function readPackageJsonFromTarball(
 ): Promise<unknown> {
   const bytes = await downloadTarball(tarballUrl);
   verifyIntegrity(bytes, integrity);
-  let packageJson: Buffer | undefined;
-  await readOrgTarball(bytes, async (header, data) => {
-    if (packageJson || normalizeEntryName(header.name) !== 'package.json' || header.size === 0) {
-      return;
+  const entries = await parseOrgTarball(bytes);
+  for (const entry of entries) {
+    if (normalizeEntryName(entry.name) !== 'package.json' || !entry.data) {
+      continue;
     }
-    const chunks: Buffer[] = [];
-    for await (const chunk of data) {
-      chunks.push(chunk);
-    }
-    packageJson = Buffer.concat(chunks);
-  });
-  if (packageJson) {
+    const text = new TextDecoder().decode(entry.data);
     try {
-      return JSON.parse(packageJson.toString('utf8')) as unknown;
+      return JSON.parse(text) as unknown;
     } catch {
       throw new Error(`invalid package.json in tarball: ${tarballUrl}`);
     }
@@ -161,6 +155,23 @@ export async function readPackageJsonFromTarball(
 }
 
 const STAGING_SUFFIX_PREFIX = '.tmp-';
+
+/**
+ * Parse a tar entry's stored mode (always octal) into the numeric
+ * permission bits (low 9 bits — `rwxrwxrwx`). Returns `undefined` when
+ * the mode is missing or unparsable so the caller leaves the file with
+ * its default (umask-derived) permissions instead of downgrading.
+ */
+export function parseEntryMode(raw: string | undefined): number | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(raw, 8);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  return parsed & 0o777;
+}
 
 /**
  * Strip the `package/` prefix from an `npm pack` tarball entry. Returns
@@ -182,16 +193,17 @@ export function normalizeEntryName(rawName: string): string | null {
 }
 
 async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<void> {
+  const entries = await parseOrgTarball(bytes);
   // Extract into a staging directory first so partial failures don't leave
   // a half-populated final cache path that future runs would skip.
   const stagingDir = `${destDir}${STAGING_SUFFIX_PREFIX}${process.pid}-${Date.now()}`;
   await fs.promises.mkdir(stagingDir, { recursive: true });
   const resolvedStaging = path.resolve(stagingDir);
   try {
-    await readOrgTarball(bytes, async (entry, data) => {
+    for (const entry of entries) {
       const relativeName = normalizeEntryName(entry.name);
       if (relativeName === null) {
-        return;
+        continue;
       }
       const targetPath = path.join(stagingDir, relativeName);
       // Defense-in-depth: make sure the resolved path is still inside the
@@ -205,16 +217,20 @@ async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<voi
       }
       if (entry.type === 'directory' || relativeName.endsWith('/')) {
         await fs.promises.mkdir(targetPath, { recursive: true });
-        return;
+        continue;
       }
       await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+      const data = entry.data ?? new Uint8Array(0);
       await fs.promises.writeFile(targetPath, data);
       // Preserve the tar entry's mode so bundled templates can ship
       // executable files (e.g. `gradlew`, `mvnw`, `scripts/*.sh`). Mask
       // to the permission bits only — setuid/setgid/sticky have no
       // business in a scaffolded project template.
-      await fs.promises.chmod(targetPath, entry.mode & 0o777);
-    });
+      const mode = parseEntryMode(entry.attrs?.mode);
+      if (mode !== undefined) {
+        await fs.promises.chmod(targetPath, mode);
+      }
+    }
     try {
       await fs.promises.rename(stagingDir, destDir);
     } catch (error) {

@@ -1,91 +1,140 @@
 import { gzipSync, gunzipSync } from 'node:zlib';
 
 import { createTar } from 'nanotar';
-import { pack, type Header } from 'tar-stream';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { ORG_TARBALL_LIMITS, readOrgTarball } from '../org-tarball-reader.ts';
+import { ORG_TARBALL_LIMITS, parseOrgTarball } from '../org-tarball-reader.ts';
 
-async function archiveWith(
-  files: { name: string; data?: string; type?: Header['type'] }[],
-): Promise<Buffer> {
-  const archive = pack();
-  for (const { data = '', ...header } of files) {
-    archive.entry(header, data);
-  }
-  archive.finalize();
-  const chunks: Buffer[] = [];
-  for await (const chunk of archive) {
-    chunks.push(chunk as Buffer);
-  }
-  return gzipSync(Buffer.concat(chunks));
+type TestEntry = { name: string; data?: string; type?: string };
+
+function tarRecord({ name, data = '', type = '0' }: TestEntry): Buffer {
+  const tar = Buffer.from(createTar([{ name, data }]));
+  tar[156] = type.charCodeAt(0);
+  tar.fill(32, 148, 156);
+  const checksum = tar.subarray(0, 512).reduce((sum, byte) => sum + byte, 0);
+  tar.write(`${checksum.toString(8).padStart(6, '0')}\0 `, 148, 'ascii');
+  return tar.subarray(0, 512 + Math.ceil(Buffer.byteLength(data) / 512) * 512);
 }
 
-describe('readOrgTarball', () => {
+function archiveWith(files: TestEntry[]): Buffer {
+  return gzipSync(Buffer.concat([...files.map(tarRecord), Buffer.alloc(1024)]));
+}
+
+function paxField(key: string, value: string): string {
+  const field = ` ${key}=${value}\n`;
+  let length = Buffer.byteLength(field) + 1;
+  while (String(length).length + Buffer.byteLength(field) !== length) {
+    length = String(length).length + Buffer.byteLength(field);
+  }
+  return `${length}${field}`;
+}
+
+describe('parseOrgTarball', () => {
   it('accepts entries exactly at the size, count, path and expanded-byte limits', async () => {
-    const archive = await archiveWith([{ name: 'package/a', data: 'hello' }]);
-    const contents: string[] = [];
-    await readOrgTarball(
-      archive,
-      async (_header, data) => {
-        for await (const chunk of data) {
-          contents.push(chunk.toString());
-        }
-      },
-      {
-        ...ORG_TARBALL_LIMITS,
-        expandedBytes: gunzipSync(archive).byteLength,
-        entryBytes: 5,
-        entries: 1,
-        pathBytes: 9,
-      },
-    );
-    expect(contents.join('')).toBe('hello');
+    const archive = archiveWith([{ name: 'package/a', data: 'hello' }]);
+    const entries = await parseOrgTarball(archive, {
+      ...ORG_TARBALL_LIMITS,
+      expandedBytes: gunzipSync(archive).byteLength,
+      entryBytes: 5,
+      entries: 1,
+      pathBytes: 9,
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].text).toBe('hello');
   });
 
   it('limits all expanded bytes, including trailing tar padding', async () => {
-    const archive = await archiveWith([{ name: 'package/a', data: 'hello' }]);
-    const visit = vi.fn().mockResolvedValue(undefined);
+    const archive = archiveWith([{ name: 'package/a', data: 'hello' }]);
     await expect(
-      readOrgTarball(archive, visit, {
+      parseOrgTarball(archive, {
         ...ORG_TARBALL_LIMITS,
         expandedBytes: gunzipSync(archive).byteLength - 1,
       }),
     ).rejects.toThrow(/decompressed size limit/);
   });
 
-  it('checks an advertised entry size before waiting for its missing body', async () => {
-    const tar = Buffer.from(createTar([{ name: 'package/a', data: '' }]));
+  it('checks the advertised size before reading a missing entry body', async () => {
+    const tar = tarRecord({ name: 'package/a' });
     tar.write('00000000100\0', 124, 'ascii'); // 64 bytes, with no body in this archive
-    tar.fill(32, 148, 156);
-    const checksum = tar.subarray(0, 512).reduce((sum, byte) => sum + byte, 0);
-    tar.write(`${checksum.toString(8).padStart(6, '0')}\0 `, 148, 'ascii');
-    const visit = vi.fn().mockResolvedValue(undefined);
     await expect(
-      readOrgTarball(gzipSync(tar.subarray(0, 512)), visit, {
-        ...ORG_TARBALL_LIMITS,
-        entryBytes: 63,
-      }),
+      parseOrgTarball(gzipSync(tar), { ...ORG_TARBALL_LIMITS, entryBytes: 63 }),
     ).rejects.toThrow(/entry exceeds 63 byte size limit/);
-    expect(visit).not.toHaveBeenCalled();
   });
 
-  it('counts skipped files and directories before visiting the next entry', async () => {
-    const archive = await archiveWith([
+  it.each(['-0000000001', 'not-octal', '1000\xb0'])(
+    'rejects a malformed size field: %s',
+    async (size) => {
+      const tar = tarRecord({ name: 'package/a' });
+      tar.fill(0, 124, 136);
+      tar.write(size, 124, 'latin1');
+      await expect(parseOrgTarball(gzipSync(tar))).rejects.toThrow(/invalid size/);
+    },
+  );
+
+  it('rejects a truncated entry body', async () => {
+    const tar = tarRecord({ name: 'package/a', data: 'hello' });
+    await expect(parseOrgTarball(gzipSync(tar.subarray(0, -1)))).rejects.toThrow(
+      /truncated tarball entry/,
+    );
+  });
+
+  it('rejects a truncated header', async () => {
+    const tar = tarRecord({ name: 'package/a' });
+    await expect(parseOrgTarball(gzipSync(tar.subarray(0, 100)))).rejects.toThrow(
+      /truncated tarball header/,
+    );
+  });
+
+  it('counts skipped files and directories', async () => {
+    const archive = archiveWith([
       { name: 'ignored/a', data: 'skipped' },
-      { name: 'ignored/dir/', type: 'directory' },
+      { name: 'ignored/dir/', type: '5' },
     ]);
-    const visit = vi.fn().mockResolvedValue(undefined);
+    await expect(parseOrgTarball(archive, { ...ORG_TARBALL_LIMITS, entries: 1 })).rejects.toThrow(
+      /entry count limit/,
+    );
+  });
+
+  it('counts metadata records that nanotar does not expose as entries', async () => {
+    const archive = archiveWith([
+      { name: 'PaxHeader/a', type: 'x', data: paxField('path', 'package/a') },
+      { name: 'package/a', data: 'hello' },
+    ]);
+    await expect(parseOrgTarball(archive, { ...ORG_TARBALL_LIMITS, entries: 1 })).rejects.toThrow(
+      /entry count limit/,
+    );
+  });
+
+  it('limits cumulative extended metadata before nanotar parses it', async () => {
+    const archive = archiveWith([
+      { name: 'PaxHeader/a', type: 'x', data: paxField('path', 'package/a') },
+      { name: 'package/a', data: 'hello' },
+      { name: 'PaxHeader/b', type: 'x', data: paxField('path', 'package/b') },
+      { name: 'package/b', data: 'hello' },
+    ]);
     await expect(
-      readOrgTarball(archive, visit, { ...ORG_TARBALL_LIMITS, entries: 1 }),
-    ).rejects.toThrow(/entry count limit/);
-    expect(visit).toHaveBeenCalledTimes(1);
+      parseOrgTarball(archive, {
+        ...ORG_TARBALL_LIMITS,
+        metadataBytes: paxField('path', 'package/a').length,
+      }),
+    ).rejects.toThrow(/metadata size limit/);
+  });
+
+  it('limits cumulative global PAX fields copied into subsequent entries', async () => {
+    const archive = archiveWith([
+      { name: 'PaxHeader/global-a', type: 'g', data: paxField('comment', 'a') },
+      { name: 'PaxHeader/global-b', type: 'g', data: paxField('comment', 'b') },
+      { name: 'package/a', data: 'hello' },
+    ]);
+    await expect(
+      parseOrgTarball(archive, { ...ORG_TARBALL_LIMITS, globalMetadataFields: 3 }),
+    ).rejects.toThrow(/global metadata field limit/);
   });
 
   it('applies the compression ratio limit after the allowance for small archives', async () => {
-    const archive = await archiveWith([{ name: 'package/a', data: 'a'.repeat(16_384) }]);
+    const archive = archiveWith([{ name: 'package/a', data: 'a'.repeat(16_384) }]);
     await expect(
-      readOrgTarball(archive, async () => {}, {
+      parseOrgTarball(archive, {
         ...ORG_TARBALL_LIMITS,
         ratioAllowanceBytes: 1024,
         compressionRatio: 2,
@@ -94,37 +143,39 @@ describe('readOrgTarball', () => {
   });
 
   it('checks UTF-8 path bytes after resolving PAX extended names', async () => {
-    const archive = await archiveWith([{ name: 'package/中文.txt', data: 'hello' }]);
-    const visit = vi.fn().mockResolvedValue(undefined);
-    await expect(
-      readOrgTarball(archive, visit, { ...ORG_TARBALL_LIMITS, pathBytes: 17 }),
-    ).rejects.toThrow(/path length limit/);
-    expect(visit).not.toHaveBeenCalled();
-  });
-
-  it('preserves long paths encoded in PAX metadata', async () => {
-    const name = `package/${'nested/'.repeat(30)}file.txt`;
-    const archive = await archiveWith([{ name, data: 'hello' }]);
-    const visit = vi.fn().mockResolvedValue(undefined);
-    await readOrgTarball(archive, visit);
-    expect(visit).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ name }),
-      expect.anything(),
-    );
-  });
-
-  it('stops decompression when the visitor fails', async () => {
-    const archive = await archiveWith([
-      { name: 'package/a', data: 'a' },
-      { name: 'package/b', data: 'b'.repeat(32_768) },
+    const archive = archiveWith([
+      { name: 'PaxHeader/a', type: 'x', data: paxField('path', 'package/中文.txt') },
+      { name: 'package/a', data: 'hello' },
     ]);
-    const visit = vi.fn().mockRejectedValue(new Error('write failed'));
-    await expect(readOrgTarball(archive, visit)).rejects.toThrow('write failed');
-    expect(visit).toHaveBeenCalledTimes(1);
+    await expect(
+      parseOrgTarball(archive, { ...ORG_TARBALL_LIMITS, pathBytes: 17 }),
+    ).rejects.toThrow(/path length limit/);
+  });
+
+  it('checks stored extended paths even when normalization shortens them', async () => {
+    const archive = archiveWith([
+      { name: 'PaxHeader/a', type: 'x', data: paxField('path', `package/${'../'.repeat(30)}a`) },
+      { name: 'package/a', data: 'hello' },
+    ]);
+    await expect(
+      parseOrgTarball(archive, { ...ORG_TARBALL_LIMITS, pathBytes: 64 }),
+    ).rejects.toThrow(/path length limit/);
+  });
+
+  it.each(['x', 'L'])('preserves long paths encoded in %s metadata', async (type) => {
+    const name = `package/${'nested/'.repeat(30)}file.txt`;
+    const archive = archiveWith([
+      { name: 'PaxHeader/a', type, data: type === 'x' ? paxField('path', name) : `${name}\0` },
+      { name: 'package/a', data: 'hello' },
+    ]);
+    const entries = await parseOrgTarball(archive);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].name).toBe(name);
+    expect(entries[0].text).toBe('hello');
   });
 
   it('rejects a truncated gzip stream', async () => {
-    const archive = await archiveWith([{ name: 'package/a', data: 'hello' }]);
-    await expect(readOrgTarball(archive.subarray(0, -8), async () => {})).rejects.toThrow();
+    const archive = archiveWith([{ name: 'package/a', data: 'hello' }]);
+    await expect(parseOrgTarball(archive.subarray(0, -8))).rejects.toThrow();
   });
 });
