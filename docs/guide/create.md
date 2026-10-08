@@ -134,7 +134,9 @@ If the monorepo has a parent directory matching `generators` or `tools`, the new
 
 Local generators are declared in [`create.templates`](/config/create#create-templates) in the monorepo's `vite.config.ts`. This is the source of truth: only registered templates appear in the `vp create` picker.
 
-`vp create vite:generator` registers the generator for you, adding an entry to `create.templates` in the root `vite.config.ts`:
+`vp create vite:generator` registers the generator for you, adding an entry to `create.templates` in the root `vite.config.ts`.
+
+For example, a generator named `my-generator` created in `generators/my-generator` is registered as follows:
 
 ```ts
 import { defineConfig } from 'vite-plus';
