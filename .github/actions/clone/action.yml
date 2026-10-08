@@ -2,6 +2,10 @@ name: 'Clone Repositories'
 description: 'Clone self and upstream repositories'
 
 inputs:
+  setup-node:
+    description: 'Set to false to keep a caller-provided Node.js with native TypeScript support (for example, on Alpine)'
+    required: false
+    default: 'true'
   ecosystem-ci-project:
     description: 'The ecosystem ci project to clone'
     required: false
@@ -15,6 +19,17 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    # Run the bootstrap scripts with native TypeScript support before installing dependencies.
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      if: ${{ inputs.setup-node != 'false' }}
+      with:
+        node-version-file: .node-version
+        package-manager-cache: false
+
+    - name: Validate bootstrap Node.js
+      shell: bash
+      run: node -e "require('node:assert/strict').ok(process.features.typescript, 'Clone bootstrap requires native TypeScript support')"
+
     - name: Output rolldown and vite hash
       shell: bash
       id: upstream-versions
@@ -48,11 +63,10 @@ runs:
         persist-credentials: false
 
     # Match the manifests used by sync-remote when it generated the root lockfile.
-    # setup-node installs with --frozen-lockfile, so this must run before it.
-    # The runner's preinstalled Node may not support direct TypeScript execution.
+    # The later dependency installation uses --frozen-lockfile, so alignment must run first.
     - name: Align vendored Vite's Vitest dependencies
       shell: bash
-      run: npx tsx packages/tools/src/vendored-vitest.ts
+      run: node packages/tools/src/vendored-vitest.ts
 
     # Disable autocrlf to preserve LF line endings on Windows
     # This prevents prettier/eslint from failing with "Delete ␍" errors
@@ -64,6 +78,6 @@ runs:
     - name: Clone ecosystem ci project
       if: ${{ inputs.ecosystem-ci-project != '' }}
       shell: bash
-      run: npx tsx ecosystem-ci/clone.ts ${INPUTS_ECOSYSTEM_CI_PROJECT}
+      run: node ecosystem-ci/clone.ts ${INPUTS_ECOSYSTEM_CI_PROJECT}
       env:
         INPUTS_ECOSYSTEM_CI_PROJECT: ${{ inputs.ecosystem-ci-project }}

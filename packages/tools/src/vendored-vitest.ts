@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync } fr
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// This module runs before dependency installation and Node.js setup in CI.
+// This module runs before dependency installation in CI.
 // Keep it independent of installed project dependencies, with only built-in imports.
 // These official packages share the runner version selected by upgrade-deps.ts.
 // Community packages, such as browser-webdriverio, have independent versions.

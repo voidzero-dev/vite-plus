@@ -289,7 +289,19 @@ jobs:
         run: apk add --no-cache bash curl git just musl-dev gcc g++ python3 cmake make
 
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Record Alpine Node.js runtime
+        run: node -p "'ALPINE_NODE=' + process.execPath" >> "$GITHUB_ENV"
+
       - uses: ./.github/actions/clone
+        with:
+          # setup-node's Linux binaries require glibc; keep the container's musl build.
+          setup-node: 'false'
+
+      - name: Verify clone preserves the Alpine Node.js runtime
+        run: |
+          node -e "require('node:assert/strict').equal(process.execPath, process.env.ALPINE_NODE)"
+          node --version
 
       - name: Install rustup
         run: |

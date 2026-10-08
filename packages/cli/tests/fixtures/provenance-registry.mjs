@@ -51,7 +51,9 @@ function platformMetadata(packageName, registryBase) {
     version,
     dist: {
       tarball: `${registryBase}/platform.tgz`,
-      integrity: 'sha512-test-only',
+      // Valid SHA-512 syntax lets provenance checks reach the deliberate HTTP
+      // failure at the tarball endpoint without accepting malformed integrity.
+      integrity: `sha512-${'A'.repeat(86)}==`,
       signatures: [{ keyid: 'registry-signature-is-not-provenance', sig: 'test-only' }],
     },
   };
