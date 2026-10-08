@@ -25,10 +25,10 @@ index 136d6b2..46fc64a 100644
  oxc_resolver = { version = "11.24.3" }
  oxc_sourcemap = "9"
 diff --git a/src/lib.rs b/src/lib.rs
-index ca7595a..18b0a37 100644
+index d8efa10..93b2b05 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -31,14 +31,7 @@ use oxc_resolver::{
+@@ -32,14 +32,7 @@ use oxc_resolver::{
  use oxc_sourcemap::SourceMap;
  use phf::Set;
  
@@ -44,7 +44,7 @@ index ca7595a..18b0a37 100644
  
  const BUILTIN_MODULES: Set<&str> = phf::phf_set! {
      "_http_agent",
-@@ -245,6 +238,32 @@ fn tsconfig_lookup_path<'a>(cwd: &Path, path: &'a Path) -> Cow<'a, Path> {
+@@ -246,6 +239,32 @@ fn tsconfig_lookup_path<'a>(cwd: &Path, path: &'a Path) -> Cow<'a, Path> {
  
  static RESOLVER_AND_TSCONFIG: OnceLock<(Resolver, TsconfigSource)> = OnceLock::new();
  
@@ -77,7 +77,7 @@ index ca7595a..18b0a37 100644
  #[cfg(not(target_os = "windows"))]
  const NODE_MODULES_PATH: &str = "/node_modules/";
  
-@@ -339,16 +358,17 @@ fn hex_digit(byte: u8) -> Option<u8> {
+@@ -349,16 +368,17 @@ fn hex_digit(byte: u8) -> Option<u8> {
  }
  
  #[cfg(target_family = "wasm")]
@@ -98,7 +98,7 @@ index ca7595a..18b0a37 100644
  fn init() {
      use tracing_subscriber::filter::Targets;
      use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-@@ -368,13 +388,13 @@ fn init() {
+@@ -378,13 +398,13 @@ fn init() {
          .init();
  }
  
@@ -114,7 +114,7 @@ index ca7595a..18b0a37 100644
  impl Output {
      #[napi]
      /// Returns the generated code
-@@ -391,29 +411,29 @@ impl Output {
+@@ -401,22 +421,22 @@ impl Output {
      }
  }
  
@@ -122,7 +122,7 @@ index ca7595a..18b0a37 100644
 -pub fn transform(path: String, source: Either<String, &[u8]>) -> Result<Output> {
 +#[napi(namespace = "oxcNode")]
 +pub fn transform(env: Env, path: String, source: Either<String, &[u8]>) -> Result<Output> {
-     let transformer = OxcTransformer::new(None);
+     let transformer = OxcTransformer::new(None, None);
 -    transformer.transform(path, source)
 +    transformer.transform(env, path, source)
  }
@@ -134,15 +134,16 @@ index ca7595a..18b0a37 100644
      source: Either3<String, Uint8Array, Buffer>,
 -) -> AsyncTask<TransformTask> {
 +) -> AsyncTask<OxcNodeTransformTask> {
-     let transformer = OxcTransformer::new(None);
+     let transformer = OxcTransformer::new(None, None);
      transformer.transform_async(path, source)
  }
  
 -pub struct TransformTask {
 +pub struct OxcNodeTransformTask {
      cwd: String,
+     helper_module_name: Option<String>,
      path: String,
-     source: Either3<String, Uint8Array, Buffer>,
+@@ -424,7 +444,7 @@ pub struct TransformTask {
  }
  
  #[napi]
@@ -151,7 +152,7 @@ index ca7595a..18b0a37 100644
      type Output = Output;
      type JsValue = Output;
  
-@@ -448,12 +468,12 @@ impl Task for TransformTask {
+@@ -460,7 +480,7 @@ impl Task for TransformTask {
      }
  }
  
@@ -159,14 +160,17 @@ index ca7595a..18b0a37 100644
 +#[napi(namespace = "oxcNode")]
  pub struct OxcTransformer {
      cwd: String,
+     /// The module name emitted for helper imports — the loaders pass a copy-tagged one
+@@ -469,7 +489,7 @@ pub struct OxcTransformer {
+     helper_module_name: Option<String>,
  }
  
 -#[napi]
 +#[napi(namespace = "oxcNode")]
  impl OxcTransformer {
      #[napi(constructor)]
-     pub fn new(cwd: Option<String>) -> Self {
-@@ -466,7 +486,13 @@ impl OxcTransformer {
+     pub fn new(cwd: Option<String>, helper_module_name: Option<String>) -> Self {
+@@ -483,7 +503,13 @@ impl OxcTransformer {
      }
  
      #[napi]
@@ -181,18 +185,18 @@ index ca7595a..18b0a37 100644
          let cwd = PathBuf::from(&self.cwd);
          let src_path = Path::new(&path);
          // Worked out before `cwd` is moved into the initialiser.
-@@ -490,8 +516,8 @@ impl OxcTransformer {
+@@ -508,8 +534,8 @@ impl OxcTransformer {
          &self,
          path: String,
          source: Either3<String, Uint8Array, Buffer>,
 -    ) -> AsyncTask<TransformTask> {
--        AsyncTask::new(TransformTask { path, source, cwd: self.cwd.clone() })
+-        AsyncTask::new(TransformTask {
 +    ) -> AsyncTask<OxcNodeTransformTask> {
-+        AsyncTask::new(OxcNodeTransformTask { path, source, cwd: self.cwd.clone() })
-     }
- }
- 
-@@ -652,6 +678,24 @@ fn oxc_transform<S: TryAsStr>(
++        AsyncTask::new(OxcNodeTransformTask {
+             path,
+             source,
+             cwd: self.cwd.clone(),
+@@ -707,6 +733,24 @@ fn oxc_transform<S: TryAsStr>(
      Ok((output, flip_to_module))
  }
  
@@ -217,14 +221,7 @@ index ca7595a..18b0a37 100644
  /// Semantic analysis, transform and codegen for an already-parsed program. Split from
  /// parsing so the CommonJS sniff path can decide from the parse result and transform
  /// straight away, without a second parse.
-@@ -664,19 +708,34 @@ fn transform_program<'a>(
-     module_target: Option<Module>,
-     enable_top_level_await: bool,
- ) -> Result<Output> {
--    let scoping = SemanticBuilder::new().build(program).semantic.into_scoping();
-+    let scoping = SemanticBuilder::new().with_enum_eval(true).build(program).semantic.into_scoping();
- 
-     let use_define_for_class_fields = use_define_for_class_fields(compiler_options);
+@@ -733,13 +777,28 @@ fn transform_program<'a>(
      // `useDefineForClassFields` selects `[[Define]]` semantics; oxc's `setPublicClassFields`
      // assumption selects the opposite, `[[Set]]`, so it is the negation of it.
      let set_public_class_fields = !use_define_for_class_fields;
@@ -254,40 +251,7 @@ index ca7595a..18b0a37 100644
                  emit_decorator_metadata: compiler_options
                      .and_then(|c| c.emit_decorator_metadata)
                      .unwrap_or(false),
-@@ -685,14 +744,18 @@ fn transform_program<'a>(
-                     .unwrap_or(false),
-             },
-             jsx: JsxOptions {
-+                // Vite+: map tsconfig's `jsx` values. Node.js cannot run preserved JSX,
-+                // so `preserve` and `react-native` use the automatic runtime.
-                 runtime: compiler_options
-                     .and_then(|c| c.jsx.as_ref())
-                     .map(|s| match s.as_str() {
--                        "automatic" => JsxRuntime::Automatic,
--                        "classic" => JsxRuntime::Classic,
--                        _ => JsxRuntime::default(),
-+                        "react" | "classic" => JsxRuntime::Classic,
-+                        _ => JsxRuntime::Automatic,
-                     })
-                     .unwrap_or_default(),
-+                development: compiler_options
-+                    .and_then(|c| c.jsx.as_deref())
-+                    .is_some_and(|jsx| jsx == "react-jsxdev"),
-                 import_source: compiler_options.and_then(|c| c.jsx_import_source.clone()),
-                 pragma: compiler_options.and_then(|c| c.jsx_factory.clone()),
-                 pragma_frag: compiler_options.and_then(|c| c.jsx_fragment_factory.clone()),
-@@ -714,7 +777,9 @@ fn transform_program<'a>(
-                     .and_then(|c| c.rewrite_relative_import_extensions)
-                     .unwrap_or_default()
-                     .then_some(RewriteExtensionsMode::Rewrite),
--                only_remove_type_imports: false,
-+                only_remove_type_imports: compiler_options
-+                    .and_then(|c| c.verbatim_module_syntax)
-+                    .unwrap_or(false),
-                 // With `[[Set]]` semantics, `tsc` also drops class fields that have no
-                 // initializer instead of assigning `undefined` through the prototype chain
-                 // (which would fire an inherited setter). oxc only does that when asked.
-@@ -724,17 +789,21 @@ fn transform_program<'a>(
+@@ -797,17 +856,21 @@ fn transform_program<'a>(
              env: EnvOptions {
                  module: module_target.unwrap_or_default(),
                  es2022: ES2022Options {
@@ -312,7 +276,7 @@ index ca7595a..18b0a37 100644
                  ..Default::default()
              },
              proposals: ProposalOptions {},
-@@ -764,7 +833,7 @@ fn transform_program<'a>(
+@@ -842,7 +905,7 @@ fn transform_program<'a>(
      Ok(Output { code, map: map.map(|source_map| source_map.into_owned()) })
  }
  
@@ -321,7 +285,7 @@ index ca7595a..18b0a37 100644
  #[derive(Debug)]
  pub struct ResolveContext {
      /// Export conditions of the relevant `package.json`
-@@ -776,7 +845,7 @@ pub struct ResolveContext {
+@@ -854,7 +917,7 @@ pub struct ResolveContext {
      pub parent_url: Option<String>,
  }
  
@@ -330,7 +294,7 @@ index ca7595a..18b0a37 100644
  pub struct ResolveFnOutput {
      pub format: Option<Either<String, Null>>,
      pub short_circuit: Option<bool>,
-@@ -797,7 +866,7 @@ impl FromNapiValue for OxcResolveOptions {
+@@ -875,7 +938,7 @@ impl FromNapiValue for OxcResolveOptions {
      }
  }
  
@@ -339,7 +303,7 @@ index ca7595a..18b0a37 100644
  #[cfg_attr(not(target_family = "wasm"), allow(unused_variables))]
  #[allow(clippy::type_complexity)]
  pub fn create_resolve<'env>(
-@@ -853,10 +922,15 @@ pub fn create_resolve<'env>(
+@@ -931,10 +994,15 @@ pub fn create_resolve<'env>(
      #[cfg(not(target_family = "wasm"))]
      let cwd = env::current_dir()?;
  
@@ -356,36 +320,19 @@ index ca7595a..18b0a37 100644
  
      // A `file:` URL is an absolute path in every form Node.js hands over,
      // UNC `file://server/…` included. Schemes are case-insensitive, so
-@@ -968,7 +1042,11 @@ pub fn create_resolve<'env>(
-         tracing::debug!(resolution = ?resolution, "resolved");
-         let p = resolution.path();
-         let url = oxc_resolved_path_to_url(&resolution);
--        if !p.to_str().map(|p| p.contains(NODE_MODULES_PATH)).unwrap_or(false) {
+@@ -1063,8 +1131,11 @@ pub fn create_resolve<'env>(
+                     Some(_) => false,
+                 }
+         };
 +        // Vite+: TypeScript dependencies are transformed too; Node.js refuses to strip
 +        // types under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`).
-+        if !p.to_str().map(|p| p.contains(NODE_MODULES_PATH)).unwrap_or(false)
+         if !p.to_str().map(|p| p.contains(NODE_MODULES_PATH)).unwrap_or(false)
+             || transformable_dependency()
 +            || is_typescript_path(p)
-+        {
+         {
              let format = {
                  let ext = p.extension().and_then(|ext| ext.to_str());
- 
-@@ -990,6 +1068,15 @@ pub fn create_resolve<'env>(
-                             match resolution.module_type() {
-                                 Some(ModuleType::Module) => Some("module"),
-                                 Some(ModuleType::CommonJs) => Some("commonjs"),
-+                                // Vite+: oxc_resolver applies the package `type` to
-+                                // `.js`/`.ts` only; Node.js applies it to `.jsx`/`.tsx`.
-+                                _ if matches!(ext, "jsx" | "tsx") => resolution
-+                                    .package_json()
-+                                    .and_then(|package_json| package_json.r#type())
-+                                    .map(|package_type| match package_type {
-+                                        oxc_resolver::PackageType::Module => "module",
-+                                        oxc_resolver::PackageType::CommonJs => "commonjs",
-+                                    }),
-                                 _ => None,
-                             }
-                         }
-@@ -1022,7 +1109,7 @@ fn json_format(context: &ResolveContext) -> &'static str {
+@@ -1145,7 +1216,7 @@ fn json_format(context: &ResolveContext) -> &'static str {
      if context.import_attributes.contains_key("type") { "json" } else { "module" }
  }
  
@@ -394,7 +341,7 @@ index ca7595a..18b0a37 100644
  #[derive(Debug)]
  pub struct LoadContext {
      /// Export conditions of the relevant `package.json`
-@@ -1037,7 +1124,7 @@ pub struct LoadContext {
+@@ -1160,7 +1231,7 @@ pub struct LoadContext {
      pub import_attributes: HashMap<String, String>,
  }
  
@@ -403,7 +350,7 @@ index ca7595a..18b0a37 100644
  pub struct LoadFnOutput {
      pub format: String,
      pub source: Option<Either4<String, Uint8Array, Buffer, Null>>,
-@@ -1045,7 +1132,7 @@ pub struct LoadFnOutput {
+@@ -1168,7 +1239,7 @@ pub struct LoadFnOutput {
      pub response_url: Option<String>,
  }
  
@@ -412,22 +359,26 @@ index ca7595a..18b0a37 100644
  #[allow(clippy::type_complexity)]
  pub fn load<'env>(
      url: String,
-@@ -1122,6 +1209,7 @@ fn load_commonjs_esm(
-         .map(|value| value.is_empty() || value == "0" || value == "false")
-         .unwrap_or(true)
-         && url.contains("/node_modules/")
-+        && !is_typescript_path(Path::new(url_path(url)))
-     {
+@@ -1245,7 +1316,10 @@ fn load_commonjs_esm(
          return Ok(None);
      }
-@@ -1130,9 +1218,17 @@ fn load_commonjs_esm(
+     // The same skip as the transform below: dependencies are left alone unless asked for.
+-    if !transform_all_enabled() && url.contains("/node_modules/") {
++    if !transform_all_enabled()
++        && url.contains("/node_modules/")
++        && !is_typescript_path(Path::new(url_path(url)))
++    {
+         return Ok(None);
+     }
+     // A `?query` or `#fragment` suffix belongs to the module URL, not to the file on disk.
+@@ -1253,9 +1327,17 @@ fn load_commonjs_esm(
      let Ok(source_type) = SourceType::from_path(&path) else { return Ok(None) };
      // Only the ambiguous extensions may flip: `.cts`/`.cjs` are CommonJS by contract, and
      // their source type emits `require()` for helpers, which an ES module cannot run.
 -    if !source_type.is_unambiguous() {
-+    // Vite+: a `.cts` that uses `import`/`export` runs as an ES module anyway — Node.js'
-+    // `require(esm)` detection already treats it as one — so parse it as a module, which
-+    // also makes the helper loader emit `import`. `.cjs` stays CommonJS, as in Node.js.
++    // Vite+: run a `.cts` that uses `import`/`export` as an ES module instead of failing
++    // (Node.js rejects it with a `SyntaxError`). Parsing it as a module also makes the
++    // helper loader emit `import`. `.cjs` stays CommonJS, as in Node.js.
 +    let is_cts = !source_type.is_unambiguous() && path.extension().is_some_and(|ext| ext == "cts");
 +    let source_type = if source_type.is_unambiguous() {
 +        source_type
@@ -440,7 +391,7 @@ index ca7595a..18b0a37 100644
      // `read_to_string` would validate UTF-8 with std's scalar check; the SIMD pass is the
      // one `file_url_to_path` uses, and borrowing the bytes skips the copy into a String.
      let Ok(bytes) = std::fs::read(&path) else { return Ok(None) };
-@@ -1142,7 +1238,13 @@ fn load_commonjs_esm(
+@@ -1265,7 +1347,13 @@ fn load_commonjs_esm(
      // top-level `for await`; `parsed_as_esm` covers the rest, including top-level await.
      let Parsed { mut program, diagnostics, module_record, only_module_parse } =
          parse_source(&allocator, source, source_type, true);
@@ -455,15 +406,20 @@ index ca7595a..18b0a37 100644
          return Ok(None);
      }
      // From here on the file is handed back as an ES module, so surface parse errors
-@@ -1245,6 +1347,7 @@ fn transform_output(
-                     .map(|value| value.is_empty() || value == "0" || value == "false")
-                     .unwrap_or(true)
-                 && url.contains("/node_modules/")
+@@ -1370,7 +1458,11 @@ fn transform_output(
+             // dependencies too — `OXC_TRANSFORM_ALL` decides whether their *source* is
+             // transpiled, and skipping this would hand Node.js raw JSON to run as an ES
+             // module.
+-            if !is_json && !transform_all_enabled() && url.contains("/node_modules/") {
++            if !is_json
++                && !transform_all_enabled()
++                && url.contains("/node_modules/")
 +                && !is_typescript_path(src_path)
-             {
++            {
                  tracing::debug!("Skip transforming node_modules {}", url);
                  return Ok(output);
-@@ -1286,6 +1389,15 @@ fn transform_output(
+             }
+@@ -1411,6 +1503,20 @@ fn transform_output(
                  });
              }
  
@@ -471,7 +427,12 @@ index ca7595a..18b0a37 100644
 +            // ESM syntax gets the same flip to an ES module as the deferred path above.
 +            if output.format == "commonjs"
 +                && ext == Some("cts")
-+                && let Some(loaded) = load_commonjs_esm(&url, &output, resolved_compiler_options)?
++                && let Some(loaded) = load_commonjs_esm(
++                    &url,
++                    &output,
++                    resolved_compiler_options,
++                    helper_module_name.clone(),
++                )?
 +            {
 +                return Ok(loaded);
 +            }
@@ -479,7 +440,7 @@ index ca7595a..18b0a37 100644
              let is_es_module = output.format == "module";
              let (transform_output, flipped_to_module) = oxc_transform(
                  src_path,
-@@ -1358,6 +1470,11 @@ impl TryAsStr for Either4<String, Uint8Array, Buffer, Null> {
+@@ -1484,6 +1590,11 @@ impl TryAsStr for Either4<String, Uint8Array, Buffer, Null> {
      }
  }
  
@@ -491,7 +452,7 @@ index ca7595a..18b0a37 100644
  /// Read an environment variable, treating an empty value as unset.
  ///
  /// Continuous integration wrappers and `.env` files routinely export variables
-@@ -1387,7 +1504,7 @@ fn default_module_from_tsconfig(tsconfig: Option<&TsConfig>) -> Option<&'static
+@@ -1513,7 +1624,7 @@ fn default_module_from_tsconfig(tsconfig: Option<&TsConfig>) -> Option<&'static
  fn init_resolver(cwd: PathBuf, conditions: Vec<String>) -> (Resolver, TsconfigSource) {
      // An explicitly requested config always wins over discovery.
      let explicit_tsconfig =
