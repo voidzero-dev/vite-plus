@@ -993,48 +993,9 @@ $env:PATH = @(
     $__vp_fallback
 ) -join [IO.Path]::PathSeparator
 
-# Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VP_NODE_VERSION in the current shell session.
-function vp {
-    $__vp_command_index = 0
-    if ($args.Count -ge 1) {
-        if ($args[0] -eq "-C") {
-            $__vp_command_index = 2
-        } elseif ("$($args[0])" -like "-C?*") {
-            $__vp_command_index = 1
-        }
-    }
-    if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
-        if ($args -contains "-h" -or $args -contains "--help") {
-            & (Join-Path $__vp_bin "vp") @args; return
-        }
-        $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
-        $previousShell = $env:VP_SHELL
-        $previousErrorActionPreference = $ErrorActionPreference
-        try {
-            $env:VP_ENV_USE_EVAL_ENABLE = "1"
-            $env:VP_SHELL = "pwsh"
-            # Windows PowerShell 5.1 treats native stderr as an error when redirected.
-            $ErrorActionPreference = "Continue"
-            $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
-                if ($_ -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Host $_.Exception.Message
-                } else {
-                    $_
-                }
-            }
-        } finally {
-            $ErrorActionPreference = $previousErrorActionPreference
-            $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
-            $env:VP_SHELL = $previousShell
-        }
-        if ($LASTEXITCODE -eq 0 -and $output) {
-            Invoke-Expression ($output -join "`n")
-        }
-    } else {
-        & (Join-Path $__vp_bin "vp") @args
-    }
-}
+# A script can propagate native failure through both $? and $LASTEXITCODE.
+# A plain function returns $? = $true even when its native command fails.
+Set-Alias vp (Join-Path $PSScriptRoot "vp.ps1")
 
 # Dynamic shell completion for PowerShell
 $env:VP_COMPLETE = "powershell"
@@ -1069,6 +1030,55 @@ $__vpr_comp = {
     }
 }
 Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
+"#;
+
+// Keep the wrapper outside bin so it cannot shadow the native executable.
+// Unlike an advanced function, this script forwards all arguments without
+// PowerShell consuming common parameters such as -Verbose or its -V alias.
+const VP_WRAPPER_PS1: &str = r#"# Vite+ PowerShell wrapper (https://viteplus.dev)
+$__vp_bin = '__VP_BIN_WIN__'
+$__vp_command_index = 0
+if ($args.Count -ge 1) {
+    if ($args[0] -eq "-C") {
+        $__vp_command_index = 2
+    } elseif ("$($args[0])" -like "-C?*") {
+        $__vp_command_index = 1
+    }
+}
+# Intercept `vp env use` to set/unset VP_NODE_VERSION in the current session.
+if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
+    if ($args -contains "-h" -or $args -contains "--help") {
+        & (Join-Path $__vp_bin "vp") @args
+        exit $LASTEXITCODE
+    }
+    $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
+    $previousShell = $env:VP_SHELL
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $env:VP_ENV_USE_EVAL_ENABLE = "1"
+        $env:VP_SHELL = "pwsh"
+        # Windows PowerShell 5.1 treats native stderr as an error when redirected.
+        $ErrorActionPreference = "Continue"
+        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                Write-Host $_.Exception.Message
+            } else {
+                $_
+            }
+        }
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
+        $env:VP_SHELL = $previousShell
+    }
+    if ($LASTEXITCODE -eq 0 -and $output) {
+        Invoke-Expression ($output -join "`n")
+    }
+} else {
+    & (Join-Path $__vp_bin "vp") @args
+}
+# Exits only this script, preserving the caller's session and native exit code.
+exit $LASTEXITCODE
 "#;
 
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
@@ -1284,9 +1294,15 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
 /// - `env` (POSIX shell — bash/zsh) with `vp()` wrapper function
 /// - `env.fish` (fish shell) with `vp` wrapper function
 /// - `env.nu` (Nushell) with `vp env use` wrapper function
-/// - `env.ps1` (PowerShell) with PATH setup + `vp` function
+/// - `env.ps1` (PowerShell) with PATH setup + alias to the `vp.ps1` wrapper
 async fn create_env_files() -> Result<(), Error> {
     let config = vp_shared::EnvConfig::get();
+    let ps1_wrapper = VP_WRAPPER_PS1.replace(
+        "__VP_BIN_WIN__",
+        &escape_powershell_single_quoted_string(&config.dirs.bin.to_string()),
+    );
+    // Like env.ps1, the wrapper needs a BOM for non-ASCII paths on PowerShell 5.1.
+    tokio::fs::write(config.dirs.config.join("vp.ps1"), format!("{UTF8_BOM}{ps1_wrapper}")).await?;
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
         let mut content = render_env_content(shell, &config);
         if matches!(shell, EnvShell::Powershell) {
@@ -2110,7 +2126,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_env_files_ps1_contains_vp_function() {
+    async fn test_create_env_files_ps1_contains_vp_alias() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         vp_shared::EnvConfig::with_vars_async(
@@ -2120,19 +2136,22 @@ mod tests {
 
                 let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
-                // Verify PowerShell function is present
+                let wrapper = tokio::fs::read_to_string(home.join("vp.ps1")).await.unwrap();
+
                 assert!(
-                    ps1_content.contains("function vp {"),
-                    "env.ps1 should contain vp function"
+                    ps1_content.contains("Set-Alias vp (Join-Path $PSScriptRoot \"vp.ps1\")"),
+                    "env.ps1 should alias vp to the script wrapper"
                 );
                 assert!(
-                    ps1_content.contains("Invoke-Expression"),
-                    "env.ps1 should use Invoke-Expression"
+                    wrapper.contains("Invoke-Expression"),
+                    "vp.ps1 should evaluate environment exports"
                 );
+                assert!(wrapper.starts_with(UTF8_BOM), "vp.ps1 should preserve non-ASCII paths");
+                assert!(wrapper.contains("exit $LASTEXITCODE"));
                 // Should not contain placeholders
                 assert!(
-                    !ps1_content.contains("__VP_BIN_WIN__"),
-                    "env.ps1 should not contain __VP_BIN_WIN__ placeholder"
+                    !ps1_content.contains("__VP_BIN_WIN__") && !wrapper.contains("__VP_BIN_WIN__"),
+                    "PowerShell scripts should not contain __VP_BIN_WIN__ placeholders"
                 );
             },
         )
@@ -2645,8 +2664,8 @@ mod tests {
             assert!(posix_content.contains("if (( CURRENT >= 4 )); then"));
             assert!(posix_content.contains("if (( CURRENT >= 3 )); then"));
             assert!(nu_content.contains(r#"-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+)"#));
-            assert!(ps1_content.contains(r#""$($args[0])" -like "-C?*""#));
-            assert!(!ps1_content.contains("$args[0].StartsWith"));
+            assert!(VP_WRAPPER_PS1.contains(r#""$($args[0])" -like "-C?*""#));
+            assert!(!VP_WRAPPER_PS1.contains("$args[0].StartsWith"));
             assert!(ps1_content.contains(r#"-C=?(?:"[^"]*"|''[^'']*''|\S+)"#));
         });
     }
