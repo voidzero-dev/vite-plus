@@ -31,7 +31,7 @@ if [ "$#" -eq 0 ]; then
   touch "$test_root/binary-invoked"
   if [ "$scenario" = failure ]; then exit 42; fi
   test "${VP_SELF_SETUP_SHELL:-}" = sh || exit 98
-  if [ "$scenario" = supported-pr ]; then
+  if [[ "$scenario" == *pr ]]; then
     test "$NPM_CONFIG_REGISTRY" = https://registry-bridge.viteplus.dev/ || exit 97
   fi
   printf 'INSTALL_DIR=%q\n' "$test_root/data"
@@ -93,6 +93,7 @@ curl() {
 }
 
 for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failure failure pr supported-pr \
+  missing-hash-tools missing-hash-tools-pr \
   integrity-missing integrity-malformed integrity-unsupported integrity-noncanonical integrity-wrong-type \
   integrity-dotted-key integrity-duplicate integrity-mismatch integrity-missing-pr integrity-mismatch-pr; do
   export scenario
@@ -101,6 +102,12 @@ for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failur
   set +e
   (
     set -e
+    command() {
+      if [[ "$scenario" == missing-hash-tools* ]] && [ "$1" = -v ]; then
+        case "$2" in sha512sum|shasum|openssl) return 1 ;; esac
+      fi
+      builtin command "$@"
+    }
     VP_VERSION=latest
     LOCAL_TGZ="" LOCAL_BINARY="" PR_VERSION="" PACKAGE_METADATA=""
     NPM_REGISTRY=https://custom.example
@@ -147,13 +154,17 @@ for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failur
     exit 1
   fi
   case "$scenario" in
-    supported|supported-pr|failure)
+    supported|supported-pr|failure|missing-hash-tools*)
       test -f "$test_root/binary-invoked"
       test ! -f "$test_root/legacy" ;;
     legacy|legacy-failure|piped-legacy|piped-legacy-failure|pr)
       test -f "$test_root/legacy"
       test ! -f "$test_root/binary-invoked" ;;
   esac
+  if [[ "$scenario" == missing-hash-tools* ]]; then
+    grep -q 'Skipping platform package integrity verification: sha512sum, shasum, and openssl are unavailable.' "$test_root/output"
+    test -f "$test_root/extracted"
+  fi
   if [ "$scenario" = pr ]; then
     test "$(head -1 "$test_root/legacy")" = "0.0.0-commit.$fixture_sha"
     test "$(tail -1 "$test_root/legacy")" = 2406
@@ -205,18 +216,3 @@ echo 'PASS: hash command failure'
   grep -q 'Failed to decode platform package integrity' "$test_root/output"
 )
 echo 'PASS: base64 command failure'
-
-(
-  command() {
-    if [ "$1" = -v ]; then
-      case "$2" in sha512sum|shasum|openssl) return 1 ;; esac
-    fi
-    builtin command "$@"
-  }
-  if verify_archive_integrity "$test_root/payload.tgz" "$fixture_integrity" > "$test_root/output" 2>&1; then
-    echo 'Missing hash tools were ignored'
-    exit 1
-  fi
-  grep -q 'SHA-512 verification requires sha512sum, shasum, or openssl' "$test_root/output"
-)
-echo 'PASS: missing hash tools'

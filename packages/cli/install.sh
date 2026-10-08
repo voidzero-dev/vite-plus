@@ -45,6 +45,7 @@ BRIDGE_REGISTRY="https://registry-bridge.viteplus.dev/"
 
 RED='\033[0;31m'
 BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 PACKAGE_METADATA=""
 PLATFORM_TARBALL_URL=""
@@ -55,6 +56,10 @@ INSTALLER_PATH="${BASH_SOURCE[0]:-}"
 
 info() {
   echo -e "${BLUE}info${NC}: $1" >&2
+}
+
+warn() {
+  echo -e "${YELLOW}warn${NC}: $1" >&2
 }
 
 error() {
@@ -541,10 +546,6 @@ verify_archive_integrity() (
   local integrity="$2"
   local expected actual
 
-  # base64 -d and od work with macOS, GNU coreutils, and BusyBox.
-  if ! expected=$(printf '%s' "${integrity#sha512-}" | base64 -d | od -An -v -tx1 | tr -d ' \n'); then
-    error "Failed to decode platform package integrity"
-  fi
   if command -v sha512sum &> /dev/null; then
     actual=$(sha512sum < "$archive") || error "Failed to hash platform package"
     actual="${actual%% *}"
@@ -555,7 +556,12 @@ verify_archive_integrity() (
     actual=$(openssl dgst -sha512 < "$archive") || error "Failed to hash platform package"
     actual="${actual##* }"
   else
-    error "SHA-512 verification requires sha512sum, shasum, or openssl"
+    warn "Skipping platform package integrity verification: sha512sum, shasum, and openssl are unavailable."
+    return 0
+  fi
+  # base64 -d and od work with macOS, GNU coreutils, and BusyBox.
+  if ! expected=$(printf '%s' "${integrity#sha512-}" | base64 -d | od -An -v -tx1 | tr -d ' \n'); then
+    error "Failed to decode platform package integrity"
   fi
   if [ "$actual" != "$expected" ]; then
     error "Platform package integrity mismatch: the downloaded archive does not match dist.integrity"
