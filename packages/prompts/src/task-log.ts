@@ -55,14 +55,14 @@ export const taskLog = (opts: TaskLogOptions) => {
   const secondarySymbol = color.gray(S_BAR);
   const spacing = opts.spacing ?? 0;
   const hasGuide = getGuide(opts);
-  const barSize = hasGuide ? 3 : 0;
+  const barSize = hasGuide ? 2 : 0;
   const retainLog = opts.retainLog === true;
   const isTTY = !isCIFn() && isTTYFn(output);
 
   if (hasGuide) {
     output.write(`${secondarySymbol}\n`);
   }
-  output.write(`${completeColor(S_STEP_SUBMIT)}  ${opts.title}\n`);
+  output.write(`${completeColor(S_STEP_SUBMIT)} ${opts.title}\n`);
   for (let i = 0; i < spacing; i++) {
     output.write(`${hasGuide ? secondarySymbol : ''}\n`);
   }
@@ -102,7 +102,7 @@ export const taskLog = (opts: TaskLogOptions) => {
         if (line === '') {
           return count + 1;
         }
-        return count + Math.ceil((stringWidth(line) + (result ? 3 : barSize)) / columns);
+        return count + Math.ceil((stringWidth(line) + (result ? 2 : barSize)) / columns);
       }, 0);
 
       lines += bufferHeight;

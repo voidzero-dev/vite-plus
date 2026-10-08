@@ -10,6 +10,7 @@ import { settings, updateSettings } from '../index.js';
 import { log } from '../log.js';
 import { note } from '../note.js';
 import { spinner } from '../spinner.js';
+import { stream } from '../stream.js';
 import { taskLog } from '../task-log.js';
 
 function capture(columns = 52, isTTY = false) {
@@ -54,7 +55,7 @@ describe('output identity', () => {
         .map((line) => line.trimEnd())
         .join('\n'),
     ).toBe(
-      '●  Checking assets\n◆  Deployed\n▲  Long warning that\n   wraps onto several\n   lines\n■  Build failed\n   Missing variable\n',
+      '● Checking assets\n◆ Deployed\n▲ Long warning that\n  wraps onto several\n  lines\n■ Build failed\n  Missing variable\n',
     );
     expect(
       c
@@ -72,7 +73,40 @@ describe('output identity', () => {
     log.info('guided\ncontinued', { output: c.output });
     log.message('override', { output: c.output, withGuide: false });
     expect(settings.withGuide).toBe(true);
-    expect(c.text()).toBe('plain\n\n!  custom\n   continued\n●  guided\n│  continued\noverride\n');
+    expect(c.text()).toBe('plain\n\n! custom\n  continued\n● guided\n│ continued\noverride\n');
+  });
+
+  it('uses one space in streamed messages and aligns continuation lines', async () => {
+    const c = capture();
+    const columns = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
+    Object.defineProperty(process.stdout, 'columns', { configurable: true, value: 52 });
+    const write = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((chunk) => c.output.write(chunk));
+    try {
+      await stream.info(['First line\nSecond line']);
+      expect(c.text()).toBe('● First line\n  Second line\n');
+    } finally {
+      write.mockRestore();
+      if (columns) {
+        Object.defineProperty(process.stdout, 'columns', columns);
+      } else {
+        Reflect.deleteProperty(process.stdout, 'columns');
+      }
+    }
+  });
+
+  it('uses one space in animated spinner frames', () => {
+    vi.stubEnv('CI', '');
+    vi.useFakeTimers();
+    const c = capture(52, true);
+    const s = spinner({ output: c.output });
+    s.start('Building');
+    vi.advanceTimersByTime(80);
+    s.stop('Built');
+    expect(c.text()).toContain('◒ Building');
+    expect(c.text()).toContain('◐ Building');
+    expect(c.text()).not.toMatch(/[◒◐] {2}/);
   });
 
   it.each([false, true])('encloses notes with both walls when withGuide=%s', (withGuide) => {
@@ -110,7 +144,8 @@ describe('output identity', () => {
     const task = taskLog({ title: 'Build', output: c.output });
     task.message('Building modules');
     task.error('Build failed');
-    expect(c.text()).toContain('■  Build failed');
+    expect(c.text()).toContain('◇ Build\n');
+    expect(c.text()).toContain('■ Build failed');
     expect(c.text()).toContain('Building modules');
     expectNoTerminalControls(c.raw());
   });
@@ -126,12 +161,13 @@ describe('spinner', () => {
     s.start('Building...');
     s.message('Uploading');
     s.stop('Deployed');
-    expect(c.text()).toBe('◒  Building...\n◇ Deployed\n');
+    expect(c.text()).toBe('◒ Building...\n◇ Deployed\n');
     expectNoTerminalControls(c.raw());
     expect(c.text()).not.toContain('\n\n');
   });
 
   it('includes running time while excluding paused time', () => {
+    vi.stubEnv('CI', '');
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
     const c = capture(52, true);
     const s = spinner({ output: c.output, indicator: 'timer' });
@@ -142,6 +178,7 @@ describe('spinner', () => {
     s.resume();
     vi.advanceTimersByTime(1000);
     s.stop('Built');
+    expect(c.text()).toContain('◒ Building (0s)');
     expect(c.text()).toContain('◇ Built (3s)\n');
     expect(c.text()).not.toContain('(13s)');
   });

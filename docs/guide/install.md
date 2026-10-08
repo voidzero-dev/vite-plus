@@ -61,6 +61,10 @@ vp install -w
 
 ## Global Packages
 
+::: info
+Global package operations with `-g` require the [global CLI](/guide/global-cli).
+:::
+
 Use the `-g` flag for installing, updating or removing globally installed packages:
 
 - `vp install -g <pkg>` installs a package globally
@@ -98,7 +102,11 @@ Vite+ provides all the familiar package management commands:
 - `vp rebuild` rebuilds native modules (e.g. after switching Node.js versions)
 - `vp link` and `vp unlink` manage local package links
 - `vp dlx <pkg>` runs a package binary without adding it to the project
-- `vp pm <command>` forwards a raw package-manager-specific command when you need behavior outside the normalized `vp` command set
+- `vp pm <command>` provides additional package-management commands adapted to the detected package manager
+
+::: info
+The `vp list` and `vp rebuild` shortcuts are available only in the global CLI. With the [project-local CLI](/guide/local-cli), use `vp pm list` and `vp pm rebuild`.
+:::
 
 ### Command Guide
 
@@ -114,6 +122,10 @@ Use `vp install` when you want to install exactly what the current `package.json
 - `vp install --ignore-scripts` skips lifecycle scripts
 - `vp install --filter <pattern>` scopes install work in monorepos
 - `vp install -w` installs in the workspace root
+
+::: info
+Option support depends on the detected package manager and its version. Unsupported options cause `vp` to exit with an error before running the package-manager command.
+:::
 
 ##### Git and remote tarball dependencies (npm v12+)
 
@@ -194,7 +206,7 @@ Use these when you need lower-level package-manager behavior.
 
 - `vp link` and `vp unlink` manage local development links
 - `vp dlx create-vite` runs a package binary without saving it as a dependency
-- `vp pm <command>` forwards directly to the resolved package manager
+- `vp pm <command>` provides additional package-management commands adapted to the detected package manager. Run `vp pm --help` to see available commands.
 
 Examples:
 
@@ -218,8 +230,8 @@ vp pm stage reject <stage-id>    # discard a staged version (2FA)
 ```
 
 - pnpm (`pnpm stage`, requires pnpm ≥ 11.3) and npm (`npm stage`, requires npm ≥ 11.15 and Node ≥ 22.14) pass through directly.
-- yarn (Berry) uses its npm plugin (`yarn npm publish --staged`, `yarn npm stage …`); `view`/`download` fall back to npm.
-- yarn Classic and bun have no staged-publishing support and fall back to `npm stage`.
+- Yarn 4.16.0 and later uses its npm plugin (`yarn npm publish --staged`, `yarn npm stage …`). The `view` and `download` subcommands, and `publish` with an explicit tarball or folder target, fall back to `npm stage`.
+- Yarn versions earlier than 4.16.0 and Bun fall back to `npm stage`.
 
 ## Package-Manager Integrity Verification
 
