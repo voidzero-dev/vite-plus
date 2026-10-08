@@ -42,12 +42,12 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 
 ## Options
 
-- `--directory <dir>` writes the generated project into a specific target directory
+- `--directory <dir>` writes the generated project into a specific target directory. Only built-in templates and bundled `@org` templates support this option.
 - `--agent <name>` creates agent instructions files during scaffolding
 - `--no-agent` skips agent instruction setup
 - `--editor <name>` writes editor config files
 - `--no-editor` skips editor config setup
-- `--git` initialize a git repository
+- `--git` initializes a git repository
 - `--no-git` skips git repository initialization
 - `--package-manager <name>` uses a specified package manager (`pnpm`, `npm`, `yarn`, or `bun`)
 - `--approve-builds` approves and runs gated dependency build scripts without prompting
@@ -56,6 +56,10 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 - `--list` prints the available built-in and popular templates
 - `--hooks` enables pre-commit hook setup (dispatcher + `.vite-hooks` + `staged` config)
 - `--no-hooks` skips hook setup
+
+::: info
+`--git` and `--no-git` are not available when adding a package to an existing monorepo.
+:::
 
 After create, manage the dispatcher with `vp hooks status`, `vp hooks disable`, and `vp hooks enable`. See the [Commit hooks guide](/guide/commit-hooks).
 
@@ -130,7 +134,9 @@ If the monorepo has a parent directory matching `generators` or `tools`, the new
 
 Local generators are declared in [`create.templates`](/config/create#create-templates) in the monorepo's `vite.config.ts`. This is the source of truth: only registered templates appear in the `vp create` picker.
 
-`vp create vite:generator` registers the generator for you, adding an entry to `create.templates` in the root `vite.config.ts`:
+`vp create vite:generator` registers the generator for you, adding an entry to `create.templates` in the root `vite.config.ts`.
+
+For example, a generator named `my-generator` created in `generators/my-generator` is registered as follows:
 
 ```ts
 import { defineConfig } from 'vite-plus';
@@ -138,7 +144,11 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   create: {
     templates: [
-      { name: 'my-generator', description: 'Generate new components', template: 'my-generator' },
+      {
+        name: 'my-generator',
+        description: 'A starter for creating a Vite+ code generator.',
+        template: './generators/my-generator',
+      },
     ],
   },
 });
