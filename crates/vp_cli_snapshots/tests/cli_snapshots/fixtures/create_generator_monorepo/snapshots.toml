@@ -24,3 +24,32 @@ steps = [
   { argv = ["vpt", "print-file", "tools/demo-pkg/package.json"], comment = "generated next to the generator under tools/, not the apps/ parent", continue-on-failure = true },
   { argv = ["vpt", "print-file", "tools/demo-pkg/src/index.ts"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "create_generator_interactive_description"
+vp = "local"
+comment = "The generator description prompt stays visible without an active progress spinner."
+steps = [
+  { argv = ["vp", "create", "vite:generator", "--directory", "tools/my-generator", "--no-agent", "--no-editor"], interactions = [
+    { "expect-milestone" = "text:text:" },
+    { "write" = "Generate workspace components" },
+    { "expect-milestone" = "text:text:Generate workspace components" },
+    { "write-key" = "enter" },
+    { "expect-milestone" = "text:text:submit" },
+  ] },
+  { argv = ["vpt", "print-file", "tools/my-generator/package.json"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]
+
+[[case]]
+name = "create_generator_interactive_default_description"
+vp = "local"
+comment = "Submitting the generator description prompt without typing preserves its default."
+steps = [
+  { argv = ["vp", "create", "vite:generator", "--directory", "tools/my-generator", "--no-agent", "--no-editor"], interactions = [
+    { "expect-milestone" = "text:text:" },
+    { "write-key" = "enter" },
+    { "expect-milestone" = "text:text:submit" },
+  ] },
+  { argv = ["vpt", "print-file", "tools/my-generator/package.json"] },
+]

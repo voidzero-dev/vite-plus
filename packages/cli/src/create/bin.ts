@@ -1013,6 +1013,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
     resumeCreateProgress();
     updateCreateProgress('Generating project');
+    // The generator prompts for a description before writing files.
+    const isGenerator = templateInfo.command === BuiltinTemplate.generator;
+    if (isGenerator) {
+      pauseCreateProgress();
+    }
     result = await executeBuiltinTemplate(
       workspaceInfo,
       {
@@ -1022,6 +1027,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       },
       { silent: compactOutput },
     );
+    if (isGenerator) {
+      resumeCreateProgress();
+    }
   } else {
     updateCreateProgress('Generating project');
     result = await executeRemoteTemplate(workspaceInfo, templateInfo, { silent: compactOutput });
