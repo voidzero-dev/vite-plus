@@ -179,7 +179,7 @@ In CI, `vp env use` can run without shell initialization. It writes a temporary 
 - `vp env unpin` removes both effective pins by default; append a selector to remove one. Lower-priority declarations are not deleted.
 - `vp env use` activates the complete project environment. Explicit specs override selected components; `--unset` clears both unless scoped.
 - `vp env install` installs the complete resolved environment, a selected component, or explicit specs.
-- `vp env uninstall` removes explicit exact Node.js or qualified package-manager versions.
+- `vp env uninstall` removes the Node.js version resolved from an explicit version or selector, such as `22` or `lts`. Package managers require a qualified exact version, such as `pnpm@10.18.0`.
 - `vp env clean` removes unused installs. Use `clean node`, `clean pm`, or a concrete manager. Current and configured-default versions are preserved.
 - `vp env exec` runs a command in the resolved environment. Use `--node` and `--package-manager`; `--npm` is an alias for `--package-manager npm@…`.
 - `vp node` uses the resolved Node.js runtime and exposes the selected package-manager path to child processes.

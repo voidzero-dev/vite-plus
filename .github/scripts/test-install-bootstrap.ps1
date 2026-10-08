@@ -58,6 +58,7 @@ if ($args.Count -eq 0) {
     exit 0
 }
 if ($env:VP_SELF_SETUP_SUPPORT_CHECK -ne '1') { exit 99 }
+New-Item -ItemType File -Path "$testRoot/binary-probed" | Out-Null
 if ($scenario -in @('legacy', 'legacy-remote', 'legacy-failure', 'pr')) { Write-Output 'Usage: vp [COMMAND]' }
 else { Write-Output 'vite-plus-self-setup-v1' }
 exit 0
@@ -75,7 +76,27 @@ if ($scenario -eq 'legacy-failure') { exit 42 }
 '@ | Set-Content -LiteralPath "$testRoot/scripts/install-legacy.ps1"
 & "$env:SystemRoot\System32\tar.exe" -czf "$testRoot/payload.tgz" -C $testRoot package
 Assert ($LASTEXITCODE -eq 0) 'Could not create fixture'
+$fixtureHasher = [Security.Cryptography.SHA512]::Create()
+try {
+    $fixtureBytes = [IO.File]::ReadAllBytes("$testRoot/payload.tgz")
+    $fixtureDigest = $fixtureHasher.ComputeHash($fixtureBytes)
+    $fixtureIntegrity = 'sha512-' + [Convert]::ToBase64String($fixtureDigest)
+} finally {
+    $fixtureHasher.Dispose()
+}
+Set-Content -LiteralPath "$testRoot/package/tampered" -Value 'Modified archive'
+& "$env:SystemRoot\System32\tar.exe" -czf "$testRoot/tampered.tgz" -C $testRoot package
+Assert ($LASTEXITCODE -eq 0) 'Could not create tampered fixture'
+Remove-Item -LiteralPath "$testRoot/package/tampered"
 $env:TEMP = "$testRoot/tmp"
+
+# Record extraction directory creation: integrity failures must precede it.
+$newItemCommand = Get-Command New-Item
+function New-Item {
+    param($ItemType, $Path, [switch]$Force)
+    if ((Split-Path -Leaf $Path) -like 'vite-platform-*') { $script:ExtractionStarted = $true }
+    & $newItemCommand @PSBoundParameters
+}
 
 function Invoke-RestMethod {
     param($Uri, $Headers)
@@ -83,17 +104,28 @@ function Invoke-RestMethod {
     if ($Uri -eq 'https://custom.example/vite-plus/latest') {
         return @{ version = '0.2.9' }
     }
-    if ([System.Uri]::UnescapeDataString($Uri) -like 'https://custom.example/@voidzero-dev/vite-plus-cli-*/0.2.9') {
+    if ([System.Uri]::UnescapeDataString($Uri) -like 'https://*/@voidzero-dev/vite-plus-cli-*/*') {
         # Release payloads must pass the real provenance gate before handoff.
-        return @{
-            version = '0.2.9'
-            dist = @{
-                tarball = 'https://custom.example/platform.tgz'
-                attestations = @{
-                    provenance = @{ predicateType = 'https://slsa.dev/provenance/v1' }
-                }
+        $dist = @{
+            tarball = 'https://custom.example/platform.tgz'
+            integrity = $fixtureIntegrity
+            attestations = @{
+                provenance = @{ predicateType = 'https://slsa.dev/provenance/v1' }
             }
         }
+        switch -Wildcard ($scenario) {
+            'integrity-missing*' { $dist.Remove('integrity') }
+            'integrity-malformed' { $dist.integrity = 'sha512-invalid' }
+            'integrity-unsupported' { $dist.integrity = $fixtureIntegrity.Replace('sha512-', 'sha256-') }
+            'integrity-noncanonical' { $dist.integrity = $fixtureIntegrity.Substring(0, $fixtureIntegrity.Length - 3) + 'B==' }
+            'integrity-wrong-type' { $dist.integrity = @($fixtureIntegrity) }
+            'integrity-dotted-key' {
+                $dist.Remove('integrity')
+                $dist['dist.integrity'] = $fixtureIntegrity
+            }
+        }
+        if ($scenario -like '*pr') { $dist.Remove('attestations') }
+        return @{ dist = $dist }
     }
     throw "Unexpected metadata request: $Uri"
 }
@@ -107,7 +139,8 @@ function Invoke-WebRequest {
         $content = Get-Content -LiteralPath "$testRoot/scripts/install-legacy.ps1" -Raw
         return @{ Content = [Text.Encoding]::UTF8.GetBytes($content) }
     }
-    Copy-Item -LiteralPath "$testRoot/payload.tgz" -Destination $OutFile
+    $payload = if ($scenario -like 'integrity-mismatch*') { 'tampered' } else { 'payload' }
+    Copy-Item -LiteralPath "$testRoot/$payload.tgz" -Destination $OutFile
 }
 
 # Use an executable script fixture so these checks need no native compiler.
@@ -123,23 +156,36 @@ function Invoke-InstallHandoff {
 }
 
 try {
-    foreach ($scenario in @('supported', 'legacy', 'legacy-remote', 'legacy-failure', 'failure', 'pr', 'supported-pr')) {
+    foreach ($scenario in @(
+        'supported', 'legacy', 'legacy-remote', 'legacy-failure', 'failure', 'pr', 'supported-pr',
+        'integrity-missing', 'integrity-malformed', 'integrity-unsupported', 'integrity-noncanonical',
+        'integrity-wrong-type', 'integrity-dotted-key', 'integrity-mismatch', 'integrity-missing-pr', 'integrity-mismatch-pr'
+    )) {
         $env:Path = $originalPath
         $env:NPM_CONFIG_REGISTRY = 'https://custom.example'
         $initialVpShell = if ($scenario -eq 'supported-pr') { 'fish' } else { $null }
         $env:VP_SHELL = $initialVpShell
         $script:Requests = New-Object 'System.Collections.Generic.List[string]'
         $script:ExitCode = 0
+        $script:ExtractionStarted = $false
         $script:PackageMetadata = $null
-        Remove-Item -LiteralPath "$testRoot/legacy", "$testRoot/binary-invoked" -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath "$testRoot/legacy", "$testRoot/binary-invoked", "$testRoot/binary-probed" -ErrorAction SilentlyContinue
         $env:VP_SELF_SETUP_SUPPORT_CHECK = if ($scenario -eq 'supported') { 'original' } else { $null }
+        $isIntegrityFailure = $scenario -like 'integrity-*'
+        $expectedExit = if ($isIntegrityFailure) {
+            1
+        } elseif ($scenario -in @('failure', 'legacy-failure')) {
+            42
+        } else {
+            0
+        }
         try {
             & {
                 $ViteVersion = 'latest'
                 $LocalTgz = $LocalBinary = $PrVersion = $PrCommitVersion = $null
                 $NpmRegistry = 'https://custom.example'
                 $InstallerDirectory = if ($scenario -eq 'legacy-remote') { $null } else { "$testRoot/scripts" }
-                if ($scenario -in @('pr', 'supported-pr')) { $PrVersion = '2406' }
+                if ($scenario -like '*pr') { $PrVersion = '2406' }
                 Main
                 Assert ($env:NPM_CONFIG_REGISTRY -eq 'https://custom.example') 'Setup changed the caller registry'
                 Assert ($script:InstallDir -eq "$testRoot/data") 'InstallDir was lost'
@@ -149,10 +195,20 @@ try {
                 Assert ($script:StateDir -eq "$testRoot/state") 'StateDir was lost'
             }
         } catch {
-            if ($scenario -notin @('failure', 'legacy-failure') -or -not (Test-IsInstallStopException $_)) { throw }
+            if ($expectedExit -eq 0 -or -not (Test-IsInstallStopException $_)) { throw }
         }
-        $expectedExit = if ($scenario -in @('failure', 'legacy-failure')) { 42 } else { 0 }
         Assert ($script:ExitCode -eq $expectedExit) 'Binary exit code was lost'
+        Assert (@(Get-ChildItem -LiteralPath "$testRoot/tmp" -Force).Count -eq 0) 'Temporary payload was not cleaned up'
+        if ($isIntegrityFailure) {
+            $tarballRequested = @($script:Requests | Where-Object { $_.Contains('platform.tgz') }).Count -gt 0
+            Assert ($tarballRequested -eq ($scenario -like 'integrity-mismatch*')) 'Incorrect tarball request before integrity validation'
+            Assert (-not $script:ExtractionStarted) 'Unverified archive reached extraction'
+            Assert (-not (Test-Path -LiteralPath "$testRoot/binary-probed")) 'Unverified binary was probed'
+            Assert (-not (Test-Path -LiteralPath "$testRoot/binary-invoked")) 'Unverified binary was invoked'
+            Assert (-not (Test-Path -LiteralPath "$testRoot/legacy")) 'Unverified binary reached legacy setup'
+            Write-Host "PASS: $scenario"
+            continue
+        }
         Assert ($env:VP_SHELL -eq $initialVpShell) 'Setup changed the caller shell'
         if ($scenario -eq 'supported') {
             Assert (($env:Path -split ';')[0] -eq "$testRoot/installed bin") 'Installed bin directory was not added to the current PATH'
@@ -165,10 +221,9 @@ try {
         if ($scenario -eq 'pr') {
             $record = @(Get-Content -LiteralPath "$testRoot/legacy")
             Assert ($record[0] -eq "0.0.0-commit.$fixtureSha" -and $record[1] -eq '2406') 'Resolved preview identity was lost'
-            Assert ($script:Requests[-1].EndsWith("@$fixtureSha")) 'Payload used a mutable ref'
-            Assert ($script:Requests.Count -eq 2) 'Preview was resolved or downloaded more than once'
+            Assert ($script:Requests[1] -like "GET https://registry-bridge.viteplus.dev/*/0.0.0-commit.$fixtureSha") 'Preview metadata used a mutable ref or the wrong registry'
+            Assert ($script:Requests.Count -eq 3) 'Preview was resolved or downloaded more than once'
         }
-        Assert (@(Get-ChildItem -LiteralPath "$testRoot/tmp" -Force).Count -eq 0) 'Temporary payload was not cleaned up'
         Write-Host "PASS: $scenario"
     }
 } finally {
