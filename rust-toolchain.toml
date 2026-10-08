@@ -1,7 +1,7 @@
 [toolchain]
 # Needed nightly features:
 # - cargo `Z-bindeps` to build and embed preload shared libraries as dependencies of fspy
-channel = "nightly-2026-08-02"
+channel = "nightly-2026-10-04"
 profile = "default"
 # vp_trampoline uses rust-src to build std from source.
 # This reduces the shim binary size.
