@@ -235,12 +235,16 @@ tasks: {
 
 Do not put a variable in `untrackedEnv` if its value changes the task result. If a cache-reporting tool covers the variable through [automatic tracking](/guide/automatic-data-tracking#cooperative-tracking), leave it out of both `env` and `untrackedEnv`.
 
-Vite Task passes a set of common environment variables to all tasks:
+Vite Task includes default untracked patterns for system variables and common tools. Examples include:
 
-- **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
-- **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
-- **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`, `GITHUB_*`, `RUNNER_*`, `ACTIONS_ID_TOKEN_REQUEST_URL`, `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
-- **Terminal:** Color variables (`FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) aren't passed to tasks unless you list them under `env` (the value gets fingerprinted, so changing it invalidates the cache) or `untrackedEnv` (passed without fingerprinting). If `FORCE_COLOR` isn't in either list, the child gets `FORCE_COLOR=1` so cached logs stay colored. Colors get stripped on display when the terminal can't render them.
+- **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`, `TMP`, `TEMP`
+- **Node.js and package managers:** `NODE_OPTIONS`, `NPM_CONFIG_STORE_DIR`, `PNPM_HOME`
+- **CI:** `CI`, `VERCEL_*`, `NEXT_*`, `GITHUB_*`, `RUNNER_*`, `ACTIONS_ID_TOKEN_REQUEST_URL`
+- **Windows:** `APPDATA`, `LOCALAPPDATA`, `SYSTEMROOT`, `USERPROFILE`
+- **Development tools:** `VSCODE_*`, `JB_IDE_*`, `DOCKER_*`, `BUILDKIT_*`, `COMPOSE_*`, `PLAYWRIGHT_*`
+- **Tokens:** `*_TOKEN`, including `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
+
+Color variables such as `FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, and `TERM_PROGRAM` require an explicit `env` or `untrackedEnv` entry. If `FORCE_COLOR` isn't listed, Vite Task sets `FORCE_COLOR=1` to keep cached logs colored. Colors are stripped on display when the terminal can't render them.
 
 ### `cache.input`
 

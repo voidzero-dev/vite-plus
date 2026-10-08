@@ -15,9 +15,9 @@ When all checks match, Vite Task replays the cached terminal output, restores sa
 When a cache miss occurs, Vite Task tells you exactly why:
 
 ```
-$ vp lint ✗ cache miss: 'src/utils.ts' modified, executing
-$ vp build ✗ cache miss: env 'VITE_GREETING' changed, executing
-$ vp test ✗ cache miss: args changed, executing
+$ vp lint ○ cache miss: 'src/utils.ts' modified, executing
+$ vp build ○ cache miss: env 'VITE_GREETING' changed, executing
+$ vp test ○ cache miss: args changed, executing
 ```
 
 ## When Is Caching Enabled?

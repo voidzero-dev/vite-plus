@@ -32,7 +32,7 @@ building legacy app for production...
 Use `vp run` without a task name to use the interactive task runner:
 
 ```
-Select a task (↑/↓, Enter to run, Esc to clear):
+Select a task (↑/↓, Enter to run, type to search):
 
   › build: node compile-legacy-app.js
     test: jest
@@ -69,7 +69,7 @@ $ node compile-legacy-app.js
 If nothing changes, the output is replayed from the cache on the next run:
 
 ```
-$ node compile-legacy-app.js ✓ cache hit, replaying
+$ node compile-legacy-app.js ◉ cache hit, replaying
 ✓ built in 69s
 
 ---
@@ -79,7 +79,7 @@ vp run: cache hit, 69s saved.
 If an input changes, the task runs again:
 
 ```
-$ node compile-legacy-app.js ✗ cache miss: 'legacy/index.js' modified, executing
+$ node compile-legacy-app.js ○ cache miss: 'legacy/index.js' modified, executing
 ```
 
 ## Task Definitions
@@ -256,8 +256,8 @@ vp run: 0/2 cache hit (0%).
 Each sub-task has its own cache entry. If only `.ts` files changed but lint still passes, only `vp build` runs again the next time `vp run --cache check` is called:
 
 ```
-$ vp lint ✓ cache hit, replaying
-$ vp build ✗ cache miss: 'src/index.ts' modified, executing
+$ vp lint ◉ cache hit, replaying
+$ vp build ○ cache miss: 'src/index.ts' modified, executing
 ✓ built in 30ms
 
 ---
