@@ -59,7 +59,7 @@ When the command is a file ending in `.ts`, `.mts`, `.cts`, `.tsx`, `.js`, `.mjs
 - TypeScript syntax that Node.js type stripping rejects: enums, namespaces, parameter properties, and JSX
 - Decorators with `"experimentalDecorators": true`, including `emitDecoratorMetadata`; standard decorators are not supported yet
 - tsconfig `paths` for `import`, `.js` imports that point at `.ts` files, and extensionless imports
-- ESM and CommonJS, including `require()` of `.ts` files; a `.cts` file that uses `import`/`export` runs as an ES module
+- ESM and CommonJS, including `require()` of `.ts` files; a `.cts` file that uses `import`/`export` runs as an ES module, so `require`, `module`, and `__dirname` are not defined inside it (use `createRequire(import.meta.url)` and `import.meta.dirname`)
 - TypeScript published in `node_modules`
 - tsconfig `jsx`, `jsxImportSource`, `jsxFactory`, `jsxFragmentFactory`, `useDefineForClassFields`, and `verbatimModuleSyntax`
 
