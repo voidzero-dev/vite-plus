@@ -114,8 +114,9 @@ File system tracking records access. It cannot know why a tool used each path.
 For a standard Vite build, you do not need to add these entries yourself because Vite reports them automatically at runtime:
 
 - `env: ['VITE_*']` or `env: ['NODE_ENV']`
-- `output: ['dist/**']`
 - input or output exclusions for temporary paths like `node_modules/.vite-temp`
+
+Build outputs such as `dist` are captured by automatic file-write tracking and restored on cache hits.
 
 You only need to define the task with `vp build`:
 
