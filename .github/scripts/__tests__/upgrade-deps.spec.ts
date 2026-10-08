@@ -23,6 +23,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 test.each([false, true])(
   'runs the upgrade pipeline and retains metadata (install fails: %s)',
   async (failInstall) => {
+    const { execFileSync } = await vi.importActual<typeof childProcess>('node:child_process');
     const root = resolve(import.meta.dirname, '../../..');
     const { root: tempDir, metaDir, corePath, pluginPath } = createSyncFixture();
     onTestFinished(() => {
@@ -50,8 +51,12 @@ test.each([false, true])(
     vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('UPGRADE_DEPS_META_DIR', metaDir);
-    vi.stubGlobal('fetch', async (url: string) => {
+    vi.stubEnv('GITHUB_TOKEN', 'synthetic-upgrade-token');
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
       if (url.startsWith('https://api.github.com/repos/')) {
+        expect(new Headers(init?.headers).get('Authorization')).toBe(
+          'token synthetic-upgrade-token',
+        );
         return Response.json([{ name: 'v1.2.3', commit: { sha: 'a'.repeat(40) } }]);
       }
       if (url === 'https://registry.npmjs.org/vitest') {
@@ -78,9 +83,19 @@ test.each([false, true])(
       throw new Error(`Unexpected request: ${url}`);
     });
     const commands: string[][] = [];
-    vi.mocked(childProcess.execFileSync).mockImplementation((command, args) => {
+    vi.mocked(childProcess.execFileSync).mockImplementation((command, args, options) => {
       expect(command).toBe('pnpm');
       commands.push(args as string[]);
+      // Exercise the child environment without installing or executing packages.
+      const childEnv = execFileSync(
+        process.execPath,
+        [
+          '-p',
+          'JSON.stringify({ token: process.env.GITHUB_TOKEN ?? null, path: process.env.PATH, metaDir: process.env.UPGRADE_DEPS_META_DIR })',
+        ],
+        { env: options?.env, encoding: 'utf8' },
+      );
+      expect(JSON.parse(childEnv)).toEqual({ token: null, path: process.env.PATH, metaDir });
       if (failInstall) {
         throw new Error('Installation failed');
       }
@@ -110,6 +125,7 @@ test.each([false, true])(
         ['install', '--no-frozen-lockfile'],
       ]);
     }
+    expect(process.env.GITHUB_TOKEN).toBe('synthetic-upgrade-token');
 
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  lint-staged: ^17.5.1\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain("\n  '@oxlint/plugins': =1.88.0\n");
