@@ -273,7 +273,7 @@ The loader is resolved from the project first and the global install second, fol
 
 ## Upstream Status and Vendored Changes
 
-These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running the prototype on Node.js 22.18, 24.11, 26.0, and 26.5. The default is upstream first and sync after: the five upstream bugs were filed as [oxc-node#794](https://github.com/oxc-project/oxc-node/issues/794) to [oxc-node#798](https://github.com/oxc-project/oxc-node/issues/798) and fixed in v0.1.5, which the vendored copy pins, so its patch no longer carries them.
+These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running the prototype on Node.js 22.18, 24.11, 26.0, and 26.5. The default is upstream first and sync after: the five upstream bugs were filed as [oxc-node#794](https://github.com/oxc-project/oxc-node/issues/794) to [oxc-node#798](https://github.com/oxc-project/oxc-node/issues/798) and fixed in v0.1.5, which the vendored copy pins, so its patch no longer carries them. The remaining patch items are filed as [oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804) to [oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811).
 
 ### Fixed Upstream in v0.1.5
 
@@ -292,11 +292,11 @@ These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running t
 
 `packages/tools/patches/oxc-node.patch` (see [Native Hooks in the Binding](#3-native-hooks-in-the-binding)) also extends these. Every change is marked `Vite+:` in the source.
 
-3. **Lower only what Node.js lacks.** Class fields, private members, and static blocks run natively on every supported Node.js, so they are lowered only when native semantics differ: `[[Set]]` fields (`useDefineForClassFields: false`) and legacy decorators. `using` is native from Node.js 24 and lowered on 22.x; the transformer records the running version from napi's `Env`. Native class features need no runtime helpers, so most scripts import none.
-4. **Standard decorators** fail with a clear error (`decorators require "experimentalDecorators": true in tsconfig.json; standard (TC39) decorators are not supported yet`) instead of Node.js' `SyntaxError` at the `@`. Lowering them needs a transform oxc does not have yet.
+3. **Lower only what Node.js lacks.** Class fields, private members, and static blocks run natively on every supported Node.js, so they are lowered only when native semantics differ: `[[Set]]` fields (`useDefineForClassFields: false`) and legacy decorators. `using` is native from Node.js 24 and lowered on 22.x; the transformer records the running version from napi's `Env`. Native class features need no runtime helpers, so most scripts import none ([oxc-node#808](https://github.com/oxc-project/oxc-node/issues/808)).
+4. **Standard decorators** fail with a clear error (`decorators require "experimentalDecorators": true in tsconfig.json; standard (TC39) decorators are not supported yet`) instead of Node.js' `SyntaxError` at the `@`. Lowering them needs a transform oxc does not have yet ([oxc-node#809](https://github.com/oxc-project/oxc-node/issues/809)).
 5. **TypeScript under `node_modules`** is transformed (`.ts .mts .cts .tsx` only; other dependency files run as published). Node.js refuses to strip types there (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`). Upstream transforms dependencies only under `OXC_TRANSFORM_ALL`.
-6. **Export conditions per request.** One shared resolver kept the conditions of its first caller, which are empty when a `require()` transform runs first. Resolvers are now kept per condition set and share the base resolver's caches.
-7. **`.cts` files with ESM syntax** run as ES modules on both the sync and async hook paths. This fixes their named exports for `import`, and `.cts` entry points (`ERR_REQUIRE_CYCLE_MODULE`). A `.cts` without `import`/`export` stays CommonJS. Node.js itself rejects such a file (`SyntaxError: Unexpected token 'export'`), so this is an extension; see [Open Questions](#open-questions).
+6. **Export conditions per request.** One shared resolver kept the conditions of its first caller, which are empty when a `require()` transform runs first. Resolvers are now kept per condition set and share the base resolver's caches ([oxc-node#810](https://github.com/oxc-project/oxc-node/issues/810)).
+7. **`.cts` files with ESM syntax** run as ES modules on both the sync and async hook paths, so their named exports, entry-point use, and `require()` work, as with tsx. A `.cts` without `import`/`export` stays CommonJS. tsc and tsx compile such a file to CommonJS; without an ESM-to-CommonJS transform in oxc, `require`, `module`, and `__dirname` are not defined inside it. Node.js rejects the file outright, and upstream fails differently on each loading path ([oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811)).
 
 ### Blocked on Oxc
 
@@ -316,7 +316,7 @@ These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running t
 - Transform TypeScript in `--eval`, stdin, and the REPL.
 - An opt-in persistent transform cache.
 - TypeScript syntax in extensionless entry files, for shebang scripts without `.ts`.
-- Split the crate into a NAPI-free core and a thin NAPI layer, so the vendored patch shrinks.
+- Split the crate into a NAPI-free core and a thin NAPI layer, so the vendored patch shrinks ([oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807)).
 
 ## Implementation Architecture
 
@@ -361,14 +361,14 @@ What the binding already contains makes this cheap. Through `rolldown_binding`, 
 
 Besides the fixes in [Fixed in the Vendored Source](#fixed-in-the-vendored-source), the patch adapts the crate to its host:
 
-| Change                                                                                                      | Reason                                                                                                                                       |
-| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crate-type = ["rlib"]`, `build = false`, and the `ast_visit` oxc feature                                   | Linked into the host cdylib, whose build script already sets the napi link args; `ast_visit` finds decorators                                |
-| Remove `#[global_allocator]` with its `cfg`                                                                 | `rolldown_binding` already declares one; two in one binary do not link                                                                       |
-| Remove the tracing `module_init`                                                                            | It always claims the global subscriber that `VP_LOG` relies on, and panics when another is already installed; oxc-node now logs via `VP_LOG` |
-| Read `VP_SCRIPT_TSCONFIG` instead of `TS_NODE_PROJECT` / `OXC_TSCONFIG_PATH`                                | See [Environment](#environment)                                                                                                              |
-| Every top-level `#[napi]` item goes under `namespace = "oxcNode"`; `TransformTask` → `OxcNodeTransformTask` | Rolldown already exports `transform` and `TransformTask` from the same binding; duplicate NAPI exports silently overwrite each other         |
-| `oxc` follows the workspace version (applied by the script, not the patch)                                  | One copy of oxc: oxc-node tracks oxc head while Rolldown and Vite+ can lag; both use 0.153.0 today                                           |
+| Change                                                                                                      | Reason                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crate-type = ["rlib"]`, `build = false`, and the `ast_visit` oxc feature                                   | Linked into the host cdylib, whose build script already sets the napi link args; `ast_visit` finds decorators ([oxc-node#809](https://github.com/oxc-project/oxc-node/issues/809))                                |
+| Remove `#[global_allocator]` with its `cfg`                                                                 | `rolldown_binding` already declares one; two in one binary do not link ([oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804))                                                                       |
+| Remove the tracing `module_init`                                                                            | It always claims the global subscriber that `VP_LOG` relies on, and panics when another is already installed; oxc-node now logs via `VP_LOG` ([oxc-node#805](https://github.com/oxc-project/oxc-node/issues/805)) |
+| Read `VP_SCRIPT_TSCONFIG` instead of `TS_NODE_PROJECT` / `OXC_TSCONFIG_PATH`                                | See [Environment](#environment) ([oxc-node#806](https://github.com/oxc-project/oxc-node/issues/806))                                                                                                              |
+| Every top-level `#[napi]` item goes under `namespace = "oxcNode"`; `TransformTask` → `OxcNodeTransformTask` | Rolldown already exports `transform` and `TransformTask` from the same binding; duplicate NAPI exports silently overwrite each other ([oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807))         |
+| `oxc` follows the workspace version (applied by the script, not the patch)                                  | One copy of oxc: oxc-node tracks oxc head while Rolldown and Vite+ can lag; both use 0.153.0 today                                                                                                                |
 
 Before this change, `BUNDLING.md` said the `rolldown` feature was release-only, but `build.ts` enables it for every build, so development builds already compile oxc. The `oxc-node` feature costs dev builds no extra crates.
 
@@ -594,7 +594,7 @@ Node.js runs every `--require` before any `--import`. The loader's own `--requir
 
 ### `.cts` Files With ESM Syntax
 
-TypeScript compiles `export` in a `.cts` file to CommonJS. oxc cannot, so such a file runs as an ES module, where `require`, `module`, and `__dirname` are not defined; its named exports and entry-point use work. Node.js itself rejects the file (`SyntaxError: Unexpected token 'export'`), so this goes beyond Node.js; see [Open Questions](#open-questions).
+TypeScript and tsx compile `export` in a `.cts` file to CommonJS. oxc cannot, so `vpx` runs such a file as an ES module: its named exports, entry-point use, and `require()` work, as with tsx, but `require`, `module`, and `__dirname` are not defined inside it. Use `import.meta.dirname` and `createRequire(import.meta.url)` there. Node.js itself rejects the file (`SyntaxError: Unexpected token 'export'`). Full parity with tsx needs an ESM-to-CommonJS transform in oxc ([oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811)).
 
 ### `TS_NODE_PROJECT` and `OXC_TSCONFIG_PATH`
 
@@ -730,7 +730,7 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 10. **Maturity** (resolved for v1): the docs mark the feature experimental, as oxc-node itself is.
 11. **`--version`** (resolved): `vpx -v/--version` prints the Vite+ version, as `vp --version` does; `vp node --version` prints the Node.js version.
 12. **Dev builds** (resolved): `build.ts` already compiles Rolldown, and therefore oxc, into every build, so the `oxc-node` feature is on for all builds at no extra crate cost.
-13. **`.cts` files with ESM syntax**: the vendored patch runs them as ES modules, which Node.js and upstream oxc-node reject. Keep the extension, or drop it and reject them as Node.js does? (Proposed: drop it, so `vpx` accepts the same files as Node.js.)
+13. **`.cts` files with ESM syntax** (resolved): keep running them as ES modules, which matches tsx for named exports, entry points, and `require()`, and document that `require`, `module`, and `__dirname` are not defined inside. Full parity waits for an ESM-to-CommonJS transform in oxc ([oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811)).
 
 ## Future Enhancements
 
