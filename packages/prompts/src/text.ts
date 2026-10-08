@@ -1,7 +1,15 @@
+import type { CANCEL_SYMBOL, Validate } from '@clack/core';
 import { TextPrompt } from '@clack/core';
 import color from 'picocolors';
 
-import { type CommonOptions, S_BAR, S_BAR_END, symbol } from './common.js';
+import {
+  type CommonOptions,
+  getGuide,
+  promptTitle,
+  wrapTextWithPrefix,
+  S_BAR,
+  S_BAR_END,
+} from './common.js';
 import { promptMilestone } from './milestone.js';
 
 export interface TextOptions extends CommonOptions {
@@ -9,7 +17,7 @@ export interface TextOptions extends CommonOptions {
   placeholder?: string;
   defaultValue?: string;
   initialValue?: string;
-  validate?: (value: string | undefined) => string | Error | undefined;
+  validate?: Validate<string>;
 }
 
 export const text = (opts: TextOptions) => {
@@ -21,10 +29,11 @@ export const text = (opts: TextOptions) => {
     output: opts.output,
     signal: opts.signal,
     input: opts.input,
+    accessible: opts.accessible,
     render() {
-      const hasGuide = opts?.withGuide ?? false;
+      const hasGuide = getGuide(opts);
       const nestedPrefix = '  ';
-      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
+      const title = promptTitle(opts.message, this.state, opts);
       const placeholder = opts.placeholder
         ? color.inverse(opts.placeholder[0]) + color.dim(opts.placeholder.slice(1))
         : color.inverse(color.hidden('_'));
@@ -32,11 +41,20 @@ export const text = (opts: TextOptions) => {
       const value = this.value ?? '';
 
       switch (this.state) {
+        case 'validating': {
+          const prefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
+          return `${title}${prefix}${color.dim(value)}\n${prefix}${color.dim('Validating…')}\n`;
+        }
         case 'error': {
-          const errorText = this.error ? ` ${color.yellow(this.error)}` : '';
+          const errorText = this.error
+            ? wrapTextWithPrefix(
+                opts.output,
+                color.yellow(this.error),
+                hasGuide ? `${color.yellow(S_BAR_END)} ` : nestedPrefix,
+              )
+            : '';
           const errorPrefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;
-          const errorPrefixEnd = hasGuide ? color.yellow(S_BAR_END) : '';
-          return `${title.trim()}\n${errorPrefix}${userInput}\n${errorPrefixEnd}${errorText}\n${promptMilestone('text', opts.testId, 'error')}`;
+          return `${title.trim()}\n${errorPrefix}${userInput}\n${errorText}\n${promptMilestone('text', opts.testId, 'error')}`;
         }
         case 'submit': {
           const valueText = value ? color.dim(value) : '';
@@ -51,9 +69,9 @@ export const text = (opts: TextOptions) => {
         default: {
           const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
           const defaultPrefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
-          return `${title}${defaultPrefix}${userInput}\n${defaultPrefixEnd}\n${promptMilestone('text', opts.testId, this.value ?? '')}`;
+          return `${title}${defaultPrefix}${userInput}${hasGuide ? `\n${defaultPrefixEnd}` : ''}\n${promptMilestone('text', opts.testId, this.value ?? '')}`;
         }
       }
     },
-  }).prompt() as Promise<string | symbol>;
+  }).prompt() as Promise<string | typeof CANCEL_SYMBOL>;
 };

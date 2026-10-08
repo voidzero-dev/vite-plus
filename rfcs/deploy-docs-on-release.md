@@ -61,16 +61,16 @@ Four parts:
 ### `.github/actions/deploy-docs`
 
 The composite action holds the steps shared by every docs deploy: `setup-vp`,
-the Vite Task cache restore/save, `vp run build`, and `vpx void deploy`. Its
+`vp run build` with the Vite Task remote cache, and `vpx void deploy`. Its
 inputs:
 
 - `void-project`: the deploy target.
 - `void-token`: composite actions cannot read secrets, so the caller passes
   `secrets.VOID_TOKEN`.
-- `cache-ref` / `cache-sha` (optional, default `main` / `github.sha`): scope
-  the Vite Task cache key. PR previews pass `pr-<number>` and the head sha,
-  which reproduces their current per-PR keys with a fallback to the `main`
-  cache.
+- `site-origin` (optional): the deploy's origin when it is not production.
+- `remote-cache` (optional, default `read-write`): Vite Task remote cache
+  access. Callers that upload grant `id-token: write` to authenticate; PR
+  previews pass `read` so they reuse cached builds without uploading.
 
 Callers check out the repo first, then run the action.
 
@@ -196,9 +196,9 @@ jobs:
   deploy there and would overwrite the `main` preview on every PR push.
 - `cancel-in-progress: true`: only the newest `main` deploy matters for a
   preview. Production keeps `false`.
-- The workflow can keep the `vite-task-docs-*-main-*` cache keys that
-  `deploy-docs.yml` uses today, since both build `main`; the release-run
-  deploy restores from the same key family.
+- All docs deploys share the Vite Task remote cache; `DOCS_SITE_ORIGIN` is
+  part of the task fingerprint, so each deploy target reuses only its own
+  builds.
 - Setup before the workflow lands: create the `viteplus-main` project on the
   void platform (the deploy uses the same `VOID_TOKEN` secret), add the DNS
   CNAME `main.viteplus.dev` -> `viteplus-main.void.app`, and attach the
@@ -294,7 +294,7 @@ after the deploy get the new script together with the new binaries.
 ## Alternatives considered
 
 - **Gate only the install scripts, keep push deploys for `docs/**`.** Fixes
-  problem 2 but not problem 1, and lets `docs/guide/install.md` drift from the
+  problem 2 but not problem 1, and lets `docs/guide/package-management.md` drift from the
   script it documents. Two freshness channels on one site.
 - **Versioned docs.** Publish `main` but hide unreleased sections until their
   release. Needs authoring conventions and theme/tooling support; out of scope.

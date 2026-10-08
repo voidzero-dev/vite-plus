@@ -13,18 +13,52 @@ POSIX wrapper and zsh vpr completion keep global -C before env use/run
 export VP_HOME="<workspace>/home"
 __vp_bin="<workspace>/home/bin"
 __vp_fallback="<workspace>/home/fallback-bin"
-for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
-    while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
-        __vp_tmp=":${PATH}:"
-        __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
-        __vp_before="${__vp_before#:}"
-        __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
-        __vp_after="${__vp_after%:}"
-        PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+# Split PATH on ':' once; repeated `${PATH#*pattern}` stripping is super-linear on long PATHs.
+# A function scopes zsh's option changes; other shells restore noglob and IFS explicitly.
+__vp_dedupe_path() {
+    __vp_ifs_set=${IFS+1}
+    __vp_ifs=${IFS-}
+    IFS=:
+    __vp_glob=
+    if [ -n "${ZSH_VERSION-}" ]; then
+        setopt localoptions shwordsplit noglob
+    else
+        case $- in *f*) ;; *) set -f; __vp_glob=1 ;; esac
+    fi
+    __vp_new=
+    # A non-empty sentinel last field keeps trailing empty entries consistent across shells.
+    __vp_path="${PATH}:."
+    for __vp_dir in $__vp_path; do
+        case "$__vp_dir" in
+            "$__vp_bin"|"$__vp_fallback") ;;
+            *) __vp_new="${__vp_new}:${__vp_dir}" ;;
+        esac
     done
-done
+    if [ -n "$__vp_ifs_set" ]; then IFS=$__vp_ifs; else unset IFS; fi
+    [ -z "$__vp_glob" ] || set +f
+    __vp_new="${__vp_new%:*}"
+    PATH="${__vp_new#:}"
+}
+# Assigning a read-only IFS aborts dash and zsh, so probe it in a subshell first and fall back
+# to stripping each copy with parameter expansion, which leaves IFS and shell options alone.
+if (IFS=:) 2>/dev/null; then
+    __vp_dedupe_path
+else
+    for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
+        while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
+            __vp_tmp=":${PATH}:"
+            __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
+            __vp_before="${__vp_before#:}"
+            __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
+            __vp_after="${__vp_after%:}"
+            PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+        done
+    done
+fi
+unset -f __vp_dedupe_path
 export PATH="${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}"
-unset __vp_bin __vp_fallback __vp_dir __vp_tmp __vp_before __vp_after
+unset __vp_bin __vp_fallback __vp_dir __vp_path __vp_new __vp_ifs __vp_ifs_set __vp_glob \
+    __vp_tmp __vp_before __vp_after
 hash -r 2>/dev/null || true
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,

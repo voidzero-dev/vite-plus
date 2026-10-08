@@ -29,13 +29,6 @@ check prettier removed from devDependencies and scripts rewritten
   "devDependencies": {
     "prettier": "^3.0.0",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

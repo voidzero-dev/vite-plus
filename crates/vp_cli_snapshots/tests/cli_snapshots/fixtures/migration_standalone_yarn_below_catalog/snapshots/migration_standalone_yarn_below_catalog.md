@@ -7,9 +7,8 @@ Yarn < 4.10.0 cannot resolve `catalog:`, so managed specs stay concrete
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
-
-✔ Switched Yarn to node-modules mode
+▲ ⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
+◆ ✔ Switched Yarn to node-modules mode
 ◇ Migrated . to Vite+ <version>
 • Node <version>  yarn <version>
 • 2 config updates applied

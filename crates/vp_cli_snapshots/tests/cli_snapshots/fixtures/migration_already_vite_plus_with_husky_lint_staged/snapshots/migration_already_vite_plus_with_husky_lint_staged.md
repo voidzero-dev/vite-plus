@@ -37,13 +37,6 @@ husky/lint-staged and prepare are left untouched
   },
   "lint-staged": {
     "*": "vp check --fix"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -63,7 +56,8 @@ husky/lint-staged and prepare are left untouched
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
+▲ No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
+▲ ⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 This project is already using Vite+! Happy coding!
 ```
 
@@ -85,13 +79,6 @@ Husky and lint-staged metadata should remain
   },
   "lint-staged": {
     "*": "vp check --fix"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

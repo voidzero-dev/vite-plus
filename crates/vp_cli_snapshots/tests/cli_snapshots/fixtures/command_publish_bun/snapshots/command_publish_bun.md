@@ -30,5 +30,5 @@ Options:
   --filter <PATTERN>         Filter packages in monorepo
   -h, --help                 Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```

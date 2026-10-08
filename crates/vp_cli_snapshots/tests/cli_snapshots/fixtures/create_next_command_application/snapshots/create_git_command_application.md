@@ -5,8 +5,7 @@
 standalone create: Git command must not change the current directory
 
 ```
-
-Using default package name: vite-plus-application
+● Using default package name: vite-plus-application
 ◇ Scaffolded vite-plus-application with Vite application
 • Node <version>  pnpm <version>
 → Git (optional): git -C vite-plus-application add -A && git -C vite-plus-application commit -m "chore: initial commit"

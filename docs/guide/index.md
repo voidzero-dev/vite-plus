@@ -82,12 +82,12 @@ This is required because the managed [unofficial-builds](https://unofficial-buil
 With the global CLI installed, create a project, install dependencies, and use the default commands:
 
 ```bash
-vp create # Create a new project
+vp create  # Create a new project
 vp install # Install dependencies
-vp dev # Start the dev server
-vp check # Format, lint, type-check
-vp test # Run JavaScript tests
-vp build # Build for production
+vp dev     # Start the dev server
+vp check   # Format, lint, type-check
+vp test    # Run JavaScript tests
+vp build   # Build for production
 ```
 
 You can also run `vp` on its own to open the interactive command line. In a local-only setup, run the same commands through your package manager, such as `pnpm exec vp check`.
@@ -100,9 +100,9 @@ Vite+ covers the full frontend development cycle, from starting a project throug
 
 - [`vp create`](/guide/create) creates new apps, packages, and monorepos.
 - [`vp migrate`](/guide/migrate) moves existing projects onto Vite+.
-- [`vp install`](/guide/install) installs dependencies with the right package manager.
-- [`vp add`](/guide/install), [`vp remove`](/guide/install), [`vp update`](/guide/install), [`vp dedupe`](/guide/install), [`vp outdated`](/guide/install), [`vp list`](/guide/install), [`vp why`](/guide/install), and [`vp info`](/guide/install) cover the rest of the package-management workflow.
-- [`vp link`](/guide/install), [`vp unlink`](/guide/install), [`vp rebuild`](/guide/install), and [`vp pm <command>`](/guide/install) provide lower-level package-manager operations.
+- [`vp install`](/guide/package-management) installs dependencies with the right package manager.
+- [`vp add`](/guide/package-management), [`vp remove`](/guide/package-management), [`vp update`](/guide/package-management), [`vp dedupe`](/guide/package-management), [`vp outdated`](/guide/package-management), [`vp list`](/guide/package-management), [`vp why`](/guide/package-management), and [`vp info`](/guide/package-management) cover the rest of the package-management workflow.
+- [`vp link`](/guide/package-management), [`vp unlink`](/guide/package-management), [`vp rebuild`](/guide/package-management), and [`vp pm <command>`](/guide/package-management) provide lower-level package-manager operations.
 
 ### Project Toolchain
 

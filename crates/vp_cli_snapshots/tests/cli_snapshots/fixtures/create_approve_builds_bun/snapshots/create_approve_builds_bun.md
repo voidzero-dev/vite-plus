@@ -51,10 +51,8 @@ core-js recorded under trustedDependencies
 default run surfaces the gated build with guidance, leaving it untrusted
 
 ```
-
-Build scripts were not run for: core-js.
-
-These dependencies may not work until built. Run vp pm approve-builds core-js in the project to approve them, or re-create with --approve-builds.
+▲ Build scripts were not run for: core-js.
+● These dependencies may not work until built. Run vp pm approve-builds core-js in the project to approve them, or re-create with --approve-builds.
 ◇ Scaffolded default-app
 • Node <version>  bun <version>
 ✓ Dependencies installed in <duration>

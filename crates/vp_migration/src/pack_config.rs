@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, path::Path};
 
 use ast_grep_core::{Doc, Node, tree_sitter::StrDoc};
 use ast_grep_language::{LanguageExt, SupportLang};
@@ -24,7 +24,11 @@ const ATTW_PROFILE_DEFAULT: &str = concat!(
 
 /// Upgrade the configuration options removed in tsdown 0.23 without evaluating
 /// user code. Only direct pack objects and standalone tsdown configs qualify.
-pub(crate) fn rewrite_pack_config(content: &str, standalone: bool) -> String {
+pub(crate) fn rewrite_pack_config(
+    content: &str,
+    standalone: bool,
+    preserve_legacy_defaults: bool,
+) -> String {
     let grep = SupportLang::TypeScript.ast_grep(content);
     let mut edits = Vec::new();
     for object in grep.root().dfs().filter(|node| node.kind() == "object") {
@@ -35,7 +39,7 @@ pub(crate) fn rewrite_pack_config(content: &str, standalone: bool) -> String {
             continue;
         }
         let source = object.text();
-        let rewritten = rewrite_options(&object);
+        let rewritten = rewrite_options(&object, preserve_legacy_defaults);
         if rewritten != source {
             let line = content[..object.range().start].rsplit('\n').next().unwrap_or_default();
             let indentation: String =
@@ -45,6 +49,94 @@ pub(crate) fn rewrite_pack_config(content: &str, standalone: bool) -> String {
     }
     // Select the declaration generator after the other option edits.
     rewrite_pack_dts_generators(&apply_edits(content, edits, 0), standalone)
+}
+
+/// Read the source toolchain before the migration's final install. Restrict
+/// lookup to this workspace so the CLI's own installation cannot supply the
+/// version. Unknown versions retain the previous conservative behavior.
+pub(crate) fn preserve_legacy_defaults(
+    file: &Path,
+    root: &Path,
+    is_tsdown_config: bool,
+    original_content: &str,
+) -> bool {
+    let Some(directory) = file.parent() else { return true };
+    // Migration retains tsdown.config.* files imported by vite.config.pack.
+    // Their original vite-plus/pack import identifies the bundled toolchain;
+    // newly rewritten tsdown imports must not affect this decision.
+    let legacy = if is_tsdown_config && !imports_bundled_pack(original_content) {
+        standalone_legacy_defaults(directory, root)
+            .or_else(|| bundled_legacy_defaults(directory, root))
+    } else {
+        bundled_legacy_defaults(directory, root)
+            .or_else(|| standalone_legacy_defaults(directory, root))
+    };
+    legacy.unwrap_or(true)
+}
+
+fn standalone_legacy_defaults(directory: &Path, root: &Path) -> Option<bool> {
+    for current in directory.ancestors().take_while(|directory| directory.starts_with(root)) {
+        let manifest_path = current.join("node_modules/tsdown/package.json");
+        if manifest_path.exists() {
+            let content = std::fs::read_to_string(manifest_path).ok()?;
+            let package: serde_json::Value = serde_json::from_str(&content).ok()?;
+            return legacy_defaults_for_version(package.get("version")?.as_str()?);
+        }
+    }
+    None
+}
+
+fn bundled_legacy_defaults(directory: &Path, root: &Path) -> Option<bool> {
+    // Use the same manifest reader and tool lookup as `vp --version`.
+    // Read the project's installed CLI, never the CLI running migration.
+    for current in directory.ancestors().take_while(|directory| directory.starts_with(root)) {
+        let package_dir = current.join("node_modules/vite-plus");
+        let manifest_path = package_dir.join("dist/toolchain.json");
+        if let Ok(manifest_path) = std::fs::canonicalize(&manifest_path)
+            && let Some(manifest_path) = vt_path::AbsolutePath::new(&manifest_path)
+            && let Ok(manifest) = vp_toolchain::load_manifest(manifest_path)
+        {
+            let legacy = vp_toolchain::node_by_id(&manifest, "tsdown")
+                .and_then(|node| node.version.as_deref())
+                .and_then(legacy_defaults_for_version);
+            return Some(legacy.unwrap_or(true));
+        }
+        if package_dir.join("package.json").is_file() {
+            // Releases without a toolchain manifest bundle tsdown <0.23.
+            // Do not inherit a parent CLI's manifest or a direct tsdown version.
+            return Some(true);
+        }
+    }
+    None
+}
+
+fn legacy_defaults_for_version(version: &str) -> Option<bool> {
+    js_semver::Version::parse(version)
+        .ok()
+        .map(|version| version < js_semver::Version::new(0, 23, 0))
+}
+
+fn imports_bundled_pack(content: &str) -> bool {
+    let grep = SupportLang::TypeScript.ast_grep(content);
+    grep.root().dfs().any(|node| {
+        let source = match node.kind().as_ref() {
+            "import_statement" | "export_statement" => node.field("source"),
+            "call_expression"
+                if node.field("function").is_some_and(|function| {
+                    function.kind() == "import" || function.text() == "require"
+                }) =>
+            {
+                node.field("arguments").and_then(|args| {
+                    args.children().find(|child| child.is_named() && child.kind() != "comment")
+                })
+            }
+            _ => None,
+        };
+        source.is_some_and(|source| {
+            source.kind() == "string"
+                && matches!(source.text().as_ref(), "'vite-plus/pack'" | "\"vite-plus/pack\"")
+        })
+    })
 }
 
 fn indent_compatibility_defaults(source: &str, object_indentation: &str) -> String {
@@ -389,12 +481,19 @@ fn constant_initializer<'a, D: Doc>(reference: &Node<'a, D>) -> Option<Node<'a, 
     None
 }
 
-fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
+fn rewrite_options<D: Doc>(object: &Node<'_, D>, preserve_legacy_defaults: bool) -> String {
     // Rolldown can retain the original static matcher while tsdown's deps
     // plugin handles neverBundle: true. Avoid overriding DTS-specific matchers
     // or user inputOptions; those combinations are reported for manual review.
     let source = if has_external_skip(object) {
-        move_option(&object.text(), "external", "inputOptions", "external", false)
+        move_option(
+            &object.text(),
+            "external",
+            "inputOptions",
+            "external",
+            false,
+            preserve_legacy_defaults,
+        )
     } else {
         object.text().into_owned()
     };
@@ -417,7 +516,9 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
                             options.rename("skipNodeModulesBundle", "neverBundle");
                         }
                     }
-                    options.set_default("resolveDepSubpath", RESOLVE_DEP_SUBPATH_DEFAULT);
+                    if preserve_legacy_defaults {
+                        options.set_default("resolveDepSubpath", RESOLVE_DEP_SUBPATH_DEFAULT);
+                    }
                 }
                 "dts" => {
                     if options
@@ -428,7 +529,9 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
                     }
                 }
                 "attw" => {
-                    if options.value("enabled").is_none_or(|value| value.kind() != "false") {
+                    if preserve_legacy_defaults
+                        && options.value("enabled").is_none_or(|value| value.kind() != "false")
+                    {
                         options.set_default("profile", ATTW_PROFILE_DEFAULT);
                     }
                 }
@@ -437,7 +540,7 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
             config.replace_value(name, updated);
         }
     });
-    let source = edit_object(&source, |config| {
+    let mut source = edit_object(&source, |config| {
         config.rename("outExtension", "outExtensions");
         config.rename("publicDir", "copy");
         for (old, new, replacement) in
@@ -454,24 +557,41 @@ fn rewrite_options<D: Doc>(object: &Node<'_, D>) -> String {
                 config.remove(old);
             }
         }
-        if config.value("attw").is_some_and(|value| value.kind() == "true") {
+        if preserve_legacy_defaults
+            && config.value("attw").is_some_and(|value| value.kind() == "true")
+        {
             config.replace_value("attw", format!("{{ {ATTW_PROFILE_DEFAULT} }}"));
         }
     });
-    let source = move_option(&source, "injectStyle", "css", "inject", false);
-    let source = move_option(&source, "inlineOnly", "deps", "onlyBundle", false);
-    let source = move_option(&source, "noExternal", "deps", "alwaysBundle", false);
-    let source = move_option(&source, "skipNodeModulesBundle", "deps", "neverBundle", true);
-    edit_object(&source, |config| {
-        config.set_default("deps", &format!("deps: {{ {RESOLVE_DEP_SUBPATH_DEFAULT} }}"));
-    })
+    for (old, group, new, boolean_only) in [
+        ("injectStyle", "css", "inject", false),
+        ("inlineOnly", "deps", "onlyBundle", false),
+        ("noExternal", "deps", "alwaysBundle", false),
+        ("skipNodeModulesBundle", "deps", "neverBundle", true),
+    ] {
+        source = move_option(&source, old, group, new, boolean_only, preserve_legacy_defaults);
+    }
+    if preserve_legacy_defaults {
+        edit_object(&source, |config| {
+            config.set_default("deps", &format!("deps: {{ {RESOLVE_DEP_SUBPATH_DEFAULT} }}"));
+        })
+    } else {
+        source
+    }
 }
 
-fn move_option(source: &str, old: &str, group: &str, new: &str, boolean: bool) -> String {
+fn move_option(
+    source: &str,
+    old: &str,
+    group: &str,
+    new: &str,
+    boolean_only: bool,
+    preserve_legacy_defaults: bool,
+) -> String {
     edit_object(source, |config| {
         let Some(property) = config.property(old) else { return };
         let value = config.value(old);
-        if boolean {
+        if boolean_only {
             let Some(value) = &value else { return };
             match value.kind().as_ref() {
                 "false" => {
@@ -512,7 +632,7 @@ fn move_option(source: &str, old: &str, group: &str, new: &str, boolean: bool) -
                 config.remove(old);
             }
         } else if config.property(group).is_none() {
-            let defaults = if group == "deps" {
+            let defaults = if preserve_legacy_defaults && group == "deps" {
                 format!(", {RESOLVE_DEP_SUBPATH_DEFAULT}")
             } else {
                 String::new()
@@ -529,10 +649,49 @@ fn move_option(source: &str, old: &str, group: &str, new: &str, boolean: bool) -
 mod tests {
     use super::*;
 
+    #[test]
+    fn modern_toolchains_rename_options_without_inserting_legacy_defaults() {
+        for (options, expected) in [
+            ("{ noExternal: ['foo'], attw: true }", "alwaysBundle: ['foo']"),
+            ("{ inlineOnly: false, attw: {} }", "onlyBundle: false"),
+            ("{ skipNodeModulesBundle: true }", "neverBundle: true"),
+            ("{ deps: { onlyAllowBundle: false }, attw: { enabled: true } }", "onlyBundle: false"),
+            ("{ publicDir: 'public', bundle: false }", "copy: 'public'"),
+        ] {
+            for standalone in [false, true] {
+                let input = if standalone {
+                    format!("export default {options};")
+                } else {
+                    format!("export default {{ pack: {options} }};")
+                };
+                let actual = rewrite_pack_config(&input, standalone, false);
+                assert!(actual.contains(expected), "{actual}");
+                assert!(!actual.contains("resolveDepSubpath"), "{actual}");
+                assert!(!actual.contains("profile:"), "{actual}");
+                assert_eq!(rewrite_pack_config(&actual, standalone, false), actual);
+            }
+        }
+    }
+
+    #[test]
+    fn modern_toolchains_preserve_explicit_compatibility_settings() {
+        for options in [
+            "{ deps: { resolveDepSubpath: true }, attw: { profile: 'strict' } }",
+            "{ deps: { resolveDepSubpath: false }, attw: { profile: 'esm-only' } }",
+        ] {
+            let input = format!("export default {{ pack: {options} }};");
+            assert_eq!(rewrite_pack_config(&input, false, false), input);
+        }
+    }
+
     fn migrate(options: &str) -> String {
         let input = format!("export default defineConfig({{ pack: {options} }});");
-        let actual = rewrite_pack_config(&input, false);
-        assert_eq!(rewrite_pack_config(&actual, false), actual, "migration must be idempotent");
+        let actual = rewrite_pack_config(&input, false, true);
+        assert_eq!(
+            rewrite_pack_config(&actual, false, true),
+            actual,
+            "migration must be idempotent"
+        );
         let grep = SupportLang::TypeScript.ast_grep(&actual);
         assert!(!grep.root().dfs().any(|node| node.kind() == "ERROR"), "{actual}");
         actual
@@ -590,14 +749,14 @@ mod tests {
             let input = format!(
                 "export default defineConfig(() => ({{ noExternal(id) {{ /* match */ return id === 'foo'; }}{deps} }}));"
             );
-            let actual = rewrite_pack_config(&input, true);
+            let actual = rewrite_pack_config(&input, true, true);
             assert!(
                 actual.contains("alwaysBundle(id) { /* match */ return id === 'foo'; }"),
                 "{actual}"
             );
             assert!(!actual.contains("noExternal"), "{actual}");
             assert!(pack_config_warnings(&actual, true).is_empty());
-            assert_eq!(rewrite_pack_config(&actual, true), actual);
+            assert_eq!(rewrite_pack_config(&actual, true, true), actual);
         }
     }
 
@@ -653,7 +812,7 @@ mod tests {
                     ),
                 ] {
                     let input = format!("{declarations}\n{config}");
-                    let actual = rewrite_pack_config(&input, standalone);
+                    let actual = rewrite_pack_config(&input, standalone, true);
                     assert!(actual.starts_with(declarations), "{actual}");
                     assert!(
                         actual.contains("inputOptions: { external: externalOptions }"),
@@ -662,12 +821,12 @@ mod tests {
                     assert!(actual.contains("neverBundle: true"), "{actual}");
                     assert!(!actual.contains("skipNodeModulesBundle"), "{actual}");
                     assert!(pack_config_warnings(&actual, standalone).is_empty());
-                    assert_eq!(rewrite_pack_config(&actual, standalone), actual);
+                    assert_eq!(rewrite_pack_config(&actual, standalone, true), actual);
                 }
             }
         }
         let input = "export default defineConfig(() => { const external = ['foo']; return { pack: { external, skipNodeModulesBundle: true } }; });";
-        let actual = rewrite_pack_config(input, false);
+        let actual = rewrite_pack_config(input, false, true);
         assert!(actual.contains("inputOptions: { external: external }"), "{actual}");
         assert!(!actual.contains("skipNodeModulesBundle"), "{actual}");
         assert!(pack_config_warnings(&actual, false).is_empty());
@@ -686,7 +845,7 @@ mod tests {
             "const externalOptions = ['foo']; export default defineConfig(() => { const externalOptions = '/foo/'; return { pack: { external: externalOptions, skipNodeModulesBundle: true } }; });",
             "const externalOptions = ['foo']; export default defineConfig(() => { if (custom) { var externalOptions = getExternal(); } return { pack: { external: externalOptions, skipNodeModulesBundle: true } }; });",
         ] {
-            assert_eq!(rewrite_pack_config(input, false), input);
+            assert_eq!(rewrite_pack_config(input, false, true), input);
             assert_eq!(pack_config_warnings(input, false), [EXTERNAL_SKIP_WARNING]);
         }
     }
@@ -708,12 +867,12 @@ mod tests {
                 let input = format!(
                     "export default {{ pack: {{ {options}, {skip}, bundle: false, dts: {{ tsgo: true }} }} }};"
                 );
-                assert_eq!(rewrite_pack_config(&input, false), input);
+                assert_eq!(rewrite_pack_config(&input, false, true), input);
                 assert_eq!(pack_config_warnings(&input, false), [EXTERNAL_SKIP_WARNING]);
             }
         }
         let input = "export default { pack: { external: ['foo'], deps: { skipNodeModulesBundle: true, dts: { neverBundle: ['types'] } } } };";
-        assert_eq!(rewrite_pack_config(input, false), input);
+        assert_eq!(rewrite_pack_config(input, false, true), input);
         assert_eq!(pack_config_warnings(input, false), [EXTERNAL_SKIP_WARNING]);
         for input in [
             "export default { pack: { external: ['foo'], skipNodeModulesBundle: false } };",
@@ -732,21 +891,21 @@ mod tests {
             "export default defineConfig(() => (({ bundle: false, dts: { tsgo: true } }) satisfies UserConfig));",
             "export default defineConfig(() => { return { bundle: false, dts: { tsgo: true } }; });",
         ] {
-            let actual = rewrite_pack_config(input, true);
+            let actual = rewrite_pack_config(input, true, true);
             assert!(actual.contains("unbundle: true"), "{actual}");
             assert!(actual.contains("generator: 'tsgo'"), "{actual}");
             assert!(!actual.contains("tsgo: true"), "{actual}");
-            assert_eq!(rewrite_pack_config(&actual, true), actual);
+            assert_eq!(rewrite_pack_config(&actual, true, true), actual);
         }
     }
 
     #[test]
     fn renames_method_options_without_changing_bodies() {
         let input = "export default defineConfig({ outExtension() { return { js: '.custom.js' }; }, async 'publicDir'() { /* assets */ return ['assets']; } });";
-        let actual = rewrite_pack_config(input, true);
+        let actual = rewrite_pack_config(input, true, true);
         assert!(actual.contains("outExtensions() { return { js: '.custom.js' }; }"), "{actual}");
         assert!(actual.contains("async copy() { /* assets */ return ['assets']; }"), "{actual}");
-        assert_eq!(rewrite_pack_config(&actual, true), actual);
+        assert_eq!(rewrite_pack_config(&actual, true, true), actual);
     }
 
     #[test]
@@ -806,11 +965,11 @@ mod tests {
     #[test]
     fn nested_define_config_calls_are_not_pack_configs() {
         let input = "export default defineConfig({ plugins: [defineConfig({ bundle: false, dts: { tsgo: true } })] });";
-        let actual = rewrite_pack_config(input, true);
+        let actual = rewrite_pack_config(input, true, true);
         assert!(actual.contains("plugins: [defineConfig({ bundle: false, dts: { tsgo: true } })]"));
         assert_eq!(actual.matches("resolveDepSubpath").count(), 1);
-        assert_eq!(rewrite_pack_config(&actual, true), actual);
-        assert_eq!(rewrite_pack_config(input, false), input);
+        assert_eq!(rewrite_pack_config(&actual, true, true), actual);
+        assert_eq!(rewrite_pack_config(input, false, true), input);
     }
 
     #[test]
@@ -886,7 +1045,7 @@ mod tests {
             "{ dts: { tsgo: true, tsgo: false }, deps: { resolveDepSubpath: true } }",
         ] {
             let input = format!("export default {{ pack: {options} }};");
-            assert_eq!(rewrite_pack_config(&input, false), input);
+            assert_eq!(rewrite_pack_config(&input, false, true), input);
         }
         let actual = migrate(
             "{ publicDir: 'old', copy: 'new', injectStyle: true, css: cssOptions, inlineOnly: ['x'], deps: { onlyBundle: ['y'], resolveDepSubpath: false }, dts: { ...dtsOptions, cjsReexport: true }, attw: attwOptions }",
@@ -917,10 +1076,10 @@ mod tests {
             ("export default { pack: ({ bundle: false } satisfies PackConfig) };", false),
             ("export default { pack: { \"bundle\": false, \"dts\": { \"tsgo\": true } } };", false),
         ] {
-            let actual = rewrite_pack_config(input, standalone);
+            let actual = rewrite_pack_config(input, standalone, true);
             assert!(!actual.contains("bundle: false"), "{actual}");
             assert!(actual.contains("resolveDepSubpath: true"), "{actual}");
-            assert_eq!(rewrite_pack_config(&actual, standalone), actual);
+            assert_eq!(rewrite_pack_config(&actual, standalone, true), actual);
         }
         for input in [
             "export default { publicDir: 'vite-public', plugins: [plugin({ bundle: false })] };",
@@ -928,7 +1087,7 @@ mod tests {
             "export default defineConfig({ plugins: [{ config() { return { pack: { bundle: false } }; } }] });",
             "const config = { bundle: false }; export default config;",
         ] {
-            assert_eq!(rewrite_pack_config(input, false), input);
+            assert_eq!(rewrite_pack_config(input, false, true), input);
         }
     }
 
@@ -984,7 +1143,7 @@ mod tests {
                 } else {
                     format!("export default {{ pack: {options} }};")
                 };
-                let actual = rewrite_pack_config(&input, standalone);
+                let actual = rewrite_pack_config(&input, standalone, true);
                 assert!(
                     actual
                         .contains("https://tsdown.dev/options/dependencies#deps-resolvedepsubpath"),
@@ -992,7 +1151,7 @@ mod tests {
                 );
                 assert!(actual.contains("https://tsdown.dev/options/lint#profiles"), "{actual}");
                 assert_eq!(actual.matches("// tsdown <0.23 compatibility:").count(), 2, "{actual}");
-                assert_eq!(rewrite_pack_config(&actual, standalone), actual);
+                assert_eq!(rewrite_pack_config(&actual, standalone, true), actual);
                 let grep = SupportLang::TypeScript.ast_grep(&actual);
                 assert!(!grep.root().dfs().any(|node| node.kind() == "ERROR"), "{actual}");
             }
@@ -1010,7 +1169,7 @@ mod tests {
             "{ deps: { resolveDepSubpath: true } }",
         ] {
             let input = format!("export default {{ pack: {options} }};");
-            assert_eq!(rewrite_pack_config(&input, false), input);
+            assert_eq!(rewrite_pack_config(&input, false, true), input);
         }
     }
 
@@ -1024,8 +1183,8 @@ mod tests {
         assert!(actual.contains(&banner), "{actual}");
 
         let input = "export default {\n  pack: [\n    { entry: 'src/index.ts' },\n  ],\n};";
-        let actual = rewrite_pack_config(input, false);
+        let actual = rewrite_pack_config(input, false, true);
         assert!(actual.contains("\n        // tsdown <0.23 compatibility:"), "{actual}");
-        assert_eq!(rewrite_pack_config(&actual, false), actual);
+        assert_eq!(rewrite_pack_config(&actual, false, true), actual);
     }
 }

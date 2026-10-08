@@ -38,7 +38,7 @@ Options:
   --long                   Show extended information
   --parseable              Parseable output format
   -P, --prod               Only production dependencies
-  -D, --dev                Only dev dependencies
+  -D, --dev                Include dev dependencies
   --no-optional            Exclude optional dependencies
   --exclude-peers          Exclude peer dependencies
   --only-projects          Show only project packages
@@ -48,7 +48,7 @@ Options:
   -g, --global             List global packages
   -h, --help               Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm list`

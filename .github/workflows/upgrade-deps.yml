@@ -39,19 +39,12 @@ jobs:
         working-directory: rolldown
         run: rustup target add x86_64-unknown-linux-gnu
 
-      - name: Upgrade dependencies
-        id: upgrade
+      - name: Upgrade dependencies and sync upstream
+        id: build
+        continue-on-error: true # Create PR even if installation or upstream sync fails
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .github/scripts/upgrade-deps.ts
-
-      - name: Sync remote and build
-        id: build
-        continue-on-error: true # Create PR even if build fails
-        run: |
-          pnpm install --no-frozen-lockfile
-          pnpm tool sync-remote
-          pnpm install --no-frozen-lockfile
 
       - name: Build
         uses: ./.github/actions/build-upstream
@@ -78,7 +71,7 @@ jobs:
       - name: Check upgrade dependencies with Kimi K3
         id: check-upgrade-dependencies
         timeout-minutes: 180
-        uses: anthropics/claude-code-action@a4f54ef2c58884867281bd8e2f8d63352ad019a9 # v1.0.229
+        uses: anthropics/claude-code-action@97c53473391bff1901034d4b454b5bac7ab7a029 # v1.0.239
         env:
           ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
           CLI_HELP_DIFF_CHANGED: ${{ steps.cli-help-diff.outputs.has-changes }}
@@ -105,9 +98,10 @@ jobs:
             }
           prompt: |
             Your goal: after the daily upstream-dependency upgrade, bring the project back
-            to a fully green state. The upgrade script has bumped every dep to its latest
-            supported version, the `Sync remote and build` step has attempted to merge the
-            rolldown and vite catalogs into the workspace, and the `build-upstream` action
+            to a fully green state. The upgrade script has attempted to select the latest
+            supported versions, install dependencies, merge the rolldown and vite catalogs,
+            deduplicate dependencies, and synchronize core's external dependency ranges.
+            The `build-upstream` action
             has attempted a build — your job is to diagnose and fix every error that
             surfaced, then prove the fix is complete by running a final validation pass.
 
@@ -124,15 +118,22 @@ jobs:
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
             - Package manager: `pnpm`. Do not downgrade a dependency selected by the
               upgrade script. Use the latest version that its compatibility policy allows.
+            - After changing tsdown or rolldown-plugin-dts, run
+              `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
+              `pnpm install --no-frozen-lockfile`. Core's external Yuku dependencies
+              must follow the plugin resolved through tsdown. The sync command also
+              copies Vite's postcss and optional fsevents ranges into core and
+              updates the upgrade metadata. `@oxlint/plugins` shares Oxlint's release
+              version and must use the exact same version selected by the upgrade script.
 
             ### Outcomes from earlier steps (both ran with continue-on-error)
-            - Sync remote and build: ${{ steps.build.outcome }}
+            - Upgrade dependencies and sync upstream: ${{ steps.build.outcome }}
             - build-upstream action: ${{ steps.build-upstream.outcome }}
 
             ### Fixups to perform (in order)
-            1. If the `Sync remote and build` outcome above is `failure`, fix it FIRST —
-               nothing else will work until the merged workspace is correct. Re-run
-               `pnpm tool sync-remote` and read the error. The most common cause is a
+            1. If the `Upgrade dependencies and sync upstream` outcome above is `failure`,
+               fix it FIRST — nothing else will work until the merged workspace is correct.
+               Read the failed command in the upgrade log and re-run it. The most common cause is a
                cross-major semver conflict in the merged catalog, e.g.
                `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses to
                auto-resolve cross-major conflicts for packages outside its synced list
@@ -140,8 +141,10 @@ jobs:
                directly (e.g. `diff`, `acorn`, `astring`, anything only present in
                `rolldown/scripts/package.json` or vite's internals), bump vp's
                `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
-               then re-run `pnpm tool sync-remote` until it exits 0. Finish with
-               `pnpm install --no-frozen-lockfile`.
+               then re-run `pnpm tool sync-remote` until it exits 0. Complete the remaining
+               upgrade operations: `pnpm dedupe`,
+               `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
+               `pnpm install --no-frozen-lockfile` before building or testing.
             2. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
                non-zero exits. If the Rust build fails inside a vendored `rolldown`
                crate with an oxc API mismatch (e.g. `oxc_ast::template_element` taking
@@ -228,9 +231,8 @@ jobs:
             actions: read
 
       - name: Update lockfile
-        run: |
-          pnpm install --no-frozen-lockfile
-          pnpm dedupe
+        # Dedupe runs in upgrade-deps.ts, before dependency sync and validation.
+        run: pnpm install --no-frozen-lockfile
 
       - name: Format code
         # `pnpm fmt` runs `vp fmt`, which loads the freshly built NAPI binding. When
@@ -244,7 +246,7 @@ jobs:
       - name: Enhance PR description with Kimi K3
         id: enhance-pr-description
         continue-on-error: true
-        uses: anthropics/claude-code-action@a4f54ef2c58884867281bd8e2f8d63352ad019a9 # v1.0.229
+        uses: anthropics/claude-code-action@97c53473391bff1901034d4b454b5bac7ab7a029 # v1.0.239
         env:
           ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
         with:
@@ -281,7 +283,7 @@ jobs:
               to discover what actually changed beyond the raw version bumps.
 
             ### Build outcomes from earlier steps
-            - Sync remote and build: ${{ steps.build.outcome }}
+            - Upgrade dependencies and sync upstream: ${{ steps.build.outcome }}
             - build-upstream action: ${{ steps.build-upstream.outcome }}
 
             ### Output files to OVERWRITE (these live outside the repo and will NOT be committed)
@@ -318,7 +320,7 @@ jobs:
                the file(s) touched. If the only changes are version bumps + lockfile + generated
                bindings, write `- None beyond version bumps, lockfile, and formatter output.`.
             4. `## Build status` — bullet list:
-               - `sync-remote-and-build`: ${{ steps.build.outcome }}
+               - `upgrade-and-sync`: ${{ steps.build.outcome }}
                - `build-upstream`: ${{ steps.build-upstream.outcome }}
 
             ### Rules

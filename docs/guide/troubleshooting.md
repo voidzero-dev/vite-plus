@@ -8,10 +8,10 @@ Vite+ 1.0 is available. We continue to improve it and welcome community feedback
 
 ## Supported Tool Versions
 
-Vite+ expects modern upstream tool versions.
+Automatic migration requires these minimum versions for existing Vite and Vitest dependencies:
 
-- Vite 8 or newer
-- Vitest 4.1 or newer
+- Vite 7 or newer
+- Vitest 4 or newer
 
 If you are migrating an existing project and it still depends on older Vite or Vitest versions, upgrade those first before adopting Vite+.
 
@@ -93,8 +93,8 @@ When `vite.config.ts` imports plugins at the top level, they are evaluated for e
 Use `lazyPlugins` to skip the plugin factory when vite-plus loads your config only to read a metadata block (`lint`, `fmt`, `check`, `staged`, `pack`, `create`, the `run`/`cache` task lookup, and editor tooling). The plugins still load whenever Vite actually runs, `dev`, `build`, `test`, `preview`, and any build your own scripts spawn (a `vp run` task, `vp exec`):
 
 ```ts [vite.config.ts]
-import { defineConfig, lazyPlugins } from 'vite-plus';
 import myPlugin from 'vite-plugin-foo';
+import { defineConfig, lazyPlugins } from 'vite-plus';
 
 export default defineConfig({
   plugins: lazyPlugins(() => [myPlugin()]),

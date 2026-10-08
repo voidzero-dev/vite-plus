@@ -87,10 +87,8 @@ missing directory fails without entering Bingo prompts
 **Exit code:** 1
 
 ```
-
-Generating project…
-
-Running: node <workspace>/tools/my-generator/bin/index.ts --name demo-pkg --skip-requests
+◇ Generating project…
+● Running: node <workspace>/tools/my-generator/bin/index.ts --name demo-pkg --skip-requests
 Missing --directory. Pass generator options after -- in vp create.
 ```
 
@@ -101,10 +99,8 @@ missing required template option fails before creating its directory
 **Exit code:** 1
 
 ```
-
-Generating project…
-
-Running: node <workspace>/tools/my-generator/bin/index.ts --directory missing-name --skip-requests
+◇ Generating project…
+● Running: node <workspace>/tools/my-generator/bin/index.ts --directory missing-name --skip-requests
 [
   {
     "code": "invalid_type",
@@ -129,20 +125,13 @@ tools/missing-name: missing
 resolve via the registered create.templates entry
 
 ```
-
-Generating project…
-
-Running: node <workspace>/tools/my-generator/bin/index.ts --name demo-pkg --directory demo-pkg --offline --skip-requests
-
-Monorepo integration...
-
-Installing dependencies...
-
-Dependencies installed
-
-Formatting code...
-
-Code formatted
+◇ Generating project…
+● Running: node <workspace>/tools/my-generator/bin/index.ts --name demo-pkg --directory demo-pkg --offline --skip-requests
+◇ Monorepo integration...
+● Installing dependencies...
+● Dependencies installed
+● Formatting code...
+● Code formatted
 ◇ Scaffolded tools/demo-pkg
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>

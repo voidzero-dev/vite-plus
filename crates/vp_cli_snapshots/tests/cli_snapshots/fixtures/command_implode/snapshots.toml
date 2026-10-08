@@ -1,0 +1,27 @@
+[[case]]
+name = "implode_confirmation"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vp", "implode"], comment = "The old confirmation word leaves the installation intact", interactions = [
+    { expect-milestone = "text:implode:ready" },
+    { write-line = "uninstall" },
+  ] },
+  ["vpt", "stat-file", "$VP_HOME", "--assert", "dir"],
+  { argv = ["vp", "implode"], comment = "The command name does not confirm removal", interactions = [
+    { expect-milestone = "text:implode:ready" },
+    { write-line = "implode" },
+  ] },
+  ["vpt", "stat-file", "$VP_HOME", "--assert", "dir"],
+  { argv = ["vp", "implode"], comment = "Empty input cancels removal", interactions = [
+    { expect-milestone = "text:implode:ready" },
+    { write-key = "enter" },
+  ] },
+  ["vpt", "stat-file", "$VP_HOME", "--assert", "dir"],
+  # Cleanup messages differ by platform; assert removal below.
+  { argv = ["vp", "implode"], comment = "boom confirms removal", snapshot = false, interactions = [
+    { expect-milestone = "text:implode:ready" },
+    { write-line = "boom" },
+  ] },
+  ["vpt", "stat-file", "$VP_HOME", "--assert", "missing"],
+]

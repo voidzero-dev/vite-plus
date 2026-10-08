@@ -1,0 +1,16 @@
+{
+  "name": "migration-pack-tsdown-defaults",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

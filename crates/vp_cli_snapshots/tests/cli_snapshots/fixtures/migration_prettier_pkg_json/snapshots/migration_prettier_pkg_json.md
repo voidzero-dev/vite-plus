@@ -7,7 +7,7 @@ migration should detect prettier in package.json and auto-migrate
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Prettier configuration detected. Auto-migrating to Oxfmt...
+● Prettier configuration detected. Auto-migrating to Oxfmt...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
@@ -29,13 +29,6 @@ check prettier key removed, scripts rewritten, dep removed
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

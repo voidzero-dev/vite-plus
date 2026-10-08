@@ -58,9 +58,8 @@ An already migrated project still cleans up a leftover dependency and updates it
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Formatting code...
-
-Code formatted
+● Formatting code...
+● Code formatted
 ◇ Updated . to Vite+ <version>
 • Node <version>  npm <version>
 ✓ Dependencies installed in <duration>

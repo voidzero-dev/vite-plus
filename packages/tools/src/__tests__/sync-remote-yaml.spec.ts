@@ -1,4 +1,4 @@
-import * as semver from 'semver';
+import * as verkit from 'verkit';
 import { describe, expect, test } from 'vitest';
 import * as yaml from 'yaml';
 
@@ -56,7 +56,7 @@ describe('mergeWorkspaceYaml()', () => {
   '@vitest/browser': '^5.2.0'
 `;
 
-    const output = mergeWorkspaceYaml(main, rolldown, vite, yaml, semver);
+    const output = mergeWorkspaceYaml(main, rolldown, vite, yaml, verkit);
 
     expect(yaml.parse(output).catalog).toEqual({
       vitest: '5.1.2',
@@ -64,11 +64,11 @@ describe('mergeWorkspaceYaml()', () => {
       '@vitest/utils': '5.1.2',
     });
     expect(output).toContain('# Keep the runner and official packages on the selected release.');
-    expect(mergeWorkspaceYaml(output, rolldown, vite, yaml, semver)).toBe(output);
+    expect(mergeWorkspaceYaml(output, rolldown, vite, yaml, verkit)).toBe(output);
   });
 
   test('preserves comments from the main workspace', () => {
-    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, semver);
+    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, verkit);
 
     expect(output).toContain('# keep zod on v3 until bingo supports zod 4');
     expect(output).toContain('# bingo introspects template option schemas via zod 3 internals;');
@@ -79,16 +79,16 @@ describe('mergeWorkspaceYaml()', () => {
       yaml.parse(MAIN_SRC),
       yaml.parse(ROLLDOWN_SRC),
       yaml.parse(VITE_SRC),
-      semver,
+      verkit,
     );
 
-    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, semver);
+    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, verkit);
 
     expect(yaml.parse(output)).toEqual(expected);
   });
 
   test('merges upstream catalog entries and dedupes redundant exclude entries', () => {
-    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, semver);
+    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, verkit);
     const parsed = yaml.parse(output);
 
     // Upstream catalog entries merged in, original pin kept.

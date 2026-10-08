@@ -52,7 +52,7 @@ const guideSidebar = [
         ],
       },
       { text: 'Update Vite+', link: '/guide/upgrade-project' },
-      { text: 'Package Management', link: '/guide/install' },
+      { text: 'Package Management', link: '/guide/package-management' },
     ],
   },
   {

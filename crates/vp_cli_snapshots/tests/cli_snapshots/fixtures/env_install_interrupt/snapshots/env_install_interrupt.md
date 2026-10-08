@@ -6,7 +6,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed @scope/long-time-install-package 0.0.0
+ Installed @scope/long-time-install-package 0.0.0
   Bins: long-time-install-package
 ```
 
@@ -45,7 +45,7 @@ Successful reinstall should clean stale packages
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed @scope/long-time-install-package 0.0.0
+ Installed @scope/long-time-install-package 0.0.0
   Bins: long-time-install-package
 ```
 

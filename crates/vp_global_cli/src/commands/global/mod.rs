@@ -293,7 +293,7 @@ fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
                 .iter()
                 .filter_map(|version| version.as_str())
                 .filter_map(|version| {
-                    node_semver::Version::parse(version).ok().map(|parsed| (parsed, version))
+                    js_semver::Version::parse(version).ok().map(|parsed| (parsed, version))
                 })
                 .max_by(|(a, _), (b, _)| a.cmp(b))
                 .map(|(_, version)| version)

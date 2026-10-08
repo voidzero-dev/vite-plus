@@ -12,16 +12,6 @@ inputs:
   void-token:
     description: 'void.app deploy token (pass secrets.VOID_TOKEN).'
     required: true
-  cache-ref:
-    description: >-
-      Ref-scoped segment of the Vite Task cache key: main, or pr-<number> for
-      PR previews. Non-main refs fall back to the main cache on restore.
-    required: false
-    default: 'main'
-  cache-sha:
-    description: 'Commit sha that scopes the primary cache key.'
-    required: false
-    default: ${{ github.sha }}
   site-origin:
     description: >-
       Origin of this deploy when it is not production viteplus.dev
@@ -30,61 +20,37 @@ inputs:
       Leave empty for production.
     required: false
     default: ''
+  remote-cache:
+    description: >-
+      Vite Task remote cache access: read-write, or read for builds that must
+      not upload. read-write requires the caller to grant `id-token: write`.
+    required: false
+    default: 'read-write'
 
 runs:
   using: 'composite'
   steps:
-    # docs/vite.config.ts uses the task cache format of this release. Once a
-    # release requires task cache settings under `cache`, remove this pin and
-    # the one in build-docs-fork-preview.yml, and update docs/vite.config.ts.
     - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
       with:
-        version: 1.0.0-rc.0
+        # Remote caching is not released yet; use the registry bridge build of
+        # https://github.com/voidzero-dev/vite-plus/pull/2842 until it is.
+        version: 0.0.0-commit.11393b1a9ec1739c5897fefd418bdb095a34db7e
         cache: true
         working-directory: docs
         cache-dependency-path: docs/pnpm-lock.yaml
 
-    - name: Compute Vite Task cache keys
-      id: cache-keys
-      shell: bash
-      env:
-        CACHE_REF: ${{ inputs.cache-ref }}
-        CACHE_SHA: ${{ inputs.cache-sha }}
-      run: |
-        prefix="vite-task-docs-${RUNNER_OS}-${RUNNER_ARCH}"
-        {
-          echo "key=${prefix}-${CACHE_REF}-${CACHE_SHA}"
-          echo 'restore-keys<<EOF'
-          echo "${prefix}-${CACHE_REF}-"
-          if [ "$CACHE_REF" != 'main' ]; then
-            echo "${prefix}-main-"
-          fi
-          echo 'EOF'
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Restore docs Vite Task cache
-      id: vite-task-cache
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: docs/node_modules/.vite/task-cache
-        key: ${{ steps.cache-keys.outputs.key }}
-        # Prefer this ref's newest cache; Vite Task fingerprints decide reuse.
-        restore-keys: ${{ steps.cache-keys.outputs.restore-keys }}
-
+    # Vite Task shares the docs build through the remote cache. Uploads
+    # authenticate with a GitHub Actions OIDC token.
     - run: vp run build
       shell: bash
       working-directory: docs
       env:
         DOCS_SITE_ORIGIN: ${{ inputs.site-origin }}
+        VP_REMOTE_CACHE_URL: https://voidzero-remote-cache.voidzero-docs.workers.dev/projects/vite-plus
+        VP_REMOTE_CACHE: ${{ inputs.remote-cache }}
 
-    - name: Save docs Vite Task cache
-      if: success() && steps.vite-task-cache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: docs/node_modules/.vite/task-cache
-        key: ${{ steps.vite-task-cache.outputs.cache-primary-key }}
-
-    - run: vpx void deploy --dir docs/.vitepress/dist
+    # void 0.24 requires a platform connection that these deploy jobs do not configure.
+    - run: vpx void@0.23.0 deploy --dir docs/.vitepress/dist
       shell: bash
       env:
         VOID_PROJECT: ${{ inputs.void-project }}

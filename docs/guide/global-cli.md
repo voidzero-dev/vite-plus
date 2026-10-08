@@ -189,7 +189,7 @@ These management variables are installation choices, saved in Vite+'s config. Th
 
 #### Development variables
 
-Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself. `VP_LOCAL_TGZ` specifies a local `vite-plus.tgz` file. `VP_LOCAL_BINARY` specifies a local `vp` binary. The installers use these files for the local build. They use `VP_DUMP_DIRS=1` to get the layout mode and all five `EnvConfig` category roots from the selected binary. They do not resolve the directory variables. The installers set `VP_INSTALL_STOP`; do not set it manually.
+Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself. `VP_LOCAL_TGZ` specifies a local `vite-plus.tgz` file. `VP_LOCAL_BINARY` specifies a local `vp` binary. The installers use these files for the local build.
 
 ### Runtime Variables
 
@@ -251,10 +251,11 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 #### `VP_BYPASS`
 
 - **Purpose**: Bypass the Vite+ shim and use the system tool
-- **Values**: `PATH`-style list of directories to bypass
-- **Default**: None
+- **Values**: Setting this variable, including to an empty string, enables bypass mode. Its value is a `PATH`-style list of additional directories to exclude from the search. The Vite+ bin directory and Vite+ shims are skipped automatically.
+- **Default**: Unset
 - **Example**:
   ```bash
+  # Find a system Node.js on PATH, excluding /usr/local/bin.
   VP_BYPASS=/usr/local/bin node -v
   ```
 
@@ -289,7 +290,6 @@ Vite+ sets additional `VP_*` variables during shim dispatch and shell integratio
 #### `VP_LOG`
 
 - **Purpose**: Log filter string for `tracing_subscriber`
-- **Installer behavior**: When `CI=true`, `install.sh` hides shell file errors. Set `VP_LOG=trace` to show these errors.
 - **Default**: None
 - **Example**:
   ```bash
@@ -403,7 +403,7 @@ To see which toolchain is selected for your current project, run `vp toolchain`.
 ## Next Steps
 
 - [Environment](/guide/env) covers Node.js and package-manager selection, pinning, shims, and managed installations.
-- [Package Management](/guide/install) covers pnpm, npm, Yarn, and Bun workflows.
+- [Package Management](/guide/package-management) covers pnpm, npm, Yarn, and Bun workflows.
 - [Run](/guide/run) covers package scripts and cached workspace tasks.
 - [Upgrading Vite+](/guide/upgrade) explains global CLI upgrades. See [Update Vite+](/guide/upgrade-project) for project-local upgrades.
 - [Removing Vite+](/guide/implode) removes the global binary and its managed data.

@@ -18,7 +18,7 @@ Options:
   --check     Check if deduplication would make changes
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp dedupe`

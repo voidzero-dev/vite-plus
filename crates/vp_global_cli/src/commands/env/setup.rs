@@ -725,18 +725,52 @@ const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS____vp_bin="__VP_BIN__"
 __vp_fallback="__VP_FALLBACK_BIN__"
-for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
-    while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
-        __vp_tmp=":${PATH}:"
-        __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
-        __vp_before="${__vp_before#:}"
-        __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
-        __vp_after="${__vp_after%:}"
-        PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+# Split PATH on ':' once; repeated `${PATH#*pattern}` stripping is super-linear on long PATHs.
+# A function scopes zsh's option changes; other shells restore noglob and IFS explicitly.
+__vp_dedupe_path() {
+    __vp_ifs_set=${IFS+1}
+    __vp_ifs=${IFS-}
+    IFS=:
+    __vp_glob=
+    if [ -n "${ZSH_VERSION-}" ]; then
+        setopt localoptions shwordsplit noglob
+    else
+        case $- in *f*) ;; *) set -f; __vp_glob=1 ;; esac
+    fi
+    __vp_new=
+    # A non-empty sentinel last field keeps trailing empty entries consistent across shells.
+    __vp_path="${PATH}:."
+    for __vp_dir in $__vp_path; do
+        case "$__vp_dir" in
+            "$__vp_bin"|"$__vp_fallback") ;;
+            *) __vp_new="${__vp_new}:${__vp_dir}" ;;
+        esac
     done
-done
+    if [ -n "$__vp_ifs_set" ]; then IFS=$__vp_ifs; else unset IFS; fi
+    [ -z "$__vp_glob" ] || set +f
+    __vp_new="${__vp_new%:*}"
+    PATH="${__vp_new#:}"
+}
+# Assigning a read-only IFS aborts dash and zsh, so probe it in a subshell first and fall back
+# to stripping each copy with parameter expansion, which leaves IFS and shell options alone.
+if (IFS=:) 2>/dev/null; then
+    __vp_dedupe_path
+else
+    for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
+        while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
+            __vp_tmp=":${PATH}:"
+            __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
+            __vp_before="${__vp_before#:}"
+            __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
+            __vp_after="${__vp_after%:}"
+            PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+        done
+    done
+fi
+unset -f __vp_dedupe_path
 export PATH="${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}"
-unset __vp_bin __vp_fallback __vp_dir __vp_tmp __vp_before __vp_after
+unset __vp_bin __vp_fallback __vp_dir __vp_path __vp_new __vp_ifs __vp_ifs_set __vp_glob \
+    __vp_tmp __vp_before __vp_after
 hash -r 2>/dev/null || true
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
@@ -1928,13 +1962,13 @@ mod tests {
 
                 let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
 
-                // Verify PATH guard structure: loop removes every duplicate.
+                // Verify PATH guard structure: a single split pass drops every duplicate.
                 assert!(
-                    env_content.contains("while case \":${PATH}:\" in"),
+                    env_content.contains("for __vp_dir in $__vp_path; do"),
                     "env file should contain a PATH cleanup loop"
                 );
                 assert!(
-                    env_content.contains("*\":${__vp_dir}:\"*)"),
+                    env_content.contains("\"$__vp_bin\"|\"$__vp_fallback\") ;;"),
                     "env file should check for existing bin in PATH"
                 );
                 // Verify it re-prepends exactly once after cleanup.
@@ -2678,6 +2712,67 @@ vp
             },
         )
         .await;
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_posix_env_dedupes_path_with_readonly_ifs() {
+        use std::{os::unix::fs::PermissionsExt, process::Command};
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin_dir = home.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let fake_vp = bin_dir.join("vp");
+        std::fs::write(&fake_vp, "#!/bin/sh\nexit 0\n").unwrap();
+        let mut permissions = std::fs::metadata(&fake_vp).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_vp, permissions).unwrap();
+
+        vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
+            let env_file = home.join("env");
+            std::fs::write(
+                &env_file,
+                render_env_content(EnvShell::Posix, &vp_shared::EnvConfig::get()),
+            )
+            .unwrap();
+
+            // The first source learns the bin and fallback dirs. The second runs with a
+            // read-only IFS and must still dedupe PATH, define `vp`, and leave globbing on.
+            let script = r#"PATH=/usr/bin:/bin
+. "$1"
+bin=${PATH%%:*}
+fallback=${PATH##*:}
+PATH="$fallback:/usr/bin:$bin:/bin:$bin"
+readonly IFS
+. "$1"
+[ "$PATH" = "$bin:/usr/bin:/bin:$fallback" ] || { echo "PATH=$PATH" >&2; exit 1; }
+set -- "$2"/*
+[ "$1" != "$2/*" ] || { echo "globbing left disabled" >&2; exit 1; }
+command -v vp >/dev/null || { echo "vp wrapper not defined" >&2; exit 1; }
+echo ok
+"#;
+            for shell in ["sh", "dash", "bash", "zsh"] {
+                if Command::new(shell).arg("-c").arg("exit 0").status().is_err() {
+                    continue;
+                }
+                let output = Command::new(shell)
+                    .arg("-c")
+                    .arg(script)
+                    .arg("test-readonly-ifs")
+                    .arg(env_file.as_path())
+                    .arg(temp_dir.path())
+                    .env("HOME", temp_dir.path())
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success() && output.stdout == b"ok\n" && output.stderr.is_empty(),
+                    "{shell}: sourcing env with a read-only IFS failed\nstdout: {}\nstderr: {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        });
     }
 
     #[test]

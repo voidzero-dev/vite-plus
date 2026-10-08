@@ -1,11 +1,13 @@
 import type { Writable } from 'node:stream';
 
 import { getColumns } from '@clack/core';
+import stringWidth from 'fast-string-width';
 import color from 'picocolors';
 import { erase } from 'sisteransi';
 
 import {
   type CommonOptions,
+  getGuide,
   completeColor,
   isCI as isCIFn,
   isTTY as isTTYFn,
@@ -51,15 +53,18 @@ export const taskLog = (opts: TaskLogOptions) => {
   const output: Writable = opts.output ?? process.stdout;
   const columns = getColumns(output);
   const secondarySymbol = color.gray(S_BAR);
-  const spacing = opts.spacing ?? 1;
-  const barSize = 3;
+  const spacing = opts.spacing ?? 0;
+  const hasGuide = getGuide(opts);
+  const barSize = hasGuide ? 2 : 0;
   const retainLog = opts.retainLog === true;
   const isTTY = !isCIFn() && isTTYFn(output);
 
-  output.write(`${secondarySymbol}\n`);
-  output.write(`${completeColor(S_STEP_SUBMIT)}  ${opts.title}\n`);
-  for (let i = 0; i < spacing; i++) {
+  if (hasGuide) {
     output.write(`${secondarySymbol}\n`);
+  }
+  output.write(`${completeColor(S_STEP_SUBMIT)} ${opts.title}\n`);
+  for (let i = 0; i < spacing; i++) {
+    output.write(`${hasGuide ? secondarySymbol : ''}\n`);
   }
 
   const buffers: BufferEntry[] = [
@@ -71,14 +76,14 @@ export const taskLog = (opts: TaskLogOptions) => {
   let lastMessageWasRaw = false;
 
   const clear = (clearTitle: boolean): void => {
-    if (buffers.length === 0) {
+    if (!isTTY || buffers.length === 0) {
       return;
     }
 
     let lines = 0;
 
     if (clearTitle) {
-      lines += spacing + 2;
+      lines += spacing + 1 + (hasGuide ? 1 : 0);
     }
 
     for (const buffer of buffers) {
@@ -97,7 +102,7 @@ export const taskLog = (opts: TaskLogOptions) => {
         if (line === '') {
           return count + 1;
         }
-        return count + Math.ceil((line.length + barSize) / columns);
+        return count + Math.ceil((stringWidth(line) + (result ? 2 : barSize)) / columns);
       }, 0);
 
       lines += bufferHeight;
@@ -113,15 +118,17 @@ export const taskLog = (opts: TaskLogOptions) => {
     if (buffer.header !== undefined && buffer.header !== '') {
       log.message(buffer.header.split('\n').map(color.bold), {
         output,
+        withGuide: hasGuide,
         secondarySymbol,
-        symbol: secondarySymbol,
+        symbol: hasGuide ? secondarySymbol : undefined,
         spacing: 0,
       });
     }
     log.message(messages.split('\n').map(color.dim), {
       output,
+      withGuide: hasGuide,
       secondarySymbol,
-      symbol: secondarySymbol,
+      symbol: hasGuide ? secondarySymbol : undefined,
       spacing: messageSpacing ?? spacing,
     });
   };
@@ -160,9 +167,19 @@ export const taskLog = (opts: TaskLogOptions) => {
     for (const buffer of buffers) {
       if (buffer.result) {
         if (buffer.result.status === 'error') {
-          log.error(buffer.result.message, { output, secondarySymbol, spacing: 0 });
+          log.error(buffer.result.message, {
+            output,
+            withGuide: hasGuide,
+            secondarySymbol,
+            spacing: 0,
+          });
         } else {
-          log.success(buffer.result.message, { output, secondarySymbol, spacing: 0 });
+          log.success(buffer.result.message, {
+            output,
+            withGuide: hasGuide,
+            secondarySymbol,
+            spacing: 0,
+          });
         }
       } else if (buffer.value !== '') {
         printBuffer(buffer, 0);
@@ -210,7 +227,7 @@ export const taskLog = (opts: TaskLogOptions) => {
     },
     error(message: string, opts?: TaskLogCompletionOptions): void {
       clear(true);
-      log.error(message, { output, secondarySymbol, spacing: 1 });
+      log.error(message, { output, withGuide: hasGuide, secondarySymbol, spacing });
       if (opts?.showLog !== false) {
         renderBuffer();
       }
@@ -221,7 +238,7 @@ export const taskLog = (opts: TaskLogOptions) => {
     },
     success(message: string, opts?: TaskLogCompletionOptions): void {
       clear(true);
-      log.success(message, { output, secondarySymbol, spacing: 1 });
+      log.success(message, { output, withGuide: hasGuide, secondarySymbol, spacing: 1 });
       if (opts?.showLog === true) {
         renderBuffer();
       }

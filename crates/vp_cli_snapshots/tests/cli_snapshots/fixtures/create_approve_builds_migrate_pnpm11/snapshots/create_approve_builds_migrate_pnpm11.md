@@ -5,8 +5,7 @@
 template ships Prettier, so create installs+migrates before the main install; the gated build (core-js) must still be surfaced and approved
 
 ```
-
-Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.
+▲ Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.
 ◇ Scaffolded approved-app
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>
@@ -37,12 +36,9 @@ peerDependencyRules:
 default run surfaces the gated build with guidance, leaving it unapproved
 
 ```
-
-Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.
-
-Build scripts were not run for: core-js.
-
-These dependencies may not work until built. Run vp pm approve-builds in the project to approve them, or re-create with --approve-builds.
+▲ Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.
+▲ Build scripts were not run for: core-js.
+● These dependencies may not work until built. Run vp pm approve-builds in the project to approve them, or re-create with --approve-builds.
 ◇ Scaffolded default-app
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>

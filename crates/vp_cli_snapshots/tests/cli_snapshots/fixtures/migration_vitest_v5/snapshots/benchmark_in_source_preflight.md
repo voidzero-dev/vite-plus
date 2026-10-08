@@ -23,11 +23,11 @@ Block unsupported in-source benchmark options before dependency changes and reta
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item (1 block dependency updates)
+▲ Vitest v5: 1 review item (1 block dependency updates)
 
-perf/work.js
-  2:11 BLOCK [benchmark-api] Migrate this import.meta.vitest bench reference manually: automatic migration requires direct calls with locally resolved zero-argument callbacks and no benchmark options or escaped references. Keep the import.meta.vitest guard.
-    Docs: https://vitest.dev/guide/migration/#benchmarking-api-rewrite
+  perf/work.js
+    2:11 BLOCK [benchmark-api] Migrate this import.meta.vitest bench reference manually: automatic migration requires direct calls with locally resolved zero-argument callbacks and no benchmark options or escaped references. Keep the import.meta.vitest guard.
+      Docs: https://vitest.dev/guide/migration/#benchmarking-api-rewrite
 Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.
 ```
 

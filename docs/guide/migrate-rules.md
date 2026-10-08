@@ -7,7 +7,7 @@ Except for [Before You Migrate](#before-you-migrate), which lists steps you take
 ## Before You Migrate
 
 1. Run `vp upgrade` so the global CLI has the latest migration rules. A stale local `vite-plus` is not a blocker: when the project's local copy is older, migration delegates to the global CLI.
-2. Upgrade the project to Vite 8+ and Vitest 4.1+ when necessary.
+2. Upgrade the project to Vite 7+ and Vitest 4+ when necessary.
 3. Run `vp migrate` from the workspace root. Use `--no-interactive` in automated environments.
 4. Review every changed manifest, package-manager config, source rewrite, and generated lockfile.
 5. Validate with `vp install`, `vp check`, `vp test`, and `vp build`.
@@ -42,7 +42,7 @@ When a default upgrade skips setup actions that would apply, it prints a hint to
 | `dts.cjsReexport`                                                  | Removed; tsdown generates CJS declarations separately                                 |
 | `--public-dir` in `tsdown` or `vp pack` scripts                    | `--copy`                                                                              |
 
-Migration preserves the previous defaults by setting `deps.resolveDepSubpath` to `true` when absent. Enabled ATTW checks receive `profile: 'strict'` when no profile is set. Explicit values, including `false`, remain unchanged.
+Migration checks the project's installed tsdown version before the final dependency install. For Vite+ pack configs, it reads the installed `vite-plus/dist/toolchain.json`. This includes `tsdown.config.*` files that already import `vite-plus/pack` before migration rewrites imports. Standalone tsdown configs use their installed tsdown version. Older Vite+ installations without this manifest retain the legacy defaults. For tsdown 0.23 or later, it does not insert compatibility defaults. For older or unknown versions, it preserves the previous defaults by setting `deps.resolveDepSubpath` to `true` when absent. Enabled ATTW checks receive `profile: 'strict'` when no profile is set. Explicit values, including `false`, remain unchanged.
 
 The inserted settings include comments with documentation links and instructions for adopting the new defaults. Remove `deps.resolveDepSubpath: true` to [preserve external subpath imports as written](https://tsdown.dev/options/dependencies#deps-resolvedepsubpath). Remove the inserted `attw.profile: 'strict'` to use the new `esm-only` [resolution profile](https://tsdown.dev/options/lint#profiles). This skips `node10` and CommonJS resolution checks. Keep either setting if your package requires the previous behavior. Migration does not add these comments to explicit settings.
 
@@ -95,6 +95,14 @@ It also warns about tasks in a `vite.config.*` object that is not the exported c
 With `cache: false`, the moved settings would have no effect, so decide whether to remove them or enable caching. On a project that is otherwise up to date, `vp migrate` prints these warnings without running the rest of the migration.
 
 ## Dependency Rules
+
+Migration preserves the project's package-manager declaration policy. An
+existing `packageManager` or `devEngines.packageManager` field remains the
+source of truth, while a project that relies only on its lockfile remains
+unpinned. In particular, migration does not turn the package-manager version
+used for its own install into a new exact requirement for contributors or CI.
+When migration infers an undeclared package manager, it prints a warning and
+points to `vp env pin` for projects that want to opt into an explicit pin.
 
 What happens to each toolchain dependency, at a glance:
 

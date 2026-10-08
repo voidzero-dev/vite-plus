@@ -83,8 +83,6 @@ pub struct MergeJsonConfigResult {
     pub content: String,
     /// Whether any changes were made
     pub updated: bool,
-    /// Whether the config uses a function callback
-    pub uses_function_callback: bool,
 }
 
 /// Merge JSON configuration file into vite config file
@@ -103,7 +101,6 @@ pub struct MergeJsonConfigResult {
 /// Returns a `MergeJsonConfigResult` containing:
 /// - `content`: The updated vite config content
 /// - `updated`: Whether any changes were made
-/// - `usesFunctionCallback`: Whether the config uses a function callback
 ///
 /// # Example
 ///
@@ -126,11 +123,7 @@ pub fn merge_json_config(
     )
     .map_err(anyhow::Error::from)?;
 
-    Ok(MergeJsonConfigResult {
-        content: result.content,
-        updated: result.updated,
-        uses_function_callback: result.uses_function_callback,
-    })
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Set the value of a top-level config key in a vite config file (upsert)
@@ -177,11 +170,7 @@ pub fn upsert_json_config(
     )
     .map_err(anyhow::Error::from)?;
 
-    Ok(MergeJsonConfigResult {
-        content: result.content,
-        updated: result.updated,
-        uses_function_callback: result.uses_function_callback,
-    })
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Whether `config_key` is already declared as a top-level property in the
@@ -206,11 +195,7 @@ pub fn remove_config_key(
     let result =
         vp_migration::remove_config_key(&content, &config_key).map_err(anyhow::Error::from)?;
 
-    Ok(MergeJsonConfigResult {
-        content: result.content,
-        updated: result.updated,
-        uses_function_callback: result.uses_function_callback,
-    })
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Error from batch import rewriting
@@ -250,7 +235,6 @@ pub struct BatchRewriteResult {
 /// Returns a `MergeJsonConfigResult` containing:
 /// - `content`: The updated vite config content
 /// - `updated`: Whether any changes were made
-/// - `usesFunctionCallback`: Whether the config uses a function callback
 ///
 /// # Example
 ///
@@ -269,11 +253,7 @@ pub fn merge_tsdown_config(
         vp_migration::merge_tsdown_config(Path::new(&vite_config_path), &tsdown_config_path)
             .map_err(anyhow::Error::from)?;
 
-    Ok(MergeJsonConfigResult {
-        content: result.content,
-        updated: result.updated,
-        uses_function_callback: result.uses_function_callback,
-    })
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Wrap safe inline `plugins: [...]` arrays in recognized Vite config objects
@@ -284,11 +264,7 @@ pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResu
     let result = vp_migration::wrap_lazy_plugins(Path::new(&vite_config_path))
         .map_err(anyhow::Error::from)?;
 
-    Ok(MergeJsonConfigResult {
-        content: result.content,
-        updated: result.updated,
-        uses_function_callback: result.uses_function_callback,
-    })
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Result of moving task cache settings under `cache`

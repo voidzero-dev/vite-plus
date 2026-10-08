@@ -53,10 +53,18 @@ steps = [{ argv = ["node", "install.mjs", "interactive", "failure"], interaction
 name = "installation_progress_non_tty"
 vp = "global"
 skip-platforms = ["windows"]
-steps = [{ argv = ["node", "install.mjs"], tty = false }]
+steps = [{ argv = ["node", "install.mjs"], tty = false, formatted-snapshot = true }]
 
 [[case]]
 name = "installation_progress_ci"
 vp = "global"
 skip-platforms = ["windows"]
-steps = [{ argv = ["node", "install.mjs"], envs = [["CI", "1"]] }]
+# The installer captures stdout while setup diagnostics retain the terminal on stderr.
+steps = [{ argv = ["node", "install.mjs"], envs = [["CI", "1"]], formatted-snapshot = true }]
+
+[[case]]
+name = "installation_progress_no_color"
+vp = "global"
+skip-platforms = ["windows"]
+env = { CI = "1", NO_COLOR = "1" }
+steps = [{ argv = ["node", "install.mjs"], formatted-snapshot = true }]

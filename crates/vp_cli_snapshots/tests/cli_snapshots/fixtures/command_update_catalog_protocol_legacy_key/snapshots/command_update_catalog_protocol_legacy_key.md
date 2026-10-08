@@ -9,9 +9,8 @@ migrate pins the toolchain through the workspace catalog
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Formatting code...
-
-Code formatted
+● Formatting code...
+● Code formatted
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>
@@ -44,12 +43,6 @@ peerDependencyRules:
 
 nothing to update, yet the bare key still resolves the catalog reference away
 
-```
-✓ Lockfile passes supply-chain policies (verified <duration> ago)
-Already up to date
-
-Done in <duration> using pnpm <version>
-```
 
 ## `vpt print-file package.json`
 
@@ -74,9 +67,8 @@ the bare key reads as pending, so one migrate repairs it
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Formatting code...
-
-Code formatted
+● Formatting code...
+● Code formatted
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>
@@ -104,12 +96,6 @@ peerDependencyRules:
 
 update is now a no-op on the catalog reference
 
-```
-✓ Lockfile passes supply-chain policies (verified <duration> ago)
-Already up to date
-
-Done in <duration> using pnpm <version>
-```
 
 ## `vpt print-file package.json`
 

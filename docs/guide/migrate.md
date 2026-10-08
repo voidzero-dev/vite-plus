@@ -65,7 +65,7 @@ For the Vitest v5 upgrade, read the [compatibility settings and review checklist
 
 Before running the migration:
 
-- For projects that do not use Vite+ yet, upgrade to Vite 8+ and Vitest 4.1+ first
+- For projects that do not use Vite+ yet, upgrade to Vite 7+ and Vitest 4+ first
 - Make sure you understand any existing lint, format, or test setup that should be preserved
 
 After running the migration:
@@ -95,21 +95,21 @@ Upgrade the [global CLI](./upgrade.md#global-vp) to your target 1.0 release, the
 
 ### Without the Global CLI
 
-Use an existing Node.js runtime that satisfies `^22.18.0 || ^24.11.0 || >=26.0.0`. Run the target migrator through your package manager without adding it to the project first. For the `1.0.0` release:
+Use an existing Node.js runtime that satisfies `^22.18.0 || ^24.11.0 || >=26.0.0`. Run the target migrator through your package manager without adding it to the project first. For the `1.1.0` release:
 
 ::: code-group
 
 ```bash [pnpm]
-pnpm dlx --package=vite-plus@1.0.0 vp migrate --no-interactive
+pnpm dlx --package=vite-plus@1.1.0 vp migrate --no-interactive
 ```
 
 ```bash [npm]
-npx --package=vite-plus@1.0.0 vp migrate --no-interactive
+npx --package=vite-plus@1.1.0 vp migrate --no-interactive
 ```
 
 :::
 
-Replace `1.0.0` with your target release. For a preview, use the version from the PR and pass `--registry=https://registry-bridge.viteplus.dev` to `pnpm` or `npx` before the `vp` command. Keep the version in `--package` explicit so you run the target migrator rather than the old local CLI.
+Replace `1.1.0` with your target release. For a preview, use the version from the PR and pass `--registry=https://registry-bridge.viteplus.dev` to `pnpm` or `npx` before the `vp` command. Keep the version in `--package` explicit so you run the target migrator rather than the old local CLI.
 
 After migration, finish dependency installation and validate with the updated local CLI:
 
@@ -151,7 +151,7 @@ View and copy this prompt into your coding agent to upgrade an existing Vite+ 0.
 
 ### Vitest
 
-Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@5.0.1` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
+Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@5.0.3` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
 
 For browser mode, you can use the base browser runtime (`@vitest/browser`) and Preview provider (`@vitest/browser-preview`) included in `vite-plus`. To use Playwright or WebDriverIO, you also need the opt-in provider (`@vitest/browser-playwright` or `@vitest/browser-webdriverio`) and its framework peer (`playwright` or `webdriverio`).
 
@@ -163,9 +163,9 @@ If you are migrating manually, update all the imports to `vite-plus/test*` inste
 
 ```ts
 // before
-import { defineConfig } from 'vitest/config';
-import { describe, expect, it, vi } from 'vitest';
 import { playwright } from '@vitest/browser-playwright';
+import { describe, expect, it, vi } from 'vitest';
+import { defineConfig } from 'vitest/config';
 
 const { page } = await import('@vitest/browser/context');
 
@@ -183,7 +183,7 @@ const { page } = await import('vite-plus/test/browser/context');
 
 `vp migrate` updates supported static options in `pack` blocks and `tsdown.config.*` for tsdown 0.23. This also runs for existing Vite+ projects and workspace packages without `--full`. See [Pack Configuration](./migrate-rules.md#pack-configuration) for the option mappings and cases that require manual review.
 
-The transform preserves earlier defaults by inserting `deps.resolveDepSubpath: true` and, when ATTW checks are enabled, `attw.profile: 'strict'` if these settings are absent. Each inserted setting includes a `tsdown <0.23 compatibility` comment with a documentation link and removal guidance. Explicit settings remain unchanged.
+When the project's installed tsdown version is older than 0.23 or cannot be determined, the transform preserves earlier defaults by inserting `deps.resolveDepSubpath: true` and, when ATTW checks are enabled, `attw.profile: 'strict'` if these settings are absent. For Vite+ pack configs, it reads the installed `vite-plus/dist/toolchain.json`. This includes `tsdown.config.*` files that already import `vite-plus/pack` before migration rewrites imports. Standalone tsdown configs use their installed tsdown version. Older Vite+ installations without this manifest retain the legacy defaults. Projects already using tsdown 0.23 or later do not receive these defaults. Each inserted setting includes a `tsdown <0.23 compatibility` comment with a documentation link and removal guidance. Explicit settings remain unchanged.
 
 Keep these settings for the first `vp pack` run. After validation, review whether your package can adopt the new defaults:
 
@@ -229,7 +229,7 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   staged: {
-    '*.{js,ts,tsx,vue,svelte}': 'vp check --fix',
+    '*': 'vp check --fix',
   },
 });
 ```

@@ -1,3 +1,6 @@
 /vp-setup https://setup.viteplus.dev 302
+/guide/install /guide/package-management 301
+/guide/install.html /guide/package-management 301
+/guide/install.md /guide/package-management.md 301
 /guide/installer-env-vars /guide/global-cli 301
 /guide/installer-env-vars.html /guide/global-cli 301

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { globSync } from 'glob';
-import semver from 'semver';
+import { normalize, normalizeRange } from 'verkit';
 import { parse as parseYaml } from 'yaml';
 
 import { type DownloadPackageManagerResult } from '../../../binding/index.js';
@@ -112,7 +112,7 @@ export function parseNvmrcVersion(alias: string): string | null {
 
   // Strip optional 'v' prefix, then validate as a semver version or range
   const normalized = version.startsWith('v') ? version.slice(1) : version;
-  if (!normalized || !semver.validRange(normalized)) {
+  if (!normalized || !normalizeRange(normalized)) {
     return null;
   }
   return normalized;
@@ -257,7 +257,7 @@ export function migrateNodeVersionManagerFile(
     // Normalize Volta's "lts" alias to the .node-version compatible form
     const resolvedVersion = voltaNodeVersion === 'lts' ? 'lts/*' : voltaNodeVersion;
 
-    if (!semver.valid(resolvedVersion) && resolvedVersion !== 'lts/*') {
+    if (!normalize(resolvedVersion) && resolvedVersion !== 'lts/*') {
       warnMigration(
         `package.json volta.node "${voltaNodeVersion}" is not an exact version. Pin an exact version (e.g. ${voltaNodeVersion}.0 or run \`volta pin node@${voltaNodeVersion}\`) then re-run migration.`,
         report,
