@@ -59,10 +59,11 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: ${{ inputs.cache-key }}
 
-      - name: Rustup Adds Target
-        run: rustup target add ${{ matrix.settings.target }}
+      - parallel:
+          - name: Rustup Adds Target
+            run: rustup target add ${{ matrix.settings.target }}
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       - name: Set build version
         shell: bash
@@ -117,35 +118,36 @@ jobs:
         with:
           target: ${{ matrix.settings.target }}
 
-      - name: Upload Vite+ native artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vite-plus-native-${{ matrix.settings.target }}
-          path: ./packages/cli/binding/*.node
-          if-no-files-found: error
+      - parallel:
+          - name: Upload Vite+ native artifact
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            with:
+              name: vite-plus-native-${{ matrix.settings.target }}
+              path: ./packages/cli/binding/*.node
+              if-no-files-found: error
 
-      - name: Upload Rust CLI binary artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vp-global-cli-${{ matrix.settings.target }}
-          path: |
-            ./target/${{ matrix.settings.target }}/release/vp
-            ./target/${{ matrix.settings.target }}/release/vp.exe
-            ./target/${{ matrix.settings.target }}/release/vp-shim.exe
-          if-no-files-found: error
+          - name: Upload Rust CLI binary artifact
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            with:
+              name: vp-global-cli-${{ matrix.settings.target }}
+              path: |
+                ./target/${{ matrix.settings.target }}/release/vp
+                ./target/${{ matrix.settings.target }}/release/vp.exe
+                ./target/${{ matrix.settings.target }}/release/vp-shim.exe
+              if-no-files-found: error
 
-      - name: Package release archive
-        shell: bash
-        working-directory: ./target/${{ matrix.settings.target }}/release
-        run: |
-          mkdir -p sync-versions
-          cp ../../../packages/cli/dist/sync-versions/bin.mjs sync-versions/bin.mjs
-          cp ../../../packages/cli/dist/toolchain.json toolchain.json
-          if [ -f vp.exe ]; then
-            7z a "vp-${{ matrix.settings.target }}.zip" vp.exe vp-shim.exe sync-versions/bin.mjs toolchain.json
-          else
-            tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp sync-versions/bin.mjs toolchain.json
-          fi
+          - name: Package release archive
+            shell: bash
+            working-directory: ./target/${{ matrix.settings.target }}/release
+            run: |
+              mkdir -p sync-versions
+              cp ../../../packages/cli/dist/sync-versions/bin.mjs sync-versions/bin.mjs
+              cp ../../../packages/cli/dist/toolchain.json toolchain.json
+              if [ -f vp.exe ]; then
+                7z a "vp-${{ matrix.settings.target }}.zip" vp.exe vp-shim.exe sync-versions/bin.mjs toolchain.json
+              else
+                tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp sync-versions/bin.mjs toolchain.json
+              fi
 
       - name: Verify packaged sync-versions planner
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
@@ -188,66 +190,68 @@ jobs:
             }
           ' "${archive_dir}/plan.json" "${VERSION}"
 
-      - name: Upload release archive
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vp-release-archive-${{ matrix.settings.target }}
-          path: |
-            ./target/${{ matrix.settings.target }}/release/vp-*.tar.gz
-            ./target/${{ matrix.settings.target }}/release/vp-*.zip
-          if-no-files-found: error
+      - parallel:
+          - name: Upload release archive
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            with:
+              name: vp-release-archive-${{ matrix.settings.target }}
+              path: |
+                ./target/${{ matrix.settings.target }}/release/vp-*.tar.gz
+                ./target/${{ matrix.settings.target }}/release/vp-*.zip
+              if-no-files-found: error
 
-      - name: Upload installer binary artifact (Windows only)
-        if: contains(matrix.settings.target, 'windows')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vp-setup-${{ matrix.settings.target }}
-          path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
-          if-no-files-found: error
+          - name: Upload installer binary artifact (Windows only)
+            if: contains(matrix.settings.target, 'windows')
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            with:
+              name: vp-setup-${{ matrix.settings.target }}
+              path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
+              if-no-files-found: error
 
       - name: Remove .node files before upload dist
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         run: |
           rm ./packages/core/dist/**/*.node
 
-      - name: Upload core dist
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        with:
-          name: core
-          path: ./packages/core/dist
-          if-no-files-found: error
+      - parallel:
+          - name: Upload core dist
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+            with:
+              name: core
+              path: ./packages/core/dist
+              if-no-files-found: error
 
-      - name: Upload prompts dist
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        with:
-          name: prompts
-          path: ./packages/prompts/dist
-          if-no-files-found: error
+          - name: Upload prompts dist
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+            with:
+              name: prompts
+              path: ./packages/prompts/dist
+              if-no-files-found: error
 
-      - name: Upload cli dist
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        with:
-          name: cli
-          path: ./packages/cli/dist
-          if-no-files-found: error
+          - name: Upload cli dist
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+            with:
+              name: cli
+              path: ./packages/cli/dist
+              if-no-files-found: error
 
-      - name: Upload cli docs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        with:
-          name: cli-docs
-          path: ./packages/cli/docs
-          if-no-files-found: error
+          - name: Upload cli docs
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+            with:
+              name: cli-docs
+              path: ./packages/cli/docs
+              if-no-files-found: error
 
-      - name: Upload LICENSE files
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        with:
-          name: licenses
-          path: |
-            ./packages/core/LICENSE
-            ./packages/cli/LICENSE
-          if-no-files-found: error
+          - name: Upload LICENSE files
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+            with:
+              name: licenses
+              path: |
+                ./packages/core/LICENSE
+                ./packages/cli/LICENSE
+              if-no-files-found: error
