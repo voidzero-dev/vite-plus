@@ -31,9 +31,18 @@ jobs:
           package-manager-cache: false
       - name: Test preview documentation origin
         run: node --test .github/scripts/__tests__/preview-docs-origin.mjs
-      - name: Use fixed documentation origin
+      - name: Resolve preview documentation origin
         id: docs
-        run: echo "origin=https://viteplus.dev" >> "$GITHUB_OUTPUT"
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            context.payload.pull_request ??= {
+              number: 2961,
+              head: { ref: 'perf/parallel-ci-steps', repo: { full_name: 'voidzero-dev/vite-plus' } },
+              base: { repo: { full_name: 'voidzero-dev/vite-plus' } },
+            };
+            const { previewDocsOrigin } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/preview-docs-origin.ts`);
+            core.setOutput('origin', previewDocsOrigin(context.payload.pull_request));
       - name: Compute version
         id: version
         run: echo "version=0.0.0-commit.eae7a8b1ed8570ba348d55ac5c83be9bc15cf56e" >> "$GITHUB_OUTPUT"

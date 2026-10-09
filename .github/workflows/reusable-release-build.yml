@@ -16,7 +16,7 @@ permissions: {}
         description: Documentation origin compiled into the native CLI, NAPI binding, and installer.
         type: string
         required: false
-        default: https://viteplus.dev
+        default: 'https://viteplus.dev'
       cache_state:
         type: string
         required: true
