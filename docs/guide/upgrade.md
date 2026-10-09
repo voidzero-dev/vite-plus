@@ -41,6 +41,12 @@ vp upgrade <version>              # install a specific version
 vp upgrade --registry <registry>  # use a custom npm registry
 ```
 
+### Automatic Update Checks
+
+The global CLI checks for updates in the background during normal terminal use, caching results for 24 hours. When a newer version is available, it prints a notice to stderr without installing it.
+
+Set `VP_NO_UPDATE_CHECK=1` to disable these checks and notices. They are also disabled in CI and for Homebrew installations.
+
 ### Move an Existing Install to the Split Directory Layout
 
 Vite+ 0.3.0 is the first release that supports the split directory layout. Vite+ 0.2.x and earlier use the single-root layout for fresh installs and upgrades.
