@@ -85,6 +85,7 @@ jobs:
           key: ${{ env.VP_CI_BENCH_PREFIX }}-preview-pack-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
           lookup-only: ${{ env.VP_CI_BENCH_CACHE_STATE == 'cold' }}
           fail-on-cache-miss: ${{ env.VP_CI_BENCH_CACHE_STATE == 'warm' }}
+        if: ${{ inputs.cache_state == 'cold' }}
       - name: Install dependencies
         run: pnpm install
       - name: Set preview package versions
@@ -157,3 +158,4 @@ run-name: Preview / before / ${{ inputs.cache_state }}
 env:
   VP_CI_BENCH_CACHE_STATE: ${{ inputs.cache_state }}
   VP_CI_BENCH_PREFIX: vp-ci-cache-2961-v1
+  VP_CI_BENCH_DEPENDENCY_CACHE_STATE: ${{ inputs.cache_state }}

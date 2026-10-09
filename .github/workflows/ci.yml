@@ -104,6 +104,8 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: windows-cross
           tools: cargo-nextest
+        env:
+          VP_CI_BENCH_CACHE_STATE: cold
       - name: Check Windows target
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
@@ -1357,3 +1359,4 @@ run-name: CI / before / ${{ inputs.cache_state }}
 env:
   VP_CI_BENCH_CACHE_STATE: ${{ inputs.cache_state }}
   VP_CI_BENCH_PREFIX: vp-ci-cache-2961-v1
+  VP_CI_BENCH_DEPENDENCY_CACHE_STATE: ${{ inputs.cache_state }}
