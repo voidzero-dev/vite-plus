@@ -253,11 +253,11 @@ $ vp build
 vp run: 0/2 cache hit (0%).
 ```
 
-Each sub-task has its own cache entry. If only `.ts` files changed but lint still passes, only `vp build` runs again the next time `vp run --cache check` is called:
+Each sub-task has its own cache entry. For example, if a file used only by the build changes, such as `index.html`, only the build runs again the next time `vp run --cache check` is called:
 
 ```
 $ vp lint ◉ cache hit, replaying
-$ vp build ○ cache miss: 'src/index.ts' modified, executing
+$ vp build ○ cache miss: 'index.html' modified, executing
 ✓ built in 30ms
 
 ---
