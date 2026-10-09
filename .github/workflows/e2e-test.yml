@@ -1,28 +1,22 @@
-name: Ecosystem CI
-
+name: Ecosystem cache benchmark (after)
 permissions: {}
-
-on:
+'on':
   workflow_dispatch:
-  schedule:
-    # Run every day at 0:00 GMT (8:00 AM Singapore time)
-    - cron: '0 0 * * *'
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - '**/*.md'
-  pull_request:
-    types: [opened, synchronize, labeled]
-
+    inputs:
+      cache_state:
+        description: Restore isolated benchmark caches, or build without restored caches.
+        type: choice
+        options:
+          - cold
+          - warm
+        required: true
+        default: cold
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.ref_name != 'main' }}
-
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 defaults:
   run:
     shell: bash
-
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -30,62 +24,36 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      related-files-changed: ${{ steps.filter.outputs.related-files }}
+      related-files-changed: 'true'
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        id: filter
-        with:
-          filters: |
-            related-files:
-              - 'packages/**/build.ts'
-              - .github/workflows/e2e-test.yml
-              - 'ecosystem-ci/*'
-
+      - name: Use full ecosystem matrix
+        run: echo "Benchmark uses the complete ecosystem matrix"
   download-previous-rolldown-binaries:
     needs: detect-changes
     runs-on: ubuntu-latest
-    # Run if: not a PR, OR PR has 'test: e2e' label, OR PR is from the deps/upstream-update or a renovate/** dependency branch, OR build.ts files changed
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'test: e2e') ||
-      github.head_ref == 'deps/upstream-update' ||
-      startsWith(github.head_ref, 'renovate/') ||
-      needs.detect-changes.outputs.related-files-changed == 'true'
+    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: e2e') || github.head_ref == 'deps/upstream-update' || startsWith(github.head_ref, 'renovate/') || needs.detect-changes.outputs.related-files-changed == 'true'"
     permissions:
       contents: read
       packages: read
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/download-rolldown-binaries
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-  # Cross-compile the Windows vite-plus binding + vp binaries on Linux so the
-  # build job's windows-latest entry only runs the (fast) JS/pack pass with
-  # skip-native, instead of the ~24m native Rust compile. The core/rolldown
-  # bundling stays on Windows (it is host-platform specific), so this can't be
-  # folded into the build job. Shares ci.yml's windows-cli-xwin cache.
   build-windows-cli:
     needs: detect-changes
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'test: e2e') ||
-      github.head_ref == 'deps/upstream-update' ||
-      startsWith(github.head_ref, 'renovate/') ||
-      needs.detect-changes.outputs.related-files-changed == 'true'
+    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: e2e') || github.head_ref == 'deps/upstream-update' || startsWith(github.head_ref, 'renovate/') || needs.detect-changes.outputs.related-files-changed == 'true'"
     name: Build Windows CLI binaries
     runs-on: namespace-profile-linux-x64-default
     permissions:
       contents: read
       packages: read
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
       - uses: ./.github/actions/build-windows-cli
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-
   build:
     name: Build vite-plus packages (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -104,47 +72,35 @@ jobs:
           - os: namespace-profile-windows-4c-8g
             target: x86_64-pc-windows-msvc
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
-      # Disable Windows Defender real-time scanning to speed up I/O-heavy builds (~30-50% faster)
       - name: Disable Windows Defender
         if: runner.os == 'Windows'
         continue-on-error: true
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
-
-      # Windows builds against the prebuilt binaries from build-windows-cli, so
-      # it needs no Rust toolchain here.
       - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+          - uses: ./.github/actions/benchmark-setup-rust
             if: ${{ !contains(matrix.target, 'windows') }}
             with:
               save-cache: ${{ github.ref_name == 'main' }}
               cache-key: e2e-build-${{ matrix.os }}
-
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          - uses: ./.github/actions/benchmark-setup-node
+          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: rolldown-binaries
               path: ./rolldown/packages/rolldown/src
               merge-multiple: true
-
-          # Prebuilt by build-windows-cli (Linux + cargo-xwin); placed where
-          # build-upstream's skip-native pass and the pack step expect them.
           - name: Download prebuilt Windows binaries
             if: contains(matrix.target, 'windows')
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: windows-cli-binaries
-
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
           skip-native: ${{ contains(matrix.target, 'windows') }}
-
       - name: Pack packages into tgz
         run: |
           mkdir -p tmp/tgz
@@ -165,18 +121,15 @@ jobs:
           cp target/${{ matrix.target }}/release/vp tmp/tgz/vp 2>/dev/null || cp target/${{ matrix.target }}/release/vp.exe tmp/tgz/vp.exe 2>/dev/null || true
           cp target/${{ matrix.target }}/release/vp-shim.exe tmp/tgz/vp-shim.exe 2>/dev/null || true
           ls -la tmp/tgz
-
       - name: Upload tgz artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: vite-plus-packages-${{ matrix.os }}
           path: tmp/tgz/
           retention-days: 1
-
   e2e-test:
     name: ${{ matrix.project.name }} E2E test (${{ matrix.os }})
     env:
-      # For packing manager install from github package registry
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: read
@@ -201,15 +154,6 @@ jobs:
               # Avoid Windows dynamic port reservations around Vitest's default 63315.
               vp test --api.port=3000
               vp run build
-          # FIXME: TypeError: Failed to fetch dynamically imported module
-          # - name: skeleton
-          #   node-version: 24
-          #   command: |
-          #     vp run format
-          #     vp run lint:check
-          #     vp run check
-          #     npx playwright install chromium
-          #     vp run test
           - name: rollipop
             node-version: 22
             command: |
@@ -241,28 +185,6 @@ jobs:
               vp run lint || true
               vp run type
               vp run test -- --coverage
-          # SKIP: vite-plugin-react - vite-task config loading incompatibility
-          # vite-task needs to load vite.config.js for all workspace packages to build the task graph,
-          # but the vite-plus process starts with workspace root as cwd.
-          # The plugin-react-swc playgrounds use SWC plugins (e.g., @swc/plugin-emotion) which
-          # cannot be resolved when loading the config from workspace root.
-          #
-          # Minimal reproduction:
-          #   git clone https://github.com/vitejs/vite-plugin-react /tmp/vite-plugin-react-test
-          #   cd /tmp/vite-plugin-react-test && pnpm install && pnpm run build
-          #   node packages/plugin-react-swc/playground/emotion-plugin/vite.config.js
-          #   # Error: Cannot find module '@swc/plugin-emotion'
-          #
-          # This works when running from within the playground directory (pnpm run build)
-          # because pnpm's symlink structure allows resolution, but fails when loading from workspace root.
-          # - name: vite-plugin-react
-          #   node-version: 22
-          #   command: |
-          #     vp run format
-          #     vp run lint -- --fix
-          #     # TODO(fengmk2): run all builds and tests after tsdown version upgrade
-          #     vp run @vitejs/plugin-rsc#build
-          #     vp run @vitejs/plugin-rsc#test
           - name: vitepress
             node-version: 24
             command: |
@@ -299,7 +221,6 @@ jobs:
           - name: dify
             node-version: 24
             directory: web
-            # Leave time for tests after migration and the Next.js build.
             timeout: 20
             command: |
               vp run type-check
@@ -317,9 +238,6 @@ jobs:
               vp test
           - name: vinext
             node-version: 24
-            # The full vinext suite (~7000 tests) outgrew a 15-minute budget
-            # on 4-core runners, so run one shard of the unit project here;
-            # the rest of the suite is covered by vinext's own CI.
             timeout: 20
             command: |
               # vp migrate's auto-install passes --ignore-scripts on pnpm v11
@@ -422,7 +340,6 @@ jobs:
               vp run test:coverage
           - name: nuxt-devtools
             node-version: 24
-            # The Windows build can exceed Node's default old-space limit.
             node-options: --max-old-space-size=4096
             command: |
               vp run build
@@ -435,7 +352,6 @@ jobs:
               vp run lint
               vp run test:unit
           - name: 10ten-ja-reader
-            # Match upstream's pin for its locked WebDriverIO/Undici versions.
             node-version: 24.15.0
             command: |
               vp test run --project browser --browser.name=chrome
@@ -450,7 +366,6 @@ jobs:
               vp test run --browser.enabled --browser.name=chrome --browser.headless
           - name: solid-vite-plugin
             node-version: 24
-            # The next branch's Vite 8 example uses Solid 2 and @solidjs/vite-plugin.
             directory: examples/vite-8
             command: |
               # Build the workspace plugin before vp run loads the example configs.
@@ -458,39 +373,30 @@ jobs:
               vp run build
               vp run test
         exclude:
-          # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: namespace-profile-windows-4c-8g
             project:
               name: frm-stack
-          # dify only runs on Linux for now
           - os: namespace-profile-windows-4c-8g
             project:
               name: dify
-          # vinext uses workerd native deps that don't build on Windows
           - os: namespace-profile-windows-4c-8g
             project:
               name: vinext
-          # yaak is a Tauri app with Rust/wasm deps
           - os: namespace-profile-windows-4c-8g
             project:
               name: yaak
-          # npmx.dev is a Nuxt app, ubuntu-only for now
           - os: namespace-profile-windows-4c-8g
             project:
               name: npmx.dev
-          # varlet upstream CI is ubuntu-only
           - os: namespace-profile-windows-4c-8g
             project:
               name: varlet
-          # Codiff's upstream test job is Ubuntu-only and needs native-keymap system libraries.
           - os: namespace-profile-windows-4c-8g
             project:
               name: codiff
-          # tiptap upstream CI is ubuntu-only
           - os: namespace-profile-windows-4c-8g
             project:
               name: tiptap
-          # Match upstream's Linux Chrome jobs for these WebDriverIO suites.
           - os: namespace-profile-windows-4c-8g
             project:
               name: 10ten-ja-reader
@@ -500,12 +406,9 @@ jobs:
           - os: namespace-profile-windows-4c-8g
             project:
               name: brazilian-utils
-
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
-      # The project clone only needs the bootstrap Node.js from the clone action.
       - name: Clone ecosystem project
         id: ecosystem-project
         background: true
@@ -515,32 +418,26 @@ jobs:
           node ecosystem-ci/clone.ts "$ECOSYSTEM_PROJECT"
         env:
           ECOSYSTEM_PROJECT: ${{ matrix.project.name }}
-
-      # Disable Windows Defender real-time scanning to speed up I/O-heavy operations
       - name: Disable Windows Defender
         if: runner.os == 'Windows'
         continue-on-error: true
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
-
       - parallel:
-          - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+          - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
             with:
               node-version: ${{ matrix.project.node-version }}
               package-manager-cache: false
-
           - name: Download vite-plus packages
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: vite-plus-packages-${{ matrix.os }}
               path: tmp/tgz
-
           - name: Install Codiff native-keymap dependencies
             if: matrix.project.name == 'codiff'
             run: |
               sudo apt-get update
               sudo apt-get install --yes libx11-dev libxkbfile-dev
-
       - name: Install vp CLI
         shell: bash
         run: |
@@ -554,96 +451,32 @@ jobs:
           # Use USERPROFILE (native Windows path) instead of HOME (Git Bash path /c/Users/...)
           # so cmd.exe and Node.js execSync can resolve binaries in PATH
           echo "${USERPROFILE:-$HOME}/.vite-plus/bin" >> $GITHUB_PATH
-
       - wait: ecosystem-project
-
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         shell: bash
-        # patch-project.ts starts a local npm registry serving the packed
-        # local build (it stays up for the later steps; the registry env is
-        # exported via GITHUB_ENV), then runs `vp migrate` and the follow-up
-        # `vp install` through it, with pnpm's minimumReleaseAge gate disabled
-        # so freshly published upstream deps install. See its comments.
         run: node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
-
       - name: Verify local packages installed
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         shell: bash
         run: node $GITHUB_WORKSPACE/ecosystem-ci/verify-install.ts
-
       - name: Determine playwright requirement
         id: pw
         shell: bash
         run: |
           needs=$(jq -r --arg p '${{ matrix.project.name }}' '.[$p].playwright // false' "$GITHUB_WORKSPACE/ecosystem-ci/repo.json")
           echo "needs=$needs" >> "$GITHUB_OUTPUT"
-
       - name: Install Playwright chromium
         if: steps.pw.outputs.needs == 'true'
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         shell: bash
         run: npx playwright install chromium
-
       - name: Run vite-plus commands in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         env:
           NODE_OPTIONS: ${{ matrix.project.node-options || '' }}
         run: ${{ matrix.project.command }}
-
-  notify-failure:
-    name: Notify on failure
-    runs-on: ubuntu-latest
-    needs: e2e-test
-    if: ${{ failure() && github.event_name == 'schedule' }}
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - name: Create or update GitHub issue on failure
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          ISSUE_TITLE="E2E Test Scheduled Run Failed"
-          ISSUE_LABEL="e2e-failure"
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-          # Create label if it doesn't exist
-          if ! gh label list --json name --jq '.[].name' | grep -q "^${ISSUE_LABEL}$"; then
-            CREATE_LABEL_OUTPUT=$(gh label create "$ISSUE_LABEL" --color "d73a4a" --description "E2E test scheduled run failure" 2>&1)
-            if [ $? -eq 0 ]; then
-              echo "Created label: $ISSUE_LABEL"
-            elif echo "$CREATE_LABEL_OUTPUT" | grep -qi "already exists"; then
-              echo "Label '$ISSUE_LABEL' already exists, continuing."
-            else
-              echo "Error: Failed to create label '$ISSUE_LABEL':"
-              echo "$CREATE_LABEL_OUTPUT" >&2
-              exit 1
-            fi
-          fi
-
-          # Search for existing open issue with the label
-          EXISTING_ISSUE=$(gh issue list --label "$ISSUE_LABEL" --state open --json number --jq '.[0].number')
-
-          if [ -z "$EXISTING_ISSUE" ]; then
-            # Create new issue if none exists
-            gh issue create \
-              --title "$ISSUE_TITLE" \
-              --label "$ISSUE_LABEL" \
-              --body "The scheduled E2E test run has failed.
-
-          **Failed Run:** $RUN_URL
-          **Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-
-          Please investigate the failure and fix any issues."
-            echo "Created new issue"
-          else
-            # Add comment to existing issue
-            gh issue comment "$EXISTING_ISSUE" \
-              --body "The scheduled E2E test run has failed again.
-
-          **Failed Run:** $RUN_URL
-          **Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-            echo "Added comment to issue #$EXISTING_ISSUE"
-          fi
+run-name: Ecosystem / after / ${{ inputs.cache_state }}
+env:
+  VP_CI_BENCH_CACHE_STATE: ${{ inputs.cache_state }}
+  VP_CI_BENCH_PREFIX: vp-ci-cache-2961-v1

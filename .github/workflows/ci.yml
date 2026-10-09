@@ -1,32 +1,23 @@
-name: CI
-
+name: CI cache benchmark (after)
 permissions:
-  # Doing it explicitly because the default permission only includes metadata: read.
   contents: read
-
-on:
+'on':
   workflow_dispatch:
-  pull_request:
-    types: [opened, synchronize, labeled]
-  push:
-    branches:
-      - main
-    # `paths` with negations instead of paths-ignore: PTY snapshot baselines
-    # are .md files (crates/vp_cli_snapshots/**/snapshots/*.md) and a
-    # baseline-only push must still run CI. Later patterns win.
-    paths:
-      - '**'
-      - '!**/*.md'
-      - 'crates/vp_cli_snapshots/**'
-
+    inputs:
+      cache_state:
+        description: Restore isolated benchmark caches, or build without restored caches.
+        type: choice
+        options:
+          - cold
+          - warm
+        required: true
+        default: cold
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.ref_name != 'main' }}
-
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 defaults:
   run:
     shell: bash
-
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -34,65 +25,33 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      # snapshots is OR-ed in because the PTY runner stores its assertions
-      # as .md files (fixtures/**/snapshots/*.md), which the code filter's
-      # markdown exclusion would otherwise classify as docs-only.
-      code-changed: ${{ steps.filter.outputs.code == 'true' || steps.filter.outputs.snapshots == 'true' }}
+      code-changed: 'true'
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        id: filter
-        with:
-          predicate-quantifier: every
-          filters: |
-            code:
-              - '!**/*.md'
-              - '!docs/**'
-              - '!.github/workflows/deploy-docs-preview.yml'
-              - '!.github/workflows/deploy-docs.yml'
-              - '!netlify.toml'
-            snapshots:
-              - 'crates/vp_cli_snapshots/**'
-
+      - name: Use full CI matrix
+        run: echo "Benchmark uses the complete CI matrix"
   docs-fmt:
     name: Docs format check
     needs: detect-changes
-    # Docs-only changes skip the full CI matrix, so nothing else format-checks
-    # them (code changes get `vp check` in cli-e2e-test). The required `done`
-    # job waits for this check and propagates failures.
     if: needs.detect-changes.outputs.code-changed == 'false'
     runs-on: namespace-profile-linux-x64-default
     permissions:
       contents: read
       packages: read
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
       - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+          - uses: ./.github/actions/benchmark-setup-rust
             with:
-              # Shares the Cargo cache with the Linux CLI test build job, which
-              # builds the same target. Only that job saves it.
               save-cache: false
               cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu
-
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
-      # Format-check with the oxfmt of this commit instead of the released one.
-      # A release carries the oxfmt it shipped with, which trails the catalog
-      # pin the repo is formatted with, and then flags files the workspace
-      # formatter accepts. build-upstream restores the NAPI binding cache the
-      # code jobs fill, so a docs-only run reuses their binaries instead of
-      # compiling Rust.
+          - uses: ./.github/actions/benchmark-setup-node
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: x86_64-unknown-linux-gnu
-
       - name: Run vp fmt --check
         run: pnpm vp fmt --check
-
   download-previous-rolldown-binaries:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
@@ -101,7 +60,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/download-rolldown-binaries
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -119,27 +78,17 @@ jobs:
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/benchmark-setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
           tools: just
-
       - run: cargo check --all-targets --all-features
         env:
-          RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
-
+          RUSTFLAGS: -D warnings --cfg tokio_unstable
       - run: just test
-
-  # Windows tests are cross-compiled on a fast Linux runner with cargo-xwin
-  # (clang-cl + lld-link against the xwin-downloaded MSVC CRT/Windows SDK)
-  # and packed into a portable nextest archive. The test-windows job then
-  # only downloads the archive and runs it: no Rust toolchain, dev drive, or
-  # compilation on the slow Windows runner. Same approach as
-  # voidzero-dev/vite-task#443.
   build-windows-tests:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
@@ -147,30 +96,15 @@ jobs:
     runs-on: namespace-profile-linux-x64-default
     env:
       XWIN_ACCEPT_LICENSE: '1'
-      # The MSVC STL from xwin's VS17 manifest static-asserts a minimum Clang
-      # version newer than what runner images ship. Microsoft's documented
-      # escape hatch lets Detours (C++, via the fspy git dependency) compile
-      # with the runner's clang-cl; cargo-xwin folds a pre-set CXXFLAGS into
-      # the per-target CXXFLAGS it generates.
       CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
       - uses: ./.github/actions/setup-xwin
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: windows-cross
           tools: cargo-nextest
-
-      # `cargo xwin env` resolves the rustflags configured in
-      # .cargo/config.toml (including the cfg-based Windows section), appends
-      # its -Lnative Windows SDK paths, and re-exports the result as
-      # CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS, so plain cargo
-      # invocations cross-compile exactly like `cargo xwin` would. It renders
-      # its intended *removal* of RUSTFLAGS as `export RUSTFLAGS="";`, which
-      # must become a real unset: a set RUSTFLAGS takes precedence over the
-      # target-specific rustflags and would shadow them.
       - name: Check Windows target
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
@@ -188,85 +122,49 @@ jobs:
           esac
           export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS -D warnings"
           cargo check --all-targets --all-features --target x86_64-pc-windows-msvc
-
-      # Keep the package selection in sync with the `test` recipe in justfile.
-      # vp_cli_snapshots is excluded there too: its snapshot suite needs a
-      # built vp and node at runtime and joins the Windows archive later.
-      # vp_trampoline is not a workspace member.
-      # Run its portable parser and layout tests on Unix.
-      # The Windows CLI snapshot suite tests Windows shim behavior.
       - name: Build test archive
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
           unset RUSTFLAGS
           cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || [ "$n" = "vp_trampoline" ] || echo -n "-p $n "; done) -p vite-plus-cli \
             --target x86_64-pc-windows-msvc --archive-file windows-tests.tar.zst
-
       - parallel:
-          - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+          - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
             with:
               name: windows-test-archive
               path: windows-tests.tar.zst
               retention-days: 7
-
-          # Separate archive for the PTY snapshot suite (excluded from the
-          # unit-test archive above): its suite needs vp, node, and a built
-          # packages/cli/dist at runtime, which only cli-snapshot-test-windows
-          # provides. The archive carries the cli_snapshots test binary plus the
-          # vpt helper; nextest rewrites CARGO_MANIFEST_DIR/CARGO_BIN_EXE_vpt at
-          # run time so the relocated binaries find fixtures and helpers.
           - name: Build snapshot test archive
             run: |
               eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
               unset RUSTFLAGS
               cargo nextest archive -p vp_cli_snapshots \
                 --target x86_64-pc-windows-msvc --archive-file windows-snapshot-tests.tar.zst
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: windows-snapshot-test-archive
           path: windows-snapshot-tests.tar.zst
           retention-days: 7
-
   test-windows:
     needs: build-windows-tests
     name: Test (Windows)
     runs-on: namespace-profile-windows-4c-8g
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
       - parallel:
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: windows-test-archive
-
-          - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+          - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
             with:
               tool: cargo-nextest
-
-      # `cargo-nextest` is invoked directly so the job never depends on the
-      # runner's Rust toolchain.
-      # Cross-compiled archives may also contain host-built proc-macro tests;
-      # filter them out before Windows tries to list their ELF binaries.
-      # --test-threads=1: nextest runs each test in its own process, so
-      # serial_test's in-process locks no longer serialize tests that contend
-      # on cross-process shared state (fixed temp paths, e.g.
-      # `vp-test-custom-home` in vp_shared::home tests). The whole suite is
-      # only ~1 minute of test time, so full serialization is cheap
-      # insurance; revisit if it becomes the bottleneck.
       - name: Run tests
         run: cargo-nextest nextest run -E 'platform(target)' --archive-file windows-tests.tar.zst --workspace-remap . --test-threads 1
         env:
           RUST_MIN_STACK: '8388608'
-          # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
-          # Snapshot assertions resolve paths from the Linux build machine's
-          # workspace root baked in at compile time; point insta at this
-          # checkout instead (without it, insta shells out to a `cargo` that
-          # is not installed here).
           INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
-
   test-musl:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
@@ -275,70 +173,49 @@ jobs:
     container:
       image: node:25-alpine3.21
     env:
-      # GitHub Actions sets HOME=/github/home in containers, but the euid home is /root.
-      # Pin Rust tooling paths to avoid $HOME mismatch issues.
       CARGO_HOME: /root/.cargo
       RUSTUP_HOME: /root/.rustup
-      # `-crt-static`: vite-task's `fspy_preload_unix` cdylib (unconditional
-      # build-dep since voidzero-dev/vite-task#344) can't link against a
-      # static musl libc. vite+ ships as a NAPI module that links musl libc
-      # dynamically anyway, so matching here is correct.
-      # Must mirror `.cargo/config.toml` rustflags — RUSTFLAGS env overrides
-      # both [build] and [target.*] levels.
       RUSTFLAGS: --cfg tokio_unstable -C link-args=-Wl,--warn-unresolved-symbols -C target-feature=-crt-static
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
         run: apk add --no-cache bash curl git just musl-dev gcc g++ python3 cmake make
-
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - name: Record Alpine Node.js runtime
         run: node -p "'ALPINE_NODE=' + process.execPath" >> "$GITHUB_ENV"
-
       - uses: ./.github/actions/clone
         with:
-          # setup-node's Linux binaries require glibc; keep the container's musl build.
           setup-node: 'false'
-
       - name: Verify clone preserves the Alpine Node.js runtime
         run: |
           node -e "require('node:assert/strict').equal(process.execPath, process.env.ALPINE_NODE)"
           node --version
-
       - name: Install rustup
         run: |
           # GitHub Actions sets HOME=/github/home in containers, but rustup expects euid home (/root)
           export HOME=/root
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
           echo "/root/.cargo/bin" >> "$GITHUB_PATH"
-
       - name: Install Rust toolchain
         run: rustup show
-
-      # Skip separate cargo check — cargo test already compiles everything.
       - run: just test
-
   lint:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
     runs-on: namespace-profile-linux-x64-default
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/benchmark-setup-node
         id: node-setup
         background: true
-
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/benchmark-setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: lint
           tools: just,cargo-shear
           components: clippy rust-docs rustfmt
-
       - name: Rust lint
         id: rust-lint
         background: true
@@ -348,45 +225,26 @@ jobs:
           cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml --check
           just lint
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
-
-      - uses: crate-ci/typos@00f422f3b19c57bc6338715ebfe3316d38768461 # v1.50.3
+      - uses: crate-ci/typos@00f422f3b19c57bc6338715ebfe3316d38768461
         with:
           files: .
-
       - wait: node-setup
-
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
-
-      # Retry once because `pnpm dedupe --check` re-resolves all dependencies and
-      # can non-deterministically flag optional transitive peers (e.g. oxc-resolver
-      # via dts-resolver) as dedup-able depending on async resolution order.
       - name: Deduplicate dependencies
         run: pnpm dedupe --check || pnpm dedupe --check
-
       - wait: rust-lint
-
-  # Cross-compiles the Windows release NAPI binding (vite-plus .node) and CLI
-  # binaries (vp.exe, vp-shim.exe, vp-setup.exe) on a fast Linux runner with
-  # cargo-xwin, then publishes them as the windows-cli-binaries artifact. The
-  # Windows entries of cli-e2e-test and install-e2e-test-sfw
-  # download that artifact instead of each spending ~24 minutes rebuilding the
-  # same binaries on slow windows-latest runners whenever build-upstream's
-  # NAPI binding cache misses. Release builds are unaffected: they keep
-  # building natively on Windows via reusable-release-build.yml (their cache
-  # keys differ through RELEASE_BUILD/VERSION).
   build-windows-cli:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows CLI binaries
     runs-on: namespace-profile-linux-x64-default
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
       - uses: ./.github/actions/build-windows-cli
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-
   cli-e2e-test:
     name: CLI E2E test
     needs:
@@ -408,49 +266,36 @@ jobs:
             test-node: 26.0.0
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
+      - uses: ./.github/actions/benchmark-setup-node
       - parallel:
           - name: Install docs dependencies
             run: pnpm -C docs install --frozen-lockfile
-
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: rolldown-binaries
               path: ./rolldown/packages/rolldown/src
               merge-multiple: true
-
-          # Prebuilt by build-windows-cli (Linux + cargo-xwin); the artifact
-          # paths are workspace-relative, so this places the binding into
-          # packages/cli/binding/ and the CLI binaries into
-          # target/x86_64-pc-windows-msvc/release/ where
-          # `tool install-global-cli` finds them.
           - name: Download prebuilt Windows binaries
             if: runner.os == 'Windows'
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: windows-cli-binaries
-
           - name: Download prebuilt CLI test binaries
             if: runner.os != 'Windows'
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: cli-test-binaries-${{ matrix.target }}
               path: ${{ runner.temp }}
-
       - name: Extract CLI test binaries
         if: runner.os != 'Windows'
         run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
-
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
           skip-native: true
-
       - name: Ensure no unexpected file changes after build
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
         run: |
@@ -460,11 +305,9 @@ jobs:
             git diff
             exit 1
           fi
-
       - name: Check TypeScript types
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
         run: pnpm tsgo
-
       - name: Install Global CLI vp
         run: |
           pnpm bootstrap-cli:ci
@@ -473,29 +316,24 @@ jobs:
             # GITHUB_PATH prepends entries, but fallback shims must remain last.
             echo "PATH=$PATH" >> "$GITHUB_ENV"
           fi
-
       - name: Load Windows CLI environment
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           . (Join-Path $HOME '.vite-plus/env.ps1')
           "PATH=$env:Path" >> $env:GITHUB_ENV
-
       - name: Verify vp installation
         run: |
           which vp
           vp --version
           vp -h
-
       - name: Run vp check
         run: vp check
-
       - name: Run unit tests
         run: vp env exec --node ${{ matrix.test-node }} node packages/cli/dist/bin.js test run
         env:
           RUST_BACKTRACE: '1'
           RUST_MIN_STACK: 8388608
-
       - name: Test global package install (powershell)
         if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
         shell: pwsh
@@ -538,7 +376,6 @@ jobs:
           vp env doctor
           vp env use --unset
           node --version
-
       - name: Test global package install (cmd)
         if: ${{ runner.os == 'Windows' }}
         shell: cmd
@@ -590,7 +427,6 @@ jobs:
           vp env doctor
           vp env use --unset
           node --version
-
       - name: Test global package install (bash)
         run: |
           echo "PATH: $PATH"
@@ -628,8 +464,6 @@ jobs:
           vp env doctor
           vp env use --unset
           node --version
-
-      # Upgrade tests (merged from separate job to avoid duplicate build)
       - name: Test upgrade (bash)
         shell: bash
         run: |
@@ -677,7 +511,6 @@ jobs:
             echo "Error: current install dir should have been restored after rollback (expected $INITIAL_DIR, got $ROLLBACK_DIR)"
             exit 1
           fi
-
       - name: Test upgrade (powershell)
         if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
         shell: pwsh
@@ -722,7 +555,6 @@ jobs:
             Write-Error "Error: current install dir should have been restored after rollback (expected $initialDir, got $rollbackDir)"
             exit 1
           }
-
       - name: Test upgrade (cmd)
         if: ${{ runner.os == 'Windows' }}
         shell: cmd
@@ -759,7 +591,6 @@ jobs:
             echo Error: current install dir should have been restored after rollback, expected %INITIAL_DIR%, got %ROLLBACK_DIR%
             exit /b 1
           )
-
       - name: Test same-version forced upgrade (Windows)
         if: ${{ runner.os == 'Windows' }}
         shell: pwsh
@@ -813,7 +644,6 @@ jobs:
             Write-Error "Expected .previous-version to be $version, got $previousVersion"
             exit 1
           }
-
       - name: Test same-version forced upgrade (Unix)
         if: ${{ runner.os != 'Windows' }}
         shell: bash
@@ -870,7 +700,6 @@ jobs:
             echo "Expected .previous-version to be $version, got $previous_version"
             exit 1
           fi
-
       - name: Test implode (bash)
         shell: bash
         run: |
@@ -893,7 +722,6 @@ jobs:
           # Reinstall
           pnpm bootstrap-cli:ci
           vp --version
-
       - name: Test implode (powershell)
         if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
         shell: pwsh
@@ -921,7 +749,6 @@ jobs:
           }
           pnpm bootstrap-cli:ci
           vp --version
-
       - name: Test implode (cmd)
         if: ${{ runner.os == 'Windows' }}
         shell: cmd
@@ -944,9 +771,6 @@ jobs:
           )
           pnpm bootstrap-cli:ci
           vp --version
-
-  # Build the native CLI and snapshot runner once per platform, then share
-  # them across the E2E job and snapshot shards. Tar preserves permissions.
   build-cli-test-binaries:
     name: Build CLI test binaries (${{ matrix.target }})
     needs:
@@ -961,28 +785,23 @@ jobs:
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
       - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+          - uses: ./.github/actions/benchmark-setup-rust
             with:
               save-cache: ${{ github.ref_name == 'main' }}
               cache-key: cli-snapshot-test-${{ matrix.target }}
-
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          - uses: ./.github/actions/benchmark-setup-node
+          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: rolldown-binaries
               path: ./rolldown/packages/rolldown/src
               merge-multiple: true
-
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
-
       - name: Ensure no unexpected file changes after build
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
         run: |
@@ -992,13 +811,10 @@ jobs:
             git diff
             exit 1
           fi
-
       - name: Build snapshot test binaries
         run: cargo test -p vp_cli_snapshots --no-run --message-format=json > "$RUNNER_TEMP/snapshot-test-build.json"
-
       - name: Test snapshot runner utilities
         run: cargo test -p vp_cli_snapshots --test redact_unit --test shard_unit --test registry_pack_unit --test report_unit --test schedule_unit
-
       - name: Package CLI test binaries
         run: |
           artifact_dir="$(mktemp -d)"
@@ -1022,17 +838,12 @@ jobs:
           tar -czf "$RUNNER_TEMP/cli-test-binaries.tar.gz" -C "$artifact_dir" .
         env:
           BUILD_TARGET: ${{ matrix.target }}
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: cli-test-binaries-${{ matrix.target }}
           path: ${{ runner.temp }}/cli-test-binaries.tar.gz
           if-no-files-found: error
           retention-days: 7
-
-  # Each shard reuses the native CLI and test binaries from the platform's
-  # build job. Only the TypeScript packages are built here for local-flavor
-  # cases. Windows uses its cross-compiled artifacts in the separate job.
   cli-snapshot-test:
     name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
     needs:
@@ -1040,8 +851,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
-        shard: [1, 2, 3]
+        os:
+          - namespace-profile-linux-x64-default
+          - namespace-profile-mac-default
+        shard:
+          - 1
+          - 2
+          - 3
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
@@ -1049,10 +865,8 @@ jobs:
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
-      # Fish and Zsh can both use apt or Homebrew; keep their installs sequential.
       - name: Install snapshot shells
         id: snapshot-shells
         background: true
@@ -1076,60 +890,47 @@ jobs:
             fi
           fi
           zsh --version
-
-      # https://github.com/marketplace/actions/setup-nu
       - name: Install Nushell
         id: nushell
         background: true
-        uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
+        uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97
         with:
           version: '*'
-
       - parallel:
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          - uses: ./.github/actions/benchmark-setup-node
+          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: rolldown-binaries
               path: ./rolldown/packages/rolldown/src
               merge-multiple: true
-
           - name: Download prebuilt CLI test binaries
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: cli-test-binaries-${{ matrix.target }}
               path: ${{ runner.temp }}
-
       - name: Install Playwright Chromium
         id: playwright
         background: true
         run: pnpm exec playwright install chromium
         env:
           PLAYWRIGHT_BROWSERS_PATH: '0'
-
       - name: Extract CLI test binaries
         run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
-
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
           skip-native: true
-
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
-
-      # Provision the managed runtime once into the real home so cases can
-      # seed from it (seed-runtime) instead of each downloading ~50MB.
-      # Best-effort: without a seed, cases that need the runtime download it
-      # themselves.
       - name: Prewarm managed runtime
         run: |
           "$HOME/.vite-plus/bin/vp" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
-
-      - wait: [snapshot-shells, nushell, playwright]
-
+      - wait:
+          - snapshot-shells
+          - nushell
+          - playwright
       - name: Run PTY snapshot tests
         run: |
           export VP_SNAP_SH_BIN="$(command -v sh)"
@@ -1142,27 +943,18 @@ jobs:
           ./target/snapshot-tests/cli_snapshots --test-threads 8
         env:
           RUST_BACKTRACE: '1'
-          # Relocate fixture and helper paths while keeping the same test
-          # process and VP_SNAP_SHARD partitioning as cargo test.
           CARGO_MANIFEST_DIR: ${{ github.workspace }}/crates/vp_cli_snapshots
           CARGO_BIN_EXE_vpt: ${{ github.workspace }}/target/snapshot-tests/vpt
           VP_SNAP_SHARD: ${{ matrix.shard }}/3
           VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
-
       - name: Upload snapshot diagnostics and timings
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: snapshot-diagnostics-${{ matrix.target }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/snapshot-artifacts
           if-no-files-found: ignore
           retention-days: 7
-
-  # Runs the PTY snapshot suite (crates/vp_cli_snapshots) on Windows with
-  # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
-  # and vpt arrive cross-compiled in the nextest archive from
-  # build-windows-tests, the global vp comes prebuilt from build-windows-cli,
-  # and the JS CLI is built here (skip-native) for the local flavor.
   cli-snapshot-test-windows:
     name: CLI snapshot test (Windows, shard ${{ matrix.shard }}/3)
     needs:
@@ -1172,64 +964,46 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
-    # Runs on the Namespace Windows runner. This is a PTY snapshot suite that
-    # opens a pseudo-console (ConPTY) and spawns vp into it. It previously stayed
-    # on GitHub-hosted windows-latest because Namespace's Windows runners ran
-    # under a Session-0 service account with no interactive console, where the
-    # ConPTY spawn blocked and every case timed out at 60s. #2126 (vite-task
-    # bump) resolved that; revert to windows-latest if it recurs.
+        shard:
+          - 1
+          - 2
+          - 3
     runs-on: namespace-profile-windows-4c-8g
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
-      # Route TEMP/TMP onto a Dev Drive (ReFS): staged fixture workspaces
-      # live under os.tmpdir() and must resolve pnpm junction reparse points
-      # cleanly. NTFS-on-C: preserves the junction-target backslashes during
-      # resolution, which produces mixed `\` / `/` paths that break Node's
-      # ESM subpath-import walk-up (`#module-sync-enabled` inside
-      # `@voidzero-dev/vite-plus-core` -> `ERR_PACKAGE_IMPORT_NOT_DEFINED`).
       - name: Setup Dev Drive
-        uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
+        uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0
         with:
           drive-size: 12GB
           drive-format: ReFS
           env-mapping: |
             TEMP,{{ DEV_DRIVE }}/Temp
             TMP,{{ DEV_DRIVE }}/Temp
-
       - name: Create TEMP/TMP on Dev Drive
         shell: bash
         run: mkdir -p "$TEMP" "$TMP"
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         id: snapshot-archive
         background: true
         with:
           name: windows-snapshot-test-archive
-
-      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
         id: nextest
         background: true
         with:
           tool: cargo-nextest
-
       - parallel:
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          - uses: ./.github/actions/benchmark-setup-node
+          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: rolldown-binaries
               path: ./rolldown/packages/rolldown/src
               merge-multiple: true
-
-          # See the cli-e2e-test job for details on the prebuilt binaries.
           - name: Download prebuilt Windows binaries
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: windows-cli-binaries
-
       - name: Install Playwright Chromium
         id: playwright
         background: true
@@ -1237,29 +1011,19 @@ jobs:
         run: pnpm exec playwright install chromium
         env:
           PLAYWRIGHT_BROWSERS_PATH: '0'
-
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: x86_64-pc-windows-msvc
           skip-native: true
-
       - name: Install Global CLI vp
         shell: bash
         run: pnpm bootstrap-cli:ci
-
-      # Provision the managed runtime once into the real home so cases can
-      # seed from it (seed-runtime) instead of each downloading ~50MB.
-      # Best-effort: without a seed, cases that need the runtime download it
-      # themselves.
       - name: Prewarm managed runtime
         shell: bash
         run: |
           "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
-
-      # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
-      # which Yarn Classic discovers when walking parent directories.
       - name: Create NTFS temp directory for case-sensitive shim snapshots
         if: matrix.shard == 1
         id: snapshot-temp
@@ -1269,13 +1033,10 @@ jobs:
           $snapshotTemp = Join-Path $volume ('vp-snapshots-' + [guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Path $snapshotTemp | Out-Null
           "directory=$snapshotTemp" >> $env:GITHUB_OUTPUT
-
-      - wait: [playwright, snapshot-archive, nextest]
-
-      # `cargo-nextest` is invoked directly so the job never depends on the
-      # runner's Rust toolchain. --workspace-remap makes nextest rewrite
-      # CARGO_MANIFEST_DIR and CARGO_BIN_EXE_vpt to this checkout, which is
-      # how the relocated test binary finds fixtures and helpers.
+      - wait:
+          - playwright
+          - snapshot-archive
+          - nextest
       - name: Run PTY snapshot tests
         shell: bash
         run: |
@@ -1322,52 +1083,40 @@ jobs:
           exit "$test_exit"
         env:
           RUST_BACKTRACE: '1'
-          # Share immutable tarballs across nextest processes in this job.
           VP_SNAP_PACKAGES_DIR: ${{ runner.temp }}/snapshot-packages
           VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
-          # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
-
       - name: Upload snapshot diagnostics and timings
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: snapshot-diagnostics-windows-${{ matrix.shard }}
           path: ${{ runner.temp }}/snapshot-artifacts
           if-no-files-found: ignore
           retention-days: 7
-
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
     needs:
       - download-previous-rolldown-binaries
     runs-on: namespace-profile-linux-x64-default
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
       - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+          - uses: ./.github/actions/benchmark-setup-rust
             with:
               save-cache: ${{ github.ref_name == 'main' }}
               cache-key: cli-e2e-test-musl
-
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          - uses: ./.github/actions/benchmark-setup-node
+          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: rolldown-binaries
               path: ./rolldown/packages/rolldown/src
               merge-multiple: true
-
-      # Cross-compile for musl on the glibc host
       - name: Build with upstream (musl)
         uses: ./.github/actions/build-upstream
         with:
           target: x86_64-unknown-linux-musl
-
-      # Run bootstrap-cli:ci and E2E tests inside an Alpine container where musl is native.
-      # Can't run on the glibc host because NAPI .node files are musl-linked.
       - name: Run E2E in Alpine container
         run: |
           docker run --rm \
@@ -1412,13 +1161,6 @@ jobs:
               git config --global --add safe.directory /workspace
               RUST_BACKTRACE=1 pnpm test:unit
             "
-
-  # Regression test for #2278: Debian slim images ship no ca-certificates
-  # package, and every vp command that touched the network aborted there
-  # (0.1.23 to 0.2.6) or failed with a handled error (#2273). The global vp
-  # is built inside a bookworm container so the binary's glibc floor matches
-  # the runtime image, then runs in node:24-bookworm-slim (the image from the
-  # report) where HTTPS must work through the bundled Mozilla roots fallback.
   certless-image-test:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
@@ -1426,19 +1168,12 @@ jobs:
     runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 30
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/benchmark-setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: certless-image-test
-
-      # Mounting the host rustup and cargo homes reuses the pinned nightly
-      # that setup-rust installed and the restored registry cache, so the
-      # container downloads nothing on a warm run (rustup dist binaries
-      # target glibc 2.17 and run on bookworm's 2.36). `rustup show` still
-      # installs the toolchain if the mount misses it.
       - name: Build the global vp in a bookworm container
         run: |
           docker run --rm \
@@ -1452,7 +1187,6 @@ jobs:
               rustup show
               cargo build -p vp_global_cli
             '
-
       - name: Run vp in node:24-bookworm-slim without a CA store
         run: |
           docker run --rm \
@@ -1470,44 +1204,34 @@ jobs:
               vp env list-remote --lts --json > /tmp/vp-versions.json
               node -e "const versions = require(\"/tmp/vp-versions.json\"); if (!versions.node?.length) process.exit(1)"
             '
-
   install-e2e-test:
     name: Local CLI `vp install` E2E test
     needs:
       - download-previous-rolldown-binaries
     runs-on: namespace-profile-linux-x64-default
-    # Run if: not a PR, OR PR has 'test: install-e2e' label
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'test: install-e2e')
+    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: install-e2e')"
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
       - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+          - uses: ./.github/actions/benchmark-setup-rust
             with:
               save-cache: ${{ github.ref_name == 'main' }}
               cache-key: install-e2e-test
-
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          - uses: ./.github/actions/benchmark-setup-node
+          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: rolldown-binaries
               path: ./rolldown/packages/rolldown/src
               merge-multiple: true
-
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: x86_64-unknown-linux-gnu
-
       - name: Build CLI
         run: |
           pnpm bootstrap-cli:ci
           echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
-
       - name: Run local CLI `vp install`
         run: |
           export PATH=$PWD/node_modules/.bin:$PATH
@@ -1548,21 +1272,14 @@ jobs:
             echo "✓ Successfully installed dependencies for $repo"
             echo ""
           done
-
   install-e2e-test-sfw:
     name: Local CLI `vp install` E2E test (Socket Firewall Free)
     env:
-      # Includes nodejs/node#61999 (first backported in Node 24.20.0).
-      # Override vp's project pins; sfw's embedded Node runtime is separate.
-      VP_NODE_VERSION: '24.21.0'
+      VP_NODE_VERSION: 24.21.0
     needs:
       - download-previous-rolldown-binaries
       - build-windows-cli
-    # Run if: not a PR (push-to-main / workflow_dispatch), OR PR has 'test: sfw' label.
-    # Heavy job (real registry traffic) — gated to avoid running on every PR.
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'test: sfw')
+    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: sfw')"
     strategy:
       fail-fast: false
       matrix:
@@ -1571,63 +1288,38 @@ jobs:
             target: x86_64-unknown-linux-gnu
             sfw_asset: sfw-free-linux-x86_64
             vp_bin: vp
-            # Only Linux needs the TLS-bypass: the ubuntu-latest runner
-            # doesn't preinstall Node 22.18 into vp's cache, so vp's HttpClient
-            # (rustls) fetches `nodejs.org/.../SHASUMS256.txt` through sfw and
-            # hits the upstream EKU bug. macOS/Windows runners ship Node in
-            # vp's cache already, so vp never calls its HttpClient through sfw
-            # in this test — leave the verification on there.
             vp_insecure_tls: '1'
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
             sfw_asset: sfw-free-macos-arm64
             vp_bin: vp
             vp_insecure_tls: ''
-          # TODO: Re-enable Windows when SFW's embedded Node includes
-          # https://github.com/nodejs/node/pull/61999 (Node 24.20.0 / 26.7.0).
-          # SFW 1.15.2 embeds Node 24.9.0 and hits UV_HANDLE_CLOSING at shutdown.
-          # VP_NODE_VERSION only changes the child runtime, not SFW's runtime.
-          # - os: namespace-profile-windows-4c-8g
-          #   target: x86_64-pc-windows-msvc
-          #   sfw_asset: sfw-free-windows-x86_64.exe
-          #   # SFW spawns directly without PATHEXT, so use vp.exe on Windows.
-          #   vp_bin: vp.exe
-          #   vp_insecure_tls: ''
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-
-      # Windows runs against the prebuilt binaries from build-windows-cli,
-      # so it needs no Rust toolchain or dev drive here.
       - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+          - uses: ./.github/actions/benchmark-setup-rust
             if: runner.os != 'Windows'
             with:
               save-cache: ${{ github.ref_name == 'main' }}
               cache-key: install-e2e-test-sfw-${{ matrix.os }}
-
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          - uses: ./.github/actions/benchmark-setup-node
+          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: rolldown-binaries
               path: ./rolldown/packages/rolldown/src
               merge-multiple: true
-
-          # See the cli-e2e-test job for details on the prebuilt binaries.
           - name: Download prebuilt Windows binaries
             if: runner.os == 'Windows'
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
             with:
               name: windows-cli-binaries
-
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
           skip-native: ${{ runner.os == 'Windows' }}
-
       - name: Build CLI
         run: |
           pnpm bootstrap-cli:ci
@@ -1640,11 +1332,8 @@ jobs:
           else
             echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
           fi
-
       - name: Prepare Node.js for SFW tests
-        # Download the selected runtime before entering sfw's proxy.
         run: vp env exec node --version
-
       - name: Download sfw
         run: |
           set -euo pipefail
@@ -1659,24 +1348,12 @@ jobs:
             chmod +x "$RUNNER_TEMP/sfw-bin/sfw"
           fi
           echo "$RUNNER_TEMP/sfw-bin" >> "$GITHUB_PATH"
-
       - name: Verify sfw and embedded Node versions
         run: |
           printf '%s\n' 'console.error("SFW embedded Node:", process.version, process.execPath);' \
             > "$RUNNER_TEMP/sfw-node-version.cjs"
           NODE_OPTIONS="--require=\"$RUNNER_TEMP/sfw-node-version.cjs\"" sfw --version
-
       - name: Run `sfw vp install` against a real repo
-        # TODO(SocketDev/sfw-free#30, SocketDev/sfw-free#43): drop `vp_insecure_tls`
-        # from the Linux matrix entry once sfw ships the EKU fix. Verified
-        # against sfw v1.11.0 (releases/latest as of 2026-05-28): on Linux,
-        # vp's HTTPS request to nodejs.org through sfw still fails with
-        # "invalid peer certificate: UnknownIssuer" because sfw's CA carries a
-        # present-but-empty Extended Key Usage extension that rustls rejects.
-        # macOS/Windows runners cache Node 22.18 in vp's directory, so vp
-        # doesn't call its HttpClient through sfw — leaving TLS verification
-        # enabled there gives us coverage that the bypass *isn't* used on
-        # those platforms.
         env:
           VP_INSECURE_TLS: ${{ matrix.vp_insecure_tls }}
         run: |
@@ -1690,7 +1367,6 @@ jobs:
           git clone --depth 1 https://github.com/vitejs/vite.git "$RUNNER_TEMP/vite"
           cd "$RUNNER_TEMP/vite"
           sfw "${{ matrix.vp_bin }}" install --no-frozen-lockfile
-
   done:
     runs-on: ubuntu-latest
     if: always()
@@ -1708,11 +1384,12 @@ jobs:
       - build-cli-test-binaries
       - cli-snapshot-test
       - cli-snapshot-test-windows
-      # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.
-      # `contains(needs.*.result, 'failure')` ignores "skipped" results.
       - install-e2e-test
       - install-e2e-test-sfw
     steps:
       - run: exit 1
-        # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+run-name: CI / after / ${{ inputs.cache_state }}
+env:
+  VP_CI_BENCH_CACHE_STATE: ${{ inputs.cache_state }}
+  VP_CI_BENCH_PREFIX: vp-ci-cache-2961-v1

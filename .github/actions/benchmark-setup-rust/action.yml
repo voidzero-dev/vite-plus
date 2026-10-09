@@ -1,0 +1,93 @@
+name: Rustup
+description: Setup Rust with caching
+inputs:
+  components:
+    required: false
+    description: space separated Rust components, e.g. `clippy rustfmt rust-docs`
+  tools:
+    required: false
+    description: comma separated Cargo tools
+  restore-cache:
+    default: 'true'
+    required: false
+    description: whether to restore cache
+  save-cache:
+    default: 'false'
+    required: false
+    description: whether to save cache, e.g. `github.ref_name == 'main'`
+  cache-key:
+    default: main
+    required: false
+    description: cache key prefix
+  cache-workspace-crates:
+    default: 'false'
+    required: false
+    description: Similar to cache-all-crates. If `true` the workspace crates will be cached.
+  target-dir:
+    required: false
+    description: Custom target directory path (for Dev Drive etc). Sets CARGO_TARGET_DIR and configures cache accordingly.
+runs:
+  using: composite
+  steps:
+    - name: Print Inputs
+      shell: bash
+      run: |
+        echo 'components: ${INPUTS_COMPONENTS}'
+        echo 'tools: ${INPUTS_TOOLS}'
+        echo 'restore-cache: ${INPUTS_RESTORE_CACHE}'
+        echo 'save-cache: ${INPUTS_SAVE_CACHE}'
+        echo 'cache-key: ${INPUTS_CACHE_KEY}'
+      env:
+        INPUTS_COMPONENTS: ${{ inputs.components }}
+        INPUTS_TOOLS: ${{ inputs.tools }}
+        INPUTS_RESTORE_CACHE: ${{ inputs.restore-cache }}
+        INPUTS_SAVE_CACHE: ${{ inputs.save-cache }}
+        INPUTS_CACHE_KEY: ${{ inputs.cache-key }}
+    - name: Change to minimal profile
+      shell: bash
+      run: |
+        sed -i ${{ (runner.os == 'macOS' && '""') || '' }} -e 's/profile = "default"/profile = "minimal"/g' rust-toolchain.toml
+        cat rust-toolchain.toml
+    - name: Set Minimal Profile
+      shell: bash
+      run: rustup set profile minimal
+    - name: Add Components
+      shell: bash
+      if: ${{ inputs.components }}
+      run: rustup component add ${INPUTS_COMPONENTS}
+      env:
+        INPUTS_COMPONENTS: ${{ inputs.components }}
+    - name: Install
+      shell: bash
+      run: |
+        rustup show
+        git restore . # restore rust-toolchain.toml change
+    - name: Set CARGO_TARGET_DIR
+      shell: bash
+      if: ${{ inputs.target-dir }}
+      run: echo "CARGO_TARGET_DIR=$INPUTS_TARGET_DIR" >> "$GITHUB_ENV" # zizmor: ignore[github-env]
+      env:
+        INPUTS_TARGET_DIR: ${{ inputs.target-dir }}
+    - name: Cache on ${{ github.ref_name }}
+      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+      if: ${{ inputs.restore-cache == 'true' }}
+      with:
+        shared-key: ${{ inputs.cache-key }}
+        save-if: ${{ env.VP_CI_BENCH_CACHE_STATE == 'cold' }}
+        cache-workspace-crates: ${{ inputs.cache-workspace-crates }}
+        cache-targets: ${{ inputs.target-dir && 'false' || 'true' }}
+        cache-directories: ${{ inputs.target-dir || '' }}
+        prefix-key: ${{ env.VP_CI_BENCH_PREFIX }}-rust
+        lookup-only: ${{ env.VP_CI_BENCH_CACHE_STATE == 'cold' }}
+      id: benchmark-cache
+    - name: Require warm Cargo cache hit
+      if: ${{ env.VP_CI_BENCH_CACHE_STATE == 'warm' && inputs.restore-cache == 'true' }}
+      shell: bash
+      env:
+        CACHE_HIT: ${{ steps.benchmark-cache.outputs.cache-hit }}
+      run: test "$CACHE_HIT" = true
+    - name: Install Tools
+      uses: taiki-e/install-action@711e1c3275189d76dcc4d34ddea63bf96ac49090
+      if: ${{ inputs.tools }}
+      with:
+        tool: ${{ inputs.tools }}

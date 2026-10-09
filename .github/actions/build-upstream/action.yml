@@ -1,37 +1,27 @@
-name: 'Build with Upstream Repositories'
-description: 'Builds Vite+ with the upstream repositories'
+name: Build with Upstream Repositories
+description: Builds Vite+ with the upstream repositories
 inputs:
   target:
-    description: 'The target platform'
+    description: The target platform
     required: true
   print-after-build:
-    description: 'Print the output after the build'
+    description: Print the output after the build
     required: false
     default: 'false'
   skip-native:
-    description: >-
-      Skip the NAPI binding cache and all native cargo/napi build steps; the
-      native binaries and Cargo metadata must already be in place (e.g.
-      downloaded from the windows-cli-binaries artifact produced by the
-      build-windows-cli job).
+    description: Skip the NAPI binding cache and all native cargo/napi build steps; the native binaries and Cargo metadata must already be in place (e.g. downloaded from the windows-cli-binaries artifact produced by the build-windows-cli job).
     required: false
     default: 'false'
-
 runs:
-  using: 'composite'
+  using: composite
   steps:
     - uses: ./.github/actions/download-rolldown-binaries
       with:
         github-token: ${{ github.token }}
         target: ${{ inputs.target }}
         upload: 'false'
-
-    # Compute the shared input hash before builds modify files
-    # (packages/cli/package.json is modified by syncTestPackageExports during build-ts).
     - uses: ./.github/actions/compute-native-cache-input-hash
       id: native-cache-inputs
-
-    # Include the documentation origin so preview binaries cannot reuse release links.
     - name: Compute NAPI binding cache key
       id: cache-key
       shell: bash
@@ -40,18 +30,14 @@ runs:
         echo "key=napi-binding-v3-${INPUTS_TARGET}-${RELEASE_BUILD}-${DEBUG}-${VERSION}-${NPM_TAG}-${DOCS_ORIGIN_HASH}-${{ steps.native-cache-inputs.outputs.hash }}" >> "$GITHUB_OUTPUT"
       env:
         INPUTS_TARGET: ${{ inputs.target }}
-
-    # Resolve the Rust target directory (CARGO_TARGET_DIR from setup-rust, or default "target")
     - name: Resolve Rust target directory
       id: rust-target
       shell: bash
       run: echo "dir=${CARGO_TARGET_DIR:-target}" >> $GITHUB_OUTPUT
-
-    # Cache NAPI bindings and Rust CLI binary (the slow parts, especially on Windows)
     - name: Restore NAPI binding cache
       id: cache-restore
-      if: inputs.skip-native != 'true'
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      if: (inputs.skip-native != 'true') && env.VP_CI_BENCH_CACHE_STATE == 'warm'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
           packages/cli/binding/*.node
@@ -64,64 +50,40 @@ runs:
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp.exe
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-shim.exe
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-setup.exe
-        key: ${{ steps.cache-key.outputs.key }}
-
-    # Single source of truth for "build the native binaries in this job":
-    # false when the caller supplied prebuilt ones (skip-native) or the cache
-    # already has them. Every native build step (and the cache save) gates on
-    # this one flag instead of repeating the two-part condition.
+        key: ${{ env.VP_CI_BENCH_PREFIX }}-${{ steps.cache-key.outputs.key }}
+        fail-on-cache-miss: true
     - name: Decide native build
       id: native
       shell: bash
       run: echo "build=${{ inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' }}" >> "$GITHUB_OUTPUT"
-
-    # Apply Vite+ branding patches to vite source (CI checks out
-    # upstream vite which doesn't have branding patches)
     - name: Brand vite
       shell: bash
       run: pnpm exec tool brand-vite
-
-    # Build upstream TypeScript packages first (don't depend on native bindings)
     - name: Build upstream TypeScript packages
       shell: bash
       run: |
         pnpm --filter rolldown build-node
         pnpm --filter vite build-types
         pnpm --filter "@voidzero-dev/*" build
-
-    # Native binding formatting imports the repo config, which needs the
-    # built CLI. Prebuilt bindings do not need this preliminary build.
     - name: Build vite-plus TypeScript for native binding formatting
       if: steps.native.outputs.build == 'true'
       shell: bash
       run: pnpm --filter vite-plus build-ts
-
-    # Install zig + cargo-zigbuild for musl cross-compilation (napi-cross only supports gnu)
     - name: Add musl Rust target
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       shell: bash
       run: rustup target add ${INPUTS_TARGET}
       env:
         INPUTS_TARGET: ${{ inputs.target }}
-
     - name: Setup zig (musl)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
-      uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+      uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
       with:
         version: 0.15.2
-
-    # Rust nightly-2026-08-02 passes --fix-cortex-a53-843419 to the linker for
-    # aarch64-linux targets, which zig cc rejects. The filter for this arg
-    # (rust-cross/cargo-zigbuild#452) is merged but unreleased, so install from
-    # the pinned git commit. TODO: revert to taiki-e/install-action once
-    # cargo-zigbuild > 0.22.3 is released.
     - name: Install cargo-zigbuild (musl)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       shell: bash
       run: cargo install --locked --git https://github.com/rust-cross/cargo-zigbuild --rev 7e791b4be71b9870e0abccedf7885486803cd923 cargo-zigbuild
-
-    # NAPI builds - only run on cache miss (slow, especially on Windows)
-    # Must run before vite-plus TypeScript builds which depend on the bindings
     - name: Build NAPI bindings (Linux gnu)
       shell: bash
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
@@ -132,7 +94,6 @@ runs:
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
-
     - name: Build NAPI bindings (Linux musl)
       shell: bash
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
@@ -143,7 +104,6 @@ runs:
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
-
     - name: Build NAPI bindings (non-Linux targets)
       shell: bash
       if: steps.native.outputs.build == 'true' && !contains(inputs.target, 'linux')
@@ -152,7 +112,6 @@ runs:
       env:
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
-
     - name: Build Rust CLI binary (Linux gnu)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       shell: bash
@@ -163,7 +122,6 @@ runs:
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
-
     - name: Build Rust CLI binary (Linux musl)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       shell: bash
@@ -174,33 +132,27 @@ runs:
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
-
     - name: Build Rust CLI binary (non-Linux targets)
       if: steps.native.outputs.build == 'true' && !contains(inputs.target, 'linux')
       shell: bash
       run: cargo build --release --target ${INPUTS_TARGET} -p vp_global_cli
       env:
         INPUTS_TARGET: ${{ inputs.target }}
-
-    # The helper builds the excluded trampoline from its crate directory.
-    # It anchors CARGO_TARGET_DIR to the repository root.
     - name: Build trampoline shim binary (Windows only)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
       run: node packages/tools/src/build-trampoline.ts --release --target "${INPUTS_TARGET}"
       env:
         INPUTS_TARGET: ${{ inputs.target }}
-
     - name: Build installer binary (Windows only)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
       run: cargo build --release --target ${INPUTS_TARGET} -p vp_installer
       env:
         INPUTS_TARGET: ${{ inputs.target }}
-
     - name: Save NAPI binding cache
-      if: steps.native.outputs.build == 'true'
-      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      if: (steps.native.outputs.build == 'true') && env.VP_CI_BENCH_CACHE_STATE == 'cold'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
           packages/cli/binding/*.node
@@ -213,18 +165,13 @@ runs:
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp.exe
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-shim.exe
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-setup.exe
-        key: ${{ steps.cache-key.outputs.key }}
-
-    # Build vite-plus TypeScript after native bindings are ready
+        key: ${{ env.VP_CI_BENCH_PREFIX }}-${{ steps.cache-key.outputs.key }}
     - name: Build vite-plus TypeScript packages
       shell: bash
       run: |
         pnpm --filter=vite-plus build-ts
       env:
-        # Reuse metadata from the native build so consumer jobs do not
-        # download a Rust toolchain and dependency sources to generate versions.
         VP_BUILD_CARGO_METADATA: ${{ inputs.skip-native == 'true' && format('{0}/packages/cli/binding/vite-plus.cargo-metadata.json', github.workspace) || '' }}
-
     - name: Print output after build
       shell: bash
       if: inputs.print-after-build == 'true'

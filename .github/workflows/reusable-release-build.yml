@@ -1,25 +1,25 @@
 name: Reusable Release Build
-
 permissions: {}
-
-on:
+'on':
   workflow_call:
     inputs:
       version:
-        description: 'Version to stamp into Cargo.toml and produced binaries.'
+        description: Version to stamp into Cargo.toml and produced binaries.
         type: string
         required: true
       cache-key:
-        description: 'setup-rust cache-key prefix; pass a distinct value per caller (e.g. "release", "pkg-pr-new") to avoid cross-workflow cache pollution.'
+        description: setup-rust cache-key prefix; pass a distinct value per caller (e.g. "release", "pkg-pr-new") to avoid cross-workflow cache pollution.
         type: string
         required: false
-        default: 'release'
+        default: release
       docs-origin:
-        description: 'Documentation origin compiled into the native CLI, NAPI binding, and installer.'
+        description: Documentation origin compiled into the native CLI, NAPI binding, and installer.
         type: string
         required: false
-        default: 'https://viteplus.dev'
-
+        default: https://viteplus.dev
+      cache_state:
+        type: string
+        required: true
 jobs:
   build-rust:
     name: Build (${{ matrix.settings.target }})
@@ -28,7 +28,7 @@ jobs:
       contents: read
     env:
       RELEASE_BUILD: 'true'
-      DEBUG: 'napi:*'
+      DEBUG: napi:*
       VERSION: ${{ inputs.version }}
       VITE_PLUS_DOCS_ORIGIN: ${{ inputs.docs-origin }}
     strategy:
@@ -52,19 +52,16 @@ jobs:
           - target: aarch64-pc-windows-msvc
             os: namespace-profile-windows-4c-8g
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/benchmark-setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: ${{ inputs.cache-key }}
-
+          cache-key: ${{ inputs.cache-key }}-${{ matrix.settings.target }}
       - parallel:
           - name: Rustup Adds Target
             run: rustup target add ${{ matrix.settings.target }}
-
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
+          - uses: ./.github/actions/benchmark-setup-node
       - name: Set build version
         shell: bash
         run: |
@@ -96,7 +93,6 @@ jobs:
             pnpm exec json-edit "$f" '_.version = process.env.VERSION'
           done
           echo "PKG_JSON_STAMP_FILES=$PKG_JSON_STAMP_FILES" >> "$GITHUB_ENV"
-
       - name: Verify version replacement
         shell: bash
         run: |
@@ -112,25 +108,22 @@ jobs:
             fi
           done
           echo "Version stamp verified: ${VERSION}"
-
       - name: Build
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.settings.target }}
-
       - name: Upload Vite+ native artifact
         id: native-upload
         background: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: vite-plus-native-${{ matrix.settings.target }}
           path: ./packages/cli/binding/*.node
           if-no-files-found: error
-
       - name: Upload Rust CLI binary artifact
         id: cli-upload
         background: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: vp-global-cli-${{ matrix.settings.target }}
           path: |
@@ -138,7 +131,6 @@ jobs:
             ./target/${{ matrix.settings.target }}/release/vp.exe
             ./target/${{ matrix.settings.target }}/release/vp-shim.exe
           if-no-files-found: error
-
       - name: Package release archive
         shell: bash
         working-directory: ./target/${{ matrix.settings.target }}/release
@@ -151,7 +143,6 @@ jobs:
           else
             tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp sync-versions/bin.mjs toolchain.json
           fi
-
       - name: Verify packaged sync-versions planner
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         shell: bash
@@ -192,68 +183,60 @@ jobs:
               throw new Error("Unexpected packaged sync plan: " + JSON.stringify(plan));
             }
           ' "${archive_dir}/plan.json" "${VERSION}"
-
       - name: Upload release archive
         id: archive-upload
         background: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: vp-release-archive-${{ matrix.settings.target }}
           path: |
             ./target/${{ matrix.settings.target }}/release/vp-*.tar.gz
             ./target/${{ matrix.settings.target }}/release/vp-*.zip
           if-no-files-found: error
-
       - name: Upload installer binary artifact (Windows only)
         id: installer-upload
         background: true
         if: contains(matrix.settings.target, 'windows')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: vp-setup-${{ matrix.settings.target }}
           path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
           if-no-files-found: error
-
       - name: Remove .node files before upload dist
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         run: |
           rm ./packages/core/dist/**/*.node
-
       - parallel:
           - name: Upload core dist
-            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
             if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
             with:
               name: core
               path: ./packages/core/dist
               if-no-files-found: error
-
           - name: Upload prompts dist
-            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
             if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
             with:
               name: prompts
               path: ./packages/prompts/dist
               if-no-files-found: error
-
           - name: Upload cli dist
-            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
             if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
             with:
               name: cli
               path: ./packages/cli/dist
               if-no-files-found: error
-
           - name: Upload cli docs
-            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
             if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
             with:
               name: cli-docs
               path: ./packages/cli/docs
               if-no-files-found: error
-
           - name: Upload LICENSE files
-            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
             if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
             with:
               name: licenses
@@ -261,5 +244,11 @@ jobs:
                 ./packages/core/LICENSE
                 ./packages/cli/LICENSE
               if-no-files-found: error
-
-      - wait: [native-upload, cli-upload, archive-upload, installer-upload]
+      - wait:
+          - native-upload
+          - cli-upload
+          - archive-upload
+          - installer-upload
+env:
+  VP_CI_BENCH_CACHE_STATE: ${{ inputs.cache_state }}
+  VP_CI_BENCH_PREFIX: vp-ci-cache-2961-v1
