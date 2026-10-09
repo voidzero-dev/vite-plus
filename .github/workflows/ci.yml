@@ -11,6 +11,7 @@ permissions:
           - cold
           - warm
           - seed
+          - seed-macos
         required: true
         default: cold
 concurrency:
@@ -30,11 +31,11 @@ jobs:
     steps:
       - name: Use full CI matrix
         run: echo "Benchmark uses the complete CI matrix"
-    if: inputs.cache_state != 'seed' && (success())
+    if: "!startsWith(inputs.cache_state, 'seed') && (success())"
   docs-fmt:
     name: Docs format check
     needs: detect-changes
-    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'false')
+    if: "!startsWith(inputs.cache_state, 'seed') && (needs.detect-changes.outputs.code-changed == 'false')"
     runs-on: namespace-profile-linux-x64-default
     permissions:
       contents: read
@@ -56,7 +57,7 @@ jobs:
         run: pnpm vp fmt --check
   download-previous-rolldown-binaries:
     needs: detect-changes
-    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
+    if: "!startsWith(inputs.cache_state, 'seed') && (needs.detect-changes.outputs.code-changed == 'true')"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -68,7 +69,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
   test:
     needs: detect-changes
-    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
+    if: "!startsWith(inputs.cache_state, 'seed') && (needs.detect-changes.outputs.code-changed == 'true')"
     name: Test
     strategy:
       fail-fast: false
@@ -93,7 +94,7 @@ jobs:
       - run: just test
   build-windows-tests:
     needs: detect-changes
-    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
+    if: "!startsWith(inputs.cache_state, 'seed') && (needs.detect-changes.outputs.code-changed == 'true')"
     name: Build Windows tests
     runs-on: namespace-profile-linux-x64-default
     env:
@@ -169,10 +170,10 @@ jobs:
           RUST_MIN_STACK: '8388608'
           __COMPAT_LAYER: RunAsInvoker
           INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
-    if: inputs.cache_state != 'seed' && (success())
+    if: "!startsWith(inputs.cache_state, 'seed') && (success())"
   test-musl:
     needs: detect-changes
-    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
+    if: "!startsWith(inputs.cache_state, 'seed') && (needs.detect-changes.outputs.code-changed == 'true')"
     name: Test (Linux x64 musl)
     runs-on: namespace-profile-linux-x64-default
     container:
@@ -206,7 +207,7 @@ jobs:
       - run: just test
   lint:
     needs: detect-changes
-    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
+    if: "!startsWith(inputs.cache_state, 'seed') && (needs.detect-changes.outputs.code-changed == 'true')"
     name: Lint
     runs-on: namespace-profile-linux-x64-default
     steps:
@@ -241,7 +242,7 @@ jobs:
       - wait: rust-lint
   build-windows-cli:
     needs: detect-changes
-    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
+    if: "!startsWith(inputs.cache_state, 'seed') && (needs.detect-changes.outputs.code-changed == 'true')"
     name: Build Windows CLI binaries
     runs-on: namespace-profile-linux-x64-default
     steps:
@@ -776,7 +777,7 @@ jobs:
           )
           pnpm bootstrap-cli:ci
           vp --version
-    if: inputs.cache_state != 'seed' && (success())
+    if: "!startsWith(inputs.cache_state, 'seed') && (success())"
   build-cli-test-binaries:
     name: Build CLI test binaries (${{ matrix.target }})
     needs:
@@ -850,7 +851,7 @@ jobs:
           path: ${{ runner.temp }}/cli-test-binaries.tar.gz
           if-no-files-found: error
           retention-days: 7
-    if: inputs.cache_state != 'seed' && (success())
+    if: "!startsWith(inputs.cache_state, 'seed') && (success())"
   cli-snapshot-test:
     name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
     needs:
@@ -962,7 +963,7 @@ jobs:
           path: ${{ runner.temp }}/snapshot-artifacts
           if-no-files-found: ignore
           retention-days: 7
-    if: inputs.cache_state != 'seed' && (success())
+    if: "!startsWith(inputs.cache_state, 'seed') && (success())"
   cli-snapshot-test-windows:
     name: CLI snapshot test (Windows, shard ${{ matrix.shard }}/3)
     needs:
@@ -1102,7 +1103,7 @@ jobs:
           path: ${{ runner.temp }}/snapshot-artifacts
           if-no-files-found: ignore
           retention-days: 7
-    if: inputs.cache_state != 'seed' && (success())
+    if: "!startsWith(inputs.cache_state, 'seed') && (success())"
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
     needs:
@@ -1170,10 +1171,10 @@ jobs:
               git config --global --add safe.directory /workspace
               RUST_BACKTRACE=1 pnpm test:unit
             "
-    if: inputs.cache_state != 'seed' && (success())
+    if: "!startsWith(inputs.cache_state, 'seed') && (success())"
   certless-image-test:
     needs: detect-changes
-    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
+    if: "!startsWith(inputs.cache_state, 'seed') && (needs.detect-changes.outputs.code-changed == 'true')"
     name: Cert-less image E2E test
     runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 30
@@ -1219,7 +1220,7 @@ jobs:
     needs:
       - download-previous-rolldown-binaries
     runs-on: namespace-profile-linux-x64-default
-    if: "inputs.cache_state != 'seed' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: install-e2e'))"
+    if: "!startsWith(inputs.cache_state, 'seed') && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: install-e2e'))"
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
@@ -1289,7 +1290,7 @@ jobs:
     needs:
       - download-previous-rolldown-binaries
       - build-windows-cli
-    if: "inputs.cache_state != 'seed' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: sfw'))"
+    if: "!startsWith(inputs.cache_state, 'seed') && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: sfw'))"
     strategy:
       fail-fast: false
       matrix:
@@ -1379,7 +1380,7 @@ jobs:
           sfw "${{ matrix.vp_bin }}" install --no-frozen-lockfile
   done:
     runs-on: ubuntu-latest
-    if: inputs.cache_state != 'seed' && (always())
+    if: "!startsWith(inputs.cache_state, 'seed') && (always())"
     needs:
       - docs-fmt
       - test
@@ -1500,6 +1501,40 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: x86_64-unknown-linux-musl
+  seed-macos-artifact:
+    name: Restore evicted macOS native cache from cold artifact
+    if: inputs.cache_state == 'seed-macos'
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: cli-test-binaries-aarch64-apple-darwin
+          run-id: 37945965866
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}
+      - name: Extract original native binaries
+        run: |
+          tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
+          test -f packages/cli/binding/vite-plus.build-time
+          test -x target/aarch64-apple-darwin/release/vp
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            packages/cli/binding/*.node
+            packages/cli/binding/index.js
+            packages/cli/binding/index.d.ts
+            packages/cli/binding/index.cjs
+            packages/cli/binding/index.d.cts
+            packages/cli/binding/vite-plus.build-time
+            target/aarch64-apple-darwin/release/vp
+            target/aarch64-apple-darwin/release/vp.exe
+            target/aarch64-apple-darwin/release/vp-shim.exe
+            target/aarch64-apple-darwin/release/vp-setup.exe
+          key: vp-ci-cache-2961-v1-napi-binding-v3-aarch64-apple-darwin-----12b574f2cdc675bc-bf4c860452f3e22e0a1799ec09973bf4295b12872f7c130113d1edf12c1cbd59
 run-name: CI / after / ${{ inputs.cache_state }}
 env:
   VP_CI_BENCH_CACHE_STATE: ${{ inputs.cache_state }}
