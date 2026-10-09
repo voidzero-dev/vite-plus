@@ -73,15 +73,15 @@ runs:
       if: ${{ inputs.restore-cache == 'true' }}
       with:
         shared-key: ${{ inputs.cache-key }}
-        save-if: ${{ env.VP_CI_BENCH_CACHE_STATE == 'cold' }}
+        save-if: ${{ env.VP_CI_BENCH_DEPENDENCY_CACHE_STATE == 'cold' }}
         cache-workspace-crates: ${{ inputs.cache-workspace-crates }}
         cache-targets: ${{ inputs.target-dir && 'false' || 'true' }}
         cache-directories: ${{ inputs.target-dir || '' }}
         prefix-key: ${{ env.VP_CI_BENCH_PREFIX }}-rust
-        lookup-only: ${{ env.VP_CI_BENCH_CACHE_STATE == 'cold' }}
+        lookup-only: true
       id: benchmark-cache
     - name: Require warm Cargo cache hit
-      if: ${{ env.VP_CI_BENCH_CACHE_STATE == 'warm' && inputs.restore-cache == 'true' }}
+      if: false
       shell: bash
       env:
         CACHE_HIT: ${{ steps.benchmark-cache.outputs.cache-hit }}

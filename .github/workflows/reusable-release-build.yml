@@ -252,3 +252,4 @@ jobs:
 env:
   VP_CI_BENCH_CACHE_STATE: ${{ inputs.cache_state }}
   VP_CI_BENCH_PREFIX: vp-ci-cache-2961-v1
+  VP_CI_BENCH_DEPENDENCY_CACHE_STATE: ${{ inputs.cache_state }}

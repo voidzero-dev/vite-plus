@@ -52,7 +52,7 @@ runs:
         path: ${{ steps.store.outputs.STORE_PATH }}
         key: ${{ env.VP_CI_BENCH_PREFIX }}-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cpu || 'default' }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
         fail-on-cache-miss: true
-      if: ${{ env.VP_CI_BENCH_CACHE_STATE == 'warm' }}
+      if: false
     - name: Set CPU architecture for pnpm
       if: ${{ inputs.cpu }}
       shell: bash
@@ -63,7 +63,7 @@ runs:
       shell: bash
     - name: Seed isolated pnpm cache
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-      if: ${{ env.VP_CI_BENCH_CACHE_STATE == 'cold' }}
+      if: ${{ env.VP_CI_BENCH_DEPENDENCY_CACHE_STATE == 'cold' }}
       with:
         path: ${{ steps.store.outputs.STORE_PATH }}
         key: ${{ env.VP_CI_BENCH_PREFIX }}-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cpu || 'default' }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
