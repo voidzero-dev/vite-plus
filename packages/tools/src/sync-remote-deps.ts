@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
+import { alignVendoredPackageManagers } from './vendored-package-manager.ts';
 import {
   alignVendoredVitestDependencies,
   REMOVED_VITEST_PACKAGES,
@@ -881,6 +882,10 @@ export async function syncRemote() {
     upstreamVersions['vite'].branch,
     upstreamVersions['vite'].hash,
   );
+
+  // Keep nested pnpm calls inside the vendored repos on the root pnpm version;
+  // the upstream pnpm v12 pins break pnpm v11's version self-switch.
+  alignVendoredPackageManagers(rootDir);
 
   // Dynamically import dependencies after git clone. Capture the whole `yaml`
   // module (we need `yaml.parseDocument` to preserve comments).

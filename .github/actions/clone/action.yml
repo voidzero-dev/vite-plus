@@ -68,6 +68,12 @@ runs:
       shell: bash
       run: node packages/tools/src/vendored-vitest.ts
 
+    # Keep nested pnpm calls inside the vendored repos on the root pnpm version;
+    # the upstream pnpm v12 pins break pnpm v11's version self-switch (pnpm/pnpm#12811).
+    - name: Align vendored packageManager pins
+      shell: bash
+      run: node packages/tools/src/vendored-package-manager.ts
+
     # Disable autocrlf to preserve LF line endings on Windows
     # This prevents prettier/eslint from failing with "Delete ␍" errors
     - name: Configure git for LF line endings
