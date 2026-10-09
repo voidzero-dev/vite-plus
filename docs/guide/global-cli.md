@@ -381,6 +381,10 @@ vp dlx create-vite   # Download and run a package binary
 
 You do not need a local `vite-plus` dependency to run existing `package.json` scripts. Add the [project-local CLI](/guide/local-cli) when you want the frontend toolchain version recorded in the project's manifest and lockfile.
 
+## Run a Command in Another Directory
+
+Use `vp -C <dir> <command>` to run any `vp` command from another working directory. See [Targeting a package with `-C`](/guide/monorepo#targeting-a-package-with-c) for examples and details.
+
 ## Use Both CLIs Together
 
 The global CLI and the project-local `vite-plus` package work together. You keep using the same `vp` command, while each project can choose its own toolchain version.
