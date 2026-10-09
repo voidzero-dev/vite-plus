@@ -328,6 +328,10 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+        id: node-setup
+        background: true
+
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
@@ -335,19 +339,21 @@ jobs:
           tools: just,cargo-shear
           components: clippy rust-docs rustfmt
 
-      - parallel:
-          - run: |
-              cargo shear
-              cargo fmt --check
-              cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml --check
-              just lint
-              # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
+      - name: Rust lint
+        id: rust-lint
+        background: true
+        run: |
+          cargo shear
+          cargo fmt --check
+          cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml --check
+          just lint
+          # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
-          - uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
-            with:
-              files: .
+      - uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
+        with:
+          files: .
 
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - wait: node-setup
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -357,6 +363,8 @@ jobs:
       # via dts-resolver) as dedup-able depending on async resolution order.
       - name: Deduplicate dependencies
         run: pnpm dedupe --check || pnpm dedupe --check
+
+      - wait: rust-lint
 
   # Cross-compiles the Windows release NAPI binding (vite-plus .node) and CLI
   # binaries (vp.exe, vp-shim.exe, vp-setup.exe) on a fast Linux runner with
@@ -1044,6 +1052,39 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
+      # Fish and Zsh can both use apt or Homebrew; keep their installs sequential.
+      - name: Install snapshot shells
+        id: snapshot-shells
+        background: true
+        run: |
+          if ! command -v fish >/dev/null 2>&1; then
+            if [ "$RUNNER_OS" = 'Linux' ]; then
+              sudo apt-get update
+              sudo apt-get install --yes fish
+            else
+              brew install fish
+            fi
+          fi
+          fish --version
+
+          if ! command -v zsh >/dev/null 2>&1; then
+            if [ "$RUNNER_OS" = 'Linux' ]; then
+              sudo apt-get update
+              sudo apt-get install --yes zsh
+            else
+              brew install zsh
+            fi
+          fi
+          zsh --version
+
+      # https://github.com/marketplace/actions/setup-nu
+      - name: Install Nushell
+        id: nushell
+        background: true
+        uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
+        with:
+          version: '*'
+
       - parallel:
           - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
@@ -1059,6 +1100,13 @@ jobs:
               name: cli-test-binaries-${{ matrix.target }}
               path: ${{ runner.temp }}
 
+      - name: Install Playwright Chromium
+        id: playwright
+        background: true
+        run: pnpm exec playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
+
       - name: Extract CLI test binaries
         run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
 
@@ -1071,51 +1119,16 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
-      # Fish and Zsh can both use apt or Homebrew; keep their installs sequential.
-      - name: Ensure Fish is installed
+      # Provision the managed runtime once into the real home so cases can
+      # seed from it (seed-runtime) instead of each downloading ~50MB.
+      # Best-effort: without a seed, cases that need the runtime download it
+      # themselves.
+      - name: Prewarm managed runtime
         run: |
-          if ! command -v fish >/dev/null 2>&1; then
-            if [ "$RUNNER_OS" = 'Linux' ]; then
-              sudo apt-get update
-              sudo apt-get install --yes fish
-            else
-              brew install fish
-            fi
-          fi
-          fish --version
+          "$HOME/.vite-plus/bin/vp" node --version \
+            || echo "prewarm failed; cases will download the runtime on demand"
 
-      - name: Ensure Zsh is installed
-        run: |
-          if ! command -v zsh >/dev/null 2>&1; then
-            if [ "$RUNNER_OS" = 'Linux' ]; then
-              sudo apt-get update
-              sudo apt-get install --yes zsh
-            else
-              brew install zsh
-            fi
-          fi
-          zsh --version
-
-      - parallel:
-          # https://github.com/marketplace/actions/setup-nu
-          - name: Install Nushell
-            uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
-            with:
-              version: '*'
-
-          # Provision the managed runtime once into the real home so cases can
-          # seed from it (seed-runtime) instead of each downloading ~50MB.
-          # Best-effort: without a seed, cases that need the runtime download it
-          # themselves.
-          - name: Prewarm managed runtime
-            run: |
-              "$HOME/.vite-plus/bin/vp" node --version \
-                || echo "prewarm failed; cases will download the runtime on demand"
-
-          - name: Install Playwright Chromium
-            run: pnpm exec playwright install chromium
-            env:
-              PLAYWRIGHT_BROWSERS_PATH: '0'
+      - wait: [snapshot-shells, nushell, playwright]
 
       - name: Run PTY snapshot tests
         run: |
@@ -1190,6 +1203,18 @@ jobs:
         shell: bash
         run: mkdir -p "$TEMP" "$TMP"
 
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        id: snapshot-archive
+        background: true
+        with:
+          name: windows-snapshot-test-archive
+
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        id: nextest
+        background: true
+        with:
+          tool: cargo-nextest
+
       - parallel:
           - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
@@ -1205,6 +1230,14 @@ jobs:
             with:
               name: windows-cli-binaries
 
+      - name: Install Playwright Chromium
+        id: playwright
+        background: true
+        shell: bash
+        run: pnpm exec playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
@@ -1215,30 +1248,15 @@ jobs:
         shell: bash
         run: pnpm bootstrap-cli:ci
 
-      - parallel:
-          # Provision the managed runtime once into the real home so cases can
-          # seed from it (seed-runtime) instead of each downloading ~50MB.
-          # Best-effort: without a seed, cases that need the runtime download it
-          # themselves.
-          - name: Prewarm managed runtime
-            shell: bash
-            run: |
-              "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
-                || echo "prewarm failed; cases will download the runtime on demand"
-
-          - name: Install Playwright Chromium
-            shell: bash
-            run: pnpm exec playwright install chromium
-            env:
-              PLAYWRIGHT_BROWSERS_PATH: '0'
-
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: windows-snapshot-test-archive
-
-          - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
-            with:
-              tool: cargo-nextest
+      # Provision the managed runtime once into the real home so cases can
+      # seed from it (seed-runtime) instead of each downloading ~50MB.
+      # Best-effort: without a seed, cases that need the runtime download it
+      # themselves.
+      - name: Prewarm managed runtime
+        shell: bash
+        run: |
+          "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
+            || echo "prewarm failed; cases will download the runtime on demand"
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
       # which Yarn Classic discovers when walking parent directories.
@@ -1251,6 +1269,8 @@ jobs:
           $snapshotTemp = Join-Path $volume ('vp-snapshots-' + [guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Path $snapshotTemp | Out-Null
           "directory=$snapshotTemp" >> $env:GITHUB_OUTPUT
+
+      - wait: [playwright, snapshot-archive, nextest]
 
       # `cargo-nextest` is invoked directly so the job never depends on the
       # runner's Rust toolchain. --workspace-remap makes nextest rewrite

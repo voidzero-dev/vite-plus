@@ -504,8 +504,17 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
-        with:
-          ecosystem-ci-project: ${{ matrix.project.name }}
+
+      # The project clone only needs the bootstrap Node.js from the clone action.
+      - name: Clone ecosystem project
+        id: ecosystem-project
+        background: true
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          node ecosystem-ci/clone.ts "$ECOSYSTEM_PROJECT"
+        env:
+          ECOSYSTEM_PROJECT: ${{ matrix.project.name }}
 
       # Disable Windows Defender real-time scanning to speed up I/O-heavy operations
       - name: Disable Windows Defender
@@ -545,6 +554,8 @@ jobs:
           # Use USERPROFILE (native Windows path) instead of HOME (Git Bash path /c/Users/...)
           # so cmd.exe and Node.js execSync can resolve binaries in PATH
           echo "${USERPROFILE:-$HOME}/.vite-plus/bin" >> $GITHUB_PATH
+
+      - wait: ecosystem-project
 
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
