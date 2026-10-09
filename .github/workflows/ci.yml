@@ -10,10 +10,11 @@ permissions:
         options:
           - cold
           - warm
+          - seed
         required: true
         default: cold
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.cache_state }}
   cancel-in-progress: false
 defaults:
   run:
@@ -29,10 +30,11 @@ jobs:
     steps:
       - name: Use full CI matrix
         run: echo "Benchmark uses the complete CI matrix"
+    if: inputs.cache_state != 'seed' && (success())
   docs-fmt:
     name: Docs format check
     needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'false'
+    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'false')
     runs-on: namespace-profile-linux-x64-default
     permissions:
       contents: read
@@ -53,7 +55,7 @@ jobs:
         run: pnpm vp fmt --check
   download-previous-rolldown-binaries:
     needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
+    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,7 +67,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
   test:
     needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
+    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
     name: Test
     strategy:
       fail-fast: false
@@ -90,7 +92,7 @@ jobs:
       - run: just test
   build-windows-tests:
     needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
+    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
     name: Build Windows tests
     runs-on: namespace-profile-linux-x64-default
     env:
@@ -164,9 +166,10 @@ jobs:
           RUST_MIN_STACK: '8388608'
           __COMPAT_LAYER: RunAsInvoker
           INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
+    if: inputs.cache_state != 'seed' && (success())
   test-musl:
     needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
+    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
     name: Test (Linux x64 musl)
     runs-on: namespace-profile-linux-x64-default
     container:
@@ -200,7 +203,7 @@ jobs:
       - run: just test
   lint:
     needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
+    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
     name: Lint
     runs-on: namespace-profile-linux-x64-default
     steps:
@@ -228,7 +231,7 @@ jobs:
         run: pnpm dedupe --check || pnpm dedupe --check
   build-windows-cli:
     needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
+    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
     name: Build Windows CLI binaries
     runs-on: namespace-profile-linux-x64-default
     steps:
@@ -762,6 +765,7 @@ jobs:
           )
           pnpm bootstrap-cli:ci
           vp --version
+    if: inputs.cache_state != 'seed' && (success())
   build-cli-test-binaries:
     name: Build CLI test binaries (${{ matrix.target }})
     needs:
@@ -834,6 +838,7 @@ jobs:
           path: ${{ runner.temp }}/cli-test-binaries.tar.gz
           if-no-files-found: error
           retention-days: 7
+    if: inputs.cache_state != 'seed' && (success())
   cli-snapshot-test:
     name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
     needs:
@@ -935,6 +940,7 @@ jobs:
           path: ${{ runner.temp }}/snapshot-artifacts
           if-no-files-found: ignore
           retention-days: 7
+    if: inputs.cache_state != 'seed' && (success())
   cli-snapshot-test-windows:
     name: CLI snapshot test (Windows, shard ${{ matrix.shard }}/3)
     needs:
@@ -1063,6 +1069,7 @@ jobs:
           path: ${{ runner.temp }}/snapshot-artifacts
           if-no-files-found: ignore
           retention-days: 7
+    if: inputs.cache_state != 'seed' && (success())
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
     needs:
@@ -1129,9 +1136,10 @@ jobs:
               git config --global --add safe.directory /workspace
               RUST_BACKTRACE=1 pnpm test:unit
             "
+    if: inputs.cache_state != 'seed' && (success())
   certless-image-test:
     needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
+    if: inputs.cache_state != 'seed' && (needs.detect-changes.outputs.code-changed == 'true')
     name: Cert-less image E2E test
     runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 30
@@ -1177,7 +1185,7 @@ jobs:
     needs:
       - download-previous-rolldown-binaries
     runs-on: namespace-profile-linux-x64-default
-    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: install-e2e')"
+    if: "inputs.cache_state != 'seed' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: install-e2e'))"
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
@@ -1246,7 +1254,7 @@ jobs:
     needs:
       - download-previous-rolldown-binaries
       - build-windows-cli
-    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: sfw')"
+    if: "inputs.cache_state != 'seed' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: sfw'))"
     strategy:
       fail-fast: false
       matrix:
@@ -1335,7 +1343,7 @@ jobs:
           sfw "${{ matrix.vp_bin }}" install --no-frozen-lockfile
   done:
     runs-on: ubuntu-latest
-    if: always()
+    if: inputs.cache_state != 'seed' && (always())
     needs:
       - docs-fmt
       - test
@@ -1355,6 +1363,107 @@ jobs:
     steps:
       - run: exit 1
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+  seed-native:
+    name: Seed missing native cache (${{ matrix.kind }})
+    if: inputs.cache_state == 'seed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        kind:
+          - cli
+          - preview
+        settings:
+          - target: x86_64-unknown-linux-musl
+    env:
+      VP_CI_BENCH_CACHE_STATE: cold
+      VP_CI_BENCH_DEPENDENCY_CACHE_STATE: warm
+      RELEASE_BUILD: ${{ matrix.kind == 'preview' && 'true' || '' }}
+      DEBUG: ${{ matrix.kind == 'preview' && 'napi:*' || '' }}
+      VERSION: ${{ matrix.kind == 'preview' && '0.0.0-commit.eae7a8b1ed8570ba348d55ac5c83be9bc15cf56e' || '' }}
+      VITE_PLUS_DOCS_ORIGIN: ${{ matrix.kind == 'preview' && 'https://perf-parallel-ci-steps-viteplus-dev.voidzero-docs.workers.dev' || '' }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
+      - uses: ./.github/actions/clone
+      - uses: ./.github/actions/benchmark-setup-rust
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: native-seed
+      - name: Rustup Adds Target
+        run: rustup target add ${{ matrix.settings.target }}
+      - uses: ./.github/actions/benchmark-setup-node
+      - name: Set build version
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Stamp ${VERSION} as the [package] version so CARGO_PKG_VERSION matches
+          # the version that gets published/installed (the release version, or
+          # 0.0.0-commit.<sha> for preview builds). Anchored to the line-start
+          # `version = "..."` so crate dependency versions are never touched.
+          for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+            node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"
+          done
+          # Keep the workspace package entries in Cargo.lock consistent with
+          # the stamped versions before later commands use --locked.
+          cargo update --workspace
+          # Stamp the package.json files too:
+          # - packages/cli: the bundled JS dist inlines ${VERSION} as
+          #   cliPkg.version (VITE_PLUS_VERSION). Without this a preview
+          #   `vp migrate` pins the build-time release placeholder instead of
+          #   the test build, and skips the registry-bridge .npmrc.
+          # - packages/core: the release build bakes ${VERSION} into bundled
+          #   Rolldown's binding version guards, matching the
+          #   @voidzero-dev/vite-plus-<platform> packages published as
+          #   ${VERSION}. A release checkout already carries ${VERSION}; this
+          #   only changes preview builds.
+          # The list feeds the verify step below, so a stamped file cannot
+          # silently drop out of verification.
+          PKG_JSON_STAMP_FILES="packages/cli/package.json packages/core/package.json"
+          for f in $PKG_JSON_STAMP_FILES; do
+            pnpm exec json-edit "$f" '_.version = process.env.VERSION'
+          done
+          echo "PKG_JSON_STAMP_FILES=$PKG_JSON_STAMP_FILES" >> "$GITHUB_ENV"
+        if: matrix.kind == 'preview'
+      - name: Verify version replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+            if ! grep -qF "version = \"${VERSION}\"" "$f"; then
+              echo "ERROR: version stamp failed for $f"; head -5 "$f"; exit 1
+            fi
+          done
+          for f in ${PKG_JSON_STAMP_FILES}; do
+            if [ "$(node -p "require('./$f').version")" != "${VERSION}" ]; then
+              echo "ERROR: version stamp failed for $f"; exit 1
+            fi
+          done
+          echo "Version stamp verified: ${VERSION}"
+        if: matrix.kind == 'preview'
+      - name: Check isolated native seed
+        id: seed
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{ env.VP_CI_BENCH_PREFIX }}-napi-binding-v3-x86_64-unknown-linux-musl-${{ matrix.kind == 'preview' && 'true-napi:*-0.0.0-commit.eae7a8b1ed8570ba348d55ac5c83be9bc15cf56e--f2c0c7b91b1be3da-73c02e2dc175b463d13739c118a52f4f779e997268872757370a69d922ce635e' || '----12b574f2cdc675bc-bf4c860452f3e22e0a1799ec09973bf4295b12872f7c130113d1edf12c1cbd59' }}
+          path: |
+            packages/cli/binding/*.node
+            packages/cli/binding/index.js
+            packages/cli/binding/index.d.ts
+            packages/cli/binding/index.cjs
+            packages/cli/binding/index.d.cts
+            packages/cli/binding/vite-plus.build-time
+            target/x86_64-unknown-linux-musl/release/vp
+            target/x86_64-unknown-linux-musl/release/vp.exe
+            target/x86_64-unknown-linux-musl/release/vp-shim.exe
+            target/x86_64-unknown-linux-musl/release/vp-setup.exe
+          lookup-only: true
+      - name: Build missing native cache
+        if: steps.seed.outputs.cache-hit != 'true'
+        uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-unknown-linux-musl
 run-name: CI / before / ${{ inputs.cache_state }}
 env:
   VP_CI_BENCH_CACHE_STATE: ${{ inputs.cache_state }}
