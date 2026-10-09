@@ -2,9 +2,9 @@
 
 `vp test` runs tests with [Vitest](https://vitest.dev).
 
-The bundled runner uses Vitest `5.0.3` and requires Node `^22.18.0 || ^24.11.0 || >=26.0.0`. For existing projects, follow [Upgrade to Vitest 5](./vitest-v5.md) before updating dependencies.
+Vite+ depends on Vitest `5.0.3`, which requires Node `^22.18.0 || ^24.11.0 || >=26.0.0`. For existing projects, follow [Upgrade to Vitest 5](./vitest-v5.md) before updating dependencies.
 
-`vp test` uses the bundled Vitest, falling back to your project's version only if it cannot resolve the bundled copy.
+`vp test` resolves Vitest from `vite-plus`'s dependencies first, then from your project.
 
 ## Overview
 
