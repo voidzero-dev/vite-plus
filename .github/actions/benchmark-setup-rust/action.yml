@@ -73,7 +73,7 @@ runs:
       if: ${{ inputs.restore-cache == 'true' }}
       with:
         shared-key: ${{ inputs.cache-key }}
-        save-if: false
+        save-if: ${{ env.VP_CI_BENCH_CACHE_STATE == 'prime' && inputs.cache-key == 'certless-image-test' }}
         cache-workspace-crates: ${{ inputs.cache-workspace-crates }}
         cache-targets: ${{ inputs.target-dir && 'false' || 'true' }}
         cache-directories: ${{ inputs.target-dir || '' }}

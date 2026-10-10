@@ -51,8 +51,8 @@ runs:
       with:
         path: ${{ steps.store.outputs.STORE_PATH }}
         key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.cpu || 'default' }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
-        fail-on-cache-miss: true
-      if: ${{ env.VP_CI_BENCH_CACHE_STATE == 'warm' }}
+        fail-on-cache-miss: ${{ env.VP_CI_BENCH_CACHE_STATE == 'warm' }}
+      if: ${{ env.VP_CI_BENCH_CACHE_STATE != 'cold' }}
     - name: Set CPU architecture for pnpm
       if: ${{ inputs.cpu }}
       shell: bash
@@ -63,7 +63,7 @@ runs:
       shell: bash
     - name: Save pnpm cache on the default branch
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-      if: false
+      if: env.VP_CI_BENCH_CACHE_STATE == 'prime' && steps.cache.outputs.cache-hit != 'true'
       continue-on-error: true
       with:
         path: ${{ steps.store.outputs.STORE_PATH }}

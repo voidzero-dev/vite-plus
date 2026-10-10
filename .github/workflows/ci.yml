@@ -14,6 +14,7 @@ run-name: R3 / CI / ${{ inputs.variant }} / ${{ inputs.cache_state }}
         options:
           - cold
           - warm
+          - prime
         required: true
 permissions:
   contents: read
@@ -23,14 +24,17 @@ concurrency:
   cancel-in-progress: false
 jobs:
   before:
-    if: inputs.variant == 'before'
+    if: inputs.variant == 'before' && inputs.cache_state != 'prime'
     uses: ./.github/workflows/benchmark-ci-before.yml
     with:
       variant: ${{ inputs.variant }}
       cache_state: ${{ inputs.cache_state }}
   after:
-    if: inputs.variant == 'after'
+    if: inputs.variant == 'after' && inputs.cache_state != 'prime'
     uses: ./.github/workflows/benchmark-ci-after.yml
     with:
       variant: ${{ inputs.variant }}
       cache_state: ${{ inputs.cache_state }}
+  prime:
+    if: inputs.cache_state == 'prime'
+    uses: ./.github/workflows/benchmark-prime-caches.yml

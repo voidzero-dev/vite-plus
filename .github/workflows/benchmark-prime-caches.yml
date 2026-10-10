@@ -1,0 +1,60 @@
+name: Seed missing benchmark caches
+'on':
+  workflow_call: {}
+permissions:
+  contents: read
+  packages: read
+defaults:
+  run:
+    shell: bash
+env:
+  VP_CI_BENCH_CACHE_STATE: prime
+jobs:
+  certless-image-test:
+    name: Seed certificate test Cargo cache
+    runs-on: namespace-profile-linux-x64-default
+    timeout-minutes: 30
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
+      - uses: ./.github/actions/clone
+      - uses: ./.github/actions/benchmark-setup-rust
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: certless-image-test
+      - name: Build the global vp in a bookworm container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/work" \
+            -v "$HOME/.rustup:/usr/local/rustup" \
+            -v "$HOME/.cargo/registry:/usr/local/cargo/registry" \
+            -v "$HOME/.cargo/git:/usr/local/cargo/git" \
+            -w /work rust:1-bookworm bash -c '
+              set -e
+              apt-get update -qq && apt-get install -y -qq --no-install-recommends cmake python3
+              rustup show
+              cargo build -p vp_global_cli
+            '
+      - name: Run vp in node:24-bookworm-slim without a CA store
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/target/debug/vp:/usr/local/bin/vp:ro" \
+            node:24-bookworm-slim bash -c '
+              set -ex
+              # The image must actually lack the CA bundle, or this job stops
+              # guarding anything.
+              test ! -e /etc/ssl/certs/ca-certificates.crt
+              # Exercise commands on the mounted build without installing a published package.
+              touch /usr/local/bin/.vp-setup-complete
+              vp --version
+              # HTTPS to nodejs.org through the shared client; exits nonzero
+              # without the bundled-roots fallback.
+              vp env list-remote --lts --json > /tmp/vp-versions.json
+              node -e "const versions = require(\"/tmp/vp-versions.json\"); if (!versions.node?.length) process.exit(1)"
+            '
+  pnpm-macos:
+    name: Seed macOS pnpm cache
+    runs-on: namespace-profile-mac-default
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
+      - uses: ./.github/actions/clone
+      - uses: ./.github/actions/benchmark-setup-node
