@@ -1,33 +1,34 @@
 # Running Binaries
 
-Use `vpx`, `vp exec`, and `vp dlx` to run binaries without switching between local installs, downloaded packages, and project-specific tools.
+Use `vpx`, `vp exec`, and `vp dlx` to run package binaries and scripts without switching between local installs, downloaded packages, and project-specific tools.
 
 ## Overview
 
-`vpx` executes a command from a local or remote npm package. It can run a package that is already available locally, download a package on demand, or target an explicit package version.
+`vpx` does one of two things, depending on its first argument:
 
-Use the other binary commands when you need stricter control:
+- [`vpx <package>`](#running-package-binaries) runs a binary from a local or remote npm package, like `npx`.
+- [`vpx <file>`](#running-scripts) runs a TypeScript or JavaScript file, like `tsx`.
 
-- `vpx` looks for a binary in local `node_modules/.bin` directories, Vite+-managed global packages, and system `PATH`, in that order, then falls back to `vp dlx`. With `pkg@version`, `--package/-p`, or `--shell-mode`, it runs via `vp dlx` directly.
-- `vpx <file>` runs a TypeScript or JavaScript file with the Vite+ script loader
-- `vp exec` runs a command from local `node_modules/.bin` directories, falling back to `PATH` if not found
-- `vp dlx` runs a package binary without adding it as a dependency
+The other commands give stricter control over where a binary comes from:
 
-## `vpx`
+- [`vp exec`](#vp-exec) runs a command from local `node_modules/.bin` directories, falling back to `PATH`.
+- [`vp dlx`](#vp-dlx) runs a package binary without adding it as a dependency.
 
-Use `vpx` for running any local or remote binary:
+`vpx -v` or `vpx --version` prints the Vite+ version, like `vp --version`.
+
+## Running Package Binaries
 
 ```bash
-vpx <pkg[@version]> [args...]
+vpx [options] <pkg[@version]> [args...]
 ```
+
+`vpx` looks for the binary in local `node_modules/.bin` directories, Vite+-managed global packages, and the system `PATH`, in that order. If none has it, `vpx` downloads the package and runs it via `vp dlx`. With `pkg@version`, `--package/-p`, or `--shell-mode`, it runs via `vp dlx` directly.
 
 ### Options
 
 - `-p, --package <name>` installs one or more additional packages before running the command
 - `-c, --shell-mode` executes the command inside a shell
 - `-s, --silent` suppresses Vite+ output and only shows the command output
-- `--tsconfig <path>` selects the tsconfig when running a script (see [tsconfig](#tsconfig))
-- `-v, --version` prints the Vite+ version, like `vp --version`
 
 ### Examples
 
@@ -38,13 +39,19 @@ vpx oxlint@1.85.0 --version
 vpx -p cowsay -c 'echo "hi" | cowsay'
 ```
 
-### Running Scripts
+Running package binaries needs the global Vite+ CLI. In `package.json` scripts, the `vpx` bin of the project's `vite-plus` package hands package commands to it.
+
+## Running Scripts
 
 ::: warning Experimental
 Running script files with `vpx` is experimental. Its loader, [oxc-node](https://github.com/oxc-project/oxc-node), is experimental too.
 :::
 
-`vpx` also runs TypeScript and JavaScript files directly, without a `tsx` or `ts-node` dependency:
+```bash
+vpx [--tsconfig <path>] [node options] <file> [args...]
+```
+
+`vpx` runs TypeScript and JavaScript files directly, without a `tsx` or `ts-node` dependency. Scripts run on the project's Node.js version, the same one [`vp node`](/guide/env) selects, with the [oxc-node](https://github.com/oxc-project/oxc-node) loader that ships with Vite+.
 
 ```bash
 vpx ./scripts/seed.ts --dry-run
@@ -54,7 +61,17 @@ vpx --env-file=.env ./scripts/migrate.ts
 vpx --tsconfig tsconfig.scripts.json ./tools/gen.ts
 ```
 
-When the command is a file ending in `.ts`, `.mts`, `.cts`, `.tsx`, `.js`, `.mjs`, `.cjs`, or `.jsx`, `vpx` runs it on the project's Node.js version, the same one [`vp node`](/guide/env) selects, with the [oxc-node](https://github.com/oxc-project/oxc-node) loader that ships with Vite+. The loader supports:
+### Files and Package Names
+
+`vpx` runs its argument as a file when it is:
+
+- a path (starting with `./`, `../`, or `/`) ending in `.ts`, `.mts`, `.cts`, `.tsx`, `.js`, `.mjs`, `.cjs`, or `.jsx`
+- a name with one of those extensions that exists as a file, such as `scripts/seed.ts`
+- a path to an executable file whose shebang runs `vpx` (see [Shebang Scripts](#shebang-scripts))
+
+A missing path, or a missing name with a TypeScript extension, is an error: `vpx` never downloads a package for it. A name with a JavaScript extension that is not a file, such as `highlight.js`, runs the package of that name.
+
+### Supported Syntax
 
 - TypeScript syntax that Node.js type stripping rejects: enums, namespaces, parameter properties, and JSX
 - Decorators with `"experimentalDecorators": true`, including `emitDecoratorMetadata`; standard decorators are not supported yet
@@ -63,20 +80,28 @@ When the command is a file ending in `.ts`, `.mts`, `.cts`, `.tsx`, `.js`, `.mjs
 - TypeScript published in `node_modules`
 - tsconfig `jsx`, `jsxImportSource`, `jsxFactory`, `jsxFragmentFactory`, `useDefineForClassFields`, and `verbatimModuleSyntax`; see [tsconfig](#tsconfig) for the defaults without one
 
-Options before the script, such as `--watch`, `--inspect`, `--test`, `--env-file`, `--require`, and `--import`, are passed to Node.js, and `--require` or `--import` preloads can be TypeScript too. Everything after the script, including `--`, is passed to the script. A missing script is an error; `vpx` never downloads a package for a path.
-
 `vpx` does not type-check. Run [`vp check`](/guide/check) for that.
 
-Scripts can also use `vpx` as their interpreter. Make the file executable and keep its extension:
+### Options
+
+- `--tsconfig <path>` applies one tsconfig to every file (see [tsconfig](#tsconfig))
+- Node.js options before the file, such as `--watch`, `--inspect`, `--test`, `--env-file`, `--require`, and `--import`, are passed to Node.js; `--require` and `--import` preloads can be TypeScript too
+- Everything after the file, including `--`, is passed to the script
+
+### Shebang Scripts
+
+Scripts can use `vpx` as their interpreter. Make the file executable and keep its extension:
 
 ```ts
 #!/usr/bin/env vpx
 // scripts/release.ts
 ```
 
-The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "vpx ./scripts/seed.ts"` works in `package.json` scripts without the global CLI. Running package binaries with `vpx` still needs the global CLI.
+### In `package.json` Scripts
 
-#### tsconfig
+The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "vpx ./scripts/seed.ts"` works in `package.json` scripts without the global CLI.
+
+### tsconfig
 
 `vpx` reads compiler options from a tsconfig but does not type-check with it. Each file uses the nearest `tsconfig.json` above it that includes it through `files`, `include`, `exclude`, or project `references`, as `tsc` does, and `extends` is followed. Files in `node_modules` use no tsconfig.
 
