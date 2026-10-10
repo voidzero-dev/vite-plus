@@ -42,8 +42,8 @@ name = "vpx_script_module_formats"
 vp = ["local", "global"]
 comment = "CommonJS and ESM interop, preloads, child processes, and node:test."
 steps = [
-  { argv = ["vpx", "./src/both.cts"], comment = "A .cts entry that uses export runs as an ES module (no output, exit 0)" },
-  { argv = ["vpx", "./src/import-cts.ts"], comment = "Its named exports import from ESM" },
+  { argv = ["vpx", "./src/both.cts"], comment = "A .cts that uses export is CommonJS with ES module syntax; it fails with a clear error", continue-on-failure = true },
+  { argv = ["vpx", "./src/import-cts.ts"], comment = "Importing it reports the same error", continue-on-failure = true },
   { argv = ["vpx", "--require", "./src/setup.cts", "./src/print-setup.ts"], comment = "A TypeScript --require preload runs after the loader" },
   { argv = ["vpx", "./src/fork.ts"], comment = "fork() and Worker inherit the loader" },
   { argv = ["vpx", "--test", "--test-reporter=dot", "./tests/enum.test.ts"], comment = "node:test runs .ts test files" },
