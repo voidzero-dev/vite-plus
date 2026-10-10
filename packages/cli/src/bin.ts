@@ -126,6 +126,9 @@ if (maybePrintCommandHelp(args)) {
   await import('./version.js');
 } else if (command === 'staged') {
   await import('./staged/bin.js');
+} else if (command === 'check' && args[1] === '--raw') {
+  // Internal: spawned by `vp check` to run oxfmt and oxlint in one process.
+  await import('./check/raw.js');
 } else {
   // All other commands — delegate to Rust core via NAPI binding
   try {

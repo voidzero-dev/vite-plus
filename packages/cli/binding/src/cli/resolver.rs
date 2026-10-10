@@ -1,4 +1,4 @@
-use std::{env, ffi::OsStr, iter, sync::Arc};
+use std::{env, ffi::OsStr, iter, path::Path, sync::Arc};
 
 use vt::config::user::{
     AutoTracking, EnabledCacheConfig, GlobWithBase, InputBase, UserCacheConfig, UserInputEntry,
@@ -271,6 +271,36 @@ impl SubcommandResolver {
                 );
             }
         }
+    }
+
+    /// Resolve the internal `vp check --raw` runner, which runs the fmt and
+    /// lint steps of `vp check` in one Node.js process.
+    pub(super) fn resolve_check_raw(
+        &self,
+        envs: &Arc<EnvMap>,
+    ) -> anyhow::Result<ResolvedSubcommand> {
+        let cli_options = self.cli_options()?;
+        let bin_path = Path::new(&cli_options.vite_plus_package_path).join("dist").join("bin.js");
+        let bin_path_str = bin_path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("vite-plus bin path is not valid UTF-8"))?;
+
+        Ok(ResolvedSubcommand {
+            program: Arc::clone(&cli_options.node_exec_path),
+            args: [
+                // oxlint loads config files that trigger this warning, see `Lint` above.
+                Str::from("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"),
+                Str::from(bin_path_str),
+                Str::from("check"),
+                Str::from("--raw"),
+            ]
+            .into_iter()
+            .collect(),
+            // Spawned only by `vp check`, never planned as a task.
+            cache_config: UserCacheConfig::disabled(),
+            // The runner adds the per-tool envs itself.
+            envs: merge_resolved_envs_with_version(envs, Vec::new()),
+        })
     }
 }
 

@@ -16,14 +16,14 @@ use std::{borrow::Cow, env, ffi::OsStr, sync::Arc};
 
 use clap::Parser;
 use cow_utils::CowUtils;
-pub(crate) use execution::resolve_and_capture_output;
+pub(crate) use execution::spawn_check_raw;
 // Re-exports for lib.rs and check/mod.rs
 pub use resolver::SubcommandResolver;
 pub use types::{
     BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand, ToolchainArgs,
     ViteConfigResolverFn,
 };
-pub(crate) use types::{CapturedCommandOutput, EnvMap};
+pub(crate) use types::{CapturedCommandOutput, EnvMap, exit_status_from};
 use vp_error::Error;
 pub use vp_shared::init_tracing;
 use vp_shared::{PrependOptions, env_vars, prepend_tools_to_path_env};
