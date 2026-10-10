@@ -182,11 +182,12 @@ function Get-VersionFromMetadata {
 function Get-PlatformPackageMetadata {
     param(
         [string]$PackageName,
-        [string]$Version
+        [string]$Version,
+        [string]$Registry = $NpmRegistry
     )
 
     $encodedPackageName = [System.Uri]::EscapeDataString($PackageName)
-    $metadataUrl = "$NpmRegistry/$encodedPackageName/$Version"
+    $metadataUrl = "$($Registry.TrimEnd('/'))/$encodedPackageName/$Version"
     try {
         $metadata = Invoke-RestMethod -Uri $metadataUrl -Headers @{ Accept = "application/json" }
     } catch {
@@ -223,7 +224,7 @@ function Get-PlatformPackageMetadata {
     return $metadata
 }
 
-function Get-VerifiedPlatformTarballUrl {
+function Get-VerifiedPlatformDistribution {
     param(
         [object]$Metadata,
         [string]$PackageName,
@@ -243,7 +244,29 @@ function Get-VerifiedPlatformTarballUrl {
     if (-not $tarballUrl) {
         Write-Error-Exit "CLI package metadata for ${PackageName}@${Version} does not include dist.tarball"
     }
-    return [string]$tarballUrl
+    $integrity = $Metadata.dist.integrity
+    # Require a canonical base64 encoding of a 64-byte SHA-512 digest.
+    if ($integrity -isnot [string] -or $integrity -cnotmatch '\Asha512-[A-Za-z0-9+/]{85}[AQgw]==\z') {
+        Write-Error-Exit "CLI package metadata for ${PackageName}@${Version} does not include a valid SHA-512 dist.integrity"
+    }
+    return [pscustomobject]@{
+        TarballUrl = [string]$tarballUrl
+        Integrity = $integrity
+    }
+}
+
+function Assert-ArchiveIntegrity {
+    param(
+        [string]$Path,
+        [string]$Integrity
+    )
+
+    $expectedBytes = [Convert]::FromBase64String($Integrity.Substring(7))
+    $expected = [BitConverter]::ToString($expectedBytes).Replace('-', '')
+    $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA512 -ErrorAction Stop).Hash
+    if ($actual -cne $expected) {
+        Write-Error-Exit "Platform package integrity mismatch: the downloaded archive does not match dist.integrity"
+    }
 }
 
 function Get-PlatformSuffix {
@@ -336,19 +359,17 @@ function Get-PayloadAndHandoff {
         if (-not $LocalTgz) {
             # npm registry or registry bridge (when PrVersion is set)
             $platformSuffix = Get-PlatformSuffix -Platform $platform
-            if ($PrVersion) {
-                # The registry bridge redirects this URL to the platform tarball for
-                # the matching commit build (0.0.0-commit.<sha>).
-                $platformUrl = "$BridgeDownloadBase/@voidzero-dev/vite-plus-cli-$platformSuffix@$($PrCommitVersion.Substring(13))"
-            } else {
-                $packageName = "@voidzero-dev/vite-plus-cli-$platformSuffix"
-                $platformMetadata = Get-PlatformPackageMetadata -PackageName $packageName -Version $ViteVersion
-                $platformUrl = Get-VerifiedPlatformTarballUrl -Metadata $platformMetadata -PackageName $packageName -Version $ViteVersion
-            }
+            $packageName = "@voidzero-dev/vite-plus-cli-$platformSuffix"
+            $registry = if ($PrVersion) { $BridgeRegistry } else { $NpmRegistry }
+            # Preview metadata binds the same immutable commit version to its archive.
+            $platformMetadata = Get-PlatformPackageMetadata -PackageName $packageName -Version $ViteVersion -Registry $registry
+            $distribution = Get-VerifiedPlatformDistribution -Metadata $platformMetadata -PackageName $packageName -Version $ViteVersion
+            $platformUrl = $distribution.TarballUrl
 
             $platformTempFile = New-TemporaryFile
             try {
                 Invoke-WebRequest -Uri $platformUrl -OutFile $platformTempFile
+                Assert-ArchiveIntegrity -Path $platformTempFile -Integrity $distribution.Integrity
 
                 # Create temp extraction directory
                 $platformTempExtract = Join-Path $env:TEMP "vite-platform-$(Get-Random)"

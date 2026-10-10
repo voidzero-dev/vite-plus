@@ -206,7 +206,16 @@ Use these when you need lower-level package-manager behavior.
 
 - `vp link` and `vp unlink` manage local development links
 - `vp dlx create-vite` runs a package binary without saving it as a dependency
-- `vp pm <command>` provides additional package-management commands adapted to the detected package manager. Run `vp pm --help` to see available commands.
+- `vp pm <command>` provides additional package-management commands adapted to the detected package manager.
+
+  - **Dependencies**: `ci`, `prune`, `list`, `rebuild`, `approve-builds`
+  - **Patching**: `patch`, `patch-commit`
+  - **Packaging and publishing**: `pack`, `version`, `publish`, `stage`, `dist-tag`, `deprecate`
+  - **Inspection**: `view`, `search`, `audit`, `fund`, `ping`
+  - **Authentication and access**: `login`, `logout`, `whoami`, `token`, `owner`
+  - **Configuration**: `config`, `cache`
+
+  Command support depends on the package manager and its version. Run `vp pm --help` to list commands or `vp pm <command> --help` for available options.
 
 Examples:
 

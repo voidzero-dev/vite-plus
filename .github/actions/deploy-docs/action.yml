@@ -37,7 +37,8 @@ runs:
         version: 0.0.0-commit.11393b1a9ec1739c5897fefd418bdb095a34db7e
         cache: true
         working-directory: docs
-        cache-dependency-path: docs/pnpm-lock.yaml
+        # Resolved relative to working-directory.
+        cache-dependency-path: pnpm-lock.yaml
 
     # Vite Task shares the docs build through the remote cache. Uploads
     # authenticate with a GitHub Actions OIDC token.
@@ -50,8 +51,9 @@ runs:
         VP_REMOTE_CACHE: ${{ inputs.remote-cache }}
 
     # void 0.24 requires a platform connection that these deploy jobs do not configure.
-    - run: vpx void@0.23.0 deploy --dir docs/.vitepress/dist
+    - run: vpx void@0.23.0 deploy --dir .vitepress/dist
       shell: bash
+      working-directory: docs
       env:
         VOID_PROJECT: ${{ inputs.void-project }}
         VOID_TOKEN: ${{ inputs.void-token }}
