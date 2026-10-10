@@ -356,8 +356,9 @@ oxc_resolver = { version = "11.24.3", features = ["yarn_pnp"] }
 oxc_resolver_napi = { version = "11.24.3", default-features = false, features = ["yarn_pnp"] }
 oxc_sourcemap = "9.0.0"
 
-# vendored oxc-node, compiled into the native binding for `vpx <script>`
-oxc-node = { path = "./oxc-node" }
+# vendored oxc-node, compiled into the native binding for `vpx <script>`;
+# `rolldown_binding` already declares the global allocator
+oxc-node = { path = "./oxc-node", features = ["default_global_allocator"] }
 
 # rolldown crates
 rolldown = { path = "./rolldown/crates/rolldown" }
