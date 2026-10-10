@@ -63,7 +63,8 @@ describe('generator scaffold dependencies', () => {
     const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml'));
     expect(pkg.devDependencies).toEqual(catalog);
     expect(pkg.name).toBe('my-generator');
-    expect(pkg.dependencies).toEqual({ bingo: '^0.9.3', zod: '^3.25.76' });
+    const templatePkg = readJsonFile(path.join(templatesDir, 'generator/package.json'));
+    expect(pkg.dependencies).toEqual(templatePkg.dependencies);
   });
 
   it.each([
