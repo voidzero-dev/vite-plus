@@ -21,8 +21,8 @@ catalog:
   '@napi-rs/cli': ^3.10.0
   '@napi-rs/wasm-runtime': ~1.2.5
   '@nkzw/safe-word-list': ^3.1.0
-  '@oxc-node/cli': ^0.1.4
-  '@oxc-node/core': ^0.1.4
+  '@oxc-node/cli': ^0.1.6
+  '@oxc-node/core': ^0.1.6
   '@oxc-project/runtime': =0.153.0
   '@oxc-project/types': =0.153.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
