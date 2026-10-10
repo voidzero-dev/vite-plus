@@ -1,0 +1,80 @@
+name: Ecosystem benchmark after
+permissions: {}
+'on':
+  workflow_call:
+    inputs:
+      cache_state:
+        type: string
+        required: true
+      variant:
+        type: string
+        required: true
+defaults:
+  run:
+    shell: bash
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      related-files-changed: 'true'
+    steps:
+      - name: Use full test matrix
+        run: echo "Benchmark uses the complete test matrix"
+  download-previous-rolldown-binaries:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: e2e') || github.head_ref == 'deps/upstream-update' || startsWith(github.head_ref, 'renovate/') || needs.detect-changes.outputs.related-files-changed == 'true'"
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
+      - uses: ./.github/actions/download-rolldown-binaries
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+  build-windows-cli:
+    needs: detect-changes
+    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: e2e') || github.head_ref == 'deps/upstream-update' || startsWith(github.head_ref, 'renovate/') || needs.detect-changes.outputs.related-files-changed == 'true'"
+    name: Build Windows CLI binaries
+    runs-on: namespace-profile-linux-x64-default
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
+      - uses: ./.github/actions/clone
+      - uses: ./.github/actions/build-windows-cli
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+  linux:
+    name: Linux ecosystem
+    needs: download-previous-rolldown-binaries
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/reusable-ecosystem-ci.yml
+    with:
+      runner: ubuntu-latest
+      target: x86_64-unknown-linux-gnu
+      cache_state: ${{ inputs.cache_state }}
+      variant: ${{ inputs.variant }}
+  windows:
+    name: Windows ecosystem
+    needs:
+      - download-previous-rolldown-binaries
+      - build-windows-cli
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/reusable-ecosystem-ci.yml
+    with:
+      runner: namespace-profile-windows-4c-8g
+      target: x86_64-pc-windows-msvc
+      cache_state: ${{ inputs.cache_state }}
+      variant: ${{ inputs.variant }}
+env:
+  VP_CI_BENCH_CACHE_STATE: ${{ inputs.cache_state }}
+  VP_CI_BENCH_NATIVE_PREFIX: vp-ci-critical-2961-r3-${{ inputs.cache_state == 'warm' && 'before' || inputs.variant }}

@@ -1,0 +1,70 @@
+name: Setup Node and pnpm
+description: Setup Node.js and pnpm with caching
+inputs:
+  registry-url:
+    default: https://registry.npmjs.org
+    required: false
+    description: Optional registry to set up for auth. Will set the registry in a project level .npmrc and .yarnrc file, and set up auth to read in from env.NODE_AUTH_TOKEN.
+  scope:
+    required: false
+    description: Optional scope for authenticating against scoped registries. Will fall back to the repository owner when using the GitHub Packages registry (https://npm.pkg.github.com/).
+  architecture:
+    required: false
+    description: Optional architecture for Node.js (e.g., x64, arm64). If not specified, defaults to the runner architecture.
+  cpu:
+    required: false
+    description: Optional CPU architecture for pnpm supportedArchitectures configuration (e.g., x64, arm64).
+runs:
+  using: composite
+  steps:
+    - name: Detect Alpine Linux
+      id: detect
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if [ -f /etc/alpine-release ]; then
+          echo "is-alpine=true" >> "$GITHUB_OUTPUT"
+        fi
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      if: steps.detect.outputs.is-alpine != 'true'
+      with:
+        node-version-file: .node-version
+        architecture: ${{ inputs.architecture }}
+        registry-url: ${{ inputs.registry-url }}
+        scope: ${{ inputs.scope }}
+        package-manager-cache: false
+    - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+    - name: Get pnpm store directory
+      id: store
+      shell: bash
+      run: |
+        echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+    - name: Resolve default branch
+      id: default_branch
+      shell: bash
+      run: echo "name=${DEFAULT_BRANCH:-main}" >> "$GITHUB_OUTPUT"
+      env:
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    - name: Restore pnpm cache
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: ${{ steps.store.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.cpu || 'default' }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+        fail-on-cache-miss: true
+      if: ${{ env.VP_CI_BENCH_CACHE_STATE == 'warm' }}
+    - name: Set CPU architecture for pnpm
+      if: ${{ inputs.cpu }}
+      shell: bash
+      run: node -e 'console.log(`\nsupportedArchitectures:\n  cpu:\n    - ${process.env.CPU_ARCH}`)' >> pnpm-workspace.yaml
+      env:
+        CPU_ARCH: ${{ inputs.cpu }}
+    - run: pnpm install --frozen-lockfile --ignore-scripts
+      shell: bash
+    - name: Save pnpm cache on the default branch
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      if: false
+      continue-on-error: true
+      with:
+        path: ${{ steps.store.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.cpu || 'default' }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}

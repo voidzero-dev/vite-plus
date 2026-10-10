@@ -1,32 +1,71 @@
-name: Reusable Ecosystem CI
+name: Ecosystem benchmark before
+permissions: {}
 'on':
   workflow_call:
     inputs:
-      runner:
-        description: Runner for the package build and ecosystem tests.
-        type: string
-        required: true
-      target:
-        description: Rust target for the package build.
-        type: string
-        required: true
       cache_state:
         type: string
         required: true
       variant:
         type: string
         required: true
-permissions: {}
 defaults:
   run:
     shell: bash
 jobs:
-  build:
-    name: Build vite-plus packages (${{ inputs.runner }})
-    runs-on: ${{ inputs.runner }}
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      related-files-changed: 'true'
+    steps:
+      - name: Use full test matrix
+        run: echo "Benchmark uses the complete test matrix"
+  download-previous-rolldown-binaries:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: e2e') || github.head_ref == 'deps/upstream-update' || startsWith(github.head_ref, 'renovate/') || needs.detect-changes.outputs.related-files-changed == 'true'"
     permissions:
       contents: read
       packages: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
+      - uses: ./.github/actions/download-rolldown-binaries
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+  build-windows-cli:
+    needs: detect-changes
+    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: e2e') || github.head_ref == 'deps/upstream-update' || startsWith(github.head_ref, 'renovate/') || needs.detect-changes.outputs.related-files-changed == 'true'"
+    name: Build Windows CLI binaries
+    runs-on: namespace-profile-linux-x64-default
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
+      - uses: ./.github/actions/clone
+      - uses: ./.github/actions/build-windows-cli
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+  build:
+    name: Build vite-plus packages (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
+    needs:
+      - download-previous-rolldown-binaries
+      - build-windows-cli
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: namespace-profile-windows-4c-8g
+            target: x86_64-pc-windows-msvc
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
@@ -36,10 +75,10 @@ jobs:
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
       - uses: ./.github/actions/benchmark-setup-rust
-        if: ${{ !contains(inputs.target, 'windows') }}
+        if: ${{ !contains(matrix.target, 'windows') }}
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: e2e-build-${{ inputs.runner }}
+          cache-key: e2e-build-${{ matrix.os }}
       - uses: ./.github/actions/benchmark-setup-node
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -47,18 +86,16 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
       - name: Download prebuilt Windows binaries
-        if: contains(inputs.target, 'windows')
+        if: contains(matrix.target, 'windows')
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: windows-cli-binaries
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
-          target: ${{ inputs.target }}
-          skip-native: ${{ contains(inputs.target, 'windows') }}
+          target: ${{ matrix.target }}
+          skip-native: ${{ contains(matrix.target, 'windows') }}
       - name: Pack packages into tgz
-        env:
-          BUILD_TARGET: ${{ inputs.target }}
         run: |
           mkdir -p tmp/tgz
           # patch-project.ts serves these tgz through a local npm registry
@@ -75,13 +112,13 @@ jobs:
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Copy vp binary for e2e-test job (findVpBinary expects it in target/)
-          cp "target/$BUILD_TARGET/release/vp" tmp/tgz/vp 2>/dev/null || cp "target/$BUILD_TARGET/release/vp.exe" tmp/tgz/vp.exe 2>/dev/null || true
-          cp "target/$BUILD_TARGET/release/vp-shim.exe" tmp/tgz/vp-shim.exe 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/vp tmp/tgz/vp 2>/dev/null || cp target/${{ matrix.target }}/release/vp.exe tmp/tgz/vp.exe 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/vp-shim.exe tmp/tgz/vp-shim.exe 2>/dev/null || true
           ls -la tmp/tgz
       - name: Upload tgz artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: vite-plus-packages-${{ inputs.runner }}
+          name: vite-plus-packages-${{ matrix.os }}
           path: tmp/tgz/
           retention-days: 1
   e2e-test:
@@ -99,7 +136,8 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ${{ inputs.runner }}
+          - ubuntu-latest
+          - namespace-profile-windows-4c-8g
         project:
           - name: vibe-dashboard
             node-version: 24
@@ -365,15 +403,8 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b
       - uses: ./.github/actions/clone
-      - name: Clone ecosystem project
-        id: ecosystem-project
-        background: true
-        shell: bash
-        run: |
-          git config --global core.autocrlf false
-          node ecosystem-ci/clone.ts "$ECOSYSTEM_PROJECT"
-        env:
-          ECOSYSTEM_PROJECT: ${{ matrix.project.name }}
+        with:
+          ecosystem-ci-project: ${{ matrix.project.name }}
       - name: Disable Windows Defender
         if: runner.os == 'Windows'
         continue-on-error: true
@@ -406,7 +437,6 @@ jobs:
           # Use USERPROFILE (native Windows path) instead of HOME (Git Bash path /c/Users/...)
           # so cmd.exe and Node.js execSync can resolve binaries in PATH
           echo "${USERPROFILE:-$HOME}/.vite-plus/bin" >> $GITHUB_PATH
-      - wait: ecosystem-project
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         shell: bash
