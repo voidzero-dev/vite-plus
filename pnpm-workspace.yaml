@@ -141,9 +141,8 @@ catalog:
   web-tree-sitter: ^0.27.0
   ws: ^8.22.0
   yaml: ^2.8.1
-  # bingo introspects template option schemas via zod 3 internals;
-  # keep zod on v3 until bingo supports zod 4
-  zod: ^3.25.76
+  # Keep generator option schemas compatible with bingo's Zod version.
+  zod: ^4.4.3
   zx: ^8.1.2
 catalogMode: prefer
 ignoreScripts: true

@@ -57,8 +57,8 @@ generator package (bingo dependency is the run hint; no marker keyword)
     "dev": "node bin/index.ts"
   },
   "dependencies": {
-    "bingo": "^0.9.3",
-    "zod": "^3.25.76"
+    "bingo": "^0.13.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "catalog:",
@@ -103,13 +103,12 @@ missing required template option fails before creating its directory
 ● Running: node <workspace>/tools/my-generator/bin/index.ts --directory missing-name --skip-requests
 [
   {
-    "code": "invalid_type",
     "expected": "string",
-    "received": "undefined",
+    "code": "invalid_type",
     "path": [
       "name"
     ],
-    "message": "Required"
+    "message": "Invalid input: expected string, received undefined"
   }
 ]
 ```
