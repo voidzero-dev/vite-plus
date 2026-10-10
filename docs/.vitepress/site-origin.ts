@@ -1,17 +1,26 @@
 import { createHash } from 'node:crypto';
 
-// Keep this host aligned with docs/wrangler.jsonc and the Workers subdomain.
+// Keep this host aligned with docs/cloudflare.config.ts and the Workers subdomain.
 const workersHost = 'viteplus-dev.voidzero-docs.workers.dev';
+
+// Workers Builds deploys main to production and every other branch as a
+// Preview, which needs both a branch origin and Preview build output.
+export function resolveWorkersPreviewBranch(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const branch = env.WORKERS_CI_BRANCH;
+  return env.WORKERS_CI === '1' && branch && branch !== 'main' ? branch : undefined;
+}
 
 export function resolveDocsSiteOrigin(env: NodeJS.ProcessEnv = process.env): string | undefined {
   if (env.DOCS_SITE_ORIGIN) {
     return env.DOCS_SITE_ORIGIN.replace(/\/+$/, '');
   }
 
-  const branch = env.WORKERS_CI_BRANCH;
+  const branch = resolveWorkersPreviewBranch(env);
   // GitHub deploys supply DOCS_SITE_ORIGIN. Workers Builds needs its own
   // branch origin; main and local builds retain the production fallback.
-  if (env.WORKERS_CI !== '1' || !branch || branch === 'main') {
+  if (!branch) {
     return undefined;
   }
 
