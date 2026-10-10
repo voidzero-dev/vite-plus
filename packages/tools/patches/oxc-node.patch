@@ -1,0 +1,242 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 5aa1fa6..cc72cb2 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -5,11 +5,12 @@ authors = ["LongYinan <github@lyn.one>"]
+ edition = "2024"
+ license = "MIT"
+ publish = false
++build = false
+ 
+ [lib]
+ # `rlib` lets `cargo test` link unit tests against the library; the napi build
+ # only consumes the `cdylib` artifact.
+-crate-type = ["cdylib", "rlib"]
++crate-type = ["rlib"]
+ 
+ [features]
+ # Leave the global allocator to the host. Enable this when linking oxc-node into
+diff --git a/src/lib.rs b/src/lib.rs
+index 843ea39..0f385ec 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -285,7 +285,7 @@ static TSCONFIG_OVERRIDE: Mutex<TsconfigOverride> =
+ /// on the first transform or resolve, so this has to run before that. Calling
+ /// it afterwards throws, unless it names the config already in use, whether
+ /// that came from here or from an environment variable.
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ pub fn set_tsconfig_path(path: Option<String>) -> Result<()> {
+     // Kept as given: a relative path is joined to the loader's working directory
+     // in `init_resolver`, exactly like the environment variables. The native
+@@ -318,7 +318,7 @@ pub fn set_tsconfig_path(path: Option<String>) -> Result<()> {
+ /// `register.mjs` hands it to the `module.register()` hook thread. Under WASI
+ /// that thread instantiates its own copy of the binding, which starts out with
+ /// no override of its own.
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ pub fn get_tsconfig_path() -> Option<String> {
+     let tsconfig_override = TSCONFIG_OVERRIDE.lock().unwrap_or_else(PoisonError::into_inner);
+     tsconfig_override.path.as_ref().map(|path| path.to_string_lossy().into_owned())
+@@ -448,13 +448,13 @@ fn hex_digit(byte: u8) -> Option<u8> {
+ }
+ 
+ #[cfg(target_family = "wasm")]
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ pub fn init_tracing() {
+     init();
+ }
+ 
+ #[cfg(not(target_family = "wasm"))]
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ pub fn init_tracing() {}
+ 
+ #[cfg_attr(not(target_family = "wasm"), napi_derive::module_init)]
+@@ -501,13 +501,13 @@ pub fn detect_runtime_syntax(_exports: Object, env: Env) -> Result<()> {
+     Ok(())
+ }
+ 
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ pub struct Output {
+     code: String,
+     map: Option<SourceMap<'static>>,
+ }
+ 
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ impl Output {
+     #[napi]
+     /// Returns the generated code
+@@ -524,22 +524,22 @@ impl Output {
+     }
+ }
+ 
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ pub fn transform(path: String, source: Either<String, &[u8]>) -> Result<Output> {
+     let transformer = OxcTransformer::new(None, None);
+     transformer.transform(path, source)
+ }
+ 
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ pub fn transform_async(
+     path: String,
+     source: Either3<String, Uint8Array, Buffer>,
+-) -> AsyncTask<TransformTask> {
++) -> AsyncTask<OxcNodeTransformTask> {
+     let transformer = OxcTransformer::new(None, None);
+     transformer.transform_async(path, source)
+ }
+ 
+-pub struct TransformTask {
++pub struct OxcNodeTransformTask {
+     cwd: String,
+     helper_module_name: Option<String>,
+     path: String,
+@@ -547,7 +547,7 @@ pub struct TransformTask {
+ }
+ 
+ #[napi]
+-impl Task for TransformTask {
++impl Task for OxcNodeTransformTask {
+     type Output = Output;
+     type JsValue = Output;
+ 
+@@ -582,7 +582,7 @@ impl Task for TransformTask {
+     }
+ }
+ 
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ pub struct OxcTransformer {
+     cwd: String,
+     /// The module name emitted for helper imports — the loaders pass a copy-tagged one
+@@ -591,7 +591,7 @@ pub struct OxcTransformer {
+     helper_module_name: Option<String>,
+ }
+ 
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ impl OxcTransformer {
+     #[napi(constructor)]
+     pub fn new(cwd: Option<String>, helper_module_name: Option<String>) -> Self {
+@@ -629,8 +629,8 @@ impl OxcTransformer {
+         &self,
+         path: String,
+         source: Either3<String, Uint8Array, Buffer>,
+-    ) -> AsyncTask<TransformTask> {
+-        AsyncTask::new(TransformTask {
++    ) -> AsyncTask<OxcNodeTransformTask> {
++        AsyncTask::new(OxcNodeTransformTask {
+             path,
+             source,
+             cwd: self.cwd.clone(),
+@@ -1068,7 +1068,7 @@ fn transform_program<'a>(
+     Ok(Output { code, map: map.map(|source_map| source_map.into_owned()) })
+ }
+ 
+-#[napi(object)]
++#[napi(object, namespace = "oxcNode")]
+ #[derive(Debug)]
+ pub struct ResolveContext {
+     /// Export conditions of the relevant `package.json`
+@@ -1080,7 +1080,7 @@ pub struct ResolveContext {
+     pub parent_url: Option<String>,
+ }
+ 
+-#[napi(object)]
++#[napi(object, namespace = "oxcNode")]
+ pub struct ResolveFnOutput {
+     pub format: Option<Either<String, Null>>,
+     pub short_circuit: Option<bool>,
+@@ -1101,7 +1101,7 @@ impl FromNapiValue for OxcResolveOptions {
+     }
+ }
+ 
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ #[cfg_attr(not(target_family = "wasm"), allow(unused_variables))]
+ #[allow(clippy::type_complexity)]
+ pub fn create_resolve<'env>(
+@@ -1289,8 +1289,11 @@ pub fn create_resolve<'env>(
+                     Some(_) => false,
+                 }
+         };
++        // Vite+: TypeScript dependencies are transformed too; Node.js refuses to strip
++        // types under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`).
+         if !p.to_str().map(|p| p.contains(NODE_MODULES_PATH)).unwrap_or(false)
+             || transformable_dependency()
++            || is_typescript_path(p)
+         {
+             let format = {
+                 let ext = p.extension().and_then(|ext| ext.to_str());
+@@ -1371,7 +1374,7 @@ fn json_format(context: &ResolveContext) -> &'static str {
+     if context.import_attributes.contains_key("type") { "json" } else { "module" }
+ }
+ 
+-#[napi(object)]
++#[napi(object, namespace = "oxcNode")]
+ #[derive(Debug)]
+ pub struct LoadContext {
+     /// Export conditions of the relevant `package.json`
+@@ -1386,7 +1389,7 @@ pub struct LoadContext {
+     pub import_attributes: HashMap<String, String>,
+ }
+ 
+-#[napi(object)]
++#[napi(object, namespace = "oxcNode")]
+ pub struct LoadFnOutput {
+     pub format: String,
+     pub source: Option<Either4<String, Uint8Array, Buffer, Null>>,
+@@ -1394,7 +1397,7 @@ pub struct LoadFnOutput {
+     pub response_url: Option<String>,
+ }
+ 
+-#[napi]
++#[napi(namespace = "oxcNode")]
+ #[allow(clippy::type_complexity)]
+ pub fn load<'env>(
+     url: String,
+@@ -1471,7 +1474,11 @@ fn load_commonjs_esm(
+         return Ok(None);
+     }
+     // The same skip as the transform below: dependencies are left alone unless asked for.
+-    if !transform_all_enabled() && url.contains("/node_modules/") {
++    // Vite+: TypeScript dependencies are transformed (see `create_resolve`).
++    if !transform_all_enabled()
++        && url.contains("/node_modules/")
++        && !is_typescript_path(Path::new(url_path(url)))
++    {
+         return Ok(None);
+     }
+     // A `?query` or `#fragment` suffix belongs to the module URL, not to the file on disk.
+@@ -1640,7 +1647,12 @@ fn transform_output(
+             // dependencies too — `OXC_TRANSFORM_ALL` decides whether their *source* is
+             // transpiled, and skipping this would hand Node.js raw JSON to run as an ES
+             // module.
+-            if !is_json && !transform_all_enabled() && url.contains("/node_modules/") {
++            // Vite+: TypeScript dependencies are transformed (see `create_resolve`).
++            if !is_json
++                && !transform_all_enabled()
++                && url.contains("/node_modules/")
++                && !is_typescript_path(src_path)
++            {
+                 tracing::debug!("Skip transforming node_modules {}", url);
+                 return Ok(output);
+             }
+@@ -1754,6 +1766,11 @@ impl TryAsStr for Either4<String, Uint8Array, Buffer, Null> {
+     }
+ }
+ 
++/// Vite+: TypeScript sources, which Node.js cannot run untransformed.
++fn is_typescript_path(path: &Path) -> bool {
++    matches!(path.extension().and_then(|ext| ext.to_str()), Some("ts" | "mts" | "cts" | "tsx"))
++}
++
+ /// Read an environment variable, treating an empty value as unset.
+ ///
+ /// Continuous integration wrappers and `.env` files routinely export variables

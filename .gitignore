@@ -8,6 +8,7 @@ dist
 rolldown
 rolldown-vite
 vite
+oxc-node
 /crates/vp_global_cli/vp
 .void/
 .direnv

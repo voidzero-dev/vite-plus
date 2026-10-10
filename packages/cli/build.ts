@@ -146,7 +146,7 @@ async function buildNapiBinding() {
 
   const cli = new NapiCli();
 
-  const bindingFeatures = ['rolldown'];
+  const bindingFeatures = ['rolldown', 'oxc-node'];
   const { dtsHeader } = (
     await import('../../rolldown/packages/rolldown/package.json', { with: { type: 'json' } })
   ).default.napi;
@@ -160,7 +160,8 @@ async function buildNapiBinding() {
     jsBinding: 'index.cjs',
     dts: 'index.d.cts',
     release: process.env.VP_CLI_DEBUG !== '1',
-    features: bindingFeatures,
+    // napi-rs passes each entry as a separate cargo argument after one `--features`.
+    features: [bindingFeatures.join(',')],
   });
 
   const outputs = await task;
@@ -624,7 +625,10 @@ type ToolchainVersionSource =
   | { type: 'core-package' }
   | { type: 'core-bundled'; key: string }
   | { type: 'npm-dependency'; package: string }
-  | { type: 'cargo'; package: string; revision?: boolean; builtAt?: boolean };
+  | { type: 'cargo'; package: string; revision?: boolean; builtAt?: boolean }
+  // Upstream source vendored by `sync-remote` and compiled into the binding: the version
+  // comes from its package.json, the revision from `.upstream-versions.json`.
+  | { type: 'vendored'; upstream: string; packageJson: string };
 
 interface ToolchainConfigNode {
   id: string;
@@ -815,6 +819,18 @@ async function resolveToolchainNode(
       } else {
         version = pkg.version;
       }
+      break;
+    }
+    case 'vendored': {
+      const repoRoot = join(projectDir, '..', '..');
+      const upstreamVersions = JSON.parse(
+        await readFile(join(repoRoot, 'packages', 'tools', '.upstream-versions.json'), 'utf8'),
+      ) as Record<string, { hash?: string }>;
+      revision = upstreamVersions[source.upstream]?.hash;
+      if (!revision) {
+        throw new Error(`Missing ${source.upstream} in packages/tools/.upstream-versions.json`);
+      }
+      version = await readPackageVersion(join(repoRoot, source.packageJson), source.packageJson);
       break;
     }
   }

@@ -24,6 +24,8 @@ runs:
           ${{
             hashFiles(
               'packages/tools/.upstream-versions.json',
+              'packages/tools/src/patch-oxc-node.ts',
+              'packages/tools/patches/oxc-node.patch',
               'rust-toolchain.toml',
               'Cargo.lock',
               'Cargo.toml',

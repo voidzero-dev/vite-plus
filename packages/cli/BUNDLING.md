@@ -254,29 +254,30 @@ pub extern crate rolldown_binding;
 
 ### Build-Time Feature Activation
 
-The rolldown feature is only enabled during release builds:
+`build.ts` enables the `rolldown` and `oxc-node` features for every binding build:
 
 ```typescript
 // In build.ts
+const bindingFeatures = ['rolldown', 'oxc-node'];
 await cli.build({
-  features: process.env.RELEASE_BUILD ? ['rolldown'] : void 0,
+  // napi-rs passes each entry as a separate cargo argument after one `--features`.
+  features: [bindingFeatures.join(',')],
   release: process.env.VP_CLI_DEBUG !== '1',
 });
 ```
 
-**When `RELEASE_BUILD=1`**:
+With the features enabled, the build:
 
-1. Enables the `rolldown` Cargo feature
-2. Compiles `rolldown_binding` into the `.node` file
-3. Extracts `napi.dtsHeader` from rolldown's package.json for type definitions
-4. Prepends custom type definitions to the generated `.d.ts` file
+1. Compiles `rolldown_binding` and the vendored `oxc-node` crate into the `.node` file
+2. Extracts `napi.dtsHeader` from rolldown's package.json for type definitions
+3. Prepends custom type definitions to the generated `.d.ts` file
 
 ### Why Conditional Compilation?
 
-| Build Type                  | rolldown Feature | Use Case                                |
-| --------------------------- | ---------------- | --------------------------------------- |
-| Development (`pnpm build`)  | Disabled         | Faster builds, smaller binaries         |
-| Release (`RELEASE_BUILD=1`) | Enabled          | Full distribution with bundled rolldown |
+| Build Type                                    | Features            | Use Case                                     |
+| --------------------------------------------- | ------------------- | -------------------------------------------- |
+| `cargo check` / `cargo test -p vite-plus-cli` | None                | Faster Rust iteration without Rolldown       |
+| `pnpm build` (debug or release)               | `rolldown,oxc-node` | Full binding with bundled Rolldown and hooks |
 
 ### Module Specifier Rewriting
 
@@ -298,12 +299,23 @@ This means:
 
 ### Native Binding Contents
 
-When compiled with `RELEASE_BUILD=1`, the `.node` file contains:
+A binding built by `pnpm build` contains:
 
-| Component          | Source                             | Purpose                        |
-| ------------------ | ---------------------------------- | ------------------------------ |
-| `vt`               | `packages/cli/binding/src/lib.rs`  | Task runner session management |
-| `rolldown_binding` | `rolldown/crates/rolldown_binding` | Rolldown bundler NAPI bindings |
+| Component          | Source                             | Purpose                                     |
+| ------------------ | ---------------------------------- | ------------------------------------------- |
+| `vt`               | `packages/cli/binding/src/lib.rs`  | Task runner session management              |
+| `rolldown_binding` | `rolldown/crates/rolldown_binding` | Rolldown bundler NAPI bindings              |
+| `oxc_node`         | `oxc-node/src/lib.rs`              | `vpx <script>` loader hooks, as `oxcNode.*` |
+
+### oxc-node Script Loader
+
+`vpx <script>` runs TypeScript through [oxc-node](https://github.com/oxc-project/oxc-node), vendored like Rolldown (see [the RFC](../../rfcs/vpx-script-execution.md)):
+
+- `sync-remote` clones it into `oxc-node/` at the hash in `packages/tools/.upstream-versions.json`; CI checks it out in `.github/actions/clone`.
+- `packages/tools/patches/oxc-node.patch`, applied by `packages/tools/src/patch-oxc-node.ts`, builds it as an rlib, puts its exports under an `oxcNode` namespace so nothing collides with Rolldown's `transform`, and transforms TypeScript under `node_modules`. The script also sets the workspace `oxc` version.
+- The root `Cargo.toml` enables oxc-node's `default_global_allocator` feature, because `rolldown_binding` declares the global allocator, and excludes `oxc-node/` from the workspace, so upstream code is not held to workspace lints.
+- `src/script-preload.ts` (the `--require` entry), `src/script-register.ts` (the `--import` entry), and `src/script-esm-hooks.ts` are adapted from oxc-node's `register.mjs` and `esm.mjs`. They load the hooks from this binding, pass `vpx --tsconfig` through `setTsconfigPath()`, and resolve oxc-node's runtime helpers from `@oxc-project/runtime`, a `vite-plus` dependency.
+- `pirates`, the CommonJS hook, is bundled into `dist`.
 
 ### Export Chain
 

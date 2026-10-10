@@ -56,6 +56,7 @@ export default defineConfig({
       './ecosystem-ci/**',
       './vite/**',
       './rolldown/**',
+      './oxc-node/**',
       '**/node_modules/**',
       // PTY snapshot fixtures; also excluded in lint/fmt here and tsconfig.json
       'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',

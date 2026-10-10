@@ -189,7 +189,7 @@ The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShe
 - `vp env uninstall` removes the Node.js version resolved from an explicit version or selector, such as `22` or `lts`. Package managers require a qualified exact version, such as `pnpm@10.18.0`.
 - `vp env clean` removes unused installs. Use `clean node`, `clean pm`, or a concrete manager. Current and configured-default versions are preserved.
 - `vp env exec` runs a command in the resolved environment. Use `--node` and `--package-manager`; `--npm` is an alias for `--package-manager npm@…`.
-- `vp node` uses the resolved Node.js runtime and exposes the selected package-manager path to child processes.
+- `vp node` uses the resolved Node.js runtime and exposes the selected package-manager path to child processes. It runs Node.js as is, so TypeScript files get Node.js type stripping only; [`vpx <file>`](/guide/vpx#running-scripts) runs them on the same runtime with full TypeScript support.
 
 ### Inspect
 

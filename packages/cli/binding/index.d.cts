@@ -1669,6 +1669,111 @@ export interface TypeScriptOptions {
   rewriteImportExtensions?: 'rewrite' | 'remove' | boolean;
 }
 
+export interface OxcResolveOptions {
+  getCurrentDirectory?: () => string;
+}
+
+export declare namespace oxcNode {
+  export class Output {
+    /**
+     * Returns the generated code
+     * Cache the result of this function if you need to use it multiple times
+     */
+    source(): string;
+    /**
+     * Returns the source map as a JSON string
+     * Cache the result of this function if you need to use it multiple times
+     */
+    sourceMap(): string | null;
+  }
+  export class OxcTransformer {
+    constructor(cwd?: string | undefined | null, helperModuleName?: string | undefined | null);
+    transform(path: string, source: string | Uint8Array): oxcNode.Output;
+    transformAsync(path: string, source: string | Uint8Array | Buffer): Promise<oxcNode.Output>;
+  }
+  export function createResolve(
+    options: OxcResolveOptions,
+    specifier: string,
+    context: oxcNode.ResolveContext,
+    nextResolve: (
+      arg0: string,
+      arg1?: oxcNode.ResolveContext | undefined | null,
+    ) => oxcNode.ResolveFnOutput | Promise<oxcNode.ResolveFnOutput>,
+  ): oxcNode.ResolveFnOutput | Promise<oxcNode.ResolveFnOutput>;
+  /**
+   * The path last passed to [`set_tsconfig_path`], exactly as given, or `null`.
+   *
+   * `register.mjs` hands it to the `module.register()` hook thread. Under WASI
+   * that thread instantiates its own copy of the binding, which starts out with
+   * no override of its own.
+   */
+  export function getTsconfigPath(): string | null;
+  export function initTracing(): void;
+  export function load(
+    url: string,
+    context: oxcNode.LoadContext,
+    nextLoad: (
+      arg0: string,
+      arg1?: oxcNode.LoadContext | undefined | null,
+    ) => oxcNode.LoadFnOutput | Promise<oxcNode.LoadFnOutput>,
+    helperModuleName?: string | undefined | null,
+  ): oxcNode.LoadFnOutput | Promise<oxcNode.LoadFnOutput>;
+  export interface LoadContext {
+    /** Export conditions of the relevant `package.json` */
+    conditions?: Array<string>;
+    /**
+     * The format optionally supplied by the `resolve` hook chain. Node.js passes it as
+     * `undefined`, not `null`, when the chain reported none — a `.node` or `.wasm` file
+     * resolved without its flag, any extension Node.js does not know — and a required
+     * field would reject the whole context with "Missing field `format`" instead of
+     * letting Node.js raise its own `ERR_UNKNOWN_FILE_EXTENSION`.
+     */
+    format?: string | null;
+    /** An object whose key-value pairs represent the assertions for the module to import */
+    importAttributes: Record<string, string>;
+  }
+  export interface LoadFnOutput {
+    format: string;
+    source?: string | Uint8Array | Buffer | null;
+    responseURL?: string;
+  }
+  export interface ResolveContext {
+    /** Export conditions of the relevant `package.json` */
+    conditions: Array<string>;
+    /** An object whose key-value pairs represent the assertions for the module to import */
+    importAttributes: Record<string, string>;
+    parentURL?: string;
+  }
+  export interface ResolveFnOutput {
+    format?: string | null;
+    shortCircuit?: boolean;
+    url: string;
+    importAttributes?: Record<string, string> | null;
+  }
+  /**
+   * Pin one `tsconfig.json` for every file, as `OXC_TSCONFIG_PATH` does, but
+   * without touching `process.env` — so the user's script and the processes it
+   * spawns do not inherit a config chosen for the loader (issue #806).
+   *
+   * A path set here takes precedence over `TS_NODE_PROJECT` and
+   * `OXC_TSCONFIG_PATH`. A relative path is resolved against the working
+   * directory the loader runs in, like the environment variables. `null`,
+   * `undefined` or an empty string clears the override and goes back to the
+   * environment variables, then to discovery.
+   *
+   * The resolver and its tsconfig are shared by the whole process and created
+   * on the first transform or resolve, so this has to run before that. Calling
+   * it afterwards throws, unless it names the config already in use, whether
+   * that came from here or from an environment variable.
+   */
+  export function setTsconfigPath(path?: string | undefined | null): void;
+  export function transform(path: string, source: string | Uint8Array): oxcNode.Output;
+  export function transformAsync(
+    path: string,
+    source: string | Uint8Array | Buffer,
+  ): Promise<unknown>;
+}
+
 export declare class BindingBundleEndEventData {
   output: string;
   duration: number;

@@ -1,0 +1,8 @@
+[[case]]
+name = "vpx_script_node26"
+vp = ["local", "global"]
+comment = "On Node.js 26 the loader uses in-thread module.registerHooks(), without the DEP0205 warning module.register() prints."
+steps = [
+  { argv = ["vpx", "./main.ts"] },
+  { argv = ["vpx", "./import-both.ts"], comment = "A .cts with ES module syntax fails with the same error on the in-thread path" },
+]

@@ -5,7 +5,9 @@ members = ["bench", "crates/*", "packages/cli/binding"]
 # It needs a separate release profile and a crate-local build-std config.
 # Cargo ignores `panic` in per-package profile overrides.
 # See crates/vp_trampoline/Cargo.toml.
-exclude = ["crates/vp_trampoline"]
+# oxc-node is vendored upstream source (see packages/tools/src/patch-oxc-node.ts);
+# excluding it keeps it out of workspace lints, like the nested rolldown workspace.
+exclude = ["crates/vp_trampoline", "oxc-node"]
 
 [workspace.metadata.cargo-shear]
 ignored = [
@@ -353,6 +355,10 @@ oxc_index = { version = "5", features = ["rayon", "serde"] }
 oxc_resolver = { version = "11.24.3", features = ["yarn_pnp"] }
 oxc_resolver_napi = { version = "11.24.3", default-features = false, features = ["yarn_pnp"] }
 oxc_sourcemap = "9.0.0"
+
+# vendored oxc-node, compiled into the native binding for `vpx <script>`;
+# `rolldown_binding` already declares the global allocator
+oxc-node = { path = "./oxc-node", features = ["default_global_allocator"] }
 
 # rolldown crates
 rolldown = { path = "./rolldown/crates/rolldown" }

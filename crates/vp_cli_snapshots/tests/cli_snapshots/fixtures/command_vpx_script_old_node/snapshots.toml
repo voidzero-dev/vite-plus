@@ -1,0 +1,7 @@
+[[case]]
+name = "vpx_script_unsupported_node"
+vp = ["local", "global"]
+comment = "Script mode explains the supported Node.js range instead of failing inside the loader."
+steps = [
+  { argv = ["vpx", "./a.ts"], continue-on-failure = true },
+]

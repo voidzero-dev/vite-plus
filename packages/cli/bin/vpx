@@ -1,0 +1,9 @@
+#!/usr/bin/env node
+
+import module from 'node:module';
+if (module.enableCompileCache) {
+  module.enableCompileCache();
+}
+// Script files run with the loader in this package; package binaries go to
+// the global `vpx`. See src/vpx-bin.ts.
+await import('../dist/vpx-bin.js');

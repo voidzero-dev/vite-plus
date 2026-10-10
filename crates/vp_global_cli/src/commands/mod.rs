@@ -190,6 +190,7 @@ pub mod shell;
 // Standalone binary commands
 pub mod vpr;
 pub mod vpx;
+pub mod vpx_script;
 
 // Self-Management
 pub mod implode;

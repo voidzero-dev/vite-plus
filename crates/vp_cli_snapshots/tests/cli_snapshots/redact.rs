@@ -462,12 +462,14 @@ fn path_variants(path: &str, label: &'static str) -> Vec<(String, &'static str)>
         .into_iter()
         .flatten()
         .flat_map(|p| {
-            [
-                p.to_owned(),
-                p.cow_replace('\\', r"\\").into_owned(),
-                p.cow_replace('\\', "/").into_owned(),
-            ]
+            let forward = p.cow_replace('\\', "/").into_owned();
+            // A file URL keeps the slash before a drive letter (`file:///D:/ws`), so
+            // also redact `/D:/ws`: the URL becomes `file://<label>`, as on Unix.
+            let url_path = matches!(forward.as_bytes(), [drive, b':', b'/', ..] if drive.is_ascii_alphabetic())
+                .then(|| ["/", &forward].concat());
+            [Some(p.to_owned()), Some(p.cow_replace('\\', r"\\").into_owned()), Some(forward), url_path]
         })
+        .flatten()
         .collect();
     variants.sort_by_key(|v| std::cmp::Reverse(v.len()));
     variants.dedup();

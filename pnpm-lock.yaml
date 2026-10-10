@@ -353,6 +353,9 @@ catalogs:
     picomatch:
       specifier: ^4.0.2
       version: 4.0.7
+    pirates:
+      specifier: ^4.0.7
+      version: 4.0.7
     playwright:
       specifier: ^1.57.0
       version: 1.62.1
@@ -475,6 +478,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@oxc-project/runtime':
+        specifier: 'catalog:'
+        version: 0.153.0
       '@oxc-project/types':
         specifier: 'catalog:'
         version: 0.153.0
@@ -581,6 +587,9 @@ importers:
       picocolors:
         specifier: 'catalog:'
         version: 1.1.1
+      pirates:
+        specifier: 'catalog:'
+        version: 4.0.7
       tsdown:
         specifier: 'catalog:'
         version: 0.23.0(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.0)(@tsdown/exe@0.23.0)(@typescript/native-preview@7.0.0-dev.20260605.1)(@vitejs/devtools@0.7.6(@devframes/json-render@1.0.0(@devframes/hub@1.0.0(@devframes/agentic@1.0.0)(crossws@0.4.12(srvx@1.0.5))(devframe@1.0.0))(devframe@1.0.0))(crossws@0.4.12(srvx@1.0.5))(srvx@1.0.5)(vite@packages+core))(@volar/typescript@2.4.28(typescript@6.0.3))(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@6.0.3)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@6.0.3))

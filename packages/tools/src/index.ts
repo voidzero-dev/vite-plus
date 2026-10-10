@@ -13,6 +13,14 @@ switch (subcommand) {
     const { brandVite } = await import('./brand-vite.ts');
     brandVite();
     break;
+  case 'patch-oxc-node':
+    const { patchOxcNode, updateOxcNodePatch } = await import('./patch-oxc-node.ts');
+    if (process.argv.includes('--update')) {
+      updateOxcNodePatch();
+    } else {
+      patchOxcNode();
+    }
+    break;
   case 'local-npm-registry':
     // Spawn the script by path instead of importing it, so the child carries
     // the canonical `node .../local-npm-registry.ts` command line that the
@@ -29,7 +37,7 @@ switch (subcommand) {
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: sync-remote, install-global-cli, brand-vite, local-npm-registry',
+      'Available subcommands: sync-remote, install-global-cli, brand-vite, patch-oxc-node, local-npm-registry',
     );
     process.exit(1);
 }

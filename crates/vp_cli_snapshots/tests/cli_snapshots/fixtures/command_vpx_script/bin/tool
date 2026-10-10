@@ -1,0 +1,2 @@
+#!/usr/bin/env vpx
+console.log('hello from an extensionless file');

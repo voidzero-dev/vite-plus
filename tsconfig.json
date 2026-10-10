@@ -23,6 +23,7 @@
     "packages/core/build.ts",
     "vite",
     "rolldown",
+    "oxc-node",
     "target"
   ]
 }

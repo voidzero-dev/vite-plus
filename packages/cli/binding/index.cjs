@@ -995,6 +995,7 @@ module.exports.moduleRunnerTransform = nativeBinding.moduleRunnerTransform;
 module.exports.moduleRunnerTransformSync = nativeBinding.moduleRunnerTransformSync;
 module.exports.transform = nativeBinding.transform;
 module.exports.transformSync = nativeBinding.transformSync;
+module.exports.oxcNode = nativeBinding.oxcNode;
 module.exports.BindingBundleEndEventData = nativeBinding.BindingBundleEndEventData;
 module.exports.BindingBundleErrorEventData = nativeBinding.BindingBundleErrorEventData;
 module.exports.BindingBundler = nativeBinding.BindingBundler;
