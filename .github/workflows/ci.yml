@@ -325,6 +325,8 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
@@ -332,7 +334,10 @@ jobs:
           tools: just,cargo-shear
           components: clippy rust-docs rustfmt
 
-      - run: |
+      - name: Rust lint
+        id: rust-lint
+        background: true
+        run: |
           cargo shear
           cargo fmt --check
           cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml --check
@@ -343,8 +348,6 @@ jobs:
         with:
           files: .
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
 
@@ -353,6 +356,8 @@ jobs:
       # via dts-resolver) as dedup-able depending on async resolution order.
       - name: Deduplicate dependencies
         run: pnpm dedupe --check || pnpm dedupe --check
+
+      - wait: rust-lint
 
   # Cross-compiles the Windows release NAPI binding (vite-plus .node) and CLI
   # binaries (vp.exe, vp-shim.exe, vp-setup.exe) on a fast Linux runner with
@@ -421,16 +426,10 @@ jobs:
         with:
           name: windows-cli-binaries
 
-      - name: Download prebuilt CLI test binaries
+      - uses: ./.github/actions/download-cli-test-binaries
         if: runner.os != 'Windows'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: cli-test-binaries-${{ matrix.target }}
-          path: ${{ runner.temp }}
-
-      - name: Extract CLI test binaries
-        if: runner.os != 'Windows'
-        run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
+          target: ${{ matrix.target }}
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
@@ -1038,6 +1037,29 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
+      # Fish and Zsh can both use apt or Homebrew; keep their installs sequential.
+      - name: Install snapshot shells
+        id: snapshot-shells
+        background: true
+        run: |
+          for snapshot_shell in fish zsh; do
+            if ! command -v "$snapshot_shell" >/dev/null 2>&1; then
+              if [ "$RUNNER_OS" = 'Linux' ]; then
+                sudo apt-get update
+                sudo apt-get install --yes "$snapshot_shell"
+              else
+                brew install "$snapshot_shell"
+              fi
+            fi
+            "$snapshot_shell" --version
+          done
+
+      # https://github.com/marketplace/actions/setup-nu
+      - name: Install Nushell
+        uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
+        with:
+          version: '*'
+
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1046,14 +1068,16 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
-      - name: Download prebuilt CLI test binaries
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: ./.github/actions/download-cli-test-binaries
         with:
-          name: cli-test-binaries-${{ matrix.target }}
-          path: ${{ runner.temp }}
+          target: ${{ matrix.target }}
 
-      - name: Extract CLI test binaries
-        run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
+      - name: Install Playwright Chromium
+        id: playwright
+        background: true
+        run: pnpm exec playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
@@ -1064,36 +1088,6 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
-      - name: Ensure Fish is installed
-        run: |
-          if ! command -v fish >/dev/null 2>&1; then
-            if [ "$RUNNER_OS" = 'Linux' ]; then
-              sudo apt-get update
-              sudo apt-get install --yes fish
-            else
-              brew install fish
-            fi
-          fi
-          fish --version
-
-      - name: Ensure Zsh is installed
-        run: |
-          if ! command -v zsh >/dev/null 2>&1; then
-            if [ "$RUNNER_OS" = 'Linux' ]; then
-              sudo apt-get update
-              sudo apt-get install --yes zsh
-            else
-              brew install zsh
-            fi
-          fi
-          zsh --version
-
-      # https://github.com/marketplace/actions/setup-nu
-      - name: Install Nushell
-        uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
-        with:
-          version: '*'
-
       # Provision the managed runtime once into the real home so cases can
       # seed from it (seed-runtime) instead of each downloading ~50MB.
       # Best-effort: without a seed, cases that need the runtime download it
@@ -1103,10 +1097,7 @@ jobs:
           "$HOME/.vite-plus/bin/vp" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install chromium
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: '0'
+      - wait: [snapshot-shells, playwright]
 
       - name: Run PTY snapshot tests
         run: |
@@ -1181,6 +1172,14 @@ jobs:
         shell: bash
         run: mkdir -p "$TEMP" "$TMP"
 
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-snapshot-test-archive
+
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest
+
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1194,6 +1193,13 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: windows-cli-binaries
+
+      - name: Install Playwright Chromium
+        id: playwright
+        background: true
+        run: pnpm exec playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: '0'
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
@@ -1215,20 +1221,6 @@ jobs:
           "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
 
-      - name: Install Playwright Chromium
-        shell: bash
-        run: pnpm exec playwright install chromium
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: '0'
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: windows-snapshot-test-archive
-
-      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
-        with:
-          tool: cargo-nextest
-
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
       # which Yarn Classic discovers when walking parent directories.
       - name: Create NTFS temp directory for case-sensitive shim snapshots
@@ -1240,6 +1232,8 @@ jobs:
           $snapshotTemp = Join-Path $volume ('vp-snapshots-' + [guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Path $snapshotTemp | Out-Null
           "directory=$snapshotTemp" >> $env:GITHUB_OUTPUT
+
+      - wait: playwright
 
       # `cargo-nextest` is invoked directly so the job never depends on the
       # runner's Rust toolchain. --workspace-remap makes nextest rewrite
@@ -1422,6 +1416,10 @@ jobs:
               cargo build -p vp_global_cli
             '
 
+      # Docker creates files as root. The host cache action must read and clean them.
+      - name: Restore Cargo cache ownership
+        run: sudo chown -R "$(id -u):$(id -g)" "$HOME/.cargo/registry" "$HOME/.cargo/git" target
+
       - name: Run vp in node:24-bookworm-slim without a CA store
         run: |
           docker run --rm \
@@ -1443,7 +1441,7 @@ jobs:
   install-e2e-test:
     name: Local CLI `vp install` E2E test
     needs:
-      - download-previous-rolldown-binaries
+      - build-cli-test-binaries
     runs-on: namespace-profile-linux-x64-default
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
@@ -1453,11 +1451,6 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-        with:
-          save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: install-e2e-test
-
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1466,10 +1459,15 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
+      - uses: ./.github/actions/download-cli-test-binaries
+        with:
+          target: x86_64-unknown-linux-gnu
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: x86_64-unknown-linux-gnu
+          skip-native: true
 
       - name: Build CLI
         run: |
@@ -1524,8 +1522,7 @@ jobs:
       # Override vp's project pins; sfw's embedded Node runtime is separate.
       VP_NODE_VERSION: '24.21.0'
     needs:
-      - download-previous-rolldown-binaries
-      - build-windows-cli
+      - build-cli-test-binaries
     # Run if: not a PR (push-to-main / workflow_dispatch), OR PR has 'test: sfw' label.
     # Heavy job (real registry traffic) — gated to avoid running on every PR.
     if: >-
@@ -1551,7 +1548,8 @@ jobs:
             sfw_asset: sfw-free-macos-arm64
             vp_bin: vp
             vp_insecure_tls: ''
-          # TODO: Re-enable Windows when SFW's embedded Node includes
+          # TODO: Restore Windows in a separate job that needs build-windows-cli
+          # when SFW's embedded Node includes
           # https://github.com/nodejs/node/pull/61999 (Node 24.20.0 / 26.7.0).
           # SFW 1.15.2 embeds Node 24.9.0 and hits UV_HANDLE_CLOSING at shutdown.
           # VP_NODE_VERSION only changes the child runtime, not SFW's runtime.
@@ -1566,14 +1564,6 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      # Windows runs against the prebuilt binaries from build-windows-cli,
-      # so it needs no Rust toolchain or dev drive here.
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-        if: runner.os != 'Windows'
-        with:
-          save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: install-e2e-test-sfw-${{ matrix.os }}
-
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1582,18 +1572,15 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
-      # See the cli-e2e-test job for details on the prebuilt binaries.
-      - name: Download prebuilt Windows binaries
-        if: runner.os == 'Windows'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: ./.github/actions/download-cli-test-binaries
         with:
-          name: windows-cli-binaries
+          target: ${{ matrix.target }}
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
-          skip-native: ${{ runner.os == 'Windows' }}
+          skip-native: true
 
       - name: Build CLI
         run: |
