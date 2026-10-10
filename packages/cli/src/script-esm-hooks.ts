@@ -1,5 +1,6 @@
 /**
- * Off-thread ESM hooks for `vpx <script>` on Node.js < 26, registered by
+ * Off-thread ESM hooks for `vpx <script>` on Node.js releases before 22.22.3 and 24.11.1,
+ * registered by
  * `script-register.ts` through `module.register()`. Adapted from oxc-node's
  * `packages/core/esm.mjs`.
  */

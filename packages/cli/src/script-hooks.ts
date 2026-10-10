@@ -20,18 +20,24 @@ export function isSupportedNodeVersion(version: string): boolean {
 
 /**
  * Whether to use the in-thread `module.registerHooks()` instead of the off-thread
- * `module.register()`, which Node.js deprecates from 25.9 (DEP0205).
+ * `module.register()`, which needs a hooks thread (about twice the startup time) and
+ * which Node.js deprecates from 25.9 (DEP0205).
  *
- * Upstream oxc-node waits for Node.js 26.2 because of two `registerHooks()` defects:
- * a sync resolve hook had its `conditions` overridden (nodejs/node#59011, fixed in
- * 22.19 and 24.5) and `require()` inside an imported CommonJS module short-circuited
- * when a load hook returned its source (nodejs/node#62920, fixed in 26.2). These hooks
- * never return source for CommonJS, so only the first defect matters, and every
- * Node.js 26 release has its fix. 22.x and 24.x keep `module.register()`, which they do
- * not deprecate.
+ * The in-thread hooks need two fixes: a sync resolve hook had its `conditions`
+ * overridden (nodejs/node#59011, in 22.19 and 24.5), and a sync load hook could not
+ * return a null source for CommonJS (nodejs/node#59929, in 22.22.3 and 24.11.1). tsx
+ * switches at the same releases. Upstream oxc-node waits for 26.2 for a third fix,
+ * nodejs/node#62920, which only matters when a load hook returns CommonJS source, as
+ * these hooks never do.
  */
 export function canRegisterSyncHooks(version: string): boolean {
-  const [major = 0] = version.split('.').map(Number);
+  const [major = 0, minor = 0, patch = 0] = version.split('.').map(Number);
+  if (major === 22) {
+    return minor > 22 || (minor === 22 && patch >= 3);
+  }
+  if (major === 24) {
+    return minor > 11 || (minor === 11 && patch >= 1);
+  }
   return major >= 26;
 }
 
