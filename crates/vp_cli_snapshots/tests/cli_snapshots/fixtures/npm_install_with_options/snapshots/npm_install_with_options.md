@@ -72,7 +72,7 @@ $ vp install --prod --silent ⊘ cache disabled
     Vite+ Task Runner • Execution Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Statistics:   1 tasks • 0 cache hits • 0 cache misses • 1 cache disabled
+Statistics:   1 task • 0 cache hits • 0 cache misses • 1 cache disabled
 Performance:  0% cache hit rate
 
 Task Details:
