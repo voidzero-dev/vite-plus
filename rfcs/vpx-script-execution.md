@@ -668,7 +668,8 @@ Startup compared with tsx 4.23.15 on an Apple M4 Pro (12 cores, macOS 26.6), at 
 - `hello`: one `.ts` file with erasable syntax only, so Node.js type stripping can run it too.
 - `esm-app`: an `index.ts` that imports 300 modules, each with an interface, an enum, and a class with a field and a parameter property, in a `"type": "module"` package.
 - `cjs-app`: the same files in a package without `"type"`.
-- `large`: one 1.8 MB `.ts` file without `import`/`export`, in a package without `"type"`.
+- `large-cjs`: one 1.8 MB `.ts` file without `import`/`export`, in a package without `"type"`.
+- `large-esm`: the same file in a `"type": "module"` package.
 
 The commands:
 
@@ -679,43 +680,51 @@ The commands:
 
 On Node.js 22.18 both loaders run their ESM hooks on a `module.register()` thread; on 24.12 and 26.5 both run them in-thread.
 
-| Scenario  | Command                         | Node.js 22.18 |  24.12 |   26.5 |
-| --------- | ------------------------------- | ------------: | -----: | -----: |
-| `hello`   | `vpx` loader (1 process)        |         48 ms |  27 ms |  30 ms |
-| `hello`   | `node --import tsx` (1 process) |         66 ms |  47 ms |  39 ms |
-| `hello`   | `node --import tsx`, no cache   |         73 ms |  63 ms |  61 ms |
-| `hello`   | `vpx` local bin (2 processes)   |         68 ms |  49 ms |  55 ms |
-| `hello`   | `tsx` CLI (2 processes)         |         94 ms |  79 ms |  71 ms |
-| `hello`   | `tsx` CLI, no cache             |        101 ms |  92 ms |  93 ms |
-| `hello`   | `node` type stripping           |         47 ms |  45 ms |  48 ms |
-| `esm-app` | `vpx` loader (1 process)        |         82 ms |  62 ms |  65 ms |
-| `esm-app` | `node --import tsx` (1 process) |        103 ms |  79 ms |  76 ms |
-| `esm-app` | `node --import tsx`, no cache   |        135 ms | 216 ms | 216 ms |
-| `esm-app` | `vpx` local bin (2 processes)   |        102 ms |  85 ms |  92 ms |
-| `esm-app` | `tsx` CLI (2 processes)         |        135 ms | 110 ms | 116 ms |
-| `esm-app` | `tsx` CLI, no cache             |        164 ms | 248 ms | 248 ms |
-| `cjs-app` | `vpx` loader (1 process)        |         81 ms |  63 ms |  67 ms |
-| `cjs-app` | `node --import tsx` (1 process) |        119 ms |  97 ms |  94 ms |
-| `cjs-app` | `node --import tsx`, no cache   |        281 ms | 258 ms | 253 ms |
-| `cjs-app` | `vpx` local bin (2 processes)   |        103 ms |  85 ms |  92 ms |
-| `cjs-app` | `tsx` CLI (2 processes)         |        151 ms | 128 ms | 125 ms |
-| `cjs-app` | `tsx` CLI, no cache             |        316 ms | 288 ms | 287 ms |
-| `large`   | `vpx` loader (1 process)        |        119 ms | 104 ms |  96 ms |
-| `large`   | `node --import tsx` (1 process) |        121 ms |  88 ms |  76 ms |
-| `large`   | `node --import tsx`, no cache   |        222 ms | 273 ms | 259 ms |
-| `large`   | `vpx` local bin (2 processes)   |        134 ms | 125 ms | 120 ms |
-| `large`   | `tsx` CLI (2 processes)         |        149 ms | 120 ms | 108 ms |
-| `large`   | `tsx` CLI, no cache             |        256 ms | 297 ms | 290 ms |
+| Scenario    | Command                         | Node.js 22.18 |  24.12 |   26.5 |
+| ----------- | ------------------------------- | ------------: | -----: | -----: |
+| `hello`     | `vpx` loader (1 process)        |         48 ms |  27 ms |  30 ms |
+| `hello`     | `node --import tsx` (1 process) |         66 ms |  47 ms |  39 ms |
+| `hello`     | `node --import tsx`, no cache   |         73 ms |  64 ms |  61 ms |
+| `hello`     | `vpx` local bin (2 processes)   |         68 ms |  50 ms |  56 ms |
+| `hello`     | `tsx` CLI (2 processes)         |         94 ms |  81 ms |  72 ms |
+| `hello`     | `tsx` CLI, no cache             |        102 ms |  94 ms |  93 ms |
+| `hello`     | `node` type stripping           |         47 ms |  45 ms |  49 ms |
+| `esm-app`   | `vpx` loader (1 process)        |         83 ms |  63 ms |  65 ms |
+| `esm-app`   | `node --import tsx` (1 process) |        105 ms |  80 ms |  77 ms |
+| `esm-app`   | `node --import tsx`, no cache   |        137 ms | 217 ms | 215 ms |
+| `esm-app`   | `vpx` local bin (2 processes)   |        104 ms |  87 ms |  91 ms |
+| `esm-app`   | `tsx` CLI (2 processes)         |        141 ms | 110 ms | 109 ms |
+| `esm-app`   | `tsx` CLI, no cache             |        167 ms | 247 ms | 245 ms |
+| `cjs-app`   | `vpx` loader (1 process)        |         83 ms |  63 ms |  65 ms |
+| `cjs-app`   | `node --import tsx` (1 process) |        122 ms |  98 ms |  92 ms |
+| `cjs-app`   | `node --import tsx`, no cache   |        285 ms | 258 ms | 253 ms |
+| `cjs-app`   | `vpx` local bin (2 processes)   |        106 ms |  87 ms |  91 ms |
+| `cjs-app`   | `tsx` CLI (2 processes)         |        155 ms | 129 ms | 124 ms |
+| `cjs-app`   | `tsx` CLI, no cache             |        317 ms | 288 ms | 287 ms |
+| `large-cjs` | `vpx` loader (1 process)        |        114 ms | 104 ms |  95 ms |
+| `large-cjs` | `node --import tsx` (1 process) |        122 ms |  89 ms |  76 ms |
+| `large-cjs` | `node --import tsx`, no cache   |        223 ms | 274 ms | 258 ms |
+| `large-cjs` | `vpx` local bin (2 processes)   |        136 ms | 126 ms | 121 ms |
+| `large-cjs` | `tsx` CLI (2 processes)         |        150 ms | 121 ms | 108 ms |
+| `large-cjs` | `tsx` CLI, no cache             |        260 ms | 298 ms | 290 ms |
+| `large-esm` | `vpx` loader (1 process)        |         96 ms |  78 ms |  79 ms |
+| `large-esm` | `node --import tsx` (1 process) |        106 ms |  75 ms |  70 ms |
+| `large-esm` | `node --import tsx`, no cache   |        216 ms | 178 ms | 172 ms |
+| `large-esm` | `vpx` local bin (2 processes)   |        118 ms | 100 ms | 104 ms |
+| `large-esm` | `tsx` CLI (2 processes)         |        134 ms | 103 ms | 102 ms |
+| `large-esm` | `tsx` CLI, no cache             |        245 ms | 204 ms | 204 ms |
 
 What the numbers show:
 
-- **`vpx` against tsx with a warm cache.** For one process, the `vpx` loader is 1.2–1.8× faster on `hello`, `esm-app`, and `cjs-app` on every Node.js version. On 24.12, for example, `hello` takes 27 ms against 47 ms and `esm-app` 62 ms against 79 ms.
-- **Against a cold or disabled tsx cache**, the gap grows to 1.5–4.1×.
-- **Against Node.js type stripping**, the `vpx` loader is on par on 22.18 (48 against 47 ms) and faster on 24.12 and 26.5 (27–30 against 45–48 ms).
-- **`large` is the one case where tsx's cache wins**: 88 against 104 ms on 24.12, and 76 against 96 ms on 26.5. The cache skips the transform, while `vpx` transforms 1.8 MB on every run. Without the cache, tsx is 2.6–2.7× slower than `vpx`.
-- **The local bin costs 15–27 ms** for its second Node.js process. The `tsx` CLI pays the same, so local bin against CLI keeps roughly the same ratios.
+- **`vpx` against tsx with a warm cache.** For one process, the `vpx` loader is 1.2–1.8× faster on `hello`, `esm-app`, and `cjs-app` on every Node.js version. On 24.12, for example, `hello` takes 27 ms against 47 ms and `esm-app` 63 ms against 80 ms.
+- **Against a cold or disabled tsx cache**, `vpx` is 1.5–4.1× faster in every scenario.
+- **Against Node.js type stripping**, the `vpx` loader is on par on 22.18 (48 against 47 ms) and faster on 24.12 and 26.5 (27–30 against 45–49 ms).
+- **Megabyte-sized files are where tsx's cache pays off**, because it skips the transform while `vpx` transforms 1.8 MB on every run.
+  - `large-esm`: about even. `vpx` is faster on 22.18 (96 against 106 ms); tsx is 3 ms faster on 24.12 and 9 ms faster on 26.5.
+  - `large-cjs`: tsx is 15–19 ms faster on 24.12 and 26.5. For `vpx`, the CommonJS file costs 16–26 ms more than the same file as an ES module: the ESM load hook reads and parses it once more to check for ES module syntax, and on the in-thread path it is also transformed twice ([oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820)).
+- **The local bin costs 20–26 ms** for its second Node.js process. The `tsx` CLI pays the same, so local bin against CLI keeps roughly the same ratios.
 
-A persistent transform cache would therefore only help with megabyte-sized sources, and stays under [Nice to Have](#nice-to-have).
+A persistent transform cache would therefore only help with megabyte-sized sources, and stays under [Nice to Have](#nice-to-have). Fixing oxc-node#820 removes most of the CommonJS gap.
 
 Binding load cost, measured by `require()` of the `.node` file alone on Node.js 22.18, macOS arm64:
 
