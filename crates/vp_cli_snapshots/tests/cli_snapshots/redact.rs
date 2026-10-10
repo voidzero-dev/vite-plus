@@ -96,12 +96,6 @@ static WINDOWS_MANAGED_NODE_PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
-// A file URL keeps the slash before a Windows drive letter (`file:///D:/ws`), so
-// it redacts to `file:///<workspace>`, while a Unix path supplies that slash
-// itself (`file:///ws` → `file://<workspace>`). Use the Unix spelling so both
-// platforms share one snapshot.
-static WINDOWS_FILE_URL_LABEL_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"file:///(<[A-Za-z_-]+>)").unwrap());
 static WINDOWS_MANAGED_PM_BIN_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(<home>/.vite-plus/package_manager/[^"\r\n]+/bin/[A-Za-z0-9._-]+)\.cmd\b"#)
         .unwrap()
@@ -468,12 +462,14 @@ fn path_variants(path: &str, label: &'static str) -> Vec<(String, &'static str)>
         .into_iter()
         .flatten()
         .flat_map(|p| {
-            [
-                p.to_owned(),
-                p.cow_replace('\\', r"\\").into_owned(),
-                p.cow_replace('\\', "/").into_owned(),
-            ]
+            let forward = p.cow_replace('\\', "/").into_owned();
+            // A file URL keeps the slash before a drive letter (`file:///D:/ws`), so
+            // also redact `/D:/ws`: the URL becomes `file://<label>`, as on Unix.
+            let url_path = matches!(forward.as_bytes(), [drive, b':', b'/', ..] if drive.is_ascii_alphabetic())
+                .then(|| ["/", &forward].concat());
+            [Some(p.to_owned()), Some(p.cow_replace('\\', r"\\").into_owned()), Some(forward), url_path]
         })
+        .flatten()
         .collect();
     variants.sort_by_key(|v| std::cmp::Reverse(v.len()));
     variants.dedup();
@@ -525,7 +521,6 @@ pub fn redact_output(
     output = WINDOWS_MANAGED_NODE_BIN_RE.replace_all(&output, "${1}/bin/${2}").into_owned();
     output = WINDOWS_MANAGED_NODE_PATH_RE.replace_all(&output, "${1}/bin${2}").into_owned();
     output = WINDOWS_MANAGED_PM_BIN_RE.replace_all(&output, "${1}").into_owned();
-    output = WINDOWS_FILE_URL_LABEL_RE.replace_all(&output, "file://${1}").into_owned();
     output = COMMAND_NOT_FOUND_RE.replace_all(&output, "${1}program not found").into_owned();
 
     // Redact UUIDs to "<uuid>"

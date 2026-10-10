@@ -140,16 +140,10 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
   let tsconfig: string | undefined;
   for (let index = 0; index < positional.length; index++) {
     const arg = positional[index];
-    if (arg === '--') {
-      if (positional[index + 1] !== undefined) {
-        isScript(positional[index + 1], cwd);
-      }
-      nodeArgs.push(...positional.slice(index));
-      break;
-    }
-    if (arg === '-' || !arg.startsWith('-')) {
-      if (arg !== '-') {
-        isScript(arg, cwd);
+    if (arg === '--' || arg === '-' || !arg.startsWith('-')) {
+      const script = arg === '--' ? positional[index + 1] : arg;
+      if (script !== undefined) {
+        isScript(script, cwd);
       }
       nodeArgs.push(...positional.slice(index));
       break;

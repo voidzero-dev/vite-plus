@@ -124,16 +124,10 @@ pub fn detect(
     let mut tsconfig = None;
     let mut index = 0;
     while let Some(arg) = positional.get(index) {
-        if arg == "--" {
-            if let Some(script) = positional.get(index + 1) {
+        if arg == "--" || arg == "-" || !arg.starts_with('-') {
+            let script = if arg == "--" { positional.get(index + 1) } else { Some(arg) };
+            if let Some(script) = script {
                 is_script(script, cwd)?;
-            }
-            node_args.extend_from_slice(&positional[index..]);
-            break;
-        }
-        if arg == "-" || !arg.starts_with('-') {
-            if arg != "-" {
-                is_script(arg, cwd)?;
             }
             node_args.extend_from_slice(&positional[index..]);
             break;
