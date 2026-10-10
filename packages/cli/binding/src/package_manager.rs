@@ -11,6 +11,7 @@ pub struct DownloadPackageManagerOptions {
     pub name: String,
     pub version: String,
     pub expected_hash: Option<String>,
+    pub cwd: Option<String>,
 }
 
 #[napi(object)]
@@ -31,6 +32,7 @@ pub struct DownloadPackageManagerResult {
 ///   - `name`: The name of the package manager
 ///   - `version`: The version of the package manager
 ///   - `expected_hash`: The expected hash of the package manager
+///   - `cwd`: An absolute directory used to load workspace npm configuration
 ///
 /// ## Returns
 ///
@@ -71,13 +73,24 @@ pub async fn download_package_manager(
         }
     };
 
-    let (install_dir, package_name, version) = vp_pm_cli::download_package_manager(
-        package_manager_type,
-        &options.version,
-        options.expected_hash.as_deref(),
-    )
-    .await
-    .map_err(anyhow::Error::from)?;
+    let result = if let Some(cwd) = options.cwd {
+        let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+        vp_pm_cli::download_package_manager_for_cwd(
+            &cwd,
+            package_manager_type,
+            &options.version,
+            options.expected_hash.as_deref(),
+        )
+        .await
+    } else {
+        vp_pm_cli::download_package_manager(
+            package_manager_type,
+            &options.version,
+            options.expected_hash.as_deref(),
+        )
+        .await
+    };
+    let (install_dir, package_name, version) = result.map_err(anyhow::Error::from)?;
 
     Ok(DownloadPackageManagerResult {
         name: options.name,
@@ -162,5 +175,23 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
         Err(e) => {
             return Err(anyhow::Error::from(e).into());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn download_package_manager_rejects_relative_cwd() {
+        let error = download_package_manager(DownloadPackageManagerOptions {
+            name: "pnpm".to_string(),
+            version: "latest".to_string(),
+            expected_hash: None,
+            cwd: Some("relative/project".to_string()),
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(error.reason, "invalid cwd");
     }
 }

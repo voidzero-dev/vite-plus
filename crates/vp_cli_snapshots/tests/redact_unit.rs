@@ -79,6 +79,50 @@ fn masks_vitest_v5_timing_but_preserves_coverage_percentages() {
 }
 
 #[test]
+fn omits_optional_vitest_transform_cache_hint() {
+    let summary = " Tests  1 passed (1)\n Duration  3.4s (transform 84%, tests 16%)\n";
+    for project in ["", "[unit] "] {
+        for ci_hint in [
+            "",
+            "           on CI this only helps when the cache directory is persisted between runs\n",
+        ] {
+            let hint = format!(
+                "\n Transform {project}transforming modules took 2.8s · 84% of tracked time, re-done on every run\n\
+                 {}persist transforms across runs with fsModuleCache: true\n\
+                 {ci_hint}{}learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns\n",
+                "           ", "           "
+            );
+            let expected = redact_output(summary.to_owned(), &[], true);
+            assert_eq!(redact_output(format!("{summary}{hint}"), &[], true), expected);
+            assert_eq!(
+                redact_output(format!("{summary}{}", hint.trim_end_matches('\n')), &[], true),
+                expected
+            );
+            assert_eq!(
+                redact_output(format!("{summary}{hint}").replace('\n', "\r\n"), &[], true),
+                expected
+            );
+            assert_eq!(
+                redact_output(format!("{summary}{hint}\nnext command\n"), &[], true),
+                format!("{expected}\nnext command\n")
+            );
+        }
+    }
+}
+
+#[test]
+fn preserves_transform_errors_and_incomplete_cache_hints() {
+    for input in [
+        "Transform failed: cannot load module\n",
+        "\n Transform transforming modules took 2.8s · 84% of tracked time, re-done on every run\n",
+        "persist transforms across runs with fsModuleCache: true\n",
+        "learn more: https://example.com/improving-performance\n",
+    ] {
+        assert_eq!(redact_output(input.to_owned(), &[], true), input.replace("2.8s", "<duration>"));
+    }
+}
+
+#[test]
 fn masks_vitest_api_port_but_preserves_other_localhost_urls() {
     let input = "API started at http://localhost:63316/\nBrowser runner started at http://localhost:63317/__vitest_test__/?sessionId=keep-session\nhttp://localhost:9229/\n";
     assert_eq!(

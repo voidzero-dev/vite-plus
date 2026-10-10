@@ -1,6 +1,6 @@
 use vp_pm_cli::{
     EnvironmentPackageManagerResolution, PackageManagerType, resolve_environment_package_manager,
-    resolve_environment_package_manager_spec, resolve_package_manager_version,
+    resolve_environment_package_manager_spec, resolve_package_manager_version_for_cwd,
 };
 use vt_path::AbsolutePath;
 
@@ -36,7 +36,7 @@ pub(crate) async fn resolve_shim_for(
             .as_ref()
             .map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
     )?;
-    let mut resolution = resolve_selection(resolution, Some(expected)).await?;
+    let mut resolution = resolve_selection(cwd, resolution, Some(expected)).await?;
     if override_spec.is_some()
         && let Some(resolution) = &mut resolution
     {
@@ -74,7 +74,7 @@ pub(crate) async fn resolve_current_for(
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
     let resolution = resolve_current_spec(cwd).await?;
-    resolve_selection(resolution, expected).await
+    resolve_selection(cwd, resolution, expected).await
 }
 
 pub(crate) async fn resolve_current_or_fallback_for(
@@ -85,7 +85,7 @@ pub(crate) async fn resolve_current_or_fallback_for(
         return Ok(resolution);
     }
 
-    registry_fallback_for(package_manager).await
+    registry_fallback_for(cwd, package_manager).await
 }
 
 pub(crate) async fn resolve_current_spec(
@@ -115,6 +115,7 @@ pub(crate) type PackageManagerSpec = (PackageManagerType, String, Option<String>
 
 /// Both entry points select a family before looking up its default version.
 async fn resolve_selection(
+    cwd: &AbsolutePath,
     resolution: Option<EnvironmentPackageManagerResolution>,
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
@@ -123,6 +124,7 @@ async fn resolve_selection(
     let config = config::load_config().await?;
     let default = kind.map(|kind| configured_default_for(&config, kind)).transpose()?.flatten();
     resolve_environment_package_manager(
+        cwd,
         resolution,
         default.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
         expected,
@@ -148,7 +150,7 @@ pub(crate) async fn resolve_from_files_for(
     expected: Option<PackageManagerType>,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
     let resolution = resolve_environment_package_manager_spec(cwd, None)?;
-    resolve_selection(resolution, expected).await
+    resolve_selection(cwd, resolution, expected).await
 }
 
 pub(crate) async fn resolve_from_files_or_fallback_for(
@@ -159,15 +161,16 @@ pub(crate) async fn resolve_from_files_or_fallback_for(
         return Ok(resolution);
     }
 
-    registry_fallback_for(package_manager).await
+    registry_fallback_for(cwd, package_manager).await
 }
 
 async fn registry_fallback_for(
+    cwd: &AbsolutePath,
     package_manager: PackageManagerType,
 ) -> Result<EnvironmentPackageManagerResolution, Error> {
     Ok(EnvironmentPackageManagerResolution {
         package_manager_type: package_manager,
-        version: resolve_package_manager_version(package_manager, "latest").await?,
+        version: resolve_package_manager_version_for_cwd(cwd, package_manager, "latest").await?,
         hash: None,
         source: "registry fallback".into(),
         source_path: None,

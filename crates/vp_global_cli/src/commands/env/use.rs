@@ -10,7 +10,9 @@
 
 use std::process::ExitStatus;
 
-use vp_pm_cli::{PackageManagerType, download_package_manager, resolve_package_manager_version};
+use vp_pm_cli::{
+    PackageManagerType, download_package_manager_for_cwd, resolve_package_manager_version_for_cwd,
+};
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -147,7 +149,8 @@ pub async fn execute(
 
     let package_manager = if scope.includes_package_managers() {
         if let Some((kind, selector, hash)) = specs.package_manager {
-            let version = resolve_package_manager_version(kind, &selector).await?.to_string();
+            let version =
+                resolve_package_manager_version_for_cwd(&cwd, kind, &selector).await?.to_string();
             package_manager::warn_if_target_differs(&cwd, kind).await;
             Some((kind, version, selector, hash))
         } else if let EnvScope::PackageManager(kind) = scope {
@@ -233,7 +236,7 @@ pub async fn execute(
     }
 
     if !no_install {
-        ensure_components_installed(&node, &package_manager).await?;
+        ensure_components_installed(&cwd, &node, &package_manager).await?;
     }
 
     if has_eval_wrapper() {
@@ -295,6 +298,7 @@ pub async fn execute(
 }
 
 async fn ensure_components_installed(
+    cwd: &AbsolutePathBuf,
     node: &Option<(String, String)>,
     package_manager: &Option<(PackageManagerType, String, String, Option<String>)>,
 ) -> Result<(), Error> {
@@ -318,7 +322,7 @@ async fn ensure_components_installed(
         }
     }
     if let Some((kind, version, _, hash)) = package_manager {
-        download_package_manager(*kind, version, hash.as_deref()).await?;
+        download_package_manager_for_cwd(cwd, *kind, version, hash.as_deref()).await?;
     }
     Ok(())
 }

@@ -3645,6 +3645,7 @@ export declare function documentationUrl(path: string): string;
  *   - `name`: The name of the package manager
  *   - `version`: The version of the package manager
  *   - `expected_hash`: The expected hash of the package manager
+ *   - `cwd`: An absolute directory used to load workspace npm configuration
  *
  * ## Returns
  *
@@ -3677,6 +3678,7 @@ export interface DownloadPackageManagerOptions {
   name: string;
   version: string;
   expectedHash?: string;
+  cwd?: string;
 }
 
 export interface DownloadPackageManagerResult {

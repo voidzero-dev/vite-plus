@@ -12,7 +12,7 @@ use chrono::Local;
 use console::style;
 use vp_pm_cli::{
     PackageManagerType, package_manager_bin_path, package_manager_install_dir,
-    resolve_package_manager_version,
+    resolve_package_manager_version_for_cwd,
 };
 use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
@@ -170,7 +170,9 @@ async fn execute_package_manager_tool(
         ),
         None if expected_type == PackageManagerType::Npm => return Ok(None),
         None => (
-            resolve_package_manager_version(expected_type, "latest").await?.to_string(),
+            resolve_package_manager_version_for_cwd(cwd, expected_type, "latest")
+                .await?
+                .to_string(),
             "registry fallback".into(),
         ),
     };

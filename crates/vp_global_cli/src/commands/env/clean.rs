@@ -5,7 +5,7 @@
 
 use std::{path::Path, process::ExitStatus};
 
-use vp_pm_cli::{PackageManagerType, resolve_package_manager_version};
+use vp_pm_cli::{PackageManagerType, resolve_package_manager_version_for_cwd};
 use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -62,7 +62,8 @@ async fn protected_package_manager(
     }
     let config = config::load_config().await?;
     if let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)? {
-        let version = resolve_package_manager_version(kind, &selector).await?.to_string();
+        let version =
+            resolve_package_manager_version_for_cwd(cwd, kind, &selector).await?.to_string();
         push_unique_version(&mut protected, version);
     }
     Ok(protected)

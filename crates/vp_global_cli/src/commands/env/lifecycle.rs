@@ -1,6 +1,6 @@
 use std::process::ExitStatus;
 
-use vp_pm_cli::{download_package_manager, resolve_package_manager_version};
+use vp_pm_cli::{download_package_manager_for_cwd, resolve_package_manager_version_for_cwd};
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -64,7 +64,7 @@ pub(crate) async fn install(
 
     if scope.includes_package_managers() {
         let requested = if let Some((kind, selector, hash)) = specs.package_manager {
-            let version = resolve_package_manager_version(kind, &selector).await?;
+            let version = resolve_package_manager_version_for_cwd(&cwd, kind, &selector).await?;
             Some((kind, version, hash))
         } else if let EnvScope::PackageManager(kind) = scope {
             let resolution = package_manager::resolve_current_or_fallback_for(&cwd, kind).await?;
@@ -84,7 +84,7 @@ pub(crate) async fn install(
         };
         if let Some((kind, version, hash)) = requested {
             vp_shared::output::print_stdout_line(format_args!("Installing {kind} v{version}..."));
-            download_package_manager(kind, &version, hash.as_deref()).await?;
+            download_package_manager_for_cwd(&cwd, kind, &version, hash.as_deref()).await?;
             vp_shared::output::print_stdout_line(format_args!("Installed {kind} v{version}"));
         }
     }

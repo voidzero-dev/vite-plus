@@ -153,7 +153,8 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         }
     }
     if let Some(package_manager) = env::package_manager::resolve_current(project_path).await? {
-        let (install_dir, _, _) = vp_pm_cli::download_package_manager(
+        let (install_dir, _, _) = vp_pm_cli::download_package_manager_for_cwd(
+            project_path,
             package_manager.package_manager_type,
             &package_manager.version,
             package_manager.hash.as_deref(),
