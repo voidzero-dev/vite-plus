@@ -126,13 +126,13 @@ These variables control the installer scripts and the standalone Windows install
 
 Fresh split-layout installations use these defaults:
 
-| Directory | macOS and Linux           | Windows                          |
-| --------- | ------------------------- | -------------------------------- |
-| Data      | `~/.local/share/vite-plus` | `%LOCALAPPDATA%\vite-plus\data`   |
-| Bin       | `<DATA>/bin`              | `%LOCALAPPDATA%\vite-plus\bin`    |
-| Cache     | `~/.cache/vite-plus`       | `%LOCALAPPDATA%\vite-plus\cache`  |
-| Config    | `~/.config/vite-plus`      | `%APPDATA%\vite-plus`             |
-| State     | `~/.local/state/vite-plus` | `%LOCALAPPDATA%\vite-plus\state`  |
+| Directory | macOS and Linux            | Windows                          |
+| --------- | -------------------------- | -------------------------------- |
+| Data      | `~/.local/share/vite-plus` | `%LOCALAPPDATA%\vite-plus\data`  |
+| Bin       | `<DATA>/bin`               | `%LOCALAPPDATA%\vite-plus\bin`   |
+| Cache     | `~/.cache/vite-plus`       | `%LOCALAPPDATA%\vite-plus\cache` |
+| Config    | `~/.config/vite-plus`      | `%APPDATA%\vite-plus`            |
+| State     | `~/.local/state/vite-plus` | `%LOCALAPPDATA%\vite-plus\state` |
 
 On macOS and Linux, absolute `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG_HOME`, and `XDG_STATE_HOME` values override the corresponding base directories. The bin directory follows the data directory.
 
