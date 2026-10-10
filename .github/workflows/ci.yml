@@ -1484,9 +1484,7 @@ jobs:
           # Entry format: "owner/repo:dir" or "owner/repo:dir:ref" (tag or branch to clone)
           repos=(
             # pnpm workspace
-            # Pinned to the latest stable tag: pnpm main pins pnpm v12 alphas,
-            # whose @pnpm/exe ships a placeholder bin that breaks pnpm's
-            # version self-switch (pnpm/pnpm#12811)
+            # Keep a fixed pnpm 11 workspace for compatibility coverage.
             "pnpm/pnpm:pnpm:v11.11.0"
             "vitejs/vite:vite"
             # yarn workspace
