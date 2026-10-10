@@ -69,15 +69,14 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-            with:
-              # Shares the Cargo cache with the Linux CLI test build job, which
-              # builds the same target. Only that job saves it.
-              save-cache: false
-              cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        with:
+          # Shares the Cargo cache with the Linux CLI test build job, which
+          # builds the same target. Only that job saves it.
+          save-cache: false
+          cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu
 
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       # Format-check with the oxfmt of this commit instead of the released one.
       # A release carries the oxfmt it shipped with, which trails the catalog
@@ -202,25 +201,24 @@ jobs:
           cargo nextest archive $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || [ "$n" = "vp_trampoline" ] || echo -n "-p $n "; done) -p vite-plus-cli \
             --target x86_64-pc-windows-msvc --archive-file windows-tests.tar.zst
 
-      - parallel:
-          - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-            with:
-              name: windows-test-archive
-              path: windows-tests.tar.zst
-              retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-test-archive
+          path: windows-tests.tar.zst
+          retention-days: 7
 
-          # Separate archive for the PTY snapshot suite (excluded from the
-          # unit-test archive above): its suite needs vp, node, and a built
-          # packages/cli/dist at runtime, which only cli-snapshot-test-windows
-          # provides. The archive carries the cli_snapshots test binary plus the
-          # vpt helper; nextest rewrites CARGO_MANIFEST_DIR/CARGO_BIN_EXE_vpt at
-          # run time so the relocated binaries find fixtures and helpers.
-          - name: Build snapshot test archive
-            run: |
-              eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
-              unset RUSTFLAGS
-              cargo nextest archive -p vp_cli_snapshots \
-                --target x86_64-pc-windows-msvc --archive-file windows-snapshot-tests.tar.zst
+      # Separate archive for the PTY snapshot suite (excluded from the
+      # unit-test archive above): its suite needs vp, node, and a built
+      # packages/cli/dist at runtime, which only cli-snapshot-test-windows
+      # provides. The archive carries the cli_snapshots test binary plus the
+      # vpt helper; nextest rewrites CARGO_MANIFEST_DIR/CARGO_BIN_EXE_vpt at
+      # run time so the relocated binaries find fixtures and helpers.
+      - name: Build snapshot test archive
+        run: |
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
+          unset RUSTFLAGS
+          cargo nextest archive -p vp_cli_snapshots \
+            --target x86_64-pc-windows-msvc --archive-file windows-snapshot-tests.tar.zst
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -236,14 +234,13 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - parallel:
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: windows-test-archive
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-test-archive
 
-          - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
-            with:
-              tool: cargo-nextest
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest
 
       # `cargo-nextest` is invoked directly so the job never depends on the
       # runner's Rust toolchain.
@@ -329,8 +326,6 @@ jobs:
       - uses: ./.github/actions/clone
 
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-        id: node-setup
-        background: true
 
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
@@ -352,8 +347,6 @@ jobs:
       - uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
         with:
           files: .
-
-      - wait: node-setup
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -413,37 +406,30 @@ jobs:
 
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
-      - parallel:
-          - name: Install docs dependencies
-            run: pnpm -C docs install --frozen-lockfile
+      - name: Install docs dependencies
+        run: pnpm -C docs install --frozen-lockfile
 
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: rolldown-binaries
-              path: ./rolldown/packages/rolldown/src
-              merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
 
-          # Prebuilt by build-windows-cli (Linux + cargo-xwin); the artifact
-          # paths are workspace-relative, so this places the binding into
-          # packages/cli/binding/ and the CLI binaries into
-          # target/x86_64-pc-windows-msvc/release/ where
-          # `tool install-global-cli` finds them.
-          - name: Download prebuilt Windows binaries
-            if: runner.os == 'Windows'
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: windows-cli-binaries
+      # Prebuilt by build-windows-cli (Linux + cargo-xwin); the artifact
+      # paths are workspace-relative, so this places the binding into
+      # packages/cli/binding/ and the CLI binaries into
+      # target/x86_64-pc-windows-msvc/release/ where
+      # `tool install-global-cli` finds them.
+      - name: Download prebuilt Windows binaries
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-cli-binaries
 
-          - name: Download prebuilt CLI test binaries
-            if: runner.os != 'Windows'
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: cli-test-binaries-${{ matrix.target }}
-              path: ${{ runner.temp }}
-
-      - name: Extract CLI test binaries
+      - uses: ./.github/actions/download-cli-test-binaries
         if: runner.os != 'Windows'
-        run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
+        with:
+          target: ${{ matrix.target }}
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
@@ -964,19 +950,18 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-            with:
-              save-cache: ${{ github.ref_name == 'main' }}
-              cache-key: cli-snapshot-test-${{ matrix.target }}
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: cli-snapshot-test-${{ matrix.target }}
 
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: rolldown-binaries
-              path: ./rolldown/packages/rolldown/src
-              merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
@@ -1079,26 +1064,21 @@ jobs:
 
       # https://github.com/marketplace/actions/setup-nu
       - name: Install Nushell
-        id: nushell
-        background: true
         uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
         with:
           version: '*'
 
-      - parallel:
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: rolldown-binaries
-              path: ./rolldown/packages/rolldown/src
-              merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
 
-          - name: Download prebuilt CLI test binaries
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: cli-test-binaries-${{ matrix.target }}
-              path: ${{ runner.temp }}
+      - uses: ./.github/actions/download-cli-test-binaries
+        with:
+          target: ${{ matrix.target }}
 
       - name: Install Playwright Chromium
         id: playwright
@@ -1106,9 +1086,6 @@ jobs:
         run: pnpm exec playwright install chromium
         env:
           PLAYWRIGHT_BROWSERS_PATH: '0'
-
-      - name: Extract CLI test binaries
-        run: tar -xzf "$RUNNER_TEMP/cli-test-binaries.tar.gz"
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
@@ -1128,7 +1105,7 @@ jobs:
           "$HOME/.vite-plus/bin/vp" node --version \
             || echo "prewarm failed; cases will download the runtime on demand"
 
-      - wait: [snapshot-shells, nushell, playwright]
+      - wait: [snapshot-shells, playwright]
 
       - name: Run PTY snapshot tests
         run: |
@@ -1204,31 +1181,26 @@ jobs:
         run: mkdir -p "$TEMP" "$TMP"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        id: snapshot-archive
-        background: true
         with:
           name: windows-snapshot-test-archive
 
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
-        id: nextest
-        background: true
         with:
           tool: cargo-nextest
 
-      - parallel:
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: rolldown-binaries
-              path: ./rolldown/packages/rolldown/src
-              merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
 
-          # See the cli-e2e-test job for details on the prebuilt binaries.
-          - name: Download prebuilt Windows binaries
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: windows-cli-binaries
+      # See the cli-e2e-test job for details on the prebuilt binaries.
+      - name: Download prebuilt Windows binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-cli-binaries
 
       - name: Install Playwright Chromium
         id: playwright
@@ -1270,7 +1242,7 @@ jobs:
           New-Item -ItemType Directory -Path $snapshotTemp | Out-Null
           "directory=$snapshotTemp" >> $env:GITHUB_OUTPUT
 
-      - wait: [playwright, snapshot-archive, nextest]
+      - wait: playwright
 
       # `cargo-nextest` is invoked directly so the job never depends on the
       # runner's Rust toolchain. --workspace-remap makes nextest rewrite
@@ -1346,19 +1318,18 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-            with:
-              save-cache: ${{ github.ref_name == 'main' }}
-              cache-key: cli-e2e-test-musl
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: cli-e2e-test-musl
 
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: rolldown-binaries
-              path: ./rolldown/packages/rolldown/src
-              merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
 
       # Cross-compile for musl on the glibc host
       - name: Build with upstream (musl)
@@ -1475,7 +1446,7 @@ jobs:
   install-e2e-test:
     name: Local CLI `vp install` E2E test
     needs:
-      - download-previous-rolldown-binaries
+      - build-cli-test-binaries
     runs-on: namespace-profile-linux-x64-default
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
@@ -1485,24 +1456,23 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-            with:
-              save-cache: ${{ github.ref_name == 'main' }}
-              cache-key: install-e2e-test
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
 
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: rolldown-binaries
-              path: ./rolldown/packages/rolldown/src
-              merge-multiple: true
+      - uses: ./.github/actions/download-cli-test-binaries
+        with:
+          target: x86_64-unknown-linux-gnu
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: x86_64-unknown-linux-gnu
+          skip-native: true
 
       - name: Build CLI
         run: |
@@ -1557,8 +1527,7 @@ jobs:
       # Override vp's project pins; sfw's embedded Node runtime is separate.
       VP_NODE_VERSION: '24.21.0'
     needs:
-      - download-previous-rolldown-binaries
-      - build-windows-cli
+      - build-cli-test-binaries
     # Run if: not a PR (push-to-main / workflow_dispatch), OR PR has 'test: sfw' label.
     # Heavy job (real registry traffic) — gated to avoid running on every PR.
     if: >-
@@ -1584,7 +1553,8 @@ jobs:
             sfw_asset: sfw-free-macos-arm64
             vp_bin: vp
             vp_insecure_tls: ''
-          # TODO: Re-enable Windows when SFW's embedded Node includes
+          # TODO: Restore Windows in a separate job that needs build-windows-cli
+          # when SFW's embedded Node includes
           # https://github.com/nodejs/node/pull/61999 (Node 24.20.0 / 26.7.0).
           # SFW 1.15.2 embeds Node 24.9.0 and hits UV_HANDLE_CLOSING at shutdown.
           # VP_NODE_VERSION only changes the child runtime, not SFW's runtime.
@@ -1599,35 +1569,24 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      # Windows runs against the prebuilt binaries from build-windows-cli,
-      # so it needs no Rust toolchain or dev drive here.
-      - parallel:
-          - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
-            if: runner.os != 'Windows'
-            with:
-              save-cache: ${{ github.ref_name == 'main' }}
-              cache-key: install-e2e-test-sfw-${{ matrix.os }}
+      # Reuse the platform build instead of compiling the same native code again.
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
-          - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
 
-          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: rolldown-binaries
-              path: ./rolldown/packages/rolldown/src
-              merge-multiple: true
-
-          # See the cli-e2e-test job for details on the prebuilt binaries.
-          - name: Download prebuilt Windows binaries
-            if: runner.os == 'Windows'
-            uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-            with:
-              name: windows-cli-binaries
+      - uses: ./.github/actions/download-cli-test-binaries
+        with:
+          target: ${{ matrix.target }}
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
-          skip-native: ${{ runner.os == 'Windows' }}
+          skip-native: true
 
       - name: Build CLI
         run: |
