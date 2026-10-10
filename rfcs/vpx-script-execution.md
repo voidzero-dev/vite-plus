@@ -297,7 +297,7 @@ These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running t
 
 `packages/tools/patches/oxc-node.patch` (see [Native Hooks in the Binding](#3-native-hooks-in-the-binding)) carries one behavior change, marked `Vite+:` in the source:
 
-3. **TypeScript under `node_modules`** is transformed (`.ts .mts .cts .tsx` only; other dependency files run as published). Node.js refuses to strip types there (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`). Upstream transforms dependencies only under `OXC_TRANSFORM_ALL`, which also transforms their JavaScript.
+3. **TypeScript under `node_modules`** is transformed (`.ts .mts .cts .tsx` only; other dependency files run as published). Node.js refuses to strip types there (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`). Upstream transforms dependencies only under `OXC_TRANSFORM_ALL`, which also transforms their JavaScript; an option for TypeScript dependencies alone is requested in [oxc-node#821](https://github.com/oxc-project/oxc-node/issues/821).
 
 ### Blocked on Oxc
 
