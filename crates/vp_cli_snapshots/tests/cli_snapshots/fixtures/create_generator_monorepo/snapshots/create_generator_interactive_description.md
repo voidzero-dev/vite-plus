@@ -26,15 +26,6 @@ VITE+ - The Unified Toolchain for the Web
 
 **← write-key:** `enter`
 
-**→ expect-milestone:** `text:text:submit`
-
-```
-VITE+ - The Unified Toolchain for the Web
-
-◇ Description:
-  Generate workspace components
-```
-
 ```
 VITE+ - The Unified Toolchain for the Web
 

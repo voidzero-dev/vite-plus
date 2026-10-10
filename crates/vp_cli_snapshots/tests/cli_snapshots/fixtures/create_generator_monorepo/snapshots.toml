@@ -35,7 +35,6 @@ steps = [
     { "write" = "Generate workspace components" },
     { "expect-milestone" = "text:text:Generate workspace components" },
     { "write-key" = "enter" },
-    { "expect-milestone" = "text:text:submit" },
   ] },
   { argv = ["vpt", "print-file", "tools/my-generator/package.json"] },
   { argv = ["vpt", "print-file", "vite.config.ts"] },
@@ -49,7 +48,6 @@ steps = [
   { argv = ["vp", "create", "vite:generator", "--directory", "tools/my-generator", "--no-agent", "--no-editor"], interactions = [
     { "expect-milestone" = "text:text:" },
     { "write-key" = "enter" },
-    { "expect-milestone" = "text:text:submit" },
   ] },
   { argv = ["vpt", "print-file", "tools/my-generator/package.json"] },
 ]

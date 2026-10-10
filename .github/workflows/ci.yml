@@ -339,7 +339,7 @@ jobs:
           just lint
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
-      - uses: crate-ci/typos@00f422f3b19c57bc6338715ebfe3316d38768461 # v1.50.3
+      - uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
         with:
           files: .
 
@@ -1343,13 +1343,14 @@ jobs:
             -e GITHUB_ACTIONS=true \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
-            node:22-alpine3.21 sh -c "
+            node:22-alpine3.21 sh -ec "
               apk add --no-cache bash curl ca-certificates git
 
               # Install pnpm and re-resolve optional dependencies for musl.
               # The host node_modules has glibc bindings; pnpm store holds both
               # but we need to re-link the musl variants.
-              corepack enable
+              # The image's Corepack expects pnpm's removed JavaScript entry point.
+              npm install --global \"\$(node -p \"require('./package.json').packageManager\")\"
               pnpm install --frozen-lockfile --force
 
               # Download musl rolldown binding (host downloaded glibc variant)
@@ -1361,7 +1362,7 @@ jobs:
               rm -rf package *.tgz
 
               pnpm bootstrap-cli:ci
-              export PATH=\"/root/.vite-plus/bin:\$PATH\"
+              . \"\$HOME/.vite-plus/env\"
 
               vp --version
               vp -h

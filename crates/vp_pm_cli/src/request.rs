@@ -58,15 +58,62 @@ impl HttpClient {
     /// * `Ok(Vec<u8>)` - The raw bytes from the response
     /// * `Err(e)` - If the request fails
     pub async fn get_bytes(&self, url: &str) -> Result<Vec<u8>, Error> {
+        self.fetch_bytes(url, None).await
+    }
+
+    /// Get raw bytes from a URL, showing a progress bar while they download
+    ///
+    /// The `message` is displayed alongside the progress bar (e.g. "Downloading
+    /// vite-plus@1.0.0..."), shown only on a TTY and outside CI so
+    /// piped/non-interactive output stays clean.
+    ///
+    /// # Arguments
+    ///
+    /// * `url` - The URL to fetch bytes from
+    /// * `message` - Message shown alongside the progress bar
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Vec<u8>)` - The raw bytes from the response
+    /// * `Err(e)` - If the request fails
+    pub async fn download_bytes(&self, url: &str, message: &str) -> Result<Vec<u8>, Error> {
+        let progress = Progress::download(message);
+        self.fetch_bytes(url, progress.as_ref().map(Progress::bar)).await
+    }
+
+    /// Internal helper to read a response body into memory.
+    async fn fetch_bytes(
+        &self,
+        url: &str,
+        progress: Option<&ProgressBar>,
+    ) -> Result<Vec<u8>, Error> {
         tracing::debug!("Fetching bytes from: {}", url);
 
         let client = vp_shared::shared_http_client()?;
 
         // Read the body inside the retry so a mid-body connection drop gets
-        // retried instead of failing outright, like `download_file`.
-        let bytes = (|| async {
+        // retried instead of failing outright, like `download_file`. The
+        // progress position is reset at the start of every attempt so a
+        // retried download doesn't double-count bytes.
+        (|| async {
             let response = client.get(url).send().await?.error_for_status()?;
-            Ok::<_, Error>(response.bytes().await?)
+            if let Some(pb) = progress {
+                pb.set_position(0);
+                if let Some(size) = response.content_length() {
+                    pb.set_length(size);
+                }
+            }
+
+            let mut bytes = Vec::new();
+            let mut stream = response.bytes_stream();
+            while let Some(chunk_result) = stream.next().await {
+                let chunk = chunk_result?;
+                if let Some(pb) = progress {
+                    pb.inc(chunk.len() as u64);
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            Ok::<_, Error>(bytes)
         })
         .retry(
             ExponentialBuilder::default()
@@ -74,9 +121,7 @@ impl HttpClient {
                 .with_min_delay(Duration::from_millis(self.min_delay))
                 .with_max_times(self.max_times),
         )
-        .await?;
-
-        Ok(bytes.to_vec())
+        .await
     }
 
     /// Get JSON data from a URL
@@ -879,6 +924,23 @@ mod tests {
             "a hash mismatch must be retried, but it was only attempted {} time(s)",
             mock.hits()
         );
+    }
+
+    #[tokio::test]
+    async fn test_download_bytes_returns_the_body() {
+        let server = MockServer::start();
+        let body = vec![7u8; 64 * 1024];
+
+        server.mock(|when, then| {
+            when.method(GET).path("/pkg.tgz");
+            then.status(200).body(&body);
+        });
+
+        let client = HttpClient::with_config(0, 10);
+        let url = vt_str::format!("{}/pkg.tgz", server.base_url());
+        let bytes = client.download_bytes(&url, "Downloading pkg...").await.unwrap();
+
+        assert_eq!(bytes, body);
     }
 
     /// `get_bytes` used to read the body outside the retry, so a connection

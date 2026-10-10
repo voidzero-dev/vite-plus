@@ -147,10 +147,17 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 6: Download platform tarball (main package is installed via npm)
     let client = HttpClient::new();
 
-    let platform_data = client
-        .get_bytes(&resolved.platform_tarball_url)
-        .await
-        .map_err(|e| Error::Upgrade(format!("Failed to download platform package: {e}").into()))?;
+    let platform_data = if options.silent {
+        client.get_bytes(&resolved.platform_tarball_url).await
+    } else {
+        client
+            .download_bytes(
+                &resolved.platform_tarball_url,
+                &format!("Downloading vite-plus@{}...", resolved.version),
+            )
+            .await
+    }
+    .map_err(|e| Error::Upgrade(format!("Failed to download platform package: {e}").into()))?;
 
     // Step 7: Verify integrity
     integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;

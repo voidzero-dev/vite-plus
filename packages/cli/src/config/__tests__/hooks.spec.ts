@@ -146,6 +146,30 @@ describe('install', () => {
     }
   });
 
+  it('does not take the git config lock when nothing changes', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-config-lock-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      process.chdir(tmp);
+
+      expect(install()).toEqual({ message: '', isError: false });
+      const configPath = join(tmp, '.git', 'config');
+      const configBefore = readFileSync(configPath, 'utf8');
+
+      // Another worktree's `vp config` holds the shared lock.
+      writeFileSync(`${configPath}.lock`, '');
+      expect(install()).toEqual({ message: '', isError: false });
+      expect(readFileSync(configPath, 'utf8')).toBe(configBefore);
+
+      // A different spelling is a real write, so it still needs the lock.
+      expect(install('./.vite-hooks').isError).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(process.platform === 'win32')(
     'does not claim success over a worktree-scoped hooks path',
     () => {
