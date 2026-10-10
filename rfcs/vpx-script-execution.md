@@ -247,29 +247,29 @@ The loader is resolved from the project first and the global install second, fol
 
 ## Comparison with tsx
 
-| Capability                     | tsx 4.23                          | `vpx` (vendored oxc-node 0.1.6)                                              | Node.js type stripping |
-| ------------------------------ | --------------------------------- | ---------------------------------------------------------------------------- | ---------------------- |
-| `.ts .mts .cts`                | ✓                                 | ✓                                                                            | ✓                      |
-| `.tsx` / `.jsx`                | ✓                                 | ✓ (automatic and classic runtimes)                                           | ✗                      |
-| Enums, namespaces, param props | ✓                                 | ✓                                                                            | ✗                      |
-| Legacy decorators              | ✓                                 | ✓                                                                            | ✗                      |
-| `emitDecoratorMetadata`        | ✗                                 | ✓                                                                            | ✗                      |
-| TC39 decorators                | ✓ (esbuild lowers)                | ✗ (oxc has no transform; clear error)                                        | ✗                      |
-| tsconfig `paths`               | ✓                                 | ✓ for `import`; not for `require()`                                          | ✗                      |
-| tsconfig selection             | One per process, from the cwd     | Nearest per file (tsc rules)                                                 | n/a                    |
-| `.js` → `.ts`, extensionless   | ✓                                 | ✓                                                                            | ✗                      |
-| `require()` of `.ts`, interop  | ✓ (compiles ESM to CJS if needed) | ✓ (`.cts` with ESM syntax is an error)                                       | Partial                |
-| TypeScript in `node_modules`   | ✓                                 | ✓                                                                            | ✗                      |
-| Native class fields, `using`   | Lowered to `target`               | Native unless `[[Set]]` fields or legacy decorators; `using` lowered on 22.x | Native                 |
-| Type checking                  | ✗                                 | ✗ (`vp check`)                                                               | ✗                      |
-| Watch                          | `tsx watch` (chokidar)            | Node.js `--watch`                                                            | `--watch`              |
-| TypeScript REPL / `-e`         | ✓                                 | ✗ (v1)                                                                       | Erasable syntax only   |
-| Transform cache                | On disk, about 8 days             | None                                                                         | n/a                    |
-| Processes per run              | 2 (Node.js parent + child)        | 1 on Unix (Rust execs Node.js); 2 via the local bin or on Windows            | 1                      |
-| Node.js version                | Whatever `node` runs tsx          | Project-managed                                                              | Project-managed        |
-| Shebang                        | `#!/usr/bin/env tsx`              | `#!/usr/bin/env vpx` (file keeps `.ts`)                                      | `#!/usr/bin/env node`  |
-| Programmatic API               | `tsImport`, `register`            | ✗ (future)                                                                   | n/a                    |
-| Extra install                  | `tsx` + esbuild                   | None (compiled into the `vite-plus` binding)                                 | None                   |
+| Capability                     | tsx 4.23                          | `vpx` (vendored oxc-node 0.1.6)                                                                  | Node.js type stripping |
+| ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------- |
+| `.ts .mts .cts`                | ✓                                 | ✓                                                                                                | ✓                      |
+| `.tsx` / `.jsx`                | ✓                                 | ✓ (automatic and classic runtimes)                                                               | ✗                      |
+| Enums, namespaces, param props | ✓                                 | ✓                                                                                                | ✗                      |
+| Legacy decorators              | ✓                                 | ✓                                                                                                | ✗                      |
+| `emitDecoratorMetadata`        | ✗                                 | ✓                                                                                                | ✗                      |
+| TC39 decorators                | ✓ (esbuild lowers)                | ✗ (oxc has no transform; clear error)                                                            | ✗                      |
+| tsconfig `paths`               | ✓                                 | ✓ for `import`; not for `require()`                                                              | ✗                      |
+| tsconfig selection             | One per process, from the cwd     | Nearest per file (tsc rules)                                                                     | n/a                    |
+| `.js` → `.ts`, extensionless   | ✓                                 | ✓                                                                                                | ✗                      |
+| `require()` of `.ts`, interop  | ✓ (compiles ESM to CJS if needed) | ✓ (`.cts` with ESM syntax is an error)                                                           | Partial                |
+| TypeScript in `node_modules`   | ✓                                 | ✓                                                                                                | ✗                      |
+| Native class fields, `using`   | Lowered to `target`               | Native unless `[[Set]]` fields or legacy decorators; `using` lowered on 22.x                     | Native                 |
+| Type checking                  | ✗                                 | ✗ (`vp check`)                                                                                   | ✗                      |
+| Watch                          | `tsx watch` (chokidar)            | Node.js `--watch`                                                                                | `--watch`              |
+| TypeScript REPL / `-e`         | ✓                                 | ✗ (v1)                                                                                           | Erasable syntax only   |
+| Transform cache                | On disk, about 8 days             | None; faster than tsx's warm cache except for megabyte-sized files ([Performance](#performance)) | n/a                    |
+| Processes per run              | 2 (Node.js parent + child)        | 1 on Unix (Rust execs Node.js); 2 via the local bin or on Windows                                | 1                      |
+| Node.js version                | Whatever `node` runs tsx          | Project-managed                                                                                  | Project-managed        |
+| Shebang                        | `#!/usr/bin/env tsx`              | `#!/usr/bin/env vpx` (file keeps `.ts`)                                                          | `#!/usr/bin/env node`  |
+| Programmatic API               | `tsImport`, `register`            | ✗ (future)                                                                                       | n/a                    |
+| Extra install                  | `tsx` + esbuild                   | None (compiled into the `vite-plus` binding)                                                     | None                   |
 
 ## Upstream Status and Vendored Changes
 
@@ -663,16 +663,59 @@ Still to verify:
 
 ## Performance
 
-Preliminary startup medians for a hello-world `.ts` on Node.js 22.18 (async hook path, 15 runs on one machine) show the loader in line with Node.js type stripping and ahead of tsx:
+Startup compared with tsx 4.23.15 on an Apple M4 Pro (12 cores, macOS 26.6), at commit `dffad11c`. Each cell is the median wall time of the whole command over 20 runs, after 3 warmup runs. Every command printed the same output, with no warnings. The scenarios are generated by a script:
 
-| Command                                          | Median  |
-| ------------------------------------------------ | ------- |
-| `node hello.js`                                  | 17.7 ms |
-| `node hello.ts` (type stripping)                 | 46.2 ms |
-| `node --import @oxc-node/core/register hello.ts` | 46.6 ms |
-| `tsx hello.ts`                                   | 59.1 ms |
+- `hello`: one `.ts` file with erasable syntax only, so Node.js type stripping can run it too.
+- `esm-app`: an `index.ts` that imports 300 modules, each with an interface, an enum, and a class with a field and a parameter property, in a `"type": "module"` package.
+- `cjs-app`: the same files in a package without `"type"`.
+- `large`: one 1.8 MB `.ts` file without `import`/`export`, in a package without `"type"`.
 
-Re-measuring on Node.js 22, 24, and 26, including the overhead of the Vite+ shim (version resolution is cached) and a graph of about 1,000 modules, is left to the benchmark phase. The second measurement decides whether a transform cache is needed.
+The commands:
+
+- `vpx` loader: `node --require dist/script-preload.cjs --import dist/script-register.js`, which is what the global `vpx` execs in place. The Rust shim's own startup is not included.
+- `node --import tsx`: tsx's loader in the same process, for comparison.
+- `vpx` local bin and the `tsx` CLI: both start the script in a child Node.js process.
+- tsx caches transforms on disk by default; "no cache" sets `TSX_DISABLE_CACHE=1`. `vpx` has no transform cache.
+
+On Node.js 22.18 both loaders run their ESM hooks on a `module.register()` thread; on 24.12 and 26.5 both run them in-thread.
+
+| Scenario  | Command                         | Node.js 22.18 |  24.12 |   26.5 |
+| --------- | ------------------------------- | ------------: | -----: | -----: |
+| `hello`   | `vpx` loader (1 process)        |         48 ms |  27 ms |  30 ms |
+| `hello`   | `node --import tsx` (1 process) |         66 ms |  47 ms |  39 ms |
+| `hello`   | `node --import tsx`, no cache   |         73 ms |  63 ms |  61 ms |
+| `hello`   | `vpx` local bin (2 processes)   |         68 ms |  49 ms |  55 ms |
+| `hello`   | `tsx` CLI (2 processes)         |         94 ms |  79 ms |  71 ms |
+| `hello`   | `tsx` CLI, no cache             |        101 ms |  92 ms |  93 ms |
+| `hello`   | `node` type stripping           |         47 ms |  45 ms |  48 ms |
+| `esm-app` | `vpx` loader (1 process)        |         82 ms |  62 ms |  65 ms |
+| `esm-app` | `node --import tsx` (1 process) |        103 ms |  79 ms |  76 ms |
+| `esm-app` | `node --import tsx`, no cache   |        135 ms | 216 ms | 216 ms |
+| `esm-app` | `vpx` local bin (2 processes)   |        102 ms |  85 ms |  92 ms |
+| `esm-app` | `tsx` CLI (2 processes)         |        135 ms | 110 ms | 116 ms |
+| `esm-app` | `tsx` CLI, no cache             |        164 ms | 248 ms | 248 ms |
+| `cjs-app` | `vpx` loader (1 process)        |         81 ms |  63 ms |  67 ms |
+| `cjs-app` | `node --import tsx` (1 process) |        119 ms |  97 ms |  94 ms |
+| `cjs-app` | `node --import tsx`, no cache   |        281 ms | 258 ms | 253 ms |
+| `cjs-app` | `vpx` local bin (2 processes)   |        103 ms |  85 ms |  92 ms |
+| `cjs-app` | `tsx` CLI (2 processes)         |        151 ms | 128 ms | 125 ms |
+| `cjs-app` | `tsx` CLI, no cache             |        316 ms | 288 ms | 287 ms |
+| `large`   | `vpx` loader (1 process)        |        119 ms | 104 ms |  96 ms |
+| `large`   | `node --import tsx` (1 process) |        121 ms |  88 ms |  76 ms |
+| `large`   | `node --import tsx`, no cache   |        222 ms | 273 ms | 259 ms |
+| `large`   | `vpx` local bin (2 processes)   |        134 ms | 125 ms | 120 ms |
+| `large`   | `tsx` CLI (2 processes)         |        149 ms | 120 ms | 108 ms |
+| `large`   | `tsx` CLI, no cache             |        256 ms | 297 ms | 290 ms |
+
+What the numbers show:
+
+- **`vpx` against tsx with a warm cache.** For one process, the `vpx` loader is 1.2–1.8× faster on `hello`, `esm-app`, and `cjs-app` on every Node.js version. On 24.12, for example, `hello` takes 27 ms against 47 ms and `esm-app` 62 ms against 79 ms.
+- **Against a cold or disabled tsx cache**, the gap grows to 1.5–4.1×.
+- **Against Node.js type stripping**, the `vpx` loader is on par on 22.18 (48 against 47 ms) and faster on 24.12 and 26.5 (27–30 against 45–48 ms).
+- **`large` is the one case where tsx's cache wins**: 88 against 104 ms on 24.12, and 76 against 96 ms on 26.5. The cache skips the transform, while `vpx` transforms 1.8 MB on every run. Without the cache, tsx is 2.6–2.7× slower than `vpx`.
+- **The local bin costs 15–27 ms** for its second Node.js process. The `tsx` CLI pays the same, so local bin against CLI keeps roughly the same ratios.
+
+A persistent transform cache would therefore only help with megabyte-sized sources, and stays under [Nice to Have](#nice-to-have).
 
 Binding load cost, measured by `require()` of the `.node` file alone on Node.js 22.18, macOS arm64:
 
