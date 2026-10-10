@@ -3,6 +3,35 @@
 
 @source "./**/*.vue";
 
+/* Match the theme's sticky local navigation and desktop header breakpoints. */
+.vp-doc {
+  --vp-doc-scroll-offset: 48px;
+}
+
+.vp-doc [id] {
+  scroll-margin-top: calc(
+    var(--vp-doc-scroll-offset) + var(--vp-layout-top-height, 0px) +
+      var(--vp-extra-scroll-margin, 24px)
+  );
+}
+
+.vp-doc h2 {
+  /* H2 headings already have 24px of top padding. */
+  --vp-extra-scroll-margin: 0px;
+}
+
+@media (min-width: 1024px) {
+  .vp-doc {
+    --vp-doc-scroll-offset: calc(var(--vp-nav-height) + 48px);
+  }
+}
+
+@media (min-width: 1280px) {
+  .vp-doc {
+    --vp-doc-scroll-offset: var(--vp-nav-height);
+  }
+}
+
 /* Viteplus */
 :root[data-variant='viteplus'] {
   --color-brand: #4f30e8;
