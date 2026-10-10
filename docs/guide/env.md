@@ -194,7 +194,7 @@ The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShe
 ### Inspect
 
 - `vp env current` shows the current resolved environment
-- `vp env doctor` runs environment diagnostics
+- `vp env doctor` runs environment diagnostics. Append `node` to focus on Node.js, `pm` for all package managers, or `npm`, `pnpm`, `yarn`, or `bun` for a specific package manager.
 - `vp env which` shows which tool path will be used
 - `vp env list` shows separate Node.js, npm, pnpm, Yarn, and Bun sections; selectors narrow output
 - `vp env list-remote` fetches Node.js and all four PM registries concurrently; selectors narrow network work. `--lts` implicitly selects Node.js.
