@@ -63,6 +63,9 @@ test('branding preserves aligned dependencies and unrelated changes across repea
     write(manifest, '{"devDependencies":{"@vitest/utils":"4.1.10"}}\n');
     write(lockfile, '# upstream lockfile\n');
     write(unrelatedSource, '// upstream source\n');
+    write(join(root, 'package.json'), '{"packageManager":"pnpm@11.24.0"}\n');
+    write(join(viteDir, 'package.json'), '{"packageManager":"pnpm@12.9.1"}\n');
+    write(join(viteDir, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
     git('init');
     git('config', 'core.autocrlf', 'false');
     git('config', 'core.hooksPath', join(root, 'no-hooks'));
@@ -94,6 +97,14 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       expect(readFileSync(unrelatedSource, 'utf8')).toBe('// unrelated local source change\n');
       expect(readFileSync(join(nodeDir, 'cli.ts'), 'utf8')).toContain("cac('vp')");
       expect(readFileSync(join(nodeDir, 'build.ts'), 'utf8')).not.toContain('logger.info(');
+      // Nested pnpm invocations in the vendored workspace must use the
+      // repository's pnpm and skip the stale upstream lockfile check.
+      expect(JSON.parse(readFileSync(join(viteDir, 'package.json'), 'utf8')).packageManager).toBe(
+        'pnpm@11.24.0',
+      );
+      expect(readFileSync(join(viteDir, 'pnpm-workspace.yaml'), 'utf8')).toContain(
+        'verifyDepsBeforeRun: false',
+      );
       const sources = Object.entries(upstreamSources).map(([file, upstream]) => {
         const source = readFileSync(join(nodeDir, file), 'utf8');
         expect(source).not.toBe(upstream);

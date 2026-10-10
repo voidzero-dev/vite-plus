@@ -11,6 +11,9 @@
  * 3. build.ts: Remove startup build banner and change error prefix
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
+ * 6. config.ts: Suppress native config loader migration notice
+ * 7. package.json: Align packageManager with the repository's pnpm
+ * 8. pnpm-workspace.yaml: Disable the pre-run dependency check
  */
 
 import { execFileSync } from 'node:child_process';
@@ -84,6 +87,76 @@ function logPatch(file: string, desc: string, result: 'patched' | 'already') {
   } else {
     log(`  - ${file}: Already patched`);
   }
+}
+
+/**
+ * Align vite's `packageManager` pin with the repository's own pnpm.
+ *
+ * Vite's scripts invoke nested `pnpm` commands (e.g. `build-types` runs
+ * `pnpm build-types-roll`). pnpm's managed-version dispatch re-execs the
+ * pinned version, and pnpm >= 12.9 publishes a native ELF bin that the
+ * dispatcher's generated shim tries to run through `node`, crashing with
+ * "SyntaxError: Invalid or unexpected token". Matching the repository's pin
+ * skips the dispatch entirely.
+ */
+function alignPackageManager(rootDir: string): 'patched' | 'already' {
+  const rootPackage = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8')) as {
+    packageManager?: string;
+  };
+  if (!rootPackage.packageManager) {
+    throw new Error(
+      '[brand-vite] Root package.json does not declare packageManager; ' +
+        'cannot align the vendored vite pin.',
+    );
+  }
+  const vitePackageFile = join(rootDir, VITE_DIR, 'package.json');
+  const vitePackage = JSON.parse(readFileSync(vitePackageFile, 'utf-8')) as {
+    packageManager?: string;
+  };
+  if (vitePackage.packageManager === undefined) {
+    // Upstream dropped the pin, so no version dispatch happens anyway.
+    return 'already';
+  }
+  if (vitePackage.packageManager === rootPackage.packageManager) {
+    return 'already';
+  }
+  vitePackage.packageManager = rootPackage.packageManager;
+  writeFileSync(vitePackageFile, `${JSON.stringify(vitePackage, null, 2)}\n`, 'utf-8');
+  return 'patched';
+}
+
+const VERIFY_DEPS_SETTING = 'verifyDepsBeforeRun: false';
+const VERIFY_DEPS_COMMENT =
+  '# Vite+ patch: the vendored tree is installed through the repository root\n' +
+  '# lockfile, while vite/pnpm-lock.yaml stays upstream and is never updated, so\n' +
+  "# pnpm's default pre-run dependency check fails every nested `pnpm run` here.";
+
+/**
+ * Disable pnpm's pre-run dependency check inside the vendored vite workspace.
+ *
+ * The vendored tree is installed through the repository's root lockfile;
+ * vite's own pnpm-lock.yaml is never updated (alignVendoredVitestDependencies
+ * pins Vitest specifiers in the manifests only). pnpm's default
+ * verifyDepsBeforeRun compares the manifests against that stale lockfile and
+ * fails every nested `pnpm run` inside the vendored workspace.
+ */
+function disableVerifyDepsBeforeRun(rootDir: string): 'patched' | 'already' {
+  const workspaceFile = join(rootDir, VITE_DIR, 'pnpm-workspace.yaml');
+  const content = readFileSync(workspaceFile, 'utf-8');
+  const existing = content.match(/^verifyDepsBeforeRun:.*$/m);
+  if (existing) {
+    if (existing[0] === VERIFY_DEPS_SETTING) {
+      return 'already';
+    }
+    writeFileSync(workspaceFile, content.replace(existing[0], VERIFY_DEPS_SETTING), 'utf-8');
+    return 'patched';
+  }
+  writeFileSync(
+    workspaceFile,
+    `${content.trimEnd()}\n\n${VERIFY_DEPS_COMMENT}\n${VERIFY_DEPS_SETTING}\n`,
+    'utf-8',
+  );
+  return 'patched';
 }
 
 export function brandVite(rootDir: string = process.cwd()) {
@@ -207,6 +280,20 @@ export function brandVite(rootDir: string = process.cwd()) {
       '      !process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),',
       "      // Vite+ manages config loading, so Vite's native-config-loader\n      // migration notice is noise. Never register the compat-check plugin.\n      false &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),",
     ),
+  );
+
+  // 7. package.json: Align packageManager with the repository's pnpm
+  logPatch(
+    'package.json',
+    "Aligned packageManager with the repository's pnpm",
+    alignPackageManager(rootDir),
+  );
+
+  // 8. pnpm-workspace.yaml: Disable the pre-run dependency check
+  logPatch(
+    'pnpm-workspace.yaml',
+    'Disabled pre-run dependency check against the upstream lockfile',
+    disableVerifyDepsBeforeRun(rootDir),
   );
 
   log('Done!');
