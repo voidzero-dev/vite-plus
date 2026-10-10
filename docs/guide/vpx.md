@@ -26,7 +26,7 @@ vpx <pkg[@version]> [args...]
 - `-p, --package <name>` installs one or more additional packages before running the command
 - `-c, --shell-mode` executes the command inside a shell
 - `-s, --silent` suppresses Vite+ output and only shows the command output
-- `--tsconfig <path>` selects the tsconfig when running a script
+- `--tsconfig <path>` selects the tsconfig when running a script (see [tsconfig](#tsconfig))
 - `-v, --version` prints the Vite+ version, like `vp --version`
 
 ### Examples
@@ -61,9 +61,7 @@ When the command is a file ending in `.ts`, `.mts`, `.cts`, `.tsx`, `.js`, `.mjs
 - tsconfig `paths` for `import`, `.js` imports that point at `.ts` files, and extensionless imports
 - ESM and CommonJS, including `require()` of `.ts` files; a `.cts` file is CommonJS, so it uses `import x = require('...')` and `export =`, and `import`/`export` declarations there fail with an error that suggests renaming the file to `.mts`
 - TypeScript published in `node_modules`
-- tsconfig `jsx`, `jsxImportSource`, `jsxFactory`, `jsxFragmentFactory`, `useDefineForClassFields`, and `verbatimModuleSyntax`
-
-Each file uses the nearest tsconfig that includes it, as `tsc` does. `--tsconfig <path>` applies one config to every file instead. Without `--tsconfig`, an `OXC_TSCONFIG_PATH` or `TS_NODE_PROJECT` environment variable does the same.
+- tsconfig `jsx`, `jsxImportSource`, `jsxFactory`, `jsxFragmentFactory`, `useDefineForClassFields`, and `verbatimModuleSyntax`; see [tsconfig](#tsconfig) for the defaults without one
 
 Options before the script, such as `--watch`, `--inspect`, `--test`, `--env-file`, `--require`, and `--import`, are passed to Node.js, and `--require` or `--import` preloads can be TypeScript too. Everything after the script, including `--`, is passed to the script. A missing script is an error; `vpx` never downloads a package for a path.
 
@@ -77,6 +75,27 @@ Scripts can also use `vpx` as their interpreter. Make the file executable and ke
 ```
 
 The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "vpx ./scripts/seed.ts"` works in `package.json` scripts without the global CLI. Running package binaries with `vpx` still needs the global CLI.
+
+#### tsconfig
+
+`vpx` reads compiler options from a tsconfig but does not type-check with it. Each file uses the nearest `tsconfig.json` above it that includes it through `files`, `include`, `exclude`, or project `references`, as `tsc` does, and `extends` is followed. Files in `node_modules` use no tsconfig.
+
+`--tsconfig <path>` applies one config to every file instead, including files that config does not include. Without `--tsconfig`, an `OXC_TSCONFIG_PATH` or `TS_NODE_PROJECT` environment variable does the same.
+
+A file that no tsconfig applies to runs as if its `compilerOptions` were empty:
+
+| Option                            | Without a tsconfig                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `module`                          | The module format comes from `package.json` `"type"`: ESM with `"module"`, CommonJS otherwise. `.mts` is always ESM and `.cts` always CommonJS. With a tsconfig `module` of `node16`, `node18`, `nodenext`, `es2015`, or later, `.ts` and `.tsx` files run as ESM regardless of `"type"`; for the `node*` values, `tsc` and tsx follow `"type"` instead. |
+| `paths`, `baseUrl`                | None. Imports resolve as in Node.js, plus `.js` to `.ts` or `.tsx`, `.mjs` to `.mts`, `.cjs` to `.cts`, and extensionless imports.                                                                                                                                                                                                                       |
+| `useDefineForClassFields`         | `true`: class fields have `[[Define]]` semantics and run natively, as with a `target` of `ES2022` or later. A lower `target` switches to `[[Set]]` semantics, as in `tsc`.                                                                                                                                                                               |
+| `experimentalDecorators`          | `false`: a decorator fails with an error that asks for this option.                                                                                                                                                                                                                                                                                      |
+| `emitDecoratorMetadata`           | `false`.                                                                                                                                                                                                                                                                                                                                                 |
+| `jsx`, `jsxImportSource`          | The automatic runtime, importing `react/jsx-runtime`.                                                                                                                                                                                                                                                                                                    |
+| `verbatimModuleSyntax`            | `false`: imports whose bindings are unused at runtime are removed, with their side effects.                                                                                                                                                                                                                                                              |
+| `rewriteRelativeImportExtensions` | `false`. `./file.ts` imports work either way.                                                                                                                                                                                                                                                                                                            |
+
+Types are removed, and enums, namespaces, and parameter properties are compiled, whatever the tsconfig says. `strict`, `lib`, and other type-checking options have no effect, and `target` only changes the class field default.
 
 ## `vp exec`
 

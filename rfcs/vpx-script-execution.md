@@ -241,7 +241,7 @@ The loader is resolved from the project first and the global install second, fol
 ### Environment
 
 - Every `node_modules/.bin` from the cwd up to the filesystem root is prepended to `PATH`, as for local binaries today (`prepend_node_modules_bin_to_path`). Scripts can then spawn project tools by name.
-- `--tsconfig <path>` is resolved against the cwd and must exist. `vpx` passes it to the child as `VP_SCRIPT_TSCONFIG`, and clears an inherited value when the flag is absent. The flag changes more than the file: without it, the hooks select the nearest tsconfig that includes each file; with it, one config applies to the whole process, including files that config does not include, for both resolution and transform. The preload passes it to oxc-node's `setTsconfigPath()`, which takes precedence over upstream's `TS_NODE_PROJECT` and `OXC_TSCONFIG_PATH`. Without the flag, those variables apply as they do for `oxnode`.
+- `--tsconfig <path>` is resolved against the cwd and must exist. `vpx` passes it to the child as `VP_SCRIPT_TSCONFIG`, and clears an inherited value when the flag is absent. The flag changes more than the file: without it, the hooks select the nearest tsconfig that includes each file; with it, one config applies to the whole process, including files that config does not include, for both resolution and transform. The preload passes it to oxc-node's `setTsconfigPath()`, which takes precedence over upstream's `TS_NODE_PROJECT` and `OXC_TSCONFIG_PATH`. Without the flag, those variables apply as they do for `oxnode`. The [guide](../docs/guide/vpx.md#tsconfig) lists how each compiler option behaves when no tsconfig applies to a file.
 - The loader is passed in argv, not `NODE_OPTIONS`. `process.execArgv` carries it, so `child_process.fork('./worker.ts')` and `new Worker('./worker.ts')` inherit it. Unrelated Node.js processes the script spawns, such as `vp build` or `npm`, do not load it.
 - Other loaders are unsupported. A `NODE_OPTIONS=--import tsx` in the environment, or a user `--import tsx`, registers a second set of hooks; Node.js runs the most recently registered hooks first, and the result depends on which loader claims the file. `vpx` does not detect or strip these.
 
@@ -311,6 +311,7 @@ These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running t
 ### Known Limitations
 
 - tsconfig `paths` apply to `import` only. `require()` uses Node.js' CommonJS resolution, as upstream.
+- A tsconfig `module` of `node16`, `node18`, or `nodenext` makes `.ts` and `.tsx` files ES modules even in a package without `"type": "module"`, as upstream does. `tsc` and tsx follow `package.json` `"type"` for those values.
 
 ### Nice to Have
 
