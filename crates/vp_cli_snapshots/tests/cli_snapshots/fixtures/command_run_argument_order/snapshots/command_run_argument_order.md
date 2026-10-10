@@ -12,7 +12,7 @@ hello from lib-b
 hello from app-a
 
 ---
-vp run: 0/2 cache hit (0%). (Run `vp run --last-details` for full details)
+vp run: 2/2 successful. (Run `vp run --last-details` for full details)
 ```
 
 ## `vp run hello -r`
