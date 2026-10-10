@@ -43,10 +43,6 @@ Running package binaries needs the global Vite+ CLI. In `package.json` scripts, 
 
 ## Running Scripts
 
-::: warning Experimental
-Running script files with `vpx` is experimental. Its loader, [oxc-node](https://github.com/oxc-project/oxc-node), is experimental too.
-:::
-
 ```bash
 vpx [--tsconfig <path>] [node options] <file> [args...]
 ```

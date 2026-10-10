@@ -386,7 +386,7 @@ Before this change, `BUNDLING.md` said the `rolldown` feature was release-only, 
 
 - `packages/cli/toolchain.config.json` registers `oxc-node` with a new `vendored` version source: the version comes from the vendored `@oxc-node/core` package.json and the revision from `.upstream-versions.json`. `vp toolchain` shows `compiles oxc-node@0.1.5 (<revision>)`, which compiles `oxc` and `oxc-resolver`.
 - `packages/cli/BUNDLING.md`: an "oxc-node Script Loader" section, plus the corrected feature description.
-- `docs/guide/vpx.md`: a "Running Scripts" section marked experimental. `docs/guide/env.md` contrasts `vp node` with `vpx <file>`.
+- `docs/guide/vpx.md`: separate "Running Package Binaries" and "Running Scripts" sections, with the tsconfig defaults. `docs/guide/env.md` contrasts `vp node` with `vpx <file>`.
 - The `vpx --help` text (`VPX_HELP`) and the `command_vpx_pnpm*` snapshots that record it.
 
 ## CLI Help Output
@@ -434,7 +434,7 @@ $ vpx ./a.ts          # engines.node pins 20.18.0
 error: Running scripts with vpx requires Node.js ^22.18.0 || ^24.11.0 || >=26.0.0 (current: v20.18.0)
 
 $ vpx ./decorators.ts # no experimentalDecorators
-Error: Failed to transform file:///…/decorators.ts: decorators require `"experimentalDecorators": true` in tsconfig.json; standard (TC39) decorators are not supported yet
+Error: Failed to transform file:///…/decorators.ts: decorators require `"experimentalDecorators": true` in a tsconfig.json that includes this file; standard (TC39) decorators are not supported yet
 ```
 
 Other errors raised in the script, including transform errors, come from Node.js and oxc-node unchanged. Source maps are on, so stack traces point at the TypeScript source.
@@ -603,7 +603,7 @@ oxc-node reads both when no path is set through `setTsconfigPath()`, with `TS_NO
 
 ### Windows
 
-There are no shebangs. `vpx scripts\a.ts` works through the file-exists rule; the preload is passed as a path and the `--import` as a `file:///C:/…` URL. Exit codes and Ctrl+C follow the existing `node` shim spawn-and-wait path. Windows has not been run yet; the snapshot cases cover it in CI, except watch mode and shebangs.
+There are no shebangs. `vpx scripts\a.ts` works through the file-exists rule; the preload is passed as a path and the `--import` as a `file:///C:/…` URL. Exit codes and Ctrl+C follow the existing `node` shim spawn-and-wait path. CI runs the snapshot cases on Windows, except watch mode and shebangs.
 
 ### Inside `vp run` and `package.json` Scripts
 
@@ -769,8 +769,8 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 ## Rollout
 
 1. **Phase 0, vendor and prototype** (implemented): oxc-node in `sync-remote`, CI, and `upgrade-deps`; the patch; the binding feature; the loader entries; detection and execution in both CLIs; toolchain metadata; unit and snapshot tests; and docs.
-2. **Phase 1, experimental** (implemented, pending review): the feature ships with the docs marked experimental. Remaining: Windows verification in CI, and upstream PRs for the fixes in [Upstream Status](#upstream-status-and-vendored-changes).
-3. **Phase 2, stable**: remove the experimental label and teach `vp migrate` to rewrite `tsx`, `ts-node`, and `esno` usages in `package.json` scripts.
+2. **Phase 1, release** (implemented, pending review): the feature ships as a regular part of `vpx`. CI covers Linux, macOS, and Windows, and the upstream fixes from [Upstream Status](#upstream-status-and-vendored-changes) landed in oxc-node v0.1.5 and v0.1.6.
+3. **Phase 2, migration**: teach `vp migrate` to rewrite `tsx`, `ts-node`, and `esno` usages in `package.json` scripts.
 4. **Phase 3**: see Future Enhancements.
 
 ## Open Questions
@@ -784,7 +784,7 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 7. **`--require` ordering** (resolved): the loader is split into a CommonJS `--require` preload and an `--import`, so `--require ./setup.ts` works.
 8. **Extensionless TypeScript in shebang scripts**: wait for upstream support, or document the `.ts` requirement? (Proposed: document; see Edge Cases.)
 9. **oxc version lockstep** (resolved): `upgrade-deps` bumps oxc-node to its latest stable tag, and `sync-remote` rewrites its `oxc` version to the workspace's and re-applies the patch; a tag that does not compile or patch fails the upgrade loudly. `@oxc-project/runtime` follows Rolldown's pin.
-10. **Maturity** (resolved for v1): the docs mark the feature experimental, as oxc-node itself is.
+10. **Maturity** (resolved): the docs present script mode as a regular `vpx` feature, without an experimental label. The oxc.rs docs still mark oxc-node itself as experimental; the vendored copy is pinned to a release and covered by Vite+'s own tests.
 11. **`--version`** (resolved): `vpx -v/--version` prints the Vite+ version, as `vp --version` does; `vp node --version` prints the Node.js version.
 12. **Dev builds** (resolved): `build.ts` already compiles Rolldown, and therefore oxc, into every build, so the `oxc-node` feature is on for all builds at no extra crate cost.
 13. **`.cts` files with ESM syntax** (resolved): follow upstream, which reports one error on every load path ([oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811), v0.1.6). Running them as tsx does needs an ESM-to-CommonJS transform in oxc.
