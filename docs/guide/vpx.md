@@ -59,11 +59,11 @@ When the command is a file ending in `.ts`, `.mts`, `.cts`, `.tsx`, `.js`, `.mjs
 - TypeScript syntax that Node.js type stripping rejects: enums, namespaces, parameter properties, and JSX
 - Decorators with `"experimentalDecorators": true`, including `emitDecoratorMetadata`; standard decorators are not supported yet
 - tsconfig `paths` for `import`, `.js` imports that point at `.ts` files, and extensionless imports
-- ESM and CommonJS, including `require()` of `.ts` files; a `.cts` file that uses `import`/`export` runs as an ES module, so `require`, `module`, and `__dirname` are not defined inside it (use `createRequire(import.meta.url)` and `import.meta.dirname`)
+- ESM and CommonJS, including `require()` of `.ts` files; a `.cts` file is CommonJS, so it uses `import x = require('...')` and `export =`, and `import`/`export` declarations there fail with an error that suggests renaming the file to `.mts`
 - TypeScript published in `node_modules`
 - tsconfig `jsx`, `jsxImportSource`, `jsxFactory`, `jsxFragmentFactory`, `useDefineForClassFields`, and `verbatimModuleSyntax`
 
-Each file uses the nearest tsconfig that includes it, as `tsc` does. `--tsconfig <path>` applies one config to every file instead.
+Each file uses the nearest tsconfig that includes it, as `tsc` does. `--tsconfig <path>` applies one config to every file instead. Without `--tsconfig`, an `OXC_TSCONFIG_PATH` or `TS_NODE_PROJECT` environment variable does the same.
 
 Options before the script, such as `--watch`, `--inspect`, `--test`, `--env-file`, `--require`, and `--import`, are passed to Node.js, and `--require` or `--import` preloads can be TypeScript too. Everything after the script, including `--`, is passed to the script. A missing script is an error; `vpx` never downloads a package for a path.
 
