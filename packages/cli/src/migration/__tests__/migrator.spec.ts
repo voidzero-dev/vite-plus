@@ -1866,6 +1866,61 @@ function readJson(filePath: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+describe('first migration preserves pnpm workspace membership', () => {
+  let project: string;
+
+  beforeEach(() => {
+    project = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-workspace-members-'));
+    fs.writeFileSync(
+      path.join(project, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*', '!packages/fixtures'],
+      }),
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(project, { recursive: true, force: true });
+  });
+
+  it.each([undefined, 'catalog:\n  example: ^1.0.0\n'])(
+    'writes detected globs when the workspace file has no packages: %s',
+    (existing) => {
+      const workspaceFile = path.join(project, 'pnpm-workspace.yaml');
+      if (existing !== undefined) {
+        fs.writeFileSync(workspaceFile, existing);
+      }
+      const workspace = makeWorkspaceInfo(project, PackageManager.pnpm, '11.24.0');
+      workspace.isMonorepo = true;
+      workspace.workspacePatterns = ['packages/*', '!packages/fixtures'];
+
+      rewriteMonorepo(workspace, true, true);
+
+      expect(readYamlObject(workspaceFile).packages).toEqual(workspace.workspacePatterns);
+      if (existing !== undefined) {
+        expect(readYamlObject(workspaceFile).catalog).toMatchObject({ example: '^1.0.0' });
+      }
+      const migrated = fs.readFileSync(workspaceFile, 'utf8');
+      rewriteMonorepo(workspace, true, true);
+      expect(fs.readFileSync(workspaceFile, 'utf8')).toBe(migrated);
+    },
+  );
+
+  it('preserves an existing packages field', () => {
+    const workspaceFile = path.join(project, 'pnpm-workspace.yaml');
+    fs.writeFileSync(workspaceFile, 'packages:\n  - apps/*\n');
+    const workspace = makeWorkspaceInfo(project, PackageManager.pnpm);
+    workspace.isMonorepo = true;
+    workspace.workspacePatterns = ['packages/*'];
+
+    rewriteMonorepo(workspace, true, true);
+
+    expect(readYamlObject(workspaceFile).packages).toEqual(['apps/*']);
+  });
+});
+
 function readYaml(filePath: string): string {
   return fs.readFileSync(filePath, 'utf8');
 }
