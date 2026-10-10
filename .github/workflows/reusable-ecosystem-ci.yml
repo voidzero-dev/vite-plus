@@ -430,7 +430,6 @@ jobs:
       - name: Clone ecosystem project
         id: ecosystem-project
         background: true
-        shell: bash
         run: |
           git config --global core.autocrlf false
           node ecosystem-ci/clone.ts "$ECOSYSTEM_PROJECT"
@@ -462,7 +461,6 @@ jobs:
           sudo apt-get install --yes libx11-dev libxkbfile-dev
 
       - name: Install vp CLI
-        shell: bash
         run: |
           # Place vp binary where install-global-cli.ts expects it (target/release/)
           mkdir -p target/release
@@ -479,7 +477,6 @@ jobs:
 
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
-        shell: bash
         # patch-project.ts starts a local npm registry serving the packed
         # local build (it stays up for the later steps; the registry env is
         # exported via GITHUB_ENV), then runs `vp migrate` and the follow-up
@@ -489,12 +486,10 @@ jobs:
 
       - name: Verify local packages installed
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
-        shell: bash
         run: node $GITHUB_WORKSPACE/ecosystem-ci/verify-install.ts
 
       - name: Determine playwright requirement
         id: pw
-        shell: bash
         run: |
           needs=$(jq -r --arg p '${{ matrix.project.name }}' '.[$p].playwright // false' "$GITHUB_WORKSPACE/ecosystem-ci/repo.json")
           echo "needs=$needs" >> "$GITHUB_OUTPUT"
@@ -502,7 +497,6 @@ jobs:
       - name: Install Playwright chromium
         if: steps.pw.outputs.needs == 'true'
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
-        shell: bash
         run: npx playwright install chromium
 
       - name: Run vite-plus commands in ${{ matrix.project.name }}
