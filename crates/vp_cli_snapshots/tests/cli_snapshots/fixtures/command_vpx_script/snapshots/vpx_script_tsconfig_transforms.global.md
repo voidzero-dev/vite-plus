@@ -38,7 +38,7 @@ Decorators without experimentalDecorators fail with a clear error
 node:internal/modules/run_main:123
     triggerUncaughtException(
     ^
-Error: Failed to transform file://<workspace>/plain/decorators.ts: decorators require `"experimentalDecorators": true` in tsconfig.json; standard (TC39) decorators are not supported yet
+Error: Failed to transform file://<workspace>/plain/decorators.ts: decorators require `"experimentalDecorators": true` in a tsconfig.json that includes this file; standard (TC39) decorators are not supported yet
     at async nextLoad (node:internal/modules/esm/hooks:748:22)
     at async Hooks.load (node:internal/modules/esm/hooks:385:20)
     at async handleMessage (node:internal/modules/esm/worker:199:18) {

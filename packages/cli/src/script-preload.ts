@@ -43,6 +43,11 @@ const { oxcNode } = createRequire(import.meta.url)(
   '../binding/index.cjs',
 ) as typeof import('../binding/index.js');
 
+// `vpx --tsconfig` pins one config for every file. It must be set before the first
+// transform or resolve; the off-thread hooks load the same native library, so they
+// see it too. Without it, each file uses its nearest tsconfig.
+oxcNode.setTsconfigPath(process.env.VP_SCRIPT_TSCONFIG);
+
 // Destructure from the namespace: these APIs are missing on older Node.js releases.
 const { registerHooks, setSourceMapsSupport } = NodeModule as Partial<typeof NodeModule>;
 

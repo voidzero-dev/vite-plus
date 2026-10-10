@@ -1700,6 +1700,14 @@ export declare namespace oxcNode {
       arg1?: oxcNode.ResolveContext | undefined | null,
     ) => oxcNode.ResolveFnOutput | Promise<oxcNode.ResolveFnOutput>,
   ): oxcNode.ResolveFnOutput | Promise<oxcNode.ResolveFnOutput>;
+  /**
+   * The path last passed to [`set_tsconfig_path`], exactly as given, or `null`.
+   *
+   * `register.mjs` hands it to the `module.register()` hook thread. Under WASI
+   * that thread instantiates its own copy of the binding, which starts out with
+   * no override of its own.
+   */
+  export function getTsconfigPath(): string | null;
   export function initTracing(): void;
   export function load(
     url: string,
@@ -1742,6 +1750,23 @@ export declare namespace oxcNode {
     url: string;
     importAttributes?: Record<string, string> | null;
   }
+  /**
+   * Pin one `tsconfig.json` for every file, as `OXC_TSCONFIG_PATH` does, but
+   * without touching `process.env` — so the user's script and the processes it
+   * spawns do not inherit a config chosen for the loader (issue #806).
+   *
+   * A path set here takes precedence over `TS_NODE_PROJECT` and
+   * `OXC_TSCONFIG_PATH`. A relative path is resolved against the working
+   * directory the loader runs in, like the environment variables. `null`,
+   * `undefined` or an empty string clears the override and goes back to the
+   * environment variables, then to discovery.
+   *
+   * The resolver and its tsconfig are shared by the whole process and created
+   * on the first transform or resolve, so this has to run before that. Calling
+   * it afterwards throws, unless it names the config already in use, whether
+   * that came from here or from an environment variable.
+   */
+  export function setTsconfigPath(path?: string | undefined | null): void;
   export function transform(path: string, source: string | Uint8Array): oxcNode.Output;
   export function transformAsync(
     path: string,

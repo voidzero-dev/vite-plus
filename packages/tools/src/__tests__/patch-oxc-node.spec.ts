@@ -40,8 +40,19 @@ describe('patches/oxc-node.patch', () => {
     expect(patch).not.toMatch(/^[+ -]oxc = \{ version/m);
   });
 
-  test('marks every source change', () => {
-    expect(patch.match(/^\+.*Vite\+:/gm)?.length).toBeGreaterThanOrEqual(10);
+  test('marks every source change that is not a NAPI rename', () => {
+    // Namespacing keeps oxc-node's exports apart from Rolldown's in the shared
+    // binding; every other source change says why with a `Vite+:` comment.
+    const source = patch.slice(patch.indexOf('diff --git a/src/lib.rs'));
+    const hunks = source.split(/^@@.*$/m).slice(1);
+    expect(hunks.length).toBeGreaterThan(0);
+    for (const hunk of hunks) {
+      const added = hunk.split('\n').filter((line) => line.startsWith('+'));
+      const rename = added.every(
+        (line) => line.includes('namespace = "oxcNode"') || line.includes('OxcNodeTransformTask'),
+      );
+      expect(rename || added.some((line) => line.includes('Vite+:')), hunk).toBe(true);
+    }
   });
 
   test.skipIf(!existsSync(join(rootDir, OXC_NODE_DIR, '.git')))(
