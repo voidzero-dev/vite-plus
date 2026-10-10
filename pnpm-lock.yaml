@@ -276,7 +276,7 @@ catalogs:
       specifier: 5.0.3
       version: 5.0.3
     bingo:
-      specifier: ^0.13.0
+      specifier: ^0.13.2
       version: 0.13.2
     cac:
       specifier: ^7.0.0
