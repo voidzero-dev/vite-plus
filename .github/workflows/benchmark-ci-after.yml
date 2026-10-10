@@ -1149,6 +1149,10 @@ jobs:
               rustup show
               cargo build -p vp_global_cli
             '
+      # Docker creates files as root. The host cache action must read and clean them.
+      - name: Restore Cargo cache ownership
+        run: sudo chown -R "$(id -u):$(id -g)" "$HOME/.cargo/registry" "$HOME/.cargo/git" target
+
       - name: Run vp in node:24-bookworm-slim without a CA store
         run: |
           docker run --rm \
