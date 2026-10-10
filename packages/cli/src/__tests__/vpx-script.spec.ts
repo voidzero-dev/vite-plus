@@ -150,11 +150,15 @@ describe('script hooks', () => {
     expect(SUPPORTED_NODE_RANGE).toBe(pkg.engines.node);
   });
 
-  it('uses in-thread hooks on Node.js 26, which deprecates module.register()', () => {
+  it('uses in-thread hooks where registerHooks() has the fixes the hooks need', () => {
     expect(canRegisterSyncHooks('22.18.0')).toBe(false);
-    expect(canRegisterSyncHooks('24.15.0')).toBe(false);
+    expect(canRegisterSyncHooks('22.22.2')).toBe(false);
+    expect(canRegisterSyncHooks('22.22.3')).toBe(true);
+    expect(canRegisterSyncHooks('22.23.0')).toBe(true);
+    expect(canRegisterSyncHooks('24.11.0')).toBe(false);
+    expect(canRegisterSyncHooks('24.11.1')).toBe(true);
+    expect(canRegisterSyncHooks('24.12.0')).toBe(true);
     expect(canRegisterSyncHooks('26.0.0')).toBe(true);
-    expect(canRegisterSyncHooks('26.5.0')).toBe(true);
   });
 
   it('checks the supported Node.js range', () => {

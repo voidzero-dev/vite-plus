@@ -4,11 +4,11 @@
  * The CLIs pass `--require <dist/script-preload.cjs> --import <dist/script-register.js>`.
  * This preload runs first, before any user `--require` or `--import`, so a
  * `--require ./setup.ts` preload works too. It checks the Node.js version, installs the
- * CommonJS hook, and on Node.js 26+ registers the in-thread ESM hooks. On older releases
- * `script-register.js` registers the off-thread ESM hooks instead; Node.js 22 cannot
- * call `module.register()` while a `--require` is loading. The `--import` also makes
- * Node.js run the entry point through the ESM loader, where these hooks decide each
- * file's module format.
+ * CommonJS hook, and registers the in-thread ESM hooks. On Node.js releases before
+ * 22.22.3 and 24.11.1, which lack `registerHooks()` fixes, `script-register.js`
+ * registers off-thread ESM hooks instead; Node.js 22 cannot call `module.register()`
+ * while a `--require` is loading. The `--import` also makes Node.js run the entry point
+ * through the ESM loader, where these hooks decide each file's module format.
  *
  * It uses the oxc-node hooks compiled into the Vite+ native binding (exported as
  * `oxcNode`). Adapted from oxc-node's `packages/core/register.mjs`; keep them in sync

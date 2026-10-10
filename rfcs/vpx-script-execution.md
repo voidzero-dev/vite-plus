@@ -226,10 +226,10 @@ The loader has two entries in `vite-plus/dist`, passed together:
    - checks the Node.js version and exits with a Vite+ error outside the supported range (being CommonJS, it can do that on every Node.js version);
    - loads the Vite+ native binding through `packages/cli/binding/index.cjs`;
    - turns on source maps and installs the pirates CommonJS hook, which also covers TypeScript under `node_modules`;
-   - on Node.js 26+, registers the in-thread ESM hooks with `module.registerHooks()`.
-2. **`--import <file URL of dist/script-register.js>`** (ESM). On Node.js < 26 it registers the off-thread ESM hooks (`dist/script-esm-hooks.js`) with `module.register()`; Node.js 22 cannot call `module.register()` while a `--require` is loading. On every version, an `--import` also makes Node.js run the entry point through the ESM loader, where the hooks decide each file's module format.
+   - on Node.js 22.22.3+, 24.11.1+, and 26+, registers the in-thread ESM hooks with `module.registerHooks()`.
+2. **`--import <file URL of dist/script-register.js>`** (ESM). On older 22.x and 24.x releases it registers the off-thread ESM hooks (`dist/script-esm-hooks.js`) with `module.register()`; Node.js 22 cannot call `module.register()` while a `--require` is loading. On every version, an `--import` also makes Node.js run the entry point through the ESM loader, where the hooks decide each file's module format.
 
-Node.js 25.9+ deprecates `module.register()` (DEP0205), so Node.js 26 uses `registerHooks()`. Upstream oxc-node waits for 26.2 because of two `registerHooks()` defects: nodejs/node#59011, which every Node.js 26 release has fixed, and nodejs/node#62920, which only affects load hooks that return source for CommonJS, which these hooks never do. Node.js 22 and 24 keep `module.register()`, which they do not deprecate.
+The in-thread hooks start about twice as fast as a `module.register()` hooks thread, and Node.js 25.9+ deprecates `module.register()` (DEP0205). They need two fixes: nodejs/node#59011 (resolve `conditions`, in 22.19 and 24.5) and nodejs/node#59929 (a null source for CommonJS from a sync load hook, in 22.22.3 and 24.11.1). tsx switches at the same releases. Upstream oxc-node waits for 26.2 for nodejs/node#62920, which only affects load hooks that return source for CommonJS, which these hooks never do. Measured with the project-local bin, `vpx` on a two-module `.mts` script went from 78 to 57 ms on Node.js 22.23 and from 69 to 52 ms on 24.11 (medians of 15 runs).
 
 The contract between the CLI and the loader is these two flags plus the `VP_SCRIPT_TSCONFIG` environment variable. Because the global `vp` may be newer or older than the project's `vite-plus`, this contract must stay stable across versions; new behavior goes into the loader entries, not into new argv.
 
@@ -291,7 +291,7 @@ These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running t
 ### Fixed in the Loader JavaScript
 
 1. **Runtime helper resolution.** Lowered code imports helpers such as `@oxc-node/core/helpers/defineProperty`, which would resolve from the user's file, where `@oxc-node/core` is usually not installed (`ERR_MODULE_NOT_FOUND`). The loader maps them to `@oxc-project/runtime`, a `vite-plus` dependency, resolved from `vite-plus` itself: the ESM resolve hook calls `nextResolve('@oxc-project/runtime/helpers/<name>', { parentURL: <vite-plus dist URL> })`.
-2. **Helpers in CommonJS output.** Output without `import`/`export` loads helpers with `require("@oxc-node/core/helpers/…")`, which the `module.register()` hooks on Node.js 22 and 24 never see. The pirates hook rewrites each to `process.getBuiltinModule("node:module").createRequire(<vite-plus dist URL>)("@oxc-project/runtime/helpers/<name>")`, so it resolves from `vite-plus`.
+2. **Helpers in CommonJS output.** Output without `import`/`export` loads helpers with `require("@oxc-node/core/helpers/…")`, which the off-thread `module.register()` hooks never see. The pirates hook rewrites each to `process.getBuiltinModule("node:module").createRequire(<vite-plus dist URL>)("@oxc-project/runtime/helpers/<name>")`, so it resolves from `vite-plus`.
 
 ### Fixed in the Vendored Source
 
@@ -636,7 +636,7 @@ Every case runs in both flavors (`vp = ["local", "global"]`), and the global shi
 | `vpx_script_shebang` (Unix)      | An executable `.ts` file and an extensionless file with `#!/usr/bin/env vpx`                                                                                  |
 | `vpx_script_watch` (Unix)        | `--watch` restarts when an imported `.ts` file changes (driven by `verify-watch.mjs`)                                                                         |
 
-`fixtures/command_vpx_script_node26/` pins Node.js 26.5.0 for the `registerHooks()` path (ESM, `require()` of CommonJS `.cts`, native `using`, the `.cts` module-syntax error). `fixtures/command_vpx_script_old_node/` pins Node.js 20.18.0 for the unsupported-version error. Both download their runtime in CI.
+`fixtures/command_vpx_script_node24/` pins Node.js 24.12.0 for the `registerHooks()` path on an LTS line, including an imported CommonJS module that `require()`s another file. `fixtures/command_vpx_script_node26/` pins Node.js 26.5.0 for the same path (ESM, `require()` of CommonJS `.cts`, native `using`, the `.cts` module-syntax error). `fixtures/command_vpx_script_old_node/` pins Node.js 20.18.0 for the unsupported-version error. Both download their runtime in CI.
 
 `command_vpx_pnpm10` and `command_vpx_pnpm11` re-record the new help text; package mode is otherwise unchanged. `command_toolchain` re-records the `oxc-node` node.
 
