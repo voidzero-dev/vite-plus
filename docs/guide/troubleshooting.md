@@ -114,6 +114,8 @@ export default defineConfig({
 });
 ```
 
+Import the plugin packages directly inside the callback. A dynamic `import()` of a local module, such as `await import('./vite.plugins.ts')`, does not avoid the cost: Vite bundles the config before loading it and follows dynamic imports of local files, so that module and the packages it imports are still processed on every command, even though the callback never runs.
+
 ## Asking for Help
 
 If you are stuck, please reach out:
