@@ -34,7 +34,7 @@ runs:
       with:
         # Remote caching is not released yet; use the registry bridge build of
         # https://github.com/voidzero-dev/vite-plus/pull/2842 until it is.
-        version: 0.0.0-commit.11393b1a9ec1739c5897fefd418bdb095a34db7e
+        version: 1.1.0
         cache: true
         working-directory: docs
         # Resolved relative to working-directory.
