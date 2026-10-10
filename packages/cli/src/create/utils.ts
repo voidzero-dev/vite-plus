@@ -96,6 +96,34 @@ export function copyDir(srcDir: string, destDir: string) {
 }
 
 /**
+ * Move the contents of `srcDir` into `destDir` without touching anything that
+ * is already in `destDir`. Directories present on both sides are merged.
+ *
+ * Returns the paths, relative to `destDir`, that were left in `srcDir` because
+ * `destDir` already had them.
+ */
+export function moveDirKeepingExisting(srcDir: string, destDir: string): string[] {
+  const kept: string[] = [];
+  const move = (relativeDir: string) => {
+    for (const entry of fs.readdirSync(path.join(srcDir, relativeDir), { withFileTypes: true })) {
+      const relativePath = path.join(relativeDir, entry.name);
+      const dest = path.join(destDir, relativePath);
+      const destStat = fs.lstatSync(dest, { throwIfNoEntry: false });
+      if (!destStat) {
+        fs.renameSync(path.join(srcDir, relativePath), dest);
+      } else if (entry.isDirectory() && destStat.isDirectory()) {
+        move(relativePath);
+      } else {
+        kept.push(relativePath.split(path.sep).join('/'));
+      }
+    }
+  };
+  fs.mkdirSync(destDir, { recursive: true });
+  move('');
+  return kept.toSorted();
+}
+
+/**
  * Format the target directory into a valid directory name and package name
  *
  * Examples:

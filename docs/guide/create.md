@@ -43,6 +43,7 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 ## Options
 
 - `--directory <dir>` writes the generated project into a specific target directory. Only built-in templates and bundled `@org` templates support this option.
+- `--force` scaffolds into a target directory that is not empty and keeps the files already there. Template files that would replace an existing file are skipped and listed. Only built-in templates and bundled `@org` templates support this option.
 - `--agent <name>` creates agent instructions files during scaffolding
 - `--no-agent` skips agent instruction setup
 - `--editor <name>` writes editor config files

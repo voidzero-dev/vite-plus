@@ -1,0 +1,10 @@
+[[case]]
+name = "create_force_keeps_existing_files"
+vp = "global"
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--directory", "."], cwd = "my-app", comment = "a non-empty directory is refused by default", continue-on-failure = true },
+  { argv = ["vp", "create", "vite:application", "--no-interactive", "--directory", ".", "--force"], cwd = "my-app", comment = "--force scaffolds around the existing files", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-app/README.md"], comment = "the existing README is kept", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-app/.gitignore"], comment = "the existing .gitignore is kept", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "my-app/package.json", "--assert", "file"], comment = "the template is scaffolded", continue-on-failure = true },
+]

@@ -10,6 +10,7 @@ import {
   ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
   getProjectDirFromPackageName,
+  moveDirKeepingExisting,
   renameFiles,
   shouldConfigureEditorsForCreate,
 } from '../utils.js';
@@ -385,5 +386,75 @@ describe('renameFiles', () => {
     write('_foo', 'bar\n');
     renameFiles(projectDir);
     expect(read('_foo')).toBe('bar\n');
+  });
+});
+
+describe('moveDirKeepingExisting', () => {
+  let rootDir: string;
+  let srcDir: string;
+  let destDir: string;
+
+  beforeEach(() => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-move-'));
+    srcDir = path.join(rootDir, 'src');
+    destDir = path.join(rootDir, 'dest');
+  });
+
+  afterEach(() => {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  });
+
+  function write(side: 'src' | 'dest', name: string, content: string): void {
+    const filePath = path.join(rootDir, side, name);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content);
+  }
+
+  function read(name: string): string {
+    return fs.readFileSync(path.join(destDir, name), 'utf-8');
+  }
+
+  it('moves everything into a missing directory', () => {
+    write('src', 'package.json', '{}');
+    write('src', 'src/main.ts', 'main');
+
+    expect(moveDirKeepingExisting(srcDir, destDir)).toEqual([]);
+    expect(read('package.json')).toBe('{}');
+    expect(read('src/main.ts')).toBe('main');
+  });
+
+  it('keeps existing files and reports them', () => {
+    write('src', 'README.md', 'template');
+    write('src', '.gitignore', 'template');
+    write('src', 'package.json', '{}');
+    write('dest', 'README.md', 'mine');
+    write('dest', '.gitignore', 'mine');
+    write('dest', 'LICENSE', 'mine');
+
+    expect(moveDirKeepingExisting(srcDir, destDir)).toEqual(['.gitignore', 'README.md']);
+    expect(read('README.md')).toBe('mine');
+    expect(read('.gitignore')).toBe('mine');
+    expect(read('LICENSE')).toBe('mine');
+    expect(read('package.json')).toBe('{}');
+  });
+
+  it('merges directories that exist on both sides', () => {
+    write('src', 'src/main.ts', 'template');
+    write('src', 'src/style.css', 'template');
+    write('src', 'public/icon.svg', 'template');
+    write('dest', 'src/main.ts', 'mine');
+
+    expect(moveDirKeepingExisting(srcDir, destDir)).toEqual(['src/main.ts']);
+    expect(read('src/main.ts')).toBe('mine');
+    expect(read('src/style.css')).toBe('template');
+    expect(read('public/icon.svg')).toBe('template');
+  });
+
+  it('keeps an existing file when the template has a directory of the same name', () => {
+    write('src', 'docs/index.md', 'template');
+    write('dest', 'docs', 'mine');
+
+    expect(moveDirKeepingExisting(srcDir, destDir)).toEqual(['docs']);
+    expect(read('docs')).toBe('mine');
   });
 });
