@@ -1,8 +1,10 @@
 /**
- * Shared pieces of the `vpx <script>` loader (see `script-register.ts`).
+ * Shared pieces of the `vpx <script>` loader (see `script-preload.ts`).
  */
 
-/** Must match `engines.node` in package.json; `script-hooks.spec.ts` checks it. */
+type OxcNodeBinding = typeof import('../binding/index.js').oxcNode;
+
+/** Must match `engines.node` in package.json; `__tests__/vpx-script.spec.ts` checks it. */
 export const SUPPORTED_NODE_RANGE = '^22.18.0 || ^24.11.0 || >=26.0.0';
 
 export function isSupportedNodeVersion(version: string): boolean {
@@ -49,17 +51,53 @@ export function runtimeHelperSpecifier(specifier: string): string | undefined {
 }
 
 /** URL that runtime helper imports resolve from: this package. */
-export const HELPERS_PARENT_URL = import.meta.url;
+const HELPERS_PARENT_URL = import.meta.url;
 
 const HELPER_REQUIRE = `require("${OXC_NODE_HELPERS}`;
 const RUNTIME_HELPER_REQUIRE = `process.getBuiltinModule("node:module").createRequire(${JSON.stringify(HELPERS_PARENT_URL)})("${RUNTIME_HELPERS}`;
 
 /**
- * The CommonJS transform emits `require()` for runtime helpers but leaves
- * `import`/`export` in place, and Node.js runs such a file as an ES module,
- * where `require` is not defined. Reach the helpers in a way both module
- * systems can run, resolved from this package.
+ * CommonJS output (a file without `import`/`export`) loads helpers with `require()`,
+ * which the `module.register()` hooks on Node.js 22 and 24 never see. Load them from
+ * this package instead of the user's file.
  */
 export function rewriteHelperRequires(code: string): string {
   return code.replaceAll(HELPER_REQUIRE, RUNTIME_HELPER_REQUIRE);
+}
+
+/**
+ * Whether this request comes from `require()`. Only `module.registerHooks()` shows
+ * `require()` to the hooks; those requests stay on Node.js' CommonJS resolution and
+ * the `pirates` hook. A CommonJS context never carries `importAttributes`.
+ */
+export function isCommonJsRequire(context: { importAttributes?: unknown } | undefined): boolean {
+  return context?.importAttributes === undefined;
+}
+
+// Only the WASI build of oxc-node reads these options; they match upstream's hooks.
+const RESOLVE_OPTIONS = { getCurrentDirectory: () => process.cwd() };
+
+/**
+ * The resolve hook for both hook paths: runtime helpers resolve from this package,
+ * `require()` stays on Node.js' resolution, and everything else goes through oxc-node.
+ */
+export function resolveWithOxcNode<Context extends { importAttributes?: unknown }, Result>(
+  oxcNode: OxcNodeBinding,
+  specifier: string,
+  context: Context,
+  nextResolve: (specifier: string, context?: Context) => Result,
+): Result {
+  const helper = runtimeHelperSpecifier(specifier);
+  if (helper) {
+    return nextResolve(helper, { ...context, parentURL: HELPERS_PARENT_URL });
+  }
+  if (isCommonJsRequire(context)) {
+    return nextResolve(specifier, context);
+  }
+  return oxcNode.createResolve(
+    RESOLVE_OPTIONS,
+    specifier,
+    context as never,
+    nextResolve as never,
+  ) as Result;
 }

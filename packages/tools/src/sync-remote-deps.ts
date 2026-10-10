@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
+import { parseCargoOxcVersions, replaceCargoCrateVersion } from './cargo-toml.ts';
 import { OXC_NODE_DIR, patchOxcNode } from './patch-oxc-node.ts';
 import {
   alignVendoredVitestDependencies,
@@ -716,43 +717,6 @@ export function mergeWorkspaceYaml(
   return mainDoc.toString(stringifyOptions);
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// Parse every `oxc*` crate version from a Cargo.toml in a single pass, keyed by
-// crate name. Handles both the bare `oxc_x = "X"` form and the inline-table
-// `oxc = { version = "X", features = [...] }` form (which may span lines, but
-// always lists `version` before its `[...]` feature array, so `[^}]*?` reaches
-// it without crossing the closing `}`).
-function parseCargoOxcVersions(src: string): Map<string, string> {
-  const versions = new Map<string, string>();
-  const re = /^\s*(oxc[\w-]*)\s*=\s*(?:"([^"]+)"|\{[^}]*?version\s*=\s*"([^"]+)")/gm;
-  for (let m = re.exec(src); m; m = re.exec(src)) {
-    versions.set(m[1], m[2] ?? m[3]);
-  }
-  return versions;
-}
-
-// Replace the version of a single crate entry in-place, preserving features,
-// formatting, and surrounding text. Only the first matching entry is rewritten.
-function replaceCargoCrateVersion(src: string, key: string, newVersion: string): string {
-  const escaped = escapeRegExp(key);
-  const bareRe = new RegExp(`^(\\s*${escaped}\\s*=\\s*")[^"]+(")`, 'm');
-  if (bareRe.test(src)) {
-    return src.replace(bareRe, `$1${newVersion}$2`);
-  }
-  const tableStart = new RegExp(`^\\s*${escaped}\\s*=\\s*\\{`, 'm').exec(src);
-  if (!tableStart) {
-    return src;
-  }
-  const start = tableStart.index;
-  const close = src.indexOf('}', start);
-  const end = close >= 0 ? close : src.length;
-  const table = src.slice(start, end).replace(/(version\s*=\s*")[^"]+(")/, `$1${newVersion}$2`);
-  return src.slice(0, start) + table + src.slice(end);
-}
-
 export interface CargoOxcChange {
   key: string;
   from: string;
@@ -857,23 +821,20 @@ export async function syncRemote() {
 
   // Get the root directory (assuming script is run from root)
   const rootDir = process.cwd();
+  // Each upstream checkout and its pin in `.upstream-versions.json`.
+  const upstreamRepos = [
+    [ROLLDOWN_DIR, upstreamVersions.rolldown],
+    [VITE_DIR, upstreamVersions.vite],
+    [OXC_NODE_DIR, upstreamVersions['oxc-node']],
+  ] as const;
 
   if (values.clean) {
     log('Cleaning existing repositories...');
-    if (existsSync(join(rootDir, ROLLDOWN_DIR))) {
-      rmSync(join(rootDir, ROLLDOWN_DIR), { recursive: true, force: true });
-      log(`Removed ${ROLLDOWN_DIR}`);
-    }
-    if (existsSync(join(rootDir, VITE_DIR))) {
-      rmSync(join(rootDir, VITE_DIR), {
-        recursive: true,
-        force: true,
-      });
-      log(`Removed ${VITE_DIR}`);
-    }
-    if (existsSync(join(rootDir, OXC_NODE_DIR))) {
-      rmSync(join(rootDir, OXC_NODE_DIR), { recursive: true, force: true });
-      log(`Removed ${OXC_NODE_DIR}`);
+    for (const [dir] of upstreamRepos) {
+      if (existsSync(join(rootDir, dir))) {
+        rmSync(join(rootDir, dir), { recursive: true, force: true });
+        log(`Removed ${dir}`);
+      }
     }
     // Clean up legacy 'rolldown-vite' directory (renamed to 'vite')
     const legacyViteDir = join(rootDir, 'rolldown-vite');
@@ -883,25 +844,9 @@ export async function syncRemote() {
     }
   }
 
-  // Clone or reset repos
-  cloneOrResetRepo(
-    upstreamVersions.rolldown.repo,
-    join(rootDir, ROLLDOWN_DIR),
-    upstreamVersions.rolldown.branch,
-    upstreamVersions.rolldown.hash,
-  );
-  cloneOrResetRepo(
-    upstreamVersions['vite'].repo,
-    join(rootDir, VITE_DIR),
-    upstreamVersions['vite'].branch,
-    upstreamVersions['vite'].hash,
-  );
-  cloneOrResetRepo(
-    upstreamVersions['oxc-node'].repo,
-    join(rootDir, OXC_NODE_DIR),
-    upstreamVersions['oxc-node'].branch,
-    upstreamVersions['oxc-node'].hash,
-  );
+  for (const [dir, { repo, branch, hash }] of upstreamRepos) {
+    cloneOrResetRepo(repo, join(rootDir, dir), branch, hash);
+  }
 
   // Dynamically import dependencies after git clone. Capture the whole `yaml`
   // module (we need `yaml.parseDocument` to preserve comments).
