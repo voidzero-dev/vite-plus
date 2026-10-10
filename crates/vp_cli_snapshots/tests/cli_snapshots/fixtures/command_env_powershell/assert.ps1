@@ -13,6 +13,8 @@ if ((Get-Command node -CommandType Application | Select-Object -First 1).Source 
 }
 
 # Repeated activation must put one shim entry first, ahead of the external Node.
+# An upgrade in an existing session must also supersede the old function wrapper.
+function vp { throw 'The previous vp function is still active' }
 . (Join-Path $env:EXPECTED_VP_HOME "env.ps1")
 . (Join-Path $env:EXPECTED_VP_HOME "env.ps1")
 
@@ -35,12 +37,12 @@ if ((Get-Command node -CommandType Application | Select-Object -First 1).Source 
     throw "Activation did not give the Node shim priority"
 }
 
-if (-not (Get-Command vp -CommandType Function -ErrorAction SilentlyContinue)) {
+if (-not (Get-Command vp -CommandType Alias -ErrorAction SilentlyContinue)) {
     throw "env.ps1 did not define the vp wrapper"
 }
 
 $vpOutput = vp --version
-if ($LASTEXITCODE -ne 0) {
+if (-not $? -or $LASTEXITCODE -ne 0) {
     throw "vp --version failed through the PowerShell wrapper"
 }
 if ([string]::IsNullOrWhiteSpace(($vpOutput -join ""))) {
@@ -49,7 +51,7 @@ if ([string]::IsNullOrWhiteSpace(($vpOutput -join ""))) {
 
 $env:VP_NODE_VERSION = "18.20.0"
 vp env use --help *> $null
-if ($LASTEXITCODE -ne 0) {
+if (-not $? -or $LASTEXITCODE -ne 0) {
     throw "vp env use --help failed through the PowerShell wrapper"
 }
 if ($env:VP_NODE_VERSION -ne "18.20.0") {
@@ -57,7 +59,7 @@ if ($env:VP_NODE_VERSION -ne "18.20.0") {
 }
 
 vp env use 20.18.0 --no-install
-if ($LASTEXITCODE -ne 0) {
+if (-not $? -or $LASTEXITCODE -ne 0) {
     throw "vp env use failed through the PowerShell wrapper"
 }
 if ($env:VP_NODE_VERSION -ne "20.18.0") {
@@ -70,8 +72,8 @@ if ($ErrorActionPreference -ne 'Stop' -or (Test-Path Env:VP_ENV_USE_EVAL_ENABLE)
 $env:VP_ENV_USE_EVAL_ENABLE = 'original'
 $env:VP_SHELL = 'powershell'
 vp env use invalid-version --no-install 6>$null
-if ($LASTEXITCODE -eq 0 -or $env:VP_NODE_VERSION -ne '20.18.0') {
-    throw "Failed vp env use changed the selected Node version or lost its exit code"
+if ($? -or $LASTEXITCODE -eq 0 -or $env:VP_NODE_VERSION -ne '20.18.0') {
+    throw "Failed vp env use changed the selected Node version or lost its failure status"
 }
 if ($ErrorActionPreference -ne 'Stop' -or $env:VP_ENV_USE_EVAL_ENABLE -ne 'original' -or $env:VP_SHELL -ne 'powershell') {
     throw "Failed vp env use did not restore the caller's preferences and environment"
@@ -96,7 +98,7 @@ Remove-Item Env:VP_ENV_USE_EVAL_ENABLE, Env:VP_SHELL
 
 $ErrorActionPreference = 'Continue'
 vp env use --unset
-if ($LASTEXITCODE -ne 0) {
+if (-not $? -or $LASTEXITCODE -ne 0) {
     throw "vp env use --unset failed through the PowerShell wrapper"
 }
 if (Test-Path Env:VP_NODE_VERSION) {
@@ -108,11 +110,13 @@ if ($ErrorActionPreference -ne 'Continue' -or (Test-Path Env:VP_ENV_USE_EVAL_ENA
 $ErrorActionPreference = 'Stop'
 
 vp env use --no-install
-if ($LASTEXITCODE -ne 0) {
+if (-not $? -or $LASTEXITCODE -ne 0) {
     throw "vp env use without a version failed through the PowerShell wrapper"
 }
 if ($env:VP_NODE_VERSION -ne "22.18.0") {
     throw "file-based VP_NODE_VERSION mismatch: expected 22.18.0, got $env:VP_NODE_VERSION"
 }
+
+. (Join-Path $PSScriptRoot "assert-status.ps1")
 
 Write-Output "PowerShell environment checks passed"
