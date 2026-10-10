@@ -1,0 +1,12 @@
+[[case]]
+name = "create_workspace_legacy_pack"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "create", "library", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, timeout = 180000 },
+  ["vpt", "print-file", "packages/library/vite.config.ts"],
+  { argv = ["vp", "run", "build"], cwd = "packages/library" },
+  ["vpt", "stat-file", "packages/library/dist/index.mjs", "--assert", "file"],
+  ["vpt", "stat-file", "packages/library/dist/index.d.mts", "--assert", "file"],
+]
