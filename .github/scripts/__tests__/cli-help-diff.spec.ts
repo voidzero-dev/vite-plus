@@ -1,20 +1,117 @@
 /// <reference types="node" />
 
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vite-plus/test';
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawnSync: vi.fn() };
+});
 
 const SCRIPT_PATH = resolve(import.meta.dirname, '../cli-help-diff.ts');
 const tempDirs: string[] = [];
 
 afterEach(() => {
+  vi.mocked(spawnSync).mockReset();
+  vi.restoreAllMocks();
+  vi.resetModules();
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true });
   }
 });
+
+test.each([
+  { useMetadata: false, failCapture: false },
+  { useMetadata: true, failCapture: false },
+  { useMetadata: true, failCapture: true },
+])(
+  'isolates upstream help capture and cleans up (metadata: $useMetadata, failure: $failCapture)',
+  async ({ useMetadata, failCapture }) => {
+    const root = mkdtempSync(join(tmpdir(), 'vite-plus-cli-help-test-'));
+    tempDirs.push(root);
+    mkdirSync(join(root, 'vite/packages/vite'), { recursive: true });
+    writeFileSync(join(root, 'vite/packages/vite/package.json'), '{"version":"1.0.0"}');
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      'catalog:\n  vitest: 1.0.0\n  oxlint: =1.0.0\n  oxfmt: =1.0.0\n  tsdown: ^1.0.0\noverrides:\n  vite: workspace:@voidzero-dev/vite-plus-core@*\n',
+    );
+    const toolNames = ['vite', 'vitest', 'oxlint', 'oxfmt', 'tsdown'];
+    writeFileSync(
+      join(root, 'versions.json'),
+      JSON.stringify(
+        Object.fromEntries(toolNames.map((name) => [name, { new: '2.0.0', tag: 'v2.0.0' }])),
+      ),
+    );
+    vi.spyOn(process, 'cwd').mockReturnValue(root);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const captureDirs = new Set<string>();
+    const version = useMetadata ? '2.0.0' : '1.0.0';
+    vi.mocked(spawnSync).mockImplementation((command, args, options) => {
+      expect(command).toBe('pnpm');
+      const cwd = String(options?.cwd ?? root);
+      captureDirs.add(cwd);
+      expect(existsSync(cwd)).toBe(true);
+      expect(cwd.startsWith(root)).toBe(false);
+      expect(existsSync(join(cwd, 'pnpm-workspace.yaml'))).toBe(false);
+      expect(args?.slice(0, 2)).toEqual(['--silent', 'dlx']);
+      expect(args?.[2]).toMatch(new RegExp(`@${version.replaceAll('.', '\\.')}$`));
+      const stdout = `upstream help ${args?.slice(3).join(' ')}\n`;
+      const stderr = failCapture ? 'upstream capture failed' : '';
+      return {
+        pid: 1,
+        output: [null, stdout, stderr],
+        stdout,
+        stderr,
+        status: failCapture ? 1 : 0,
+        signal: null,
+      };
+    });
+    const originalArgv = process.argv;
+    process.argv = [
+      process.execPath,
+      SCRIPT_PATH,
+      'capture',
+      '--output',
+      join(root, 'snapshot.json'),
+    ];
+    if (useMetadata) {
+      process.argv.push('--versions', join(root, 'versions.json'));
+    }
+    try {
+      const capture = import('../cli-help-diff.ts');
+      if (failCapture) {
+        await expect(capture).rejects.toThrow(
+          'Failed to capture Vite help (--help):\nupstream capture failed',
+        );
+        expect(existsSync(join(root, 'snapshot.json'))).toBe(false);
+      } else {
+        await capture;
+        const snapshot = JSON.parse(readFileSync(join(root, 'snapshot.json'), 'utf8'));
+        expect(Object.keys(snapshot.tools)).toEqual(toolNames);
+        for (const name of toolNames) {
+          expect(snapshot.tools[name]).toEqual({
+            version,
+            help:
+              name === 'vite'
+                ? '$ vite --help\nupstream help --help\n\n$ vite build --help\nupstream help build --help\n\n$ vite preview --help\nupstream help preview --help'
+                : `$ ${name} --help\nupstream help --help`,
+          });
+        }
+        expect(spawnSync).toHaveBeenCalledTimes(7);
+      }
+    } finally {
+      process.argv = originalArgv;
+    }
+    expect(captureDirs.size).toBeGreaterThan(0);
+    for (const dir of captureDirs) {
+      expect(existsSync(dir)).toBe(false);
+    }
+  },
+);
 
 test('reports changed, unchanged, and not-updated CLI help in one comment', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'vite-plus-cli-help-test-'));
