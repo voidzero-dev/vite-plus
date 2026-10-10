@@ -2,19 +2,10 @@
  * Prepare the vendored oxc-node source for compilation into the Vite+ native binding.
  *
  * `sync-remote` clones oxc-node into `oxc-node/`, and CI checks it out at the hash in
- * `.upstream-versions.json`. `patches/oxc-node.patch` adapts the upstream tree; every
- * change is marked `Vite+:` in the source. In short, it:
- *
- * - builds only the rlib, without the napi build script, and with `ast_visit`;
- * - drops the `#[global_allocator]` and the tracing `module_init`, which belong to the
- *   host binding;
- * - exports everything under an `oxcNode` namespace (and renames `TransformTask`), so
- *   nothing collides with Rolldown's `transform` and `TransformTask`;
- * - reads the explicit tsconfig from `VP_SCRIPT_TSCONFIG` only;
- * - fixes or extends transforms: enum evaluation, tsconfig `jsx` values,
- *   `verbatimModuleSyntax`, class features and `using` lowered only when needed, a clear
- *   error for standard decorators, TypeScript under `node_modules`, `.cts` files with
- *   ESM syntax, and per-request export conditions.
+ * `.upstream-versions.json`. `patches/oxc-node.patch` adapts the upstream tree: it builds
+ * only the rlib, without the napi build script; exports everything under an `oxcNode`
+ * namespace (renaming `TransformTask`), so nothing collides with Rolldown's exports; and
+ * transforms TypeScript under `node_modules`, marked `Vite+:` in the source.
  *
  * This script applies the patch, then points the `oxc` dependency at the workspace
  * version so the binding links one copy of oxc. It is idempotent and fails loudly when
@@ -26,6 +17,8 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { parseCargoOxcVersions, replaceCargoCrateVersion } from './cargo-toml.ts';
 
 export const OXC_NODE_DIR = 'oxc-node';
 
@@ -39,40 +32,32 @@ function gitApply(dir: string, args: string[]): void {
   execFileSync('git', ['apply', ...args, OXC_NODE_PATCH], { cwd: dir, stdio: 'pipe' });
 }
 
-function workspaceOxcVersion(rootDir: string): string {
-  const cargoToml = readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8');
-  const match = /^oxc\s*=\s*\{\s*version\s*=\s*"([^"]+)"/m.exec(cargoToml);
-  if (!match) {
-    throw new Error('[patch-oxc-node] Could not find the workspace `oxc` version in Cargo.toml');
+function oxcVersion(cargoToml: string, file: string): string {
+  const version = parseCargoOxcVersions(cargoToml).get('oxc');
+  if (!version) {
+    throw new Error(`[patch-oxc-node] Could not find the \`oxc\` dependency in ${file}`);
   }
-  return match[1];
+  return version;
 }
 
-/** Point oxc-node's `oxc` dependency at `oxcVersion`. */
-export function setOxcVersion(cargoToml: string, oxcVersion: string): string {
-  const oxcDependency = /^(oxc\s*=\s*\{\s*version\s*=\s*")[^"]+(")/m;
-  if (!oxcDependency.test(cargoToml)) {
-    throw new Error('[patch-oxc-node] Could not find the `oxc` dependency in oxc-node/Cargo.toml');
-  }
-  return cargoToml.replace(oxcDependency, `$1${oxcVersion}$2`);
+/** Point oxc-node's `oxc` dependency at `version`. */
+export function setOxcVersion(cargoToml: string, version: string): string {
+  oxcVersion(cargoToml, 'oxc-node/Cargo.toml');
+  return replaceCargoCrateVersion(cargoToml, 'oxc', version);
 }
 
 export function patchOxcNode(rootDir: string = process.cwd()): void {
   const oxcNodeDir = join(rootDir, OXC_NODE_DIR);
 
-  let applied = false;
+  // `git apply` is atomic, so a failed apply leaves the tree untouched; only then check
+  // whether the patch is already applied.
   try {
-    gitApply(oxcNodeDir, ['--reverse', '--check']);
-    applied = true;
-  } catch {
-    // Not applied yet.
-  }
-  if (applied) {
-    log('patches/oxc-node.patch is already applied');
-  } else {
+    gitApply(oxcNodeDir, []);
+    log('✓ Applied patches/oxc-node.patch');
+  } catch (error) {
     try {
-      gitApply(oxcNodeDir, []);
-    } catch (error) {
+      gitApply(oxcNodeDir, ['--reverse', '--check']);
+    } catch {
       const stderr = (error as { stderr?: Buffer }).stderr?.toString().trim();
       throw new Error(
         `[patch-oxc-node] patches/oxc-node.patch does not apply to ${OXC_NODE_DIR}/.\n` +
@@ -80,16 +65,16 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
         { cause: error },
       );
     }
-    log('✓ Applied patches/oxc-node.patch');
+    log('patches/oxc-node.patch is already applied');
   }
 
-  const oxcVersion = workspaceOxcVersion(rootDir);
+  const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
   const cargoTomlPath = join(oxcNodeDir, 'Cargo.toml');
   const cargoToml = readFileSync(cargoTomlPath, 'utf-8');
-  const patched = setOxcVersion(cargoToml, oxcVersion);
+  const patched = setOxcVersion(cargoToml, version);
   if (patched !== cargoToml) {
     writeFileSync(cargoTomlPath, patched, 'utf-8');
-    log(`✓ Cargo.toml: oxc ${oxcVersion}`);
+    log(`✓ Cargo.toml: oxc ${version}`);
   }
 }
 
@@ -106,10 +91,7 @@ export function updateOxcNodePatch(rootDir: string = process.cwd()): void {
     cwd: oxcNodeDir,
     encoding: 'utf-8',
   });
-  const upstreamVersion = /^oxc\s*=\s*\{\s*version\s*=\s*"([^"]+)"/m.exec(upstream)?.[1];
-  if (!upstreamVersion) {
-    throw new Error('[patch-oxc-node] Could not find the upstream `oxc` version');
-  }
+  const upstreamVersion = oxcVersion(upstream, 'the upstream oxc-node/Cargo.toml');
   writeFileSync(cargoTomlPath, setOxcVersion(cargoToml, upstreamVersion), 'utf-8');
   try {
     const patch = execFileSync('git', ['diff', '--', 'Cargo.toml', 'src'], {

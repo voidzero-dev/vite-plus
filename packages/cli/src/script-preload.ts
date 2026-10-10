@@ -15,18 +15,18 @@
  * when bumping the vendored oxc-node in `.upstream-versions.json`.
  */
 
-import * as NodeModule from 'node:module';
-import { createRequire } from 'node:module';
+import type { LoadFnOutput, LoadHookSync, ResolveHookSync } from 'node:module';
+import { createRequire, registerHooks, setSourceMapsSupport } from 'node:module';
 import path from 'node:path';
 
 import { addHook } from 'pirates';
 
 import {
   canRegisterSyncHooks,
-  HELPERS_PARENT_URL,
+  isCommonJsRequire,
   isSupportedNodeVersion,
+  resolveWithOxcNode,
   rewriteHelperRequires,
-  runtimeHelperSpecifier,
   SUPPORTED_NODE_RANGE,
 } from './script-hooks.ts';
 
@@ -48,14 +48,7 @@ const { oxcNode } = createRequire(import.meta.url)(
 // see it too. Without it, each file uses its nearest tsconfig.
 oxcNode.setTsconfigPath(process.env.VP_SCRIPT_TSCONFIG);
 
-// Destructure from the namespace: these APIs are missing on older Node.js releases.
-const { registerHooks, setSourceMapsSupport } = NodeModule as Partial<typeof NodeModule>;
-
-if (typeof setSourceMapsSupport === 'function') {
-  setSourceMapsSupport(true, { nodeModules: true, generatedCode: true });
-} else if (typeof process.setSourceMapsEnabled === 'function') {
-  process.setSourceMapsEnabled(true);
-}
+setSourceMapsSupport(true, { nodeModules: true, generatedCode: true });
 
 const EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.cjs', '.cts', '.es6', '.es'];
 const TYPESCRIPT_EXTENSIONS = new Set(['.ts', '.mts', '.cts', '.tsx']);
@@ -82,40 +75,16 @@ addHook(
   },
 );
 
-/**
- * Whether this request comes from `require()`. Only `module.registerHooks()` shows
- * `require()` to the hooks; those requests stay on Node.js' CommonJS resolution and
- * the `pirates` hook above. A CommonJS context never carries `importAttributes`.
- */
-function isCommonJsRequire(context: { importAttributes?: unknown } | undefined): boolean {
-  return context?.importAttributes === undefined;
-}
+const resolve: ResolveHookSync = (specifier, context, nextResolve) =>
+  resolveWithOxcNode(oxcNode, specifier, context, nextResolve);
 
-const resolve: NodeModule.ResolveHookSync = (specifier, context, nextResolve) => {
-  const helper = runtimeHelperSpecifier(specifier);
-  if (helper) {
-    return nextResolve(helper, { ...context, parentURL: HELPERS_PARENT_URL });
-  }
-  if (isCommonJsRequire(context)) {
-    return nextResolve(specifier, context);
-  }
-  return oxcNode.createResolve(
-    { getCurrentDirectory: () => process.cwd() },
-    specifier,
-    context as never,
-    nextResolve as never,
-  ) as NodeModule.ResolveFnOutput;
-};
-
-const load: NodeModule.LoadHookSync = (url, context, nextLoad) => {
+const load: LoadHookSync = (url, context, nextLoad) => {
   if (isCommonJsRequire(context)) {
     return nextLoad(url, context);
   }
-  const result = oxcNode.load(
-    url,
-    context as never,
-    nextLoad as never,
-  ) as NodeModule.LoadFnOutput & { responseURL?: string };
+  const result = oxcNode.load(url, context as never, nextLoad as never) as LoadFnOutput & {
+    responseURL?: string;
+  };
   // Leave CommonJS to the CommonJS loader, which compiles it through `pirates` with
   // an accurate source map. A null source keeps `require()` inside such a module
   // working on every runtime (nodejs/node#62920).
@@ -125,11 +94,11 @@ const load: NodeModule.LoadHookSync = (url, context, nextLoad) => {
       format: 'commonjs',
       source: null,
       responseURL: result.responseURL ?? url,
-    } as unknown as NodeModule.LoadFnOutput;
+    } as unknown as LoadFnOutput;
   }
   return result;
 };
 
-if (typeof registerHooks === 'function' && canRegisterSyncHooks(process.versions.node)) {
+if (canRegisterSyncHooks(process.versions.node)) {
   registerHooks({ resolve, load });
 }

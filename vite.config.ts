@@ -94,7 +94,6 @@ export default defineConfig({
       'packages/cli/src/run-config.ts',
       'vite',
       'rolldown',
-      'oxc-node',
     ],
     singleQuote: true,
     semi: true,

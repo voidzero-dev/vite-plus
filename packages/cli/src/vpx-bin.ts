@@ -46,20 +46,18 @@ function prependNodeModulesBins(cwd: string, pathValue: string | undefined): str
 
 /** The global `vpx` on PATH, skipping `node_modules/.bin` directories (this bin). */
 function findGlobalVpx(env: NodeJS.ProcessEnv): string | undefined {
-  const names = process.platform === 'win32' ? ['vpx.exe'] : ['vpx'];
+  const name = process.platform === 'win32' ? 'vpx.exe' : 'vpx';
   const self = realpathSync(process.argv[1]);
   for (const dir of (env[pathKey(env)] ?? '').split(path.delimiter)) {
     if (!dir || path.basename(dir) === '.bin') {
       continue;
     }
-    for (const name of names) {
-      const candidate = path.join(dir, name);
-      if (
-        statSync(candidate, { throwIfNoEntry: false })?.isFile() &&
-        realpathSync(candidate) !== self
-      ) {
-        return candidate;
-      }
+    const candidate = path.join(dir, name);
+    if (
+      statSync(candidate, { throwIfNoEntry: false })?.isFile() &&
+      realpathSync(candidate) !== self
+    ) {
+      return candidate;
     }
   }
   return undefined;
@@ -136,12 +134,12 @@ if (invocation) {
   );
 } else {
   const globalVpx = findGlobalVpx(process.env);
-  if (!globalVpx && flags.version) {
-    const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
-    process.stdout.write(`vite-plus v${version}\n`);
-    process.exit(0);
-  }
   if (!globalVpx) {
+    if (flags.version) {
+      const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
+      process.stdout.write(`vite-plus v${version}\n`);
+      process.exit(0);
+    }
     errorMsg(
       'vpx: Running package binaries requires the global Vite+ CLI (https://viteplus.dev/guide/). ' +
         'Use `vp exec` or `vp dlx` from a project-local install.',

@@ -12,7 +12,8 @@ import * as NodeModule from 'node:module';
 
 import { canRegisterSyncHooks } from './script-hooks.ts';
 
-// Destructure from the namespace: `register` is missing on older Node.js releases.
+// Look `register` up on the namespace: a named import would fail to link on every
+// version once Node.js removes the deprecated API (DEP0205), even where it is unused.
 const { register } = NodeModule as Partial<typeof NodeModule>;
 
 if (!canRegisterSyncHooks(process.versions.node)) {
