@@ -88,9 +88,7 @@ struct MigrateCliArgs {
 fn migrate_command() -> Command {
     MigrateCliArgs::augment_args(
         Command::new("vp migrate")
-            .about(
-                "Migrate standalone Vite, Vitest, Oxlint, Oxfmt, and Prettier projects to unified Vite+.",
-            )
+            .about("Migrate web development toolchains to Vite+.")
             .disable_help_flag(true)
             .override_usage("vp migrate [PATH] [OPTIONS]"),
     )
