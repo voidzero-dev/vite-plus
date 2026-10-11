@@ -157,7 +157,7 @@ pub fn parse_migrate_args(argv: Vec<String>) -> ParseMigrateArgsOutcome {
                     "  development, builds, tests, linting, formatting, and packaging.".into(),
                     "  Run `vp help` and `vp help migrate` before you make changes.".into(),
                     "  Run `vp migrate --no-interactive` in the workspace root.".into(),
-                    "  Make sure that the project uses Vite 8+ and Vitest 4.1+.".into(),
+                    "  Make sure that the project uses Vite 7+ and Vitest 4+.".into(),
                     "".into(),
                     "  After the migration, check imports, configuration, and package aliases."
                         .into(),
