@@ -9,7 +9,7 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp migrate [PATH] [OPTIONS]
 
-Migrate web development toolchains to Vite+.
+Migrate existing toolchains to Vite+.
 
 Arguments:
   [PATH]  Target directory to migrate (default: current directory)

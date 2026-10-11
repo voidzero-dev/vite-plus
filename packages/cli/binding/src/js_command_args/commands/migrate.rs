@@ -88,7 +88,7 @@ struct MigrateCliArgs {
 fn migrate_command() -> Command {
     MigrateCliArgs::augment_args(
         Command::new("vp migrate")
-            .about("Migrate web development toolchains to Vite+.")
+            .about("Migrate existing toolchains to Vite+.")
             .disable_help_flag(true)
             .override_usage("vp migrate [PATH] [OPTIONS]"),
     )
