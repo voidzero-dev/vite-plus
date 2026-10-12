@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { defineConfig } from 'vite-plus';
 import { createVitest } from 'vite-plus/test/node';
@@ -15,24 +13,30 @@ const dimensions = (file) => {
   return [buffer.readUInt32BE(16), buffer.readUInt32BE(20)];
 };
 for (const phase of ['record', 'compare', 'failure']) {
-  // Vitest replaces port 0 with its default, so select an available port first.
-  const portProbe = createServer().listen(0, 'localhost');
-  await once(portProbe, 'listening');
-  const apiPort = portProbe.address().port;
-  portProbe.close();
-  await once(portProbe, 'close');
-
   const runner = await createVitest({
-    config: false, watch: false, api: { port: apiPort }, reporters: [], update: phase === 'record',
-  }, defineConfig({ test: {
-    include: [phase === 'failure' ? 'failure.test.js' : 'browser.test.js'],
-    browser: {
-      enabled: true, provider: playwright(), headless: !headed, ui: false,
-      instances: [{ browser: 'chromium' }], viewport: { width: 800, height: 600 },
-      screenshotFailures: true, screenshotDirectory: 'manual-images',
-      expect: { toMatchScreenshot: { screenshotDirectory: 'reference-images' } },
+    config: false, watch: false, reporters: [], update: phase === 'record',
+  }, defineConfig({
+    plugins: [{
+      name: 'browser-server-port',
+      // Set port 0 after Vitest resolves its defaults so the OS chooses the port.
+      enforce: 'post',
+      config: {
+        order: 'post',
+        handler(config) {
+          config.test.api.port = 0;
+        },
+      },
+    }],
+    test: {
+      include: [phase === 'failure' ? 'failure.test.js' : 'browser.test.js'],
+      browser: {
+        enabled: true, provider: playwright(), headless: !headed, ui: false,
+        instances: [{ browser: 'chromium' }], viewport: { width: 800, height: 600 },
+        screenshotFailures: true, screenshotDirectory: 'manual-images',
+        expect: { toMatchScreenshot: { screenshotDirectory: 'reference-images' } },
+      },
     },
-  } }));
+  }));
   try {
     const result = await runner.start();
     assert.equal(result.unhandledErrors.length, 0, JSON.stringify(result.unhandledErrors));
