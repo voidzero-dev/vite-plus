@@ -1,6 +1,6 @@
 # IDE Integration
 
-Vite+ supports VS Code and Zed through editor-specific settings that `vp create` and `vp migrate` can automatically write into your project.
+Vite+ supports VS Code, Zed, and JetBrains IDEs through editor-specific settings that `vp create` and `vp migrate` can automatically write into your project.
 
 ## VS Code
 
