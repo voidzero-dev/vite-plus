@@ -2,7 +2,7 @@
 
 - Status: Draft (for review); prototype implemented and verified on Node.js 22, 24, and 26 (macOS)
 - Related: [`vpx` command](./vpx-command.md), [JavaScript runtime management](./js-runtime.md), [CLI bundling](../packages/cli/BUNDLING.md), [Core binding resolution](./core-binding-resolution.md)
-- Upstream: [oxc-project/oxc-node](https://github.com/oxc-project/oxc-node) (v0.1.6; source vendored and compiled into the Vite+ native binding, as Rolldown is)
+- Upstream: [oxc-project/oxc-node](https://github.com/oxc-project/oxc-node) (v0.1.6 plus the fix for oxc-node#820 from `main`; source vendored and compiled into the Vite+ native binding, as Rolldown is)
 - Prior art: [tsx](https://github.com/privatenumber/tsx) 4.23.15
 
 ## Summary
@@ -229,7 +229,7 @@ The loader has two entries in `vite-plus/dist`, passed together:
    - on Node.js 22.22.3+, 24.11.1+, and 26+, registers the in-thread ESM hooks with `module.registerHooks()`.
 2. **`--import <file URL of dist/script-register.js>`** (ESM). On older 22.x and 24.x releases it registers the off-thread ESM hooks (`dist/script-esm-hooks.js`) with `module.register()`; Node.js 22 cannot call `module.register()` while a `--require` is loading. On every version, an `--import` also makes Node.js run the entry point through the ESM loader, where the hooks decide each file's module format.
 
-The in-thread hooks start about twice as fast as a `module.register()` hooks thread, and Node.js 25.9+ deprecates `module.register()` (DEP0205). They need two fixes: nodejs/node#59011 (resolve `conditions`, in 22.19 and 24.5) and nodejs/node#59929 (a null source for CommonJS from a sync load hook, in 22.22.3 and 24.11.1). tsx switches at the same releases. Upstream oxc-node waits for 26.2 for nodejs/node#62920, which only affects load hooks that return source for CommonJS, which these hooks never do. Measured with the project-local bin, `vpx` on a two-module `.mts` script went from 78 to 57 ms on Node.js 22.23 and from 69 to 52 ms on 24.11 (medians of 15 runs).
+The in-thread hooks start about twice as fast as a `module.register()` hooks thread, and Node.js 25.9+ deprecates `module.register()` (DEP0205). They need two fixes: nodejs/node#59011 (resolve `conditions`, in 22.19 and 24.5) and nodejs/node#59929 (a null source for CommonJS from a sync load hook, in 22.22.3 and 24.11.1). tsx switches at the same releases. Upstream oxc-node waits for 26.2 for nodejs/node#62920, which only affects load hooks that return source for CommonJS. These hooks return it only when another hook supplied the source, which a null source would discard. Measured with the project-local bin, `vpx` on a two-module `.mts` script went from 78 to 57 ms on Node.js 22.23 and from 69 to 52 ms on 24.11 (medians of 15 runs).
 
 The contract between the CLI and the loader is these two flags plus the `VP_SCRIPT_TSCONFIG` environment variable. Because the global `vp` may be newer or older than the project's `vite-plus`, this contract must stay stable across versions; new behavior goes into the loader entries, not into new argv.
 
@@ -273,7 +273,7 @@ The loader is resolved from the project first and the global install second, fol
 
 ## Upstream Status and Vendored Changes
 
-These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running the prototype on Node.js 22.18, 24.11, 26.0, and 26.5. The default is upstream first and sync after. Of the 13 issues filed, [oxc-node#794](https://github.com/oxc-project/oxc-node/issues/794) to [oxc-node#798](https://github.com/oxc-project/oxc-node/issues/798) were fixed in v0.1.5, and [oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804) to [oxc-node#806](https://github.com/oxc-project/oxc-node/issues/806) and [oxc-node#808](https://github.com/oxc-project/oxc-node/issues/808) to [oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811) in v0.1.6, which the vendored copy pins. [oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807) is open.
+These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running the prototype on Node.js 22.18, 24.11, 26.0, and 26.5. The default is upstream first and sync after. Of the 15 issues filed, [oxc-node#794](https://github.com/oxc-project/oxc-node/issues/794) to [oxc-node#798](https://github.com/oxc-project/oxc-node/issues/798) were fixed in v0.1.5, [oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804) to [oxc-node#806](https://github.com/oxc-project/oxc-node/issues/806) and [oxc-node#808](https://github.com/oxc-project/oxc-node/issues/808) to [oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811) in v0.1.6, and [oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820) on `main` after v0.1.6, at the commit the vendored copy pins. [oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807) and [oxc-node#821](https://github.com/oxc-project/oxc-node/issues/821) are open.
 
 ### Fixed Upstream
 
@@ -287,6 +287,7 @@ These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running t
 - **Export conditions per request** ([oxc-node#810](https://github.com/oxc-project/oxc-node/issues/810), v0.1.6). The shared resolver kept the conditions of its first caller, which are empty when a `require()` transform runs first; each condition set now gets its own resolver, sharing the base resolver's caches.
 - **`.cts` files with ES module syntax** ([oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811), v0.1.6) fail with one error on every load path, suggesting a rename to `.mts` or `import x = require()` and `export =`. Node.js rejects such a file too. tsc and tsx compile it to CommonJS, which needs an ESM-to-CommonJS transform oxc does not have.
 - **Embedding** ([oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804), [oxc-node#805](https://github.com/oxc-project/oxc-node/issues/805), [oxc-node#806](https://github.com/oxc-project/oxc-node/issues/806), v0.1.6): a `default_global_allocator` feature, a tracing subscriber installed only when `OXC_LOG` is set and never over an existing one, and `setTsconfigPath()` for an explicit tsconfig without environment variables. See [Native Hooks in the Binding](#3-native-hooks-in-the-binding).
+- **CommonJS transformed twice** ([oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820), `main` after v0.1.6). On the in-thread path, Node.js' synchronous default load reads every CommonJS file, and the load hook transformed that source only for the loader to discard it and let `pirates` transform the file again. The load hook now defers a CommonJS result whose source is the file on disk, byte for byte, without transforming it; source another hook supplied is transformed and kept. `script-preload.ts` mirrors upstream's `register.mjs` and returns a null source only when oxc-node produced none.
 
 ### Fixed in the Loader JavaScript
 
@@ -353,7 +354,7 @@ The detection rules are pure functions over `(tokens, cwd)` and are unit tested 
 
 oxc-node is vendored the way Rolldown is:
 
-- `.upstream-versions.json` pins oxc-node at its latest release tag (v0.1.6), and the daily `upgrade-deps` workflow bumps it to new stable tags, as it does for Rolldown and Vite.
+- `.upstream-versions.json` pins oxc-node at a release tag, or at a `main` commit when a needed fix is not released yet; it currently pins the fix for oxc-node#820, which v0.1.6 lacks. The daily `upgrade-deps` workflow bumps it to new stable tags, as it does for Rolldown and Vite, but only to a tag that contains the pinned commit.
 - `sync-remote` clones it into the gitignored `oxc-node/` and runs `patch-oxc-node.ts` after the Cargo oxc sync. CI checks it out in the shared clone action and the security workflow, and runs the same script before any cargo command, because `Cargo.lock` records the patched manifest. The script and the patch are part of the native cache key.
 - `patch-oxc-node.ts` applies `patches/oxc-node.patch` with `git apply` (a reverse check makes it idempotent) and then points the `oxc` dependency at the workspace version. After editing `oxc-node/` by hand, `pnpm tool patch-oxc-node --update` writes the changes back to the patch, leaving the oxc version out so the patch keeps applying.
 - The root `Cargo.toml` adds `oxc-node = { path = "./oxc-node", features = ["default_global_allocator"] }`, leaving the global allocator to `rolldown_binding`, and excludes `oxc-node/` from the workspace, so upstream code is not held to `--deny warnings` workspace lints, like the nested rolldown workspace.
@@ -665,7 +666,7 @@ Still to verify:
 
 ## Performance
 
-Startup compared with tsx 4.23.15 on an Apple M4 Pro (12 cores, macOS 26.6), at commit `460f320a`. `bench/vpx-script.ts` produces the table below. To rerun it, build the loader with `pnpm --filter vite-plus build-ts`, then run `node bench/vpx-script.ts --node <node> [--node <node>…]` with one `--node` per Node.js binary to measure.
+Startup compared with tsx 4.23.15 on an Apple M4 Pro (12 cores, macOS 26.6), with oxc-node at `c61aea5`. `bench/vpx-script.ts` produces the table below. To rerun it, build the loader with `pnpm --filter vite-plus build-ts`, then run `node bench/vpx-script.ts --node <node> [--node <node>…]` with one `--node` per Node.js binary to measure.
 
 The script generates the scenarios in the OS temp directory, outside any `tsconfig.json`, and checks that every command prints the same output without warnings. It then reports the median wall time of the whole command over 20 runs, after 3 warmup runs.
 
@@ -688,49 +689,50 @@ On Node.js 22.18 both loaders run their ESM hooks on a `module.register()` threa
 
 | Scenario    | Command                         | Node.js 22.18.0 | Node.js 24.12.0 | Node.js 26.5.0 |
 | ----------- | ------------------------------- | --------------: | --------------: | -------------: |
-| `hello`     | `vpx` loader (1 process)        |           50 ms |           26 ms |          30 ms |
-| `hello`     | `node --import tsx` (1 process) |           68 ms |           46 ms |          41 ms |
-| `hello`     | `node --import tsx`, no cache   |           75 ms |           63 ms |          62 ms |
+| `hello`     | `vpx` loader (1 process)        |           48 ms |           26 ms |          29 ms |
+| `hello`     | `node --import tsx` (1 process) |           67 ms |           46 ms |          39 ms |
+| `hello`     | `node --import tsx`, no cache   |           75 ms |           63 ms |          61 ms |
 | `hello`     | `vpx` local bin (2 processes)   |           69 ms |           49 ms |          55 ms |
-| `hello`     | `tsx` CLI (2 processes)         |           98 ms |           81 ms |          72 ms |
-| `hello`     | `tsx` CLI, no cache             |          106 ms |           95 ms |          94 ms |
-| `hello`     | `node` type stripping           |           48 ms |           44 ms |          48 ms |
-| `esm-app`   | `vpx` loader (1 process)        |           87 ms |           65 ms |          70 ms |
-| `esm-app`   | `node --import tsx` (1 process) |          109 ms |           81 ms |          84 ms |
-| `esm-app`   | `node --import tsx`, no cache   |          140 ms |          217 ms |         216 ms |
-| `esm-app`   | `vpx` local bin (2 processes)   |          113 ms |           87 ms |          92 ms |
-| `esm-app`   | `tsx` CLI (2 processes)         |          143 ms |          114 ms |         113 ms |
-| `esm-app`   | `tsx` CLI, no cache             |          173 ms |          250 ms |         251 ms |
-| `cjs-app`   | `vpx` loader (1 process)        |           87 ms |           65 ms |          67 ms |
-| `cjs-app`   | `node --import tsx` (1 process) |          127 ms |          100 ms |          95 ms |
-| `cjs-app`   | `node --import tsx`, no cache   |          289 ms |          261 ms |         258 ms |
-| `cjs-app`   | `vpx` local bin (2 processes)   |          108 ms |           89 ms |          93 ms |
-| `cjs-app`   | `tsx` CLI (2 processes)         |          160 ms |          132 ms |         128 ms |
-| `cjs-app`   | `tsx` CLI, no cache             |          325 ms |          293 ms |         291 ms |
-| `large-cjs` | `vpx` loader (1 process)        |          115 ms |          103 ms |          95 ms |
-| `large-cjs` | `node --import tsx` (1 process) |          122 ms |           90 ms |          76 ms |
-| `large-cjs` | `node --import tsx`, no cache   |          226 ms |          274 ms |         258 ms |
-| `large-cjs` | `vpx` local bin (2 processes)   |          136 ms |          125 ms |         126 ms |
-| `large-cjs` | `tsx` CLI (2 processes)         |          153 ms |          123 ms |         110 ms |
-| `large-cjs` | `tsx` CLI, no cache             |          262 ms |          303 ms |         294 ms |
-| `large-esm` | `vpx` loader (1 process)        |           97 ms |           77 ms |          79 ms |
-| `large-esm` | `node --import tsx` (1 process) |          106 ms |           75 ms |          70 ms |
-| `large-esm` | `node --import tsx`, no cache   |          200 ms |          178 ms |         173 ms |
-| `large-esm` | `vpx` local bin (2 processes)   |          118 ms |           99 ms |         104 ms |
-| `large-esm` | `tsx` CLI (2 processes)         |          137 ms |          107 ms |         103 ms |
-| `large-esm` | `tsx` CLI, no cache             |          230 ms |          209 ms |         206 ms |
+| `hello`     | `tsx` CLI (2 processes)         |          103 ms |           81 ms |          72 ms |
+| `hello`     | `tsx` CLI, no cache             |          106 ms |           93 ms |          94 ms |
+| `hello`     | `node` type stripping           |           48 ms |           44 ms |          49 ms |
+| `esm-app`   | `vpx` loader (1 process)        |           87 ms |           65 ms |          67 ms |
+| `esm-app`   | `node --import tsx` (1 process) |          111 ms |           84 ms |          81 ms |
+| `esm-app`   | `node --import tsx`, no cache   |          141 ms |          217 ms |         214 ms |
+| `esm-app`   | `vpx` local bin (2 processes)   |          108 ms |           88 ms |          93 ms |
+| `esm-app`   | `tsx` CLI (2 processes)         |          146 ms |          117 ms |         115 ms |
+| `esm-app`   | `tsx` CLI, no cache             |          174 ms |          249 ms |         246 ms |
+| `cjs-app`   | `vpx` loader (1 process)        |           87 ms |           73 ms |          76 ms |
+| `cjs-app`   | `node --import tsx` (1 process) |          129 ms |          103 ms |          96 ms |
+| `cjs-app`   | `node --import tsx`, no cache   |          288 ms |          260 ms |         263 ms |
+| `cjs-app`   | `vpx` local bin (2 processes)   |          108 ms |           96 ms |         102 ms |
+| `cjs-app`   | `tsx` CLI (2 processes)         |          164 ms |          135 ms |         133 ms |
+| `cjs-app`   | `tsx` CLI, no cache             |          324 ms |          293 ms |         292 ms |
+| `large-cjs` | `vpx` loader (1 process)        |          114 ms |           92 ms |          84 ms |
+| `large-cjs` | `node --import tsx` (1 process) |          121 ms |           90 ms |          76 ms |
+| `large-cjs` | `node --import tsx`, no cache   |          225 ms |          274 ms |         260 ms |
+| `large-cjs` | `vpx` local bin (2 processes)   |          135 ms |          116 ms |         110 ms |
+| `large-cjs` | `tsx` CLI (2 processes)         |          153 ms |          122 ms |         108 ms |
+| `large-cjs` | `tsx` CLI, no cache             |          261 ms |          305 ms |         292 ms |
+| `large-esm` | `vpx` loader (1 process)        |           96 ms |           77 ms |          77 ms |
+| `large-esm` | `node --import tsx` (1 process) |          106 ms |           75 ms |          69 ms |
+| `large-esm` | `node --import tsx`, no cache   |          199 ms |          178 ms |         172 ms |
+| `large-esm` | `vpx` local bin (2 processes)   |          118 ms |           99 ms |         103 ms |
+| `large-esm` | `tsx` CLI (2 processes)         |          136 ms |          107 ms |         102 ms |
+| `large-esm` | `tsx` CLI, no cache             |          229 ms |          210 ms |         206 ms |
 
 What the numbers show:
 
-- **`vpx` against tsx with a warm cache.** For one process, the `vpx` loader is 1.2–1.8× faster on `hello`, `esm-app`, and `cjs-app` on every Node.js version. On 24.12, for example, `hello` takes 26 ms against 46 ms and `esm-app` 65 ms against 81 ms.
-- **Against a cold or disabled tsx cache**, `vpx` is 1.5–4.0× faster in every scenario.
-- **Against Node.js type stripping**, the `vpx` loader is on par on 22.18 (50 against 48 ms) and faster on 24.12 and 26.5 (26–30 against 44–48 ms).
+- **`vpx` against tsx with a warm cache.** For one process, the `vpx` loader is 1.2–1.8× faster on `hello`, `esm-app`, and `cjs-app` on every Node.js version. On 24.12, for example, `hello` takes 26 ms against 46 ms and `esm-app` 65 ms against 84 ms.
+- **Against a cold or disabled tsx cache**, `vpx` is 1.5–3.6× faster in every scenario.
+- **Against Node.js type stripping**, the `vpx` loader is on par on 22.18 (48 against 48 ms) and faster on 24.12 and 26.5 (26–29 against 44–49 ms).
 - **Megabyte-sized files are where tsx's cache pays off**, because it skips the transform while `vpx` transforms 1.8 MB on every run.
-  - `large-esm`: about even. `vpx` is faster on 22.18 (97 against 106 ms); tsx is 2 ms faster on 24.12 and 9 ms faster on 26.5.
-  - `large-cjs`: tsx is 13–19 ms faster on 24.12 and 26.5. For `vpx`, the CommonJS file costs 17–26 ms more than the same file as an ES module: the ESM load hook reads and parses it once more to check for ES module syntax, and on the in-thread path it is also transformed twice ([oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820)).
-- **The local bin costs 19–30 ms** for its second Node.js process. The `tsx` CLI pays the same, so local bin against CLI keeps roughly the same ratios.
+  - `large-esm`: about even. `vpx` is faster on 22.18 (96 against 106 ms); tsx is 2 ms faster on 24.12 and 8 ms faster on 26.5.
+  - `large-cjs`: `vpx` is faster on 22.18 (114 against 121 ms); tsx is 2 ms faster on 24.12 and 8 ms faster on 26.5. For `vpx`, the CommonJS file costs 7–18 ms more than the same file as an ES module, because the ESM load hook reads and parses it once more to check for ES module syntax before the CommonJS loader compiles it. The fix for [oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820), which stopped transforming it twice on the in-thread path, took 11 ms off on 24.12 and 26.5.
+- **CommonJS packages with ES module syntax got slower on the in-thread path with that fix.** `cjs-app` went from 65 to 73 ms on 24.12 and from 67 to 76 ms on 26.5, while `esm-app` stayed the same. Before transforming such a file as an ES module, oxc-node now reads it twice more: once to check that the source Node.js passed is the file on disk, and once to check its syntax. For the 301 files, those 602 reads take 7–9 ms on this machine. Checking the syntax of the source Node.js passed first, and comparing it with the file only when it stays CommonJS, would avoid both reads for such files.
+- **The local bin costs 21–26 ms** for its second Node.js process. The `tsx` CLI pays the same, so local bin against CLI keeps roughly the same ratios.
 
-A persistent transform cache would therefore only help with megabyte-sized sources, and stays under [Nice to Have](#nice-to-have). Fixing oxc-node#820 removes most of the CommonJS gap.
+A persistent transform cache would therefore only help with megabyte-sized sources, and stays under [Nice to Have](#nice-to-have).
 
 Binding load cost, measured by `require()` of the `.node` file alone on Node.js 22.18, macOS arm64:
 
@@ -770,7 +772,7 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 ## Rollout
 
 1. **Phase 0, vendor and prototype** (implemented): oxc-node in `sync-remote`, CI, and `upgrade-deps`; the patch; the binding feature; the loader entries; detection and execution in both CLIs; toolchain metadata; unit and snapshot tests; and docs.
-2. **Phase 1, release** (implemented, pending review): the feature ships as a regular part of `vpx`. CI covers Linux, macOS, and Windows, and the upstream fixes from [Upstream Status](#upstream-status-and-vendored-changes) landed in oxc-node v0.1.5 and v0.1.6.
+2. **Phase 1, release** (implemented, pending review): the feature ships as a regular part of `vpx`. CI covers Linux, macOS, and Windows, and the upstream fixes from [Upstream Status](#upstream-status-and-vendored-changes) landed in oxc-node v0.1.5, v0.1.6, and on `main`.
 3. **Phase 2, migration**: teach `vp migrate` to rewrite `tsx`, `ts-node`, and `esno` usages in `package.json` scripts.
 4. **Phase 3**: see Future Enhancements.
 
