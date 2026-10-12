@@ -80,12 +80,14 @@ export async function downloadPackageManager(
   version: string,
   interactive?: boolean,
   silent = false,
+  cwd?: string,
 ) {
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`${packageManager}@${version} installing...`);
   const downloadResult = await downloadPackageManagerBinding({
     name: packageManager,
     version,
+    cwd,
   });
   spinner.stop(`${packageManager}@${downloadResult.version} installed`);
   return downloadResult;

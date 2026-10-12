@@ -190,7 +190,8 @@ async fn print_env(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitSt
                 None => package_manager::resolve_current_for(&cwd, None).await?,
             };
             if let Some(resolution) = resolution {
-                let (install_dir, _, _) = vp_pm_cli::download_package_manager(
+                let (install_dir, _, _) = vp_pm_cli::download_package_manager_for_cwd(
+                    &cwd,
                     resolution.package_manager_type,
                     &resolution.version,
                     resolution.hash.as_deref(),

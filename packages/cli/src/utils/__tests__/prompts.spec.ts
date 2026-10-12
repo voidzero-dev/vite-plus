@@ -1,7 +1,54 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { downloadPackageManager as downloadPackageManagerBinding } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.ts';
-import { resolveGitInit, shouldIgnoreScriptsForAutoInstall } from '../prompts.ts';
+import {
+  downloadPackageManager,
+  resolveGitInit,
+  shouldIgnoreScriptsForAutoInstall,
+} from '../prompts.ts';
+
+vi.mock('../../../binding/index.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../binding/index.js')>()),
+  downloadPackageManager: vi.fn(),
+}));
+
+describe('downloadPackageManager', () => {
+  it('forwards the target workspace directory to the native binding', async () => {
+    const result = {
+      name: 'pnpm',
+      version: '11.24.0',
+      installDir: '/cache/pnpm',
+      binPrefix: '/cache/pnpm/bin',
+      packageName: 'pnpm',
+    };
+    vi.mocked(downloadPackageManagerBinding).mockResolvedValueOnce(result);
+    expect(
+      await downloadPackageManager(PackageManager.pnpm, 'latest', false, true, '/target/workspace'),
+    ).toBe(result);
+    expect(downloadPackageManagerBinding).toHaveBeenLastCalledWith({
+      name: 'pnpm',
+      version: 'latest',
+      cwd: '/target/workspace',
+    });
+  });
+
+  it('keeps existing callers without a target directory compatible', async () => {
+    vi.mocked(downloadPackageManagerBinding).mockResolvedValueOnce({
+      name: 'pnpm',
+      version: '11.24.0',
+      installDir: '/cache/pnpm',
+      binPrefix: '/cache/pnpm/bin',
+      packageName: 'pnpm',
+    });
+    await downloadPackageManager(PackageManager.pnpm, 'latest', false, true);
+    expect(downloadPackageManagerBinding).toHaveBeenLastCalledWith({
+      name: 'pnpm',
+      version: 'latest',
+      cwd: undefined,
+    });
+  });
+});
 
 describe('resolveGitInit', () => {
   it('never initializes git when adding a package to an existing monorepo', async () => {

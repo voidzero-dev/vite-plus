@@ -673,6 +673,7 @@ async function downloadSupportedPackageManager(options: {
     packageManagerVersion,
     interactive,
     true,
+    rootDir,
   );
 
   if (
