@@ -273,7 +273,7 @@ The loader is resolved from the project first and the global install second, fol
 
 ## Upstream Status and Vendored Changes
 
-These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running the prototype on Node.js 22.18, 24.11, 26.0, and 26.5. The default is upstream first and sync after. Of the 16 issues filed, [oxc-node#794](https://github.com/oxc-project/oxc-node/issues/794) to [oxc-node#798](https://github.com/oxc-project/oxc-node/issues/798) were fixed in v0.1.5, [oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804) to [oxc-node#806](https://github.com/oxc-project/oxc-node/issues/806) and [oxc-node#808](https://github.com/oxc-project/oxc-node/issues/808) to [oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811) in v0.1.6, and [oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820) on `main` after v0.1.6, at the commit the vendored copy pins. [oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807), [oxc-node#821](https://github.com/oxc-project/oxc-node/issues/821), and [oxc-node#827](https://github.com/oxc-project/oxc-node/issues/827) are open.
+These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running the prototype on Node.js 22.18, 24.11, 26.0, and 26.5. The default is upstream first and sync after. Of the 17 issues filed, [oxc-node#794](https://github.com/oxc-project/oxc-node/issues/794) to [oxc-node#798](https://github.com/oxc-project/oxc-node/issues/798) were fixed in v0.1.5, [oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804) to [oxc-node#806](https://github.com/oxc-project/oxc-node/issues/806) and [oxc-node#808](https://github.com/oxc-project/oxc-node/issues/808) to [oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811) in v0.1.6, and [oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820) on `main` after v0.1.6, at the commit the vendored copy pins. [oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807), [oxc-node#821](https://github.com/oxc-project/oxc-node/issues/821), [oxc-node#827](https://github.com/oxc-project/oxc-node/issues/827), and [oxc-node#828](https://github.com/oxc-project/oxc-node/issues/828) are open.
 
 ### Fixed Upstream
 
@@ -313,12 +313,12 @@ These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running t
 
 - tsconfig `paths` apply to `import` only. `require()` uses Node.js' CommonJS resolution, as upstream.
 - A tsconfig `module` of `node16`, `node18`, or `nodenext` makes `.ts` and `.tsx` files ES modules even in a package without `"type": "module"`, as upstream does. `tsc` and tsx follow `package.json` `"type"` for those values.
+- In a package without `"type"`, an extensionless JavaScript file with ES module syntax fails with `ERR_REQUIRE_CYCLE_MODULE`, whether it is run or imported. oxc-node's resolve hook reports it as CommonJS, which skips Node.js' syntax detection, and its load hook does not flip it to an ES module as it does a `.js` file ([oxc-node#828](https://github.com/oxc-project/oxc-node/issues/828)).
 
 ### Nice to Have
 
 - Transform TypeScript in `--eval`, stdin, and the REPL.
 - An opt-in persistent transform cache.
-- TypeScript syntax in extensionless entry files, for shebang scripts without `.ts`.
 - Split the crate into a NAPI-free core and a thin NAPI layer, so the vendored patch shrinks ([oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807)).
 
 ## Implementation Architecture
@@ -584,7 +584,7 @@ Kept as the fallback if vendoring proves harder than expected.
 
 `#!/usr/bin/env vpx` makes the kernel run `vpx /abs/path/tool.ts args`. The absolute path is explicit, so script mode applies. This is the supported form: the file keeps its `.ts` extension and is made executable.
 
-An extensionless executable with that shebang (`bin/tool`) does not work for TypeScript in v1. Node.js treats extensionless files as JavaScript, and oxc-node's hooks only claim known extensions, so the file runs as plain JavaScript (see Nice to Have). The shebang check in `is_script` exists only to stop a loop: without it, `vpx /abs/bin/tool` would go through the `PATH` lookup, exec the file, and re-enter `vpx` forever. Options in a shebang need `#!/usr/bin/env -S vpx --tsconfig …`.
+An extensionless executable with that shebang (`bin/tool`) runs as JavaScript, not TypeScript: its name does not tell which it is, and oxc-node picks the parser by extension. In a package without `"type"`, such a file with ES module syntax fails with `ERR_REQUIRE_CYCLE_MODULE`, while plain Node.js detects the syntax and runs it as an ES module ([oxc-node#828](https://github.com/oxc-project/oxc-node/issues/828)). The shebang check in `is_script` exists only to stop a loop: without it, `vpx /abs/bin/tool` would go through the `PATH` lookup, exec the file, and re-enter `vpx` forever. Options in a shebang need `#!/usr/bin/env -S vpx --tsconfig …`.
 
 ### Scripts Outside the Current Directory
 
@@ -785,7 +785,7 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 5. **Loader source**: project `vite-plus` first, or always the global install? (Proposed: project first.)
 6. **Local bin scope**: Design Decision 8 ships a project-local `vpx` that handles script mode and delegates package mode. Should it instead implement the full lookup chain in JS, so that `vpx eslint .` also works without the global CLI? (Proposed: delegate; keep one implementation of the chain.)
 7. **`--require` ordering** (resolved): the loader is split into a CommonJS `--require` preload and an `--import`, so `--require ./setup.ts` works.
-8. **Extensionless TypeScript in shebang scripts**: wait for upstream support, or document the `.ts` requirement? (Proposed: document; see Edge Cases.)
+8. **Extensionless TypeScript in shebang scripts** (resolved): not supported. An extensionless name does not tell TypeScript from JavaScript, so shebang scripts keep their `.ts` extension (see Edge Cases).
 9. **oxc version lockstep** (resolved): `upgrade-deps` bumps oxc-node to its latest stable tag, and `sync-remote` rewrites its `oxc` version to the workspace's and re-applies the patch; a tag that does not compile or patch fails the upgrade loudly. `@oxc-project/runtime` follows Rolldown's pin.
 10. **Maturity** (resolved): the docs present script mode as a regular `vpx` feature, without an experimental label. The oxc.rs docs still mark oxc-node itself as experimental; the vendored copy is pinned to a release and covered by Vite+'s own tests.
 11. **`--version`** (resolved): `vpx -v/--version` prints the Vite+ version, as `vp --version` does; `vp node --version` prints the Node.js version.
