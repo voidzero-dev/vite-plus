@@ -93,18 +93,6 @@ jobs:
       - name: Run vp fmt --check
         run: pnpm vp fmt --check
 
-  download-previous-rolldown-binaries:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: ./.github/actions/download-rolldown-binaries
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
   test:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
@@ -403,12 +391,6 @@ jobs:
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       # Prebuilt by build-windows-cli (Linux + cargo-xwin); the artifact
       # paths are workspace-relative, so this places the binding into
@@ -943,7 +925,6 @@ jobs:
   cli-e2e-test-windows:
     name: CLI E2E test
     needs:
-      - download-previous-rolldown-binaries
       - build-windows-cli
     strategy:
       fail-fast: false
@@ -957,10 +938,11 @@ jobs:
 
   # Build the native CLI and snapshot runner once per platform, then share
   # them across the E2E job and snapshot shards. Tar preserves permissions.
+  # build-upstream downloads the source-matched Rolldown binding when needed.
   build-cli-test-binaries-linux:
     name: Build CLI test binaries (${{ matrix.target }})
-    needs:
-      - download-previous-rolldown-binaries
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -978,12 +960,6 @@ jobs:
           cache-key: cli-snapshot-test-${{ matrix.target }}-ci
 
       - uses: ./.github/actions/setup-ci-node
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
@@ -1040,8 +1016,8 @@ jobs:
 
   build-cli-test-binaries-macos:
     name: Build CLI test binaries (${{ matrix.target }})
-    needs:
-      - download-previous-rolldown-binaries
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -1094,12 +1070,6 @@ jobs:
           version: '*'
 
       - uses: ./.github/actions/setup-ci-node
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       - uses: ./.github/actions/download-cli-test-binaries
         with:
@@ -1180,7 +1150,6 @@ jobs:
   cli-snapshot-test-windows:
     name: CLI snapshot test (Windows, shard ${{ matrix.shard }}/3)
     needs:
-      - download-previous-rolldown-binaries
       - build-windows-cli
       - build-windows-tests
     strategy:
@@ -1226,12 +1195,6 @@ jobs:
           tool: cargo-nextest
 
       - uses: ./.github/actions/setup-ci-node
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       # See the cli-e2e-test job for details on the prebuilt binaries.
       - name: Download prebuilt Windows binaries
@@ -1345,8 +1308,8 @@ jobs:
 
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
-    needs:
-      - download-previous-rolldown-binaries
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
     runs-on: namespace-profile-linux-x64-default
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -1358,12 +1321,6 @@ jobs:
           cache-key: cli-e2e-test-musl-ci
 
       - uses: ./.github/actions/setup-ci-node
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       # Cross-compile for musl on the glibc host
       - name: Build with upstream (musl)
@@ -1497,12 +1454,6 @@ jobs:
 
       - uses: ./.github/actions/setup-ci-node
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
-
       - uses: ./.github/actions/download-cli-test-binaries
         with:
           target: x86_64-unknown-linux-gnu
@@ -1590,12 +1541,6 @@ jobs:
       - uses: ./.github/actions/clone
 
       - uses: ./.github/actions/setup-ci-node
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       - uses: ./.github/actions/download-cli-test-binaries
         with:
