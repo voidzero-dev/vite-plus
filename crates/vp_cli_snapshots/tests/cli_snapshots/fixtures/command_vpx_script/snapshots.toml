@@ -83,6 +83,7 @@ steps = [
   { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/automatic-dev", comment = "\"jsx\": \"react-jsxdev\": jsxDEV from the package's jsx-dev-runtime, with source line numbers" },
   { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/pragma-automatic", comment = "A @jsxImportSource pragma comment" },
   { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/pragma-classic", comment = "@jsxRuntime classic, @jsx, and @jsxFrag pragma comments" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/pragma-mixed", comment = "Hono's @jsx plus @jsxImportSource pair: the automatic runtime applies and @jsx is ignored" },
   { argv = ["vpx", "./main.jsx"], cwd = "jsx-custom/jsx-allowjs", comment = "A .jsx file gets the tsconfig's JSX options when allowJs is on" },
   { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/automatic-cjs", comment = "A .tsx in a package without \"type\" runs as CommonJS and requires the runtime" },
 ]
