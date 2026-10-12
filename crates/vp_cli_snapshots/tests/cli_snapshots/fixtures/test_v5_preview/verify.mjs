@@ -26,7 +26,7 @@ provider.providerFactory = (project) => {
 };
 let runner;
 try {
-  runner = await createVitest({ config: false, watch: false, reporters: [] }, defineConfig({
+  runner = await createVitest({ config: false, watch: false, api: { port: 0 }, reporters: [] }, defineConfig({
     ...(browserDefines ? { define: { __VP_STRING_DEFINE__: JSON.stringify('/messages'), __VP_BOOL_DEFINE__: 'false' } } : {}),
     test: {
       include: [browserDefines ? 'defines.test.js' : realTimers ? 'upstream.test.js' : 'browser.test.js'],

@@ -14,7 +14,7 @@ const dimensions = (file) => {
 };
 for (const phase of ['record', 'compare', 'failure']) {
   const runner = await createVitest({
-    config: false, watch: false, reporters: [], update: phase === 'record',
+    config: false, watch: false, api: { port: 0 }, reporters: [], update: phase === 'record',
   }, defineConfig({ test: {
     include: [phase === 'failure' ? 'failure.test.js' : 'browser.test.js'],
     browser: {
