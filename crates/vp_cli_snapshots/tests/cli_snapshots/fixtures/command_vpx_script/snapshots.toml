@@ -72,6 +72,22 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_script_jsx_custom"
+vp = ["local", "global"]
+comment = "JSX customizations with a runtime installed as a package: classic and automatic runtimes, the development runtime, pragma comments, .jsx with allowJs, and JSX in a CommonJS package."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "jsx-custom/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "jsx-custom/mini-jsx", "jsx-custom/node_modules/mini-jsx"], snapshot = false },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/classic-import", comment = "\"jsx\": \"react\" with jsxFactory and jsxFragmentFactory imported from the package; the import is kept" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/automatic-package", comment = "\"jsx\": \"react-jsx\" with the package as jsxImportSource" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/automatic-dev", comment = "\"jsx\": \"react-jsxdev\": jsxDEV from the package's jsx-dev-runtime, with source line numbers" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/pragma-automatic", comment = "A @jsxImportSource pragma comment" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/pragma-classic", comment = "@jsxRuntime classic, @jsx, and @jsxFrag pragma comments" },
+  { argv = ["vpx", "./main.jsx"], cwd = "jsx-custom/jsx-allowjs", comment = "A .jsx file gets the tsconfig's JSX options when allowJs is on" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/automatic-cjs", comment = "A .tsx in a package without \"type\" runs as CommonJS and requires the runtime" },
+]
+
+[[case]]
 name = "vpx_script_shebang"
 vp = ["local", "global"]
 skip-platforms = ["windows"]
