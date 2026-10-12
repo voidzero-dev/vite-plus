@@ -39,7 +39,7 @@ The documentation uses bare `vp` commands for readability. Without the global CL
 
 ### Manual Installation
 
-If you are manually migrating a project to Vite+, install `vite-plus` as a development dependency using your existing package manager:
+If you are manually migrating a project to Vite+, install `vite-plus` as a development dependency:
 
 ::: code-group
 
