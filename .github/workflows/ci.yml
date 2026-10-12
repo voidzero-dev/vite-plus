@@ -382,12 +382,11 @@ jobs:
           profile: ci
           save-cache: ${{ github.ref_name == 'main' }}
 
-  cli-e2e-test:
+  # Each platform waits only for its own binaries. Anchors keep the steps shared.
+  cli-e2e-test-linux:
     name: CLI E2E test
     needs:
-      - download-previous-rolldown-binaries
-      - build-windows-cli
-      - build-cli-test-binaries
+      - build-cli-test-binaries-linux
     strategy:
       fail-fast: false
       matrix:
@@ -395,14 +394,8 @@ jobs:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
             test-node: 22.18.0
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            test-node: 24.11.0
-          - os: namespace-profile-windows-4c-8g
-            target: x86_64-pc-windows-msvc
-            test-node: 26.0.0
     runs-on: ${{ matrix.os }}
-    steps:
+    steps: &cli-e2e-steps
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
@@ -933,9 +926,38 @@ jobs:
           pnpm bootstrap-cli:ci
           vp --version
 
+  cli-e2e-test-macos:
+    name: CLI E2E test
+    needs:
+      - build-cli-test-binaries-macos
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+            test-node: 24.11.0
+    runs-on: ${{ matrix.os }}
+    steps: *cli-e2e-steps
+
+  cli-e2e-test-windows:
+    name: CLI E2E test
+    needs:
+      - download-previous-rolldown-binaries
+      - build-windows-cli
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: namespace-profile-windows-4c-8g
+            target: x86_64-pc-windows-msvc
+            test-node: 26.0.0
+    runs-on: ${{ matrix.os }}
+    steps: *cli-e2e-steps
+
   # Build the native CLI and snapshot runner once per platform, then share
   # them across the E2E job and snapshot shards. Tar preserves permissions.
-  build-cli-test-binaries:
+  build-cli-test-binaries-linux:
     name: Build CLI test binaries (${{ matrix.target }})
     needs:
       - download-previous-rolldown-binaries
@@ -945,10 +967,8 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
-    steps:
+    steps: &build-cli-test-binaries-steps
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
@@ -1018,25 +1038,35 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Each shard reuses the native CLI and test binaries from the platform's
-  # build job. Only the TypeScript packages are built here for local-flavor
-  # cases. Windows uses its cross-compiled artifacts in the separate job.
-  cli-snapshot-test:
-    name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
+  build-cli-test-binaries-macos:
+    name: Build CLI test binaries (${{ matrix.target }})
     needs:
-      - build-cli-test-binaries
+      - download-previous-rolldown-binaries
     strategy:
       fail-fast: false
       matrix:
-        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
+        include:
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps: *build-cli-test-binaries-steps
+
+  # Each shard reuses the native CLI and test binaries from the platform's
+  # build job. Only the TypeScript packages are built here for local-flavor
+  # cases. Windows uses its cross-compiled artifacts in the separate job.
+  cli-snapshot-test-linux:
+    name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
+    needs:
+      - build-cli-test-binaries-linux
+    strategy:
+      fail-fast: false
+      matrix:
         shard: [1, 2, 3]
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
-    steps:
+    steps: &cli-snapshot-steps
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
@@ -1127,6 +1157,20 @@ jobs:
           path: ${{ runner.temp }}/snapshot-artifacts
           if-no-files-found: ignore
           retention-days: 7
+
+  cli-snapshot-test-macos:
+    name: CLI snapshot test (${{ matrix.target }}, shard ${{ matrix.shard }}/3)
+    needs:
+      - build-cli-test-binaries-macos
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+        include:
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps: *cli-snapshot-steps
 
   # Runs the PTY snapshot suite (crates/vp_cli_snapshots) on Windows with
   # BOTH vp flavors, without a Rust toolchain on the runner: the test binary
@@ -1441,7 +1485,7 @@ jobs:
   install-e2e-test:
     name: Local CLI `vp install` E2E test
     needs:
-      - build-cli-test-binaries
+      - build-cli-test-binaries-linux
     runs-on: namespace-profile-linux-x64-default
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
@@ -1513,14 +1557,17 @@ jobs:
             echo ""
           done
 
-  install-e2e-test-sfw:
+  # Restore Windows separately when SFW's embedded Node includes nodejs/node#61999.
+  # SFW 1.15.2 embeds Node 24.9.0, which hits UV_HANDLE_CLOSING at shutdown.
+  # VP_NODE_VERSION controls the child runtime only.
+  install-e2e-test-sfw-linux:
     name: Local CLI `vp install` E2E test (Socket Firewall Free)
     env:
       # Includes nodejs/node#61999 (first backported in Node 24.20.0).
       # Override vp's project pins; sfw's embedded Node runtime is separate.
       VP_NODE_VERSION: '24.21.0'
     needs:
-      - build-cli-test-binaries
+      - build-cli-test-binaries-linux
     # Run if: not a PR (push-to-main / workflow_dispatch), OR PR has 'test: sfw' label.
     # Heavy job (real registry traffic) — gated to avoid running on every PR.
     if: >-
@@ -1534,31 +1581,11 @@ jobs:
             target: x86_64-unknown-linux-gnu
             sfw_asset: sfw-free-linux-x86_64
             vp_bin: vp
-            # Only Linux needs the TLS-bypass: the ubuntu-latest runner
-            # doesn't preinstall Node 22.18 into vp's cache, so vp's HttpClient
-            # (rustls) fetches `nodejs.org/.../SHASUMS256.txt` through sfw and
-            # hits the upstream EKU bug. macOS/Windows runners ship Node in
-            # vp's cache already, so vp never calls its HttpClient through sfw
-            # in this test — leave the verification on there.
+            # Linux downloads Node through SFW; its proxy certificate needs
+            # the existing TLS bypass. macOS retains certificate verification.
             vp_insecure_tls: '1'
-          - os: namespace-profile-mac-default
-            target: aarch64-apple-darwin
-            sfw_asset: sfw-free-macos-arm64
-            vp_bin: vp
-            vp_insecure_tls: ''
-          # TODO: Restore Windows in a separate job that needs build-windows-cli
-          # when SFW's embedded Node includes
-          # https://github.com/nodejs/node/pull/61999 (Node 24.20.0 / 26.7.0).
-          # SFW 1.15.2 embeds Node 24.9.0 and hits UV_HANDLE_CLOSING at shutdown.
-          # VP_NODE_VERSION only changes the child runtime, not SFW's runtime.
-          # - os: namespace-profile-windows-4c-8g
-          #   target: x86_64-pc-windows-msvc
-          #   sfw_asset: sfw-free-windows-x86_64.exe
-          #   # SFW spawns directly without PATHEXT, so use vp.exe on Windows.
-          #   vp_bin: vp.exe
-          #   vp_insecure_tls: ''
     runs-on: ${{ matrix.os }}
-    steps:
+    steps: &install-sfw-steps
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
@@ -1643,6 +1670,31 @@ jobs:
           cd "$RUNNER_TEMP/vite"
           sfw "${{ matrix.vp_bin }}" install --no-frozen-lockfile
 
+  install-e2e-test-sfw-macos:
+    name: Local CLI `vp install` E2E test (Socket Firewall Free)
+    env:
+      # Includes nodejs/node#61999 (first backported in Node 24.20.0).
+      # Override vp's project pins; sfw's embedded Node runtime is separate.
+      VP_NODE_VERSION: '24.21.0'
+    needs:
+      - build-cli-test-binaries-macos
+    # Run if: not a PR (push-to-main / workflow_dispatch), OR PR has 'test: sfw' label.
+    # Heavy job (real registry traffic) — gated to avoid running on every PR.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'test: sfw')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+            sfw_asset: sfw-free-macos-arm64
+            vp_bin: vp
+            vp_insecure_tls: ''
+    runs-on: ${{ matrix.os }}
+    steps: *install-sfw-steps
+
   done:
     runs-on: ubuntu-latest
     if: always()
@@ -1654,16 +1706,21 @@ jobs:
       - build-windows-cli
       - test-musl
       - lint
-      - cli-e2e-test
+      - cli-e2e-test-linux
+      - cli-e2e-test-macos
+      - cli-e2e-test-windows
       - cli-e2e-test-musl
       - certless-image-test
-      - build-cli-test-binaries
-      - cli-snapshot-test
+      - build-cli-test-binaries-linux
+      - build-cli-test-binaries-macos
+      - cli-snapshot-test-linux
+      - cli-snapshot-test-macos
       - cli-snapshot-test-windows
       # Skipped on unlabeled PRs; counted on push-to-main and labeled PRs.
       # `contains(needs.*.result, 'failure')` ignores "skipped" results.
       - install-e2e-test
-      - install-e2e-test-sfw
+      - install-e2e-test-sfw-linux
+      - install-e2e-test-sfw-macos
     steps:
       - run: exit 1
         # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379
