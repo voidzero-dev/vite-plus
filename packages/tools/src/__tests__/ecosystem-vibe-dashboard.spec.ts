@@ -17,11 +17,10 @@ test.each([browserProject, browserProject.replace('[tailwindcss()]', '[\n  tailw
   'preserves migrated plugins and selects the port after Vitest defaults',
   (config) => {
     const tailwind = { name: 'tailwind' };
-    const lazyPlugins = (factory: () => unknown[]) => factory();
     const patched = runInNewContext(patchVibeDashboardConfig(config), {
       defineConfig: (project: unknown) => project,
       tailwindcss: () => tailwind,
-      lazyPlugins,
+      lazyPlugins: (factory: () => unknown[]) => factory(),
     }) as {
       plugins: {
         enforce?: string;
