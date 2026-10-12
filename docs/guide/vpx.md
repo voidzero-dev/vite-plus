@@ -131,7 +131,7 @@ Types are removed, and enums, namespaces, and parameter properties are compiled,
 
 A classic factory that the file imports, such as `import { h, Fragment } from 'preact'`, is kept even though only JSX uses it.
 
-Pragma comments at the top of a file override the tsconfig for that file:
+Pragma comments override the tsconfig for that file:
 
 ```tsx
 /** @jsxImportSource preact */
@@ -144,7 +144,18 @@ Pragma comments at the top of a file override the tsconfig for that file:
 import { h, Fragment } from 'preact';
 ```
 
+When a file has both `@jsx` and `@jsxImportSource`, as Hono's docs show, `@jsxImportSource` selects the automatic runtime and `@jsx` is ignored. Pragmas are read from every comment in the file, so prose such as `// @jsxImportSource is set above` in an ordinary comment changes the runtime too.
+
 A `.jsx` file gets a tsconfig's JSX options only when that tsconfig sets `"allowJs": true`, as in `tsc` and tsx. Otherwise it uses the defaults above.
+
+Libraries that ship a JSX runtime or a factory work this way, for example:
+
+- React's automatic runtime, for terminal UIs with Ink, email templates with React Email, and HTML with `react-dom/server`
+- Preact, with `"jsxImportSource": "preact"` or a classic `h`
+- Hono JSX (`"jsxImportSource": "hono/jsx"`) and `@kitajs/html`, which render HTML strings
+- Satori's own runtime (`satori/jsx`), for SVG images without React
+
+Frameworks that compile JSX with their own plugin, usually with `"jsx": "preserve"`, do not. Solid needs `babel-preset-solid`, so its imports fail at runtime, and Qwik needs the Qwik optimizer. Vue's runtime renders JSX, for example with `vue/server-renderer`, but features of `@vue/babel-plugin-jsx` such as `v-model` are not available.
 
 ::: tip Coming from tsx
 Without a tsconfig `jsx` option, tsx compiles JSX to `React.createElement()`, which needs `React` in scope, while `vpx` uses the automatic runtime. Set `"jsx": "react"` to keep the classic output.

@@ -48,6 +48,14 @@ A @jsxImportSource pragma comment
 <section title="t"><b>bold</b>frag</section>
 ```
 
+## `cd jsx-custom/pragma-mixed && vpx ./main.tsx`
+
+Hono's @jsx plus @jsxImportSource pair: the automatic runtime applies and @jsx is ignored
+
+```
+<section title="t"><b>bold</b>frag</section>
+```
+
 ## `cd jsx-custom/jsx-allowjs && vpx ./main.jsx`
 
 A .jsx file gets the tsconfig's JSX options when allowJs is on
