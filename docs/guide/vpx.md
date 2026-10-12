@@ -148,6 +148,8 @@ A `.jsx` file gets a tsconfig's JSX options only when that tsconfig sets `"allow
 
 ::: tip Coming from tsx
 Without a tsconfig `jsx` option, tsx compiles JSX to `React.createElement()`, which needs `React` in scope, while `vpx` uses the automatic runtime. Set `"jsx": "react"` to keep the classic output.
+
+Because of that default, tsx ignores a lone `/** @jsxImportSource … */` comment unless the file also has `/** @jsxRuntime automatic */` or the tsconfig sets `"jsx": "react-jsx"`. `vpx` applies the comment on its own.
 :::
 
 ## `vp exec`
