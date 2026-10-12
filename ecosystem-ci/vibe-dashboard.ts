@@ -1,11 +1,12 @@
 export function patchVibeDashboardConfig(config: string): string {
-  const plugins = /plugins:\s*\[tailwindcss\(\)\]/g;
+  // Preserve the lazyPlugins wrapper that migration adds around this array.
+  const plugins = /\[\s*tailwindcss\(\)\s*,?\s*\]/g;
   if ([...config.matchAll(plugins)].length !== 1) {
     throw new Error('vibe-dashboard patch: expected the pinned browser project plugins');
   }
   return config.replace(
     plugins,
-    `plugins: [tailwindcss(), {
+    `[tailwindcss(), {
       name: 'vibe-dashboard:test:browser-port',
       enforce: 'post',
       config: {
