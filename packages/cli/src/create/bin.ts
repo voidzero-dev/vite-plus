@@ -692,6 +692,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     packageManagerVersion,
     options.interactive,
     shouldSilencePackageManagerInstallLog,
+    workspaceInfoOptional.rootDir,
   );
   const workspaceInfo: WorkspaceInfo = {
     ...workspaceInfoOptional,

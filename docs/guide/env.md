@@ -171,6 +171,13 @@ Only `vp env use` needs this alternate command. Other `vp env` commands work nor
 
 In CI, `vp env use` can run without shell initialization. It writes a temporary session file per runtime or package manager in the resolved state directory, such as `.session-node-version` or `.session-pnpm-version`. Later shim calls in the same job use these files to resolve the same environment.
 
+#### Shell completion
+
+The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShell. Run `vp env setup` and follow its printed shell setup instructions to enable it. Press Tab to complete commands, or project task names after `vp run` and `vpr`.
+
+- **Zsh**: Run `autoload -Uz compinit; compinit` before loading the setup script if your shell has not initialized completion.
+- **Nushell**: Completion requires `fish` on `PATH`.
+
 ### Manage
 
 - `vp env default` shows the global Node.js default and each configured package-manager version. Bare versions set Node.js; qualified specs such as `pnpm@10.18.0` set that package manager's shim default without replacing the defaults for Bun, Yarn, or npm. `--unset` clears all defaults unless scoped.
@@ -187,7 +194,7 @@ In CI, `vp env use` can run without shell initialization. It writes a temporary 
 ### Inspect
 
 - `vp env current` shows the current resolved environment
-- `vp env doctor` runs environment diagnostics
+- `vp env doctor` runs environment diagnostics. Append `node` to focus on Node.js, `pm` for all package managers, or `npm`, `pnpm`, `yarn`, or `bun` for a specific package manager.
 - `vp env which` shows which tool path will be used
 - `vp env list` shows separate Node.js, npm, pnpm, Yarn, and Bun sections; selectors narrow output
 - `vp env list-remote` fetches Node.js and all four PM registries concurrently; selectors narrow network work. `--lts` implicitly selects Node.js.

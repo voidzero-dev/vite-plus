@@ -21,7 +21,7 @@ Read these guides before making changes:
 
 Inspect the worktree and preserve unrelated changes. Identify the workspace root, package manager, scripts, configuration files, and tools in use. If the project already uses Vite+, follow the upgrade flow in the migration guide and keep the existing setup; do not use --full unless I request it.
 
-For a project that does not use Vite+ yet, check the prerequisites for the tools it uses: Vite 8+ and Vitest 4.1+. Complete any required upstream upgrades and validate them before starting the Vite+ migration. Then keep those manifests, lockfile, and installed packages available so the migrator can identify the original Vitest version. Do not install vite-plus or upgrade Vitest to the target's bundled version before running migration.
+For a project that does not use Vite+ yet, check the prerequisites for the tools it uses: Vite 7+ and Vitest 4+. Complete any required upstream upgrades and validate them before starting the Vite+ migration. Then keep those manifests, lockfile, and installed packages available so the migrator can identify the original Vitest version. Do not install vite-plus or upgrade Vitest to the target's bundled version before running migration.
 
 Use the CLI from the target Vite+ 1.0 release or its preview build. Use a supported Node.js runtime from the compatibility guide. A global installation is optional:
 

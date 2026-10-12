@@ -8,7 +8,7 @@ Use `vpx`, `vp exec`, and `vp dlx` to run binaries without switching between loc
 
 Use the other binary commands when you need stricter control:
 
-- `vpx` resolves a package binary locally first by default and downloads it if not found; with `pkg@version`, `--package/-p`, or `--shell-mode`, it runs via `vp dlx`
+- `vpx` looks for a binary in local `node_modules/.bin` directories, Vite+-managed global packages, and system `PATH`, in that order, then falls back to `vp dlx`. With `pkg@version`, `--package/-p`, or `--shell-mode`, it runs via `vp dlx` directly.
 - `vp exec` runs a command from local `node_modules/.bin` directories, falling back to `PATH` if not found
 - `vp dlx` runs a package binary without adding it as a dependency
 

@@ -38,6 +38,8 @@ Select a task (↑/↓, Enter to run, type to search):
     test: jest
 ```
 
+With [shell completion](/guide/env#shell-completion) enabled, press Tab after `vp run ` or `vpr ` to complete task names from your project.
+
 ## Built-in Commands vs Scripts
 
 `vp dev` is a built-in command. `vp run dev` is your `dev` script. Built-in commands cannot be overwritten, so adding a `dev` script does not change what `vp dev` does:

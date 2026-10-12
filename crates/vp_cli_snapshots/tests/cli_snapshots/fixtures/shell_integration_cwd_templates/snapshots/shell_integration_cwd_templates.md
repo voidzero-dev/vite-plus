@@ -283,7 +283,7 @@ export extern "vpr" [...args: string@"nu-complete vpr"]
 
 ## `vpt print-file home/env.ps1`
 
-PowerShell wrapper and vpr completion keep global -C before env use/run
+PowerShell activation aliases the wrapper and keeps global -C in vpr completion
 
 ```
 # Vite+ environment setup (https://viteplus.dev)
@@ -296,48 +296,9 @@ $env:PATH = @(
     $__vp_fallback
 ) -join [IO.Path]::PathSeparator
 
-# Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VP_NODE_VERSION in the current shell session.
-function vp {
-    $__vp_command_index = 0
-    if ($args.Count -ge 1) {
-        if ($args[0] -eq "-C") {
-            $__vp_command_index = 2
-        } elseif ("$($args[0])" -like "-C?*") {
-            $__vp_command_index = 1
-        }
-    }
-    if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
-        if ($args -contains "-h" -or $args -contains "--help") {
-            & (Join-Path $__vp_bin "vp") @args; return
-        }
-        $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
-        $previousShell = $env:VP_SHELL
-        $previousErrorActionPreference = $ErrorActionPreference
-        try {
-            $env:VP_ENV_USE_EVAL_ENABLE = "1"
-            $env:VP_SHELL = "pwsh"
-            # Windows PowerShell 5.1 treats native stderr as an error when redirected.
-            $ErrorActionPreference = "Continue"
-            $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
-                if ($_ -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Host $_.Exception.Message
-                } else {
-                    $_
-                }
-            }
-        } finally {
-            $ErrorActionPreference = $previousErrorActionPreference
-            $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
-            $env:VP_SHELL = $previousShell
-        }
-        if ($LASTEXITCODE -eq 0 -and $output) {
-            Invoke-Expression ($output -join "`n")
-        }
-    } else {
-        & (Join-Path $__vp_bin "vp") @args
-    }
-}
+# A script can propagate native failure through both $? and $LASTEXITCODE.
+# A plain function returns $? = $true even when its native command fails.
+Set-Alias vp (Join-Path $PSScriptRoot "vp.ps1")
 
 # Dynamic shell completion for PowerShell
 $env:VP_COMPLETE = "powershell"
@@ -372,4 +333,55 @@ $__vpr_comp = {
     }
 }
 Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
+```
+
+## `vpt print-file home/vp.ps1`
+
+PowerShell wrapper keeps global -C before env use and propagates the native exit code
+
+```
+# Vite+ PowerShell wrapper (https://viteplus.dev)
+$__vp_bin = '<workspace>/home/bin'
+$__vp_command_index = 0
+if ($args.Count -ge 1) {
+    if ($args[0] -eq "-C") {
+        $__vp_command_index = 2
+    } elseif ("$($args[0])" -like "-C?*") {
+        $__vp_command_index = 1
+    }
+}
+# Intercept `vp env use` to set/unset VP_NODE_VERSION in the current session.
+if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
+    if ($args -contains "-h" -or $args -contains "--help") {
+        & (Join-Path $__vp_bin "vp") @args
+        exit $LASTEXITCODE
+    }
+    $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
+    $previousShell = $env:VP_SHELL
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $env:VP_ENV_USE_EVAL_ENABLE = "1"
+        $env:VP_SHELL = "pwsh"
+        # Windows PowerShell 5.1 treats native stderr as an error when redirected.
+        $ErrorActionPreference = "Continue"
+        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                Write-Host $_.Exception.Message
+            } else {
+                $_
+            }
+        }
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
+        $env:VP_SHELL = $previousShell
+    }
+    if ($LASTEXITCODE -eq 0 -and $output) {
+        Invoke-Expression ($output -join "`n")
+    }
+} else {
+    & (Join-Path $__vp_bin "vp") @args
+}
+# Exits only this script, preserving the caller's session and native exit code.
+exit $LASTEXITCODE
 ```

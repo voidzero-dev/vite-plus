@@ -2,11 +2,10 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { parseTarGzip } from 'nanotar';
-
 import { getVpDirs } from '../../binding/index.js';
 import { fetchNpmResource } from '../utils/npm-config.ts';
 import type { OrgManifest } from './org-manifest.ts';
+import { parseOrgTarball } from './org-tarball-reader.ts';
 
 function getCacheRoot(): string {
   return path.join(getVpDirs().cache, 'create-org');
@@ -140,7 +139,7 @@ export async function readPackageJsonFromTarball(
 ): Promise<unknown> {
   const bytes = await downloadTarball(tarballUrl);
   verifyIntegrity(bytes, integrity);
-  const entries = await parseTarGzip(bytes);
+  const entries = await parseOrgTarball(bytes);
   for (const entry of entries) {
     if (normalizeEntryName(entry.name) !== 'package.json' || !entry.data) {
       continue;
@@ -194,7 +193,7 @@ export function normalizeEntryName(rawName: string): string | null {
 }
 
 async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<void> {
-  const entries = await parseTarGzip(bytes);
+  const entries = await parseOrgTarball(bytes);
   // Extract into a staging directory first so partial failures don't leave
   // a half-populated final cache path that future runs would skip.
   const stagingDir = `${destDir}${STAGING_SUFFIX_PREFIX}${process.pid}-${Date.now()}`;

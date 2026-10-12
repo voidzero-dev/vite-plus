@@ -7,5 +7,6 @@ steps = [
   { argv = ["vpt", "print-file", "home/env"], comment = "POSIX wrapper and zsh vpr completion keep global -C before env use/run" },
   { argv = ["vpt", "print-file", "home/env.fish"], comment = "fish wrapper and vpr completion keep global -C before env use/run" },
   { argv = ["vpt", "print-file", "home/env.nu"], comment = "Nushell wrapper and vpr completion keep global -C before env use/run" },
-  { argv = ["vpt", "print-file", "home/env.ps1"], comment = "PowerShell wrapper and vpr completion keep global -C before env use/run" },
+  { argv = ["vpt", "print-file", "home/env.ps1"], comment = "PowerShell activation aliases the wrapper and keeps global -C in vpr completion" },
+  { argv = ["vpt", "print-file", "home/vp.ps1"], comment = "PowerShell wrapper keeps global -C before env use and propagates the native exit code" },
 ]
