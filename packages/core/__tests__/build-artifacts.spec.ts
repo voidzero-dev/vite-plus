@@ -43,6 +43,20 @@ describe('build artifacts', () => {
     expect(imports).not.toContain('yuku-codegen');
   });
 
+  it('pins the external parser to the Yuku versions used by the bundled dts plugin', () => {
+    const coreRequire = createRequire(path.join(coreDir, 'package.json'));
+    const pkg = coreRequire('./package.json');
+    const tsdownRequire = createRequire(coreRequire.resolve('tsdown/package.json'));
+    const pluginRequire = createRequire(tsdownRequire.resolve('rolldown-plugin-dts/package.json'));
+    const parserVersion = pluginRequire('yuku-parser/package.json').version;
+
+    expect(pkg.dependencies['yuku-parser']).toBe(parserVersion);
+    expect(coreRequire('yuku-parser/package.json').version).toBe(parserVersion);
+    for (const name of ['yuku-ast', 'yuku-codegen']) {
+      expect(pluginRequire(`${name}/package.json`).version, name).toBe(parserVersion);
+    }
+  });
+
   // The bundled dts plugin resolves `vue-tsc`, `@volar/typescript`,
   // `@vue/language-core` and `@typescript/native-preview` from core at runtime,
   // so isolated installs such as pnpm's global virtual store need core to

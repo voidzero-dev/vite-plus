@@ -24,7 +24,7 @@ test.each([false, true])(
   'runs the upgrade pipeline and retains metadata (install fails: %s)',
   async (failInstall) => {
     const root = resolve(import.meta.dirname, '../../..');
-    const { root: tempDir, metaDir, corePath, pluginPath } = createSyncFixture();
+    const { root: tempDir, metaDir, corePath, pluginPath, parserPath } = createSyncFixture();
     onTestFinished(() => {
       vi.mocked(childProcess.execFileSync).mockReset();
       vi.restoreAllMocks();
@@ -89,9 +89,10 @@ test.each([false, true])(
         writeJson(pluginPath, {
           dependencies: { 'yuku-codegen': '^0.11.0', 'yuku-parser': '^0.11.0' },
         });
+        writeJson(parserPath, { version: '0.11.2' });
       }
       if (commands.length === 4) {
-        expect(readJson(corePath).dependencies['yuku-parser']).toBe('^0.11.0');
+        expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.11.2');
       }
       return Buffer.from('');
     });
@@ -121,7 +122,7 @@ test.each([false, true])(
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);
     expect(versions['oxlint-tsgolint'].new).toBe('7.0.2004');
     if (!failInstall) {
-      expect(versions['yuku-parser']).toEqual({ old: '^0.9.3', new: '^0.11.0' });
+      expect(versions['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.11.2' });
     }
     expect(readFileSync(join(metaDir, 'commit-message.txt'), 'utf8')).toContain(
       '- lint-staged: 16.2.6 -> 17.5.1',
@@ -146,6 +147,7 @@ function createSyncFixture() {
   onTestFinished(() => rmSync(root, { recursive: true, force: true }));
   const corePath = join(root, 'packages/core/package.json');
   const pluginPath = join(root, 'store/tsdown/node_modules/rolldown-plugin-dts/package.json');
+  const parserPath = join(dirname(pluginPath), 'node_modules/yuku-parser/package.json');
   const vitePath = join(root, 'vite/packages/vite/package.json');
   const metaDir = join(root, 'meta');
   const versionsPath = join(metaDir, 'versions.json');
@@ -161,6 +163,11 @@ function createSyncFixture() {
       'yuku-codegen': '^0.10.1',
       'yuku-parser': '~0.10.2',
     },
+  });
+  writeJson(parserPath, { version: '0.10.3' });
+  // Core's existing parser is not the version used by the bundled plugin.
+  writeJson(join(root, 'packages/core/node_modules/yuku-parser/package.json'), {
+    version: '0.9.3',
   });
   // A pnpm-style symlink ensures resolution starts at the real tsdown package.
   mkdirSync(join(root, 'packages/core/node_modules'), { recursive: true });
@@ -188,44 +195,68 @@ function createSyncFixture() {
         stdio: 'pipe',
       },
     );
-  return { root, corePath, pluginPath, vitePath, metaDir, versionsPath, run };
+  return { root, corePath, pluginPath, parserPath, vitePath, metaDir, versionsPath, run };
 }
 
-test('syncs external ranges from bundled consumers and preserves upgrade metadata', () => {
+test('pins the bundled parser, syncs Vite ranges, and preserves upgrade metadata', () => {
   const fixture = createSyncFixture();
   const { corePath, versionsPath, metaDir, run } = fixture;
   run();
   expect(readJson(corePath)).toEqual({
-    dependencies: { 'yuku-parser': '~0.10.2', postcss: '^8.5.28' },
+    dependencies: { 'yuku-parser': '0.10.3', postcss: '^8.5.28' },
     optionalDependencies: { fsevents: '~2.4.0' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
   });
   expect(readJson(versionsPath)).toEqual({
     oxlint: { old: '1.86.0', new: '1.87.0' },
-    'yuku-parser': { old: '^0.9.3', new: '~0.10.2' },
+    'yuku-parser': { old: '^0.9.3', new: '0.10.3' },
     postcss: { old: '^8.5.6', new: '^8.5.28' },
     fsevents: { old: '~2.3.3', new: '~2.4.0' },
   });
   expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(
-    '| `yuku-parser` | `^0.9.3` | `~0.10.2` |',
+    '| `yuku-parser` | `^0.9.3` | `0.10.3` |',
   );
 
   // A second pass after lockfile deduplication must retain the original ranges.
   writeJson(fixture.pluginPath, {
     dependencies: { 'yuku-codegen': '^0.11.0', 'yuku-parser': '^0.11.0' },
   });
+  writeJson(fixture.parserPath, { version: '0.11.2' });
   run();
   expect(readJson(corePath).dependencies).not.toHaveProperty('yuku-ast');
   expect(readJson(corePath).dependencies).not.toHaveProperty('yuku-codegen');
-  expect(readJson(corePath).dependencies['yuku-parser']).toBe('^0.11.0');
-  expect(readJson(versionsPath)['yuku-parser']).toEqual({ old: '^0.9.3', new: '^0.11.0' });
+  expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.11.2');
+  expect(readJson(versionsPath)['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.11.2' });
   expect(readFileSync(join(metaDir, 'commit-message.txt'), 'utf8')).toContain(
-    '- yuku-parser: ^0.9.3 -> ^0.11.0',
+    '- yuku-parser: ^0.9.3 -> 0.11.2',
   );
   const before = readFileSync(corePath, 'utf8');
   run();
   expect(readFileSync(corePath, 'utf8')).toBe(before);
 });
+
+test('updates the parser pin when its installed version changes within the same range', () => {
+  const { corePath, parserPath, versionsPath, run } = createSyncFixture();
+  run();
+  writeJson(parserPath, { version: '0.10.4' });
+  run();
+  expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.10.4');
+  expect(readJson(versionsPath)['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.10.4' });
+});
+
+test.each([undefined, '', ' '])(
+  'fails without writing core for an invalid parser version: %s',
+  (version) => {
+    const { corePath, parserPath, versionsPath, run } = createSyncFixture();
+    writeJson(parserPath, { version });
+    const before = readFileSync(corePath, 'utf8');
+    expect(run).toThrow('Missing version');
+    expect(readFileSync(corePath, 'utf8')).toBe(before);
+    expect(readJson(versionsPath)).toEqual({
+      oxlint: { old: '1.86.0', new: '1.87.0' },
+    });
+  },
+);
 
 test.each([
   { source: 'pluginPath', field: 'dependencies', name: 'yuku-parser' },

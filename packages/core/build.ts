@@ -416,7 +416,8 @@ async function bundleTsdown() {
   //
   // `yuku-parser` (used by `rolldown-plugin-dts`) loads native bindings through
   // `yuku-core`. Keep it external and declare it as a core dependency so the
-  // native loader resolves its platform package at runtime. `yuku-ast` and
+  // native loader resolves its platform package at runtime. Pin its version
+  // to the one resolved by the bundled plugin. `yuku-ast` and
   // `yuku-codegen` are pure JavaScript in Yuku 0.19 and are bundled into core.
   const tsdownExternal = [
     ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
