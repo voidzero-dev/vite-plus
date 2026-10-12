@@ -1,5 +1,8 @@
 # Run locally on Windows with ./.github/scripts/test-install-bootstrap.ps1; no registry or installed vp needed.
+param([switch]$StrictMode)
+
 $ErrorActionPreference = 'Stop'
+if ($StrictMode) { Set-StrictMode -Version Latest }
 $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../packages/cli/install.ps1') -Raw
 . ([scriptblock]::Create(($source -replace '(?m)^    Main\r?$', '')))
 function Assert($Condition, [string]$Message) {
@@ -102,9 +105,20 @@ function Invoke-RestMethod {
     param($Uri, $Headers)
     $script:Requests.Add("GET $Uri")
     if ($Uri -eq 'https://custom.example/vite-plus/latest') {
-        return @{ version = '0.2.9' }
+        # Real registry responses are PSCustomObjects, whose missing properties
+        # throw under StrictMode (unlike missing hashtable keys).
+        switch ($scenario) {
+            'metadata-error' { return '{"error":"fixture registry error"}' | ConvertFrom-Json }
+            'metadata-missing-version' { return '{}' | ConvertFrom-Json }
+            'metadata-network-error' { throw 'Fixture metadata request failed without ErrorDetails' }
+        }
+        return '{"version":"0.2.9"}' | ConvertFrom-Json
     }
     if ([System.Uri]::UnescapeDataString($Uri) -like 'https://*/@voidzero-dev/vite-plus-cli-*/*') {
+        switch ($scenario) {
+            'platform-error' { return '{"error":"fixture platform error"}' | ConvertFrom-Json }
+            'platform-network-error' { throw 'Fixture platform request failed without ErrorDetails' }
+        }
         # Release payloads must pass the real provenance gate before handoff.
         $dist = @{
             tarball = 'https://custom.example/platform.tgz'
@@ -114,6 +128,13 @@ function Invoke-RestMethod {
             }
         }
         switch -Wildcard ($scenario) {
+            'provenance-missing' { $dist.Remove('attestations') }
+            'provenance-malformed' { $dist.attestations = @{ provenance = 'not-an-object' } }
+            'provenance-dotted-key' {
+                $dist.Remove('attestations')
+                $dist['attestations.provenance.predicateType'] = 'https://slsa.dev/provenance/v1'
+            }
+            'tarball-missing' { $dist.Remove('tarball') }
             'integrity-missing*' { $dist.Remove('integrity') }
             'integrity-malformed' { $dist.integrity = 'sha512-invalid' }
             'integrity-unsupported' { $dist.integrity = $fixtureIntegrity.Replace('sha512-', 'sha256-') }
@@ -125,7 +146,7 @@ function Invoke-RestMethod {
             }
         }
         if ($scenario -like '*pr') { $dist.Remove('attestations') }
-        return @{ dist = $dist }
+        return @{ dist = $dist } | ConvertTo-Json -Depth 10 -Compress | ConvertFrom-Json
     }
     throw "Unexpected metadata request: $Uri"
 }
@@ -158,6 +179,8 @@ function Invoke-InstallHandoff {
 try {
     foreach ($scenario in @(
         'supported', 'legacy', 'legacy-remote', 'legacy-failure', 'failure', 'pr', 'supported-pr',
+        'metadata-error', 'metadata-missing-version', 'metadata-network-error', 'platform-error', 'platform-network-error',
+        'provenance-missing', 'provenance-malformed', 'provenance-dotted-key', 'tarball-missing',
         'integrity-missing', 'integrity-malformed', 'integrity-unsupported', 'integrity-noncanonical',
         'integrity-wrong-type', 'integrity-dotted-key', 'integrity-mismatch', 'integrity-missing-pr', 'integrity-mismatch-pr'
     )) {
@@ -172,7 +195,8 @@ try {
         Remove-Item -LiteralPath "$testRoot/legacy", "$testRoot/binary-invoked", "$testRoot/binary-probed" -ErrorAction SilentlyContinue
         $env:VP_SELF_SETUP_SUPPORT_CHECK = if ($scenario -eq 'supported') { 'original' } else { $null }
         $isIntegrityFailure = $scenario -like 'integrity-*'
-        $expectedExit = if ($isIntegrityFailure) {
+        $isMetadataFailure = $scenario -match '^(metadata-|platform-|provenance-|tarball-missing$)'
+        $expectedExit = if ($isIntegrityFailure -or $isMetadataFailure) {
             1
         } elseif ($scenario -in @('failure', 'legacy-failure')) {
             42
@@ -199,7 +223,7 @@ try {
         }
         Assert ($script:ExitCode -eq $expectedExit) 'Binary exit code was lost'
         Assert (@(Get-ChildItem -LiteralPath "$testRoot/tmp" -Force).Count -eq 0) 'Temporary payload was not cleaned up'
-        if ($isIntegrityFailure) {
+        if ($isIntegrityFailure -or $isMetadataFailure) {
             $tarballRequested = @($script:Requests | Where-Object { $_.Contains('platform.tgz') }).Count -gt 0
             Assert ($tarballRequested -eq ($scenario -like 'integrity-mismatch*')) 'Incorrect tarball request before integrity validation'
             Assert (-not $script:ExtractionStarted) 'Unverified archive reached extraction'
@@ -225,6 +249,13 @@ try {
             Assert ($script:Requests.Count -eq 3) 'Preview was resolved or downloaded more than once'
         }
         Write-Host "PASS: $scenario"
+    }
+    if ($StrictMode) {
+        $strictModePreserved = $false
+        try { $null = ([pscustomobject]@{}).missing } catch {
+            $strictModePreserved = $_.FullyQualifiedErrorId -eq 'PropertyNotFoundStrict'
+        }
+        Assert $strictModePreserved 'Installer disabled the caller strict mode'
     }
 } finally {
     $env:VP_SELF_SETUP_SUPPORT_CHECK = $originalCheck
