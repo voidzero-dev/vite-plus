@@ -113,7 +113,7 @@
     "@oxc-project/runtime": "catalog:",
     "@oxc-project/types": "catalog:",
     "lightningcss": "catalog:",
-    "postcss": "^8.5.28",
+    "postcss": "^8.5.29",
     "yuku-codegen": "^0.10.1",
     "yuku-parser": "^0.10.1"
   },
@@ -240,7 +240,7 @@
     "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
   },
   "bundledVersions": {
-    "vite": "8.3.3",
+    "vite": "8.3.4",
     "rolldown": "1.2.13",
     "tsdown": "0.23.0"
   }

@@ -74,6 +74,8 @@ vp config --no-agent
 
 Use `--no-hooks` when you want `vp config` to leave the Git hook dispatcher unchanged. Use `--no-agent` when you want it to skip updates to existing coding agent instruction files. You can pass both flags when you want `vp config` to skip both setup steps. After `vp hooks disable`, `vp config` skips reinstalling the dispatcher and points you at `vp hooks enable` instead of prompting again.
 
+If `core.hooksPath` points to another hook directory, `vp config` skips dispatcher installation to preserve the existing setup. Run `vp hooks status` to inspect the current configuration.
+
 You can also set `VP_GIT_HOOKS=0` to disable hook installation from lifecycle scripts such as `prepare` or `postinstall`.
 
 Project-owned hook scripts such as `.vite-hooks/pre-commit` should be committed to the repository. The generated dispatcher and shims under `.vite-hooks/_` are ignored and recreated by `vp config` or `vp hooks enable`. Neither command creates or modifies project hook scripts or staged-file configuration.
