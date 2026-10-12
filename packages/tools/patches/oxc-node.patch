@@ -17,7 +17,7 @@ index 5aa1fa6..cc72cb2 100644
  [features]
  # Leave the global allocator to the host. Enable this when linking oxc-node into
 diff --git a/src/lib.rs b/src/lib.rs
-index 843ea39..0f385ec 100644
+index 64150ff..690248b 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -285,7 +285,7 @@ static TSCONFIG_OVERRIDE: Mutex<TsconfigOverride> =
@@ -214,7 +214,7 @@ index 843ea39..0f385ec 100644
          return Ok(None);
      }
      // A `?query` or `#fragment` suffix belongs to the module URL, not to the file on disk.
-@@ -1640,7 +1647,12 @@ fn transform_output(
+@@ -1683,7 +1690,12 @@ fn transform_output(
              // dependencies too — `OXC_TRANSFORM_ALL` decides whether their *source* is
              // transpiled, and skipping this would hand Node.js raw JSON to run as an ES
              // module.
@@ -228,7 +228,7 @@ index 843ea39..0f385ec 100644
                  tracing::debug!("Skip transforming node_modules {}", url);
                  return Ok(output);
              }
-@@ -1754,6 +1766,11 @@ impl TryAsStr for Either4<String, Uint8Array, Buffer, Null> {
+@@ -1801,6 +1813,11 @@ impl TryAsStr for Either4<String, Uint8Array, Buffer, Null> {
      }
  }
  

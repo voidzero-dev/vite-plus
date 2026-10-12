@@ -85,10 +85,11 @@ const load: LoadHookSync = (url, context, nextLoad) => {
   const result = oxcNode.load(url, context as never, nextLoad as never) as LoadFnOutput & {
     responseURL?: string;
   };
-  // Leave CommonJS to the CommonJS loader, which compiles it through `pirates` with
-  // an accurate source map. A null source keeps `require()` inside such a module
-  // working on every runtime (nodejs/node#62920).
-  if (result.format === 'commonjs') {
+  // oxc-node returns no source for a CommonJS file it leaves to the CommonJS loader,
+  // which compiles it through `pirates` with an accurate source map; source that
+  // another hook supplied is transformed and kept. A null source keeps `require()`
+  // inside such a module working on every runtime (nodejs/node#62920).
+  if (result.format === 'commonjs' && result.source == null) {
     // `@types/node` does not model the null source Node.js accepts for CommonJS.
     return {
       format: 'commonjs',
