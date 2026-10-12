@@ -74,7 +74,7 @@ A missing path, or a missing name with a TypeScript extension, is an error: `vpx
 - tsconfig `paths` for `import`, `.js` imports that point at `.ts` files, and extensionless imports
 - ESM and CommonJS, including `require()` of `.ts` files; a `.cts` file is CommonJS, so it uses `import x = require('...')` and `export =`, and `import`/`export` declarations there fail with an error that suggests renaming the file to `.mts`
 - TypeScript published in `node_modules`
-- tsconfig `jsx`, `jsxImportSource`, `jsxFactory`, `jsxFragmentFactory`, `useDefineForClassFields`, and `verbatimModuleSyntax`; see [tsconfig](#tsconfig) for the defaults without one
+- tsconfig `jsx`, `jsxImportSource`, `jsxFactory`, `jsxFragmentFactory`, `useDefineForClassFields`, and `verbatimModuleSyntax`; see [JSX](#jsx) and [tsconfig](#tsconfig) for the defaults
 
 `vpx` does not type-check. Run [`vp check`](/guide/check) for that.
 
@@ -99,7 +99,7 @@ The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "v
 
 ### tsconfig
 
-`vpx` reads compiler options from a tsconfig but does not type-check with it. Each file uses the nearest `tsconfig.json` above it that includes it through `files`, `include`, `exclude`, or project `references`, as `tsc` does, and `extends` is followed. Files in `node_modules` use no tsconfig.
+`vpx` reads compiler options from a tsconfig but does not type-check with it. Each file uses the nearest `tsconfig.json` above it that includes it through `files`, `include`, `exclude`, or project `references`, as `tsc` does, and `extends` is followed. Files in `node_modules` use no tsconfig. tsx, by contrast, applies one tsconfig, found from the working directory upward, to every file it includes, so `vpx` compiles a file the same way wherever it runs from.
 
 `--tsconfig <path>` applies one config to every file instead, including files that config does not include. Without `--tsconfig`, an `OXC_TSCONFIG_PATH` or `TS_NODE_PROJECT` environment variable does the same.
 
@@ -112,11 +112,43 @@ A file that no tsconfig applies to runs as if its `compilerOptions` were empty:
 | `useDefineForClassFields`         | `true`: class fields have `[[Define]]` semantics and run natively, as with a `target` of `ES2022` or later. A lower `target` switches to `[[Set]]` semantics, as in `tsc`.                                                                                                                                                                               |
 | `experimentalDecorators`          | `false`: a decorator fails with an error that asks for this option.                                                                                                                                                                                                                                                                                      |
 | `emitDecoratorMetadata`           | `false`.                                                                                                                                                                                                                                                                                                                                                 |
-| `jsx`, `jsxImportSource`          | The automatic runtime, importing `react/jsx-runtime`.                                                                                                                                                                                                                                                                                                    |
+| `jsx`, `jsxImportSource`          | The automatic runtime, importing `react/jsx-runtime` (see [JSX](#jsx)).                                                                                                                                                                                                                                                                                  |
 | `verbatimModuleSyntax`            | `false`: imports whose bindings are unused at runtime are removed, with their side effects.                                                                                                                                                                                                                                                              |
 | `rewriteRelativeImportExtensions` | `false`. `./file.ts` imports work either way.                                                                                                                                                                                                                                                                                                            |
 
 Types are removed, and enums, namespaces, and parameter properties are compiled, whatever the tsconfig says. `strict`, `lib`, and other type-checking options have no effect, and `target` only changes the class field default.
+
+### JSX
+
+`.jsx` and `.tsx` files compile to calls into a JSX runtime, React's by default. Install the runtime they use, `react` or the package named by `jsxImportSource`; Vite+ does not ship one. tsconfig options select the runtime:
+
+| tsconfig `jsx`                 | Output                                                                                                                             |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| not set, or `"react-jsx"`      | The automatic runtime: `jsx()` and `jsxs()` from `<jsxImportSource>/jsx-runtime`, with `jsxImportSource` defaulting to `react`     |
+| `"react-jsxdev"`               | The development runtime: `jsxDEV()` from `<jsxImportSource>/jsx-dev-runtime`, with the file name, line, and column of each element |
+| `"react"`                      | The classic runtime: `React.createElement()`, or `jsxFactory`, with fragments as `React.Fragment`, or `jsxFragmentFactory`         |
+| `"preserve"`, `"react-native"` | The automatic runtime, because Node.js cannot run JSX                                                                              |
+
+A classic factory that the file imports, such as `import { h, Fragment } from 'preact'`, is kept even though only JSX uses it.
+
+Pragma comments at the top of a file override the tsconfig for that file:
+
+```tsx
+/** @jsxImportSource preact */
+```
+
+```tsx
+/** @jsxRuntime classic */
+/** @jsx h */
+/** @jsxFrag Fragment */
+import { h, Fragment } from 'preact';
+```
+
+A `.jsx` file gets a tsconfig's JSX options only when that tsconfig sets `"allowJs": true`, as in `tsc` and tsx. Otherwise it uses the defaults above.
+
+::: tip Coming from tsx
+Without a tsconfig `jsx` option, tsx compiles JSX to `React.createElement()`, which needs `React` in scope, while `vpx` uses the automatic runtime. Set `"jsx": "react"` to keep the classic output.
+:::
 
 ## `vp exec`
 
