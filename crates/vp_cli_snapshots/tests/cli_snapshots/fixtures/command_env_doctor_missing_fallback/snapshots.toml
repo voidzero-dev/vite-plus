@@ -1,0 +1,6 @@
+[[case]]
+name = "command_env_doctor_missing_fallback"
+vp = "global"
+steps = [
+  { argv = ["node", "verify.mjs"], comment = "Doctor names the missing fallback directory even when the main shim directory is on PATH." },
+]
