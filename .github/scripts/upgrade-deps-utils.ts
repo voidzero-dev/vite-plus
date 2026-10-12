@@ -15,7 +15,7 @@ export function getBundledDependencyRanges(
   // These packages stay external in packages/core/build.ts. Mirror their
   // consumers' ranges rather than independently selecting the latest releases.
   const sources: { path: string; field: DependencyField; names: string[] }[] = [
-    { path: pluginPath, field: 'dependencies', names: ['yuku-codegen', 'yuku-parser'] },
+    { path: pluginPath, field: 'dependencies', names: ['yuku-parser'] },
     { path: vitePath, field: 'dependencies', names: ['postcss'] },
     { path: vitePath, field: 'optionalDependencies', names: ['fsevents'] },
   ];

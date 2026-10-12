@@ -414,18 +414,14 @@ async function bundleTsdown() {
   // in and they cannot be bundled. Both are core `dependencies`, so they resolve
   // at runtime and CSS bundling works without users installing anything.
   //
-  // `yuku-codegen` and `yuku-parser` (pulled in by `rolldown-plugin-dts` for dts
-  // generation) are napi packages: their loaders `require` a per-platform
-  // `@yuku-*/binding-<platform>/*.node` relative to their own `__dirname`.
-  // Bundling their JS into a core chunk rebinds `__dirname` to `dist/tsdown/`,
-  // so the native binding no longer resolves. Keep them external and list them
-  // as core `dependencies` so each package's loader resolves its own binding
-  // (declared as optionalDependencies) at runtime.
+  // `yuku-parser` (used by `rolldown-plugin-dts`) loads native bindings through
+  // `yuku-core`. Keep it external and declare it as a core dependency so the
+  // native loader resolves its platform package at runtime. `yuku-ast` and
+  // `yuku-codegen` are pure JavaScript in Yuku 0.19 and are bundled into core.
   const tsdownExternal = [
     ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
     'lightningcss',
     'postcss',
-    'yuku-codegen',
     'yuku-parser',
   ];
   const isExternal = (id: string) => tsdownExternal.some((e) => id === e || id.startsWith(`${e}/`));

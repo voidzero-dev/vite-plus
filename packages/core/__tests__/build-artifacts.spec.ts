@@ -3,7 +3,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import url from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { init, parse } from 'es-module-lexer';
+import { describe, expect, it } from 'vite-plus/test';
 
 const coreDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(coreDir, 'dist');
@@ -25,6 +26,21 @@ describe('build artifacts', () => {
     const content = fs.readFileSync(clientPath, 'utf8');
     expect(content).toContain('ImportMeta');
     expect(content).toContain('glob');
+  });
+
+  it('bundles JavaScript Yuku packages and keeps the native parser external', async () => {
+    await init;
+    const tsdownDir = path.join(distDir, 'tsdown');
+    const imports = fs.readdirSync(tsdownDir).flatMap((file) => {
+      if (!file.endsWith('.js')) {
+        return [];
+      }
+      const [imports] = parse(fs.readFileSync(path.join(tsdownDir, file), 'utf8'));
+      return imports.map((entry) => entry.n);
+    });
+    expect(imports).toContain('yuku-parser');
+    expect(imports).not.toContain('yuku-ast');
+    expect(imports).not.toContain('yuku-codegen');
   });
 
   // The bundled dts plugin resolves `vue-tsc`, `@volar/typescript`,

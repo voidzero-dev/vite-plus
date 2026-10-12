@@ -668,9 +668,6 @@ importers:
       yaml:
         specifier: ^2.4.2
         version: 2.9.1
-      yuku-codegen:
-        specifier: ^0.19.0
-        version: 0.19.0
       yuku-parser:
         specifier: ^0.19.0
         version: 0.19.0

@@ -114,7 +114,6 @@
     "@oxc-project/types": "catalog:",
     "lightningcss": "catalog:",
     "postcss": "^8.5.29",
-    "yuku-codegen": "^0.19.0",
     "yuku-parser": "^0.19.0"
   },
   "devDependencies": {

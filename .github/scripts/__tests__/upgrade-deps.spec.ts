@@ -150,13 +150,17 @@ function createSyncFixture() {
   const metaDir = join(root, 'meta');
   const versionsPath = join(metaDir, 'versions.json');
   writeJson(corePath, {
-    dependencies: { 'yuku-codegen': '^0.9.3', 'yuku-parser': '^0.9.3', postcss: '^8.5.6' },
+    dependencies: { 'yuku-parser': '^0.9.3', postcss: '^8.5.6' },
     optionalDependencies: { fsevents: '~2.3.3' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
   });
   writeJson(join(root, 'store/tsdown/package.json'), { name: 'tsdown', version: '0.23.0' });
   writeJson(pluginPath, {
-    dependencies: { 'yuku-codegen': '^0.10.1', 'yuku-parser': '~0.10.2' },
+    dependencies: {
+      'yuku-ast': '^0.10.1',
+      'yuku-codegen': '^0.10.1',
+      'yuku-parser': '~0.10.2',
+    },
   });
   // A pnpm-style symlink ensures resolution starts at the real tsdown package.
   mkdirSync(join(root, 'packages/core/node_modules'), { recursive: true });
@@ -192,13 +196,12 @@ test('syncs external ranges from bundled consumers and preserves upgrade metadat
   const { corePath, versionsPath, metaDir, run } = fixture;
   run();
   expect(readJson(corePath)).toEqual({
-    dependencies: { 'yuku-codegen': '^0.10.1', 'yuku-parser': '~0.10.2', postcss: '^8.5.28' },
+    dependencies: { 'yuku-parser': '~0.10.2', postcss: '^8.5.28' },
     optionalDependencies: { fsevents: '~2.4.0' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
   });
   expect(readJson(versionsPath)).toEqual({
     oxlint: { old: '1.86.0', new: '1.87.0' },
-    'yuku-codegen': { old: '^0.9.3', new: '^0.10.1' },
     'yuku-parser': { old: '^0.9.3', new: '~0.10.2' },
     postcss: { old: '^8.5.6', new: '^8.5.28' },
     fsevents: { old: '~2.3.3', new: '~2.4.0' },
@@ -212,10 +215,12 @@ test('syncs external ranges from bundled consumers and preserves upgrade metadat
     dependencies: { 'yuku-codegen': '^0.11.0', 'yuku-parser': '^0.11.0' },
   });
   run();
-  expect(readJson(corePath).dependencies['yuku-codegen']).toBe('^0.11.0');
-  expect(readJson(versionsPath)['yuku-codegen']).toEqual({ old: '^0.9.3', new: '^0.11.0' });
+  expect(readJson(corePath).dependencies).not.toHaveProperty('yuku-ast');
+  expect(readJson(corePath).dependencies).not.toHaveProperty('yuku-codegen');
+  expect(readJson(corePath).dependencies['yuku-parser']).toBe('^0.11.0');
+  expect(readJson(versionsPath)['yuku-parser']).toEqual({ old: '^0.9.3', new: '^0.11.0' });
   expect(readFileSync(join(metaDir, 'commit-message.txt'), 'utf8')).toContain(
-    '- yuku-codegen: ^0.9.3 -> ^0.11.0',
+    '- yuku-parser: ^0.9.3 -> ^0.11.0',
   );
   const before = readFileSync(corePath, 'utf8');
   run();
