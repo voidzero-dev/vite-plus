@@ -32,8 +32,8 @@ catalog:
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
-  '@tsdown/css': ^0.23.0
-  '@tsdown/exe': ^0.23.0
+  '@tsdown/css': ^0.23.1
+  '@tsdown/exe': ^0.23.1
   '@types/babel__core': 7.20.5
   '@types/babel__traverse': ^7.28.0
   '@types/connect': ^3.4.38
@@ -104,7 +104,7 @@ catalog:
   oxc-transform: =0.153.0
   oxfmt: =0.72.0
   oxlint: =1.87.0
-  oxlint-tsgolint: =7.0.2003
+  oxlint-tsgolint: =7.0.2004
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -124,7 +124,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.23.0
+  tsdown: ^0.23.1
   tsx: ^4.22.0
   typescript: ^6.0.0
   unified: ^11.0.5
