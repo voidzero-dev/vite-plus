@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { defineConfig } from 'vite-plus';
 import { createVitest } from 'vite-plus/test/node';
@@ -13,8 +15,15 @@ const dimensions = (file) => {
   return [buffer.readUInt32BE(16), buffer.readUInt32BE(20)];
 };
 for (const phase of ['record', 'compare', 'failure']) {
+  // Vitest replaces port 0 with its default, so select an available port first.
+  const portProbe = createServer().listen(0, 'localhost');
+  await once(portProbe, 'listening');
+  const apiPort = portProbe.address().port;
+  portProbe.close();
+  await once(portProbe, 'close');
+
   const runner = await createVitest({
-    config: false, watch: false, api: { port: 0 }, reporters: [], update: phase === 'record',
+    config: false, watch: false, api: { port: apiPort }, reporters: [], update: phase === 'record',
   }, defineConfig({ test: {
     include: [phase === 'failure' ? 'failure.test.js' : 'browser.test.js'],
     browser: {

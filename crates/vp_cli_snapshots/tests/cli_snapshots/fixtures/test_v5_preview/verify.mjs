@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
 import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
 import { defineConfig } from 'vite-plus';
 import { createVitest } from 'vite-plus/test/node';
 import { preview } from 'vite-plus/test/browser-preview';
+
+// Vitest replaces port 0 with its default, so select an available port first.
+const portProbe = createServer().listen(0, 'localhost');
+await once(portProbe, 'listening');
+const apiPort = portProbe.address().port;
+portProbe.close();
+await once(portProbe, 'close');
 
 // Automate Preview's normal manually opened page, without replacing its
 // locator implementation or opening the developer's default browser.
@@ -26,7 +35,7 @@ provider.providerFactory = (project) => {
 };
 let runner;
 try {
-  runner = await createVitest({ config: false, watch: false, api: { port: 0 }, reporters: [] }, defineConfig({
+  runner = await createVitest({ config: false, watch: false, api: { port: apiPort }, reporters: [] }, defineConfig({
     ...(browserDefines ? { define: { __VP_STRING_DEFINE__: JSON.stringify('/messages'), __VP_BOOL_DEFINE__: 'false' } } : {}),
     test: {
       include: [browserDefines ? 'defines.test.js' : realTimers ? 'upstream.test.js' : 'browser.test.js'],
