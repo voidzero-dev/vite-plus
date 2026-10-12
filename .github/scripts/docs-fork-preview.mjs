@@ -181,7 +181,7 @@ export async function isCurrentPreview({ github, context }, number) {
 }
 
 function uploadedPreviewUrl(output, expectedAliasUrl) {
-  // WRANGLER_OUTPUT_FILE_PATH contains JSONL, not console output. Require one
+  // cf writes JSONL to WRANGLER_OUTPUT_FILE_PATH, not console output. Require one
   // upload from this job, its version URL, and the alias used by its installers.
   const uploads = output
     .split('\n')
@@ -189,7 +189,7 @@ function uploadedPreviewUrl(output, expectedAliasUrl) {
     .map((line) => JSON.parse(line))
     .filter((entry) => entry?.type === 'version-upload');
   if (uploads.length !== 1) {
-    throw new Error('Expected one version-upload record from Wrangler');
+    throw new Error('Expected one version-upload record from cf');
   }
   const [upload] = uploads;
   if (
@@ -201,7 +201,7 @@ function uploadedPreviewUrl(output, expectedAliasUrl) {
     upload.preview_alias_url !== expectedAliasUrl
   ) {
     throw new Error(
-      'Invalid preview URLs from Wrangler; check that Preview URLs and the PR alias are configured',
+      'Invalid preview URLs from cf; check that Preview URLs and the PR alias are configured',
     );
   }
   return upload.preview_alias_url;
