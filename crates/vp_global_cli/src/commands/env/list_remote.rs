@@ -6,7 +6,7 @@ use console::style;
 use futures::future::try_join_all;
 use serde::Serialize;
 use vp_js_runtime::{LtsInfo, NodeProvider, NodeVersionEntry};
-use vp_pm_cli::{fetch_package_manager_versions, resolve_package_manager_version};
+use vp_pm_cli::{fetch_package_manager_versions_for_cwd, resolve_package_manager_version_for_cwd};
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -78,11 +78,15 @@ pub async fn execute(
             Ok(None)
         }
     };
+    let cwd_ref = &cwd;
     let package_manager_future =
         try_join_all(package_manager_types.iter().copied().map(|kind| async move {
-            fetch_package_manager_versions(kind).await.map(|versions| (kind, versions)).map_err(
-                |error| Error::Other(format!("failed to fetch {kind} versions: {error}").into()),
-            )
+            fetch_package_manager_versions_for_cwd(cwd_ref, kind)
+                .await
+                .map(|versions| (kind, versions))
+                .map_err(|error| {
+                    Error::Other(format!("failed to fetch {kind} versions: {error}").into())
+                })
         }));
     let (node_versions, package_manager_versions) =
         futures::join!(node_future, package_manager_future);
@@ -118,7 +122,7 @@ pub async fn execute(
             else {
                 continue;
             };
-            let version = resolve_package_manager_version(kind, &selector).await?;
+            let version = resolve_package_manager_version_for_cwd(&cwd, kind, &selector).await?;
             default_package_manager_versions.insert(kind.to_string(), version.to_string());
         }
     }
