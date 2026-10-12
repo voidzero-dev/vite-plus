@@ -100,7 +100,7 @@ jobs:
             Your goal: after the daily upstream-dependency upgrade, bring the project back
             to a fully green state. The upgrade script has attempted to select the latest
             supported versions, install dependencies, merge the rolldown and vite catalogs,
-            deduplicate dependencies, and synchronize core's external dependency ranges.
+            deduplicate dependencies, and synchronize core's external dependencies.
             The `build-upstream` action
             has attempted a build — your job is to diagnose and fix every error that
             surfaced, then prove the fix is complete by running a final validation pass.
@@ -120,8 +120,10 @@ jobs:
               upgrade script. Use the latest version that its compatibility policy allows.
             - After changing tsdown or rolldown-plugin-dts, run
               `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
-              `pnpm install --no-frozen-lockfile`. Core's external Yuku dependencies
-              must follow the plugin resolved through tsdown. The sync command also
+              `pnpm install --no-frozen-lockfile`. Core's external `yuku-parser` must
+              use the exact installed version resolved by the plugin bundled through
+              tsdown, so it stays aligned with the bundled Yuku code. Do not replace
+              this pin with a version range. The sync command also
               copies Vite's postcss and optional fsevents ranges into core and
               updates the upgrade metadata. `@oxlint/plugins` shares Oxlint's release
               version and must use the exact same version selected by the upgrade script.
