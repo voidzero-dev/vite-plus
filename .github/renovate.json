@@ -56,7 +56,6 @@
         "vite",
         "vitest",
         "vitest-dev",
-        "yuku-codegen",
         "yuku-parser"
       ],
       "enabled": false

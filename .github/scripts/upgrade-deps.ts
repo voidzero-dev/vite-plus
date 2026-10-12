@@ -581,7 +581,7 @@ async function upgradeDependencies(): Promise<void> {
     execFileSync('pnpm', args, { cwd: ROOT, stdio: 'inherit' });
   }
   // sync-remote installs the merged workspace. Dedupe can select a newer dts
-  // plugin, so mirror its external ranges only after both operations finish.
+  // plugin, so sync its external dependencies only after both operations finish.
   syncBundledDependencies();
   execFileSync('pnpm', ['install', '--no-frozen-lockfile'], { cwd: ROOT, stdio: 'inherit' });
 
