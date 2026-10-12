@@ -50,7 +50,16 @@ test.each([false, true])(
     vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('UPGRADE_DEPS_META_DIR', metaDir);
+    // Each run also covers one side of the oxc-node pin guard: a release that does not
+    // contain the pinned commit leaves the pin alone.
+    const pinnedOxcNode = JSON.parse(
+      readFileSync(join(tempDir, 'packages/tools/.upstream-versions.json'), 'utf8'),
+    )['oxc-node'].hash;
     vi.stubGlobal('fetch', async (url: string) => {
+      if (url.startsWith('https://api.github.com/repos/oxc-project/oxc-node/compare/')) {
+        expect(url).toContain(`/compare/${pinnedOxcNode}...`);
+        return Response.json({ status: failInstall ? 'diverged' : 'ahead' });
+      }
       if (url.startsWith('https://api.github.com/repos/')) {
         return Response.json([{ name: 'v1.2.3', commit: { sha: 'a'.repeat(40) } }]);
       }
@@ -121,6 +130,11 @@ test.each([false, true])(
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);
     expect(versions['oxlint-tsgolint'].new).toBe('7.0.2004');
+    expect(versions['oxc-node']).toEqual(
+      failInstall
+        ? { old: pinnedOxcNode, new: pinnedOxcNode }
+        : { old: pinnedOxcNode, new: 'a'.repeat(40), tag: 'v1.2.3' },
+    );
     if (!failInstall) {
       expect(versions['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.11.2' });
     }
