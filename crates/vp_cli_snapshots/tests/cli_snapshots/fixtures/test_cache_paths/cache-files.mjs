@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { appendFileSync, existsSync, readdirSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
 const [operation, ...directories] = process.argv.slice(2);
-assert.ok(['check', 'mutate', 'absent'].includes(operation));
+assert.ok(['check', 'mutate', 'clear', 'absent'].includes(operation));
 assert.ok(directories.length > 0);
 
 function cacheFiles(directory) {
@@ -27,6 +27,10 @@ for (const directory of directories) {
   if (operation === 'mutate') {
     for (const file of files) appendFileSync(file, '\n');
     console.log(`Modified cache files in ${directory}`);
+  } else if (operation === 'clear') {
+    // Keep directory entries that Windows can track outside the ignored roots.
+    for (const file of files) unlinkSync(file);
+    console.log(`Removed cache files in ${directory}`);
   } else {
     console.log(`Cache files exist in ${directory}`);
   }

@@ -73,12 +73,16 @@ $ vp test run ◉ cache hit, replaying
 vp run: cache hit, <duration> saved.
 ```
 
-## `vpt rm -rf node_modules/.vite/vitest node_modules/.vitest-cache`
+## `node cache-files.mjs clear node_modules/.vite/vitest node_modules/.vitest-cache`
 
+```
+Removed cache files in node_modules/.vite/vitest
+Removed cache files in node_modules/.vitest-cache
+```
 
 ## `vp run test`
 
-Deleting Vitest's caches must still hit the task cache.
+Removing cache files while preserving their directories must still hit the task cache.
 
 ```
 $ vp test run ◉ cache hit, replaying

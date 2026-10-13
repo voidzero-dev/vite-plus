@@ -774,40 +774,58 @@ interface VitestCachePathContext {
  * tool-managed paths are neither inputs nor outputs, mirroring what Vite
  * does for `.vite-temp` and the optimizer cache dir.
  *
- * The `configureVitest` hook fires once PER PROJECT after `vitest.projects`
- * is attached, but the cache paths are instance-global — register them once
- * per shared instance, keyed weakly on identity like the coverage guard.
- * Both calls are no-ops outside `vp run`.
+ * Runtime project injection appends to `vitest.projects` without calling
+ * `configureVitest` again. Observe those attachments as well as the initial
+ * list. Both ignore calls are no-ops outside `vp run`.
  */
 function vitePlusVitestCachePathsPlugin(): PluginOption {
-  const handledVitestInstances = new WeakSet<object>();
+  const observedProjectLists = new WeakSet<object>();
   return {
     name: 'vite-plus:vitest-cache-paths',
     configureVitest(context: VitestCachePathContext) {
       const { vitest } = context;
-      if (handledVitestInstances.has(vitest)) {
+      const { projects } = vitest;
+      if (observedProjectLists.has(projects)) {
         return;
       }
-      handledVitestInstances.add(vitest);
+      observedProjectLists.add(projects);
+
+      const ignoredPaths = new Set<string>();
+      const ignoreCachePath = (path: string) => {
+        if (!path || ignoredPaths.has(path)) {
+          return;
+        }
+        ignoredPaths.add(path);
+        ignoreInput(path);
+        ignoreOutput(path);
+      };
 
       // Results and dependency-record caches live under the resolved Vite
       // cacheDir, which Vitest points at its own subdirectory.
-      ignoreInput(vitest.viteConfig.cacheDir);
-      ignoreOutput(vitest.viteConfig.cacheDir);
+      ignoreCachePath(vitest.viteConfig.cacheDir);
 
       // Mirror Vitest's fs module cache layout: the shared root cache plus
       // any per-project override.
       const rootCache =
-        vitest.config.fsModuleCachePath ??
+        vitest.config.fsModuleCachePath ||
         join(searchForWorkspaceRoot(vitest.viteConfig.root), 'node_modules', '.vitest-cache');
-      const fsCachePaths = new Set([rootCache]);
-      for (const project of vitest.projects) {
-        fsCachePaths.add(project.config.fsModuleCachePath ?? rootCache);
+      ignoreCachePath(rootCache);
+      for (const project of projects) {
+        ignoreCachePath(project.config.fsModuleCachePath || rootCache);
       }
-      for (const fsCachePath of fsCachePaths) {
-        ignoreInput(fsCachePath);
-        ignoreOutput(fsCachePath);
-      }
+
+      // Vitest's injectTestProjects resolves and attaches projects before
+      // pushing them here, even when an async `order: 'pre'` hook started
+      // injection before this hook. A restart replaces the array, so each
+      // new list gets its own observer and resolved root cache.
+      const push = projects.push;
+      projects.push = function (...addedProjects) {
+        const length = push.apply(this, addedProjects);
+        for (const project of addedProjects) {
+          ignoreCachePath(project.config.fsModuleCachePath || rootCache);
+        }
+        return length;
+      };
     },
   } as PluginOption;
 }

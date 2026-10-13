@@ -81,8 +81,13 @@ $ vp test run ◉ cache hit, replaying
 vp run: cache hit, <duration> saved.
 ```
 
-## `vpt rm -rf .test-cache`
+## `node cache-files.mjs clear .test-cache/results/vitest .test-cache/root .test-cache/project`
 
+```
+Removed cache files in .test-cache/results/vitest
+Removed cache files in .test-cache/root
+Removed cache files in .test-cache/project
+```
 
 ## `vp run test`
 

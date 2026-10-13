@@ -1,9 +1,11 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Plugin } from 'vite';
+import { normalizePath } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createVitest, type VitestPluginContext } from 'vitest/node';
 
 import {
   assertCoverageProviderVersionMatch,
@@ -481,16 +483,102 @@ describe('defineConfig vitest cache paths plugin', () => {
     expect(ignoredInputs).not.toContain('/ws/node_modules/.vitest-cache');
   });
 
-  it('registers each shared vitest instance only once', () => {
+  it.each(['', '/ws/custom-root-cache'])(
+    'uses truthy fallbacks for empty overrides (root: %s)',
+    (rootCache) => {
+      const plugin = getCachePathsPlugin();
+      plugin.configureVitest({
+        vitest: {
+          viteConfig: { cacheDir: '/ws/results', root: '/ws' },
+          config: { fsModuleCachePath: rootCache },
+          projects: [{ config: { fsModuleCachePath: '' } }],
+        },
+      });
+      const ignoredInputs = taskClientMocks.ignoreInput.mock.calls.map(([path]) => path);
+      expect(ignoredInputs).toEqual([
+        '/ws/results',
+        rootCache || join('/ws', 'node_modules/.vitest-cache'),
+      ]);
+      expect(taskClientMocks.ignoreOutput.mock.calls).toEqual(
+        taskClientMocks.ignoreInput.mock.calls,
+      );
+    },
+  );
+
+  it('deduplicates paths and observes a new project list after a restart', () => {
     const plugin = getCachePathsPlugin();
     const vitest = {
       viteConfig: { cacheDir: '/ws/node_modules/.vite/vitest/deadbeef', root: '/ws' },
       config: {},
-      projects: [],
+      projects: [] as Array<{ config: { fsModuleCachePath?: string } }>,
     };
     plugin.configureVitest({ vitest });
     plugin.configureVitest({ vitest });
     expect(taskClientMocks.ignoreInput).toHaveBeenCalledTimes(2);
+    vitest.projects = [];
+    plugin.configureVitest({ vitest });
+    vitest.projects.push({ config: { fsModuleCachePath: '/ws/restarted-cache' } });
+    expect(taskClientMocks.ignoreInput).toHaveBeenCalledWith('/ws/restarted-cache');
+    expect(taskClientMocks.ignoreOutput).toHaveBeenCalledWith('/ws/restarted-cache');
+  });
+
+  it('registers projects injected by async pre hooks and after initialization', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'vp-injected-cache-paths-')));
+    let injectAfterStartup!: () => Promise<void>;
+    const vitest = await createVitest(
+      { root, config: false, watch: false },
+      defineConfig({
+        test: { name: 'root' },
+        plugins: [
+          {
+            name: 'inject-cache-projects',
+            configureVitest: {
+              order: 'pre',
+              async handler({ injectTestProjects }: VitestPluginContext) {
+                await Promise.resolve();
+                await injectTestProjects({
+                  extends: false,
+                  test: { name: 'injected', fsModuleCachePath: '.injected-cache' },
+                });
+                injectAfterStartup = async () => {
+                  await injectTestProjects([
+                    { extends: false, test: { name: 'later', fsModuleCachePath: '.later-cache' } },
+                    { extends: false, test: { name: 'empty', fsModuleCachePath: '' } },
+                  ]);
+                };
+              },
+            },
+            // Vitest 5.0.4's type unwraps object hooks, but its runtime accepts them.
+          } as unknown as Plugin,
+        ],
+      }),
+    );
+    try {
+      expect(taskClientMocks.ignoreInput).toHaveBeenCalledWith(
+        normalizePath(join(root, '.injected-cache')),
+      );
+      expect(taskClientMocks.ignoreOutput).toHaveBeenCalledWith(
+        normalizePath(join(root, '.injected-cache')),
+      );
+      await injectAfterStartup();
+      expect(vitest.projects.map((project) => project.name)).toEqual([
+        'root',
+        'injected',
+        'later',
+        'empty',
+      ]);
+      expect(taskClientMocks.ignoreInput).toHaveBeenCalledWith(
+        normalizePath(join(root, '.later-cache')),
+      );
+      expect(taskClientMocks.ignoreOutput).toHaveBeenCalledWith(
+        normalizePath(join(root, '.later-cache')),
+      );
+      expect(taskClientMocks.ignoreInput).not.toHaveBeenCalledWith('');
+      expect(taskClientMocks.ignoreOutput).not.toHaveBeenCalledWith('');
+    } finally {
+      await vitest.close();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
