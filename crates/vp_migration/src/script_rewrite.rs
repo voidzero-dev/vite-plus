@@ -168,6 +168,23 @@ fn visit_command(
     match cmd {
         ast::Command::Simple(simple) => visitor(simple),
         ast::Command::Compound(compound, _redirects) => visit_compound_command(compound, visitor),
+        ast::Command::ExtendedTest(test, Some(redirects)) => {
+            // brush-parser 0.4 joins `]]` and its redirects without spaces.
+            // Use SimpleCommand's formatter for this parsed node so it inserts
+            // a separator before each redirect, without changing quoted text.
+            // This node is only serialized afterwards, not visited as a command.
+            *cmd = ast::Command::Simple(ast::SimpleCommand {
+                prefix: None,
+                word_or_name: Some(ast::Word { value: format!("[[ {test} ]]"), loc: None }),
+                suffix: Some(ast::CommandSuffix(
+                    std::mem::take(&mut redirects.0)
+                        .into_iter()
+                        .map(ast::CommandPrefixOrSuffixItem::IoRedirect)
+                        .collect(),
+                )),
+            });
+            false
+        }
         _ => false,
     }
 }
