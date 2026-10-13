@@ -912,7 +912,8 @@ const commandHelpDocs = {
           },
           {
             label: '--env-prefix <prefix>',
-            description: 'Prefix for env variables to inject into the bundle (default: TSDOWN_)',
+            description:
+              'Prefix for env variables to inject into the bundle (default: VITE_PACK_, TSDOWN_)',
           },
           { label: '--on-success <command>', description: 'Command to run on success' },
           { label: '--copy <dir>', description: 'Copy files to output dir' },
