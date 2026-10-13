@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { satisfies } from 'verkit';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -149,6 +150,13 @@ describe('script hooks', () => {
       readFileSync(path.join(import.meta.dirname, '../../package.json'), 'utf8'),
     );
     expect(SUPPORTED_NODE_RANGE).toBe(pkg.engines.node);
+    // The startup check is hand-written to keep a range parser out of the preload.
+    for (const major of [20, 21, 22, 23, 24, 25, 26, 27]) {
+      for (const minor of [0, 10, 11, 17, 18, 19, 22, 23]) {
+        const version = `${major}.${minor}.0`;
+        expect(isSupportedNodeVersion(version), version).toBe(satisfies(version, pkg.engines.node));
+      }
+    }
   });
 
   it('uses in-thread hooks where registerHooks() has the fixes the hooks need', () => {

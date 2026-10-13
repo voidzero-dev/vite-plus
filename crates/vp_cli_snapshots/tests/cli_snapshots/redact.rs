@@ -491,9 +491,8 @@ fn path_variants(path: &str, label: &'static str) -> Vec<(String, &'static str)>
             let url_path = url::Url::parse(&["file:///", forward.trim_start_matches('/')].concat())
                 .ok()
                 .map(|url| url.path().to_owned());
-            [Some(p.to_owned()), Some(p.cow_replace('\\', r"\\").into_owned()), Some(forward), url_path]
+            [p.to_owned(), p.cow_replace('\\', r"\\").into_owned(), forward].into_iter().chain(url_path)
         })
-        .flatten()
         .collect();
     variants.sort_by_key(|v| std::cmp::Reverse(v.len()));
     variants.dedup();

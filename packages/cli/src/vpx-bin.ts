@@ -17,7 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 
-import { detectScript, parseVpxArgs, ScriptError } from './vpx-script.ts';
+import { detectScript, isFile, parseVpxArgs, ScriptError } from './vpx-script.ts';
 
 function errorMsg(message: string) {
   /* oxlint-disable-next-line no-console */
@@ -53,10 +53,7 @@ function findGlobalVpx(env: NodeJS.ProcessEnv): string | undefined {
       continue;
     }
     const candidate = path.join(dir, name);
-    if (
-      statSync(candidate, { throwIfNoEntry: false })?.isFile() &&
-      realpathSync(candidate) !== self
-    ) {
+    if (isFile(candidate) && realpathSync(candidate) !== self) {
       return candidate;
     }
   }
@@ -112,7 +109,7 @@ if (invocation) {
     delete env.VP_SCRIPT_TSCONFIG;
   } else {
     const file = path.resolve(cwd, tsconfig);
-    if (!statSync(file, { throwIfNoEntry: false })?.isFile()) {
+    if (!isFile(file)) {
       errorMsg(`vpx: tsconfig not found: ${tsconfig}`);
       process.exit(1);
     }
