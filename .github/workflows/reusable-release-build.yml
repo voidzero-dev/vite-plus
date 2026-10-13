@@ -139,9 +139,10 @@ jobs:
             VP_LOCAL_BINARY="$PWD/target/x86_64-unknown-freebsd/release/vp" \
               VP_LOCAL_TGZ="$local_tgz" VP_SELF_SETUP_NO_MODIFY_PATH=1 \
               VP_VERSION="$VERSION" VP_SKIP_DEPS_INSTALL=1 \
-              VP_NODE_MANAGER=no VP_PM_MANAGER=no bash packages/cli/install.sh
+              VP_NODE_MANAGER=yes VP_PM_MANAGER=no bash packages/cli/install.sh
             "$VP_HOME/bin/vp" --version
-            "$VP_HOME/bin/vp" node -e 'if (process.platform !== "freebsd") process.exit(1)'
+            PATH="$VP_HOME/bin:$PATH" VP_NODE_VERSION=24.11.0 \
+              "$VP_HOME/bin/node" -e 'if (process.platform !== "freebsd") process.exit(1)'
 
       - name: Prepare Rust build
         if: matrix.settings.target != 'x86_64-unknown-freebsd'

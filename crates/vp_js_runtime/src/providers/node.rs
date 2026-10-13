@@ -755,6 +755,7 @@ mod tests {
             (Platform { os: Os::Darwin, arch: Arch::Arm64 }, "darwin-arm64"),
             (Platform { os: Os::Windows, arch: Arch::X64 }, "win-x64"),
             (Platform { os: Os::Windows, arch: Arch::Arm64 }, "win-arm64"),
+            (Platform { os: Os::FreeBSD, arch: Arch::X64 }, "freebsd-x64"),
         ];
         #[cfg(target_env = "musl")]
         let cases = [
@@ -764,10 +765,21 @@ mod tests {
             (Platform { os: Os::Darwin, arch: Arch::Arm64 }, "darwin-arm64"),
             (Platform { os: Os::Windows, arch: Arch::X64 }, "win-x64"),
             (Platform { os: Os::Windows, arch: Arch::Arm64 }, "win-arm64"),
+            (Platform { os: Os::FreeBSD, arch: Arch::X64 }, "freebsd-x64"),
         ];
 
         for (platform, expected) in cases {
             assert_eq!(provider.platform_string(platform), expected);
+        }
+    }
+
+    #[test]
+    fn test_platform_download_support() {
+        let provider = NodeProvider::new();
+        for (os, supported) in
+            [(Os::Linux, true), (Os::Darwin, true), (Os::Windows, true), (Os::FreeBSD, false)]
+        {
+            assert_eq!(provider.is_download_supported(Platform { os, arch: Arch::X64 }), supported);
         }
     }
 
