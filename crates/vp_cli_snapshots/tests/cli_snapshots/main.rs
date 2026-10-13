@@ -36,8 +36,8 @@ use std::{
 
 use cp_r::CopyOptions;
 use flavor::{Flavor, FlavorRuntime};
-use vt_pty_terminal_test::{CommandBuilder, ScreenSize, TestTerminal};
 use redact::redact_output;
+use vt_pty_terminal_test::{CommandBuilder, ScreenSize, TestTerminal};
 
 /// Default per-step timeout. Windows CI needs longer due to process startup
 /// overhead and slower I/O. Individual steps override via `timeout` (ms).
