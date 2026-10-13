@@ -4,7 +4,7 @@
 
 Replace the current snap-test runner with a new snapshot-test solution that runs every test case inside a real pseudo-terminal (PTY) backed by a vt100 screen emulator. Test cases can script full interactive sessions: they send keystrokes (arrows, enter, ctrl-c, free text) and synchronize on render milestones emitted by the CLI, so prompts, pickers, spinners, and watch modes become first-class testable surfaces. Snapshots are Markdown files containing rendered terminal screens, compared with real pass/fail semantics (`UPDATE_SNAPSHOTS=1` to accept changes) instead of the current regenerate-and-inspect-git-diff model.
 
-The runner reuses the PTY/terminal-emulation/milestone/snapshot crates that already exist in the vite-task repository (`pty_terminal`, `pty_terminal_test`, `pty_terminal_test_client`, `snapshot_test`), which vite-plus already consumes as git dependencies for other crates. The two existing trees (`snap-tests/` and `snap-tests-global/`) merge into a single fixture tree where each case declares whether it runs under the global Rust `vp` binary or the local JS CLI (or both).
+The runner reuses the PTY/terminal-emulation/milestone/snapshot crates that already exist in the vite-task repository (`vt_pty_terminal`, `vt_pty_terminal_test`, `vt_pty_terminal_test_client`, `vt_snapshot_test`), which vite-plus already consumes as git dependencies for other crates. The two existing trees (`snap-tests/` and `snap-tests-global/`) merge into a single fixture tree where each case declares whether it runs under the global Rust `vp` binary or the local JS CLI (or both).
 
 This is a clean break: the new format is not compatible with the old `steps.json`/`snap.txt` format and does not try to be. A migration tool converts old case directories to new fixtures in one command, and the old runner is deleted once the corpus is migrated.
 
@@ -40,12 +40,12 @@ Adding a PTY mode to `snap-test.ts` would keep the no-assertion model, the shell
 
 The vite-task repository has a working implementation of exactly this design, used by ~190 snapshot files today, including interactive selector navigation and ctrl-c cancellation cases. Its pieces:
 
-| Crate                      | Role                                                                                                                                                                                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pty_terminal`             | Spawns a child in a PTY (`portable-pty`), feeds output through a `vt100` emulator, answers cursor-position queries, handles resize and ctrl-c. Encodes platform workarounds: ConPTY on Windows, a global lock for musl PTY crashes, macOS slave-fd lifetime for EIO truncation. |
-| `pty_terminal_test`        | `TestTerminal` wrapper plus `Reader::expect_milestone(name)`: block until the child emits a named milestone, then return the rendered screen.                                                                                                                                   |
-| `pty_terminal_test_client` | Child-side helper that encodes milestones as window-title updates (`OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)>`, a fresh id per emission), which survive both Unix PTYs and Windows ConPTY and arrive in-order with the output they mark.                          |
-| `snapshot_test`            | Minimal snapshot store: compare or update via `UPDATE_SNAPSHOTS=1`, write `<name>.new` on mismatch, return a unified diff as the failure message.                                                                                                                               |
+| Crate                         | Role                                                                                                                                                                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vt_pty_terminal`             | Spawns a child in a PTY (`portable-pty`), feeds output through a `vt100` emulator, answers cursor-position queries, handles resize and ctrl-c. Encodes platform workarounds: ConPTY on Windows, a global lock for musl PTY crashes, macOS slave-fd lifetime for EIO truncation. |
+| `vt_pty_terminal_test`        | `TestTerminal` wrapper plus `Reader::expect_milestone(name)`: block until the child emits a named milestone, then return the rendered screen.                                                                                                                                   |
+| `vt_pty_terminal_test_client` | Child-side helper that encodes milestones as window-title updates (`OSC 2 ; vt-pty-terminal-test:<32-hex-id>:<base64url(name)>`, a fresh id per emission), which survive both Unix PTYs and Windows ConPTY and arrive in-order with the output they mark.                       |
+| `vt_snapshot_test`            | Minimal snapshot store: compare or update via `UPDATE_SNAPSHOTS=1`, write `<name>.new` on mismatch, return a unified diff as the failure message.                                                                                                                               |
 
 On top of these, `vt_bin/tests/e2e_snapshots` implements a `libtest-mimic` custom test target: fixtures declare cases in `snapshots.toml`, steps are argv arrays (no shell), interactive steps carry an ordered `interactions` list, and each case produces one Markdown snapshot containing the command lines, the interaction log, and fenced terminal screenshots captured at each milestone and at exit.
 
@@ -73,7 +73,7 @@ New layout (names open to bikeshedding):
 ```
 crates/vp_cli_snapshots/          # dev-only crate, never published or packaged
 ├── Cargo.toml                      # publish = false; dev-deps: libtest-mimic,
-│                                   #   pty_terminal_test, snapshot_test
+│                                   #   vt_pty_terminal_test, vt_snapshot_test
 ├── src/bin/vpt.rs                  # test utility multitool (own bin target)
 └── tests/cli_snapshots/
     ├── main.rs                     # libtest-mimic runner (harness = false)
@@ -229,7 +229,7 @@ The per-case bin dir fronts `packages/cli/bin` (the JS dispatch), which requires
 
 ## Execution model
 
-- **PTY and screen.** Each step spawns in a fresh PTY with a 500x500 grid (large enough that wrapping and scrolling do not distort output; scrollback capture is an open question for outputs beyond 500 rows). Output feeds a vt100 emulator continuously; screens are read from the emulator, never from raw bytes. Plain capture flattens all styling; `formatted-snapshot = true` preserves SGR color codes (rendered as escaped `\x1b[31m` text) for cases that assert color behavior, with the ConPTY parity fix (bare SGR-reset stripping) inherited from `pty_terminal`.
+- **PTY and screen.** Each step spawns in a fresh PTY with a 500x500 grid (large enough that wrapping and scrolling do not distort output; scrollback capture is an open question for outputs beyond 500 rows). Output feeds a vt100 emulator continuously; screens are read from the emulator, never from raw bytes. Plain capture flattens all styling; `formatted-snapshot = true` preserves SGR color codes (rendered as escaped `\x1b[31m` text) for cases that assert color behavior, with the ConPTY parity fix (bare SGR-reset stripping) inherited from `vt_pty_terminal`.
 - **Environment.** The child env is cleared and rebuilt: fixed baseline (`VP_CLI_TEST=1`, `VP_EMIT_MILESTONES=1`, `TERM=xterm-256color`, git identity, temp `VP_HOME`, temp `NPM_CONFIG_PREFIX`, controlled `HOME`), a small platform allow-list (Windows needs `SYSTEMROOT`, `APPDATA`, etc.), then case `env`/`unset-env`, then step `envs`. Today's ~40-pattern passthrough allow-list and its leakage risks go away. Notably absent from the baseline: `CI=true` and `NO_COLOR` (the PTY makes real interactive behavior the default, and the grid render makes color stripping unnecessary).
 - **Timeouts.** Per-step, default 50s (120s for `local-registry` cases), overridable per step. On timeout the child is killed, the exit is recorded as `timeout`, and remaining steps are skipped. No leaked processes.
 - **Exit codes.** Recorded in the snapshot when nonzero. On failure, execution skips the rest of the step's "line" (everything up to and including the next `continue-on-failure = true` step) and resumes after it; with no boundary ahead, the case stops, shell-style. The migrator reproduces legacy semantics exactly: `&&` chain members keep the stopping default and each legacy command line's final step carries the boundary marker, so a mid-chain failure skips its line while the next line still runs, and later steps never bless output from a broken same-line setup.
@@ -237,13 +237,13 @@ The per-case bin dir fronts `packages/cli/bin` (the JS dispatch), which requires
 
 ## Milestone protocol and CLI instrumentation
 
-A milestone is an invisible marker the CLI writes into its output stream at a deterministic render point. The encoding is the vite-task protocol: a window-title update (`OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)>`) with a fresh random id per emission so repeated names stay observable as distinct title changes. It survives Unix PTYs and Windows ConPTY, arrives in-order with the output it marks, and renders as nothing in a real terminal's screen content.
+A milestone is an invisible marker the CLI writes into its output stream at a deterministic render point. The encoding is the vite-task protocol: a window-title update (`OSC 2 ; vt-pty-terminal-test:<32-hex-id>:<base64url(name)>`) with a fresh random id per emission so repeated names stay observable as distinct title changes. It survives Unix PTYs and Windows ConPTY, arrives in-order with the output it marks, and renders as nothing in a real terminal's screen content.
 
 Emission is gated on `VP_EMIT_MILESTONES=1`, which only the runner sets. vp is a widely distributed CLI whose output gets piped into logs and other tools, so unconditional emission (vite-task's choice) is not appropriate here.
 
 Instrumentation points:
 
-- **Rust prompts** (`crates/vp_global_cli`, `crates/vp_shared`): emit via `pty_terminal_test_client` (a new git dependency, same source as the existing vite-task crates). The planned interactive package picker builds on `vt_select`, whose `after_render(RenderState)` hook was designed for exactly this; the picker emits `select:app-target:<index>` per render.
+- **Rust prompts** (`crates/vp_global_cli`, `crates/vp_shared`): emit via `vt_pty_terminal_test_client` (a new git dependency, same source as the existing vite-task crates). The planned interactive package picker builds on `vt_select`, whose `after_render(RenderState)` hook was designed for exactly this; the picker emits `select:app-target:<index>` per render.
 - **TS prompts** (`packages/prompts`): a small helper (`emitMilestone(name)`) writes the same byte sequence, wired into each prompt component's render loop. Naming convention: `<kind>:<id>:<state>`, for example `text:project-name:my-app`, `select:template:1`, `confirm:approve-builds:yes`, `spinner:install:stop`. Prompt call sites gain a stable `id` (the component kind plus an explicit name where ambiguous).
 - **Non-prompt sync points**: long-running commands may mark stable lifecycle points (`dev-server:ready`, `watch:rebuilt`) so tests of servers and watch modes have something to wait on before sending the next keystroke or ctrl-c. This is what unblocks the parked `command-pack-watch-restart` case.
 
@@ -291,7 +291,7 @@ Arrow-down in the template picker selects the second template.
 
 Step headings include `cd <cwd> &&` and `ENV=val` prefixes so the snapshot is self-describing; nonzero exits appear as `**Exit code:** N`.
 
-Comparison semantics come from the `snapshot_test` crate:
+Comparison semantics come from the `vt_snapshot_test` crate:
 
 - Default run: mismatch writes `snapshots/<case>.md.new` and fails the trial; the failure message is a unified diff, printed by `cargo test` in the failures summary.
 - `UPDATE_SNAPSHOTS=1 just snapshot-test`: writes snapshots, removes stale `.new` files.
@@ -338,7 +338,7 @@ Payload subcommands, for cases where the command under test spawns other command
 
 vp-specific additions with no `vtt` counterpart: `vpt json-edit <file> <dot-path> <value>` (the existing snap-tests `json-edit` helper for fixture manifest edits) and `vpt chmod`.
 
-Reusing `vtt` itself was considered and rejected. Cargo git dependencies provide library code only, never a dependency's binaries, so obtaining the `vtt` executable would require an out-of-band `cargo install --git` pinned in lockstep with the other vite-task git deps across local dev, CI, and nextest archives. Reusing it as a library would mean depending on `vt_bin` and dragging the entire `vt` product tree (task engine, TUI, server, fspy) into the runner build for a handful of trivial helpers. And vp-specific subcommands would then need upstream PRs plus dep bumps before tests here could use them. If the duplication ever becomes a maintenance burden, the designated path is upstream extraction: vite-task moves the subcommands into a small library crate (as `pty_terminal` already is for the emulator) and `vtt`/`vpt` become thin bin wrappers over it.
+Reusing `vtt` itself was considered and rejected. Cargo git dependencies provide library code only, never a dependency's binaries, so obtaining the `vtt` executable would require an out-of-band `cargo install --git` pinned in lockstep with the other vite-task git deps across local dev, CI, and nextest archives. Reusing it as a library would mean depending on `vt_bin` and dragging the entire `vt` product tree (task engine, TUI, server, fspy) into the runner build for a handful of trivial helpers. And vp-specific subcommands would then need upstream PRs plus dep bumps before tests here could use them. If the duplication ever becomes a maintenance burden, the designated path is upstream extraction: vite-task moves the subcommands into a small library crate (as `vt_pty_terminal` already is for the emulator) and `vtt`/`vpt` become thin bin wrappers over it.
 
 Everything `vpt` prints is deterministic and platform-identical, which directly attacks the biggest cause of the 182 Windows skips. The subcommand list grows as migration finds patterns worth first-classing; anything not worth a subcommand is a sign the old case was testing the shell, not vp.
 
@@ -357,7 +357,7 @@ The registry tool itself is unchanged; it already serves packed tarballs overlai
 - The suite is a cargo test target: `cargo build -p vp_global_cli` followed by `cargo test -p vp_cli_snapshots --test cli_snapshots`, wrapped in a `just snapshot-test` recipe. Sharding uses `cargo nextest --partition` instead of the custom `--shard=i/n` logic.
 - Both flavors run in CI from day one, in dedicated jobs. `cli-snapshot-test` (Linux and macOS, one leg per OS) builds `packages/cli/dist`, installs the release binary, and runs the full suite with the global flavor pointed at the installed binary via `VP_SNAP_GLOBAL_VP`, so no second `vp_global_cli` compile is needed. (`VP_SNAP_SKIP_FLAVORS` remains available for environments that cannot provide one of the flavors, e.g. local runs without a built `dist/`.)
 - The Windows story reuses the existing cross-compile infrastructure: `build-windows-tests` produces a dedicated `-p vp_cli_snapshots` nextest archive (carrying the test binary and `vpt`), and the `cli-snapshot-test-windows` job runs it on `windows-latest` with no Rust toolchain. The global `vp` comes prebuilt from `build-windows-cli` via `VP_SNAP_GLOBAL_VP`, the JS CLI is built on the runner for the local flavor, and nextest's `--workspace-remap` rewrites `CARGO_MANIFEST_DIR`/`CARGO_BIN_EXE_vpt` at run time so the relocated binaries find fixtures and helpers in the checkout (the runner prefers those runtime values over compile-time paths for exactly this reason).
-- musl coverage keeps its Alpine container leg; `pty_terminal` already serializes PTY spawn on musl internally.
+- musl coverage keeps its Alpine container leg; `vt_pty_terminal` already serializes PTY spawn on musl internally.
 - Pass/fail is the test exit code. The `git diff` gate and `retry-failed-snap-tests.sh` do not apply to the new suite. If a case proves flaky, the fix is a milestone or a redaction rule, not a rerun; a temporary quarantine (`ignore = true` plus an issue) is the pressure valve.
 
 Developer commands:
@@ -463,7 +463,7 @@ Shared global state forced `serial`, ordering hazards, and the bootstrap byte-ma
 
 ## Rollout plan
 
-Phase 1, runner: add the git deps (`pty_terminal_test`, `pty_terminal_test_client`, `snapshot_test`), the `crates/vp_cli_snapshots` crate with its `cli_snapshots` test target and `vpt` bin, flavor provisioning, redaction, the `just snapshot-test` recipe, and CI wiring. Land with a handful of hand-written cases covering both flavors, one interactive case, and one `local-registry` case.
+Phase 1, runner: add the git deps (`vt_pty_terminal_test`, `vt_pty_terminal_test_client`, `vt_snapshot_test`), the `crates/vp_cli_snapshots` crate with its `cli_snapshots` test target and `vpt` bin, flavor provisioning, redaction, the `just snapshot-test` recipe, and CI wiring. Land with a handful of hand-written cases covering both flavors, one interactive case, and one `local-registry` case.
 
 Phase 2, instrumentation: milestone emission in `packages/prompts` (clack components) and in the Rust prompt/selector paths. Land the PR #2031 follow-up picker tests and a `vp create` interactive flow as the proof cases, plus the parked watch-restart case.
 

@@ -952,20 +952,24 @@ jobs:
 
       - name: Check bootstrap handoff
         shell: powershell
-        run: ./.github/scripts/test-install-bootstrap.ps1
+        run: |
+          foreach ($mode in @('Off', '2.0', 'Latest')) {
+            ./.github/scripts/test-install-bootstrap.ps1 -CallerStrictMode $mode
+          }
 
       - name: Run install.ps1
         shell: powershell
         run: |
           & ./packages/cli/install.ps1
 
-      - name: Run install.ps1 via irm simulation (catches BOM issues)
+      - name: Run install.ps1 via irm simulation under StrictMode (catches BOM issues)
         shell: powershell
         # Piped installers cannot locate a sibling script; use this PR's legacy implementation.
         env:
           VP_LEGACY_INSTALLER_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}/${{ github.event.pull_request.head.sha || github.sha }}/packages/cli/install-legacy.ps1
         run: |
           $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
           Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression
 
       - name: Set PATH
@@ -1125,13 +1129,21 @@ jobs:
             exit 1
           }
 
-      - name: Run install.ps1 via iex under PowerShell 7.6
+      - name: Check bootstrap handoff under PowerShell 7.6
+        shell: pwsh
+        run: |
+          foreach ($mode in @('Off', '2.0', 'Latest')) {
+            & $env:PWSH76 -NoProfile -File ./.github/scripts/test-install-bootstrap.ps1 -CallerStrictMode $mode
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Run install.ps1 via iex under PowerShell 7.6 StrictMode
         shell: pwsh
         # Piped installers cannot locate a sibling script; use this PR's legacy implementation.
         env:
           VP_LEGACY_INSTALLER_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}/${{ github.event.pull_request.head.sha || github.sha }}/packages/cli/install-legacy.ps1
         run: |
-          & $env:PWSH76 -NoProfile -Command "Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression"
+          & $env:PWSH76 -NoProfile -Command "Set-StrictMode -Version Latest; Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression"
 
       - name: Set PATH
         shell: bash

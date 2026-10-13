@@ -192,7 +192,7 @@ dunce = "1.0.5"
 fast-glob = "1.0.0"
 flate2 = { version = "=1.1.9", features = ["zlib-rs"] }
 form_urlencoded = "1.2.1"
-fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
@@ -251,8 +251,6 @@ pretty_assertions = "1.4.1"
 phf = "0.14.0"
 prettyplease = "0.2.32"
 proc-macro2 = "1"
-pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
-pty_terminal_test_client = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
 quote = "1"
 rayon = "1.10.0"
 regex = "1.11.1"
@@ -275,7 +273,6 @@ sha2 = "0.10.9"
 shell-escape = "0.1.5"
 simdutf8 = "0.1.5"
 smallvec = { version = "1.16.0", features = ["union"] }
-snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
 string_cache = "0.9.0"
 sugar_path = { version = "3", features = ["cached_current_dir"] }
 supports-color = "3"
@@ -309,13 +306,16 @@ vp_setup = { path = "crates/vp_setup" }
 vp_shared = { path = "crates/vp_shared" }
 vp_static_config = { path = "crates/vp_static_config" }
 vp_toolchain = { path = "crates/vp_toolchain" }
-vt = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
-vt_casefold = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
-vt_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
-vt_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
-vt_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
-vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
-vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "7d69d6577ecf6bd83deee32186de59918a712873" }
+vt = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
+vt_casefold = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
+vt_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
+vt_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
+vt_pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
+vt_pty_terminal_test_client = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
+vt_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
+vt_snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
+vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
+vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc" }
 walkdir = "2.5.0"
 webpki-root-certs = "1.0.9"
 which = "8.0.6"
@@ -417,14 +417,14 @@ string_wizard = { path = "./rolldown/crates/string_wizard", features = ["serde"]
 # =============================================================================
 # [patch."https://github.com/voidzero-dev/vite-task.git"]
 # fspy = { path = "../vite-task/crates/fspy" }
-# pty_terminal_test = { path = "../vite-task/crates/pty_terminal_test" }
-# pty_terminal_test_client = { path = "../vite-task/crates/pty_terminal_test_client" }
-# snapshot_test = { path = "../vite-task/crates/snapshot_test" }
 # vt = { path = "../vite-task/crates/vt" }
 # vt_casefold = { path = "../vite-task/crates/vt_casefold" }
 # vt_path = { path = "../vite-task/crates/vt_path" }
 # vt_powershell = { path = "../vite-task/crates/vt_powershell" }
+# vt_pty_terminal_test = { path = "../vite-task/crates/vt_pty_terminal_test" }
+# vt_pty_terminal_test_client = { path = "../vite-task/crates/vt_pty_terminal_test_client" }
 # vt_select = { path = "../vite-task/crates/vt_select" }
+# vt_snapshot_test = { path = "../vite-task/crates/vt_snapshot_test" }
 # vt_str = { path = "../vite-task/crates/vt_str" }
 # vt_workspace = { path = "../vite-task/crates/vt_workspace" }
 

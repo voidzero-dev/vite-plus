@@ -352,7 +352,7 @@ fn confirm_implode(
     output::raw(&vt_str::format!("Type {} to confirm:", style("boom").bold()));
 
     if std::env::var(vp_shared::env_vars::VP_EMIT_MILESTONES).as_deref() == Ok("1") {
-        pty_terminal_test_client::mark_milestone("text:implode:ready");
+        vt_pty_terminal_test_client::mark_milestone("text:implode:ready");
     }
 
     // String is needed here for read_line

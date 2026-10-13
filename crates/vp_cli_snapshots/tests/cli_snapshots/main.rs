@@ -36,8 +36,8 @@ use std::{
 
 use cp_r::CopyOptions;
 use flavor::{Flavor, FlavorRuntime};
-use pty_terminal_test::{CommandBuilder, ScreenSize, TestTerminal};
 use redact::redact_output;
+use vt_pty_terminal_test::{CommandBuilder, ScreenSize, TestTerminal};
 
 /// Default per-step timeout. Windows CI needs longer due to process startup
 /// overhead and slower I/O. Individual steps override via `timeout` (ms).
@@ -1214,7 +1214,7 @@ fn run_case(
     local_registry_pack: Option<&Path>,
     report: &report::Report,
 ) -> Result<(), String> {
-    let snapshots = snapshot_test::Snapshots::new(fixture_path.join("snapshots"));
+    let snapshots = vt_snapshot_test::Snapshots::new(fixture_path.join("snapshots"));
 
     // Copy the fixture to a per-case staging directory so the test runs in
     // isolation and workspace-root discovery doesn't walk past the fixture.

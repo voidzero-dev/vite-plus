@@ -1,0 +1,55 @@
+[[case]]
+name = "default_cache_paths"
+vp = "local"
+comment = "Vitest's default disk caches are neither task inputs nor restored outputs."
+steps = [
+  { argv = ["vp", "run", "test"], comment = "Populate the task cache and Vitest's default disk caches." },
+  ["node", "cache-files.mjs", "check", "node_modules/.vite/vitest", "node_modules/.vitest-cache"],
+  { argv = ["vp", "run", "test"], comment = "The second run must hit the task cache." },
+  ["node", "cache-files.mjs", "mutate", "node_modules/.vite/vitest", "node_modules/.vitest-cache"],
+  { argv = ["vp", "run", "test"], comment = "Changing Vitest's cache contents must not invalidate the task." },
+  ["node", "cache-files.mjs", "clear", "node_modules/.vite/vitest", "node_modules/.vitest-cache"],
+  { argv = ["vp", "run", "test"], comment = "Removing cache files while preserving their directories must still hit the task cache." },
+  ["node", "cache-files.mjs", "absent", "node_modules/.vite/vitest", "node_modules/.vitest-cache"],
+  { argv = ["vpt", "write-file", "src/value.ts", "export const value = 2;\n"], snapshot = false },
+  { argv = ["vp", "run", "test"], comment = "Changing source must miss the task cache and run Vitest again." },
+  ["node", "cache-files.mjs", "check", "node_modules/.vite/vitest", "node_modules/.vitest-cache"],
+]
+
+[[case]]
+name = "custom_cache_paths"
+vp = "local"
+comment = "Custom cacheDir and runner/project fsModuleCachePath values are excluded from task caching."
+steps = [
+  { argv = ["vpt", "cp", "vite.custom.config.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "run", "test"], comment = "Populate caches for both projects, outside node_modules." },
+  ["node", "cache-files.mjs", "check", ".test-cache/results/vitest", ".test-cache/root", ".test-cache/project"],
+  { argv = ["vp", "run", "test"], comment = "Both projects must be replayed from the task cache." },
+  ["node", "cache-files.mjs", "mutate", ".test-cache/results/vitest", ".test-cache/root", ".test-cache/project"],
+  { argv = ["vp", "run", "test"], comment = "Changes to every custom cache path must leave the task cache valid." },
+  ["node", "cache-files.mjs", "clear", ".test-cache/results/vitest", ".test-cache/root", ".test-cache/project"],
+  { argv = ["vp", "run", "test"], comment = "A cache hit must not restore the custom Vitest caches." },
+  ["node", "cache-files.mjs", "absent", ".test-cache/results/vitest", ".test-cache/root", ".test-cache/project"],
+  { argv = ["vpt", "write-file", "src/value.ts", "export const value = 2;\n"], snapshot = false },
+  { argv = ["vp", "run", "test"], comment = "Source changes must rerun both projects and recreate their caches." },
+  ["node", "cache-files.mjs", "check", ".test-cache/results/vitest", ".test-cache/root", ".test-cache/project"],
+]
+
+[[case]]
+name = "injected_cache_paths"
+vp = "local"
+comment = "Projects injected by an async pre hook have their resolved cache paths excluded."
+steps = [
+  { argv = ["vpt", "cp", "vite.injected.config.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "run", "test"], comment = "The first run must be cacheable even when a project is attached after the cache-path hook." },
+  ["node", "cache-files.mjs", "check", ".test-cache/injected"],
+  { argv = ["vp", "run", "test"], comment = "Both projects must be replayed from the task cache." },
+  ["node", "cache-files.mjs", "mutate", ".test-cache/injected"],
+  { argv = ["vp", "run", "test"], comment = "Changing only the injected project's cache must still hit the task cache." },
+  ["node", "cache-files.mjs", "clear", ".test-cache/injected"],
+  ["vp", "run", "test"],
+  ["node", "cache-files.mjs", "absent", ".test-cache/injected"],
+  { argv = ["vpt", "write-file", "src/value.ts", "export const value = 2;\n"], snapshot = false },
+  { argv = ["vp", "run", "test"], comment = "A source change must rerun both projects." },
+  ["node", "cache-files.mjs", "check", ".test-cache/injected"],
+]
