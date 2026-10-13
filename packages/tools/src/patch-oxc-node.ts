@@ -3,9 +3,9 @@
  *
  * `sync-remote` clones oxc-node into `oxc-node/`, and CI checks it out at the hash in
  * `.upstream-versions.json`. `patches/oxc-node.patch` adapts the upstream tree: it builds
- * only the rlib, without the napi build script; exports everything under an `oxcNode`
- * namespace (renaming `TransformTask`), so nothing collides with Rolldown's exports; and
- * transforms TypeScript under `node_modules`, marked `Vite+:` in the source.
+ * only the rlib, without the napi build script, and exports everything under an `oxcNode`
+ * namespace (renaming `TransformTask`), so nothing collides with Rolldown's exports. Any
+ * other change to the source must say why with a `Vite+:` comment.
  *
  * This script applies the patch, then points the `oxc` dependency at the workspace
  * version so the binding links one copy of oxc. It is idempotent and fails loudly when

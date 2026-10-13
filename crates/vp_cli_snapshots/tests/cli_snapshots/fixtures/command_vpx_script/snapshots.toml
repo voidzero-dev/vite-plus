@@ -57,7 +57,11 @@ steps = [
   { argv = ["vpt", "mkdir", "-p", "node_modules/ts-dep"], snapshot = false },
   { argv = ["vpt", "write-file", "node_modules/ts-dep/package.json", "{ \"name\": \"ts-dep\", \"type\": \"module\", \"exports\": \"./index.ts\" }\n"], snapshot = false },
   { argv = ["vpt", "write-file", "node_modules/ts-dep/index.ts", "export enum Level { High = 'high' }\nexport const level: Level = Level.High;\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/ts-cjs-dep"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-cjs-dep/package.json", "{ \"name\": \"ts-cjs-dep\", \"main\": \"./index.ts\" }\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-cjs-dep/index.ts", "enum Kind { Cjs = 'cjs' }\nconst kind: Kind = Kind.Cjs;\nmodule.exports = { kind };\n"], snapshot = false },
   { argv = ["vpx", "./src/ts-dependency.ts"] },
+  { argv = ["vpx", "./src/require-ts-dependency.cts"], comment = "A CommonJS TypeScript dependency loaded with require()" },
 ]
 
 [[case]]
@@ -96,8 +100,10 @@ comment = "#!/usr/bin/env vpx works for executable script files."
 steps = [
   { argv = ["vpt", "chmod", "+x", "bin/tool.ts"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "bin/tool"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "bin/commonjs/tool"], snapshot = false },
   { argv = ["vpx", "sh", "-c", "./bin/tool.ts"], comment = "An executable .ts file" },
   { argv = ["vpx", "sh", "-c", "./bin/tool"], comment = "An extensionless file runs as JavaScript instead of re-entering vpx" },
+  { argv = ["vpx", "sh", "-c", "./bin/commonjs/tool"], comment = "In a package without type, an extensionless file with ES module syntax runs as an ES module" },
 ]
 
 [[case]]

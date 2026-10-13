@@ -47,11 +47,13 @@ const { oxcNode } = createRequire(import.meta.url)(
 // transform or resolve; the off-thread hooks load the same native library, so they
 // see it too. Without it, each file uses its nearest tsconfig.
 oxcNode.setTsconfigPath(process.env.VP_SCRIPT_TSCONFIG);
+// Dependencies run as published, except TypeScript, which Node.js refuses to strip
+// under `node_modules`. Set the same way, before the first transform or resolve.
+oxcNode.setTransformDeps('typescript');
 
 setSourceMapsSupport(true, { nodeModules: true, generatedCode: true });
 
 const EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.cjs', '.cts', '.es6', '.es'];
-const TYPESCRIPT_EXTENSIONS = new Set(['.ts', '.mts', '.cts', '.tsx']);
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
 const SOURCEMAP_PREFIX = '\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,';
 
@@ -68,10 +70,9 @@ addHook(
   },
   {
     exts: EXTENSIONS,
-    // Dependencies run as published, except TypeScript, which Node.js cannot run.
+    // oxc-node decides which dependencies to transform, as for `import`.
     ignoreNodeModules: false,
-    matcher: (filename) =>
-      !filename.includes(NODE_MODULES) || TYPESCRIPT_EXTENSIONS.has(path.extname(filename)),
+    matcher: (filename) => !filename.includes(NODE_MODULES) || oxcNode.transformsDep(filename),
   },
 );
 
