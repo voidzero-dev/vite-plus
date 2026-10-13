@@ -252,7 +252,7 @@ $ vp build
 ✓ built in 28ms
 
 ---
-vp run: 0/2 cache hit (0%).
+vp run: 0/2 cache hit (0%), 2/2 successful.
 ```
 
 Each sub-task has its own cache entry. For example, if a file used only by the build changes, such as `index.html`, only the build runs again the next time `vp run --cache check` is called:
@@ -263,7 +263,7 @@ $ vp build ○ cache miss: 'index.html' modified, executing
 ✓ built in 30ms
 
 ---
-vp run: 1/2 cache hit (50%), 120ms saved.
+vp run: 1/2 cache hit (50%), 2/2 successful, 120ms saved.
 ```
 
 ### Nested `vp run`

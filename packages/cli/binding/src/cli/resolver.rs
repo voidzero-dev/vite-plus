@@ -98,6 +98,7 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: None,
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -120,6 +121,7 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: None,
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -149,6 +151,7 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: None,
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -181,6 +184,7 @@ impl SubcommandResolver {
                             ),
                         ]),
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -203,6 +207,7 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: Some(build_pack_cache_inputs()),
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -261,6 +266,7 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: None,
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })

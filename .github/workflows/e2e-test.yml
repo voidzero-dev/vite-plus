@@ -98,6 +98,8 @@ jobs:
     uses: ./.github/workflows/reusable-ecosystem-ci.yml
     with:
       runner: ubuntu-latest
+      # Match the CLI cache producer's Rust toolchains and environment.
+      build-runner: namespace-profile-linux-x64-default
       target: x86_64-unknown-linux-gnu
 
   windows:
