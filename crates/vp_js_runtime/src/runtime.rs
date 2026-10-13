@@ -9,7 +9,10 @@ use vt_str::Str;
 use crate::{
     Error, Platform,
     dev_engines::{PackageJson, read_node_version_file, read_nvmrc_file},
-    download::{download_file, download_text, extract_archive, move_to_cache, verify_file_hash},
+    download::{
+        download_file, download_text, extract_archive, lock_installation, move_to_cache,
+        verify_file_hash,
+    },
     provider::{HashVerification, JsRuntimeProvider, ShasumsSignature},
     providers::NodeProvider,
 };
@@ -205,6 +208,19 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
         });
     }
 
+    // Lock before downloading so concurrent commands share one download and
+    // extraction. A peer may finish installing while we wait for the lock.
+    let _lock = lock_installation(&install_dir, version).await?;
+    if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+        return Ok(JsRuntime {
+            runtime_type,
+            version: version.into(),
+            install_dir,
+            binary_relative_path,
+            bin_dir_relative_path,
+        });
+    }
+
     let download_message = format!("Downloading {} v{version}...", provider.name());
     tracing::info!("{download_message}");
 
@@ -264,7 +280,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     .await?;
 
     // Move extracted directory to cache location
-    move_to_cache(&extracted_path, &install_dir, &binary_path, version).await?;
+    move_to_cache(&extracted_path, &install_dir, &binary_path).await?;
 
     tracing::info!("{} {version} installed at {install_dir:?}", provider.name());
 
@@ -1192,88 +1208,123 @@ mod tests {
         .await;
     }
 
-    /// Test concurrent downloads - multiple tasks downloading the same version
-    /// should not cause corruption or conflicts due to file-based locking
+    fn mock_runtime_archive(info: &crate::provider::DownloadInfo) -> Vec<u8> {
+        use std::io::{Cursor, Write};
+
+        use crate::provider::ArchiveFormat;
+
+        let binary = NodeProvider::new().binary_relative_path(Platform::current());
+        let path = format!("{}/{binary}", info.extracted_dir_name);
+        let contents = b"mock node binary";
+        match info.archive_format {
+            ArchiveFormat::TarGz => {
+                let encoder =
+                    flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+                let mut archive = tar::Builder::new(encoder);
+                let mut header = tar::Header::new_gnu();
+                header.set_size(contents.len() as u64);
+                header.set_mode(0o755);
+                header.set_cksum();
+                archive.append_data(&mut header, path, contents.as_slice()).unwrap();
+                archive.into_inner().unwrap().finish().unwrap()
+            }
+            ArchiveFormat::Zip => {
+                let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+                archive.start_file(path, zip::write::SimpleFileOptions::default()).unwrap();
+                archive.write_all(contents).unwrap();
+                archive.finish().unwrap().into_inner()
+            }
+        }
+    }
+
     #[tokio::test]
-    #[ignore]
     async fn test_concurrent_downloads() {
-        let vp_home = shared_vp_home();
+        use httpmock::prelude::*;
+        use sha2::{Digest, Sha256};
+
+        let vp_home = TempDir::new().unwrap();
+        let server = MockServer::start_async().await;
         vp_shared::EnvConfig::with_vars_async(
-            [(env_vars::VP_HOME, vp_home.as_os_str())],
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::VP_NODE_DIST_MIRROR, std::ffi::OsStr::new(&server.base_url())),
+            ],
             |_| async {
-                // Use a different version to avoid conflicts with other tests
                 let version = "20.17.0";
+                let info = NodeProvider::new().get_download_info(version, Platform::current());
+                let archive = mock_runtime_archive(&info);
+                let hash = hex::encode(Sha256::digest(&archive));
+                let checksums = server
+                    .mock_async(|when, then| {
+                        when.method(GET).path(format!("/v{version}/SHASUMS256.txt"));
+                        then.status(200).body(format!("{hash}  {}\n", info.archive_filename));
+                    })
+                    .await;
+                let download = server
+                    .mock_async(|when, then| {
+                        when.method(GET).path(format!("/v{version}/{}", info.archive_filename));
+                        // Keep the first download in flight while the other callers start.
+                        then.status(200).delay(Duration::from_millis(100)).body(archive);
+                    })
+                    .await;
 
-                // Clear any existing cache for this version
-                let cache_dir = crate::cache::get_cache_dir().unwrap();
-                let install_dir = cache_dir.join("node").join(version);
-                if tokio::fs::try_exists(&install_dir).await.unwrap_or(false) {
-                    tokio::fs::remove_dir_all(&install_dir).await.unwrap();
-                }
-
-                // Spawn multiple concurrent download tasks
-                let num_concurrent = 4;
-                let mut handles = Vec::with_capacity(num_concurrent);
-
-                for i in 0..num_concurrent {
-                    let version = version.to_string();
-                    handles.push(tokio::spawn(async move {
-                        tracing::info!("Starting concurrent download task {i}");
-                        let result = download_runtime(JsRuntimeType::Node, &version).await;
-                        tracing::info!("Completed concurrent download task {i}");
-                        result
-                    }));
-                }
-
-                // Wait for all tasks and collect results
-                let mut results = Vec::with_capacity(num_concurrent);
-                for handle in handles {
-                    results.push(handle.await.unwrap());
-                }
-
-                // All tasks should succeed
-                for (i, result) in results.iter().enumerate() {
-                    assert!(result.is_ok(), "Task {i} failed: {:?}", result.as_ref().err());
-                }
-
-                // All tasks should return the same install directory
-                let first_install_dir = &results[0].as_ref().unwrap().install_dir;
-                for (i, result) in results.iter().enumerate().skip(1) {
+                let results = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    futures_util::future::join_all(
+                        (0..8).map(|_| download_runtime(JsRuntimeType::Node, version)),
+                    ),
+                )
+                .await
+                .unwrap();
+                let expected_dir =
+                    crate::cache::get_cache_dir().unwrap().join("node").join(version);
+                for result in results {
+                    let runtime = result.unwrap();
+                    assert_eq!(runtime.install_dir, expected_dir);
                     assert_eq!(
-                        &result.as_ref().unwrap().install_dir,
-                        first_install_dir,
-                        "Task {i} has different install_dir"
+                        tokio::fs::read(runtime.get_binary_path()).await.unwrap(),
+                        b"mock node binary"
                     );
                 }
-
-                // Verify the binary works
-                let runtime = results.into_iter().next().unwrap().unwrap();
-                let binary_path = runtime.get_binary_path();
-                assert!(
-                    tokio::fs::try_exists(&binary_path).await.unwrap(),
-                    "Binary should exist at {binary_path:?}"
-                );
-
-                let output = tokio::process::Command::new(binary_path.as_path())
-                    .arg("--version")
-                    .output()
-                    .await
-                    .unwrap();
-
-                assert!(output.status.success(), "Binary should be executable");
-                let version_output = String::from_utf8_lossy(&output.stdout);
-                assert!(
-                    version_output.contains(version),
-                    "Version output should contain {version}, got: {version_output}"
-                );
+                checksums.assert_hits_async(1).await;
+                download.assert_hits_async(1).await;
             },
         )
         .await;
     }
 
-    // ==========================================
-    // Multi-source version reading tests
-    // ==========================================
+    #[tokio::test]
+    async fn test_failed_download_releases_installation_lock() {
+        use httpmock::prelude::*;
+
+        let vp_home = TempDir::new().unwrap();
+        let server = MockServer::start_async().await;
+        let checksums = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/v20.17.0/SHASUMS256.txt");
+                then.status(200).body("");
+            })
+            .await;
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::VP_NODE_DIST_MIRROR, std::ffi::OsStr::new(&server.base_url())),
+            ],
+            |_| async {
+                for _ in 0..2 {
+                    let result = tokio::time::timeout(
+                        Duration::from_secs(10),
+                        download_runtime(JsRuntimeType::Node, "20.17.0"),
+                    )
+                    .await
+                    .unwrap();
+                    assert!(matches!(result, Err(Error::HashNotFound { .. })));
+                }
+                checksums.assert_hits_async(2).await;
+            },
+        )
+        .await;
+    }
 
     #[tokio::test]
     async fn test_node_version_file_takes_priority() {
