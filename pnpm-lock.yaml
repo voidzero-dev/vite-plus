@@ -549,7 +549,7 @@ importers:
         specifier: workspace:*
         version: link:../prompts
       '@voidzero-dev/vite-task-client':
-        specifier: ^0.2.0
+        specifier: 0.2.0
         version: 0.2.0
       bingo:
         specifier: 'catalog:'

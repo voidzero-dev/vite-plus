@@ -41,7 +41,6 @@ const ROLLDOWN_DIR = 'rolldown';
 const VITE_DIR = 'vite';
 const CORE_PACKAGE_PATH = 'packages/core';
 const VITE_DEVTOOLS_PACKAGE = '@vitejs/devtools';
-const VITE_TASK_CLIENT_PACKAGE = '@voidzero-dev/vite-task-client';
 
 function log(message: string) {
   console.log(`[sync-rolldown] ${message}`);
@@ -355,16 +354,6 @@ export function syncViteDevtoolsDependencies(corePkg: PackageJson, vitePkg: Pack
   corePkg.peerDependencies ??= {};
   corePkg.devDependencies[VITE_DEVTOOLS_PACKAGE] = devRange;
   corePkg.peerDependencies[VITE_DEVTOOLS_PACKAGE] = peerRange;
-}
-
-export function syncViteTaskClientDependency(cliPkg: PackageJson, vitePkg: PackageJson): void {
-  const range = vitePkg.devDependencies?.[VITE_TASK_CLIENT_PACKAGE];
-  if (!range?.trim()) {
-    throw new Error(`Vite package.json must define ${VITE_TASK_CLIENT_PACKAGE} in devDependencies`);
-  }
-
-  cliPkg.devDependencies ??= {};
-  cliPkg.devDependencies[VITE_TASK_CLIENT_PACKAGE] = range;
 }
 
 // Oxc-related packages that should use the higher version on conflict
@@ -943,12 +932,6 @@ export async function syncRemote() {
   syncViteDevtoolsDependencies(corePackage, rolldownVitePackage);
   writeFileSync(corePackagePath, JSON.stringify(corePackage, null, 2) + '\n', 'utf-8');
   log('✓ package.json Vite DevTools ranges updated successfully!');
-
-  const cliPackagePath = join(rootDir, 'packages/cli/package.json');
-  const cliPackage = JSON.parse(readFileSync(cliPackagePath, 'utf-8')) as PackageJson;
-  syncViteTaskClientDependency(cliPackage, rolldownVitePackage);
-  writeFileSync(cliPackagePath, JSON.stringify(cliPackage, null, 2) + '\n', 'utf-8');
-  log('✓ package.json Vite Task client range updated successfully!');
 
   execCommand('pnpm install --no-frozen-lockfile', rootDir);
 

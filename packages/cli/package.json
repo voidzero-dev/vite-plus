@@ -370,7 +370,7 @@
     "@vitest/browser-playwright": "catalog:",
     "@vitest/browser-webdriverio": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
-    "@voidzero-dev/vite-task-client": "^0.2.0",
+    "@voidzero-dev/vite-task-client": "0.2.0",
     "bingo": "catalog:",
     "cac": "catalog:",
     "cross-spawn": "catalog:",
