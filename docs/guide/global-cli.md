@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { getScrollOffset } from 'vitepress';
 import { nextTick, onMounted, onUnmounted } from 'vue';
 
 function openTarget() {
@@ -18,9 +17,7 @@ function openTarget() {
   // VitePress cannot measure a heading inside closed details. Correct the scroll after revealing it.
   requestAnimationFrame(() => {
     if (!target.isConnected) return;
-    const top = window.scrollY + target.getBoundingClientRect().top - getScrollOffset()
-      + Number.parseInt(window.getComputedStyle(target).paddingTop, 10);
-    window.scrollTo(0, top);
+    target.scrollIntoView({ block: 'start' });
   });
 }
 

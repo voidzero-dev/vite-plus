@@ -87,6 +87,7 @@ impl CommandHandler for VitePlusCommandHandler {
                         untracked_env: None,
                         input: Some(check_cache_inputs()),
                         output: None,
+                        remote: None,
                     }),
                 )))
             }
