@@ -20,6 +20,40 @@ vp create <template>
 vp create <template> -- <template-options>
 ```
 
+### Without the Global CLI
+
+The `create-vite-plus` package runs `vp create` through your package manager, so you can create a project without installing the [global CLI](/guide/global-cli):
+
+::: code-group
+
+```bash [pnpm]
+pnpm create vite-plus
+```
+
+```bash [npm]
+npm create vite-plus@latest
+```
+
+```bash [Yarn]
+yarn create vite-plus
+```
+
+```bash [Bun]
+bun create vite-plus
+```
+
+:::
+
+The new project uses the package manager that ran the command, unless you pass `--package-manager` or create it inside an existing workspace. Arguments are forwarded to `vp create` unchanged, so the first argument is the template, not the target directory:
+
+```bash
+pnpm create vite-plus vite:application --directory my-app
+```
+
+npm needs `--` before options meant for `vp create`, for example `npm create vite-plus@latest -- vite:application --directory my-app`.
+
+After creating the project, run `vp` through your package manager, for example `pnpm exec vp run`.
+
 ## Built-in Templates
 
 Vite+ ships with these built-in templates:
