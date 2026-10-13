@@ -331,6 +331,10 @@ function Enable-SetupVpLegacyCompatibility {
 }
 
 function Main {
+    # Keep installation rules stable even when a profile selects a future Latest.
+    # Function scope also preserves the caller's setting for `irm ... | iex`.
+    Set-StrictMode -Version 3.0
+
     Enable-SetupVpLegacyCompatibility
 
     if ($PrVersion -and $LocalTgz) {

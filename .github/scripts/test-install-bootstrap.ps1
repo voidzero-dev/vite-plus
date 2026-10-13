@@ -1,20 +1,40 @@
 # Run locally on Windows with ./.github/scripts/test-install-bootstrap.ps1; no registry or installed vp needed.
-param([switch]$StrictMode)
+param([ValidateSet('Off', '2.0', 'Latest')][string]$CallerStrictMode = 'Off')
 
 $ErrorActionPreference = 'Stop'
-if ($StrictMode) { Set-StrictMode -Version Latest }
+if ($CallerStrictMode -eq 'Off') { Set-StrictMode -Off }
+else { Set-StrictMode -Version $CallerStrictMode }
 $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../packages/cli/install.ps1') -Raw
 . ([scriptblock]::Create(($source -replace '(?m)^    Main\r?$', '')))
 function Assert($Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
+function Assert-StrictMode([string]$Mode) {
+    $missingPropertyRejected = $false
+    try { $null = ([pscustomobject]@{}).missing } catch {
+        if ($_.FullyQualifiedErrorId -ne 'PropertyNotFoundStrict') { throw }
+        $missingPropertyRejected = $true
+    }
+    $invalidIndexRejected = $false
+    try { $values = @(1); $null = $values[1] } catch {
+        if ($_.Exception -isnot [System.IndexOutOfRangeException]) { throw }
+        $invalidIndexRejected = $true
+    }
+    Assert ($missingPropertyRejected -eq ($Mode -ne 'Off')) "Expected $Mode missing-property behavior"
+    Assert ($invalidIndexRejected -eq ($Mode -in @('3.0', 'Latest'))) "Expected $Mode array-index behavior"
+}
+Assert-StrictMode $CallerStrictMode
+
 # Exercise the piped entry point without acquiring a payload.
 function Test-InstallerEntryPoint {
+    Assert-StrictMode '3.0'
     Assert ($ErrorActionPreference -eq 'Stop') 'Installer did not enable terminating errors'
     if ($entryPointFails) { throw 'Expected installer failure' }
 }
-$entryPointSource = $source -replace '(?m)^    Main\r?$', '    Test-InstallerEntryPoint'
+$main = ${function:Main}
+# Stop inside Main so this checks its real execution scope through Invoke-Expression.
+$entryPointSource = $source -replace '(?m)^    Enable-SetupVpLegacyCompatibility\r?$', "    Test-InstallerEntryPoint`n    return"
 try {
     foreach ($preference in @('Continue', 'Stop')) {
         foreach ($entryPointFails in @($false, $true)) {
@@ -28,11 +48,14 @@ try {
             }
             Assert ($caught -eq $entryPointFails) 'Installer failure was lost'
             Assert ($ErrorActionPreference -eq $preference) 'Installer changed the caller error preference'
+            Assert-StrictMode $CallerStrictMode
         }
     }
 } finally {
+    ${function:Main} = $main
     $ErrorActionPreference = 'Stop'
 }
+Write-Host "PASS: piped entry point preserves caller StrictMode $CallerStrictMode on success and failure"
 function Exit-Installer { param([int]$Code = 1); $script:ExitCode = $Code; throw $script:InstallStopSignal }
 
 $testRoot = Join-Path $env:TEMP "vite-bootstrap-test-$(Get-Random)"
@@ -103,6 +126,7 @@ function New-Item {
 
 function Invoke-RestMethod {
     param($Uri, $Headers)
+    Assert-StrictMode '3.0'
     $script:Requests.Add("GET $Uri")
     if ($Uri -eq 'https://custom.example/vite-plus/latest') {
         # Real registry responses are PSCustomObjects, whose missing properties
@@ -221,6 +245,7 @@ try {
         } catch {
             if ($expectedExit -eq 0 -or -not (Test-IsInstallStopException $_)) { throw }
         }
+        Assert-StrictMode $CallerStrictMode
         Assert ($script:ExitCode -eq $expectedExit) 'Binary exit code was lost'
         Assert (@(Get-ChildItem -LiteralPath "$testRoot/tmp" -Force).Count -eq 0) 'Temporary payload was not cleaned up'
         if ($isIntegrityFailure -or $isMetadataFailure) {
@@ -250,13 +275,49 @@ try {
         }
         Write-Host "PASS: $scenario"
     }
-    if ($StrictMode) {
-        $strictModePreserved = $false
-        try { $null = ([pscustomobject]@{}).missing } catch {
-            $strictModePreserved = $_.FullyQualifiedErrorId -eq 'PropertyNotFoundStrict'
+
+    # The real legacy installer inherits Main's pinned mode. Load its helpers in
+    # a child scope without running setup or modifying the user's PATH.
+    & {
+        Set-StrictMode -Version 3.0
+        $legacySource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../packages/cli/install-legacy.ps1') -Raw
+        . ([scriptblock]::Create(($legacySource -replace '(?m)^    Main\r?$', ''))) -BinarySource "$testRoot/package/vp.exe" -ResolvedVersion '0.2.6'
+        function Write-Error-Exit { param([string]$Message); throw $Message }
+        $overrideNames = @('VP_BIN_DIR', 'VP_DATA_DIR', 'VP_CACHE_DIR')
+        $previousOverrides = @{}
+        foreach ($name in $overrideNames) {
+            $previousOverrides[$name] = [Environment]::GetEnvironmentVariable($name)
         }
-        Assert $strictModePreserved 'Installer disabled the caller strict mode'
+        try {
+            foreach ($count in @(0, 1, 3)) {
+                for ($i = 0; $i -lt $overrideNames.Count; $i++) {
+                    $value = if ($i -lt $count) { Join-Path $testRoot $overrideNames[$i] } else { $null }
+                    [Environment]::SetEnvironmentVariable($overrideNames[$i], $value, 'Process')
+                }
+                $rejected = $false
+                try { Test-VpDirOverrides } catch {
+                    Assert ($_.Exception.Message -eq 'Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset.') "Unexpected override error: $_"
+                    $rejected = $true
+                }
+                Assert ($rejected -eq ($count -eq 1)) 'Incorrect legacy override validation'
+            }
+            foreach ($count in @(0, 1, 3, 4)) {
+                $versionsDir = Join-Path $testRoot "legacy-versions-$count"
+                New-Item -ItemType Directory -Path $versionsDir | Out-Null
+                for ($i = 0; $i -lt $count; $i++) {
+                    New-Item -ItemType Directory -Path (Join-Path $versionsDir "0.2.$i") | Out-Null
+                }
+                Cleanup-OldVersions -InstallDir $versionsDir
+                Assert (@(Get-ChildItem -LiteralPath $versionsDir -Directory).Count -eq [Math]::Min($count, 3)) 'Incorrect legacy version cleanup'
+            }
+        } finally {
+            foreach ($name in $overrideNames) {
+                [Environment]::SetEnvironmentVariable($name, $previousOverrides[$name], 'Process')
+            }
+        }
     }
+    Assert-StrictMode $CallerStrictMode
+    Write-Host 'PASS: legacy overrides and version cleanup under pinned StrictMode'
 } finally {
     $env:VP_SELF_SETUP_SUPPORT_CHECK = $originalCheck
     $env:Path = $originalPath

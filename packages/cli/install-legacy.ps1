@@ -208,8 +208,8 @@ function Test-AbsoluteOverridePath {
 }
 
 function Test-VpDirOverrides {
-    $values = @($env:VP_BIN_DIR, $env:VP_DATA_DIR, $env:VP_CACHE_DIR) |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $values = @(@($env:VP_BIN_DIR, $env:VP_DATA_DIR, $env:VP_CACHE_DIR) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($values.Count -ne 0 -and $values.Count -ne 3) {
         Write-Error-Exit "Set VP_BIN_DIR, VP_DATA_DIR, and VP_CACHE_DIR together, or leave all three unset."
     }
@@ -533,10 +533,10 @@ function Cleanup-OldVersions {
     # Only cleanup semver format directories (0.1.0, 1.2.3-beta.1, etc.)
     # This excludes 'current' symlink and non-semver directories like 'local-dev'
     $semverPattern = '^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$'
-    $versions = Get-ChildItem -Path $InstallDir -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match $semverPattern }
+    $versions = @(Get-ChildItem -Path $InstallDir -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match $semverPattern })
 
-    if ($null -eq $versions -or $versions.Count -le $maxVersions) {
+    if ($versions.Count -le $maxVersions) {
         return
     }
 

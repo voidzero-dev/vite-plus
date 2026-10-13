@@ -953,8 +953,9 @@ jobs:
       - name: Check bootstrap handoff
         shell: powershell
         run: |
-          ./.github/scripts/test-install-bootstrap.ps1
-          ./.github/scripts/test-install-bootstrap.ps1 -StrictMode
+          foreach ($mode in @('Off', '2.0', 'Latest')) {
+            ./.github/scripts/test-install-bootstrap.ps1 -CallerStrictMode $mode
+          }
 
       - name: Run install.ps1
         shell: powershell
@@ -1131,10 +1132,10 @@ jobs:
       - name: Check bootstrap handoff under PowerShell 7.6
         shell: pwsh
         run: |
-          & $env:PWSH76 -NoProfile -File ./.github/scripts/test-install-bootstrap.ps1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $env:PWSH76 -NoProfile -File ./.github/scripts/test-install-bootstrap.ps1 -StrictMode
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($mode in @('Off', '2.0', 'Latest')) {
+            & $env:PWSH76 -NoProfile -File ./.github/scripts/test-install-bootstrap.ps1 -CallerStrictMode $mode
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Run install.ps1 via iex under PowerShell 7.6 StrictMode
         shell: pwsh
