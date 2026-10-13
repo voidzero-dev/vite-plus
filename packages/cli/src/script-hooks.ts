@@ -27,8 +27,9 @@ export function isSupportedNodeVersion(version: string): boolean {
  * overridden (nodejs/node#59011, in 22.19 and 24.5), and a sync load hook could not
  * return a null source for CommonJS (nodejs/node#59929, in 22.22.3 and 24.11.1). tsx
  * switches at the same releases. Upstream oxc-node waits for 26.2 for a third fix,
- * nodejs/node#62920, which only matters when a load hook returns CommonJS source, as
- * these hooks never do.
+ * nodejs/node#62920 (also in 24.18.0), which only matters when a load hook returns
+ * CommonJS source. These hooks return it only for source another hook supplied, so
+ * without that fix `require()` inside such a module can fail.
  */
 export function canRegisterSyncHooks(version: string): boolean {
   const [major = 0, minor = 0, patch = 0] = version.split('.').map(Number);
@@ -41,14 +42,21 @@ export function canRegisterSyncHooks(version: string): boolean {
   return major >= 26;
 }
 
-const OXC_NODE_HELPERS = '@oxc-node/core/helpers/';
+/**
+ * The module name oxc-node gives the runtime helpers it injects, passed to its transformer
+ * and load hook. Only these hooks emit it, so they redirect only their own helper imports,
+ * not `@oxc-node/core/helpers/*` imports that another oxc-node copy produced.
+ */
+export const HELPER_MODULE_NAME = 'vite-plus:oxc-node';
+
+const OXC_NODE_HELPERS = `${HELPER_MODULE_NAME}/helpers/`;
 const RUNTIME_HELPERS = '@oxc-project/runtime/helpers/';
 
 /**
  * oxc-node lowers class fields, static blocks, `using`, and legacy decorators to
- * helper imports from `@oxc-node/core/helpers/*`. Those resolve from the user's file,
- * where `@oxc-node/core` is usually not installed. The same helpers ship in
- * `@oxc-project/runtime`, a dependency of `vite-plus`; the hooks resolve them from here.
+ * helper imports. The same helpers ship in `@oxc-project/runtime`, a dependency of
+ * `vite-plus`; the hooks resolve them from here, because the user's project usually
+ * does not have it.
  */
 export function runtimeHelperSpecifier(specifier: string): string | undefined {
   return specifier.startsWith(OXC_NODE_HELPERS)

@@ -9,7 +9,7 @@ import type { LoadHook, ResolveHook } from 'node:module';
 import { isMainThread, MessageChannel } from 'node:worker_threads';
 
 import { oxcNode } from '../binding/index.js';
-import { resolveWithOxcNode } from './script-hooks.ts';
+import { HELPER_MODULE_NAME, resolveWithOxcNode } from './script-hooks.ts';
 
 // Keep the loader worker alive, as upstream does.
 if (!isMainThread) {
@@ -20,4 +20,9 @@ export const resolve: ResolveHook = (specifier, context, nextResolve) =>
   resolveWithOxcNode(oxcNode, specifier, context, nextResolve);
 
 export const load: LoadHook = (url, context, nextLoad) =>
-  oxcNode.load(url, context as never, nextLoad as never) as ReturnType<LoadHook>;
+  oxcNode.load(
+    url,
+    context as never,
+    nextLoad as never,
+    HELPER_MODULE_NAME,
+  ) as ReturnType<LoadHook>;
