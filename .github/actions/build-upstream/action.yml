@@ -184,7 +184,11 @@ runs:
     - name: Build trampoline shim binary (Windows only)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
-      run: node packages/tools/src/build-trampoline.ts --release --target "${INPUTS_TARGET}"
+      # The standalone trampoline keeps its own size-optimized Cargo profile.
+      run: |
+        env -u CARGO_PROFILE_RELEASE_LTO -u CARGO_PROFILE_RELEASE_CODEGEN_UNITS \
+          -u CARGO_PROFILE_RELEASE_OPT_LEVEL \
+          node packages/tools/src/build-trampoline.ts --release --target "${INPUTS_TARGET}"
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 

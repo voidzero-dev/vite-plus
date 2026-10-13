@@ -91,7 +91,11 @@ runs:
     - name: Build trampoline shim binary
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: node packages/tools/src/build-trampoline.ts --xwin --release --target x86_64-pc-windows-msvc
+      # The standalone trampoline keeps its own size-optimized Cargo profile.
+      run: |
+        env -u CARGO_PROFILE_RELEASE_LTO -u CARGO_PROFILE_RELEASE_CODEGEN_UNITS \
+          -u CARGO_PROFILE_RELEASE_OPT_LEVEL \
+          node packages/tools/src/build-trampoline.ts --xwin --release --target x86_64-pc-windows-msvc
       env:
         XWIN_ACCEPT_LICENSE: '1'
 
