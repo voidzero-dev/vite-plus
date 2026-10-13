@@ -44,7 +44,8 @@ fn find_system_node() -> Option<AbsolutePathBuf> {
         // by `vp env setup`) or canonicalises to it; a real `node` from
         // FreeBSD Ports (lang/node, lang/node22, …) resolves somewhere else.
         let canonical = candidate.canonicalize().ok();
-        if let Some(self_real) = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok())
+        if let Some(self_real) =
+            std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok())
         {
             if canonical.as_ref() == Some(&self_real) {
                 continue;
@@ -171,7 +172,7 @@ pub async fn download_runtime(
                         return Err(Error::UnsupportedPlatform {
                             platform: Platform::current().to_string().into(),
                             runtime: "node".into(),
-                        })
+                        });
                     }
                 }
             }

@@ -62,6 +62,7 @@ Prebuilt binaries are distributed for the following platforms (grouped by [Node.
   - Windows arm64 (`aarch64-pc-windows-msvc`)
 - Experimental
   - Linux x64 musl (`x86_64-unknown-linux-musl`)
+  - FreeBSD x64 (`x86_64-unknown-freebsd`)
 - Other
   - Linux arm64 musl (`aarch64-unknown-linux-musl`)
 
