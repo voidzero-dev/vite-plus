@@ -65,6 +65,10 @@ jobs:
   build:
     name: Build vite-plus packages
     runs-on: namespace-profile-linux-x64-default
+    # Match the CLI build profile to reuse its native and Cargo caches.
+    env:
+      CARGO_PROFILE_RELEASE_LTO: 'off'
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
     permissions:
       contents: read
       packages: read
