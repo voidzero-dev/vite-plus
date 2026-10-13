@@ -688,6 +688,18 @@ fn file_urls_redact_to_one_spelling_on_every_platform() {
     assert_eq!(redact_output(unix, &[("/tmp/ws", "<workspace>")], true), expected);
 }
 
+#[test]
+fn file_urls_with_percent_encoded_paths_redact() {
+    let windows = "at file:///C:/Users/First%20Last/ws/main.ts\n".to_owned();
+    let unix = "at file:///home/first%20last/ws/main.ts\n".to_owned();
+    let expected = "at file://<workspace>/main.ts\n";
+    assert_eq!(
+        redact_output(windows, &[("C:\\Users\\First Last\\ws", "<workspace>")], true),
+        expected
+    );
+    assert_eq!(redact_output(unix, &[("/home/first last/ws", "<workspace>")], true), expected);
+}
+
 #[cfg(windows)]
 #[test]
 fn formatted_mode_preserves_escape_renderings() {

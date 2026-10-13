@@ -484,10 +484,13 @@ fn path_variants(path: &str, label: &'static str) -> Vec<(String, &'static str)>
         .flatten()
         .flat_map(|p| {
             let forward = p.cow_replace('\\', "/").into_owned();
-            // A file URL keeps the slash before a drive letter (`file:///D:/ws`), so
-            // also redact `/D:/ws`: the URL becomes `file://<label>`, as on Unix.
-            let url_path = matches!(forward.as_bytes(), [drive, b':', b'/', ..] if drive.is_ascii_alphabetic())
-                .then(|| ["/", &forward].concat());
+            // A file URL keeps the slash before a drive letter (`file:///D:/ws`) and
+            // percent-encodes its path, so also redact that spelling: the URL becomes
+            // `file://<label>` on every platform. Parsed as a string, so Windows-style
+            // paths work on Unix too.
+            let url_path = url::Url::parse(&["file:///", forward.trim_start_matches('/')].concat())
+                .ok()
+                .map(|url| url.path().to_owned());
             [Some(p.to_owned()), Some(p.cow_replace('\\', r"\\").into_owned()), Some(forward), url_path]
         })
         .flatten()
