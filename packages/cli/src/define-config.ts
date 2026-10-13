@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { ignoreInput, ignoreOutput } from '@voidzero-dev/vite-task-client';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
+import { searchForWorkspaceRoot } from 'vite';
 import type { Alias, Plugin, PluginOption, UserConfig } from 'vite';
 import {
   defineConfig as viteDefineConfig,
@@ -748,8 +750,72 @@ function vitePlusCoverageVersionGuardPlugin(): PluginOption {
 }
 
 /**
- * Inject the vitest resolver plugin, the auto-inline matcher plugin, and the
- * coverage version guard into a single inline project config. Used both for
+ * The `configureVitest` plugin hook context, narrowed to the fields the cache
+ * path plugin reads: the shared runner's resolved Vite config (`cacheDir`,
+ * `root`), the resolved `fsModuleCachePath` overrides, and the attached
+ * projects (each carrying its own resolved `fsModuleCachePath`).
+ */
+interface VitestCachePathContext {
+  vitest: {
+    viteConfig: { cacheDir: string; root: string };
+    config: { fsModuleCachePath?: string };
+    projects: Array<{ config: { fsModuleCachePath?: string } }>;
+  };
+}
+
+/**
+ * Vitest 5.0.4 enables its on-disk caches by default: the results cache
+ * (`<cacheDir>/results.json`, written atomically through `.tmp-*` siblings)
+ * and the fs module cache (`<workspaceRoot>/node_modules/.vitest-cache`, or
+ * `fsModuleCachePath` when overridden). Under `vp run`, file-system tracking
+ * would record those cache reads/writes as task inputs the run itself
+ * modifies, so every `vp test` task would stay permanently uncacheable
+ * ("not cached because it modified its input"). Tell the runner these
+ * tool-managed paths are neither inputs nor outputs, mirroring what Vite
+ * does for `.vite-temp` and the optimizer cache dir.
+ *
+ * The `configureVitest` hook fires once PER PROJECT after `vitest.projects`
+ * is attached, but the cache paths are instance-global — register them once
+ * per shared instance, keyed weakly on identity like the coverage guard.
+ * Both calls are no-ops outside `vp run`.
+ */
+function vitePlusVitestCachePathsPlugin(): PluginOption {
+  const handledVitestInstances = new WeakSet<object>();
+  return {
+    name: 'vite-plus:vitest-cache-paths',
+    configureVitest(context: VitestCachePathContext) {
+      const { vitest } = context;
+      if (handledVitestInstances.has(vitest)) {
+        return;
+      }
+      handledVitestInstances.add(vitest);
+
+      // Results and dependency-record caches live under the resolved Vite
+      // cacheDir, which Vitest points at its own subdirectory.
+      ignoreInput(vitest.viteConfig.cacheDir);
+      ignoreOutput(vitest.viteConfig.cacheDir);
+
+      // Mirror Vitest's fs module cache layout: the shared root cache plus
+      // any per-project override.
+      const rootCache =
+        vitest.config.fsModuleCachePath ??
+        join(searchForWorkspaceRoot(vitest.viteConfig.root), 'node_modules', '.vitest-cache');
+      const fsCachePaths = new Set([rootCache]);
+      for (const project of vitest.projects) {
+        fsCachePaths.add(project.config.fsModuleCachePath ?? rootCache);
+      }
+      for (const fsCachePath of fsCachePaths) {
+        ignoreInput(fsCachePath);
+        ignoreOutput(fsCachePath);
+      }
+    },
+  } as PluginOption;
+}
+
+/**
+ * Inject the vitest resolver plugin, the auto-inline matcher plugin, the
+ * coverage version guard, and the cache-paths plugin into a single inline
+ * project config. Used both for
  * root configs and for object-shaped entries inside `test.projects`.
  *
  * The shapes overlap (both have an optional top-level `plugins` array and
@@ -760,6 +826,7 @@ const VITE_PLUS_TEST_PLUGIN_NAMES: ReadonlySet<string> = new Set([
   'vite-plus:vitest-resolver',
   'vite-plus:auto-inline-matcher-deps',
   'vite-plus:coverage-version-guard',
+  'vite-plus:vitest-cache-paths',
 ]);
 
 function withoutVitePlusTestPlugins(plugin: PluginOption): PluginOption {
@@ -788,6 +855,7 @@ function injectPluginIntoInlineConfig<
       vitePlusVitestResolverPlugin(),
       vitePlusAutoInlineMatcherPlugin(),
       vitePlusCoverageVersionGuardPlugin(),
+      vitePlusVitestCachePathsPlugin(),
       ...(config.plugins ?? []).filter(keepUserPlugin).map(withoutVitePlusTestPlugins),
     ],
   };
