@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { type WorkspacePackage } from '../../types/index.ts';
+import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
@@ -192,16 +192,23 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
       if (!isPlainRecord(pkg) || Object.hasOwn(pkg, 'workspaces')) {
         continue;
       }
+      const devEnginePackageManager = isPlainRecord(pkg.devEngines)
+        ? pkg.devEngines.packageManager
+        : undefined;
       if (
         directory !== projectPath &&
         fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) &&
         (pkg.packageManager === undefined ||
           (typeof pkg.packageManager === 'string' && pkg.packageManager.startsWith('pnpm@'))) &&
         (pkg.packageManager !== undefined ||
-          !isPlainRecord(pkg.devEngines) ||
-          pkg.devEngines.packageManager === undefined ||
-          (isPlainRecord(pkg.devEngines.packageManager) &&
-            pkg.devEngines.packageManager.name === 'pnpm'))
+          devEnginePackageManager === undefined ||
+          (Array.isArray(devEnginePackageManager)
+            ? devEnginePackageManager.find(
+                (entry: unknown): entry is Record<string, unknown> =>
+                  isPlainRecord(entry) &&
+                  Object.values(PackageManager).some((name) => name === entry.name),
+              )?.name === 'pnpm'
+            : isPlainRecord(devEnginePackageManager) && devEnginePackageManager.name === 'pnpm'))
       ) {
         projects.push(directory);
       }

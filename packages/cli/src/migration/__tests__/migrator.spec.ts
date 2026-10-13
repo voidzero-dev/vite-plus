@@ -2013,16 +2013,38 @@ describe('standalone pnpm child project boundaries', () => {
     });
   });
 
-  it('preserves a child that declares pnpm in devEngines and has its own lockfile', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'web/package.json'),
-      JSON.stringify({ name: 'web', devEngines: { packageManager: { name: 'pnpm' } } }),
-    );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
-    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
-      packages: ['.'],
-    });
-  });
+  it.each([
+    { packageManager: { name: 'pnpm' } },
+    { packageManager: [{ name: 'pnpm' }] },
+    { packageManager: [{ name: 'pnpm' }, { name: 'npm' }] },
+  ])(
+    'preserves a child that declares pnpm in devEngines (%j) and has its own lockfile',
+    ({ packageManager }) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'web/package.json'),
+        JSON.stringify({ name: 'web', devEngines: { packageManager } }),
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+      expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+        packages: ['.'],
+      });
+    },
+  );
+
+  it.each(['npm', 'yarn', 'bun'])(
+    'does not add a child boundary when devEngines lists %s before pnpm',
+    (name) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'web/package.json'),
+        JSON.stringify({
+          name: 'web',
+          devEngines: { packageManager: [{ name }, { name: 'pnpm' }] },
+        }),
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+      expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+    },
+  );
 
   it('preserves independent install roots in multiple child projects', () => {
     fs.mkdirSync(path.join(tmpDir, 'apps'));
