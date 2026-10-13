@@ -14,8 +14,29 @@ export const level: Level = Level.High;
 '`
 
 
+## `vpt mkdir -p node_modules/ts-cjs-dep`
+
+
+## `vpt write-file node_modules/ts-cjs-dep/package.json '{ "name": "ts-cjs-dep", "main": "./index.ts" }
+'`
+
+
+## `vpt write-file node_modules/ts-cjs-dep/index.ts 'enum Kind { Cjs = '\''cjs'\'' }
+const kind: Kind = Kind.Cjs;
+module.exports = { kind };
+'`
+
+
 ## `vpx ./src/ts-dependency.ts`
 
 ```
 ts-dep: high
+```
+
+## `vpx ./src/require-ts-dependency.cts`
+
+A CommonJS TypeScript dependency loaded with require()
+
+```
+ts-cjs-dep: cjs
 ```
