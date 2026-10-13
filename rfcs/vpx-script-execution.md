@@ -326,7 +326,7 @@ The detection rules are pure functions over `(tokens, cwd)` and are unit tested 
 
 - `"vpx": "./bin/vpx"` sits next to `vp` and `vpr`. The shim imports `dist/vpx-bin.js`, a separate entry that loads neither the CLI bundle nor the native binding; the script's own Node.js process loads the binding through the preload.
 - Script mode: the same detection rules (`vpx-script.ts`), then `spawn(process.execPath, ['--require', preload, '--import', registerUrl, ...nodeArgs], { stdio: 'inherit' })`, with the signal handling described in [Process Model](#process-model).
-- Package mode, `--help`, and `--version` go to the global `vpx` found on `PATH`, skipping `node_modules/.bin` directories. Without one, package mode prints that running package binaries needs the global CLI, and `--version` prints this package's version. Inside `vp run` and package manager scripts, where `node_modules/.bin/vpx` shadows the global shim, `vpx eslint .` therefore behaves as before.
+- Package mode, `--help`, and `--version` go to the global `vpx` found on `PATH`, skipping `node_modules/.bin` directories. Without one, package mode prints that running package binaries needs the global CLI, and `--version` prints this package's version. Inside `vp run` and package manager scripts, where `node_modules/.bin/vpx` shadows the global shim, `vpx eslint .` therefore behaves as before, though it starts Node.js first: `vpx -h` takes about 28 ms through the local bin against 4 ms through the global binary.
 - A unit test checks that the Rust and TypeScript lists of script extensions and value-taking Node.js options stay identical.
 
 ### 2. Loader Resolution
@@ -595,7 +595,7 @@ There are no shebangs. `vpx scripts\a.ts` works through the file-exists rule; th
 
 ### Inside `vp run` and `package.json` Scripts
 
-With the global CLI installed, `node_modules/.bin/vpx` (the project-local bin) shadows the global shim on `PATH` inside `vp run` and package manager scripts. Both resolve the same loader and the same Node.js, so the difference is the extra parent process of the local bin. Without the global CLI, only the local bin exists and package mode prints the existing "requires the global CLI" hint.
+With the global CLI installed, `node_modules/.bin/vpx` (the project-local bin) shadows the global shim on `PATH` inside `vp run` and package manager scripts. Both resolve the same loader and the same Node.js, so the difference is the extra parent process of the local bin: about 22–26 ms for a script (see [Performance](#performance)) and about 25 ms for package mode. Without the global CLI, only the local bin exists and package mode prints the existing "requires the global CLI" hint.
 
 ## Testing Strategy
 
