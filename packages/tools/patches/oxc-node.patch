@@ -17,7 +17,7 @@ index 5aa1fa6..cc72cb2 100644
  [features]
  # Leave the global allocator to the host. Enable this when linking oxc-node into
 diff --git a/src/lib.rs b/src/lib.rs
-index ab2c496..706c7ef 100644
+index 4fa05a3..24c3c9b 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -285,7 +285,7 @@ static TSCONFIG_OVERRIDE: Mutex<TsconfigOverride> =
