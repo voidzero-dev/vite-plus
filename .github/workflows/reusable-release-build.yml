@@ -312,7 +312,24 @@ jobs:
             mkdir -p target/x86_64-unknown-freebsd/release
             cp "$build_dir/x86_64-unknown-freebsd/release/vp" target/x86_64-unknown-freebsd/release/vp
             cp "$build_dir/x86_64-unknown-freebsd/release/libvite_plus_cli.so" packages/cli/binding/vite-plus.freebsd-x64.node
-            node -e 'const assert=require("node:assert/strict"),binding=require("./packages/cli/binding/vite-plus.freebsd-x64.node");assert.equal(typeof binding.run,"function");assert.equal(typeof binding.BindingBundler,"function")'
+            node <<'JS'
+            const assert = require('node:assert/strict');
+            const binding = require('./packages/cli/binding/vite-plus.freebsd-x64.node');
+            assert.equal(typeof binding.run, 'function');
+            assert.equal(typeof binding.BindingBundler, 'function');
+            binding.runCommand({
+              binName: process.execPath,
+              args: ['-e', 'process.exit(7)'],
+              envs: {},
+              cwd: process.cwd(),
+            }).then((result) => {
+              assert.equal(result.exitCode, 7);
+              assert.deepEqual(result.pathAccesses, {});
+            }).catch((error) => {
+              console.error(error);
+              process.exitCode = 1;
+            });
+            JS
 
             # Exercise the installer and system Node.js fallback without
             # downloading this release's not-yet-published npm packages.

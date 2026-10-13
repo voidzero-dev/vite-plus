@@ -8,15 +8,17 @@ publish = false
 rust-version.workspace = true
 
 [dependencies]
-fspy = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true }
 tracing = { workspace = true }
 vp_error = { workspace = true }
 vt_path = { workspace = true }
 vt_powershell = { workspace = true }
 vp_shared = { workspace = true }
 which = { workspace = true, features = ["tracing"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+fspy = { workspace = true }
+tokio-util = { workspace = true }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 nix = { workspace = true, features = ["signal", "term"] }
