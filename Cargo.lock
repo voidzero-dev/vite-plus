@@ -8383,6 +8383,7 @@ dependencies = [
  "shell-escape",
  "tempfile",
  "toml",
+ "url",
  "vt_pty_terminal_test",
  "vt_pty_terminal_test_client",
  "vt_snapshot_test",
