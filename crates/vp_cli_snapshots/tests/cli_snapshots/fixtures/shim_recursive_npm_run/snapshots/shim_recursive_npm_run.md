@@ -1,5 +1,10 @@
 # shim_recursive_npm_run
 
+## `node --version`
+
+Prepare the pinned runtime before checking recursive npm execution
+
+
 ## `npm run outer`
 
 Outer script calls npm run inner recursively
