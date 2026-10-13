@@ -577,7 +577,14 @@ async function upgradeDependencies(): Promise<void> {
   // Keep the selected versions available if installation or upstream sync fails.
   writeMetaFiles();
 
-  for (const args of [['install', '--no-frozen-lockfile'], ['tool', 'sync-remote'], ['dedupe']]) {
+  for (const args of [
+    ['install', '--no-frozen-lockfile'],
+    ['tool', 'sync-remote'],
+    // Refresh both workspace consumers within Vite's range, even when it has not
+    // changed. Preserve the synced ranges; install and dedupe can keep old locks.
+    ['update', '--recursive', '@voidzero-dev/vite-task-client', '--no-save', '--lockfile-only'],
+    ['dedupe'],
+  ]) {
     execFileSync('pnpm', args, { cwd: ROOT, stdio: 'inherit' });
   }
   // sync-remote installs the merged workspace. Dedupe can select a newer dts

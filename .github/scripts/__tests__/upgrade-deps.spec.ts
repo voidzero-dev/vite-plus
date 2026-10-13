@@ -91,7 +91,7 @@ test.each([false, true])(
         });
         writeJson(parserPath, { version: '0.11.2' });
       }
-      if (commands.length === 4) {
+      if (commands.length === 5) {
         expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.11.2');
       }
       return Buffer.from('');
@@ -107,6 +107,7 @@ test.each([false, true])(
       expect(commands).toEqual([
         ['install', '--no-frozen-lockfile'],
         ['tool', 'sync-remote'],
+        ['update', '--recursive', '@voidzero-dev/vite-task-client', '--no-save', '--lockfile-only'],
         ['dedupe'],
         ['install', '--no-frozen-lockfile'],
       ]);

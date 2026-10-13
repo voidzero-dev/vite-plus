@@ -144,7 +144,9 @@ jobs:
                `rolldown/scripts/package.json` or vite's internals), bump vp's
                `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
                then re-run `pnpm tool sync-remote` until it exits 0. Complete the remaining
-               upgrade operations: `pnpm dedupe`,
+               upgrade operations:
+               `pnpm update --recursive @voidzero-dev/vite-task-client --no-save --lockfile-only`,
+               `pnpm dedupe`,
                `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
                `pnpm install --no-frozen-lockfile` before building or testing.
             2. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any

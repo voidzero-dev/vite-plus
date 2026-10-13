@@ -24,7 +24,7 @@
   ],
   "packageRules": [
     {
-      "description": "CLI's vite-task-client range follows the bundled Vite version through pnpm tool sync-remote.",
+      "description": "CLI's vite-task-client range follows bundled Vite through pnpm tool sync-remote; upgrade-deps.ts refreshes the lockfile within that range.",
       "matchManagers": ["npm"],
       "matchFileNames": ["packages/cli/package.json"],
       "matchPackageNames": ["@voidzero-dev/vite-task-client"],
