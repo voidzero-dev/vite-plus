@@ -188,37 +188,27 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     let platform = Platform::current();
     let cache_dir = crate::cache::get_cache_dir()?;
 
-    // Get paths from provider
-    let binary_relative_path = provider.binary_relative_path(platform);
-    let bin_dir_relative_path = provider.bin_dir_relative_path(platform);
-
     // Cache path: <DATA>/js_runtime/{runtime}/{version}/
-    let install_dir = cache_dir.join(provider.name()).join(version);
+    let runtime = JsRuntime {
+        runtime_type,
+        version: version.into(),
+        install_dir: cache_dir.join(provider.name()).join(version),
+        binary_relative_path: provider.binary_relative_path(platform),
+        bin_dir_relative_path: provider.bin_dir_relative_path(platform),
+    };
+    let install_dir = &runtime.install_dir;
+    let binary_path = runtime.get_binary_path();
 
-    // Check if already cached
-    let binary_path = install_dir.join(&binary_relative_path);
     if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
         tracing::debug!("{} {version} already cached at {install_dir:?}", provider.name());
-        return Ok(JsRuntime {
-            runtime_type,
-            version: version.into(),
-            install_dir,
-            binary_relative_path,
-            bin_dir_relative_path,
-        });
+        return Ok(runtime);
     }
 
     // Lock before downloading so concurrent commands share one download and
     // extraction. A peer may finish installing while we wait for the lock.
-    let _lock = lock_installation(&install_dir, version).await?;
+    let _lock = lock_installation(install_dir, version).await?;
     if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        return Ok(JsRuntime {
-            runtime_type,
-            version: version.into(),
-            install_dir,
-            binary_relative_path,
-            bin_dir_relative_path,
-        });
+        return Ok(runtime);
     }
 
     let download_message = format!("Downloading {} v{version}...", provider.name());
@@ -229,7 +219,6 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
 
     // Create temp directory for download under cache_dir to ensure rename works
     // (rename fails with EXDEV if source and target are on different filesystems)
-    tokio::fs::create_dir_all(&cache_dir).await?;
     let temp_dir = TempDir::new_in(&cache_dir)?;
     let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
     let archive_path = temp_path.join(&download_info.archive_filename);
@@ -280,17 +269,11 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     .await?;
 
     // Move extracted directory to cache location
-    move_to_cache(&extracted_path, &install_dir, &binary_path).await?;
+    move_to_cache(&extracted_path, install_dir, &binary_path).await?;
 
     tracing::info!("{} {version} installed at {install_dir:?}", provider.name());
 
-    Ok(JsRuntime {
-        runtime_type,
-        version: version.into(),
-        install_dir,
-        binary_relative_path,
-        bin_dir_relative_path,
-    })
+    Ok(runtime)
 }
 
 /// Predicate for the content-integrity retry in
@@ -1325,6 +1308,10 @@ mod tests {
         )
         .await;
     }
+
+    // ==========================================
+    // Multi-source version reading tests
+    // ==========================================
 
     #[tokio::test]
     async fn test_node_version_file_takes_priority() {

@@ -433,22 +433,18 @@ fn extract_zip(archive_path: &AbsolutePath, target_dir: &AbsolutePath) -> Result
 
 /// Lock a runtime version until the returned file is dropped.
 pub async fn lock_installation(target: &AbsolutePath, version: &str) -> Result<File, Error> {
-    // Create parent directory
     let parent = target.parent().ok_or_else(|| Error::ExtractionFailed {
         reason: "Target path has no parent directory".into(),
     })?;
     fs::create_dir_all(&parent).await?;
 
-    // Share the lock across processes for the entire download and installation.
     let lock_path = parent.join(vt_str::format!("{version}.lock"));
     tracing::debug!("Acquiring lock file: {lock_path:?}");
 
-    // Acquire file lock in a blocking task to avoid blocking the async runtime.
-    // The lock() call blocks until the lock is acquired.
+    // Wait for the file lock without blocking the async runtime.
     let lock_guard = tokio::task::spawn_blocking(move || {
         let lock_file =
             File::options().write(true).create(true).truncate(false).open(lock_path.as_path())?;
-        // Acquire exclusive lock (blocks until available)
         lock_file.lock()?;
         tracing::debug!("Lock acquired: {lock_path:?}");
         Ok::<_, std::io::Error>(lock_file)
