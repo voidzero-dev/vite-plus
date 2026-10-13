@@ -15,15 +15,28 @@ const dimensions = (file) => {
 for (const phase of ['record', 'compare', 'failure']) {
   const runner = await createVitest({
     config: false, watch: false, reporters: [], update: phase === 'record',
-  }, defineConfig({ test: {
-    include: [phase === 'failure' ? 'failure.test.js' : 'browser.test.js'],
-    browser: {
-      enabled: true, provider: playwright(), headless: !headed, ui: false,
-      instances: [{ browser: 'chromium' }], viewport: { width: 800, height: 600 },
-      screenshotFailures: true, screenshotDirectory: 'manual-images',
-      expect: { toMatchScreenshot: { screenshotDirectory: 'reference-images' } },
+  }, defineConfig({
+    plugins: [{
+      name: 'browser-server-port',
+      // Set port 0 after Vitest resolves its defaults so the OS chooses the port.
+      enforce: 'post',
+      config: {
+        order: 'post',
+        handler(config) {
+          config.test.api.port = 0;
+        },
+      },
+    }],
+    test: {
+      include: [phase === 'failure' ? 'failure.test.js' : 'browser.test.js'],
+      browser: {
+        enabled: true, provider: playwright(), headless: !headed, ui: false,
+        instances: [{ browser: 'chromium' }], viewport: { width: 800, height: 600 },
+        screenshotFailures: true, screenshotDirectory: 'manual-images',
+        expect: { toMatchScreenshot: { screenshotDirectory: 'reference-images' } },
+      },
     },
-  } }));
+  }));
   try {
     const result = await runner.start();
     assert.equal(result.unhandledErrors.length, 0, JSON.stringify(result.unhandledErrors));

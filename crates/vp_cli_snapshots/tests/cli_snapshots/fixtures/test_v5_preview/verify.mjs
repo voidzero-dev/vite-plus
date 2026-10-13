@@ -28,6 +28,17 @@ let runner;
 try {
   runner = await createVitest({ config: false, watch: false, reporters: [] }, defineConfig({
     ...(browserDefines ? { define: { __VP_STRING_DEFINE__: JSON.stringify('/messages'), __VP_BOOL_DEFINE__: 'false' } } : {}),
+    plugins: [{
+      name: 'browser-server-port',
+      // Set port 0 after Vitest resolves its defaults so the OS chooses the port.
+      enforce: 'post',
+      config: {
+        order: 'post',
+        handler(config) {
+          config.test.api.port = 0;
+        },
+      },
+    }],
     test: {
       include: [browserDefines ? 'defines.test.js' : realTimers ? 'upstream.test.js' : 'browser.test.js'],
       browser: { enabled: true, provider, headless: false, instances: [{ browser: 'chromium' }] },
