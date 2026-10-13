@@ -24,10 +24,11 @@
   ],
   "packageRules": [
     {
-      "description": "Bump vite-task-client ranges for in-range releases so renovate-lockfiles can update the lockfile when artifact updates are skipped.",
+      "description": "CLI's vite-task-client range follows the bundled Vite version through pnpm tool sync-remote.",
       "matchManagers": ["npm"],
+      "matchFileNames": ["packages/cli/package.json"],
       "matchPackageNames": ["@voidzero-dev/vite-task-client"],
-      "rangeStrategy": "bump"
+      "enabled": false
     },
     {
       "description": "Ignore toolchain npm packages managed by .github/workflows/upgrade-deps.yml through upgrade-deps.ts and sync-remote. Official Vitest packages share the runner version; the independently versioned @vitest/browser-webdriverio remains enabled.",

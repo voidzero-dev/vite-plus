@@ -12,6 +12,7 @@ import {
   mergePnpmWorkspaces,
   syncCargoOxcVersions,
   syncViteDevtoolsDependencies,
+  syncViteTaskClientDependency,
 } from '../sync-remote-deps.ts';
 import { alignVendoredVitestDependencies } from '../vendored-vitest.ts';
 
@@ -299,6 +300,33 @@ describe('syncViteDevtoolsDependencies()', () => {
     expect(() => syncViteDevtoolsDependencies({}, {})).toThrow(
       'Vite package.json must define @vitejs/devtools in devDependencies and peerDependencies',
     );
+  });
+});
+
+describe('syncViteTaskClientDependency()', () => {
+  test.each(['^0.3.0', '~0.1.2'])('follows Vite even when its range is %s', (range) => {
+    const cliPackage = {
+      devDependencies: { '@voidzero-dev/vite-task-client': '^0.2.0', yaml: '^2.8.0' },
+    };
+    const vitePackage = { devDependencies: { '@voidzero-dev/vite-task-client': range } };
+
+    syncViteTaskClientDependency(cliPackage, vitePackage);
+
+    expect(cliPackage.devDependencies).toEqual({
+      '@voidzero-dev/vite-task-client': range,
+      yaml: '^2.8.0',
+    });
+  });
+
+  test.each([undefined, '', ' '])('rejects an absent or empty Vite range: %s', (range) => {
+    const cliPackage = { devDependencies: { '@voidzero-dev/vite-task-client': '^0.2.0' } };
+    const vitePackage =
+      range === undefined ? {} : { devDependencies: { '@voidzero-dev/vite-task-client': range } };
+
+    expect(() => syncViteTaskClientDependency(cliPackage, vitePackage)).toThrow(
+      'Vite package.json must define @voidzero-dev/vite-task-client in devDependencies',
+    );
+    expect(cliPackage.devDependencies['@voidzero-dev/vite-task-client']).toBe('^0.2.0');
   });
 });
 
