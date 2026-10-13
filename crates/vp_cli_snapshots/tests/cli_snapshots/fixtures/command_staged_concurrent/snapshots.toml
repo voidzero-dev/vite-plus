@@ -2,6 +2,7 @@
 name = "command_staged_concurrent"
 vp = "local"
 steps = [
+  { argv = ["node", "--version"], snapshot = false, timeout = 120000, comment = "Prepare the pinned runtime before the staged command's 10-second limit" },
   { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
   { argv = ["git", "add", "-A"], snapshot = false },
   { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "init"], snapshot = false },

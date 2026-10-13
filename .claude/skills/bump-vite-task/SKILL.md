@@ -1,6 +1,6 @@
 ---
 name: bump-vite-task
-description: Bump vite-task git dependency to the latest main commit. Use when you need to update the vite-task git-dependency crates (vt, fspy, pty_terminal_test, and friends; the authoritative set lives in Cargo.toml) in vite-plus.
+description: Bump vite-task git dependency to the latest main commit. Use when you need to update the vite-task git-dependency crates (vt, fspy, vt_pty_terminal_test, and friends; the authoritative set lives in Cargo.toml) in vite-plus.
 allowed-tools: Read, Grep, Glob, Edit, Bash, Agent, WebFetch
 ---
 
@@ -53,7 +53,7 @@ vite-task changes often affect CLI output, which means snapshot tests need updat
 
 **PTY snapshot suite (`crates/vp_cli_snapshots`):**
 
-- A bump can break it two ways: runner compilation (it consumes vite-task's `pty_terminal_test`, `pty_terminal_test_client`, and `snapshot_test` crates directly, so their API changes surface here; fix in the runner) and recorded CLI output.
+- A bump can break it two ways: runner compilation (it consumes vite-task's `vt_pty_terminal_test`, `vt_pty_terminal_test_client`, and `vt_snapshot_test` crates directly, so their API changes surface here; fix in the runner) and recorded CLI output.
 - Update output locally with real assertions: `UPDATE_SNAPSHOTS=1 just snapshot-test`, then review the `.md` diffs like code. Without a built `packages/cli/dist`, run the global flavor only: `VP_SNAP_SKIP_FLAVORS=local UPDATE_SNAPSHOTS=1 just snapshot-test`.
 - Windows runs in the `CLI snapshot test (Windows)` CI job via a cross-compiled nextest archive; snapshots are OS-shared, so a Windows-only diff there means a redaction gap, not a re-record.
 - Reference: `crates/vp_cli_snapshots/tests/cli_snapshots/README.md`.

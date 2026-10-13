@@ -48,7 +48,7 @@ async function checkpoint(phase) {
   process.stdin.resume();
   const id = randomBytes(16).toString('hex');
   const name = Buffer.from(`install:${phase}:ready`).toString('base64url');
-  process.stderr.write(`\x1b]2;pty-terminal-test:${id}:${name}\x1b\\`);
+  process.stderr.write(`\x1b]2;vt-pty-terminal-test:${id}:${name}\x1b\\`);
   await nextInput;
   process.stdin.pause();
 }

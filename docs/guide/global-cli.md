@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { getScrollOffset } from 'vitepress';
 import { nextTick, onMounted, onUnmounted } from 'vue';
 
 function openTarget() {
@@ -18,9 +17,7 @@ function openTarget() {
   // VitePress cannot measure a heading inside closed details. Correct the scroll after revealing it.
   requestAnimationFrame(() => {
     if (!target.isConnected) return;
-    const top = window.scrollY + target.getBoundingClientRect().top - getScrollOffset()
-      + Number.parseInt(window.getComputedStyle(target).paddingTop, 10);
-    window.scrollTo(0, top);
+    target.scrollIntoView({ block: 'start' });
   });
 }
 
@@ -157,6 +154,17 @@ Low-priority managed shims live in `<DATA>/fallback-bin`, where `<DATA>` is the 
 - **Purpose**: Custom npm registry URL
 - **Default**: `https://registry.npmjs.org`
 - **CLI equivalent**: `--registry`
+- **Managed package managers**: When Vite+ downloads a pinned npm, pnpm,
+  Yarn, or Bun version, it also reads the workspace-root and user `.npmrc`.
+  Package-scoped registries and registry-scoped `_authToken`, `_auth`, or
+  `username`/`_password` credentials are honored. Keep secrets in environment
+  variables and reference them from `.npmrc`, for example:
+
+  ```ini
+  registry=https://npm.corp.example/repository/npm/
+  //npm.corp.example/repository/npm/:_authToken=${NPM_TOKEN}
+  ```
+
 - **Example**:
   ```bash
   curl -fsSL https://vite.plus | NPM_CONFIG_REGISTRY=https://registry.npmmirror.com bash

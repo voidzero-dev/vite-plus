@@ -1,0 +1,26 @@
+name: Setup Node and pnpm for CI
+description: Install CI dependencies without slow pnpm cache restores on macOS and Windows.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node and pnpm with caching on Linux
+      if: runner.os == 'Linux'
+      uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+
+    # Restoring the pnpm store archive costs more than a fresh install on
+    # these runners. Keep the same Node, pnpm, and install settings.
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      if: runner.os != 'Linux'
+      with:
+        node-version-file: .node-version
+        registry-url: https://registry.npmjs.org
+        package-manager-cache: false
+
+    - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      if: runner.os != 'Linux'
+
+    - name: Install dependencies
+      if: runner.os != 'Linux'
+      shell: bash
+      run: pnpm install --frozen-lockfile --ignore-scripts

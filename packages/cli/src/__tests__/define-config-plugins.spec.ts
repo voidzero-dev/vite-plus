@@ -1,5 +1,11 @@
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import type { Plugin } from 'vite';
-import { describe, expect, it } from 'vitest';
+import { normalizePath } from 'vite';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createVitest, type VitestPluginContext } from 'vitest/node';
 
 import {
   assertCoverageProviderVersionMatch,
@@ -12,8 +18,17 @@ import {
 } from '../define-config.ts';
 import { VITEST_VERSION } from '../utils/constants.ts';
 
+// Capture the runner notifications so the cache-paths plugin can be asserted
+// without a live `vp run` around the test process.
+const taskClientMocks = vi.hoisted(() => ({
+  ignoreInput: vi.fn(),
+  ignoreOutput: vi.fn(),
+}));
+vi.mock('@voidzero-dev/vite-task-client', () => taskClientMocks);
+
 const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 const COVERAGE_GUARD_PLUGIN_NAME = 'vite-plus:coverage-version-guard';
+const CACHE_PATHS_PLUGIN_NAME = 'vite-plus:vitest-cache-paths';
 
 function pluginName(p: unknown): string | undefined {
   if (p && typeof p === 'object' && 'name' in p && typeof p.name === 'string') {
@@ -30,7 +45,8 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(result.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(result.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(result.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-    expect(pluginName(result.plugins[3])).toBe('user-existing-root-plugin');
+    expect(pluginName(result.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
+    expect(pluginName(result.plugins[4])).toBe('user-existing-root-plugin');
   });
 
   it('injects resolver + auto-inline plugins into an inline-object project entry, preserving existing plugins', () => {
@@ -52,9 +68,10 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-    expect(pluginName(project.plugins[3])).toBe('user-unit-project-plugin');
+    expect(pluginName(project.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
+    expect(pluginName(project.plugins[4])).toBe('user-unit-project-plugin');
     // Sanity: the existing plugin reference is preserved (clone shallow-copies the array).
-    expect(project.plugins[3]).toBe(existing);
+    expect(project.plugins[4]).toBe(existing);
   });
 
   it('injects plugins into the return value of a function-shaped project entry', () => {
@@ -78,7 +95,8 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(resolved.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(resolved.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(resolved.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-    expect(pluginName(resolved.plugins[3])).toBe('user-fn-project-plugin');
+    expect(pluginName(resolved.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
+    expect(pluginName(resolved.plugins[4])).toBe('user-fn-project-plugin');
   });
 
   it('passes string-glob project entries through unchanged', () => {
@@ -105,10 +123,11 @@ describe('defineConfig project plugin injection', () => {
 
     const project = result.test.projects[0] as { plugins: unknown[]; test: { name: string } };
     expect(project.test.name).toBe('no-plugins');
-    expect(project.plugins).toHaveLength(3);
+    expect(project.plugins).toHaveLength(4);
     expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
+    expect(pluginName(project.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
   });
 
   it.each([undefined, true])('inherits root plugins with extends %s', (extendsRoot) => {
@@ -140,6 +159,7 @@ describe('defineConfig project plugin injection', () => {
       RESOLVER_PLUGIN_NAME,
       AUTO_INLINE_PLUGIN_NAME,
       COVERAGE_GUARD_PLUGIN_NAME,
+      CACHE_PATHS_PLUGIN_NAME,
     ]);
   });
 
@@ -149,6 +169,7 @@ describe('defineConfig project plugin injection', () => {
       RESOLVER_PLUGIN_NAME,
       AUTO_INLINE_PLUGIN_NAME,
       COVERAGE_GUARD_PLUGIN_NAME,
+      CACHE_PATHS_PLUGIN_NAME,
       'user',
     ]);
   });
@@ -159,9 +180,9 @@ describe('defineConfig project plugin injection', () => {
         projects: [{ extends: false, test: { name: 'child' } }, { test: { name: 'inherited' } }],
       },
     });
-    expect(config.plugins).toHaveLength(3);
+    expect(config.plugins).toHaveLength(4);
     const [independent, inherited] = config.test!.projects! as { plugins?: unknown[] }[];
-    expect(independent.plugins).toHaveLength(3);
+    expect(independent.plugins).toHaveLength(4);
     expect(inherited.plugins).toBeUndefined();
   });
 });
@@ -389,6 +410,176 @@ describe('checkCoverageProviderVersion', () => {
     expect(() => checkCoverageProviderVersion({ enabled: true }, '/project', deps)).toThrow(
       /@vitest\/coverage-v8@4\.1\.8/,
     );
+  });
+});
+
+/** Extract the cache-paths plugin from a fresh defineConfig. */
+function getCachePathsPlugin(): { configureVitest: (ctx: unknown) => void } {
+  const result = defineConfig({}) as { plugins: unknown[] };
+  const plugin = result.plugins.find(
+    (p): p is { configureVitest: (ctx: unknown) => void } =>
+      !!p && typeof p === 'object' && (p as { name?: unknown }).name === CACHE_PATHS_PLUGIN_NAME,
+  );
+  if (!plugin) {
+    throw new Error('cache-paths plugin not found');
+  }
+  return plugin;
+}
+
+describe('defineConfig vitest cache paths plugin', () => {
+  afterEach(() => {
+    taskClientMocks.ignoreInput.mockClear();
+    taskClientMocks.ignoreOutput.mockClear();
+  });
+
+  it('registers the cache-paths plugin with a configureVitest hook', () => {
+    const result = defineConfig({}) as { plugins: unknown[] };
+    const plugin = result.plugins.find(
+      (p): p is Record<string, unknown> =>
+        !!p && typeof p === 'object' && (p as { name?: unknown }).name === CACHE_PATHS_PLUGIN_NAME,
+    );
+    expect(plugin).toBeDefined();
+    expect(typeof plugin?.configureVitest).toBe('function');
+  });
+
+  it('ignores the results cache dir, the default fs module cache, and per-project overrides', () => {
+    // Anchor searchForWorkspaceRoot at a known directory: a package.json
+    // without workspace markers makes the probe root itself the workspace root.
+    const root = mkdtempSync(join(tmpdir(), 'vp-cache-paths-'));
+    writeFileSync(join(root, 'package.json'), '{"name":"probe","private":true}\n');
+    try {
+      const plugin = getCachePathsPlugin();
+      plugin.configureVitest({
+        vitest: {
+          viteConfig: { cacheDir: join(root, 'node_modules/.vite/vitest/deadbeef'), root },
+          config: {},
+          projects: [{ config: {} }, { config: { fsModuleCachePath: '/custom/fs-cache' } }],
+        },
+      });
+
+      const ignoredInputs = taskClientMocks.ignoreInput.mock.calls.map(([p]) => p);
+      const ignoredOutputs = taskClientMocks.ignoreOutput.mock.calls.map(([p]) => p);
+      expect(ignoredInputs).toEqual(ignoredOutputs);
+      expect(ignoredInputs).toContain(join(root, 'node_modules/.vite/vitest/deadbeef'));
+      expect(ignoredInputs).toContain(join(root, 'node_modules/.vitest-cache'));
+      expect(ignoredInputs).toContain('/custom/fs-cache');
+      expect(ignoredInputs).toHaveLength(3);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers the runner-level fsModuleCachePath over the workspace default', () => {
+    const plugin = getCachePathsPlugin();
+    plugin.configureVitest({
+      vitest: {
+        viteConfig: { cacheDir: '/ws/node_modules/.vite/vitest/deadbeef', root: '/ws' },
+        config: { fsModuleCachePath: '/ws/custom-root-cache' },
+        projects: [{ config: {} }],
+      },
+    });
+    const ignoredInputs = taskClientMocks.ignoreInput.mock.calls.map(([p]) => p);
+    expect(ignoredInputs).toContain('/ws/custom-root-cache');
+    expect(ignoredInputs).not.toContain('/ws/node_modules/.vitest-cache');
+  });
+
+  it.each(['', '/ws/custom-root-cache'])(
+    'uses truthy fallbacks for empty overrides (root: %s)',
+    (rootCache) => {
+      const plugin = getCachePathsPlugin();
+      plugin.configureVitest({
+        vitest: {
+          viteConfig: { cacheDir: '/ws/results', root: '/ws' },
+          config: { fsModuleCachePath: rootCache },
+          projects: [{ config: { fsModuleCachePath: '' } }],
+        },
+      });
+      const ignoredInputs = taskClientMocks.ignoreInput.mock.calls.map(([path]) => path);
+      expect(ignoredInputs).toEqual([
+        '/ws/results',
+        rootCache || join('/ws', 'node_modules/.vitest-cache'),
+      ]);
+      expect(taskClientMocks.ignoreOutput.mock.calls).toEqual(
+        taskClientMocks.ignoreInput.mock.calls,
+      );
+    },
+  );
+
+  it('deduplicates paths and observes a new project list after a restart', () => {
+    const plugin = getCachePathsPlugin();
+    const vitest = {
+      viteConfig: { cacheDir: '/ws/node_modules/.vite/vitest/deadbeef', root: '/ws' },
+      config: {},
+      projects: [] as Array<{ config: { fsModuleCachePath?: string } }>,
+    };
+    plugin.configureVitest({ vitest });
+    plugin.configureVitest({ vitest });
+    expect(taskClientMocks.ignoreInput).toHaveBeenCalledTimes(2);
+    vitest.projects = [];
+    plugin.configureVitest({ vitest });
+    vitest.projects.push({ config: { fsModuleCachePath: '/ws/restarted-cache' } });
+    expect(taskClientMocks.ignoreInput).toHaveBeenCalledWith('/ws/restarted-cache');
+    expect(taskClientMocks.ignoreOutput).toHaveBeenCalledWith('/ws/restarted-cache');
+  });
+
+  it('registers projects injected by async pre hooks and after initialization', async () => {
+    // Resolve Windows short directory names before Vite canonicalizes project roots.
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'vp-injected-cache-paths-')));
+    let injectAfterStartup!: () => Promise<void>;
+    const vitest = await createVitest(
+      { root, config: false, watch: false },
+      defineConfig({
+        test: { name: 'root' },
+        plugins: [
+          {
+            name: 'inject-cache-projects',
+            configureVitest: {
+              order: 'pre',
+              async handler({ injectTestProjects }: VitestPluginContext) {
+                await Promise.resolve();
+                await injectTestProjects({
+                  extends: false,
+                  test: { name: 'injected', fsModuleCachePath: '.injected-cache' },
+                });
+                injectAfterStartup = async () => {
+                  await injectTestProjects([
+                    { extends: false, test: { name: 'later', fsModuleCachePath: '.later-cache' } },
+                    { extends: false, test: { name: 'empty', fsModuleCachePath: '' } },
+                  ]);
+                };
+              },
+            },
+            // Vitest 5.0.4's type unwraps object hooks, but its runtime accepts them.
+          } as unknown as Plugin,
+        ],
+      }),
+    );
+    try {
+      expect(taskClientMocks.ignoreInput).toHaveBeenCalledWith(
+        normalizePath(join(root, '.injected-cache')),
+      );
+      expect(taskClientMocks.ignoreOutput).toHaveBeenCalledWith(
+        normalizePath(join(root, '.injected-cache')),
+      );
+      await injectAfterStartup();
+      expect(vitest.projects.map((project) => project.name)).toEqual([
+        'root',
+        'injected',
+        'later',
+        'empty',
+      ]);
+      expect(taskClientMocks.ignoreInput).toHaveBeenCalledWith(
+        normalizePath(join(root, '.later-cache')),
+      );
+      expect(taskClientMocks.ignoreOutput).toHaveBeenCalledWith(
+        normalizePath(join(root, '.later-cache')),
+      );
+      expect(taskClientMocks.ignoreInput).not.toHaveBeenCalledWith('');
+      expect(taskClientMocks.ignoreOutput).not.toHaveBeenCalledWith('');
+    } finally {
+      await vitest.close();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

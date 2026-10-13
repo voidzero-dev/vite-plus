@@ -25,9 +25,17 @@ try {
     const runner = await createVitest({ config: false, watch: false, reporters: [] }, configFor(name));
     try {
       if (name === 'injected') {
+        // Vitest 5.0.4 rejects projects that share sequence.groupOrder but
+        // resolve different maxWorkers, and runtime-injected projects resolve
+        // maxWorkers differently from the root project. Give each injected
+        // project its own group.
+        const browserProject = project('injected-browser');
+        const nodeProject = project('injected-node', false);
+        browserProject.test.sequence = { groupOrder: 1 };
+        nodeProject.test.sequence = { groupOrder: 2 };
         await runner.injectTestProject([
-          { extends: false, ...project('injected-browser') },
-          { extends: false, ...project('injected-node', false) },
+          { extends: false, ...browserProject },
+          { extends: false, ...nodeProject },
         ]);
       }
       assert.equal(runner.projects.length, count, name);

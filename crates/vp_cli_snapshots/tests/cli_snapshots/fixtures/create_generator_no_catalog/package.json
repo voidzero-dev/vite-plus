@@ -1,0 +1,7 @@
+{
+  "name": "generator-no-catalog-fixture",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "workspaces": ["tools/*"]
+}

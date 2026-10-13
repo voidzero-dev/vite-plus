@@ -12,7 +12,7 @@ Found 0 warnings and 0 errors.
 Finished in <duration> on 3 files with <n> rules using <n> threads.
 
 ---
-vp run: 0/2 cache hit (0%). (Run `vp run --last-details` for full details)
+vp run: 0/2 cache hit (0%), 2/2 successful. (Run `vp run --last-details` for full details)
 ```
 
 ## `vpt write-file a.ts 'console.log(123)
@@ -35,5 +35,5 @@ Found 0 warnings and 0 errors.
 Finished in <duration> on 3 files with <n> rules using <n> threads.
 
 ---
-vp run: 1/2 cache hit (50%), <duration> saved. (Run `vp run --last-details` for full details)
+vp run: 1/2 cache hit (50%), 2/2 successful, <duration> saved. (Run `vp run --last-details` for full details)
 ```

@@ -76,7 +76,7 @@ jobs:
           save-cache: false
           cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       # Format-check with the oxfmt of this commit instead of the released one.
       # A release carries the oxfmt it shipped with, which trails the catalog
@@ -325,7 +325,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
@@ -404,7 +404,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -955,7 +955,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-snapshot-test-${{ matrix.target }}
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1060,7 +1060,7 @@ jobs:
         with:
           version: '*'
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1088,14 +1088,12 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
-      # Provision the managed runtime once into the real home so cases can
-      # seed from it (seed-runtime) instead of each downloading ~50MB.
-      # Best-effort: without a seed, cases that need the runtime download it
-      # themselves.
-      - name: Prewarm managed runtime
+      # Seed both the repository pin and the default LTS before command timers
+      # start. Fixtures without a version pin use LTS, not the repository pin.
+      - name: Prewarm managed runtimes
         run: |
-          "$HOME/.vite-plus/bin/vp" node --version \
-            || echo "prewarm failed; cases will download the runtime on demand"
+          "$HOME/.vite-plus/bin/vp" node --version
+          VP_NODE_VERSION=lts "$HOME/.vite-plus/bin/vp" node --version
 
       - wait: [snapshot-shells, playwright]
 
@@ -1180,7 +1178,7 @@ jobs:
         with:
           tool: cargo-nextest
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1211,15 +1209,13 @@ jobs:
         shell: bash
         run: pnpm bootstrap-cli:ci
 
-      # Provision the managed runtime once into the real home so cases can
-      # seed from it (seed-runtime) instead of each downloading ~50MB.
-      # Best-effort: without a seed, cases that need the runtime download it
-      # themselves.
-      - name: Prewarm managed runtime
+      # Seed both the repository pin and the default LTS before command timers
+      # start. Fixtures without a version pin use LTS, not the repository pin.
+      - name: Prewarm managed runtimes
         shell: bash
         run: |
-          "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
-            || echo "prewarm failed; cases will download the runtime on demand"
+          "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
+          VP_NODE_VERSION=lts "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
       # which Yarn Classic discovers when walking parent directories.
@@ -1314,7 +1310,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-musl
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1451,7 +1447,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1482,9 +1478,7 @@ jobs:
           # Entry format: "owner/repo:dir" or "owner/repo:dir:ref" (tag or branch to clone)
           repos=(
             # pnpm workspace
-            # Pinned to the latest stable tag: pnpm main pins pnpm v12 alphas,
-            # whose @pnpm/exe ships a placeholder bin that breaks pnpm's
-            # version self-switch (pnpm/pnpm#12811)
+            # Keep a fixed pnpm 11 workspace for compatibility coverage.
             "pnpm/pnpm:pnpm:v11.11.0"
             "vitejs/vite:vite"
             # yarn workspace
@@ -1564,7 +1558,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

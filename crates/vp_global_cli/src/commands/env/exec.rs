@@ -10,7 +10,7 @@
 use std::process::ExitStatus;
 
 use vp_js_runtime::NodeProvider;
-use vp_pm_cli::{download_package_manager, resolve_package_manager_version};
+use vp_pm_cli::{download_package_manager_for_cwd, resolve_package_manager_version_for_cwd};
 use vp_shared::{PrependOptions, ToolPathEnv, env_vars};
 use vt_path::AbsolutePath;
 
@@ -153,7 +153,8 @@ async fn execute_with_version(
     let mut system_package_manager = None;
     let selected_package_manager = if let Some(package_manager) = package_manager {
         let (kind, selector, hash) = parse_package_manager_spec_with_hash(package_manager)?;
-        let version = resolve_package_manager_version(kind, &selector).await?.to_string();
+        let version =
+            resolve_package_manager_version_for_cwd(cwd, kind, &selector).await?.to_string();
         Some((kind, version, hash))
     } else {
         let selected = package_manager_resolution::resolve_current_spec(cwd).await?;
@@ -206,7 +207,7 @@ async fn execute_with_version(
             Some(format!("{kind}@{system_version}"))
         } else {
             let (install_dir, _, _) =
-                download_package_manager(kind, &version, hash.as_deref()).await?;
+                download_package_manager_for_cwd(cwd, kind, &version, hash.as_deref()).await?;
             path_prefixes
                 .insert(0, (install_dir.join("bin").into_path_buf(), kind.bin_names().to_vec()));
             Some(format!("{kind}@{version}"))

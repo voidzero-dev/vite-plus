@@ -21,7 +21,7 @@ export const featureRunTranscripts: TerminalTranscript[] = [
       {
         segments: [
           { text: 'vp run:', tone: 'brand', bold: true },
-          { text: ' 0/2 cache hit (0%).', tone: 'muted' },
+          { text: ' 0/2 cache hit (0%), 2/2 successful.', tone: 'muted' },
         ],
       },
     ],
@@ -54,7 +54,7 @@ export const featureRunTranscripts: TerminalTranscript[] = [
       {
         segments: [
           { text: 'vp run:', tone: 'brand', bold: true },
-          { text: ' 2/2 cache hit (100%), 1.24s saved.', tone: 'muted' },
+          { text: ' 2/2 cache hit (100%), 2/2 successful, 1.24s saved.', tone: 'muted' },
         ],
       },
     ],
@@ -89,7 +89,7 @@ export const featureRunTranscripts: TerminalTranscript[] = [
       {
         segments: [
           { text: 'vp run:', tone: 'brand', bold: true },
-          { text: ' 1/2 cache hit (50%), 528ms saved.', tone: 'muted' },
+          { text: ' 1/2 cache hit (50%), 2/2 successful, 528ms saved.', tone: 'muted' },
         ],
       },
     ],
@@ -126,7 +126,7 @@ export const featureRunTranscripts: TerminalTranscript[] = [
       {
         segments: [
           { text: 'vp run:', tone: 'brand', bold: true },
-          { text: ' 0/2 cache hit (0%).', tone: 'muted' },
+          { text: ' 0/2 cache hit (0%), 2/2 successful.', tone: 'muted' },
         ],
       },
     ],

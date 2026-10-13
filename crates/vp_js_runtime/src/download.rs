@@ -431,42 +431,34 @@ fn extract_zip(archive_path: &AbsolutePath, target_dir: &AbsolutePath) -> Result
     Ok(())
 }
 
-/// Move extracted directory to cache location with atomic operations and file-based locking
-///
-/// Uses a file-based lock to ensure atomicity when multiple processes/threads
-/// try to install the same runtime version concurrently.
-pub async fn move_to_cache(
-    source: &AbsolutePath,
-    target: &AbsolutePathBuf,
-    binary_path: &AbsolutePath,
-    version: &str,
-) -> Result<(), Error> {
-    // Create parent directory
+/// Lock a runtime version until the returned file is dropped.
+pub async fn lock_installation(target: &AbsolutePath, version: &str) -> Result<File, Error> {
     let parent = target.parent().ok_or_else(|| Error::ExtractionFailed {
         reason: "Target path has no parent directory".into(),
     })?;
     fs::create_dir_all(&parent).await?;
 
-    // Use a file-based lock to ensure atomicity of the move operation.
-    // This prevents race conditions when multiple processes/threads
-    // try to install the same runtime version concurrently.
     let lock_path = parent.join(vt_str::format!("{version}.lock"));
     tracing::debug!("Acquiring lock file: {lock_path:?}");
 
-    // Acquire file lock in a blocking task to avoid blocking the async runtime.
-    // The lock() call blocks until the lock is acquired.
-    let lock_path_clone = lock_path.clone();
-    // Store the lock file to keep it alive until end of function
-    let _lock_guard = tokio::task::spawn_blocking(move || {
-        let lock_file = File::create(lock_path_clone.as_path())?;
-        // Acquire exclusive lock (blocks until available)
+    // Wait for the file lock without blocking the async runtime.
+    let lock_guard = tokio::task::spawn_blocking(move || {
+        let lock_file =
+            File::options().write(true).create(true).truncate(false).open(lock_path.as_path())?;
         lock_file.lock()?;
-        tracing::debug!("Lock acquired: {lock_path_clone:?}");
+        tracing::debug!("Lock acquired: {lock_path:?}");
         Ok::<_, std::io::Error>(lock_file)
     })
     .await??;
-    tracing::debug!("Lock acquired: {lock_path:?}");
+    Ok(lock_guard)
+}
 
+/// Atomically publish an extracted runtime while holding its installation lock.
+pub async fn move_to_cache(
+    source: &AbsolutePath,
+    target: &AbsolutePathBuf,
+    binary_path: &AbsolutePath,
+) -> Result<(), Error> {
     // Under the lock, decide by the binary (not just the directory) and clean up
     // here, so it can't delete a peer's install mid-race:
     //   - binary present     -> a peer's complete install, keep it and skip
@@ -710,7 +702,8 @@ mod tests {
         let target = cache.join("node").join("1.0.0");
         let binary = target.join("bin").join("node");
 
-        move_to_cache(&source, &target, &binary, "1.0.0").await.unwrap();
+        let _lock = lock_installation(&target, "1.0.0").await.unwrap();
+        move_to_cache(&source, &target, &binary).await.unwrap();
 
         assert_eq!(tokio::fs::read(binary.as_path()).await.unwrap(), b"new");
     }
@@ -726,7 +719,8 @@ mod tests {
         tokio::fs::create_dir_all(target.join("leftover").as_path()).await.unwrap();
         let binary = target.join("bin").join("node");
 
-        move_to_cache(&source, &target, &binary, "1.0.0").await.unwrap();
+        let _lock = lock_installation(&target, "1.0.0").await.unwrap();
+        move_to_cache(&source, &target, &binary).await.unwrap();
 
         assert_eq!(tokio::fs::read(binary.as_path()).await.unwrap(), b"new");
         assert!(!tokio::fs::try_exists(target.join("leftover").as_path()).await.unwrap());
@@ -746,7 +740,8 @@ mod tests {
         tokio::fs::create_dir_all(target.join("bin").as_path()).await.unwrap();
         tokio::fs::write(binary.as_path(), b"peer").await.unwrap();
 
-        move_to_cache(&source, &target, &binary, "1.0.0").await.unwrap();
+        let _lock = lock_installation(&target, "1.0.0").await.unwrap();
+        move_to_cache(&source, &target, &binary).await.unwrap();
 
         // The peer's binary is preserved, not clobbered.
         assert_eq!(tokio::fs::read(binary.as_path()).await.unwrap(), b"peer");

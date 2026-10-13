@@ -10,10 +10,10 @@ Use this page when you need to understand why a task hits or misses the cache, o
 
 Automatic data tracking has two tiers:
 
-| Tier                 | Applies to                               | Records                                                                                                                                                         |
-| -------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File system tracking | All tasks with cache enabled             | <ul><li>Files read by the command</li><li>Missing-file probes</li><li>Directory listings</li><li>Written output files</li></ul>                                 |
-| Cooperative tracking | Cache-reporting tools (`vp build` today) | <ul><li>Environment variables reported by the tool</li><li>Tool-managed paths that should not be inputs or outputs, such as `node_modules/.vite-temp`</li></ul> |
+| Tier                 | Applies to                                    | Records                                                                                                                                                         |
+| -------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File system tracking | All tasks with cache enabled                  | <ul><li>Files read by the command</li><li>Missing-file probes</li><li>Directory listings</li><li>Written output files</li></ul>                                 |
+| Cooperative tracking | Cache-reporting tools (`vp build`, `vp test`) | <ul><li>Environment variables reported by the tool</li><li>Tool-managed paths that should not be inputs or outputs, such as `node_modules/.vite-temp`</li></ul> |
 
 Vite Task starts with file system tracking for any command. A cache-reporting tool can add information that only the tool knows while it runs.
 
@@ -136,7 +136,7 @@ Run this task with `vpr frontendBuild` or `vp run frontendBuild`.
 
 Manual config overrides reported metadata. Add `cache.input`, `cache.output`, `cache.env`, or `cache.untrackedEnv` when your project has behavior that Vite cannot report.
 
-Vite+ supports cooperative tracking for `vp build` today. It will extend this support to more first-party tools in the future. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
+Vite+ supports cooperative tracking for `vp build` and `vp test`. `vp test` reports Vitest's on-disk cache paths (`node_modules/.vitest-cache` and the results cache under the Vite cache directory) so they neither invalidate the task nor get restored into it. It will extend this support to more first-party tools in the future. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
 
 ## When To Add Manual Config
 

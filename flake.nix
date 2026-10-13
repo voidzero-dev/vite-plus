@@ -32,7 +32,7 @@
         default = pkgs.mkShell {
           packages = with pkgs; [
             nodejs_22
-            pnpm_11
+            pnpm_12
             just
             cmake
 

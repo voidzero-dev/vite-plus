@@ -31,6 +31,17 @@ static YARN_STEP_TIMING_RE: LazyLock<regex::Regex> =
 static VITEST_TIMING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?m)(Duration\s+<duration>) \((?:[a-z]+ \d+%(?:, )?)+\)").unwrap()
 });
+// Vitest conditionally prints this advisory based on measured transform time.
+// Remove the complete known block, not arbitrary Transform lines or failures.
+static VITEST_TRANSFORM_CACHE_HINT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(concat!(
+        r"(?m)\n[ \t]*Transform [^\n]*transforming modules took <duration> · \d+% of tracked time, re-done on every run\n",
+        r"[ \t]*persist transforms across runs with fsModuleCache: true\n",
+        r"(?:[ \t]*on CI this only helps when the cache directory is persisted between runs\n)?",
+        r"[ \t]*learn more: https://vitest\.dev/guide/improving-performance#caching-between-reruns(?:\n|$)",
+    ))
+    .unwrap()
+});
 // Only v-prefixed versions are masked: tool and runtime banners all print
 // that form (`vite v7.3.2`, `vp v0.2.2`, `Node.js v24.18.0`) and churn on
 // every dep bump, while bare semver literals (`app-1.0.0.tgz`,
@@ -529,6 +540,7 @@ pub fn redact_output(
     output = YARN_ELAPSED_RE.replace_all(&output, "${1}<duration>").into_owned();
     output = DURATION_RE.replace_all(&output, "<duration>").into_owned();
     output = VITEST_TIMING_RE.replace_all(&output, "$1 (<timing>)").into_owned();
+    output = VITEST_TRANSFORM_CACHE_HINT_RE.replace_all(&output, "").into_owned();
 
     // Redact semver-shaped versions (bundled tool versions, Node versions).
     output = VERSION_RE.replace_all(&output, "<version>").into_owned();
