@@ -66,7 +66,7 @@ var require_webcontainer_fallback = /* @__PURE__ */ __commonJSMin(((exports, mod
 			}
 // #endregion
 
-// #region freebsd-x64 branch (unsupported platform)
+// #region freebsd-x64 branch (supported platform)
 			try {
 				const binding = __require("@rolldown/binding-freebsd-x64");
 				const bindingPackageVersion = __require("@rolldown/binding-freebsd-x64/package.json").version;
@@ -78,6 +78,14 @@ var require_webcontainer_fallback = /* @__PURE__ */ __commonJSMin(((exports, mod
 		} else if (process.arch === "arm64") {
 			try {
 				return __require("./rolldown-binding.freebsd-arm64.node");
+			} catch (e) {
+				loadErrors.push(e);
+			}
+			try {
+				const binding = __require("@rolldown/binding-freebsd-arm64");
+				const bindingPackageVersion = __require("@rolldown/binding-freebsd-arm64/package.json").version;
+				if (bindingPackageVersion !== "1.2.1" && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== "0") throw new Error(`Native binding package version mismatch, expected 1.2.1 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`);
+				return binding;
 			} catch (e) {
 				loadErrors.push(e);
 			}

@@ -22,6 +22,7 @@ const PACKAGE_NAME = '@voidzero-dev/vite-plus';
 const platformSuffixes = new Set([
   'darwin-arm64',
   'darwin-x64',
+  'freebsd-x64',
   'linux-arm64-gnu',
   'linux-arm64-musl',
   'linux-x64-gnu',
@@ -40,9 +41,8 @@ describe('rewriteRolldownBindingRequires', () => {
   });
 
   it('rewrites supported platform branches to Vite+ platform packages', () => {
-    // Fixture contains three supported branches: darwin-x64, darwin-arm64,
-    // linux-x64-musl. Each requires the package and its package.json.
-    for (const suffix of ['darwin-x64', 'darwin-arm64', 'linux-x64-musl']) {
+    // Each supported branch requires the package and its package.json.
+    for (const suffix of ['darwin-x64', 'darwin-arm64', 'freebsd-x64', 'linux-x64-musl']) {
       expect(result.source).toContain(`__require("@voidzero-dev/vite-plus-${suffix}")`);
       expect(result.source).toContain(
         `__require("@voidzero-dev/vite-plus-${suffix}/package.json")`,
@@ -50,25 +50,25 @@ describe('rewriteRolldownBindingRequires', () => {
       expect(result.source).not.toContain(`@rolldown/binding-${suffix}`);
     }
     expect(result.rewrittenSuffixes).toEqual(
-      new Set(['darwin-x64', 'darwin-arm64', 'linux-x64-musl']),
+      new Set(['darwin-x64', 'darwin-arm64', 'freebsd-x64', 'linux-x64-musl']),
     );
-    expect(result.specifierRewrites).toBe(6);
+    expect(result.specifierRewrites).toBe(8);
   });
 
   it('rewrites version guards only for rewritten branches', () => {
-    expect(result.guardRewrites).toBe(3);
+    expect(result.guardRewrites).toBe(4);
     const guardMatches = result.source.match(/bindingPackageVersion !== "9\.9\.9"/g);
-    expect(guardMatches).toHaveLength(3);
+    expect(guardMatches).toHaveLength(4);
     const messageMatches = result.source.match(/expected 9\.9\.9 but got/g);
-    expect(messageMatches).toHaveLength(3);
+    expect(messageMatches).toHaveLength(4);
   });
 
   it('leaves unsupported platform branches on the Rolldown packages and version', () => {
-    expect(result.source).toContain('__require("@rolldown/binding-freebsd-x64")');
-    expect(result.source).toContain('__require("@rolldown/binding-freebsd-x64/package.json")');
-    // The freebsd guard still compares against the Rolldown version.
+    expect(result.source).toContain('__require("@rolldown/binding-freebsd-arm64")');
+    expect(result.source).toContain('__require("@rolldown/binding-freebsd-arm64/package.json")');
+    // The FreeBSD arm64 guard still compares against the Rolldown version.
     const freebsdGuard = result.source.slice(
-      result.source.indexOf('@rolldown/binding-freebsd-x64/package.json'),
+      result.source.indexOf('@rolldown/binding-freebsd-arm64/package.json'),
     );
     expect(freebsdGuard).toContain('bindingPackageVersion !== "1.2.1"');
     expect(freebsdGuard).toContain('expected 1.2.1 but got');
