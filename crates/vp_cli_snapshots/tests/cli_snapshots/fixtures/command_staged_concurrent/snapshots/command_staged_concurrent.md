@@ -1,5 +1,10 @@
 # command_staged_concurrent
 
+## `node --version`
+
+Prepare the pinned runtime before the staged command's 10-second limit
+
+
 ## `git init`
 
 
