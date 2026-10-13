@@ -192,7 +192,7 @@ function isExplicitPath(token: string): boolean {
   );
 }
 
-function isFile(file: string): boolean {
+export function isFile(file: string): boolean {
   return statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
 }
 
