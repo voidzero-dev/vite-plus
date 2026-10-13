@@ -22,7 +22,7 @@ vp create <template> -- <template-options>
 
 ### Without the Global CLI
 
-The `create-vite-plus` package runs `vp create` through your package manager, so you can create a project without installing the [global CLI](/guide/global-cli):
+If you haven't installed [the global `vp`](/guide/global-cli) yet. Vite+ provides `create-vite-plus` package running `vp create` through your package manager.
 
 ::: code-group
 
@@ -50,7 +50,7 @@ The new project uses the package manager that ran the command, unless you pass `
 pnpm create vite-plus vite:application --directory my-app
 ```
 
-npm needs `--` before options meant for `vp create`, for example `npm create vite-plus@latest -- vite:application --directory my-app`.
+If you are using npm, there is a `--` needed before options meant for `vp create`, for example `npm create vite-plus@latest -- vite:application --directory my-app`.
 
 After creating the project, run `vp` through your package manager, for example `pnpm exec vp run`.
 
