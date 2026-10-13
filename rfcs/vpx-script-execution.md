@@ -653,7 +653,7 @@ Still to verify:
 
 ## Performance
 
-Startup compared with tsx 4.23.15 on an Apple M4 Pro (12 cores, macOS 26.6), with oxc-node at `a953b6b`. `bench/vpx-script.ts` produces the table below. To rerun it, build the loader with `pnpm --filter vite-plus build-ts`, then run `node bench/vpx-script.ts --node <node> [--node <node>…]` with one `--node` per Node.js binary to measure.
+Startup compared with tsx 4.23.15 on an Apple M4 Pro (12 cores, macOS 26.6), with oxc-node at `a953b6b`; the Node.js 22.18 column was rerun after the hooks thread switched to requiring the binding. `bench/vpx-script.ts` produces the table below. To rerun it, build the loader with `pnpm --filter vite-plus build-ts`, then run `node bench/vpx-script.ts --node <node> [--node <node>…]` with one `--node` per Node.js binary to measure.
 
 The script generates the scenarios in the OS temp directory, outside any `tsconfig.json`, and checks that every command prints the same output without warnings. It then reports the median wall time of the whole command over 20 runs, after 3 warmup runs.
 
@@ -676,46 +676,46 @@ On Node.js 22.18 both loaders run their ESM hooks on a `module.register()` threa
 
 | Scenario    | Command                         | Node.js 22.18.0 | Node.js 24.12.0 | Node.js 26.5.0 |
 | ----------- | ------------------------------- | --------------: | --------------: | -------------: |
-| `hello`     | `vpx` loader (1 process)        |           49 ms |           26 ms |          29 ms |
-| `hello`     | `node --import tsx` (1 process) |           71 ms |           46 ms |          38 ms |
-| `hello`     | `node --import tsx`, no cache   |           77 ms |           62 ms |          60 ms |
-| `hello`     | `vpx` local bin (2 processes)   |           71 ms |           48 ms |          54 ms |
-| `hello`     | `tsx` CLI (2 processes)         |          101 ms |           81 ms |          71 ms |
-| `hello`     | `tsx` CLI, no cache             |          108 ms |           93 ms |          92 ms |
-| `hello`     | `node` type stripping           |           49 ms |           43 ms |          48 ms |
-| `esm-app`   | `vpx` loader (1 process)        |           87 ms |           64 ms |          69 ms |
-| `esm-app`   | `node --import tsx` (1 process) |          114 ms |           85 ms |          81 ms |
+| `hello`     | `vpx` loader (1 process)        |           41 ms |           26 ms |          29 ms |
+| `hello`     | `node --import tsx` (1 process) |           68 ms |           46 ms |          38 ms |
+| `hello`     | `node --import tsx`, no cache   |           75 ms |           62 ms |          60 ms |
+| `hello`     | `vpx` local bin (2 processes)   |           63 ms |           48 ms |          54 ms |
+| `hello`     | `tsx` CLI (2 processes)         |           99 ms |           81 ms |          71 ms |
+| `hello`     | `tsx` CLI, no cache             |          107 ms |           93 ms |          92 ms |
+| `hello`     | `node` type stripping           |           48 ms |           43 ms |          48 ms |
+| `esm-app`   | `vpx` loader (1 process)        |           83 ms |           64 ms |          69 ms |
+| `esm-app`   | `node --import tsx` (1 process) |          116 ms |           85 ms |          81 ms |
 | `esm-app`   | `node --import tsx`, no cache   |          141 ms |          216 ms |         212 ms |
-| `esm-app`   | `vpx` local bin (2 processes)   |          109 ms |           87 ms |          91 ms |
-| `esm-app`   | `tsx` CLI (2 processes)         |          150 ms |          118 ms |         118 ms |
-| `esm-app`   | `tsx` CLI, no cache             |          174 ms |          249 ms |         247 ms |
-| `cjs-app`   | `vpx` loader (1 process)        |           87 ms |           65 ms |          66 ms |
+| `esm-app`   | `vpx` local bin (2 processes)   |          105 ms |           87 ms |          91 ms |
+| `esm-app`   | `tsx` CLI (2 processes)         |          154 ms |          118 ms |         118 ms |
+| `esm-app`   | `tsx` CLI, no cache             |          175 ms |          249 ms |         247 ms |
+| `cjs-app`   | `vpx` loader (1 process)        |           84 ms |           65 ms |          66 ms |
 | `cjs-app`   | `node --import tsx` (1 process) |          133 ms |          104 ms |          99 ms |
-| `cjs-app`   | `node --import tsx`, no cache   |          287 ms |          260 ms |         255 ms |
-| `cjs-app`   | `vpx` local bin (2 processes)   |          109 ms |           87 ms |          92 ms |
-| `cjs-app`   | `tsx` CLI (2 processes)         |          170 ms |          137 ms |         134 ms |
-| `cjs-app`   | `tsx` CLI, no cache             |          323 ms |          292 ms |         288 ms |
-| `large-cjs` | `vpx` loader (1 process)        |          114 ms |           91 ms |          83 ms |
+| `cjs-app`   | `node --import tsx`, no cache   |          288 ms |          260 ms |         255 ms |
+| `cjs-app`   | `vpx` local bin (2 processes)   |          106 ms |           87 ms |          92 ms |
+| `cjs-app`   | `tsx` CLI (2 processes)         |          171 ms |          137 ms |         134 ms |
+| `cjs-app`   | `tsx` CLI, no cache             |          325 ms |          292 ms |         288 ms |
+| `large-cjs` | `vpx` loader (1 process)        |          112 ms |           91 ms |          83 ms |
 | `large-cjs` | `node --import tsx` (1 process) |          122 ms |           89 ms |          75 ms |
-| `large-cjs` | `node --import tsx`, no cache   |          225 ms |          272 ms |         258 ms |
-| `large-cjs` | `vpx` local bin (2 processes)   |          136 ms |          114 ms |         109 ms |
+| `large-cjs` | `node --import tsx`, no cache   |          230 ms |          272 ms |         258 ms |
+| `large-cjs` | `vpx` local bin (2 processes)   |          135 ms |          114 ms |         109 ms |
 | `large-cjs` | `tsx` CLI (2 processes)         |          153 ms |          121 ms |         107 ms |
-| `large-cjs` | `tsx` CLI, no cache             |          261 ms |          299 ms |         291 ms |
-| `large-esm` | `vpx` loader (1 process)        |           96 ms |           76 ms |          76 ms |
-| `large-esm` | `node --import tsx` (1 process) |          105 ms |           75 ms |          68 ms |
-| `large-esm` | `node --import tsx`, no cache   |          207 ms |          176 ms |         171 ms |
-| `large-esm` | `vpx` local bin (2 processes)   |          118 ms |           98 ms |         102 ms |
-| `large-esm` | `tsx` CLI (2 processes)         |          136 ms |          105 ms |         101 ms |
-| `large-esm` | `tsx` CLI, no cache             |          229 ms |          208 ms |         202 ms |
+| `large-cjs` | `tsx` CLI, no cache             |          264 ms |          299 ms |         291 ms |
+| `large-esm` | `vpx` loader (1 process)        |           95 ms |           76 ms |          76 ms |
+| `large-esm` | `node --import tsx` (1 process) |          107 ms |           75 ms |          68 ms |
+| `large-esm` | `node --import tsx`, no cache   |          202 ms |          176 ms |         171 ms |
+| `large-esm` | `vpx` local bin (2 processes)   |          117 ms |           98 ms |         102 ms |
+| `large-esm` | `tsx` CLI (2 processes)         |          137 ms |          105 ms |         101 ms |
+| `large-esm` | `tsx` CLI, no cache             |          232 ms |          208 ms |         202 ms |
 
 What the numbers show:
 
 - **`vpx` against tsx with a warm cache.** For one process, the `vpx` loader is 1.2–1.8× faster on `hello`, `esm-app`, and `cjs-app` on every Node.js version. On 24.12, for example, `hello` takes 26 ms against 46 ms and `esm-app` 64 ms against 85 ms.
-- **Against a cold or disabled tsx cache**, `vpx` is 1.6–4.0× faster in every scenario.
-- **Against Node.js type stripping**, the `vpx` loader is on par on 22.18 (49 against 49 ms) and faster on 24.12 and 26.5 (26–29 against 43–48 ms).
+- **Against a cold or disabled tsx cache**, `vpx` is 1.7–4.0× faster in every scenario.
+- **Against Node.js type stripping**, the `vpx` loader is faster on every version: 41 against 48 ms on 22.18, and 26–29 against 43–48 ms on 24.12 and 26.5.
 - **Megabyte-sized files are where tsx's cache pays off**, because it skips the transform while `vpx` transforms 1.8 MB on every run.
-  - `large-esm`: about even. `vpx` is faster on 22.18 (96 against 105 ms); tsx is 1 ms faster on 24.12 and 8 ms faster on 26.5.
-  - `large-cjs`: `vpx` is faster on 22.18 (114 against 122 ms); tsx is 2 ms faster on 24.12 and 8 ms faster on 26.5. For `vpx`, the CommonJS file costs 7–18 ms more than the same file as an ES module, because the ESM load hook parses it once more to check for ES module syntax before the CommonJS loader compiles it. The fix for [oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820), which stopped transforming it twice on the in-thread path, took 12 ms off on 24.12 and 26.5 (103 to 91 ms and 95 to 83 ms).
+  - `large-esm`: about even. `vpx` is faster on 22.18 (95 against 107 ms); tsx is 1 ms faster on 24.12 and 8 ms faster on 26.5.
+  - `large-cjs`: `vpx` is faster on 22.18 (112 against 122 ms); tsx is 2 ms faster on 24.12 and 8 ms faster on 26.5. For `vpx`, the CommonJS file costs 7–17 ms more than the same file as an ES module, because the ESM load hook parses it once more to check for ES module syntax before the CommonJS loader compiles it. The fix for [oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820), which stopped transforming it twice on the in-thread path, took 12 ms off on 24.12 and 26.5 (103 to 91 ms and 95 to 83 ms).
 - **CommonJS packages with ES module syntax start as fast as ES module packages.** `cjs-app` takes 65 ms against `esm-app`'s 64 ms on 24.12, and 66 against 69 ms on 26.5. The oxc-node#820 fix had made it 8–9 ms slower on the in-thread path, because oxc-node read each file twice more before transforming it as an ES module; the fix for [oxc-node#827](https://github.com/oxc-project/oxc-node/issues/827) checks the syntax of the source in hand first and removed those reads.
 - **The local bin costs 22–26 ms** for its second Node.js process. The `tsx` CLI pays the same, so local bin against CLI keeps roughly the same ratios.
 
