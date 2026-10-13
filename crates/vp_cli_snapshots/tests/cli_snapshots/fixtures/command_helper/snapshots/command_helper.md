@@ -78,7 +78,7 @@ Options:
   --report                      Size report (default: true)
   --env.* <value>               Define compile-time env variables
   --env-file <file>             Load environment variables from a file, when used together with --env, variables in --env take precedence
-  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: TSDOWN_)
+  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: VITE_PACK_, TSDOWN_)
   --on-success <command>        Command to run on success
   --copy <dir>                  Copy files to output dir
   --tsconfig <tsconfig>         Set tsconfig path

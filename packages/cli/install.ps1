@@ -128,6 +128,24 @@ function Get-Architecture {
     }
 }
 
+function Get-MetadataProperty {
+    param([object]$Metadata, [string[]]$Path)
+
+    # Optional JSON fields must also be readable when the caller enables StrictMode.
+    # Walk nested properties individually; a literal dotted key is not a nested field.
+    foreach ($name in $Path) {
+        if ($Metadata -is [System.Collections.IDictionary]) {
+            $Metadata = $Metadata[$name]
+        } elseif ($null -ne $Metadata -and $null -ne $Metadata.PSObject.Properties[$name]) {
+            $Metadata = $Metadata.PSObject.Properties[$name].Value
+        } else {
+            return $null
+        }
+    }
+    # Preserve arrays so malformed values cannot become valid scalars on the pipeline.
+    return ,$Metadata
+}
+
 function Get-PackageMetadata {
     if ($null -eq $script:PackageMetadata) {
         $versionPath = $ViteVersion
@@ -137,12 +155,13 @@ function Get-PackageMetadata {
         } catch {
             if (Test-IsInstallStopException $_) { throw }
             # Try to extract npm error message from response
-            $errorMsg = $_.ErrorDetails.Message
+            $errorMsg = if ($_.ErrorDetails) { $_.ErrorDetails.Message }
             if ($errorMsg) {
                 try {
                     $errorJson = $errorMsg | ConvertFrom-Json
-                    if ($errorJson.error) {
-                        Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)`n  URL: $metadataUrl"
+                    $registryError = Get-MetadataProperty $errorJson @('error')
+                    if ($registryError) {
+                        Write-Error-Exit "Failed to fetch version '${versionPath}': $registryError`n  URL: $metadataUrl"
                     }
                 } catch {
                     if (Test-IsInstallStopException $_) { throw }
@@ -164,8 +183,9 @@ function Get-PackageMetadata {
                 Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata`n  URL: $metadataUrl"
             }
         }
-        if ($script:PackageMetadata.error) {
-            Write-Error-Exit "Failed to fetch version '${versionPath}': $($script:PackageMetadata.error)`n  URL: $metadataUrl"
+        $registryError = Get-MetadataProperty $script:PackageMetadata @('error')
+        if ($registryError) {
+            Write-Error-Exit "Failed to fetch version '${versionPath}': $registryError`n  URL: $metadataUrl"
         }
     }
     return $script:PackageMetadata
@@ -173,10 +193,11 @@ function Get-PackageMetadata {
 
 function Get-VersionFromMetadata {
     $metadata = Get-PackageMetadata
-    if (-not $metadata.version) {
+    $version = Get-MetadataProperty $metadata @('version')
+    if (-not $version) {
         Write-Error-Exit "Failed to extract version from package metadata"
     }
-    return $metadata.version
+    return $version
 }
 
 function Get-PlatformPackageMetadata {
@@ -192,12 +213,13 @@ function Get-PlatformPackageMetadata {
         $metadata = Invoke-RestMethod -Uri $metadataUrl -Headers @{ Accept = "application/json" }
     } catch {
         if (Test-IsInstallStopException $_) { throw }
-        $errorMsg = $_.ErrorDetails.Message
+        $errorMsg = if ($_.ErrorDetails) { $_.ErrorDetails.Message }
         if ($errorMsg) {
             try {
                 $errorJson = $errorMsg | ConvertFrom-Json
-                if ($errorJson.error) {
-                    Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $($errorJson.error)`n  URL: $metadataUrl"
+                $registryError = Get-MetadataProperty $errorJson @('error')
+                if ($registryError) {
+                    Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $registryError`n  URL: $metadataUrl"
                 }
             } catch {
                 if (Test-IsInstallStopException $_) { throw }
@@ -217,8 +239,9 @@ function Get-PlatformPackageMetadata {
             Write-Error-Exit "Failed to parse CLI package metadata '${PackageName}@${Version}'`n  URL: $metadataUrl"
         }
     }
-    if ($metadata.error) {
-        Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $($metadata.error)`n  URL: $metadataUrl"
+    $registryError = Get-MetadataProperty $metadata @('error')
+    if ($registryError) {
+        Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $registryError`n  URL: $metadataUrl"
     }
 
     return $metadata
@@ -233,18 +256,18 @@ function Get-VerifiedPlatformDistribution {
 
     # Check nested provenance metadata; registry signatures and package-defined
     # top-level fields do not satisfy the release check.
-    $predicateType = $Metadata.dist.attestations.provenance.predicateType
+    $predicateType = Get-MetadataProperty $Metadata @('dist', 'attestations', 'provenance', 'predicateType')
     # Commit preview builds do not carry npm provenance, regardless of registry.
     $isCommitPreview = $Version -cmatch '\A0\.0\.0-commit\.[0-9a-fA-F]{40}\z'
     if (-not $isCommitPreview -and $SupportedProvenancePredicateTypes -notcontains $predicateType) {
         Write-Error-Exit "Refusing to install ${PackageName}@${Version}: the package does not contain supported npm provenance metadata. Vite+ only installs release binaries published with npm provenance."
     }
 
-    $tarballUrl = $Metadata.dist.tarball
+    $tarballUrl = Get-MetadataProperty $Metadata @('dist', 'tarball')
     if (-not $tarballUrl) {
         Write-Error-Exit "CLI package metadata for ${PackageName}@${Version} does not include dist.tarball"
     }
-    $integrity = $Metadata.dist.integrity
+    $integrity = Get-MetadataProperty $Metadata @('dist', 'integrity')
     # Require a canonical base64 encoding of a 64-byte SHA-512 digest.
     if ($integrity -isnot [string] -or $integrity -cnotmatch '\Asha512-[A-Za-z0-9+/]{85}[AQgw]==\z') {
         Write-Error-Exit "CLI package metadata for ${PackageName}@${Version} does not include a valid SHA-512 dist.integrity"
@@ -308,6 +331,10 @@ function Enable-SetupVpLegacyCompatibility {
 }
 
 function Main {
+    # Keep installation rules stable even when a profile selects a future Latest.
+    # Function scope also preserves the caller's setting for `irm ... | iex`.
+    Set-StrictMode -Version 3.0
+
     Enable-SetupVpLegacyCompatibility
 
     if ($PrVersion -and $LocalTgz) {
