@@ -1,15 +1,20 @@
 /**
- * Off-thread ESM hooks for `vpx <script>` on Node.js releases before 22.22.3 and 24.11.1,
- * registered by
- * `script-register.ts` through `module.register()`. Adapted from oxc-node's
- * `packages/core/esm.mjs`.
+ * Off-thread ESM hooks for `vpx <script>`, registered by `script-register.ts` through
+ * `module.register()` where `canRegisterSyncHooks` rules out the in-thread hooks.
+ * Adapted from oxc-node's `packages/core/esm.mjs`.
  */
 
 import type { LoadHook, ResolveHook } from 'node:module';
+import { createRequire } from 'node:module';
 import { isMainThread, MessageChannel } from 'node:worker_threads';
 
-import { oxcNode } from '../binding/index.js';
 import { HELPER_MODULE_NAME, resolveWithOxcNode } from './script-hooks.ts';
+
+// Required, not imported: importing `index.js` makes this thread translate the whole
+// CommonJS binding for ESM, and `module.register()` waits for that (5-13 ms).
+const { oxcNode } = createRequire(import.meta.url)(
+  '../binding/index.cjs',
+) as typeof import('../binding/index.js');
 
 // Keep the loader worker alive, as upstream does.
 if (!isMainThread) {
