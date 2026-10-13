@@ -1889,6 +1889,165 @@ function overrideMap(pkg: Record<string, unknown>, manager: PackageManager, vers
   >;
 }
 
+describe('standalone pnpm child project boundaries', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-nested-pnpm-'));
+    fs.mkdirSync(path.join(tmpDir, 'web'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        devDependencies: { vite: '^8.0.1' },
+        scripts: { postinstall: 'cd web && pnpm install' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'web/package.json'),
+      JSON.stringify({
+        name: 'web',
+        packageManager: 'pnpm@10.33.0',
+        pnpm: { overrides: { example: '1.0.0' } },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'lockfileVersion: "9.0"\n');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('preserves the child install boundary when migrating with pnpm', () => {
+    const manifest = fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8');
+    const lockfile = fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8');
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+      overrides: { example: '1.0.0' },
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+    expect(fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8')).toBe(lockfile);
+    expect(readJson(path.join(tmpDir, 'package.json')).scripts).toEqual({
+      postinstall: 'cd web && pnpm install',
+    });
+    const childYaml = readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'));
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(childYaml);
+  });
+
+  it('preserves the child install boundary when upgrading with pnpm', () => {
+    const manifest = fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8');
+    const lockfile = fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        ...readJson(path.join(tmpDir, 'package.json')),
+        devDependencies: { 'vite-plus': '^0.1.12', vite: '^8.0.1' },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+      overrides: { example: '1.0.0' },
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+    expect(fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8')).toBe(lockfile);
+    expect(readJson(path.join(tmpDir, 'package.json')).scripts).toEqual({
+      postinstall: 'cd web && pnpm install',
+    });
+    const childYaml = readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'));
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(childYaml);
+  });
+
+  it.each([
+    [
+      'the child declares npm in packageManager',
+      'web/package.json',
+      JSON.stringify({ name: 'web', packageManager: 'npm@10.9.4' }),
+    ],
+    [
+      'the child declares npm in devEngines',
+      'web/package.json',
+      JSON.stringify({ name: 'web', devEngines: { packageManager: { name: 'npm' } } }),
+    ],
+    [
+      'the child declares workspaces',
+      'web/package.json',
+      JSON.stringify({ name: 'web', packageManager: 'pnpm@10.33.0', workspaces: ['services/*'] }),
+    ],
+    [
+      'the parent declares workspaces',
+      'package.json',
+      JSON.stringify({ name: 'root', workspaces: ['web'], devDependencies: { vite: '^8.0.1' } }),
+    ],
+    ['the parent already has a pnpm workspace', 'pnpm-workspace.yaml', 'packages:\n  - web\n'],
+  ])('does not add a child boundary when %s', (_, file, content) => {
+    fs.writeFileSync(path.join(tmpDir, file), content);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it('does not add a child boundary when the child has no pnpm lockfile', () => {
+    fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it('does not create pnpm workspace files when the parent uses npm', () => {
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it('detects a pnpm child from its own lockfile without a packageManager declaration', () => {
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), JSON.stringify({ name: 'web' }));
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+    });
+  });
+
+  it('preserves a child that declares pnpm in devEngines and has its own lockfile', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'web/package.json'),
+      JSON.stringify({ name: 'web', devEngines: { packageManager: { name: 'pnpm' } } }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+    });
+  });
+
+  it('preserves independent install roots in multiple child projects', () => {
+    fs.mkdirSync(path.join(tmpDir, 'apps'));
+    fs.renameSync(path.join(tmpDir, 'web'), path.join(tmpDir, 'apps/web'));
+    fs.mkdirSync(path.join(tmpDir, 'apps/mobile'));
+    fs.writeFileSync(path.join(tmpDir, 'apps/mobile/package.json'), '{"name":"mobile"}');
+    fs.writeFileSync(path.join(tmpDir, 'apps/mobile/pnpm-lock.yaml'), 'lockfileVersion: "9.0"\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        ...readJson(path.join(tmpDir, 'package.json')),
+        scripts: { postinstall: 'pnpm --dir apps/web install && pnpm --dir apps/mobile install' },
+      }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    for (const directory of ['apps/web', 'apps/mobile']) {
+      expect(readYamlObject(path.join(tmpDir, directory, 'pnpm-workspace.yaml')).packages).toEqual([
+        '.',
+      ]);
+    }
+  });
+});
+
 describe('WebDriverIO browser overrides', () => {
   let tmpDir: string;
   const provider = '@vitest/browser-webdriverio';

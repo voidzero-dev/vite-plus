@@ -12,6 +12,7 @@ import {
   OXLINT_PLUGINS_PACKAGE,
   packageOwnsOxlintApi,
   PLAYWRIGHT_PROVIDER,
+  isPlainRecord,
   readPackageJsonIfExists,
   type DependencyBag,
 } from './shared.ts';
@@ -171,6 +172,58 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
 // Built plugins can still load the original API after migration. Skip installed
 // source and VCS metadata; dependency peer contracts are checked separately.
 const OXLINT_RETENTION_SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn']);
+
+// Capture independent install roots before creating the parent's workspace file.
+// An existing workspace boundary owns its descendants; do not split its members.
+export function collectStandalonePnpmProjects(projectPath: string): string[] {
+  const projects: string[] = [];
+  const directories = [projectPath];
+  for (const directory of directories) {
+    if (fs.existsSync(path.join(directory, 'pnpm-workspace.yaml'))) {
+      continue;
+    }
+    if (fs.existsSync(path.join(directory, 'package.json'))) {
+      let pkg: Record<string, unknown>;
+      try {
+        pkg = readJsonFile(path.join(directory, 'package.json'));
+      } catch {
+        continue;
+      }
+      if (!isPlainRecord(pkg) || Object.hasOwn(pkg, 'workspaces')) {
+        continue;
+      }
+      if (
+        directory !== projectPath &&
+        fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) &&
+        (pkg.packageManager === undefined ||
+          (typeof pkg.packageManager === 'string' && pkg.packageManager.startsWith('pnpm@'))) &&
+        (pkg.packageManager !== undefined ||
+          !isPlainRecord(pkg.devEngines) ||
+          pkg.devEngines.packageManager === undefined ||
+          (isPlainRecord(pkg.devEngines.packageManager) &&
+            pkg.devEngines.packageManager.name === 'pnpm'))
+      ) {
+        projects.push(directory);
+      }
+    }
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (
+        entry.isDirectory() &&
+        !VITEST_SCAN_SKIP_DIRS.has(entry.name) &&
+        !OXLINT_RETENTION_SKIP_DIRS.has(entry.name)
+      ) {
+        directories.push(path.join(directory, entry.name));
+      }
+    }
+  }
+  return projects;
+}
 
 /**
  * Detect whether a package uses vitest's browser mode.

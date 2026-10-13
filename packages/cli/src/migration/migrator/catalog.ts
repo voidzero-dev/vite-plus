@@ -251,6 +251,19 @@ export function migratePnpmSettingsToWorkspaceYaml(
   });
 }
 
+export function ensureStandalonePnpmWorkspace(projectPath: string): void {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (fs.existsSync(pnpmWorkspaceYamlPath)) {
+    return;
+  }
+  const pkg = readJsonFile(path.join(projectPath, 'package.json')) as {
+    pnpm?: PnpmPackageJsonSettings;
+  };
+  fs.writeFileSync(pnpmWorkspaceYamlPath, 'packages:\n  - "."\n');
+  // Extract from the in-memory copy only: keep the child's manifest and lockfile.
+  migratePnpmSettingsToWorkspaceYaml(projectPath, takePnpmWorkspaceSettings(pkg));
+}
+
 /**
  * Rewrite pnpm-workspace.yaml to add vite-plus dependencies
  * @param projectPath - The path to the project

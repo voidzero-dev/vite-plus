@@ -1,0 +1,11 @@
+{
+  "name": "migration-nested-pnpm-postinstall",
+  "private": true,
+  "scripts": {
+    "postinstall": "cd web && pnpm install"
+  },
+  "devDependencies": {
+    "vite": "^8.0.1"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

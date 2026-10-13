@@ -12,11 +12,13 @@ import {
   collectOxlintDependencyNames,
   collectOxlintOwnerDirs,
   collectProviderSourceModes,
+  collectStandalonePnpmProjects,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
   dropDeadOxlintPluginsDependency,
   dropRemovePackageOverrideKeys,
   ensurePnpmWorkspaceExoticSubdepsSetting,
+  ensureStandalonePnpmWorkspace,
   findYarnWorkspaceHoisting,
   hasDirectVitePlusInstallEntry,
   hasOwnWebdriverioDependency,
@@ -77,6 +79,12 @@ export function rewriteStandaloneProject(
   }
 
   const packageManager = workspaceInfo.packageManager;
+  const standalonePnpmProjects =
+    packageManager === PackageManager.pnpm &&
+    !workspaceInfo.isMonorepo &&
+    !fs.existsSync(path.join(projectPath, 'pnpm-workspace.yaml'))
+      ? collectStandalonePnpmProjects(projectPath)
+      : [];
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
@@ -308,6 +316,9 @@ export function rewriteStandaloneProject(
 
   if (packageManager === PackageManager.pnpm) {
     ensurePnpmWorkspaceExoticSubdepsSetting(projectPath);
+    for (const directory of standalonePnpmProjects) {
+      ensureStandalonePnpmWorkspace(directory);
+    }
   }
 
   if (packageManager === PackageManager.yarn) {
