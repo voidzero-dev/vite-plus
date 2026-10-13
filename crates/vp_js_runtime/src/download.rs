@@ -446,7 +446,8 @@ pub async fn lock_installation(target: &AbsolutePath, version: &str) -> Result<F
     // Acquire file lock in a blocking task to avoid blocking the async runtime.
     // The lock() call blocks until the lock is acquired.
     let lock_guard = tokio::task::spawn_blocking(move || {
-        let lock_file = File::create(lock_path.as_path())?;
+        let lock_file =
+            File::options().write(true).create(true).truncate(false).open(lock_path.as_path())?;
         // Acquire exclusive lock (blocks until available)
         lock_file.lock()?;
         tracing::debug!("Lock acquired: {lock_path:?}");
