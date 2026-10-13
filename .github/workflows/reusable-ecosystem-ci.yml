@@ -4,9 +4,13 @@ on:
   workflow_call:
     inputs:
       runner:
-        description: Runner for the package build and ecosystem tests.
+        description: Runner for ecosystem tests and the default package build.
         type: string
         required: true
+      build-runner:
+        description: Optional runner for the package build.
+        type: string
+        default: ''
       target:
         description: Rust target for the package build.
         type: string
@@ -20,8 +24,8 @@ defaults:
 
 jobs:
   build:
-    name: Build vite-plus packages (${{ inputs.runner }})
-    runs-on: ${{ inputs.runner }}
+    name: Build vite-plus packages (${{ inputs.build-runner || inputs.runner }})
+    runs-on: ${{ inputs.build-runner || inputs.runner }}
     permissions:
       contents: read
       packages: read
