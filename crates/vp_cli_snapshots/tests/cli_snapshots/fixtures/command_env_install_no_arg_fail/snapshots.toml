@@ -16,5 +16,6 @@ seed-runtime = false
 steps = [
   { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpm", "#!/bin/sh\n"], snapshot = false },
   { argv = ["vpt", "write-file", "$VP_HOME/package_manager/pnpm/10.18.0/pnpm/bin/pnpx", "#!/bin/sh\n"], snapshot = false },
-  { argv = ["node", "assert-package-manager-installed.cjs"], comment = "a bare install still installs the declared package manager when Node.js is unpinned" },
+  # The `node` shim downloads the LTS runtime into this fresh VP_HOME first.
+  { argv = ["node", "assert-package-manager-installed.cjs"], comment = "a bare install still installs the declared package manager when Node.js is unpinned", timeout = 120000 },
 ]

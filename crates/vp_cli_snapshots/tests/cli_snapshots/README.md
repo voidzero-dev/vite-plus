@@ -278,7 +278,13 @@ canonical system path. `CI` and `NO_COLOR` are deliberately NOT
 set: with a PTY attached, the CLI behaves interactively by default, which is
 the point.
 `seed-runtime = true` (default) symlinks a provisioned managed Node runtime
-into the case `VP_HOME` so commands do not download ~50MB per case.
+into the case `VP_HOME` so commands do not download ~50MB per case. CI
+provisions it with [`prewarm-snapshot-runtimes.sh`](../../../../.github/scripts/prewarm-snapshot-runtimes.sh),
+which installs the latest LTS and the versions fixtures pin in `.node-version`,
+`.nvmrc`, `--node`, `vp env install|use`, or `VP_NODE_VERSION`. A pin in any
+other form is downloaded inside the step's timeout, so prefer one of those.
+`seed-runtime = false` cases always download; give those steps
+`timeout = 120000`.
 
 Fixture configs may import bare `vite-plus` and
 `@voidzero-dev/vite-plus-core`: the runner links the checkout packages

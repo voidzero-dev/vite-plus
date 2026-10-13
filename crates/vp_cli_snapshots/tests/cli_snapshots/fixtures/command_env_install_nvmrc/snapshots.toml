@@ -4,5 +4,5 @@ vp = "global"
 skip-platforms = ["windows"]
 seed-runtime = false
 steps = [
-  { argv = ["vp", "env", "install"], comment = "Install version from .nvmrc (22.x)", continue-on-failure = true },
+  { argv = ["vp", "env", "install"], comment = "Install version from .nvmrc (22.x)", continue-on-failure = true, timeout = 120000 },
 ]

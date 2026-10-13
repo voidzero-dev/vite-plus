@@ -1088,14 +1088,12 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
-      # Provision the managed runtime once into the real home so cases can
-      # seed from it (seed-runtime) instead of each downloading ~50MB.
-      # Best-effort: without a seed, cases that need the runtime download it
-      # themselves.
-      - name: Prewarm managed runtime
-        run: |
-          "$HOME/.vite-plus/bin/vp" node --version \
-            || echo "prewarm failed; cases will download the runtime on demand"
+      # Provision the runtimes fixtures resolve once into the real home so
+      # cases can seed from it (seed-runtime) instead of downloading ~50MB
+      # each inside a step timeout. Best-effort: a runtime missing from the
+      # seed is downloaded by the case that needs it.
+      - name: Prewarm managed runtimes
+        run: bash .github/scripts/prewarm-snapshot-runtimes.sh "$HOME/.vite-plus/bin/vp"
 
       - wait: [snapshot-shells, playwright]
 
@@ -1211,15 +1209,13 @@ jobs:
         shell: bash
         run: pnpm bootstrap-cli:ci
 
-      # Provision the managed runtime once into the real home so cases can
-      # seed from it (seed-runtime) instead of each downloading ~50MB.
-      # Best-effort: without a seed, cases that need the runtime download it
-      # themselves.
-      - name: Prewarm managed runtime
+      # Provision the runtimes fixtures resolve once into the real home so
+      # cases can seed from it (seed-runtime) instead of downloading ~50MB
+      # each inside a step timeout. Best-effort: a runtime missing from the
+      # seed is downloaded by the case that needs it.
+      - name: Prewarm managed runtimes
         shell: bash
-        run: |
-          "$USERPROFILE/.vite-plus/bin/vp.exe" node --version \
-            || echo "prewarm failed; cases will download the runtime on demand"
+        run: bash .github/scripts/prewarm-snapshot-runtimes.sh "$USERPROFILE/.vite-plus/bin/vp.exe"
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
       # which Yarn Classic discovers when walking parent directories.
