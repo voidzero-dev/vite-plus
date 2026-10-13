@@ -523,7 +523,8 @@ describe('defineConfig vitest cache paths plugin', () => {
   });
 
   it('registers projects injected by async pre hooks and after initialization', async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), 'vp-injected-cache-paths-')));
+    // Resolve Windows short directory names before Vite canonicalizes project roots.
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'vp-injected-cache-paths-')));
     let injectAfterStartup!: () => Promise<void>;
     const vitest = await createVitest(
       { root, config: false, watch: false },

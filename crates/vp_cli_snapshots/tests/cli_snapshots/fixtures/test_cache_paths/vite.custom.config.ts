@@ -3,6 +3,7 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   cacheDir: '.test-cache/results',
   test: {
+    experimental: { diagnostics: false },
     fsModuleCachePath: '.test-cache/root',
     maxWorkers: 1,
     projects: [
