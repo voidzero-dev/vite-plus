@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   canRegisterSyncHooks,
+  HELPER_MODULE_NAME,
   isSupportedNodeVersion,
   rewriteHelperRequires,
   runtimeHelperSpecifier,
@@ -172,16 +173,18 @@ describe('script hooks', () => {
   });
 
   it('maps oxc-node runtime helpers to @oxc-project/runtime', () => {
-    expect(runtimeHelperSpecifier('@oxc-node/core/helpers/defineProperty')).toBe(
+    expect(runtimeHelperSpecifier(`${HELPER_MODULE_NAME}/helpers/defineProperty`)).toBe(
       '@oxc-project/runtime/helpers/defineProperty',
     );
-    expect(runtimeHelperSpecifier('@oxc-node/core')).toBeUndefined();
+    // Helper imports another oxc-node copy emitted keep their own resolution.
+    expect(runtimeHelperSpecifier('@oxc-node/core/helpers/defineProperty')).toBeUndefined();
+    expect(runtimeHelperSpecifier(HELPER_MODULE_NAME)).toBeUndefined();
     expect(runtimeHelperSpecifier('./helpers/defineProperty')).toBeUndefined();
   });
 
   it('rewrites CommonJS helper requires so ES module evaluation can run them', () => {
     const code = rewriteHelperRequires(
-      'var _defineProperty = require("@oxc-node/core/helpers/defineProperty");\nexport function f() {}',
+      `var _defineProperty = require("${HELPER_MODULE_NAME}/helpers/defineProperty");\nexport function f() {}`,
     );
     expect(code).not.toContain('require(');
     expect(code).toContain(`process.getBuiltinModule("node:module").createRequire("file://`);

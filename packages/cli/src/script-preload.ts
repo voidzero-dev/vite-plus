@@ -23,6 +23,7 @@ import { addHook } from 'pirates';
 
 import {
   canRegisterSyncHooks,
+  HELPER_MODULE_NAME,
   isCommonJsRequire,
   isSupportedNodeVersion,
   resolveWithOxcNode,
@@ -57,7 +58,7 @@ const EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.cjs', '.cts'
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
 const SOURCEMAP_PREFIX = '\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,';
 
-const transformer = new oxcNode.OxcTransformer(process.cwd());
+const transformer = new oxcNode.OxcTransformer(process.cwd(), HELPER_MODULE_NAME);
 
 addHook(
   (code, filename) => {
@@ -83,7 +84,12 @@ const load: LoadHookSync = (url, context, nextLoad) => {
   if (isCommonJsRequire(context)) {
     return nextLoad(url, context);
   }
-  const result = oxcNode.load(url, context as never, nextLoad as never) as LoadFnOutput & {
+  const result = oxcNode.load(
+    url,
+    context as never,
+    nextLoad as never,
+    HELPER_MODULE_NAME,
+  ) as LoadFnOutput & {
     responseURL?: string;
   };
   // oxc-node returns no source for a CommonJS file it leaves to the CommonJS loader,
