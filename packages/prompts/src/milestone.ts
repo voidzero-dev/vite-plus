@@ -6,8 +6,8 @@
  * piped output never see these markers as content (they only update the
  * window title, which the runner's PTY captures).
  *
- * Protocol (shared with vite-task's `pty_terminal_test_client` crate):
- * `OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)> ST`. The runner
+ * Protocol (shared with vite-task's `vt_pty_terminal_test_client` crate):
+ * `OSC 2 ; vt-pty-terminal-test:<32-hex-id>:<base64url(name)> ST`. The runner
  * decodes the title with `decode_milestone_title`, ignoring ordinary title
  * updates. A fresh random id per emission keeps repeated milestones with the
  * same name observable as distinct title changes through Windows ConPTY.
@@ -15,7 +15,7 @@
 
 import { randomBytes } from 'node:crypto';
 
-const MILESTONE_TITLE_MARKER = 'pty-terminal-test:';
+const MILESTONE_TITLE_MARKER = 'vt-pty-terminal-test:';
 const OSC2_OPEN = '\x1b]2;';
 const ST = '\x1b\\';
 

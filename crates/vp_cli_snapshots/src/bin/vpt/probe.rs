@@ -9,7 +9,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("What is your name?");
     std::io::stdout().flush()?;
-    pty_terminal_test_client::mark_milestone("probe:ask");
+    vt_pty_terminal_test_client::mark_milestone("probe:ask");
 
     let mut line = String::new();
     std::io::stdin().lock().read_line(&mut line)?;
@@ -17,6 +17,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Hello, {name}!");
     std::io::stdout().flush()?;
-    pty_terminal_test_client::mark_milestone("probe:done");
+    vt_pty_terminal_test_client::mark_milestone("probe:done");
     Ok(())
 }
