@@ -15,7 +15,7 @@ pub enum OwnerCommand {
         package: String,
 
         /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
+        #[arg(long, value_name = "OTP", not_supported(yarn < "1.12.1"))]
         otp: Option<String>,
     },
 
@@ -28,7 +28,7 @@ pub enum OwnerCommand {
         package: String,
 
         /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
+        #[arg(long, value_name = "OTP", not_supported(yarn < "1.12.1"))]
         otp: Option<String>,
     },
 
@@ -41,39 +41,59 @@ pub enum OwnerCommand {
         package: String,
 
         /// One-time password for authentication
-        #[arg(long, value_name = "OTP")]
+        #[arg(long, value_name = "OTP", not_supported(yarn < "1.12.1"))]
         otp: Option<String>,
     },
 }
 
 impl Npm {
     fn resolve_owner(args: &OwnerCommand) -> CommandResolution {
-        let mut cmd = CommandBuilder::new("npm");
-        cmd.arg("owner");
-        match args {
-            OwnerCommand::List { package, otp } => {
-                cmd.arg("list").arg(package).option("--otp", otp.as_ref());
-            }
-            OwnerCommand::Add { user, package, otp } => {
-                cmd.arg("add").arg(user).arg(package).option("--otp", otp.as_ref());
-            }
-            OwnerCommand::Rm { user, package, otp } => {
-                cmd.arg("rm").arg(user).arg(package).option("--otp", otp.as_ref());
-            }
-        }
-        cmd.into()
+        resolve_owner("npm", args)
     }
+}
+
+fn resolve_owner(program: &str, args: &OwnerCommand) -> CommandResolution {
+    let mut cmd = CommandBuilder::new(program);
+    cmd.arg("owner");
+    match args {
+        OwnerCommand::List { package, otp } => {
+            cmd.arg("list").arg(package).option("--otp", otp.as_ref());
+        }
+        OwnerCommand::Add { user, package, otp } => {
+            cmd.arg("add");
+            if program == "pnpm" {
+                cmd.arg(package).arg(user);
+            } else {
+                cmd.arg(user).arg(package);
+            }
+            cmd.option("--otp", otp.as_ref());
+        }
+        OwnerCommand::Rm { user, package, otp } => {
+            cmd.arg(if program == "yarn" { "remove" } else { "rm" });
+            if program == "pnpm" {
+                cmd.arg(package).arg(user);
+            } else {
+                cmd.arg(user).arg(package);
+            }
+            cmd.option("--otp", otp.as_ref());
+        }
+    }
+    cmd.into()
 }
 
 impl Resolve<OwnerCommand> for Pnpm {
     fn resolve(&self, args: &OwnerCommand, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_owner(args)
+        if self.supports_v11_1_commands() {
+            resolve_owner("pnpm", args)
+        } else {
+            Npm::resolve_owner(args)
+        }
     }
 }
 
 impl Resolve<OwnerCommand> for Yarn {
     fn resolve(&self, args: &OwnerCommand, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_owner(args)
+        if self.is_berry() { Npm::resolve_owner(args) } else { resolve_owner("yarn", args) }
     }
 }
 
@@ -94,8 +114,37 @@ mod tests {
     use super::*;
     use crate::resolution::{
         Resolution, resolve,
-        test_utils::{bun, expect_run, npm, parse_subcommand, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_subcommand, pnpm, yarn},
     };
+
+    #[test]
+    fn test_pnpm_native_version_boundary_and_argument_order() {
+        for subcommand in ["list", "add", "rm"] {
+            let mut argv = vec![subcommand];
+            if subcommand != "list" {
+                argv.push("alice");
+            }
+            argv.extend(["@scope/pkg", "--otp", "123456"]);
+            let args = parse_subcommand::<OwnerCommand>(argv.clone()).unwrap();
+            for (version, program) in [
+                ("10.0.0", "npm"),
+                ("11.0.6", "npm"),
+                ("11.1.0-rc.1", "npm"),
+                ("11.1.0", "pnpm"),
+                ("12.13.0", "pnpm"),
+            ] {
+                let resolution = resolve(&pnpm(version), args.clone());
+                assert!(resolution.diagnostics.is_empty());
+                let command = expect_run(resolution.outcome);
+                let mut expected = argv.clone();
+                if program == "pnpm" && subcommand != "list" {
+                    expected.swap(1, 2);
+                }
+                assert_eq!(command.program, program, "{version}");
+                assert_eq!(command.args, [vec!["owner"], expected].concat());
+            }
+        }
+    }
 
     #[test]
     fn test_parser_accepts_list_alias_and_otp() {
@@ -162,17 +211,37 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_classic_owner_uses_npm() {
-        let command = expect_run(
-            resolve(
-                &yarn("1.22.0"),
-                OwnerCommand::List { package: "my-package".to_string(), otp: None },
-            )
-            .outcome,
-        );
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["owner", "list", "my-package"]);
+    fn test_yarn_owner_otp_version_boundary_and_native_routing() {
+        for subcommand in ["list", "add", "rm"] {
+            let mut argv = vec![subcommand];
+            if subcommand != "list" {
+                argv.push("alice");
+            }
+            argv.push("@scope/pkg");
+            let without_otp = parse_subcommand::<OwnerCommand>(argv.clone()).unwrap();
+            argv.extend(["--otp", "123456"]);
+            let args = parse_subcommand::<OwnerCommand>(argv.clone()).unwrap();
+            for version in ["1.12.0", "1.12.1-rc.1"] {
+                expect_unsupported(
+                    resolve(&yarn(version), args.clone()),
+                    &["yarn < 1.12.1 does not support --otp."],
+                );
+                let resolution = resolve(&yarn(version), without_otp.clone());
+                assert!(resolution.diagnostics.is_empty());
+                assert_eq!(expect_run(resolution.outcome).program, "yarn");
+            }
+            for (version, program) in [("1.12.1", "yarn"), ("1.22.22", "yarn"), ("2.4.3", "npm")] {
+                let resolution = resolve(&yarn(version), args.clone());
+                assert!(resolution.diagnostics.is_empty());
+                let command = expect_run(resolution.outcome);
+                let mut expected = argv.clone();
+                if program == "yarn" && subcommand == "rm" {
+                    expected[0] = "remove";
+                }
+                assert_eq!(command.program, program);
+                assert_eq!(command.args, [vec!["owner"], expected].concat());
+            }
+        }
     }
 
     #[test]

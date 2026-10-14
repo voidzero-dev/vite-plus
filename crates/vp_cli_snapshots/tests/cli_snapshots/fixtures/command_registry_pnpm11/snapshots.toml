@@ -1,0 +1,10 @@
+[[case]]
+name = "command_registry_pnpm11"
+vp = "global"
+steps = [
+  { argv = ["vp", "pm", "login", "--scope", "@company", "--", "--help"], comment = "should reject scope on pnpm before native support was added", continue-on-failure = true },
+  { argv = ["vp", "pm", "dist-tag", "list"], comment = "should preserve the native missing-package error", continue-on-failure = true },
+  { argv = ["vp", "pm", "deprecate", "command-registry-pnpm11@1.0.0", ""], comment = "should preserve the native empty-message error without undeprecating", continue-on-failure = true },
+  { argv = ["vp", "pm", "search", "react", "--long"], comment = "should reject long before invoking native pnpm search", continue-on-failure = true },
+  { argv = ["vp", "pm", "logout", "--scope", "@company", "--", "--help"], comment = "should reject scope before invoking native pnpm logout", continue-on-failure = true },
+]

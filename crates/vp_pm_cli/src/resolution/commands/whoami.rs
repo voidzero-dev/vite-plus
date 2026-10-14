@@ -18,7 +18,11 @@ pub struct WhoamiArgs {
 
 impl Resolve<WhoamiArgs> for Pnpm {
     fn resolve(&self, args: &WhoamiArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_whoami(args)
+        if self.supports_v11_commands() {
+            resolve_whoami("pnpm", &["whoami"], args)
+        } else {
+            Npm::resolve_whoami(args)
+        }
     }
 }
 
@@ -70,6 +74,29 @@ mod tests {
         resolve,
         test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
+
+    #[test]
+    fn test_pnpm_native_version_boundary() {
+        let args = parse_args::<WhoamiArgs>([
+            "--registry",
+            "https://registry.example.com",
+            "--",
+            "--json",
+        ])
+        .unwrap();
+        for (version, program) in
+            [("10.99.0", "npm"), ("11.0.0-rc.1", "npm"), ("11.0.0", "pnpm"), ("12.13.0", "pnpm")]
+        {
+            let resolution = resolve(&pnpm(version), args.clone());
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, program, "{version}");
+            assert_eq!(
+                command.args,
+                vec!["whoami", "--registry", "https://registry.example.com", "--json"]
+            );
+        }
+    }
 
     #[test]
     fn test_parser_accepts_registry_and_pass_through_args() {
@@ -171,11 +198,12 @@ mod tests {
             registry: Some("https://registry.example.com".to_string()),
             ..Default::default()
         };
-        for resolution in
-            [resolve(&npm("11.16.0"), args.clone()), resolve(&pnpm("11.3.0"), args.clone())]
-        {
+        for (resolution, program) in [
+            (resolve(&npm("11.16.0"), args.clone()), "npm"),
+            (resolve(&pnpm("11.3.0"), args.clone()), "pnpm"),
+        ] {
             let command = expect_run(resolution.outcome);
-            assert_eq!(command.program, "npm");
+            assert_eq!(command.program, program);
             assert_eq!(command.args, vec!["whoami", "--registry", "https://registry.example.com"]);
             assert!(resolution.diagnostics.is_empty());
         }

@@ -47,7 +47,11 @@ impl Resolve<DistTagCommand> for Npm {
 
 impl Resolve<DistTagCommand> for Pnpm {
     fn resolve(&self, args: &DistTagCommand, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_dist_tag(args)
+        if self.supports_v11_commands() {
+            resolve_dist_tag("pnpm", &["dist-tag"], args)
+        } else {
+            Npm::resolve_dist_tag(args)
+        }
     }
 }
 
@@ -103,6 +107,30 @@ mod tests {
 
     fn list(package: &str) -> DistTagCommand {
         DistTagCommand::List { package: Some(package.to_string()) }
+    }
+
+    #[test]
+    fn test_pnpm_native_version_boundary_preserves_arguments() {
+        for argv in [
+            vec!["list"],
+            vec!["list", "@scope/pkg"],
+            vec!["add", "@scope/pkg@^1", "beta"],
+            vec!["rm", "@scope/pkg", "latest"],
+        ] {
+            let args = parse_subcommand::<DistTagCommand>(argv.clone()).unwrap();
+            for (version, program) in [
+                ("10.99.0", "npm"),
+                ("11.0.0-rc.1", "npm"),
+                ("11.0.0", "pnpm"),
+                ("12.13.0", "pnpm"),
+            ] {
+                let resolution = resolve(&pnpm(version), args.clone());
+                assert!(resolution.diagnostics.is_empty());
+                let command = expect_run(resolution.outcome);
+                assert_eq!(command.program, program, "{version}");
+                assert_eq!(command.args, [vec!["dist-tag"], argv.clone()].concat());
+            }
+        }
     }
 
     #[test]

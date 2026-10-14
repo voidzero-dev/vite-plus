@@ -433,29 +433,33 @@ impl FieldSupport {
 #[derive(Clone)]
 struct Clause {
     manager: Manager,
-    op: Option<VersionOperator>,
-    original_version: Option<String>,
-    normalized_version: Option<String>,
+    versions: Vec<VersionCondition>,
+}
+
+#[derive(Clone)]
+struct VersionCondition {
+    op: VersionOperator,
+    original_version: String,
+    normalized_version: String,
 }
 
 impl Clause {
     fn to_tokens(&self) -> TokenStream2 {
         let manager = self.manager.to_tokens();
-        match (&self.op, &self.original_version, &self.normalized_version) {
-            (Some(op), Some(original), Some(normalized)) => {
-                let op = op.to_tokens();
-                quote! {
-                    crate::resolution::PmSupportRule::version(
-                        #manager,
-                        #op,
-                        #original,
-                        ::semver::Version::parse(#normalized).expect("pm_args emitted a valid semver version"),
-                    )
-                }
+        let versions = self.versions.iter().map(|version| {
+            let op = version.op.to_tokens();
+            let original = &version.original_version;
+            let normalized = &version.normalized_version;
+            quote! {
+                .with_version(
+                    #op,
+                    #original,
+                    ::semver::Version::parse(#normalized).expect("pm_args emitted a valid semver version"),
+                )
             }
-            _ => quote! {
-                crate::resolution::PmSupportRule::manager(#manager)
-            },
+        });
+        quote! {
+            crate::resolution::PmSupportRule::manager(#manager) #(#versions)*
         }
     }
 }
@@ -526,15 +530,20 @@ impl Parse for Clause {
             }
         };
 
-        if input.is_empty() || input.peek(Token![,]) {
-            return Ok(Self {
-                manager,
-                op: None,
-                original_version: None,
-                normalized_version: None,
-            });
+        let mut versions = Vec::new();
+        if !input.is_empty() && !input.peek(Token![,]) {
+            versions.push(input.parse()?);
+            while input.peek(Token![&&]) {
+                input.parse::<Token![&&]>()?;
+                versions.push(input.parse()?);
+            }
         }
+        Ok(Self { manager, versions })
+    }
+}
 
+impl Parse for VersionCondition {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let op = if input.peek(Token![<=]) {
             input.parse::<Token![<=]>()?;
             VersionOperator::LessEqual
@@ -558,12 +567,7 @@ impl Parse for Clause {
         let original_version = version.value();
         let normalized_version = normalize_version_literal(&version)?;
 
-        Ok(Self {
-            manager,
-            op: Some(op),
-            original_version: Some(original_version),
-            normalized_version: Some(normalized_version),
-        })
+        Ok(Self { op, original_version, normalized_version })
     }
 }
 
@@ -616,6 +620,36 @@ mod tests {
         assert!(!output.contains("not_supported"));
         assert!(output.contains("value_name"));
         assert!(output.contains("PmSupportRule"));
+    }
+
+    #[test]
+    fn expands_conjoined_version_bounds() {
+        let output = pm_args_impl(quote! {
+            struct Demo {
+                #[arg(long, not_supported(yarn >= "2" && < "4.9.3", bun))]
+                json: bool,
+            }
+        })
+        .unwrap()
+        .to_string();
+
+        assert!(!output.contains("not_supported"));
+        assert!(output.contains("GreaterEqual"));
+        assert!(output.contains("Less"));
+        assert!(output.contains("\"2.0.0\""));
+        assert!(output.contains("\"4.9.3\""));
+    }
+
+    #[test]
+    fn rejects_invalid_conjoined_version_bounds() {
+        for clauses in [
+            quote!(yarn >= "2" &&),
+            quote!(yarn >= "2" && < "invalid"),
+            quote!(yarn >= "2" && npm < "4.9.3"),
+            quote!(yarn >= "2" || < "4.9.3"),
+        ] {
+            assert!(syn::parse2::<ClauseList>(clauses).is_err());
+        }
     }
 
     #[test]

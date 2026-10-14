@@ -18,17 +18,25 @@ pub struct PingArgs {
 
 impl Npm {
     fn resolve_ping(args: &PingArgs) -> CommandResolution {
-        let mut cmd = CommandBuilder::new("npm");
-        cmd.arg("ping")
-            .option("--registry", args.registry.as_ref())
-            .extend(args.pass_through_args.iter());
-        cmd.into()
+        resolve_ping("npm", args)
     }
+}
+
+fn resolve_ping(program: &str, args: &PingArgs) -> CommandResolution {
+    let mut cmd = CommandBuilder::new(program);
+    cmd.arg("ping")
+        .option("--registry", args.registry.as_ref())
+        .extend(args.pass_through_args.iter());
+    cmd.into()
 }
 
 impl Resolve<PingArgs> for Pnpm {
     fn resolve(&self, args: &PingArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_ping(args)
+        if self.supports_v11_commands() {
+            resolve_ping("pnpm", args)
+        } else {
+            Npm::resolve_ping(args)
+        }
     }
 }
 
@@ -66,6 +74,26 @@ mod tests {
 
         assert_eq!(args.registry, Some("https://registry.npmjs.org".to_string()));
         assert_eq!(args.pass_through_args, vec!["--json".to_string()]);
+    }
+
+    #[test]
+    fn test_pnpm_native_version_boundary() {
+        let args = PingArgs {
+            registry: Some("https://registry.example.com".into()),
+            pass_through_args: vec!["--help".into()],
+        };
+        for (version, program) in
+            [("10.99.0", "npm"), ("11.0.0-rc.1", "npm"), ("11.0.0", "pnpm"), ("12.13.0", "pnpm")]
+        {
+            let resolution = resolve(&pnpm(version), args.clone());
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, program, "{version}");
+            assert_eq!(
+                command.args,
+                vec!["ping", "--registry", "https://registry.example.com", "--help"]
+            );
+        }
     }
 
     #[test]

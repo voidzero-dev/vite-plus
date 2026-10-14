@@ -3,5 +3,5 @@ name = "command_owner_pnpm11"
 vp = "global"
 steps = [
   { argv = ["vp", "pm", "owner", "--help"], comment = "should show help", continue-on-failure = true },
-  { argv = ["vp", "pm", "owner", "list", "testnpm2"], comment = "should list package owners (uses npm owner)", continue-on-failure = true },
+  { argv = ["vp", "pm", "owner", "list", "testnpm2"], comment = "should preserve native pnpm owner errors without retrying npm", continue-on-failure = true },
 ]

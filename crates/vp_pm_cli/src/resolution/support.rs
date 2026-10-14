@@ -82,24 +82,22 @@ impl VersionRule {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PmSupportRule {
     name: &'static str,
-    version: Option<VersionRule>,
+    versions: Vec<VersionRule>,
 }
 
 impl PmSupportRule {
     pub(crate) fn manager(name: &'static str) -> Self {
-        Self { name, version: None }
+        Self { name, versions: Vec::new() }
     }
 
-    pub(crate) fn version(
-        name: &'static str,
+    pub(crate) fn with_version(
+        mut self,
         operator: VersionOperator,
         original: &str,
         normalized: Version,
     ) -> Self {
-        Self {
-            name,
-            version: Some(VersionRule { operator, original: original.to_string(), normalized }),
-        }
+        self.versions.push(VersionRule { operator, original: original.to_string(), normalized });
+        self
     }
 
     pub(crate) fn first_matching<'a, Dialect: PackageManagerDialect>(
@@ -113,15 +111,15 @@ impl PmSupportRule {
         self.name
     }
 
-    pub(crate) fn version_rule(&self) -> Option<&VersionRule> {
-        self.version.as_ref()
+    pub(crate) fn version_rules(&self) -> &[VersionRule] {
+        &self.versions
     }
 
     fn matches<Dialect: PackageManagerDialect>(&self, dialect: &Dialect) -> bool {
         if self.name != Dialect::COMMAND_NAME {
             return false;
         }
-        self.version.as_ref().is_none_or(|version| {
+        self.versions.iter().all(|version| {
             dialect
                 .version()
                 .is_some_and(|current| version.operator.matches(current, &version.normalized))
@@ -295,10 +293,12 @@ mod tests {
         struct ShapeArgs {
             #[arg(long, not_supported(npm < "99"))]
             future: bool,
+            #[arg(long, not_supported(npm >= "2" && < "99"))]
+            bounded: bool,
         }
 
         let mut diagnostics = Diagnostics::default();
-        let shape = ShapeArgs { future: true };
+        let shape = ShapeArgs { future: true, bounded: true };
         shape.diagnose(&Npm::unknown_version(), &mut diagnostics);
 
         assert!(shape.future);
