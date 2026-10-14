@@ -446,3 +446,10 @@ panic = "abort" # Let it crash and force ourselves to write safe Rust.
 # The installer binary is downloaded by users, so optimize for size.
 [profile.release.package.vp_installer]
 opt-level = "z"
+
+# Oxc's compilation settings for native CI test binaries.
+[profile.ci]
+inherits = "release"
+opt-level = 2
+lto = "thin"
+codegen-units = 256
