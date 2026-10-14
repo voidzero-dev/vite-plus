@@ -30,8 +30,18 @@ function waitFor(text) {
 
 try {
   await waitFor('value first');
-  await writeFile('dep.ts', "export const value: string = 'second';\n");
-  await waitFor('value second');
+  // Node.js watches dep.ts only once the child reports it, which can be after its first
+  // output, and macOS drops a change made before the watcher is ready. Keep rewriting
+  // the file until the restart shows up.
+  const restarted = waitFor('value second');
+  const rewrite = () => writeFile('dep.ts', "export const value: string = 'second';\n");
+  await rewrite();
+  const timer = setInterval(() => rewrite().catch(() => {}), 500);
+  try {
+    await restarted;
+  } finally {
+    clearInterval(timer);
+  }
   console.log('vpx --watch restarted after an imported .ts file changed');
 } catch (error) {
   console.error(logs);
