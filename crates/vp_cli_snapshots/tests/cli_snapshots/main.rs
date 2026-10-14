@@ -39,10 +39,11 @@ use flavor::{Flavor, FlavorRuntime};
 use redact::redact_output;
 use vt_pty_terminal_test::{CommandBuilder, ScreenSize, TestTerminal};
 
-/// Default per-step timeout. Windows CI needs longer due to process startup
-/// overhead and slower I/O. Individual steps override via `timeout` (ms).
-const STEP_TIMEOUT: Duration =
-    if cfg!(windows) { Duration::from_secs(60) } else { Duration::from_secs(50) };
+/// Cases have isolated package-manager installs. Downloading a native Bun or
+/// pnpm binary can exceed a minute on CI, before the command itself starts.
+/// Keep the same allowance as registry-backed installs on every platform.
+/// Individual steps override this via `timeout` (ms).
+const STEP_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Screen size for the PTY terminal. Large enough to avoid line wrapping.
 const SCREEN_SIZE: ScreenSize = ScreenSize { rows: 500, cols: 500 };
@@ -1279,12 +1280,6 @@ fn run_case(
 
     drop(registry_phase);
 
-    // Installs through the local registry are slower than pure vp commands, so
-    // local-registry steps get a 120s default (still overridable per step);
-    // everything else keeps the standard per-step default.
-    let step_default_timeout =
-        if case.local_registry { Duration::from_secs(120) } else { STEP_TIMEOUT };
-
     let stage_str = stage.to_str().unwrap().to_owned();
     let case_dirs = case_home.redaction_paths();
     let repo_root = flavor::repo_root();
@@ -1318,7 +1313,7 @@ fn run_case(
         let (step_env, step_cwd, program) =
             step_context(step, &case_env, &case_path, &stage, &case.cwd, &case_install)?;
         let step_env: &BTreeMap<String, OsString> = &step_env;
-        let timeout = step.timeout(step_default_timeout);
+        let timeout = step.timeout(STEP_TIMEOUT);
 
         let command_line = step.display_command_line(&case.cwd);
         let execution_phase = report.phase(format!("step-{}: {command_line}", step_index + 1));
@@ -1571,7 +1566,7 @@ fn run_case(
         // Cleanup honors the step timeout (output is discarded either way),
         // so a hung teardown can never wedge the whole suite.
         if let Ok(mut child) = cmd.spawn() {
-            let _ = wait_with_deadline(&mut child, step.timeout(step_default_timeout));
+            let _ = wait_with_deadline(&mut child, step.timeout(STEP_TIMEOUT));
         }
     }
 

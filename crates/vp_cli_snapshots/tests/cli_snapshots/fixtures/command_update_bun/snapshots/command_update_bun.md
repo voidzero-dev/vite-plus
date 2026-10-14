@@ -1,8 +1,5 @@
 # command_update_bun
 
-## `bun --version`
-
-
 ## `vp update --help`
 
 should show help

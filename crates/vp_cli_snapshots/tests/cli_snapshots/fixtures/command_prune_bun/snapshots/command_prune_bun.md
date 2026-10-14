@@ -1,8 +1,5 @@
 # command_prune_bun
 
-## `bun --version`
-
-
 ## `vp install -- --silent`
 
 should install packages first

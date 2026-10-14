@@ -1,8 +1,5 @@
 # bun_install_preserves_native_dev
 
-## `bun --version`
-
-
 ## `vp install -D`
 
 Bun's native dev option does not exclude production dependencies
