@@ -2,7 +2,7 @@
 
 - Status: Draft (for review); prototype implemented and verified on Node.js 22, 24, and 26 (macOS)
 - Related: [`vpx` command](./vpx-command.md), [JavaScript runtime management](./js-runtime.md), [CLI bundling](../packages/cli/BUNDLING.md), [Core binding resolution](./core-binding-resolution.md)
-- Upstream: [oxc-project/oxc-node](https://github.com/oxc-project/oxc-node) (`main` after v0.1.6, for the fixes for oxc-node#820, #821, #827, and #828; source vendored and compiled into the Vite+ native binding, as Rolldown is)
+- Upstream: [oxc-project/oxc-node](https://github.com/oxc-project/oxc-node) (v0.1.7; source vendored unpatched and compiled into the Vite+ native binding, as Rolldown is)
 - Prior art: [tsx](https://github.com/privatenumber/tsx) 4.23.15
 
 ## Summary
@@ -247,7 +247,7 @@ The loader is resolved from the project first and the global install second, fol
 
 ## Comparison with tsx
 
-| Capability                     | tsx 4.23                                                              | `vpx` (vendored oxc-node 0.1.6)                                                                  | Node.js type stripping |
+| Capability                     | tsx 4.23                                                              | `vpx` (vendored oxc-node 0.1.7)                                                                  | Node.js type stripping |
 | ------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------- |
 | `.ts .mts .cts`                | ✓                                                                     | ✓                                                                                                | ✓                      |
 | `.tsx` / `.jsx`                | ✓ (classic `React.createElement` by default)                          | ✓ (automatic `react/jsx-runtime` by default; classic via tsconfig or pragma)                     | ✗                      |
@@ -273,7 +273,7 @@ The loader is resolved from the project first and the global install second, fol
 
 ## Upstream Status and Vendored Changes
 
-These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running the prototype on Node.js 22.18, 24.11, 26.0, and 26.5. The default is upstream first and sync after. Of the 17 issues filed, [oxc-node#794](https://github.com/oxc-project/oxc-node/issues/794) to [oxc-node#798](https://github.com/oxc-project/oxc-node/issues/798) were fixed in v0.1.5, [oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804) to [oxc-node#806](https://github.com/oxc-project/oxc-node/issues/806) and [oxc-node#808](https://github.com/oxc-project/oxc-node/issues/808) to [oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811) in v0.1.6, and [oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820), [oxc-node#821](https://github.com/oxc-project/oxc-node/issues/821), [oxc-node#827](https://github.com/oxc-project/oxc-node/issues/827), and [oxc-node#828](https://github.com/oxc-project/oxc-node/issues/828) on `main` after v0.1.6, at the commit the vendored copy pins. [oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807) is open.
+These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running the prototype on Node.js 22.18, 24.11, 26.0, and 26.5. The default is upstream first and sync after. Of the 17 issues filed, [oxc-node#794](https://github.com/oxc-project/oxc-node/issues/794) to [oxc-node#798](https://github.com/oxc-project/oxc-node/issues/798) were fixed in v0.1.5, [oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804) to [oxc-node#806](https://github.com/oxc-project/oxc-node/issues/806) and [oxc-node#808](https://github.com/oxc-project/oxc-node/issues/808) to [oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811) in v0.1.6, and [oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807), [oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820), [oxc-node#821](https://github.com/oxc-project/oxc-node/issues/821), [oxc-node#827](https://github.com/oxc-project/oxc-node/issues/827), and [oxc-node#828](https://github.com/oxc-project/oxc-node/issues/828) in v0.1.7, which the vendored copy pins. All of them are fixed.
 
 ### Fixed Upstream
 
@@ -287,10 +287,11 @@ These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running t
 - **Export conditions per request** ([oxc-node#810](https://github.com/oxc-project/oxc-node/issues/810), v0.1.6). The shared resolver kept the conditions of its first caller, which are empty when a `require()` transform runs first; each condition set now gets its own resolver, sharing the base resolver's caches.
 - **`.cts` files with ES module syntax** ([oxc-node#811](https://github.com/oxc-project/oxc-node/issues/811), v0.1.6) fail with one error on every load path, suggesting a rename to `.mts` or `import x = require()` and `export =`. Node.js rejects such a file too. tsc and tsx compile it to CommonJS, which needs an ESM-to-CommonJS transform oxc does not have.
 - **Embedding** ([oxc-node#804](https://github.com/oxc-project/oxc-node/issues/804), [oxc-node#805](https://github.com/oxc-project/oxc-node/issues/805), [oxc-node#806](https://github.com/oxc-project/oxc-node/issues/806), v0.1.6): a `default_global_allocator` feature, a tracing subscriber installed only when `OXC_LOG` is set and never over an existing one, and `setTsconfigPath()` for an explicit tsconfig without environment variables. See [Native Hooks in the Binding](#3-native-hooks-in-the-binding).
-- **CommonJS transformed twice** ([oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820), `main` after v0.1.6). On the in-thread path, Node.js' synchronous default load reads every CommonJS file, and the load hook transformed that source only for the loader to discard it and let `pirates` transform the file again. The load hook now defers a CommonJS result whose source is the file on disk, byte for byte, without transforming it; source another hook supplied is transformed and kept. `script-preload.ts` mirrors upstream's `register.mjs` and returns a null source only when oxc-node produced none.
-- **Extra reads for CommonJS packages** ([oxc-node#827](https://github.com/oxc-project/oxc-node/issues/827), `main` after v0.1.6). The #820 fix compared each CommonJS result with the file on disk and then read the file again to check its syntax, so a CommonJS-package file with ES module syntax was read twice more before it was transformed as an ES module. The load hook now checks the syntax of the source in hand first and compares it with the file only when it stays CommonJS: such a file costs no extra read, and a file that stays CommonJS costs one instead of two.
-- **TypeScript dependencies** ([oxc-node#821](https://github.com/oxc-project/oxc-node/issues/821), `main` after v0.1.6). Node.js refuses to strip types under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), and upstream transformed dependencies only under `OXC_TRANSFORM_ALL`, which also transforms their JavaScript. `setTransformDeps("typescript")` now transforms `.ts .mts .cts .tsx` dependencies alone, on both module systems; `transformsDep(path)` gives the `pirates` matcher the same answer. This replaces the last behavior change the vendored patch carried. A mode set this way wins over the variable, so `OXC_TRANSFORM_ALL` has no effect under `vpx`.
-- **Extensionless ES modules** ([oxc-node#828](https://github.com/oxc-project/oxc-node/issues/828), `main` after v0.1.6). In a package without `"type"`, an extensionless file with ES module syntax failed with `ERR_REQUIRE_CYCLE_MODULE`: the resolve hook reported it as CommonJS, and the load hook did not flip it to an ES module, because it picked no source type for a path without an extension. Such a file is now JavaScript whose syntax decides its module kind, as in Node.js.
+- **CommonJS transformed twice** ([oxc-node#820](https://github.com/oxc-project/oxc-node/issues/820), v0.1.7). On the in-thread path, Node.js' synchronous default load reads every CommonJS file, and the load hook transformed that source only for the loader to discard it and let `pirates` transform the file again. The load hook now defers a CommonJS result whose source is the file on disk, byte for byte, without transforming it; source another hook supplied is transformed and kept. `script-preload.ts` mirrors upstream's `register.mjs` and returns a null source only when oxc-node produced none.
+- **Extra reads for CommonJS packages** ([oxc-node#827](https://github.com/oxc-project/oxc-node/issues/827), v0.1.7). The #820 fix compared each CommonJS result with the file on disk and then read the file again to check its syntax, so a CommonJS-package file with ES module syntax was read twice more before it was transformed as an ES module. The load hook now checks the syntax of the source in hand first and compares it with the file only when it stays CommonJS: such a file costs no extra read, and a file that stays CommonJS costs one instead of two.
+- **TypeScript dependencies** ([oxc-node#821](https://github.com/oxc-project/oxc-node/issues/821), v0.1.7). Node.js refuses to strip types under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), and upstream transformed dependencies only under `OXC_TRANSFORM_ALL`, which also transforms their JavaScript. `setTransformDeps("typescript")` now transforms `.ts .mts .cts .tsx` dependencies alone, on both module systems; `transformsDep(path)` gives the `pirates` matcher the same answer. This replaces the last behavior change the vendored patch carried. A mode set this way wins over the variable, so `OXC_TRANSFORM_ALL` has no effect under `vpx`.
+- **Embedding without a patch** ([oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807), v0.1.7). A `napi` feature, on by default, gates every `#[napi]` export and mimalloc. With `default-features = false`, oxc-node links as a plain library that registers nothing into the host addon, so its exports no longer collide with Rolldown's `transform`; the host forwards what it needs. This replaced the vendored patch (see [Native Hooks in the Binding](#3-native-hooks-in-the-binding)).
+- **Extensionless ES modules** ([oxc-node#828](https://github.com/oxc-project/oxc-node/issues/828), v0.1.7). In a package without `"type"`, an extensionless file with ES module syntax failed with `ERR_REQUIRE_CYCLE_MODULE`: the resolve hook reported it as CommonJS, and the load hook did not flip it to an ES module, because it picked no source type for a path without an extension. Such a file is now JavaScript whose syntax decides its module kind, as in Node.js.
 
 ### Fixed in the Loader JavaScript
 
@@ -306,7 +307,6 @@ These items were found by reading oxc-node (0.1.3, then v0.1.4) and by running t
 
 - Transform TypeScript in `--eval`, stdin, and the REPL.
 - An opt-in persistent transform cache.
-- Split the crate into a NAPI-free core and a thin NAPI layer, so the vendored patch shrinks ([oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807)).
 
 ## Implementation Architecture
 
@@ -337,27 +337,23 @@ The detection rules are pure functions over `(tokens, cwd)` and are unit tested 
 
 ### 3. Native Hooks in the Binding
 
-**Files**: `packages/tools/.upstream-versions.json`, `packages/tools/src/sync-remote-deps.ts`, `packages/tools/src/patch-oxc-node.ts`, `packages/tools/patches/oxc-node.patch`, `.github/actions/clone/action.yml`, `.github/workflows/security.yml`, `.github/scripts/upgrade-deps.ts`, `Cargo.toml`, `packages/cli/binding/Cargo.toml`, `packages/cli/binding/src/lib.rs`, `packages/cli/build.ts`
+**Files**: `packages/tools/.upstream-versions.json`, `packages/tools/src/sync-remote-deps.ts`, `packages/tools/src/patch-oxc-node.ts`, `.github/actions/clone/action.yml`, `.github/workflows/security.yml`, `.github/scripts/upgrade-deps.ts`, `Cargo.toml`, `packages/cli/binding/Cargo.toml`, `packages/cli/binding/src/lib.rs`, `packages/cli/binding/src/oxc_node.rs`, `packages/cli/build.ts`
 
 oxc-node is vendored the way Rolldown is:
 
-- `.upstream-versions.json` pins oxc-node at a release tag, or at a `main` commit when a needed fix is not released yet; it currently pins `main` for the fixes for oxc-node#820, #821, #827, and #828, which v0.1.6 lacks. The daily `upgrade-deps` workflow bumps it to new stable tags, as it does for Rolldown and Vite, but only to a tag that contains the pinned commit.
-- `sync-remote` clones it into the gitignored `oxc-node/` and runs `patch-oxc-node.ts` after the Cargo oxc sync. CI checks it out in the shared clone action and the security workflow, and runs the same script before any cargo command, because `Cargo.lock` records the patched manifest. The script and the patch are part of the native cache key.
-- `patch-oxc-node.ts` applies `patches/oxc-node.patch` with `git apply` (a reverse check makes it idempotent) and then points the `oxc` dependency at the workspace version. After editing `oxc-node/` by hand, `pnpm tool patch-oxc-node --update` writes the changes back to the patch, leaving the oxc version out so the patch keeps applying.
-- The root `Cargo.toml` adds `oxc-node = { path = "./oxc-node", features = ["default_global_allocator"] }`, leaving the global allocator to `rolldown_binding`, and excludes `oxc-node/` from the workspace, so upstream code is not held to `--deny warnings` workspace lints, like the nested rolldown workspace.
-- The binding has an optional `oxc-node` feature and does `pub extern crate oxc_node;` next to `rolldown_binding`. `build.ts` enables `rolldown,oxc-node` for every build; napi-rs passes each `features` entry as a separate cargo argument, so the list is joined into one.
+- `.upstream-versions.json` pins oxc-node at a release tag (v0.1.7), or at a `main` commit when a needed fix is not released yet. The daily `upgrade-deps` workflow bumps it to new stable tags, as it does for Rolldown and Vite, but only to a tag that contains the pinned commit.
+- `sync-remote` clones it into the gitignored `oxc-node/` and runs `patch-oxc-node.ts` after the Cargo oxc sync. CI checks it out in the shared clone action and the security workflow, and runs the same script before any cargo command, because `Cargo.lock` records the rewritten manifest. The script is part of the native cache key.
+- `patch-oxc-node.ts` only points the `oxc` dependency at the workspace version. The source is not patched.
+- The root `Cargo.toml` adds `oxc-node = { path = "./oxc-node", default-features = false }`, which drops oxc-node's `#[napi]` exports and its global allocator, and excludes `oxc-node/` from the workspace, so upstream code is not held to `--deny warnings` workspace lints, like the nested rolldown workspace.
+- The binding has an optional `oxc-node` feature that compiles `src/oxc_node.rs`. `build.ts` enables `rolldown,oxc-node` for every build; napi-rs passes each `features` entry as a separate cargo argument, so the list is joined into one.
 
-What the binding already contains makes this cheap. Through `rolldown_binding`, the binding links the same crates oxc-node uses (`oxc` with transformer, codegen, and semantic; `oxc_resolver` 11.24.3; `oxc_sourcemap` 9). oxc-node's `src/lib.rs` (about 2,370 lines with the patch) and `src/windows_file_url.rs` (about 1,170 lines) are glue over those crates.
+What the binding already contains makes this cheap. Through `rolldown_binding`, the binding links the same crates oxc-node uses (`oxc` with transformer, codegen, and semantic; `oxc_resolver` 11.24.3; `oxc_sourcemap` 9). oxc-node's `src/lib.rs` (about 2,400 lines) and `src/windows_file_url.rs` (about 1,170 lines) are glue over those crates.
 
-The patch only adapts the crate to its host:
+`packages/cli/binding/src/oxc_node.rs` is the thin NAPI layer upstream documents for embedders. It forwards the functions the loader uses under an `oxcNode` namespace (`createResolve`, `load`, `OxcTransformer`, `setTsconfigPath`, `setTransformDeps`, `transformsDep`), so nothing collides with the `transform` export of `oxc_transform_napi`, which `rolldown_binding` links. Its `module_exports` hook calls `init_tracing()` and `detect_runtime_syntax()`, which oxc-node's own module hooks run when its `napi` feature is on: without them, `OXC_LOG` would print nothing and `using` would stay lowered on Node.js 24 and later. `OxcTransformer.transform` returns a plain `{ source, sourceMap }` object, because oxc-node's `Output` class is not exported without the feature. oxc-node's `#[napi(object)]` types (`ResolveContext`, `LoadContext`, and so on) still land at the top level of the binding's `.d.ts`; none collides with another name there. An upstream signature change shows up as a compile error in the forwarders, not as a patch that no longer applies.
 
-| Change                                                                                                      | Reason                                                                                                                                                                                                                             |
-| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crate-type = ["rlib"]` and `build = false`                                                                 | Linked into the host cdylib, whose build script already sets the napi link args                                                                                                                                                    |
-| Every top-level `#[napi]` item goes under `namespace = "oxcNode"`; `TransformTask` → `OxcNodeTransformTask` | `rolldown_binding` links `oxc_transform_napi`, which also exports `transform` and has a `TransformTask`; duplicate NAPI exports silently overwrite each other ([oxc-node#807](https://github.com/oxc-project/oxc-node/issues/807)) |
-| `oxc` follows the workspace version (applied by the script, not the patch)                                  | One copy of oxc: oxc-node tracks oxc head while Rolldown and Vite+ can lag; both use 0.153.0 today                                                                                                                                 |
+`oxc` follows the workspace version, set by the script: one copy of oxc, because oxc-node tracks oxc head while Rolldown and Vite+ can lag. v0.1.7 asks for 0.154.0 and compiles against the workspace's 0.153.0.
 
-Everything else uses upstream options: the `default_global_allocator` feature, the tracing subscriber that stays off unless `OXC_LOG` is set (so `VP_LOG` keeps its own), `setTsconfigPath()`, which the preload calls with `VP_SCRIPT_TSCONFIG`, and `setTransformDeps("typescript")`.
+Everything else uses upstream options: the tracing subscriber that stays off unless `OXC_LOG` is set (so `VP_LOG` keeps its own), `setTsconfigPath()`, which the preload calls with `VP_SCRIPT_TSCONFIG`, and `setTransformDeps("typescript")`.
 
 Before this change, `BUNDLING.md` said the `rolldown` feature was release-only, but `build.ts` enables it for every build, so development builds already compile oxc. The `oxc-node` feature costs dev builds no extra crates.
 
@@ -510,7 +506,7 @@ Other errors raised in the script, including transform errors, come from Node.js
 - One oxc version for the whole toolchain. Rolldown, `vp lint`'s type-aware parsing, the static config extractor, and the script loader cannot drift apart.
 - The vendoring mechanism (`sync-remote`, `.upstream-versions.json`, workspace path deps, a Cargo feature, publish-time platform injection) exists and is exercised on every release.
 
-**Costs**: oxc-node tracks oxc head and bumps often (18 oxc updates in its changelog), so a new tag must compile against the workspace's oxc version, and the vendored copy carries `patches/oxc-node.patch` until its fixes land upstream. A bump whose patch no longer applies fails `sync-remote` loudly and needs `pnpm tool patch-oxc-node --update` after rebasing the changes.
+**Costs**: oxc-node tracks oxc head and bumps often (18 oxc updates in its changelog), so a new tag must compile against the workspace's oxc version, and a change to a forwarded signature needs the matching change in `binding/src/oxc_node.rs`. Either fails the build loudly.
 
 ## Alternatives Considered
 
@@ -603,7 +599,7 @@ With the global CLI installed, `node_modules/.bin/vpx` (the project-local bin) s
 
 - `crates/vp_global_cli/src/commands/vpx_script.rs` and `vpx.rs`: the detection table, option-value skipping, `--tsconfig` extraction, the shebang guard, and `-v/--version`.
 - `packages/cli/src/__tests__/vpx-script.spec.ts`: the TypeScript port of the same rules; a check that the Rust and TypeScript lists match; the Node.js range check, which must equal `engines.node`; the sync-hooks cutoff; and the helper mapping and `require()` rewrite.
-- `packages/tools/src/__tests__/patch-oxc-node.spec.ts`: the oxc version rewrite, the patch's scope, and that it is applied to the vendored checkout.
+- `packages/tools/src/__tests__/patch-oxc-node.spec.ts`: the oxc version rewrite.
 - `packages/tools/src/__tests__/sync-remote-deps.spec.ts`: `@oxc-project/runtime` follows Rolldown's pin.
 - `packages/cli/src/__tests__/toolchain.spec.ts`: the `oxc-node` toolchain node with its version and revision.
 
@@ -758,8 +754,8 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 
 ## Rollout
 
-1. **Phase 0, vendor and prototype** (implemented): oxc-node in `sync-remote`, CI, and `upgrade-deps`; the patch; the binding feature; the loader entries; detection and execution in both CLIs; toolchain metadata; unit and snapshot tests; and docs.
-2. **Phase 1, release** (implemented, pending review): the feature ships as a regular part of `vpx`. CI covers Linux, macOS, and Windows, and the upstream fixes from [Upstream Status](#upstream-status-and-vendored-changes) landed in oxc-node v0.1.5, v0.1.6, and on `main`.
+1. **Phase 0, vendor and prototype** (implemented): oxc-node in `sync-remote`, CI, and `upgrade-deps`; the binding feature and its forwarders; the loader entries; detection and execution in both CLIs; toolchain metadata; unit and snapshot tests; and docs.
+2. **Phase 1, release** (implemented, pending review): the feature ships as a regular part of `vpx`. CI covers Linux, macOS, and Windows, and the upstream fixes from [Upstream Status](#upstream-status-and-vendored-changes) landed in oxc-node v0.1.5, v0.1.6, and v0.1.7.
 3. **Phase 2, migration**: teach `vp migrate` to rewrite `tsx`, `ts-node`, and `esno` usages in `package.json` scripts.
 4. **Phase 3**: see Future Enhancements.
 
@@ -773,7 +769,7 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 6. **Local bin scope**: Design Decision 8 ships a project-local `vpx` that handles script mode and delegates package mode. Should it instead implement the full lookup chain in JS, so that `vpx eslint .` also works without the global CLI? (Proposed: delegate; keep one implementation of the chain.)
 7. **`--require` ordering** (resolved): the loader is split into a CommonJS `--require` preload and an `--import`, so `--require ./setup.ts` works.
 8. **Extensionless TypeScript in shebang scripts** (resolved): not supported. An extensionless name does not tell TypeScript from JavaScript, so shebang scripts keep their `.ts` extension (see Edge Cases).
-9. **oxc version lockstep** (resolved): `upgrade-deps` bumps oxc-node to its latest stable tag, and `sync-remote` rewrites its `oxc` version to the workspace's and re-applies the patch; a tag that does not compile or patch fails the upgrade loudly. `@oxc-project/runtime` follows Rolldown's pin.
+9. **oxc version lockstep** (resolved): `upgrade-deps` bumps oxc-node to its latest stable tag, and `sync-remote` rewrites its `oxc` version to the workspace's; a tag that does not compile fails the upgrade loudly. `@oxc-project/runtime` follows Rolldown's pin.
 10. **Maturity** (resolved): the docs present script mode as a regular `vpx` feature, without an experimental label. The oxc.rs docs still mark oxc-node itself as experimental; the vendored copy is pinned to a release and covered by Vite+'s own tests.
 11. **`--version`** (resolved): `vpx -v/--version` prints the Vite+ version, as `vp --version` does; `vp node --version` prints the Node.js version.
 12. **Dev builds** (resolved): `build.ts` already compiles Rolldown, and therefore oxc, into every build, so the `oxc-node` feature is on for all builds at no extra crate cost.

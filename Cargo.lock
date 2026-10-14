@@ -4234,7 +4234,6 @@ version = "0.0.0"
 dependencies = [
  "idna",
  "memchr",
- "mimalloc-safe",
  "napi",
  "napi-build",
  "napi-derive",

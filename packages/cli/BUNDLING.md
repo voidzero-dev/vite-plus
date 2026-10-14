@@ -312,8 +312,7 @@ A binding built by `pnpm build` contains:
 `vpx <script>` runs TypeScript through [oxc-node](https://github.com/oxc-project/oxc-node), vendored like Rolldown (see [the RFC](../../rfcs/vpx-script-execution.md)):
 
 - `sync-remote` clones it into `oxc-node/` at the hash in `packages/tools/.upstream-versions.json`; CI checks it out in `.github/actions/clone`.
-- `packages/tools/patches/oxc-node.patch`, applied by `packages/tools/src/patch-oxc-node.ts`, builds it as an rlib, puts its exports under an `oxcNode` namespace so nothing collides with Rolldown's `transform`, and transforms TypeScript under `node_modules`. The script also sets the workspace `oxc` version.
-- The root `Cargo.toml` enables oxc-node's `default_global_allocator` feature, because `rolldown_binding` declares the global allocator, and excludes `oxc-node/` from the workspace, so upstream code is not held to workspace lints.
+- The source stays unpatched. The root `Cargo.toml` links it with `default-features = false`, so it registers no NAPI exports and declares no global allocator, and excludes `oxc-node/` from the workspace, so upstream code is not held to workspace lints. `binding/src/oxc_node.rs` forwards the functions the loader uses under an `oxcNode` namespace, so nothing collides with Rolldown's `transform`. `packages/tools/src/patch-oxc-node.ts` only sets oxc-node's `oxc` dependency to the workspace version.
 - `src/script-preload.ts` (the `--require` entry), `src/script-register.ts` (the `--import` entry), and `src/script-esm-hooks.ts` are adapted from oxc-node's `register.mjs` and `esm.mjs`. They load the hooks from this binding, pass `vpx --tsconfig` through `setTsconfigPath()`, and resolve oxc-node's runtime helpers from `@oxc-project/runtime`, a `vite-plus` dependency.
 - `pirates`, the CommonJS hook, is bundled into `dist`.
 

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { satisfies } from 'verkit';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { oxcNode } from '../../binding/index.js';
 import {
   canRegisterSyncHooks,
   HELPER_MODULE_NAME,
@@ -188,6 +189,18 @@ describe('script hooks', () => {
     expect(runtimeHelperSpecifier('@oxc-node/core/helpers/defineProperty')).toBeUndefined();
     expect(runtimeHelperSpecifier(HELPER_MODULE_NAME)).toBeUndefined();
     expect(runtimeHelperSpecifier('./helpers/defineProperty')).toBeUndefined();
+  });
+
+  it('keeps `using` native where Node.js runs it, which the binding detects when it loads', () => {
+    // `detect_runtime_syntax` runs from the binding's `module_exports` hook; without it,
+    // `using` would be lowered to a helper on every version.
+    const transformer = new oxcNode.OxcTransformer(process.cwd(), HELPER_MODULE_NAME);
+    const { source } = transformer.transform(
+      path.join(tmpdir(), 'using.ts'),
+      '{ using x = { [Symbol.dispose]() {} }; }',
+    );
+    const major = Number(process.versions.node.split('.')[0]);
+    expect(source.includes(`${HELPER_MODULE_NAME}/helpers/usingCtx`)).toBe(major < 24);
   });
 
   it('rewrites CommonJS helper requires so ES module evaluation can run them', () => {

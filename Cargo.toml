@@ -356,9 +356,10 @@ oxc_resolver = { version = "11.24.3", features = ["yarn_pnp"] }
 oxc_resolver_napi = { version = "11.24.3", default-features = false, features = ["yarn_pnp"] }
 oxc_sourcemap = "9.0.0"
 
-# vendored oxc-node, compiled into the native binding for `vpx <script>`;
-# `rolldown_binding` already declares the global allocator
-oxc-node = { path = "./oxc-node", features = ["default_global_allocator"] }
+# vendored oxc-node, compiled into the native binding for `vpx <script>`; without its
+# `napi` feature it registers no exports and declares no global allocator, and
+# `packages/cli/binding/src/oxc_node.rs` forwards what the loader uses
+oxc-node = { path = "./oxc-node", default-features = false }
 
 # rolldown crates
 rolldown = { path = "./rolldown/crates/rolldown" }
