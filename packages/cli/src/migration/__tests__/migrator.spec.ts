@@ -1977,11 +1977,6 @@ describe('standalone pnpm child project boundaries', () => {
       JSON.stringify({ name: 'web', devEngines: { packageManager: { name: 'npm' } } }),
     ],
     [
-      'the child declares workspaces',
-      'web/package.json',
-      JSON.stringify({ name: 'web', packageManager: 'pnpm@10.33.0', workspaces: ['services/*'] }),
-    ],
-    [
       'the parent declares workspaces',
       'package.json',
       JSON.stringify({ name: 'root', workspaces: ['web'], devDependencies: { vite: '^8.0.1' } }),
@@ -1991,6 +1986,24 @@ describe('standalone pnpm child project boundaries', () => {
     fs.writeFileSync(path.join(tmpDir, file), content);
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
     expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it('preserves the child pnpm boundary without enabling package.json workspaces', () => {
+    const manifest = JSON.stringify({
+      name: 'web',
+      packageManager: 'pnpm@10.33.0',
+      workspaces: ['services/*'],
+    });
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), manifest);
+    const lockfile = readYaml(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+    expect(readYaml(path.join(tmpDir, 'web/pnpm-lock.yaml'))).toBe(lockfile);
   });
 
   it('does not add a child boundary when the child has no pnpm lockfile', () => {

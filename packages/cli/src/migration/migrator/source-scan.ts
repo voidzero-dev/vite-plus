@@ -189,7 +189,7 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
       } catch {
         continue;
       }
-      if (!isPlainRecord(pkg) || Object.hasOwn(pkg, 'workspaces')) {
+      if (!isPlainRecord(pkg) || (directory === projectPath && Object.hasOwn(pkg, 'workspaces'))) {
         continue;
       }
       const devEnginePackageManager = isPlainRecord(pkg.devEngines)
