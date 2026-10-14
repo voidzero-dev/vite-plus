@@ -6,6 +6,15 @@ steps = [
 ]
 
 [[case]]
+name = "create_next_command_application_from_package_manager"
+vp = "local"
+comment = "`npm create vite-plus` stamps npm's user agent: create with npm and run vp through it, since the global CLI may be missing."
+env = { npm_config_user_agent = "npm/11.0.0 node/v24.0.0 linux x64 workspaces/false" }
+steps = [
+  { argv = ["vp", "create", "vite:application", "--no-interactive"], comment = "verify npm is selected and the next command uses npx", continue-on-failure = true },
+]
+
+[[case]]
 name = "create_git_command_application"
 vp = "global"
 steps = [
