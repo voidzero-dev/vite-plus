@@ -132,6 +132,7 @@ const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 const AUTO_INLINE_PLUGIN_NAME = 'vite-plus:auto-inline-matcher-deps';
 const COVERAGE_GUARD_PLUGIN_NAME = 'vite-plus:coverage-version-guard';
 const CACHE_PATHS_PLUGIN_NAME = 'vite-plus:vitest-cache-paths';
+const MODULES_YAML_PLUGIN_NAME = 'vite-plus:pnpm-modules-yaml';
 const userPlugins = (plugins: unknown): unknown[] => {
   expect(Array.isArray(plugins)).toBe(true);
   const arr = plugins as unknown[];
@@ -139,7 +140,8 @@ const userPlugins = (plugins: unknown): unknown[] => {
   expect((arr[1] as { name?: string })?.name).toBe(AUTO_INLINE_PLUGIN_NAME);
   expect((arr[2] as { name?: string })?.name).toBe(COVERAGE_GUARD_PLUGIN_NAME);
   expect((arr[3] as { name?: string })?.name).toBe(CACHE_PATHS_PLUGIN_NAME);
-  return arr.slice(4);
+  expect((arr[4] as { name?: string })?.name).toBe(MODULES_YAML_PLUGIN_NAME);
+  return arr.slice(5);
 };
 
 // lazyPlugins type compatibility tests — these verify at compile time that

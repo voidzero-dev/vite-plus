@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -29,6 +29,7 @@ vi.mock('@voidzero-dev/vite-task-client', () => taskClientMocks);
 const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 const COVERAGE_GUARD_PLUGIN_NAME = 'vite-plus:coverage-version-guard';
 const CACHE_PATHS_PLUGIN_NAME = 'vite-plus:vitest-cache-paths';
+const MODULES_YAML_PLUGIN_NAME = 'vite-plus:pnpm-modules-yaml';
 
 function pluginName(p: unknown): string | undefined {
   if (p && typeof p === 'object' && 'name' in p && typeof p.name === 'string') {
@@ -46,7 +47,8 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(result.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(result.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
     expect(pluginName(result.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
-    expect(pluginName(result.plugins[4])).toBe('user-existing-root-plugin');
+    expect(pluginName(result.plugins[4])).toBe(MODULES_YAML_PLUGIN_NAME);
+    expect(pluginName(result.plugins[5])).toBe('user-existing-root-plugin');
   });
 
   it('injects resolver + auto-inline plugins into an inline-object project entry, preserving existing plugins', () => {
@@ -69,9 +71,10 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
     expect(pluginName(project.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
-    expect(pluginName(project.plugins[4])).toBe('user-unit-project-plugin');
+    expect(pluginName(project.plugins[4])).toBe(MODULES_YAML_PLUGIN_NAME);
+    expect(pluginName(project.plugins[5])).toBe('user-unit-project-plugin');
     // Sanity: the existing plugin reference is preserved (clone shallow-copies the array).
-    expect(project.plugins[4]).toBe(existing);
+    expect(project.plugins[5]).toBe(existing);
   });
 
   it('injects plugins into the return value of a function-shaped project entry', () => {
@@ -96,7 +99,8 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(resolved.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(resolved.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
     expect(pluginName(resolved.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
-    expect(pluginName(resolved.plugins[4])).toBe('user-fn-project-plugin');
+    expect(pluginName(resolved.plugins[4])).toBe(MODULES_YAML_PLUGIN_NAME);
+    expect(pluginName(resolved.plugins[5])).toBe('user-fn-project-plugin');
   });
 
   it('passes string-glob project entries through unchanged', () => {
@@ -123,11 +127,12 @@ describe('defineConfig project plugin injection', () => {
 
     const project = result.test.projects[0] as { plugins: unknown[]; test: { name: string } };
     expect(project.test.name).toBe('no-plugins');
-    expect(project.plugins).toHaveLength(4);
+    expect(project.plugins).toHaveLength(5);
     expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
     expect(pluginName(project.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
+    expect(pluginName(project.plugins[4])).toBe(MODULES_YAML_PLUGIN_NAME);
   });
 
   it.each([undefined, true])('inherits root plugins with extends %s', (extendsRoot) => {
@@ -160,6 +165,7 @@ describe('defineConfig project plugin injection', () => {
       AUTO_INLINE_PLUGIN_NAME,
       COVERAGE_GUARD_PLUGIN_NAME,
       CACHE_PATHS_PLUGIN_NAME,
+      MODULES_YAML_PLUGIN_NAME,
     ]);
   });
 
@@ -170,6 +176,7 @@ describe('defineConfig project plugin injection', () => {
       AUTO_INLINE_PLUGIN_NAME,
       COVERAGE_GUARD_PLUGIN_NAME,
       CACHE_PATHS_PLUGIN_NAME,
+      MODULES_YAML_PLUGIN_NAME,
       'user',
     ]);
   });
@@ -180,9 +187,9 @@ describe('defineConfig project plugin injection', () => {
         projects: [{ extends: false, test: { name: 'child' } }, { test: { name: 'inherited' } }],
       },
     });
-    expect(config.plugins).toHaveLength(4);
+    expect(config.plugins).toHaveLength(5);
     const [independent, inherited] = config.test!.projects! as { plugins?: unknown[] }[];
-    expect(independent.plugins).toHaveLength(4);
+    expect(independent.plugins).toHaveLength(5);
     expect(inherited.plugins).toBeUndefined();
   });
 });
@@ -578,6 +585,54 @@ describe('defineConfig vitest cache paths plugin', () => {
       expect(taskClientMocks.ignoreOutput).not.toHaveBeenCalledWith('');
     } finally {
       await vitest.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+function runConfigHook(root: string | undefined) {
+  const result = defineConfig({ root }) as { plugins: unknown[] };
+  const plugin = result.plugins.find(
+    (p): p is { config: (config: { root?: string }) => void } =>
+      pluginName(p) === MODULES_YAML_PLUGIN_NAME,
+  );
+  if (!plugin) {
+    throw new Error('pnpm modules.yaml plugin not found');
+  }
+  plugin.config({ root });
+}
+
+describe('defineConfig pnpm modules.yaml plugin', () => {
+  afterEach(() => {
+    taskClientMocks.ignoreInput.mockClear();
+  });
+
+  it('ignores the workspace node_modules/.modules.yaml before Vite reads it', () => {
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'vp-modules-yaml-')));
+    writeFileSync(join(root, 'package.json'), '{"name":"probe","private":true}\n');
+    try {
+      runConfigHook(root);
+      expect(taskClientMocks.ignoreInput).toHaveBeenCalledTimes(1);
+      expect(taskClientMocks.ignoreInput).toHaveBeenCalledWith(
+        join(root, 'node_modules', '.modules.yaml'),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('anchors at the workspace root when the Vite root is a package inside it', () => {
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'vp-modules-yaml-ws-')));
+    writeFileSync(join(root, 'package.json'), '{"name":"ws","private":true}\n');
+    writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - pkgs/*\n');
+    mkdirSync(join(root, 'pkgs', 'app'), { recursive: true });
+    writeFileSync(join(root, 'pkgs', 'app', 'package.json'), '{"name":"app"}\n');
+    try {
+      runConfigHook(join(root, 'pkgs', 'app'));
+      expect(taskClientMocks.ignoreInput).toHaveBeenCalledWith(
+        join(root, 'node_modules', '.modules.yaml'),
+      );
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });

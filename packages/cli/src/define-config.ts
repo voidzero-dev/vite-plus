@@ -831,6 +831,24 @@ function vitePlusVitestCachePathsPlugin(): PluginOption {
 }
 
 /**
+ * Vite reads `<workspaceRoot>/node_modules/.modules.yaml` while resolving the
+ * server options, to find the pnpm virtual store. pnpm rewrites that file on
+ * every install (`prunedAt` changes), so under `vp run` the tracked read makes
+ * every task miss its cache after a fresh install. Tell the runner the file is
+ * not an input. The `config` hook runs before Vite resolves the server
+ * options. The call is a no-op outside `vp run`.
+ */
+function vitePlusPnpmModulesYamlPlugin(): PluginOption {
+  return {
+    name: 'vite-plus:pnpm-modules-yaml',
+    config(config) {
+      const root = resolve(config.root ?? process.cwd());
+      ignoreInput(join(searchForWorkspaceRoot(root), 'node_modules', '.modules.yaml'));
+    },
+  };
+}
+
+/**
  * Inject the vitest resolver plugin, the auto-inline matcher plugin, the
  * coverage version guard, and the cache-paths plugin into a single inline
  * project config. Used both for
@@ -845,6 +863,7 @@ const VITE_PLUS_TEST_PLUGIN_NAMES: ReadonlySet<string> = new Set([
   'vite-plus:auto-inline-matcher-deps',
   'vite-plus:coverage-version-guard',
   'vite-plus:vitest-cache-paths',
+  'vite-plus:pnpm-modules-yaml',
 ]);
 
 function withoutVitePlusTestPlugins(plugin: PluginOption): PluginOption {
@@ -874,6 +893,7 @@ function injectPluginIntoInlineConfig<
       vitePlusAutoInlineMatcherPlugin(),
       vitePlusCoverageVersionGuardPlugin(),
       vitePlusVitestCachePathsPlugin(),
+      vitePlusPnpmModulesYamlPlugin(),
       ...(config.plugins ?? []).filter(keepUserPlugin).map(withoutVitePlusTestPlugins),
     ],
   };
