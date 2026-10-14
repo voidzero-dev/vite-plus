@@ -28,6 +28,18 @@ describe('build artifacts', () => {
     expect(content).toContain('glob');
   });
 
+  // `vp dev`, `vp build`, and `vp preview` start through this script, which
+  // records the startup time for the dev server's `ready in N ms` banner.
+  it('should include the Vite bin script pointing at the bundled CLI', () => {
+    const binPath = path.join(distDir, 'vite/bin/vite.js');
+    expect(fs.existsSync(binPath), `${binPath} should exist`).toBe(true);
+
+    const content = fs.readFileSync(binPath, 'utf8');
+    expect(content).toContain('global.__vite_start_time = performance.now()');
+    expect(content).toContain(`import('../node/cli.js')`);
+    expect(fs.existsSync(path.resolve(path.dirname(binPath), '../node/cli.js'))).toBe(true);
+  });
+
   it('bundles JavaScript Yuku packages and keeps the native parser external', async () => {
     await init;
     const tsdownDir = path.join(distDir, 'tsdown');

@@ -14,6 +14,10 @@ static UUID_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 static DURATION_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)?(ns|µs|ms|s)\b").unwrap());
+// Vite's dev server banner separates the startup time from its unit
+// (`VITE+ v1.2.0  ready in 123 ms`), which DURATION_RE does not match.
+static VITE_READY_IN_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\b(ready in )\d+ ms\b").unwrap());
 // Yarn prints elapsed times as one or several units (999ms vs 1s 0ms).
 // Match the entire elapsed field, not adjacent values in timing tables.
 static YARN_ELAPSED_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
@@ -547,6 +551,7 @@ pub fn redact_output(
     // Runs before version redaction so "1.23s" never half-matches as a version.
     output = YARN_ELAPSED_RE.replace_all(&output, "${1}<duration>").into_owned();
     output = DURATION_RE.replace_all(&output, "<duration>").into_owned();
+    output = VITE_READY_IN_RE.replace_all(&output, "${1}<duration>").into_owned();
     output = VITEST_TIMING_RE.replace_all(&output, "$1 (<timing>)").into_owned();
     output = VITEST_TRANSFORM_CACHE_HINT_RE.replace_all(&output, "").into_owned();
 
