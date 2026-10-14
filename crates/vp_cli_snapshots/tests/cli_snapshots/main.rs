@@ -1376,50 +1376,54 @@ fn run_case(
                 std::thread::spawn(move || {
                     let mut terminal = terminal;
 
-                    for interaction in interactions {
-                        match interaction {
-                            Interaction::ExpectMilestone(expect) => {
-                                output_for_thread.lock().unwrap().push_str(&format!(
-                                    "**→ expect-milestone:** `{}`\n\n",
-                                    expect.expect_milestone
-                                ));
-                                let milestone_screen =
-                                    terminal.reader.expect_milestone(&expect.expect_milestone);
-                                let mut output = output_for_thread.lock().unwrap();
-                                push_fenced_block(&mut output, &milestone_screen);
-                                output.push('\n');
-                            }
-                            Interaction::Write(write) => {
-                                output_for_thread
-                                    .lock()
-                                    .unwrap()
-                                    .push_str(&format!("**← write:** `{}`\n\n", write.write));
-                                terminal.writer.write_all(write.write.as_bytes()).unwrap();
-                                terminal.writer.flush().unwrap();
-                            }
-                            Interaction::WriteLine(write_line) => {
-                                output_for_thread.lock().unwrap().push_str(&format!(
-                                    "**← write-line:** `{}`\n\n",
-                                    write_line.write_line
-                                ));
-                                terminal
-                                    .writer
-                                    .write_line(write_line.write_line.as_bytes())
-                                    .unwrap();
-                            }
-                            Interaction::WriteKey(write_key) => {
-                                let key_name = write_key.write_key.as_str();
-                                output_for_thread
-                                    .lock()
-                                    .unwrap()
-                                    .push_str(&format!("**← write-key:** `{key_name}`\n\n"));
-                                terminal.writer.write_all(write_key.write_key.bytes()).unwrap();
-                                terminal.writer.flush().unwrap();
+                    // Killing a timed-out child can make a milestone wait panic.
+                    // Capture its final screen before propagating that panic.
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        for interaction in interactions {
+                            match interaction {
+                                Interaction::ExpectMilestone(expect) => {
+                                    output_for_thread.lock().unwrap().push_str(&format!(
+                                        "**→ expect-milestone:** `{}`\n\n",
+                                        expect.expect_milestone
+                                    ));
+                                    let milestone_screen =
+                                        terminal.reader.expect_milestone(&expect.expect_milestone);
+                                    let mut output = output_for_thread.lock().unwrap();
+                                    push_fenced_block(&mut output, &milestone_screen);
+                                    output.push('\n');
+                                }
+                                Interaction::Write(write) => {
+                                    output_for_thread
+                                        .lock()
+                                        .unwrap()
+                                        .push_str(&format!("**← write:** `{}`\n\n", write.write));
+                                    terminal.writer.write_all(write.write.as_bytes()).unwrap();
+                                    terminal.writer.flush().unwrap();
+                                }
+                                Interaction::WriteLine(write_line) => {
+                                    output_for_thread.lock().unwrap().push_str(&format!(
+                                        "**← write-line:** `{}`\n\n",
+                                        write_line.write_line
+                                    ));
+                                    terminal
+                                        .writer
+                                        .write_line(write_line.write_line.as_bytes())
+                                        .unwrap();
+                                }
+                                Interaction::WriteKey(write_key) => {
+                                    let key_name = write_key.write_key.as_str();
+                                    output_for_thread
+                                        .lock()
+                                        .unwrap()
+                                        .push_str(&format!("**← write-key:** `{key_name}`\n\n"));
+                                    terminal.writer.write_all(write_key.write_key.bytes()).unwrap();
+                                    terminal.writer.flush().unwrap();
+                                }
                             }
                         }
-                    }
 
-                    let status = terminal.reader.wait_for_exit().unwrap();
+                        terminal.reader.wait_for_exit().unwrap()
+                    }));
                     let screen = if formatted_snapshot {
                         render_formatted_screen(&terminal.reader.screen_contents_formatted())
                     } else {
@@ -1431,16 +1435,21 @@ fn run_case(
                         push_fenced_block(&mut output, &screen);
                     }
 
-                    let _ = tx.send(i64::from(status.exit_code()));
+                    let _ = tx.send(result);
                 });
 
                 match rx.recv_timeout(timeout) {
-                    Ok(exit_code) => {
+                    Ok(result) => {
+                        let status =
+                            result.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
                         let output = output.lock().unwrap().clone();
-                        (TerminationState::Exited(exit_code), output)
+                        (TerminationState::Exited(i64::from(status.exit_code())), output)
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         let _ = killer.kill();
+                        // Let the reader drain the PTY and save its screen. Bound
+                        // this wait because descendants may still hold the PTY.
+                        let _ = rx.recv_timeout(Duration::from_secs(2));
                         let output = output.lock().unwrap().clone();
                         (TerminationState::TimedOut, output)
                     }

@@ -134,7 +134,9 @@ any case files left by a panic or an unsuccessful earlier cleanup attempt.
 Failed cases also write `error.txt`, `expected.md` (when present), `actual.md`
 (when a complete or partial snapshot was rendered), and `output.txt`. The output
 contains the last 1 MiB of unredacted rendered step output, including successful
-hidden steps; it is not the raw PTY byte stream. Artifacts survive temporary
+hidden steps; it is not the raw PTY byte stream. After a PTY timeout, the runner kills the
+child and waits up to two seconds for the reader to save the final screen,
+including when a milestone wait ends at EOF. Artifacts survive temporary
 workspace cleanup. CI uploads these files and timings on successful and failed
 runs. Listing tests with `--list` neither packs packages nor creates artifacts.
 
