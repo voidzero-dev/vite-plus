@@ -263,10 +263,10 @@ static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     .unwrap()
 });
 // Bun emits this warning based on filesystem timing, sometimes after a
-// same-line lifecycle progress indicator. Neither is part of the build result.
+// same-line lifecycle or resolution progress indicator. Neither is part of the result.
 static BUN_SLOW_FILESYSTEM_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r"(?m)^[ \t]*(?:⚙\u{FE0F}?[ \t]+\S+[ \t]+\[\d+/\d+\][ \t]+)?warn: Slow filesystem detected\. If [^\n]+ is a network drive, consider setting \$BUN_INSTALL_CACHE_DIR to a local folder\.(?:\n|$)",
+        r"(?m)^[ \t]*(?:[⚙🔍]\u{FE0F}?[ \t]+\S+[ \t]+\[\d+/\d+\][ \t]+)?warn: Slow filesystem detected\. If [^\n]+ is a network drive, consider setting \$BUN_INSTALL_CACHE_DIR to a local folder\.(?:\n|$)",
     )
     .unwrap()
 });

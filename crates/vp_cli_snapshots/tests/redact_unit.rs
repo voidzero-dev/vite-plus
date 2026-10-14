@@ -239,7 +239,8 @@ fn drops_bun_slow_filesystem_warning_with_optional_progress() {
         "\n 1 script ran across 1 package [12ms]\n",
     );
     let expected = redact_output(format!("bun pm trust v1.4.0 (34cbb9a40)\n{result}"), &[], true);
-    for prefix in ["", "  ⚙️  core-js [1/1] ", "  ⚙ @scope/pkg [12/34] "] {
+    for prefix in ["", "  ⚙️  core-js [1/1] ", "  ⚙ @scope/pkg [12/34] ", "  🔍 Resolving [1/1] "]
+    {
         for cache in ["/private/tmp/vp-local-registry-bun-PXkDcD", "C:/cache with spaces/bun"] {
             let input = format!(
                 "bun pm trust v1.4.0 (34cbb9a40)\n\
@@ -256,6 +257,7 @@ fn preserves_other_bun_warnings_and_script_failures() {
     let input = concat!(
         "warn: install failed for core-js\n",
         "  ⚙️  core-js [1/1] warn: postinstall failed\n",
+        "  🔍 Resolving [1/1] warn: package not found\n",
         "warn: Slow filesystem detected. Custom diagnostic.\n",
         "error: postinstall script from \"core-js\" exited with 1\n",
     );
