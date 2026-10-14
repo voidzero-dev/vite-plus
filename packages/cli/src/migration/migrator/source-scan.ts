@@ -195,15 +195,16 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
       const devEnginePackageManager = isPlainRecord(pkg.devEngines)
         ? pkg.devEngines.packageManager
         : undefined;
-      const devEngineEntries: unknown[] =
-        devEnginePackageManager === undefined
-          ? []
-          : Array.isArray(devEnginePackageManager)
-            ? devEnginePackageManager
-            : [devEnginePackageManager];
-      const supportedDevEngine = devEngineEntries.find(
-        (entry): entry is Record<string, unknown> =>
-          isPlainRecord(entry) && Object.values(PackageManager).some((name) => name === entry.name),
+      const devEngineEntries = (
+        Array.isArray(devEnginePackageManager) ? devEnginePackageManager : [devEnginePackageManager]
+      )
+        .filter(
+          (entry: unknown): entry is Record<string, unknown> & { name: string } =>
+            isPlainRecord(entry) && typeof entry.name === 'string' && entry.name.trim().length > 0,
+        )
+        .map((entry) => ({ name: entry.name.trim(), onFail: entry.onFail }));
+      const supportedDevEngine = devEngineEntries.find((entry) =>
+        Object.values(PackageManager).some((name) => name === entry.name),
       );
       const lastDevEngine = devEngineEntries.at(-1);
       if (
@@ -215,8 +216,7 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
           devEngineEntries.length === 0 ||
           supportedDevEngine?.name === 'pnpm' ||
           (supportedDevEngine === undefined &&
-            isPlainRecord(lastDevEngine) &&
-            (lastDevEngine.onFail === 'ignore' || lastDevEngine.onFail === 'warn')))
+            (lastDevEngine?.onFail === 'ignore' || lastDevEngine?.onFail === 'warn')))
       ) {
         projects.push(directory);
       }

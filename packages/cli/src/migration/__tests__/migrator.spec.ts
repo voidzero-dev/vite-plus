@@ -2061,6 +2061,16 @@ describe('standalone pnpm child project boundaries', () => {
 
   it.each([
     { packageManager: [], expected: true },
+    { packageManager: {}, expected: true },
+    { packageManager: null, expected: true },
+    { packageManager: [null, {}, { name: 42 }, { name: ' \t' }], expected: true },
+    { packageManager: { name: ' pnpm ' }, expected: true },
+    { packageManager: [{ name: ' npm ' }, { name: 'pnpm' }], expected: false },
+    {
+      packageManager: [{ name: 'unsupported', onFail: 'ignore' }, {}],
+      expected: true,
+    },
+    { packageManager: [{ name: 'unsupported' }, { onFail: 'ignore' }], expected: false },
     { packageManager: { name: 'unsupported', onFail: 'ignore' }, expected: true },
     { packageManager: [{ name: 'unsupported', onFail: 'warn' }], expected: true },
     {
