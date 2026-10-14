@@ -1,0 +1,11 @@
+{
+  "name": "migration-prettier-unsupported",
+  "scripts": {
+    "dev": "vite",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.0.0",
+    "vite": "^7.0.0"
+  }
+}

@@ -106,6 +106,10 @@ jobs:
     env:
       # For packing manager install from github package registry
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Passed through --api.port; Vitest has no environment variable for this option.
+      # Avoid Windows dynamic port reservations around the default 63315.
+      # https://github.com/vitest-dev/vitest/issues/9035
+      ECOSYSTEM_VITEST_PORT: '7357'
     permissions:
       contents: read
       packages: read
@@ -124,8 +128,7 @@ jobs:
               # FIXME: Failed to load JS plugin: ./plugins/debugger.js
               # vp run ready
               vp fmt
-              # Avoid Windows dynamic port reservations around Vitest's default 63315.
-              vp test --api.port=3000
+              vp test --api.port="$ECOSYSTEM_VITEST_PORT"
               vp run build
           # FIXME: TypeError: Failed to fetch dynamically imported module
           # - name: skeleton
@@ -201,7 +204,7 @@ jobs:
           - name: tanstack-start-helloworld
             node-version: 24
             command: |
-              vp run test
+              vp run test --api.port="$ECOSYSTEM_VITEST_PORT"
               vp run build
           - name: oxlint-plugin-complexity
             node-version: 22
@@ -220,7 +223,7 @@ jobs:
           - name: vite-vue-vercel
             node-version: 24
             command: |
-              vp run test
+              vp run test --api.port="$ECOSYSTEM_VITEST_PORT"
               vp run build
           - name: dify
             node-version: 24
@@ -284,7 +287,7 @@ jobs:
               vp fmt
               vp run lint
               vp run test:types
-              vp test --project nuxt
+              vp test --project nuxt --api.port="$ECOSYSTEM_VITEST_PORT"
               vp test --project unit
           - name: codiff
             node-version: 24
@@ -323,7 +326,7 @@ jobs:
           - name: vitest-playwright-repro
             node-version: 24
             command: |
-              vp test
+              vp test --api.port="$ECOSYSTEM_VITEST_PORT"
           - name: vite-plus-vitest-type-aug
             node-version: 24
             command: |
@@ -364,16 +367,16 @@ jobs:
             # Match upstream's pin for its locked WebDriverIO/Undici versions.
             node-version: 24.15.0
             command: |
-              vp test run --project browser --browser.name=chrome
+              vp test run --project browser --browser.name=chrome --api.port="$ECOSYSTEM_VITEST_PORT"
           - name: sqlocal
             node-version: 24
             command: |
               # OPFS setup can exceed the upstream 1-second hook timeout on CI.
-              vp test run --browser.name=chrome --hookTimeout=5000
+              vp test run --browser.name=chrome --hookTimeout=5000 --api.port="$ECOSYSTEM_VITEST_PORT"
           - name: brazilian-utils
             node-version: 24
             command: |
-              vp test run --browser.enabled --browser.name=chrome --browser.headless
+              vp test run --browser.enabled --browser.name=chrome --browser.headless --api.port="$ECOSYSTEM_VITEST_PORT"
           - name: solid-vite-plugin
             node-version: 24
             # The next branch's Vite 8 example uses Solid 2 and @solidjs/vite-plugin.
@@ -382,7 +385,7 @@ jobs:
               # Build the workspace plugin before vp run loads the example configs.
               (cd ../.. && vp exec rollup -c)
               vp run build
-              vp run test
+              vp run test --api.port="$ECOSYSTEM_VITEST_PORT"
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: namespace-profile-windows-4c-8g
