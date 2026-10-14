@@ -79,6 +79,11 @@ impl PackageManagerDialect for Npm {
 }
 
 impl Pnpm {
+    /// `licenses list` landed in pnpm 7.17.0.
+    pub(crate) fn supports_v7_17_commands(&self) -> bool {
+        self.version >= Version::new(7, 17, 0)
+    }
+
     /// `approve-builds !<pkg>` deny syntax landed in pnpm 11.
     pub(crate) fn supports_v11_commands(&self) -> bool {
         self.version >= Version::new(11, 0, 0)
@@ -103,7 +108,7 @@ impl Bun {
         self.version >= Version::new(1, 2, 18)
     }
 
-    /// `dedupe`, `prune`, and `audit fix` landed in bun 1.4.
+    /// `dedupe`, `prune`, `audit fix`, and `pm licenses` landed in bun 1.4.
     pub(crate) fn supports_v1_4_commands(&self) -> bool {
         self.version >= Version::new(1, 4, 0)
     }

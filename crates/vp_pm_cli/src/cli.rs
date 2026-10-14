@@ -11,11 +11,11 @@ use crate::{
     Error, PackageManager, PackageManagerType,
     resolution::{
         AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, CiArgs, ConfigCommand, DedupeArgs,
-        DeprecateArgs, DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs,
-        LoginArgs, LogoutArgs, OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PatchArgs,
-        PatchCommitArgs, PingArgs, PruneArgs, PublishArgs, RebuildArgs, RemoveArgs, Resolution,
-        SearchArgs, StageCommand, TokenCommand, UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs,
-        WhoamiArgs, WhyArgs, resolve_for_manager as resolve_args_for_manager,
+        DeprecateArgs, DistTagCommand, DlxArgs, FundArgs, InstallArgs, LicensesCommand, LinkArgs,
+        ListArgs, LoginArgs, LogoutArgs, OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs,
+        PatchArgs, PatchCommitArgs, PingArgs, PruneArgs, PublishArgs, RebuildArgs, RemoveArgs,
+        Resolution, SearchArgs, StageCommand, TokenCommand, UnlinkArgs, UpdateArgs, VersionArgs,
+        ViewArgs, WhoamiArgs, WhyArgs, resolve_for_manager as resolve_args_for_manager,
     },
 };
 
@@ -95,6 +95,10 @@ pub enum PmCommand {
     /// List installed packages
     #[command(visible_alias = "ls")]
     List(ListArgs),
+
+    /// Inspect licenses of installed dependencies
+    #[command(subcommand)]
+    Licenses(LicensesCommand),
 
     /// View package information from the registry
     #[command(visible_alias = "info", visible_alias = "show")]
@@ -345,6 +349,7 @@ impl PmCommand {
             Self::PatchCommit(args) => resolve_args_for_manager(manager, args),
             Self::Pack(args) => resolve_args_for_manager(manager, args),
             Self::List(args) => resolve_args_for_manager(manager, args),
+            Self::Licenses(args) => resolve_args_for_manager(manager, args),
             Self::View(args) => resolve_args_for_manager(manager, args),
             Self::Version(args) => resolve_args_for_manager(manager, args),
             Self::Publish(args) => resolve_args_for_manager(manager, args),
@@ -369,6 +374,7 @@ impl PmCommand {
     fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::List(args) => args.json || args.parseable,
+            Self::Licenses(LicensesCommand::List { json, .. }) => *json,
             Self::Pack(args) => args.json,
             Self::View(args) => args.json,
             Self::Version(args) => args.json,
@@ -476,6 +482,35 @@ mod tests {
             parse(&["pm", "stage", "ls"]).unwrap(),
             PackageManagerCommand::Pm(PmCommand::Stage(StageCommand::List { .. }))
         ));
+    }
+
+    #[test]
+    fn licenses_list_parses_and_resolves_for_supported_managers() {
+        for (client, version, program, prefix) in [
+            (PackageManagerType::Pnpm, "7.17.0", "pnpm", vec!["licenses", "list"]),
+            (PackageManagerType::Yarn, "1.22.22", "yarn", vec!["licenses", "list"]),
+            (PackageManagerType::Bun, "1.4.0", "bun", vec!["pm", "licenses"]),
+        ] {
+            for subcommand in ["list", "ls"] {
+                for json in [false, true] {
+                    let mut argv = vec!["pm", "licenses", subcommand];
+                    let mut expected = prefix.clone();
+                    if json {
+                        argv.push("--json");
+                        expected.push("--json");
+                    }
+                    let command = parse(&argv).unwrap();
+                    assert_eq!(command.is_quiet_or_machine_readable(), json);
+                    assert!(command.should_render_diagnostics());
+                    let result =
+                        command.resolve_for_manager(&package_manager(client, version)).unwrap();
+                    assert!(result.diagnostics.is_empty());
+                    let resolved = expect_run(result.outcome);
+                    assert_eq!(resolved.program, program);
+                    assert_eq!(resolved.args, expected);
+                }
+            }
+        }
     }
 
     #[test]

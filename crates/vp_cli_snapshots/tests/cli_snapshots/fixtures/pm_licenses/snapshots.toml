@@ -1,0 +1,48 @@
+[[case]]
+name = "pm_licenses_pnpm"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.11.0"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "pm", "licenses", "list"], comment = "pnpm lists installed dependencies" },
+  { argv = ["vp", "pm", "licenses", "ls", "--json"], comment = "the ls alias preserves native JSON output", tty = false },
+  { argv = ["vp", "pm", "licenses", "list", "--json", "--", "--prod", "--long"], comment = "native options limit the report to production dependencies", tty = false },
+]
+
+[[case]]
+name = "pm_licenses_yarn"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@1.22.22"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "pm", "licenses", "list"], comment = "Yarn Classic lists installed dependencies" },
+  { argv = ["vp", "pm", "licenses", "ls", "--json"], comment = "the ls alias preserves Yarn Classic's JSON events", tty = false },
+  { argv = ["vp", "pm", "licenses", "list", "--json", "--", "--production"], comment = "Yarn receives its native production option", tty = false },
+]
+
+[[case]]
+name = "pm_licenses_bun"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.4.0"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "pm", "licenses", "list"], comment = "Bun lists installed dependencies at the minimum supported version" },
+  { argv = ["vp", "pm", "licenses", "ls", "--json"], comment = "the ls alias preserves native JSON output, including unknown licenses", tty = false },
+  { argv = ["vp", "pm", "licenses", "list", "--json", "--", "--prod", "--long"], comment = "native options limit the report to production dependencies", tty = false },
+]
+
+[[case]]
+name = "pm_licenses_unsupported"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "pm", "licenses", "--help"] },
+  { argv = ["vp", "pm", "licenses", "list", "--help"] },
+  { argv = ["vp", "pm", "licenses", "list"], comment = "npm warns and exits successfully without installing a scanner" },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.18.0"], snapshot = false },
+  { argv = ["vp", "pm", "licenses", "list", "--json"], comment = "Yarn Modern still warns when JSON output is requested" },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@7.16.0"], snapshot = false },
+  { argv = ["vp", "pm", "licenses", "list"], comment = "older pnpm versions warn and exit successfully" },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.3.11"], snapshot = false },
+  { argv = ["vp", "pm", "licenses", "list"], comment = "older Bun versions warn and exit successfully" },
+  { argv = ["vpt", "stat-file", "node_modules", "--assert", "missing"] },
+]

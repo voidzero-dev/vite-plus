@@ -417,6 +417,7 @@ Commands:
   patch-commit      Commit a prepared package patch
   pack              Create a tarball of the package
   list              List installed packages [alias: ls]
+  licenses          Inspect licenses of installed dependencies
   view, info, show  View package information from the registry
   version           Forward the native package version command
   publish           Publish package to registry
