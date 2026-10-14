@@ -6,6 +6,10 @@ description: >-
   skip-native input). Run on a Linux runner after checkout + clone.
 
 inputs:
+  profile:
+    description: 'Cargo profile for native builds (release or ci).'
+    required: false
+    default: 'release'
   save-cache:
     description: "Whether setup-xwin's setup-rust should save its cache (usually only on main)."
     required: false
@@ -22,6 +26,8 @@ runs:
     # the native binaries and generated bindings.
     - uses: ./.github/actions/compute-native-cache-input-hash
       id: native-cache-inputs
+      with:
+        profile: ${{ inputs.profile }}
 
     # Use a distinct prefix: this cache stores Linux-relative paths and must
     # never mix with the caches build-upstream saves on other runners. Sharing
@@ -59,7 +65,7 @@ runs:
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       with:
         save-cache: ${{ inputs.save-cache }}
-        cache-key: windows-cli-cross
+        cache-key: windows-cli-cross-${{ inputs.profile }}
 
     - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
       if: steps.binaries-cache.outputs.cache-hit != 'true'
@@ -70,8 +76,9 @@ runs:
     - name: Build NAPI binding
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: pnpm --filter=vite-plus build-native --target x86_64-pc-windows-msvc -x --skip-format
+      run: pnpm --filter=vite-plus build-native --profile "$INPUTS_PROFILE" --target x86_64-pc-windows-msvc -x --skip-format
       env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
         DEBUG: 'napi:*'
         XWIN_ACCEPT_LICENSE: '1'
         # See setup-xwin / build-windows-tests for why this Detours escape
@@ -81,8 +88,9 @@ runs:
     - name: Build Rust CLI binaries
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: cargo xwin build --release --target x86_64-pc-windows-msvc -p vp_global_cli -p vp_installer
+      run: cargo xwin build --profile "$INPUTS_PROFILE" --target x86_64-pc-windows-msvc -p vp_global_cli -p vp_installer
       env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
         XWIN_ACCEPT_LICENSE: '1'
         CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 
@@ -94,6 +102,17 @@ runs:
       run: node packages/tools/src/build-trampoline.ts --xwin --release --target x86_64-pc-windows-msvc
       env:
         XWIN_ACCEPT_LICENSE: '1'
+
+    # Keep the artifact layout used by installers and test consumers.
+    - name: Stage native CLI binaries
+      if: steps.binaries-cache.outputs.cache-hit != 'true' && inputs.profile != 'release'
+      shell: bash
+      run: |
+        target_dir="${CARGO_TARGET_DIR:-target}/x86_64-pc-windows-msvc"
+        mkdir -p "$target_dir/release"
+        cp "$target_dir/$INPUTS_PROFILE/vp.exe" "$target_dir/$INPUTS_PROFILE/vp-setup.exe" "$target_dir/release/"
+      env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
 
     # TypeScript builds need only these Cargo package fields for toolchain
     # versions. Export them where the Rust dependencies are already present.
