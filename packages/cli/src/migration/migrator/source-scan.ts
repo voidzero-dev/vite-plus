@@ -192,6 +192,10 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
       if (!isPlainRecord(pkg) || (directory === projectPath && Object.hasOwn(pkg, 'workspaces'))) {
         continue;
       }
+      const packageManager =
+        typeof pkg.packageManager === 'string' && !pkg.packageManager.includes('@')
+          ? undefined
+          : pkg.packageManager;
       const devEnginePackageManager = isPlainRecord(pkg.devEngines)
         ? pkg.devEngines.packageManager
         : undefined;
@@ -210,9 +214,9 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
       if (
         directory !== projectPath &&
         fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) &&
-        (pkg.packageManager === undefined ||
-          (typeof pkg.packageManager === 'string' && pkg.packageManager.startsWith('pnpm@'))) &&
-        (pkg.packageManager !== undefined ||
+        (packageManager === undefined ||
+          (typeof packageManager === 'string' && packageManager.startsWith('pnpm@'))) &&
+        (packageManager !== undefined ||
           devEngineEntries.length === 0 ||
           supportedDevEngine?.name === 'pnpm' ||
           (supportedDevEngine === undefined &&

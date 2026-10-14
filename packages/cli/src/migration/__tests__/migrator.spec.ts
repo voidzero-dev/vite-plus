@@ -2027,6 +2027,28 @@ describe('standalone pnpm child project boundaries', () => {
   });
 
   it.each([
+    { packageManager: '', devEngine: undefined, expected: true },
+    { packageManager: 'pnpm', devEngine: undefined, expected: true },
+    { packageManager: '', devEngine: 'pnpm', expected: true },
+    { packageManager: 'pnpm', devEngine: 'npm', expected: false },
+    { packageManager: 'npm@10.9.4', devEngine: 'pnpm', expected: false },
+  ])(
+    'resolves child packageManager fallback in the correct order (%j)',
+    ({ packageManager, devEngine, expected }) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'web/package.json'),
+        JSON.stringify({
+          name: 'web',
+          packageManager,
+          devEngines: devEngine === undefined ? undefined : { packageManager: { name: devEngine } },
+        }),
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+      expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(expected);
+    },
+  );
+
+  it.each([
     { packageManager: { name: 'pnpm' } },
     { packageManager: [{ name: 'pnpm' }] },
     { packageManager: [{ name: 'pnpm' }, { name: 'npm' }] },
