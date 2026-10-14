@@ -13,8 +13,9 @@
 
 import { dirname, join } from 'node:path';
 
-import { CONFIG_METADATA_ENV, DEFAULT_ENVS, resolve, resolveBundled } from './utils/constants.ts';
+import { CONFIG_METADATA_ENV, DEFAULT_ENVS, resolveBundled } from './utils/constants.ts';
 import { resolveLintBackendExecutable } from './utils/lint-backend-path.ts';
+import { resolveProjectTool } from './utils/resolve-project-tool.ts';
 
 export { resolveWindowsLintBackendExecutable } from './utils/lint-backend-path.ts';
 
@@ -37,7 +38,7 @@ export async function lint(): Promise<{
   // resolve the main entry point and derive the bin path from it.
   // resolve('oxlint') returns .../oxlint/dist/index.js, so we need to go up
   // two directories (past 'dist') to reach the package root.
-  const oxlintMainPath = resolve('oxlint');
+  const oxlintMainPath = resolveProjectTool('oxlint');
   const oxlintPackageRoot = dirname(dirname(oxlintMainPath));
   const binPath = join(oxlintPackageRoot, 'bin', 'oxlint');
   const tsrsLintPath = resolveLintBackendExecutable(
