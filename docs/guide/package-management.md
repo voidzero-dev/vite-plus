@@ -225,20 +225,6 @@ vp pm cache clean -- --force
 vp pm audit --json
 ```
 
-#### Dependency licenses
-
-`vp pm licenses list` lists licenses of installed dependencies. Use `vp pm licenses ls` as a shorthand, and add `--json` for the package manager's native JSON output. Output formats differ between package managers, including Yarn Classic's newline-delimited JSON events.
-
-This command delegates to `pnpm licenses list` with pnpm 7.17.0 or later, `yarn licenses list` with Yarn Classic, or `bun pm licenses` with Bun 1.4.0 or later. npm, Yarn Modern, and older pnpm or Bun versions print a warning and exit successfully without listing licenses. A successful exit alone does not confirm that a license report was produced.
-
-Pass native options after `--`. Supported options and workspace scope depend on the package manager.
-
-```bash
-vp pm licenses list
-vp pm licenses list --json
-vp pm licenses list -- --prod --long # pnpm and Bun
-```
-
 #### Staged publishing
 
 `vp pm stage` exposes [npm's staged publishing](https://docs.npmjs.com/staged-publishing) workflow: a build is uploaded to a staging area (no 2FA, CI-friendly), then a maintainer approves or rejects it from a trusted device (2FA). It adapts to the detected package manager.
