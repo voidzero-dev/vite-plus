@@ -23,10 +23,10 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.6
   '@oxc-node/core': ^0.1.6
-  '@oxc-project/runtime': =0.153.0
-  '@oxc-project/types': =0.153.0
+  '@oxc-project/runtime': =0.154.0
+  '@oxc-project/types': =0.154.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
-  '@oxlint/plugins': =1.87.0
+  '@oxlint/plugins': =1.88.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
   '@rollup/plugin-commonjs': ^29.0.0
@@ -99,11 +99,11 @@ catalog:
   mocha: ^11.7.5
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.153.0
-  oxc-parser: =0.153.0
-  oxc-transform: =0.153.0
-  oxfmt: =0.72.0
-  oxlint: =1.87.0
+  oxc-minify: =0.154.0
+  oxc-parser: =0.154.0
+  oxc-transform: =0.154.0
+  oxfmt: =0.73.0
+  oxlint: =1.88.0
   oxlint-tsgolint: =7.0.2004
   pathe: ^2.0.3
   picocolors: ^1.1.1

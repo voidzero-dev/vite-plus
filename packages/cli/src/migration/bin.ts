@@ -851,14 +851,14 @@ async function executeMigrationPlan(
   // 5b. Prettier → Oxfmt migration (before main rewrite so .oxfmtrc.json gets picked up)
   if (plan.migratePrettier) {
     updateMigrationProgress('Migrating Prettier');
-    const prettierOk = await migratePrettierToOxfmt(
+    const prettierResult = await migratePrettierToOxfmt(
       workspaceInfo.rootDir,
       interactive,
       plan.prettierConfigFile,
       workspaceInfo.packages,
       { silent: true, report },
     );
-    if (!prettierOk) {
+    if (prettierResult === 'failed') {
       failMigrationProgress('Migration failed');
       cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
     }
@@ -1001,7 +1001,7 @@ async function executeMigrationPlan(
   );
   if (
     finalInstallSummary.status === 'installed' &&
-    canFormatWithOxfmt(plan.hasPrettierDependency, plan.migratePrettier)
+    canFormatWithOxfmt(plan.hasPrettierDependency, report.prettierMigrated)
   ) {
     await formatMigratedProject(workspaceInfo.rootDir, interactive, report, {
       excludedPaths: preExistingChangedPaths,
@@ -1348,18 +1348,18 @@ async function main() {
         if (migratePrettier) {
           await ensureExistingPackageManager();
           updateMigrationProgress('Migrating Prettier');
-          const prettierOk = await migratePrettierToOxfmt(
+          const prettierResult = await migratePrettierToOxfmt(
             workspaceInfoOptional.rootDir,
             options.interactive,
             prettierProject.configFile,
             workspaceInfoOptional.packages,
             { silent: true, report },
           );
-          if (!prettierOk) {
+          if (prettierResult === 'failed') {
             clearMigrationProgress();
             cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
           }
-          prettierMigrated = true;
+          prettierMigrated = prettierResult === 'migrated';
         }
       } else if (prettierProject.hasDependency) {
         warnPackageLevelPrettier();
