@@ -60,8 +60,8 @@ const transformer = new oxcNode.OxcTransformer(process.cwd(), HELPER_MODULE_NAME
 addHook(
   (code, filename) => {
     const output = transformer.transform(filename, code);
-    const source = rewriteHelperRequires(output.source());
-    const sourceMap = output.sourceMap();
+    const source = rewriteHelperRequires(output.source);
+    const sourceMap = output.sourceMap;
     return sourceMap
       ? source + SOURCEMAP_PREFIX + Buffer.from(sourceMap, 'utf8').toString('base64')
       : source;
