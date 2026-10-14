@@ -238,7 +238,7 @@ name = "picker_selects_second_entry"
 vp = "local"
 steps = [
   { argv = ["vp", "create"], interactions = [
-    { "expect-milestone" = "select:template:0" },  # wait, then capture screen
+    { "expect-milestone" = "select:template:0" }, # wait, then capture screen
     { "write-key" = "down" },
     { "expect-milestone" = "select:template:1" },
     { "write-key" = "enter" },

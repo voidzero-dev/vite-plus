@@ -1,0 +1,24 @@
+[[case]]
+name = "migration_prettier_unsupported"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-hooks"], comment = "unsupported Prettier config should not stop migration" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "keep Prettier and its format script while migrating Vite" },
+  ["vpt", "print-file", ".prettierrc.yml"],
+  { argv = ["vpt", "print-file", "index.js"], comment = "do not format with Oxfmt when Prettier migration was skipped" },
+  ["vpt", "stat-file", ".oxfmtrc.json", "--assert", "missing"],
+]
+
+[[case]]
+name = "migration_prettier_unsupported_existing"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "latest"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-agent", "--no-hooks"], comment = "full migration of an existing Vite+ project should skip unsupported Prettier configs" },
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", ".prettierrc.yml"],
+  ["vpt", "print-file", "index.js"],
+  ["vpt", "stat-file", ".oxfmtrc.json", "--assert", "missing"],
+]

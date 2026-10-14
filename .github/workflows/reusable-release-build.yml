@@ -118,14 +118,14 @@ jobs:
           target: ${{ matrix.settings.target }}
 
       - name: Upload Vite+ native artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vite-plus-native-${{ matrix.settings.target }}
           path: ./packages/cli/binding/*.node
           if-no-files-found: error
 
       - name: Upload Rust CLI binary artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vp-global-cli-${{ matrix.settings.target }}
           path: |
@@ -189,7 +189,7 @@ jobs:
           ' "${archive_dir}/plan.json" "${VERSION}"
 
       - name: Upload release archive
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vp-release-archive-${{ matrix.settings.target }}
           path: |
@@ -199,7 +199,7 @@ jobs:
 
       - name: Upload installer binary artifact (Windows only)
         if: contains(matrix.settings.target, 'windows')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vp-setup-${{ matrix.settings.target }}
           path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
@@ -211,7 +211,7 @@ jobs:
           rm ./packages/core/dist/**/*.node
 
       - name: Upload core dist
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: core
@@ -219,7 +219,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload prompts dist
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: prompts
@@ -227,7 +227,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload cli dist
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: cli
@@ -235,7 +235,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload cli docs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: cli-docs
@@ -243,7 +243,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload LICENSE files
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: licenses

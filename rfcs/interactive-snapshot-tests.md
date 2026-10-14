@@ -170,8 +170,8 @@ Interactive steps carry an ordered `interactions` list, executed against the PTY
 
 ```toml
 interactions = [
-  { "expect-milestone" = "text:project-name" },      # wait, then capture the screen
-  { write = "my-app" },                              # raw bytes, no newline
+  { "expect-milestone" = "text:project-name" }, # wait, then capture the screen
+  { write = "my-app" }, # raw bytes, no newline
   { "expect-milestone" = "text:project-name:my-app" },
   { "write-key" = "enter" },
   { "expect-milestone" = "select:template:0" },
@@ -197,7 +197,10 @@ name = "app_root_interactive_picker"
 vp = "global"
 comment = "Bare `vp dev` at a workspace root opens the package picker; arrow-down selects the web app, ctrl-c on the next prompt exits cleanly."
 steps = [
-  { argv = ["vp", "dev"], interactions = [
+  { argv = [
+    "vp",
+    "dev",
+  ], interactions = [
     { "expect-milestone" = "select:app-target:0" },
     { "write-key" = "down" },
     { "expect-milestone" = "select:app-target:1" },
