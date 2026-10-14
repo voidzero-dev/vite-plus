@@ -3,6 +3,8 @@ name = "command_update_bun"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
+  # Download the pinned Bun binary before the command's 50-second limit.
+  { argv = ["bun", "--version"], snapshot = false, timeout = 120000 },
   { argv = ["vp", "update", "--help"], comment = "should show help", continue-on-failure = true },
   { argv = ["vp", "update", "testnpm2", "--workspace-root"], comment = "reject unsupported --workspace-root without updating dependencies", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },

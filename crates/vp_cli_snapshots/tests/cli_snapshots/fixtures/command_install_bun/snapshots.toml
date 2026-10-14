@@ -3,6 +3,8 @@ name = "bun_install_preserves_native_dev"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
+  # Download the pinned Bun binary before the command's 50-second limit.
+  { argv = ["bun", "--version"], snapshot = false, timeout = 120000 },
   { argv = ["vp", "install", "-D"], comment = "Bun's native dev option does not exclude production dependencies" },
   ["vpt", "stat-file", "node_modules/prod-only-fixture/package.json", "--assert", "file"],
   { argv = ["vp", "install", "--dev", "--frozen-lockfile"], comment = "preserve the dev option in frozen-lockfile mode too" },
