@@ -16,7 +16,6 @@ async-trait = { workspace = true }
 base64-simd = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cow-utils = { workspace = true }
-fspy = { workspace = true }
 rustc-hash = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
@@ -42,6 +41,9 @@ vt = { workspace = true }
 vt_casefold = { workspace = true }
 vt_workspace = { workspace = true }
 rolldown_binding = { workspace = true, optional = true, features = ["disable_panic_hook"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+fspy = { workspace = true }
 
 [build-dependencies]
 napi-build = { workspace = true }

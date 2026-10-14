@@ -378,6 +378,7 @@ mod tests {
         let published_suffixes = [
             "darwin-arm64",
             "darwin-x64",
+            "freebsd-x64",
             "linux-arm64-gnu",
             "linux-arm64-musl",
             "linux-x64-gnu",
@@ -395,6 +396,7 @@ mod tests {
         let detection_suffixes = [
             "darwin-arm64",
             "darwin-x64",
+            "freebsd-x64",
             "linux-arm64-gnu",
             "linux-x64-gnu",
             "linux-arm64-musl",

@@ -13,17 +13,22 @@ use std::{
     process::{ExitStatus, Stdio},
 };
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use fspy::AccessMode;
 use tokio::process::Command;
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use tokio_util::sync::CancellationToken;
 use vp_error::Error;
-use vt_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use vt_path::RelativePathBuf;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 mod ps1_shim;
 
 pub use ps1_shim::rewrite_cmd_to_powershell;
 
 /// Result of running a command with fspy tracking.
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[derive(Debug)]
 pub struct FspyCommandResult {
     /// The termination status of the command.
@@ -215,6 +220,7 @@ where
 /// # Returns
 ///
 /// Returns a `FspyCommandResult` containing the exit status and path accesses.
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub async fn run_command_with_fspy<I, S>(
     bin_name: &str,
     args: I,
@@ -570,6 +576,7 @@ mod tests {
         }
     }
 
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     mod run_command_with_fspy_tests {
         use super::*;
 

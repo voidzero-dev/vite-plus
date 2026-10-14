@@ -17,6 +17,47 @@ use crate::{
     providers::NodeProvider,
 };
 
+/// Look for a `node` executable on `PATH` and return its absolute path.
+///
+/// Used as a fallback on platforms where the managed download is not
+/// available (e.g. FreeBSD, where Node.js publishes no official build).
+/// The returned path is the first `node` found scanning `PATH` directories,
+/// excluding the Vite+ `node` shim (which canonicalises back to the running
+/// `vp` executable).
+///
+/// Returns `None` if no suitable binary is found.
+fn find_system_node() -> Option<AbsolutePathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join("node");
+        let Ok(meta) = std::fs::metadata(&candidate) else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        // Skip Vite+ shims. The codebase's own `shim::find_system_tool`
+        // canonicalizes the candidate and treats it as a shim when the result
+        // resolves back to the `vp` executable (or is a Windows trampoline).
+        // Mirror that here without pulling in `vp_shared`: a `node` that is a
+        // Vite+ shim either *is* the current executable (symlinked into PATH
+        // by `vp env setup`) or canonicalises to it; a real `node` from
+        // FreeBSD Ports (lang/node, lang/node22, …) resolves somewhere else.
+        let canonical = candidate.canonicalize().ok();
+        if let Some(self_real) =
+            std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok())
+        {
+            if canonical.as_ref() == Some(&self_real) {
+                continue;
+            }
+        }
+        if let Some(abs) = AbsolutePathBuf::new(candidate.to_path_buf()) {
+            return Some(abs);
+        }
+    }
+    None
+}
+
 /// Supported JavaScript runtime types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JsRuntimeType {
@@ -113,6 +154,28 @@ pub async fn download_runtime(
     match runtime_type {
         JsRuntimeType::Node => {
             let provider = NodeProvider::new();
+            // If this platform has no managed download available (e.g. FreeBSD,
+            // where Node.js publishes no official build), fall back to the
+            // system-installed `node` binary instead of attempting a download
+            // that would pull an incompatible binary (e.g. a Linux build that
+            // segfaults on FreeBSD).
+            if !provider.is_download_supported(Platform::current()) {
+                match find_system_node() {
+                    Some(bin) => {
+                        tracing::info!(
+                            "No managed Node.js download for this platform; \
+                             using system node at {bin:?}"
+                        );
+                        return Ok(JsRuntime::from_system(JsRuntimeType::Node, bin));
+                    }
+                    None => {
+                        return Err(Error::UnsupportedPlatform {
+                            platform: Platform::current().to_string().into(),
+                            runtime: "node".into(),
+                        });
+                    }
+                }
+            }
             download_runtime_with_provider(&provider, JsRuntimeType::Node, version).await
         }
     }
