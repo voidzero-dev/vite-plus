@@ -253,6 +253,14 @@ static SPINNER_FRAME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static PNPM_PROGRESS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?m)^(Progress: resolved .*|Packages: \+\d+|\++)\n?").unwrap()
 });
+// Successful registry requests can emit a warning solely because of network
+// latency. Keep request errors and other warnings in the snapshot.
+static PNPM_SLOW_REQUEST_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^[ \t\u{2009}]*WARN[ \t\u{2009}]+Request took <duration>: https?://\S+[ \t]*(?:\n|$)",
+    )
+    .unwrap()
+});
 // pnpm conditionally explains whether packages were cloned or hard-linked and
 // prints platform-specific store paths. The block depends on store state and
 // filesystem capabilities rather than fixture behavior, so strip it.
@@ -672,6 +680,7 @@ pub fn redact_output(
     output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
+    output = PNPM_SLOW_REQUEST_RE.replace_all(&output, "").into_owned();
     output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
     output = BUN_SLOW_FILESYSTEM_RE.replace_all(&output, "").into_owned();
 

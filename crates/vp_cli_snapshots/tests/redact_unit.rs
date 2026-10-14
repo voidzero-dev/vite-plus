@@ -697,3 +697,22 @@ fn collapses_debug_escaped_separators_and_preserves_urls() {
         "at \"<workspace>/src\" see https://viteplus.dev/guide/\n"
     );
 }
+
+#[test]
+fn strips_pnpm_slow_request_warning_but_preserves_request_errors() {
+    let input = concat!(
+        "devDependencies:\n test-vite-plus-package 1.0.0\n\n",
+        "\u{2009}WARN\u{2009} Request took 12675ms: https://registry.npmjs.org/pnpm\n\n",
+        " WARN Request took 10.5s: https://registry.npmjs.org/@scope%2Fpkg\n",
+        "\u{2009}WARN\u{2009} GET https://registry.npmjs.org/pkg error (ETIMEDOUT). Will retry in 10 seconds.\n",
+        "\u{2009}WARN\u{2009} deprecated example@1.0.0: use another package\n",
+        "Done in 13s using pnpm 10.18.0\n",
+    );
+    let expected = concat!(
+        "devDependencies:\n test-vite-plus-package 1.0.0\n\n",
+        "\u{2009}WARN\u{2009} GET https://registry.npmjs.org/pkg error (ETIMEDOUT). Will retry in 10 seconds.\n",
+        "\u{2009}WARN\u{2009} deprecated example@1.0.0: use another package\n\n",
+        "Done in <duration> using pnpm <version>\n",
+    );
+    assert_eq!(redact_output(input.into(), &[], true), expected);
+}
