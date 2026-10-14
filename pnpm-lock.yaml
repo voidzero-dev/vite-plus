@@ -758,6 +758,12 @@ importers:
         specifier: ~2.3.3
         version: 2.3.3
 
+  packages/create-vite-plus:
+    dependencies:
+      vite-plus:
+        specifier: workspace:vite-plus@*
+        version: link:../cli
+
   packages/prompts:
     dependencies:
       '@clack/core':
