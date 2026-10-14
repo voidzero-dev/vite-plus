@@ -2,12 +2,12 @@
 //! links with `default-features = false`, so it registers no NAPI exports of its own.
 //! Only what the `vpx <script>` loader in `packages/cli/src/script-*.ts` uses is exported.
 
+use ::oxc_node::{LoadContext, LoadFnOutput, OxcResolveOptions, ResolveContext, ResolveFnOutput};
 use napi::{
     Either, Env, Result,
     bindgen_prelude::{FnArgs, Function, Object, PromiseRaw},
 };
 use napi_derive::napi;
-use ::oxc_node::{LoadContext, LoadFnOutput, OxcResolveOptions, ResolveContext, ResolveFnOutput};
 
 /// What oxc-node's own module hooks do, which `default-features = false` leaves to the
 /// host: honor `OXC_LOG`, and keep `using` native on Node.js 24 and later.
@@ -84,7 +84,11 @@ impl OxcTransformer {
     }
 
     #[napi]
-    pub fn transform(&self, path: String, source: Either<String, &[u8]>) -> Result<TransformOutput> {
+    pub fn transform(
+        &self,
+        path: String,
+        source: Either<String, &[u8]>,
+    ) -> Result<TransformOutput> {
         let output = self.inner.transform(path, source)?;
         Ok(TransformOutput { source: output.source(), source_map: output.source_map() })
     }
