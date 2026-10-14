@@ -2046,6 +2046,33 @@ describe('standalone pnpm child project boundaries', () => {
     },
   );
 
+  it.each([
+    { packageManager: [], expected: true },
+    { packageManager: { name: 'unsupported', onFail: 'ignore' }, expected: true },
+    { packageManager: [{ name: 'unsupported', onFail: 'warn' }], expected: true },
+    {
+      packageManager: [{ name: 'unsupported' }, { name: 'other', onFail: 'ignore' }],
+      expected: true,
+    },
+    { packageManager: [{ name: 'unsupported' }], expected: false },
+    { packageManager: [{ name: 'unsupported', onFail: 'error' }], expected: false },
+    { packageManager: [{ name: 'unsupported', onFail: 'download' }], expected: false },
+    {
+      packageManager: [{ name: 'unsupported', onFail: 'ignore' }, { name: 'other' }],
+      expected: false,
+    },
+  ])(
+    'uses the child pnpm lockfile only when devEngines permits fallback (%j)',
+    ({ packageManager, expected }) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'web/package.json'),
+        JSON.stringify({ name: 'web', devEngines: { packageManager } }),
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+      expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(expected);
+    },
+  );
+
   it('preserves independent install roots in multiple child projects', () => {
     fs.mkdirSync(path.join(tmpDir, 'apps'));
     fs.renameSync(path.join(tmpDir, 'web'), path.join(tmpDir, 'apps/web'));

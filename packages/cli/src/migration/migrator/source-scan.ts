@@ -195,20 +195,28 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
       const devEnginePackageManager = isPlainRecord(pkg.devEngines)
         ? pkg.devEngines.packageManager
         : undefined;
+      const devEngineEntries: unknown[] =
+        devEnginePackageManager === undefined
+          ? []
+          : Array.isArray(devEnginePackageManager)
+            ? devEnginePackageManager
+            : [devEnginePackageManager];
+      const supportedDevEngine = devEngineEntries.find(
+        (entry): entry is Record<string, unknown> =>
+          isPlainRecord(entry) && Object.values(PackageManager).some((name) => name === entry.name),
+      );
+      const lastDevEngine = devEngineEntries.at(-1);
       if (
         directory !== projectPath &&
         fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) &&
         (pkg.packageManager === undefined ||
           (typeof pkg.packageManager === 'string' && pkg.packageManager.startsWith('pnpm@'))) &&
         (pkg.packageManager !== undefined ||
-          devEnginePackageManager === undefined ||
-          (Array.isArray(devEnginePackageManager)
-            ? devEnginePackageManager.find(
-                (entry: unknown): entry is Record<string, unknown> =>
-                  isPlainRecord(entry) &&
-                  Object.values(PackageManager).some((name) => name === entry.name),
-              )?.name === 'pnpm'
-            : isPlainRecord(devEnginePackageManager) && devEnginePackageManager.name === 'pnpm'))
+          devEngineEntries.length === 0 ||
+          supportedDevEngine?.name === 'pnpm' ||
+          (supportedDevEngine === undefined &&
+            isPlainRecord(lastDevEngine) &&
+            (lastDevEngine.onFail === 'ignore' || lastDevEngine.onFail === 'warn')))
       ) {
         projects.push(directory);
       }
