@@ -88,9 +88,11 @@ import {
 import { BuiltinTemplate, TemplateType } from './templates/types.ts';
 import {
   deriveDefaultPackageName,
+  detectLauncherPackageManager,
   ensurePnpmCreateCatalogEntries,
   ensureDefaultGitignoreEntries,
   ensureGitignoreVsCodeEditorConfigs,
+  formatLocalVpCommand,
   formatTargetDir,
   shouldConfigureEditorsForCreate,
 } from './utils.ts';
@@ -672,13 +674,15 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  // Resolve package manager: existing monorepo > CLI flag > ambient detection > prompt/default
+  // Resolve package manager: existing monorepo > CLI flag > ambient detection > launcher > prompt/default
   const requestedPackageManager = options.packageManager;
   const detectedPackageManager = workspaceInfoOptional.packageManager;
+  const launcherPackageManager = detectLauncherPackageManager();
   const packageManager =
     (isMonorepo
       ? (detectedPackageManager ?? requestedPackageManager)
       : (requestedPackageManager ?? detectedPackageManager)) ??
+    launcherPackageManager ??
     (await selectPackageManager(options.interactive, compactOutput));
   const packageManagerVersion =
     packageManager === detectedPackageManager
@@ -699,6 +703,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     packageManager,
     downloadPackageManager: downloadResult,
   };
+  // Only the global CLI puts `vp` on PATH; launches through a package manager reach it through the project's package manager.
+  const vpRunCommand = launcherPackageManager
+    ? formatLocalVpCommand(packageManager, 'vp run')
+    : 'vp run';
 
   const existingAgentTargetPaths =
     options.agent !== undefined || !options.interactive
@@ -975,7 +983,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
       gitInitialized,
       installSummary,
-      nextCommand: getNextCommand(projectDir, 'vp run'),
+      nextCommand: getNextCommand(projectDir, vpRunCommand),
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
       projectDir,
@@ -1333,7 +1341,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
     gitInitialized,
     installSummary,
-    nextCommand: getNextCommand(projectDir, 'vp run'),
+    nextCommand: getNextCommand(projectDir, vpRunCommand),
     packageManager: workspaceInfo.packageManager,
     packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     projectDir,
