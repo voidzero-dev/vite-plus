@@ -25,7 +25,7 @@ runs:
     # symlinks the MSVC-style llvm-lib/llvm-dlltool (used by cc-rs to archive
     # C/C++ deps) and lld-link from there when the runner image has no matching
     # system LLVM.
-    - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+    - uses: ./.github/actions/setup-rust
       with:
         save-cache: ${{ inputs.save-cache }}
         cache-key: ${{ inputs.cache-key }}
