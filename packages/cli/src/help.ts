@@ -386,7 +386,8 @@ const commandHelpDocs = {
           },
           {
             label: '--cache',
-            description: "Enable cache. Use '--help --cache' for more info.",
+            description:
+              'Store the results of test runs to run failed and longer test files first (default: true)',
           },
           {
             label: '--maxConcurrency <number>',
@@ -396,7 +397,7 @@ const commandHelpDocs = {
           {
             label: '--fsModuleCache',
             description:
-              'Cache transformed modules on the file system and reuse them between reruns (default: false)',
+              'Cache transformed modules on the file system and reuse them between reruns (default: true)',
           },
           {
             label: '--fsModuleCachePath <path>',
@@ -911,7 +912,8 @@ const commandHelpDocs = {
           },
           {
             label: '--env-prefix <prefix>',
-            description: 'Prefix for env variables to inject into the bundle (default: TSDOWN_)',
+            description:
+              'Prefix for env variables to inject into the bundle (default: VITE_PACK_, TSDOWN_)',
           },
           { label: '--on-success <command>', description: 'Command to run on success' },
           { label: '--copy <dir>', description: 'Copy files to output dir' },

@@ -1,0 +1,26 @@
+[[case]]
+name = "empty_root_cache_path"
+vp = "local"
+cwd = "packages/a"
+comment = "An empty runner cache path must not exclude a workspace package's source from task inputs."
+steps = [
+  ["vp", "run", "test"],
+  { argv = ["vp", "run", "test"], comment = "Populate and confirm the task cache before changing source." },
+  { argv = ["vpt", "write-file", "src/value.ts", "export const value = 2;\n"], snapshot = false },
+  { argv = ["vp", "run", "test"], continue-on-failure = true, comment = "The source change must miss the task cache and fail the test." },
+  { argv = ["vp", "test", "run"], continue-on-failure = true, comment = "The direct run must report the same failure." },
+]
+
+[[case]]
+name = "empty_project_cache_path"
+vp = "local"
+cwd = "packages/a"
+comment = "An empty project cache path must fall back to the runner cache without ignoring the package directory."
+steps = [
+  { argv = ["vpt", "cp", "vite.project.config.ts", "vite.config.ts"], snapshot = false },
+  ["vp", "run", "test"],
+  { argv = ["vp", "run", "test"], comment = "Populate and confirm the task cache before changing source." },
+  { argv = ["vpt", "write-file", "src/value.ts", "export const value = 2;\n"], snapshot = false },
+  { argv = ["vp", "run", "test"], continue-on-failure = true, comment = "The source change must miss the task cache and fail the test." },
+  { argv = ["vp", "test", "run"], continue-on-failure = true, comment = "The direct run must report the same failure." },
+]

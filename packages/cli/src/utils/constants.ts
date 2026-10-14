@@ -15,11 +15,11 @@ export const VITE_CONFIG_FILES = [
   'vite.config.cts',
 ] as const;
 
-export const VITEST_VERSION = '5.0.3';
+export const VITEST_VERSION = '5.0.4';
 
 // Exact action release used by generated workflows and the @v1 migration.
 // The Renovate custom manager keeps this value current.
-export const SETUP_VP_VERSION = 'v1.21.1';
+export const SETUP_VP_VERSION = 'v1.21.2';
 
 export const TSDOWN_MIGRATION_SKILL_URL =
   'https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md';

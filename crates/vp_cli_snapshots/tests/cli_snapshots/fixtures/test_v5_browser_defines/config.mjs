@@ -48,7 +48,12 @@ export function configFor(name) {
         configureVitest: {
           order: 'pre',
           async handler({ injectTestProjects }) {
-            await injectTestProjects({ extends: false, ...project('hook-injected') });
+            // Vitest 5.0.4 rejects projects that share sequence.groupOrder but
+            // resolve different maxWorkers, and runtime-injected projects
+            // resolve maxWorkers differently from the root project.
+            const injected = project('hook-injected');
+            injected.test.sequence = { groupOrder: 1 };
+            await injectTestProjects({ extends: false, ...injected });
           },
         },
       }];

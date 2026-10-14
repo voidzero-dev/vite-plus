@@ -1,6 +1,6 @@
 {
   "name": "vite-plus",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -370,6 +370,7 @@
     "@vitest/browser-playwright": "catalog:",
     "@vitest/browser-webdriverio": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
+    "@voidzero-dev/vite-task-client": "0.2.0",
     "bingo": "catalog:",
     "cac": "catalog:",
     "cross-spawn": "catalog:",

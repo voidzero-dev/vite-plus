@@ -475,7 +475,7 @@ impl JsExecutor {
 ```toml
 [dependencies]
 vp_js_runtime = { path = "../vp_js_runtime" }
-vp_shared = { path = "../vp_shared" }  # For cache dir, etc.
+vp_shared = { path = "../vp_shared" } # For cache dir, etc.
 vt_path = { path = "../vt_path" }
 
 clap = { version = "4", features = ["derive"] }

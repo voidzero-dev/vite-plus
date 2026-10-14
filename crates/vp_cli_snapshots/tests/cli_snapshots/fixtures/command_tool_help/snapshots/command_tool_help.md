@@ -185,9 +185,9 @@ Options:
   -p, --project <name>                The name of the project to run if you are using Vitest workspace feature. This can be repeated for multiple projects: --project=1 --project=2. You can also filter projects using wildcards like --project=packages*, and exclude projects with --project=!pattern. A project runs if it matches no negated pattern and, when regular patterns are also given, matches at least one of them.
   --slowTestThreshold <threshold>     Threshold in milliseconds for a test or suite to be considered slow (default: 300)
   --teardownTimeout <timeout>         Default timeout of a teardown function in milliseconds (default: 10000)
-  --cache                             Enable cache. Use '--help --cache' for more info.
+  --cache                             Store the results of test runs to run failed and longer test files first (default: true)
   --maxConcurrency <number>           Maximum number of concurrent tests and suites during test file execution (default: 5)
-  --fsModuleCache                     Cache transformed modules on the file system and reuse them between reruns (default: false)
+  --fsModuleCache                     Cache transformed modules on the file system and reuse them between reruns (default: true)
   --fsModuleCachePath <path>          Directory where the fsModuleCache is stored (default: node_modules/.vitest-cache)
   --expect                            Configuration options for expect() matches. Use '--help --expect' for more info.
   --printConsoleTrace                 Always print console stack traces
@@ -260,7 +260,7 @@ Options:
   --report                      Size report (default: true)
   --env.* <value>               Define compile-time env variables
   --env-file <file>             Load environment variables from a file, when used together with --env, variables in --env take precedence
-  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: TSDOWN_)
+  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: VITE_PACK_, TSDOWN_)
   --on-success <command>        Command to run on success
   --copy <dir>                  Copy files to output dir
   --tsconfig <tsconfig>         Set tsconfig path

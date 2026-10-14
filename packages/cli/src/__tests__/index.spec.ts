@@ -123,20 +123,23 @@ test('lazyPlugins wraps sync function returning a Promise into array', () => {
   expect(result).not.toBeInstanceOf(Promise);
 });
 
-// defineConfig auto-injects three internal plugins before user-supplied
-// plugins: vite-plus:vitest-resolver, vite-plus:auto-inline-matcher-deps, and
-// vite-plus:coverage-version-guard. The helper below strips those prefix
-// entries so tests can assert on user-supplied plugins only.
+// defineConfig auto-injects four internal plugins before user-supplied
+// plugins: vite-plus:vitest-resolver, vite-plus:auto-inline-matcher-deps,
+// vite-plus:coverage-version-guard, and vite-plus:vitest-cache-paths. The
+// helper below strips those prefix entries so tests can assert on
+// user-supplied plugins only.
 const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 const AUTO_INLINE_PLUGIN_NAME = 'vite-plus:auto-inline-matcher-deps';
 const COVERAGE_GUARD_PLUGIN_NAME = 'vite-plus:coverage-version-guard';
+const CACHE_PATHS_PLUGIN_NAME = 'vite-plus:vitest-cache-paths';
 const userPlugins = (plugins: unknown): unknown[] => {
   expect(Array.isArray(plugins)).toBe(true);
   const arr = plugins as unknown[];
   expect((arr[0] as { name?: string })?.name).toBe(RESOLVER_PLUGIN_NAME);
   expect((arr[1] as { name?: string })?.name).toBe(AUTO_INLINE_PLUGIN_NAME);
   expect((arr[2] as { name?: string })?.name).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-  return arr.slice(3);
+  expect((arr[3] as { name?: string })?.name).toBe(CACHE_PATHS_PLUGIN_NAME);
+  return arr.slice(4);
 };
 
 // lazyPlugins type compatibility tests — these verify at compile time that
