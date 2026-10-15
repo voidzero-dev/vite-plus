@@ -214,6 +214,52 @@ fn missing_script(token: &str, path: &AbsolutePath) -> ScriptError {
     }
 }
 
+/// Why package mode cannot run an explicit path as a program.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ProgramError {
+    pub error: String,
+    pub note: Option<String>,
+}
+
+/// Package mode runs an explicit path as a program. An existing file must be
+/// executable, and a directory needs a `package.json` for `vp dlx`, so either fails
+/// here with a clear error instead of in `vp dlx`. Mirrors `checkExplicitProgram` in
+/// `packages/cli/src/vpx-script.ts`.
+pub fn check_explicit_program(token: &str, cwd: &AbsolutePath) -> Result<(), ProgramError> {
+    if !is_explicit_path(token) {
+        return Ok(());
+    }
+    let path = cwd.join(token);
+    let Ok(metadata) = std::fs::metadata(path.as_path()) else {
+        return Ok(());
+    };
+    if metadata.is_dir() && !path.join("package.json").as_path().is_file() {
+        return Err(ProgramError {
+            error: format!("'{token}' is a directory without a package.json"),
+            note: None,
+        });
+    }
+    if metadata.is_file() && !is_executable(&metadata) {
+        return Err(ProgramError {
+            error: format!("'{token}' is not executable"),
+            note: Some(format!("Make it executable with `chmod +x {token}`.")),
+        });
+    }
+    Ok(())
+}
+
+/// An executable mode bit; always true on Windows.
+#[cfg(unix)]
+fn is_executable(metadata: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn is_executable(_metadata: &std::fs::Metadata) -> bool {
+    true
+}
+
 /// Whether `token` names a script. A missing explicit path, or a missing file
 /// with a TypeScript extension, is an error: it must never fall through to a
 /// remote package download.
@@ -416,6 +462,46 @@ mod tests {
         let (_global, global) = dist(&[PRELOAD_ENTRY]);
         assert_eq!(choose_loader_dir(Some(local), || Some(global.join("dist"))), None);
         assert_eq!(choose_loader_dir(None, || None), None);
+    }
+
+    /// `explicitPrograms` in `vpx_script_cases.json`, which the project-local bin's
+    /// `checkExplicitProgram` runs too.
+    #[test]
+    fn shared_explicit_programs() {
+        let table: Value = serde_json::from_str(include_str!("vpx_script_cases.json")).unwrap();
+        for case in table["explicitPrograms"].as_array().unwrap() {
+            let name = case["name"].as_str().unwrap();
+            if cfg!(not(unix)) && case.get("unixOnly").and_then(Value::as_bool) == Some(true) {
+                continue;
+            }
+            let files: Vec<(String, String)> = case
+                .get("files")
+                .and_then(Value::as_object)
+                .map(|files| {
+                    files
+                        .iter()
+                        .map(|(name, content)| (name.clone(), content.as_str().unwrap().to_owned()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let (_dir, cwd) = project(&files);
+            #[cfg(unix)]
+            for file in case.get("executable").and_then(Value::as_array).into_iter().flatten() {
+                use std::os::unix::fs::PermissionsExt;
+                let path = cwd.join(file.as_str().unwrap());
+                std::fs::set_permissions(path.as_path(), std::fs::Permissions::from_mode(0o755))
+                    .unwrap();
+            }
+            let expected = match &case["expect"] {
+                Value::String(ok) if ok == "ok" => Ok(()),
+                expect => Err(ProgramError {
+                    error: expect["error"].as_str().unwrap().to_owned(),
+                    note: expect.get("note").and_then(Value::as_str).map(str::to_owned),
+                }),
+            };
+            let actual = check_explicit_program(case["token"].as_str().unwrap(), &cwd);
+            assert_eq!(actual, expected, "{name}");
+        }
     }
 
     /// `vpx_script_cases.json` also lists what `packages/cli/src/vpx-script.ts` must

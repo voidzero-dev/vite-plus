@@ -71,3 +71,21 @@ Nor a missing explicit path without an extension
 ```
 error: vpx: Script not found: ./bin/missing
 ```
+
+## `vpx`
+
+Without a command, both CLIs print the same usage
+
+**Exit code:** 1
+
+```
+error: vpx requires a command to run
+
+Usage: vpx <pkg[@version]> [args...]
+       vpx <script> [args...]
+
+Examples:
+  vpx eslint .
+  vpx create-vue my-app
+  vpx ./scripts/seed.ts
+```
