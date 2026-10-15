@@ -328,7 +328,7 @@ The detection rules are pure functions over `(tokens, cwd)` and are unit tested 
 - `"vpx": "./bin/vpx"` sits next to `vp` and `vpr`. The shim imports `dist/vpx-bin.js`, a separate entry that loads neither the CLI bundle nor the native binding; the script's own Node.js process loads the binding through the preload.
 - Script mode: the same detection rules (`vpx-script.ts`), then `spawn(process.execPath, ['--require', preload, '--import', registerUrl, ...nodeArgs], { stdio: 'inherit' })`, with the signal handling described in [Process Model](#process-model).
 - Package mode, `--help`, and `--version` go to the global `vpx` found on `PATH`, skipping `node_modules/.bin` directories. Without one, package mode prints that running package binaries needs the global CLI, and `--version` prints this package's version. Inside `vp run` and package manager scripts, where `node_modules/.bin/vpx` shadows the global shim, `vpx eslint .` therefore behaves as before, though it starts Node.js first: `vpx -h` takes about 28 ms through the local bin against 4 ms through the global binary.
-- A unit test checks that the Rust and TypeScript lists of script extensions and value-taking Node.js options stay identical.
+- Both implementations run the same detection cases from `crates/vp_global_cli/src/commands/vpx_script_cases.json`, and a unit test checks that their lists of script extensions and value-taking Node.js options stay identical.
 
 ### 2. Loader Resolution
 
@@ -598,8 +598,8 @@ With the global CLI installed, `node_modules/.bin/vpx` (the project-local bin) s
 
 ### Unit Tests
 
-- `crates/vp_global_cli/src/commands/vpx_script.rs` and `vpx.rs`: the detection table, option-value skipping, `--tsconfig` extraction, the shebang guard, and `-v/--version`.
-- `packages/cli/src/__tests__/vpx-script.spec.ts`: the TypeScript port of the same rules; a check that the Rust and TypeScript lists match; the Node.js range check, which must equal `engines.node`; the sync-hooks cutoff; and the helper mapping and `require()` rewrite.
+- `crates/vp_global_cli/src/commands/vpx_script.rs` and `vpx.rs`: the shared detection cases (`vpx_script_cases.json`: script and package mode, missing files, option-value skipping, `--tsconfig` extraction, and the shebang guard), the loader falling back to the global install when the project's `vite-plus` lacks either entry, and `-v/--version`.
+- `packages/cli/src/__tests__/vpx-script.spec.ts`: the same shared detection cases against the TypeScript port; a check that the Rust and TypeScript lists match; the Node.js range check, which must equal `engines.node`; the sync-hooks cutoff; and the helper mapping and `require()` rewrite.
 - `packages/tools/src/__tests__/patch-oxc-node.spec.ts`: the oxc version rewrite.
 - `packages/tools/src/__tests__/sync-remote-deps.spec.ts`: `@oxc-project/runtime` follows Rolldown's pin.
 - `packages/cli/src/__tests__/toolchain.spec.ts`: the `oxc-node` toolchain node with its version and revision.
