@@ -8,7 +8,7 @@
  * `--shell-mode` runs with this package's `vp dlx`. See `packageInvocation`.
  *
  * Only `vp dlx` loads the CLI bundle and the native binding. A script's own Node.js
- * process loads the binding through `script-register.js`.
+ * process loads the binding through `script-preload.cjs`.
  */
 
 import { statSync } from 'node:fs';
