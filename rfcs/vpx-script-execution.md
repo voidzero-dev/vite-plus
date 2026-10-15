@@ -365,7 +365,7 @@ What the binding already contains makes this cheap. Through `rolldown_binding`, 
 
 `packages/cli/binding/src/oxc_node.rs` is the thin NAPI layer upstream documents for embedders. It forwards the functions the loader uses under an `oxcNode` namespace (`createResolve`, `load`, `OxcTransformer`, `setTsconfigPath`, `setTransformDeps`, `transformsDep`), so nothing collides with the `transform` export of `oxc_transform_napi`, which `rolldown_binding` links. Its `module_exports` hook calls `init_tracing()` and `detect_runtime_syntax()`, which oxc-node's own module hooks run when its `napi` feature is on: without them, `OXC_LOG` would print nothing and `using` would stay lowered on Node.js 24 and later. `OxcTransformer.transform` returns a plain `{ source, sourceMap }` object, because oxc-node's `Output` class is not exported without the feature. oxc-node's `#[napi(object)]` types (`ResolveContext`, `LoadContext`, and so on) still land at the top level of the binding's `.d.ts`; none collides with another name there. An upstream signature change shows up as a compile error in the forwarders, not as a patch that no longer applies.
 
-`oxc` follows the workspace version, set by the script: one copy of oxc, because oxc-node tracks oxc head while Rolldown and Vite+ can lag. v0.1.7 asks for 0.154.0 and compiles against the workspace's 0.153.0.
+`oxc` follows the workspace version, set by the script: one copy of oxc, because oxc-node tracks oxc head while Rolldown and Vite+ can lag. v0.1.7 asks for 0.154.0, the workspace's version today, so the rewrite currently changes nothing; it compiled against 0.153.0 before Rolldown moved to 0.154.0.
 
 Everything else uses upstream options: the tracing subscriber that stays off unless `OXC_LOG` is set (so `VP_LOG` keeps its own), `setTsconfigPath()`, which the preload calls with `VP_SCRIPT_TSCONFIG`, and `setTransformDeps("typescript")`.
 
@@ -379,7 +379,7 @@ Before this change, `BUNDLING.md` said the `rolldown` feature was release-only, 
 - `script-preload.ts` is built by its own tsdown block as one CommonJS file, `dist/script-preload.cjs`, with `import.meta.url` shimmed.
 - `pirates` is a `devDependency`, bundled into `dist`.
 - Source maps are on for `node_modules` too (`setSourceMapsSupport(true, { nodeModules: true })`), as tsx and upstream do, so stack traces in transformed TypeScript dependencies point at their source. The cost is that Node.js reads the `.map` file of every dependency that has one when it loads, which adds startup time for scripts with large dependency graphs.
-- `@oxc-project/runtime` is a `dependency` of `vite-plus`, so helpers resolve from `vite-plus` under strict layouts such as pnpm. Its catalog pin follows Rolldown's (`sync-remote` no longer takes the higher version, and `upgrade-deps` no longer bumps it to the latest npm release), so it matches the oxc crates compiled into the binding: 0.153.0 today.
+- `@oxc-project/runtime` is a `dependency` of `vite-plus`, so helpers resolve from `vite-plus` under strict layouts such as pnpm. Its catalog pin follows Rolldown's (`sync-remote` no longer takes the higher version, and `upgrade-deps` no longer bumps it to the latest npm release), so it matches the oxc crates compiled into the binding: 0.154.0 today.
 
 ### 4. Toolchain Metadata and Docs
 
@@ -651,7 +651,7 @@ Every case except `vpx_package_not_installed` runs in both flavors (`vp = ["loca
 
 Verified on macOS arm64 with Node.js 22.18, 24.11, 26.0, and 26.5, through the project-local bin (and the global shim on 22.18):
 
-- [x] The vendored crate compiles against the workspace's oxc (0.152.0, then 0.153.0) without source changes, and `Cargo.lock` holds one `oxc`.
+- [x] The vendored crate compiles against the workspace's oxc (0.152.0, 0.153.0, then 0.154.0) without source changes, and `Cargo.lock` holds one `oxc`.
 - [x] The `oxcNode` namespace removes the export collisions; Rolldown's `transform` and `TransformTask` are unchanged.
 - [x] Helpers resolve for class fields from ESM, from CommonJS, and from a `require()`d CommonJS `.cts` file.
 - [x] A `.cts` with `export` fails with the same error as the entry and when imported, on both hook paths.
