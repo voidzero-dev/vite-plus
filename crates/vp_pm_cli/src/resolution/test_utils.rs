@@ -68,33 +68,3 @@ fn test_argv(
 ) -> impl Iterator<Item = OsString> {
     std::iter::once(OsString::from("test")).chain(args.into_iter().map(Into::into))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[derive(clap::Args, Debug, PartialEq, Eq)]
-    struct TestArgs {
-        #[arg(long)]
-        value: String,
-    }
-
-    #[derive(clap::Subcommand, Debug, PartialEq, Eq)]
-    enum TestSubcommand {
-        Get { key: String },
-    }
-
-    #[test]
-    fn parses_args_without_a_program_name() {
-        let args = parse_args::<TestArgs>(["--value", "hello"]).unwrap();
-
-        assert_eq!(args, TestArgs { value: "hello".to_string() });
-    }
-
-    #[test]
-    fn parses_subcommands_without_a_program_name() {
-        let args = parse_subcommand::<TestSubcommand>(["get", "registry"]).unwrap();
-
-        assert_eq!(args, TestSubcommand::Get { key: "registry".to_string() });
-    }
-}

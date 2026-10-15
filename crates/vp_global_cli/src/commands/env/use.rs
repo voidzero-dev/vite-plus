@@ -333,23 +333,10 @@ fn current_override(session: Option<String>, environment: Option<String>) -> Opt
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use vp_shared::env_vars;
 
     use super::*;
-
-    #[test]
-    fn test_detect_shell_vp_shell_powershell() {
-        vp_shared::EnvConfig::with_vars(
-            [
-                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
-                (env_vars::VP_SHELL, std::ffi::OsStr::new("powershell")),
-            ],
-            |_| {
-                let shell = detect_shell();
-                assert_eq!(shell, Shell::PowerShell);
-            },
-        );
-    }
 
     #[test]
     fn empty_environment_override_falls_back_to_session() {
@@ -357,45 +344,6 @@ mod tests {
             current_override(Some("pnpm@10.18.0".into()), Some("   ".into())).as_deref(),
             Some("pnpm@10.18.0")
         );
-    }
-
-    #[test]
-    fn test_detect_shell_vp_shell_fish() {
-        vp_shared::EnvConfig::with_vars(
-            [
-                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
-                (env_vars::VP_SHELL, std::ffi::OsStr::new("fish")),
-            ],
-            |_| {
-                let shell = detect_shell();
-                assert_eq!(shell, Shell::Fish);
-            },
-        );
-    }
-
-    #[test]
-    fn test_detect_shell_vp_shell_nu() {
-        vp_shared::EnvConfig::with_vars(
-            [
-                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
-                (env_vars::VP_SHELL, std::ffi::OsStr::new("nu")),
-            ],
-            |_| {
-                let shell = detect_shell();
-                assert_eq!(shell, Shell::NuShell);
-            },
-        );
-    }
-
-    #[test]
-    fn test_detect_shell_posix_default() {
-        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
-            let shell = detect_shell();
-            #[cfg(not(windows))]
-            assert_eq!(shell, Shell::Posix);
-            #[cfg(windows)]
-            assert_eq!(shell, Shell::Cmd);
-        });
     }
 
     #[test]

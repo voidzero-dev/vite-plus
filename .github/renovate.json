@@ -20,9 +20,36 @@
       "depNameTemplate": "voidzero-dev/setup-vp",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver-coerced"
+    },
+    {
+      "description": "Update the cargo-xwin version used for Windows builds.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/actions/setup-xwin/action\\.yml$/"],
+      "matchStrings": ["CARGO_XWIN_VERSION: '(?<currentValue>[^']+)'"],
+      "depNameTemplate": "cargo-xwin",
+      "datasourceTemplate": "crate"
+    },
+    {
+      "description": "Update the Windows SDK release and its archive checksum together.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/actions/setup-xwin/action\\.yml$/"],
+      "matchStrings": [
+        "SYSROOT_VERSION: '(?<currentValue>\\d{4}-\\d{2}-\\d{2})'\\s+SYSROOT_SHA256: (?<currentDigest>[a-f0-9]{64})"
+      ],
+      "depNameTemplate": "trcrsired/windows-msvc-sysroot",
+      "datasourceTemplate": "github-release-attachments",
+      "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
     }
   ],
   "packageRules": [
+    {
+      "description": "Require review for Windows SDK and cargo-xwin updates.",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": [".github/actions/setup-xwin/action.yml"],
+      "matchPackageNames": ["cargo-xwin", "trcrsired/windows-msvc-sysroot"],
+      "groupName": "Windows build toolchain",
+      "automerge": false
+    },
     {
       "description": "Ignore toolchain npm packages managed by .github/workflows/upgrade-deps.yml through upgrade-deps.ts and sync-remote. Official Vitest packages share the runner version; the independently versioned @vitest/browser-webdriverio remains enabled.",
       "matchManagers": ["npm"],
