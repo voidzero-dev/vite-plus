@@ -194,7 +194,7 @@ A step is a bare argv array or a table:
                               #   any other name resolves from the case env
                               #   (`PATH = "${workspace}/bin${PATH_SEPARATOR}${PATH}"`
                               #   is the shell's `PATH="$(pwd)/bin:$PATH"`)
-  timeout = 600000,           # ms, default 10 minutes (includes cold package-manager downloads)
+  timeout = 120000,           # ms, default 120s (includes cold package-manager downloads)
   snapshot = false,           # omit the screen while the step succeeds
                               #   (failures always keep their output)
   continue-on-failure = true, # a failing step skips the rest of its line,

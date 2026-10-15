@@ -39,12 +39,11 @@ use flavor::{Flavor, FlavorRuntime};
 use redact::redact_output;
 use vt_pty_terminal_test::{CommandBuilder, ScreenSize, TestTerminal};
 
-/// Cases have isolated package-manager installs. CI can take several minutes
-/// to download a native Bun or pnpm binary before the command itself starts.
-/// Allow the same ten-minute budget as the CLI's large-file downloads instead
-/// of killing a transfer that is still making progress after two minutes.
+/// Cases have isolated package-manager installs. Downloading a native Bun or
+/// pnpm binary can exceed a minute on CI, before the command itself starts.
+/// Keep the same allowance as registry-backed installs on every platform.
 /// Individual steps override this via `timeout` (ms).
-const STEP_TIMEOUT: Duration = Duration::from_secs(600);
+const STEP_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Screen size for the PTY terminal. Large enough to avoid line wrapping.
 const SCREEN_SIZE: ScreenSize = ScreenSize { rows: 500, cols: 500 };
