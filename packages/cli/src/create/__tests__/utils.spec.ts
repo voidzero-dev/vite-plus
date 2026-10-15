@@ -2,10 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   deriveDefaultPackageName,
+  detectLauncherPackageManager,
   ensureDefaultGitignoreEntries,
   ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
@@ -38,6 +39,22 @@ describe('editor configuration policy', () => {
   it('keeps --no-editor as an explicit opt-out in every workspace mode', () => {
     expect(shouldConfigureEditorsForCreate({ isMonorepo: false, editor: false })).toBe(false);
     expect(shouldConfigureEditorsForCreate({ isMonorepo: true, editor: false })).toBe(false);
+  });
+});
+
+describe('detectLauncherPackageManager', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('detects the package manager that launched the process, but not vp', () => {
+    vi.stubEnv('npm_config_user_agent', 'pnpm/11.0.0 npm/? node/v24.0.0 darwin arm64');
+    expect(detectLauncherPackageManager()).toBe('pnpm');
+    // `vp run` and `vp exec` prefix the agent with vp, where the global CLI is already available.
+    vi.stubEnv('npm_config_user_agent', 'vp/1.1.0 npm/11.0.0 node/v24.0.0 darwin arm64');
+    expect(detectLauncherPackageManager()).toBeUndefined();
+    vi.stubEnv('npm_config_user_agent', undefined);
+    expect(detectLauncherPackageManager()).toBeUndefined();
   });
 });
 
