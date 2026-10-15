@@ -82,6 +82,26 @@ function runAndExit(command: string, args: string[], env: NodeJS.ProcessEnv): vo
   });
 }
 
+const LOCAL_HELP = `Run a script file with the Vite+ loader
+
+Usage: vpx [OPTIONS] [NODE_OPTIONS] <script> [args...]
+
+Arguments:
+  <script>   Script file to run (.ts, .mts, .cts, .tsx, .js, .mjs, .cjs, .jsx)
+  [args...]  Arguments to pass to the script
+
+Options:
+      --tsconfig <PATH>  tsconfig.json to use when running the script
+  -v, --version          Print the vite-plus version
+  -h, --help             Print help
+
+Examples:
+  vpx ./scripts/seed.ts --dry-run   # Run a TypeScript script
+  vpx --watch ./server.ts           # Pass Node.js options before the script
+
+Running package binaries (vpx <pkg>) requires the global Vite+ CLI: https://viteplus.dev/guide/
+`;
+
 const args = process.argv.slice(2);
 const cwd = process.cwd();
 const { flags, positional } = parseVpxArgs(args);
@@ -135,6 +155,11 @@ if (invocation) {
     if (flags.version) {
       const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
       process.stdout.write(`vite-plus v${version}\n`);
+      process.exit(0);
+    }
+    if (flags.help) {
+      // Without the global CLI this bin only runs scripts, so it describes just that.
+      process.stdout.write(LOCAL_HELP);
       process.exit(0);
     }
     errorMsg(
