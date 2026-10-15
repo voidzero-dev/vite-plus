@@ -12,12 +12,19 @@
  * fails when the commands of a scenario disagree on output, exit with an error, or
  * warn.
  *
+ * `--vpx <path>` also measures a global `vpx`: a `vpx` symlink to a `vp` built from
+ * this checkout (`cargo build -p vp_global_cli --release`). It runs the Rust shim
+ * itself, with `VP_NODE_VERSION` set to the `--node` binary's version, so the row
+ * includes the shim's startup and Node.js resolution. The scenarios link
+ * `node_modules/vite-plus` to `packages/cli`, so it resolves the loader from the
+ * project, as in a real project.
+ *
  * Options: `--runs <n>` (default 20) and `--warmup <n>` (default 3) per command,
  * and `--json <file>` to keep every measurement.
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -32,6 +39,7 @@ const modules = 300;
 const { values } = parseArgs({
   options: {
     node: { type: 'string', multiple: true, default: [process.execPath] },
+    vpx: { type: 'string' },
     runs: { type: 'string', default: '20' },
     warmup: { type: 'string', default: '3' },
     json: { type: 'string' },
@@ -82,6 +90,13 @@ export function run${i}(): number {
 
 function generateFixtures(): void {
   rmSync(fixtures, { recursive: true, force: true });
+  // The global `vpx` resolves the loader from the project's `vite-plus` first.
+  mkdirSync(path.join(fixtures, 'node_modules'), { recursive: true });
+  symlinkSync(
+    path.join(repo, 'packages/cli'),
+    path.join(fixtures, 'node_modules/vite-plus'),
+    'dir',
+  );
   // One erasable file, so Node.js type stripping can run it too.
   write('hello/package.json', '{ "type": "module" }\n');
   write('hello/hello.ts', "const message: string = 'hello';\nconsole.log(message);\n");
@@ -130,13 +145,16 @@ const scenarios = [
 
 interface Command {
   label: string;
+  /** The executable; the `--node` binary when absent. */
+  program?: string;
   args: string[];
   env: NodeJS.ProcessEnv;
 }
 
-function commands(scenario: string, entry: string): Command[] {
+function commands(scenario: string, entry: string, nodeVersion: string): Command[] {
+  // `VP_HOME` stays, so a global `vpx` finds its managed runtimes.
   const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !/^(VP|TSX|OXC)_/.test(key)),
+    Object.entries(process.env).filter(([key]) => key === 'VP_HOME' || !/^(VP|TSX|OXC)_/.test(key)),
   );
   const noCache = { ...env, TSX_DISABLE_CACHE: '1' };
   const loader = [
@@ -149,6 +167,17 @@ function commands(scenario: string, entry: string): Command[] {
   const tsxCli = path.join(tsxDir, 'dist/cli.mjs');
   const vpxBin = path.join(repo, 'packages/cli/bin/vpx');
   return [
+    // The global `vpx`: the Rust shim resolves Node.js and the loader, then execs it.
+    ...(values.vpx
+      ? [
+          {
+            label: 'global `vpx` (1 process)',
+            program: values.vpx,
+            args: [entry],
+            env: { ...env, VP_NODE_VERSION: nodeVersion },
+          },
+        ]
+      : []),
     // What the global `vpx` execs in place, without the Rust shim's own startup.
     { label: '`vpx` loader (1 process)', args: [...loader, entry], env },
     { label: '`node --import tsx` (1 process)', args: ['--import', tsxLoader, entry], env },
@@ -163,7 +192,7 @@ function commands(scenario: string, entry: string): Command[] {
 
 function time(node: string, command: Command, cwd: string) {
   const start = performance.now();
-  const result = spawnSync(node, command.args, { cwd, env: command.env });
+  const result = spawnSync(command.program ?? node, command.args, { cwd, env: command.env });
   return {
     ms: performance.now() - start,
     status: result.status,
@@ -194,7 +223,7 @@ for (const { node, version } of nodes) {
   for (const { name, entry } of scenarios) {
     const cwd = path.join(fixtures, name);
     let expected: string | undefined;
-    for (const command of commands(name, entry)) {
+    for (const command of commands(name, entry, version)) {
       const first = time(node, command, cwd);
       expected ??= first.stdout;
       if (first.status !== 0 || first.stdout !== expected || first.stderr.includes('Warning')) {
