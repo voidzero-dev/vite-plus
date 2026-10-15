@@ -12,8 +12,10 @@ use std::{borrow::Cow, sync::LazyLock};
 static UUID_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}").unwrap()
 });
+// One optional space covers units printed apart from the number, as in
+// Vite's dev banner (`ready in 123 ms`).
 static DURATION_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)?(ns|µs|ms|s)\b").unwrap());
+    LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)? ?(ns|µs|ms|s)\b").unwrap());
 // Yarn prints elapsed times as one or several units (999ms vs 1s 0ms).
 // Match the entire elapsed field, not adjacent values in timing tables.
 static YARN_ELAPSED_RE: LazyLock<regex::Regex> = LazyLock::new(|| {

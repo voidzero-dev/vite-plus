@@ -38,8 +38,9 @@ export async function vite(
   if (err) {
     throw err;
   }
-  const vitePackagePath = dirname(resolveCore('', resolveViteRoot(context)));
-  const binPath = join(vitePackagePath, 'cli.js');
+  // Start through Vite's bin script, as `vite` does; see packages/core/BUNDLING.md.
+  const viteDistDir = dirname(dirname(resolveCore('', resolveViteRoot(context))));
+  const binPath = join(viteDistDir, 'bin', 'vite.js');
   if (!existsSync(binPath)) {
     throw new Error(`Could not find the bundled Vite CLI at ${binPath}. Run \`vp install\`.`);
   }

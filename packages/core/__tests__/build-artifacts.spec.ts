@@ -28,6 +28,15 @@ describe('build artifacts', () => {
     expect(content).toContain('glob');
   });
 
+  it('should include the Vite bin script pointing at the bundled CLI', () => {
+    const binPath = path.join(distDir, 'vite/bin/vite.js');
+    expect(fs.existsSync(binPath), `${binPath} should exist`).toBe(true);
+
+    const content = fs.readFileSync(binPath, 'utf8');
+    expect(content).toContain(`import('../node/cli.js')`);
+    expect(fs.existsSync(path.resolve(path.dirname(binPath), '../node/cli.js'))).toBe(true);
+  });
+
   it('bundles JavaScript Yuku packages and keeps the native parser external', async () => {
     await init;
     const tsdownDir = path.join(distDir, 'tsdown');
