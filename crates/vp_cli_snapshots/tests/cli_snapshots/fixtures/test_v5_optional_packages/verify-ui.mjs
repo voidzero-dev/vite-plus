@@ -4,7 +4,7 @@ import { createVitest } from 'vite-plus/test/node';
 
 const runner = await createVitest({
   config: false, watch: false, reporters: [], ui: true, open: false,
-  api: { host: '127.0.0.1', port: 0 },
+  api: { host: '127.0.0.1' },
 }, defineConfig({
   plugins: [{
     name: 'ui-server-port',
