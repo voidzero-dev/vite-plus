@@ -282,6 +282,10 @@ the point.
 `seed-runtime = true` (default) symlinks a provisioned managed Node runtime
 into the case `VP_HOME` so commands do not download ~50MB per case.
 
+The runner sets `VP_DOWNLOAD_TIMEOUT=20` so runtime and package-manager
+downloads can retry within the default 120-second step timeout. Cases that
+need a different download limit can override it with `env` or `envs`.
+
 Fixture configs may import bare `vite-plus` and
 `@voidzero-dev/vite-plus-core`: the runner links the checkout packages
 into the run root's `node_modules`, where Node's upward walk finds them
