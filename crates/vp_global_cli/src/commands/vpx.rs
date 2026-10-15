@@ -450,6 +450,22 @@ mod tests {
 
     use super::*;
 
+    /// `packageSpecs` in `vpx_script_cases.json`, which
+    /// `packages/cli/src/__tests__/vpx-script.spec.ts` checks against the project-local
+    /// bin's port of these two functions.
+    #[test]
+    fn shared_package_specs() {
+        let table: serde_json::Value =
+            serde_json::from_str(include_str!("vpx_script_cases.json")).unwrap();
+        let specs = table["packageSpecs"].as_array().unwrap();
+        assert!(!specs.is_empty());
+        for case in specs {
+            let spec = case["spec"].as_str().unwrap();
+            assert_eq!(has_version_spec(spec), case["versioned"].as_bool().unwrap(), "{spec}");
+            assert_eq!(extract_command_name(spec), case["command"].as_str().unwrap(), "{spec}");
+        }
+    }
+
     // =========================================================================
     // has_version_spec tests
     // =========================================================================

@@ -122,6 +122,7 @@ pub struct ScriptInvocation {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ScriptError {
     NotFound(String),
+    IsDirectory(String),
     MissingTsconfigValue,
 }
 
@@ -129,6 +130,7 @@ impl std::fmt::Display for ScriptError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotFound(script) => write!(f, "Script not found: {script}"),
+            Self::IsDirectory(script) => write!(f, "Script is a directory: {script}"),
             Self::MissingTsconfigValue => write!(f, "--tsconfig requires a path"),
         }
     }
@@ -198,9 +200,18 @@ fn check_script_after_options(token: &str, cwd: &AbsolutePath) -> Result<(), Scr
         && SCRIPT_EXTENSIONS.iter().any(|extension| token.ends_with(extension))
         && !cwd.join(token).as_path().is_file()
     {
-        return Err(ScriptError::NotFound(token.to_owned()));
+        return Err(missing_script(token, &cwd.join(token)));
     }
     Ok(())
+}
+
+/// The error for a script path that is not a file.
+fn missing_script(token: &str, path: &AbsolutePath) -> ScriptError {
+    if path.as_path().is_dir() {
+        ScriptError::IsDirectory(token.to_owned())
+    } else {
+        ScriptError::NotFound(token.to_owned())
+    }
 }
 
 /// Whether `token` names a script. A missing explicit path, or a missing file
@@ -214,7 +225,7 @@ fn is_script(token: &str, cwd: &AbsolutePath) -> Result<bool, ScriptError> {
             return Ok(true);
         }
         if is_explicit_path(token) || TS_EXTENSIONS.contains(extension) {
-            return Err(ScriptError::NotFound(token.to_owned()));
+            return Err(missing_script(token, &path));
         }
         return Ok(false);
     }
