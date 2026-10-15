@@ -41,3 +41,13 @@ error: vpx: tsconfig not found: missing.json
 ```
 error: vpx: --package cannot be used when running a script
 ```
+
+## `vpx -p cowsay ./src/missing.ts`
+
+A missing explicit path never falls through to a package download, even with --package
+
+**Exit code:** 1
+
+```
+error: vpx: Script not found: ./src/missing.ts
+```

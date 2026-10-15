@@ -223,7 +223,7 @@ fn is_script(token: &str, cwd: &AbsolutePath) -> Result<bool, ScriptError> {
     Ok(is_explicit_path(token) && path.as_path().is_file() && has_vpx_shebang(&path))
 }
 
-fn is_explicit_path(token: &str) -> bool {
+pub fn is_explicit_path(token: &str) -> bool {
     if token.starts_with("./") || token.starts_with("../") || token.starts_with('/') {
         return true;
     }
