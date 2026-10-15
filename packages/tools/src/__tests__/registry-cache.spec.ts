@@ -123,6 +123,30 @@ it('bounds an unfinished download and releases its lock for another registry', a
   expect((await next.get(url, 'application/octet-stream')).body.toString()).toBe('complete');
 });
 
+it.each(['headers', 'body'])(
+  'releases a download stalled before %s for a client retry',
+  async (stage) => {
+    let complete = false;
+    const url = await upstream((_req, res) => {
+      if (complete) {
+        res.end('complete');
+      } else if (stage === 'body') {
+        res.writeHead(200);
+        res.flushHeaders();
+      }
+    });
+    const dir = await directory();
+    const cache = new RegistryCache(dir, true, undefined, 60_000, 100);
+    await expect(cache.get(url, 'application/octet-stream')).rejects.toMatchObject({
+      name: 'AbortError',
+      cause: { message: 'Registry request stalled' },
+    });
+    complete = true;
+    const next = new RegistryCache(dir);
+    expect((await next.get(url, 'application/octet-stream')).body.toString()).toBe('complete');
+  },
+);
+
 it('routes tarballs through the case registry without changing unrelated metadata', () => {
   const registry = 'http://127.0.0.1:1234';
   const cdn = 'https://cdn.example.test/package.tgz';

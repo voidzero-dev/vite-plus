@@ -143,6 +143,9 @@ directory. Combine both locations when counting requests: `fixture` events
 identify locally served data, `request` events count proxy requests, `hit` events
 identify reused responses, and `upstream` events count actual upstream HTTP
 requests (including redirects). Non-GET requests are forwarded without caching.
+`upstream-stalled` identifies requests with no response progress for 15 seconds,
+including connection setup. These requests release their cache locks so clients
+can retry. Each upstream request also has a 60-second total deadline.
 These counts cover the registry; requests to other services, such as Node.js
 release downloads or Git hosts, are outside this log.
 
