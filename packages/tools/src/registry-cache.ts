@@ -66,12 +66,20 @@ export class RegistryCache {
   private readonly enabled: boolean;
   private readonly logFile?: string;
   private readonly timeoutMs: number;
+  private readonly idleTimeoutMs: number;
 
-  constructor(directory: string, enabled = true, logFile?: string, timeoutMs = 60_000) {
+  constructor(
+    directory: string,
+    enabled = true,
+    logFile?: string,
+    timeoutMs = 60_000,
+    idleTimeoutMs = 15_000,
+  ) {
     this.directory = directory;
     this.enabled = enabled;
     this.logFile = logFile;
     this.timeoutMs = timeoutMs;
+    this.idleTimeoutMs = idleTimeoutMs;
   }
 
   record(event: string, url: string): void {
@@ -177,6 +185,15 @@ export class RegistryCache {
   private async download(url: string, accept: string, redirects = 5): Promise<Response> {
     this.record('upstream', url);
     return new Promise((resolve, reject) => {
+      const stalled = new AbortController();
+      let idleTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
+      const progress = () => {
+        clearTimeout(idleTimer);
+        idleTimer = globalThis.setTimeout(() => {
+          this.record('upstream-stalled', url);
+          stalled.abort(new Error('Registry request stalled'));
+        }, this.idleTimeoutMs);
+      };
       const request = url.startsWith('https:') ? httpsRequest : httpRequest;
       const req = request(
         url,
@@ -188,9 +205,10 @@ export class RegistryCache {
           agent: url.startsWith('https:') ? this.agent : undefined,
           // Bound the whole request, including connection setup and responses
           // that keep sending data. Release the cache lock before a case times out.
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: AbortSignal.any([AbortSignal.timeout(this.timeoutMs), stalled.signal]),
         },
         (res: IncomingMessage) => {
+          progress();
           res.on('error', reject);
           const status = res.statusCode ?? 502;
           if (status >= 300 && status < 400 && res.headers.location) {
@@ -205,7 +223,10 @@ export class RegistryCache {
             return;
           }
           const chunks: Buffer[] = [];
-          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('data', (chunk: Buffer) => {
+            progress();
+            chunks.push(chunk);
+          });
           res.on('end', () => {
             try {
               let body = Buffer.concat(chunks);
@@ -231,6 +252,10 @@ export class RegistryCache {
           });
         },
       );
+      // Start before DNS/connect, unlike a socket timeout. Return a failed
+      // request promptly so the client's retries fit inside the case deadline.
+      progress();
+      req.once('close', () => clearTimeout(idleTimer));
       req.on('error', reject);
       req.end();
     });
