@@ -1,5 +1,5 @@
 {
-  "$comment": "Script detection cases shared by crates/vp_global_cli/src/commands/vpx_script.rs and packages/cli/src/__tests__/vpx-script.spec.ts, so the global vpx and the project-local bin decide the same way. `files` are created in a temporary project directory that is the cwd; `{cwd}` in `args` and `script` stands for that directory. `expect` is \"package\", { \"error\": message }, or { \"script\": Node.js arguments, \"tsconfig\": path }. `scriptExtensions` and `nodeOptionsWithValue` are the lists both implementations must declare. `packageSpecs` gives, for a package spec, whether it names a version and which binary it runs.",
+  "$comment": "Script detection cases shared by crates/vp_global_cli/src/commands/vpx_script.rs and packages/cli/src/__tests__/vpx-script.spec.ts, so the global vpx and the project-local bin decide the same way. `files` are created in a temporary project directory that is the cwd; `{cwd}` in `args` and `script` stands for that directory. `expect` is \"package\", { \"error\": message }, or { \"script\": Node.js arguments, \"tsconfig\": path }. `scriptExtensions` and `nodeOptionsWithValue` are the lists both implementations must declare. `packageSpecs` gives, for a package spec, whether it names a version and which binary it runs. `explicitPrograms` checks an explicit path that package mode runs as a program: `executable` lists the files made executable, `expect` is \"ok\" or { \"error\", \"note\" }, and `unixOnly` cases depend on mode bits.",
   "scriptExtensions": [".ts", ".mts", ".cts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"],
   "nodeOptionsWithValue": [
     "-C",
@@ -92,6 +92,42 @@
     { "spec": "@vue/cli", "versioned": false, "command": "cli" },
     { "spec": "@vue/cli@5.0.0", "versioned": true, "command": "cli" },
     { "spec": "@scope", "versioned": false, "command": "@scope" }
+  ],
+  "explicitPrograms": [
+    {
+      "name": "an executable file",
+      "files": { "deploy.sh": "#!/bin/sh\n" },
+      "executable": ["deploy.sh"],
+      "token": "./deploy.sh",
+      "expect": "ok"
+    },
+    {
+      "name": "a file that is not executable",
+      "files": { "notes.txt": "hi\n" },
+      "token": "./notes.txt",
+      "unixOnly": true,
+      "expect": {
+        "error": "'./notes.txt' is not executable",
+        "note": "Make it executable with `chmod +x ./notes.txt`."
+      }
+    },
+    {
+      "name": "a package directory",
+      "files": { "tools/package.json": "{}" },
+      "token": "./tools",
+      "expect": "ok"
+    },
+    {
+      "name": "a directory without a package.json",
+      "files": { "empty/.keep": "" },
+      "token": "./empty",
+      "expect": { "error": "'./empty' is a directory without a package.json" }
+    },
+    {
+      "name": "a bare name is not a path",
+      "token": "eslint",
+      "expect": "ok"
+    }
   ],
   "cases": [
     {

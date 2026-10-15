@@ -3,7 +3,7 @@
  * `crates/vp_global_cli/src/commands/vpx_script.rs`; keep the two in sync.
  */
 
-import { accessSync, closeSync, constants, openSync, readSync, statSync } from 'node:fs';
+import { closeSync, openSync, readSync, type Stats, statSync } from 'node:fs';
 import path from 'node:path';
 
 export const SCRIPT_EXTENSIONS = ['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
@@ -306,12 +306,7 @@ export function commandName(spec: string): string {
   return spec.split('@')[0];
 }
 
-/**
- * The nearest `node_modules/.bin/<name>` from `cwd` up (`.cmd` on Windows), like the
- * global CLI's `find_local_binary`. `vp exec` gets this path, not the name: it only
- * searches the package and workspace roots and then `PATH`, which can pick another
- * binary, or none.
- */
+/** The nearest `node_modules/.bin/<name>` from `cwd` up (`.cmd` on Windows), like the global CLI's `find_local_binary`. */
 export function findLocalBin(name: string, cwd: string): string | undefined {
   const file = process.platform === 'win32' ? `${name}.cmd` : name;
   for (let dir = cwd; ; dir = path.dirname(dir)) {
@@ -325,28 +320,50 @@ export function findLocalBin(name: string, cwd: string): string | undefined {
   }
 }
 
-function isExecutable(file: string): boolean {
-  if (process.platform === 'win32') {
-    return true;
+/** An executable mode bit, as the global CLI checks; always true on Windows. */
+function isExecutable(stats: Stats): boolean {
+  return process.platform === 'win32' || (stats.mode & 0o111) !== 0;
+}
+
+export interface ProgramError {
+  error: string;
+  note?: string;
+}
+
+/**
+ * Package mode runs an explicit path as a program. An existing file must be executable,
+ * and a directory needs a package.json for `vp dlx`, so either fails here with a clear
+ * error instead of in `vp dlx`. Mirrors `check_explicit_program` in the global CLI.
+ */
+export function checkExplicitProgram(token: string, cwd: string): ProgramError | undefined {
+  if (!isExplicitPath(token)) {
+    return undefined;
   }
-  try {
-    accessSync(file, constants.X_OK);
-    return true;
-  } catch {
-    return false;
+  const file = path.resolve(cwd, token);
+  const stats = statSync(file, { throwIfNoEntry: false });
+  if (stats?.isDirectory() && !isFile(path.join(file, 'package.json'))) {
+    return { error: `'${token}' is a directory without a package.json` };
   }
+  if (stats?.isFile() && !isExecutable(stats)) {
+    return {
+      error: `'${token}' is not executable`,
+      note: `Make it executable with \`chmod +x ${token}\`.`,
+    };
+  }
+  return undefined;
 }
 
 export type PackageInvocation =
-  | { command: 'exec' | 'dlx'; args: string[] }
-  | { error: string; note: string };
+  | { command: 'run'; file: string; args: string[] }
+  | { command: 'dlx'; args: string[] }
+  | ProgramError;
 
 /**
- * How the project-local bin runs `vpx <pkg> [args...]` with this package's `vp`. A
- * binary installed in `node_modules/.bin`, or an existing executable file, runs with
- * `vp exec`; a versioned package, `--package`, `--shell-mode`, or a local package
- * directory runs with `vp dlx`. Global packages and `PATH` are not searched, so a
- * binary that is not installed is an error rather than a download.
+ * How the project-local bin runs `vpx <pkg> [args...]`. The nearest binary in
+ * `node_modules/.bin`, or an existing executable file, runs directly, as the global CLI
+ * execs the path it finds. A versioned package, `--package`, `--shell-mode`, or a local
+ * package directory runs with this package's `vp dlx`. Global packages and `PATH` are
+ * not searched, so a binary that is not installed is an error rather than a download.
  */
 export function packageInvocation(
   flags: VpxFlags,
@@ -367,22 +384,26 @@ export function packageInvocation(
     };
   }
   if (isExplicitPath(spec)) {
+    const problem = checkExplicitProgram(spec, cwd);
+    if (problem) {
+      return problem;
+    }
     const file = path.resolve(cwd, spec);
-    if (!isFile(file)) {
-      return { command: 'dlx', args: [...silent, spec, ...rest] };
-    }
-    if (!isExecutable(file)) {
-      return {
-        error: `'${spec}' is not executable`,
-        note: `Make it executable with \`chmod +x ${spec}\`.`,
-      };
-    }
-    return { command: 'exec', args: [spec, ...rest] };
+    return isFile(file)
+      ? { command: 'run', file, args: rest }
+      : { command: 'dlx', args: [...silent, spec, ...rest] };
   }
   const name = commandName(spec);
   const bin = findLocalBin(name, cwd);
   if (bin) {
-    return { command: 'exec', args: [bin, ...rest] };
+    if (!isExecutable(statSync(bin))) {
+      const relative = path.relative(cwd, bin);
+      return {
+        error: `'${relative}' is not executable`,
+        note: `Reinstall dependencies with \`vp install\`, or make it executable with \`chmod +x ${relative}\`.`,
+      };
+    }
+    return { command: 'run', file: bin, args: rest };
   }
   return {
     error: `'${name}' is not installed in node_modules`,

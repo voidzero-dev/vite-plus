@@ -39,7 +39,7 @@ vpx oxlint@1.85.0 --version
 vpx -p cowsay -c 'echo "hi" | cowsay'
 ```
 
-Package managers and `vp run` put `node_modules/.bin` first on `PATH`, so `package.json` scripts run the `vpx` bin of the project's `vite-plus` package. That bin does not need the global CLI, and it looks only in local `node_modules/.bin` directories. It runs an installed binary via `vp exec`, and `pkg@version`, `--package/-p`, or `--shell-mode` via `vp dlx`. A binary that is not installed is an error, so a script never downloads a package by accident:
+Package managers and `vp run` put `node_modules/.bin` first on `PATH`, so `package.json` scripts run the `vpx` bin of the project's `vite-plus` package. That bin does not need the global CLI, and it looks only in local `node_modules/.bin` directories. It runs an installed binary directly, as the global `vpx` does, and `pkg@version`, `--package/-p`, or `--shell-mode` via `vp dlx`. A binary that is not installed is an error, so a script never downloads a package by accident:
 
 ```
 error: vpx: 'eslint' is not installed in node_modules

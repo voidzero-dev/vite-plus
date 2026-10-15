@@ -38,6 +38,7 @@ steps = [
   { argv = ["vpx", "-p", "cowsay", "./src/missing.ts"], comment = "A missing explicit path never falls through to a package download, even with --package", continue-on-failure = true },
   { argv = ["vpx", "-p", "cowsay", "seed.ts"], comment = "Nor does a missing bare name with a TypeScript extension", continue-on-failure = true },
   { argv = ["vpx", "./bin/missing"], comment = "Nor a missing explicit path without an extension", continue-on-failure = true },
+  { argv = ["vpx"], comment = "Without a command, both CLIs print the same usage", continue-on-failure = true },
 ]
 
 [[case]]

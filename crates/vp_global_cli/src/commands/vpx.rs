@@ -54,12 +54,12 @@ Options:
   -h, --help            Print help
 
 Examples:
-  vpx eslint .                                           # Run local eslint (or download)
-  vpx create-vue my-app                                  # Download and run create-vue
-  vpx oxlint@1.85.0 --version                             # Run specific version
-  vpx -p cowsay -c 'echo \"hi\" | cowsay'                  # Shell mode with package
-  vpx ./scripts/seed.ts --dry-run                        # Run a TypeScript script
-  vpx --watch ./server.ts                                # Pass Node.js options before the script";
+  vpx eslint .                           # Run local eslint (or download)
+  vpx create-vue my-app                  # Download and run create-vue
+  vpx oxlint@1.85.0 --version            # Run specific version
+  vpx -p cowsay -c 'echo \"hi\" | cowsay'  # Shell mode with package
+  vpx ./scripts/seed.ts --dry-run        # Run a TypeScript script
+  vpx --watch ./server.ts                # Pass Node.js options before the script";
 
 /// A globally installed binary found via `vp install -g`.
 struct GlobalBinary {
@@ -96,10 +96,12 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
         output::error("vpx requires a command to run");
         eprintln!();
         eprintln!("Usage: vpx <pkg[@version]> [args...]");
+        eprintln!("       vpx <script> [args...]");
         eprintln!();
         eprintln!("Examples:");
         eprintln!("  vpx eslint .");
         eprintln!("  vpx create-vue my-app");
+        eprintln!("  vpx ./scripts/seed.ts");
         return 1;
     }
 
@@ -143,6 +145,15 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
 
     // If no version spec and no --package flag, try local → global → PATH lookup
     if !has_version_spec(cmd_spec) && flags.packages.is_empty() && !flags.shell_mode {
+        // An explicit path runs as a program; fail clearly here rather than in `dlx`.
+        if let Err(error) = vpx_script::check_explicit_program(cmd_spec, cwd) {
+            output::error(&format!("vpx: {}", error.error));
+            if let Some(note) = &error.note {
+                output::note(note);
+            }
+            return 1;
+        }
+
         // 1. Try local node_modules/.bin
         if let Some(local_bin) = find_local_binary(cwd, &cmd_name) {
             tracing::debug!("vpx: found local binary at {}", local_bin.as_path().display());

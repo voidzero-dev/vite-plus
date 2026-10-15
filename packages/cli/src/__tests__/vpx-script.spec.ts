@@ -15,6 +15,7 @@ import {
   SUPPORTED_NODE_RANGE,
 } from '../script-hooks.ts';
 import {
+  checkExplicitProgram,
   commandName,
   detectScript,
   hasVersionSpec,
@@ -55,6 +56,14 @@ const detectionTable: {
   scriptExtensions: string[];
   nodeOptionsWithValue: string[];
   packageSpecs: { spec: string; versioned: boolean; command: string }[];
+  explicitPrograms: {
+    name: string;
+    files?: Record<string, string>;
+    executable?: string[];
+    token: string;
+    unixOnly?: boolean;
+    expect: 'ok' | { error: string; note?: string };
+  }[];
   cases: DetectionCase[];
 } = JSON.parse(
   readFileSync(
@@ -121,6 +130,23 @@ function runPackage(args: string[], cwd: string) {
   return packageInvocation(flags, positional as [string, ...string[]], cwd);
 }
 
+describe('checkExplicitProgram', () => {
+  // The global CLI runs the same cases (`vpx_script.rs`).
+  it.each(detectionTable.explicitPrograms)(
+    '$name',
+    ({ files = {}, executable = [], token, unixOnly, expect: expected }) => {
+      if (unixOnly && process.platform === 'win32') {
+        return;
+      }
+      const cwd = project(files);
+      for (const file of executable) {
+        chmodSync(path.join(cwd, file), 0o755);
+      }
+      expect(checkExplicitProgram(token, cwd)).toEqual(expected === 'ok' ? undefined : expected);
+    },
+  );
+});
+
 describe('packageInvocation', () => {
   const bin =
     process.platform === 'win32' ? 'node_modules/.bin/eslint.cmd' : 'node_modules/.bin/eslint';
@@ -133,18 +159,32 @@ describe('packageInvocation', () => {
     },
   );
 
-  it('runs the nearest binary in node_modules/.bin by its path, from a parent directory too', () => {
+  it('runs the nearest binary in node_modules/.bin, from a parent directory too', () => {
     const dir = project({ [bin]: '', 'packages/app/src/.keep': '', [`packages/lib/${bin}`]: '' });
+    chmodSync(path.join(dir, bin), 0o755);
+    chmodSync(path.join(dir, 'packages/lib', bin), 0o755);
     expect(runPackage(['eslint', '.'], path.join(dir, 'packages/app/src'))).toEqual({
-      command: 'exec',
-      args: [path.join(dir, bin), '.'],
+      command: 'run',
+      file: path.join(dir, bin),
+      args: ['.'],
     });
     // `packages/lib` has no package.json, so `vp exec eslint` would not search it.
     expect(runPackage(['eslint'], path.join(dir, 'packages/lib'))).toEqual({
-      command: 'exec',
-      args: [path.join(dir, 'packages/lib', bin)],
+      command: 'run',
+      file: path.join(dir, 'packages/lib', bin),
+      args: [],
     });
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'reports an installed binary that is not executable',
+    () => {
+      expect(runPackage(['eslint'], project({ [bin]: '' }))).toEqual({
+        error: `'${bin}' is not executable`,
+        note: `Reinstall dependencies with \`vp install\`, or make it executable with \`chmod +x ${bin}\`.`,
+      });
+    },
+  );
 
   it('reports a binary that is not installed instead of downloading it', () => {
     expect(runPackage(['eslint', '.'], project({}))).toEqual({
@@ -162,21 +202,15 @@ describe('packageInvocation', () => {
     });
   });
 
-  it('runs an existing file with exec and a local package directory with dlx', () => {
+  it('runs an existing executable file and hands a local package directory to dlx', () => {
     const dir = project({ 'deploy.sh': '', 'tools/package.json': '{}' });
     chmodSync(path.join(dir, 'deploy.sh'), 0o755);
     expect(runPackage(['./deploy.sh', 'x'], dir)).toEqual({
-      command: 'exec',
-      args: ['./deploy.sh', 'x'],
+      command: 'run',
+      file: path.join(dir, 'deploy.sh'),
+      args: ['x'],
     });
     expect(runPackage(['./tools'], dir)).toEqual({ command: 'dlx', args: ['./tools'] });
-  });
-
-  it.skipIf(process.platform === 'win32')('reports a file that is not executable', () => {
-    expect(runPackage(['./notes.txt'], project({ 'notes.txt': '' }))).toEqual({
-      error: "'./notes.txt' is not executable",
-      note: 'Make it executable with `chmod +x ./notes.txt`.',
-    });
   });
 });
 
