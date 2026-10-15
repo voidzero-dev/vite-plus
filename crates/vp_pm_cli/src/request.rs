@@ -1420,7 +1420,7 @@ mod tests {
         // Calculate expected SHA1
         let mut hasher = Sha1::new();
         hasher.update(content);
-        let expected_hash = vt_str::format!("sha1.{:x}", hasher.finalize());
+        let expected_hash = vt_str::format!("sha1.{}", hex::encode(hasher.finalize()));
 
         // Test successful verification
         let result = verify_file_hash(&test_file, &expected_hash).await;
@@ -1480,7 +1480,7 @@ mod tests {
         // Calculate expected SHA224
         let mut hasher = Sha224::new();
         hasher.update(content);
-        let expected_hash = vt_str::format!("sha224.{:x}", hasher.finalize());
+        let expected_hash = vt_str::format!("sha224.{}", hex::encode(hasher.finalize()));
 
         // Test successful verification
         let result = verify_file_hash(&test_file, &expected_hash).await;

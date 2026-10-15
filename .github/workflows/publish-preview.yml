@@ -200,6 +200,10 @@ jobs:
             packages/cli
             packages/core
             packages/prompts
+            packages/create-vite-plus
+          # Must match the upload step in publish-preview-register.yml, which
+          # validates the same batch from main.
+          workspace-packages: vite-plus,create-vite-plus,@voidzero-dev/vite-plus-*
 
       - name: Upload packed packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

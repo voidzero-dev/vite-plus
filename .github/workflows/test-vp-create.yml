@@ -74,11 +74,11 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
-          # The CI CLI build caches these release dependencies and saves the cache.
+          # Reuse the CLI build job's Cargo cache for the ci profile.
           save-cache: false
-          cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu
+          cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu-ci
 
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
@@ -91,6 +91,7 @@ jobs:
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
+          profile: ci
           target: x86_64-unknown-linux-gnu
 
       - name: Pack packages into tgz

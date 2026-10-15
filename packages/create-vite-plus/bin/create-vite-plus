@@ -1,0 +1,11 @@
+#!/usr/bin/env node
+
+import module from 'node:module';
+if (module.enableCompileCache) {
+  module.enableCompileCache();
+}
+// `pnpm create vite-plus <args>` runs this bin with `<args>`; the CLI entry
+// dispatches on the first argument, so this becomes `vp create <args>`.
+process.argv.splice(2, 0, 'create');
+// Dynamic import so it runs AFTER enableCompileCache and the argv rewrite.
+await import('vite-plus/bin');

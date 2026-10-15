@@ -205,6 +205,15 @@ jobs:
           "vite-plus@${VERSION}"
           "@voidzero-dev/vite-plus-prompts@${VERSION}"
 
+      # create-vite-plus pins vite-plus via workspace:* (rewritten to this exact
+      # version), so it publishes only after vite-plus is installable.
+      - name: Publish create-vite-plus
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "create-vite-plus@${VERSION}"
+          --
+          pnpm publish --filter=./packages/create-vite-plus --tag latest --access public --no-git-checks
+
       - name: Create release body
         env:
           REPOSITORY: ${{ github.repository }}
@@ -219,6 +228,7 @@ jobs:
 
           - \`@voidzero-dev/vite-plus-core@${VERSION}\`
           - \`vite-plus@${VERSION}\`
+          - \`create-vite-plus@${VERSION}\`
 
           ### Installation
 
@@ -375,6 +385,7 @@ jobs:
             **Published Packages:**
             • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
             • vite-plus@${{ env.VERSION }}
+            • create-vite-plus@${{ env.VERSION }}
 
             **Docker (GHCR):**
             • `docker pull ${{ env.IMAGE }}:${{ env.VERSION }}`

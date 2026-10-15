@@ -214,6 +214,7 @@ Use these when you need lower-level package-manager behavior.
   - **Inspection**: `view`, `search`, `licenses`, `audit`, `fund`, `ping`
   - **Authentication and access**: `login`, `logout`, `whoami`, `token`, `owner`
   - **Configuration**: `config`, `cache`
+  - **Package manifest**: `pkg get`, `pkg set`, `pkg delete`, `pkg fix`
 
   Command support depends on the package manager and its version. Run `vp pm --help` to list commands or `vp pm <command> --help` for available options.
 
@@ -224,6 +225,22 @@ vp pm config get registry
 vp pm cache clean -- --force
 vp pm audit --json
 ```
+
+#### Package manifest
+
+`vp pm pkg` reads and updates fields in `package.json` using the detected package manager.
+
+```bash
+vp pm pkg get name
+vp pm pkg set scripts.build="vite build"
+vp pm pkg set private=true --json
+vp pm pkg delete scripts.build
+vp pm pkg fix
+```
+
+npm supports `get`, `set`, and `delete` from 7.20.0 and `fix` from 9.8.0. pnpm supports all four commands from 11.3.0, and Bun supports them through `bun pm pkg` from 1.2.19. Yarn and unsupported versions print a warning and exit successfully without changing the manifest, matching `vp pm patch`.
+
+Native behavior is preserved. For example, npm returns JSON from `get`, while pnpm prints a single string value without quotes by default. Use `--json` to request JSON output or to parse values passed to `set` as JSON. Additional native options can be passed after `--`. The corrections made by `fix` depend on the package manager.
 
 #### Staged publishing
 
