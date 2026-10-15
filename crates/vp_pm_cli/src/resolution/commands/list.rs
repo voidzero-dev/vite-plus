@@ -181,10 +181,6 @@ mod tests {
         test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
-    fn list_args(pattern: Option<&str>) -> ListArgs {
-        ListArgs { pattern: pattern.map(ToString::to_string), ..Default::default() }
-    }
-
     #[test]
     fn test_parser_accepts_short_dev_and_global_flags() {
         let args = parse_args::<ListArgs>(["react", "-D", "-g"]).unwrap();
@@ -664,11 +660,5 @@ mod tests {
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["list", "--json", "--long", "--parseable"]);
-    }
-
-    #[test]
-    fn list_args_helper_keeps_pattern() {
-        assert_eq!(list_args(Some("react")).pattern, Some("react".to_string()));
-        assert_eq!(list_args(None).pattern, None);
     }
 }
