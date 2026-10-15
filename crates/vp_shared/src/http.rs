@@ -72,6 +72,11 @@ pub const fn request_timeout() -> Duration {
 /// retries (multiple minutes).
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Maximum wait for the next response bytes. This restarts after each read,
+/// so slow downloads can use their full total budget while stalled streams
+/// fail soon enough for callers to retry.
+const READ_TIMEOUT: Duration = Duration::from_secs(20);
+
 /// Default per-request timeout for large file downloads (Node.js runtimes,
 /// package-manager tarballs). Those archives are tens of megabytes, so on
 /// slow or flaky connections the shared [`REQUEST_TIMEOUT`] aborts an
@@ -219,8 +224,10 @@ fn build_with(
     insecure: bool,
     follow_redirects: bool,
 ) -> Result<reqwest::Client, reqwest::Error> {
-    let mut builder =
-        reqwest::Client::builder().timeout(REQUEST_TIMEOUT).connect_timeout(CONNECT_TIMEOUT);
+    let mut builder = reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(READ_TIMEOUT);
     if !extra_certs.is_empty() {
         builder = builder.tls_certs_merge(extra_certs);
     }
@@ -293,6 +300,68 @@ mod tests {
     use std::ffi::OsString;
 
     use super::*;
+
+    /// Send a body one byte at a time to distinguish idle and total timeouts.
+    async fn serve_slow_body(
+        chunks: usize,
+        interval: Duration,
+    ) -> (String, tokio::task::JoinHandle<()>) {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 1024];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = stream.read(&mut buffer).await.unwrap();
+                assert_ne!(count, 0);
+                request.extend_from_slice(&buffer[..count]);
+            }
+            stream
+                .write_all(
+                    format!("HTTP/1.1 200 OK\r\nContent-Length: {chunks}\r\n\r\n").as_bytes(),
+                )
+                .await
+                .unwrap();
+            for index in 0..chunks {
+                if index > 0 {
+                    tokio::time::sleep(interval).await;
+                }
+                stream.write_all(b"x").await.unwrap();
+            }
+        });
+        (url, server)
+    }
+
+    #[tokio::test]
+    async fn stalled_body_times_out_before_the_total_download_budget() {
+        crate::ensure_tls_provider();
+        let client = build_with(Vec::new(), false, false).unwrap();
+        let (url, server) = serve_slow_body(2, READ_TIMEOUT * 3).await;
+        let response = client.get(url).timeout(DEFAULT_DOWNLOAD_TIMEOUT).send().await.unwrap();
+        let result = tokio::time::timeout(READ_TIMEOUT * 2, response.bytes()).await;
+        server.abort();
+
+        let error = result.expect("a stalled body must hit the read timeout").unwrap_err();
+        assert!(error.is_timeout(), "{error}");
+    }
+
+    #[tokio::test]
+    async fn progressing_body_can_take_longer_than_the_read_timeout() {
+        crate::ensure_tls_provider();
+        let client = build_with(Vec::new(), false, true).unwrap();
+        let (url, server) = serve_slow_body(4, READ_TIMEOUT / 2).await;
+        let response = client.get(url).timeout(DEFAULT_DOWNLOAD_TIMEOUT).send().await.unwrap();
+        let result = tokio::time::timeout(READ_TIMEOUT * 3, response.bytes()).await;
+        server.abort();
+
+        assert_eq!(result.unwrap().unwrap().as_ref(), b"xxxx");
+    }
 
     /// Valid PEM, invalid DER: `from_pem_bundle` accepts it, `build` rejects
     /// it. Portable way into the build-failure branch, unlike an empty trust

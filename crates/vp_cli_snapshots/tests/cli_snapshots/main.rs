@@ -844,10 +844,6 @@ fn compose_path_env(tool_dirs: &[PathBuf]) -> OsString {
 fn baseline_env(case_home: &CaseHome, install: &CaseInstall) -> BTreeMap<String, OsString> {
     let mut env = case_home.base_env(install.path_env.clone());
     env.insert("VP_EMIT_MILESTONES".into(), "1".into());
-    // Leave room for the initial download and three retries inside the 120s
-    // step budget. The production 10-minute timeout would let one stalled
-    // runtime or package-manager transfer consume the whole step.
-    env.insert("VP_DOWNLOAD_TIMEOUT".into(), "20".into());
     // Legacy-runner parity: `vp migrate` fixtures skip real dependency
     // installs (slow, network-bound). Cases that want real installs unset
     // this via `unset-env`.
