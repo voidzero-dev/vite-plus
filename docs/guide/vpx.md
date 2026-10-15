@@ -75,7 +75,7 @@ A missing path, or a missing name with a TypeScript extension, is an error: `vpx
 ### Supported Syntax
 
 - TypeScript syntax that Node.js type stripping rejects: enums, namespaces, parameter properties, and JSX
-- Decorators with `"experimentalDecorators": true`, including `emitDecoratorMetadata`; standard decorators are not supported yet
+- Decorators with `"experimentalDecorators": true`, including `emitDecoratorMetadata`; standard decorators and `accessor` fields are not supported yet
 - tsconfig `paths` for `import`, `.js` imports that point at `.ts` files, and extensionless imports
 - ESM and CommonJS, including `require()` of `.ts` files; a `.cts` file is CommonJS, so it uses `import x = require('...')` and `export =`, and `import`/`export` declarations there fail with an error that suggests renaming the file to `.mts`
 - TypeScript published in `node_modules`
@@ -162,10 +162,12 @@ Most scripts that run with tsx run with `vpx` unchanged. These differences can n
 - **`paths` outside `include`**: tsx resolves tsconfig `paths` for every file. `vpx` applies them only to files a tsconfig includes, so a script in `scripts/` next to a root tsconfig with `"include": ["src"]` cannot resolve its aliases. Add the directory to `include`, or pass `--tsconfig` (see [tsconfig](#tsconfig)).
 - **JSX default**: without a tsconfig `jsx` option, tsx compiles JSX to `React.createElement()`, which needs `React` in scope, while `vpx` uses the automatic runtime. Set `"jsx": "react"` to keep the classic output. Because of its default, tsx also ignores a lone `/** @jsxImportSource … */` comment unless the file has `/** @jsxRuntime automatic */` or the tsconfig sets `"jsx": "react-jsx"`; `vpx` applies the comment on its own.
 - **`.cts` files with `import` or `export`**: tsx compiles them to CommonJS, and `vpx` reports an error. Rename the file to `.mts`, or write it with `import x = require()` and `export =`.
-- **`import` in a CommonJS package**: in a package without `"type": "module"`, tsx compiles a `.ts` file that uses `import` or `export` to CommonJS, so `__filename`, `__dirname`, and `require` still work. `vpx` runs such a file as an ES module, as Node.js does, so they are not defined. Use `import.meta.filename`, `import.meta.dirname`, and `createRequire(import.meta.url)` instead.
+- **`import` in a CommonJS package**: in a package without `"type": "module"`, tsx compiles a `.ts` or `.js` file that uses `import`, `export`, or `import.meta` to CommonJS, so `__filename`, `__dirname`, and `require` still work. `vpx` runs such a file as an ES module, as Node.js does, so they are not defined, and a default import of it from an ES module gets its default export rather than the whole module. Use `import.meta.filename`, `import.meta.dirname`, and `createRequire(import.meta.url)` instead.
 - **`require()` resolution**: tsx maps `require('./a.js')` to `a.ts` and applies tsconfig `paths` to `require()`. `vpx` resolves `require()` as Node.js does, so write the `.ts` extension, and use `paths` aliases only with `import`.
+- **`.js` next to `.ts`**: when `a.js` and `a.ts` are both present, tsx runs `a.ts` for `./a.js` and `./a`, and `vpx` runs `a.js`. Delete compiled output that sits next to its source, or import `./a.ts`.
+- **Signals**: tsx turns `SIGINT` and `SIGTERM` into exit codes 130 and 143 and runs `process.on('exit')` handlers first. Under `vpx` the signal ends the script, as it does under Node.js, so clean up in a `process.on('SIGINT')` or `process.on('SIGTERM')` handler.
 - **Node.js version**: `vpx` needs Node.js `^22.18.0 || ^24.11.0 || >=26.0.0`, while tsx also runs on older releases.
-- **Watch mode**: `tsx watch` becomes `vpx --watch`, which is Node.js `--watch`. It has no `--include`, `--exclude`, or `--clear-screen` options and no rerun on Enter; use `--watch-path` to watch more files.
+- **Watch mode**: `tsx watch` becomes `vpx --watch`, which is Node.js `--watch`. It has no `--include`, `--exclude`, or `--clear-screen` options and no rerun on Enter; use `--watch-path` to watch more files. Node.js waits for a script that ignores `SIGTERM` to exit before it restarts, where tsx kills it after a few seconds; pass `--watch-kill-signal=SIGKILL` to restart at once.
 - **Eval and REPL**: `vpx --eval` and the REPL do not transform TypeScript.
 - **`node --import tsx`**: `vpx` has no equivalent for tools that must start `node` themselves.
 - **Other loaders**: remove `--import tsx` from `NODE_OPTIONS`. Two loaders registered together compete for the same files.
