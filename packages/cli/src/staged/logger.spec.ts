@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vite-plus/test';
+import type { Logger } from 'lint-staged';
+import { describe, expect, it, vi, type Mocked } from 'vite-plus/test';
 
 import { createStagedLogger } from './logger.ts';
 
-function setup() {
+function setup(): { output: Mocked<Logger>; logger: Logger } {
   const output = { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
   return { output, logger: createStagedLogger(output) };
 }

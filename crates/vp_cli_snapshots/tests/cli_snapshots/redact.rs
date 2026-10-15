@@ -706,28 +706,7 @@ pub fn redact_output(
     output = YARN_LOCKFILE_CHECKSUM_RE.replace_all(&output, "${1}<hash>").into_owned();
     output = STASH_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
 
-    if STAGED_DEBUG_BANNER_RE.is_match(&output) {
-        output = STAGED_DEBUG_BANNER_RE
-            .replace_all(&output, "${1}<version>${2}(<platform>)")
-            .into_owned();
-        output = STAGED_GIT_BUILD_RE
-            .replace_all(&output, "lint-staged: git version <git-build> +<duration>")
-            .into_owned();
-        output = STAGED_ARG_LENGTH_RE.replace_all(&output, "${1}<n>${2}").into_owned();
-        output = STAGED_BACKUP_ID_RE.replace_all(&output, "${1}<id>${2}").into_owned();
-        if let Some(captures) = STAGED_BACKUP_HASH_RE.captures(&output) {
-            output = output.replace(&captures[1], "<hash>");
-        }
-        output = STAGED_PARALLEL_READS_RE
-            .replace_all(&output, |captures: &regex::Captures| {
-                let mut lines = captures[0].lines().collect::<Vec<_>>();
-                lines.sort_by_key(|line| {
-                    (line.split('`').nth(1).unwrap_or(""), !line.contains(": Reading file "))
-                });
-                format!("{}\n", lines.join("\n"))
-            })
-            .into_owned();
-    }
+    output = redact_staged_debug(output);
 
     // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
     // log name, live spinner frames, and timing-dependent pnpm/Bun diagnostics
@@ -789,6 +768,36 @@ pub fn redact_output(
     }
 
     output
+}
+
+#[expect(clippy::disallowed_types, reason = "String required by regex replace_all API")]
+fn redact_staged_debug(mut output: String) -> String {
+    if !STAGED_DEBUG_BANNER_RE.is_match(&output) {
+        return output;
+    }
+
+    output =
+        STAGED_DEBUG_BANNER_RE.replace_all(&output, "${1}<version>${2}(<platform>)").into_owned();
+    output = STAGED_GIT_BUILD_RE
+        .replace_all(&output, "lint-staged: git version <git-build> +<duration>")
+        .into_owned();
+    output = STAGED_ARG_LENGTH_RE.replace_all(&output, "${1}<n>${2}").into_owned();
+    output = STAGED_BACKUP_ID_RE.replace_all(&output, "${1}<id>${2}").into_owned();
+    if let Some(captures) = STAGED_BACKUP_HASH_RE.captures(&output) {
+        output = output.replace(&captures[1], "<hash>");
+    }
+
+    STAGED_PARALLEL_READS_RE
+        .replace_all(&output, |captures: &regex::Captures| {
+            let mut lines = captures[0].lines().collect::<Vec<_>>();
+            lines.sort_by_key(|line| {
+                let path = line.split('`').nth(1).unwrap_or("");
+                let is_result = !line.contains(": Reading file ");
+                (path, is_result)
+            });
+            format!("{}\n", lines.join("\n"))
+        })
+        .into_owned()
 }
 
 /// Masks the bare semver a version-probe step (`npm --version` /
