@@ -47,18 +47,32 @@ provider.providerFactory = (project) => {
   };
   return instance;
 };
-const runner = await createVitest({ config: false, watch: false, reporters: [] }, defineConfig({ test: {
-  include: ['browser.test.js'],
-  browser: {
-    enabled: true, headless: true, provider, instances: [{ browser: 'chrome' }],
-    viewport: { width: 800, height: 600 },
-    commands: { inspectLocator(context, locator) {
-      assert.equal(typeof locator, 'object');
-      return { ...locator, session: typeof context.sessionId === 'string' && context.sessionId.length > 0 };
-    } },
+const runner = await createVitest({ config: false, watch: false, reporters: [] }, defineConfig({
+  plugins: [{
+    name: 'browser-server-port',
+    // Vitest replaces a plain api.port: 0 with its default. Override it last.
+    enforce: 'post',
+    config: {
+      order: 'post',
+      handler(config) {
+        config.test.api.port = 0;
+      },
+    },
+  }],
+  test: {
+    include: ['browser.test.js'],
+    browser: {
+      enabled: true, headless: true, provider, instances: [{ browser: 'chrome' }],
+      viewport: { width: 800, height: 600 },
+      commands: { inspectLocator(context, locator) {
+        assert.equal(typeof locator, 'object');
+        return { ...locator, session: typeof context.sessionId === 'string' && context.sessionId.length > 0 };
+      } },
+    },
   },
-} }));
+}));
 try {
+  assert.equal(runner.projects[0].config.api.port, 0);
   const result = await runner.start();
   assert.equal(result.unhandledErrors.length, 0, inspect(result.unhandledErrors));
   assert.equal(runner.state.getCountOfFailedTests(), 0, JSON.stringify(runner.state.getFiles().flatMap((file) => [file.result, ...file.tasks.map((task) => task.result)])));

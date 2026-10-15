@@ -10,6 +10,18 @@ export const executablePath = existsSync('chromium-path.json')
 
 export function project(name, browser = true) {
   return {
+    plugins: [{
+      name: 'browser-server-port',
+      // Each project needs its own hook, even with extends: true.
+      // Vitest replaces a plain api.port: 0 with its default. Override it last.
+      enforce: 'post',
+      config: {
+        order: 'post',
+        handler(config) {
+          config.test.api.port = 0;
+        },
+      },
+    }],
     define: {
       __VP_STRING_DEFINE__: JSON.stringify('/messages?locale="en"'),
       __VP_FALSE_DEFINE__: 'false',
@@ -43,7 +55,7 @@ export function configFor(name) {
   switch (name) {
     case 'injected-hook': {
       const config = project('root');
-      config.plugins = [{
+      config.plugins.push({
         name: 'inject-browser-project',
         configureVitest: {
           order: 'pre',
@@ -56,7 +68,7 @@ export function configFor(name) {
             await injectTestProjects({ extends: false, ...injected });
           },
         },
-      }];
+      });
       return config;
     }
     case 'injected': return project('root');
@@ -78,15 +90,18 @@ export function configFor(name) {
     case 'inherited': {
       const config = project('root');
       config.test.projects = [
-        { test: project('shared').test },
-        { extends: true, test: project('inherited').test },
+        { plugins: config.plugins, test: project('shared').test },
+        { extends: true, plugins: config.plugins, test: project('inherited').test },
       ];
       return config;
     }
     case 'separate': {
       const config = project('root');
       config.test.sharedViteServer = false;
-      config.test.projects = [{ test: project('first').test }, { test: project('second').test }];
+      config.test.projects = [
+        { plugins: config.plugins, test: project('first').test },
+        { plugins: config.plugins, test: project('second').test },
+      ];
       return config;
     }
     case 'independent': return {

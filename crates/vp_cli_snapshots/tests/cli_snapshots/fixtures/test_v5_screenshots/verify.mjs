@@ -38,6 +38,7 @@ for (const phase of ['record', 'compare', 'failure']) {
     },
   }));
   try {
+    assert.equal(runner.projects[0].config.api.port, 0);
     const result = await runner.start();
     assert.equal(result.unhandledErrors.length, 0, JSON.stringify(result.unhandledErrors));
     assert.equal(runner.state.getFiles().length, 1);
