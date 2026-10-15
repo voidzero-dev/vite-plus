@@ -14,7 +14,7 @@ The other commands give stricter control over where a binary comes from:
 - [`vp exec`](#vp-exec) runs a command from local `node_modules/.bin` directories, falling back to `PATH`.
 - [`vp dlx`](#vp-dlx) runs a package binary without adding it as a dependency.
 
-`vpx -v` or `vpx --version` prints the Vite+ version, like `vp --version`.
+`vpx -v` or `vpx --version` prints the Vite+ version, like `vp --version`. Without the global CLI, the project-local `vpx` prints only its own `vite-plus` version.
 
 ## Running Package Binaries
 
@@ -61,11 +61,11 @@ vpx --tsconfig tsconfig.scripts.json ./tools/gen.ts
 
 `vpx` runs its argument as a file when it is:
 
-- a path (starting with `./`, `../`, or `/`) ending in `.ts`, `.mts`, `.cts`, `.tsx`, `.js`, `.mjs`, `.cjs`, or `.jsx`
+- a path (starting with `./`, `../`, or `/`; on Windows also `.\`, `..\`, a drive such as `C:\`, or `\\`) ending in `.ts`, `.mts`, `.cts`, `.tsx`, `.js`, `.mjs`, `.cjs`, or `.jsx`
 - a name with one of those extensions that exists as a file, such as `scripts/seed.ts`
-- a path to an executable file whose shebang runs `vpx` (see [Shebang Scripts](#shebang-scripts))
+- a path to a file whose shebang runs `vpx` (see [Shebang Scripts](#shebang-scripts))
 
-A missing path, or a missing name with a TypeScript extension, is an error: `vpx` never downloads a package for it. A name with a JavaScript extension that is not a file, such as `highlight.js`, runs the package of that name.
+A missing path, or a missing name with a TypeScript extension, is an error: `vpx` never downloads a package for it. After Node.js options, such as `vpx --watch seed.ts`, only a missing path is reported by `vpx`; Node.js reports a missing name itself. A name with a JavaScript extension that is not a file, such as `highlight.js`, runs the package of that name.
 
 ### Supported Syntax
 
