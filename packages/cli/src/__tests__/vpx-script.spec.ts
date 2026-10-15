@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -54,6 +54,7 @@ interface DetectionCase {
 const detectionTable: {
   scriptExtensions: string[];
   nodeOptionsWithValue: string[];
+  packageSpecs: { spec: string; versioned: boolean; command: string }[];
   cases: DetectionCase[];
 } = JSON.parse(
   readFileSync(
@@ -124,26 +125,24 @@ describe('packageInvocation', () => {
   const bin =
     process.platform === 'win32' ? 'node_modules/.bin/eslint.cmd' : 'node_modules/.bin/eslint';
 
-  it('parses package specs the way the global CLI does', () => {
-    expect(['eslint', 'eslint@9', '@vue/cli', '@vue/cli@5', '@scope'].map(hasVersionSpec)).toEqual([
-      false,
-      true,
-      false,
-      true,
-      false,
-    ]);
-    expect(['eslint@9', '@vue/cli@5.0.0', 'create-vue'].map(commandName)).toEqual([
-      'eslint',
-      'cli',
-      'create-vue',
-    ]);
-  });
+  it.each(detectionTable.packageSpecs)(
+    'parses $spec the way the global CLI does',
+    ({ spec, versioned, command }) => {
+      expect(hasVersionSpec(spec)).toBe(versioned);
+      expect(commandName(spec)).toBe(command);
+    },
+  );
 
-  it('runs a binary installed in node_modules/.bin, from a parent directory too', () => {
-    const dir = project({ [bin]: '', 'packages/app/.keep': '' });
-    expect(runPackage(['eslint', '.'], path.join(dir, 'packages/app'))).toEqual({
+  it('runs the nearest binary in node_modules/.bin by its path, from a parent directory too', () => {
+    const dir = project({ [bin]: '', 'packages/app/src/.keep': '', [`packages/lib/${bin}`]: '' });
+    expect(runPackage(['eslint', '.'], path.join(dir, 'packages/app/src'))).toEqual({
       command: 'exec',
-      args: ['eslint', '.'],
+      args: [path.join(dir, bin), '.'],
+    });
+    // `packages/lib` has no package.json, so `vp exec eslint` would not search it.
+    expect(runPackage(['eslint'], path.join(dir, 'packages/lib'))).toEqual({
+      command: 'exec',
+      args: [path.join(dir, 'packages/lib', bin)],
     });
   });
 
@@ -165,11 +164,19 @@ describe('packageInvocation', () => {
 
   it('runs an existing file with exec and a local package directory with dlx', () => {
     const dir = project({ 'deploy.sh': '', 'tools/package.json': '{}' });
+    chmodSync(path.join(dir, 'deploy.sh'), 0o755);
     expect(runPackage(['./deploy.sh', 'x'], dir)).toEqual({
       command: 'exec',
       args: ['./deploy.sh', 'x'],
     });
     expect(runPackage(['./tools'], dir)).toEqual({ command: 'dlx', args: ['./tools'] });
+  });
+
+  it.skipIf(process.platform === 'win32')('reports a file that is not executable', () => {
+    expect(runPackage(['./notes.txt'], project({ 'notes.txt': '' }))).toEqual({
+      error: "'./notes.txt' is not executable",
+      note: 'Make it executable with `chmod +x ./notes.txt`.',
+    });
   });
 });
 

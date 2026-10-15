@@ -3,7 +3,7 @@
  * `crates/vp_global_cli/src/commands/vpx_script.rs`; keep the two in sync.
  */
 
-import { closeSync, openSync, readSync, statSync } from 'node:fs';
+import { accessSync, closeSync, constants, openSync, readSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 export const SCRIPT_EXTENSIONS = ['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
@@ -211,8 +211,17 @@ function checkScriptAfterOptions(token: string, cwd: string): void {
     SCRIPT_EXTENSIONS.some((extension) => token.endsWith(extension)) &&
     !isFile(path.resolve(cwd, token))
   ) {
-    throw new ScriptError(`Script not found: ${token}`);
+    throw missingScript(token, path.resolve(cwd, token));
   }
+}
+
+/** The error for a script path that is not a file. */
+function missingScript(token: string, file: string): ScriptError {
+  return new ScriptError(
+    statSync(file, { throwIfNoEntry: false })?.isDirectory()
+      ? `Script is a directory: ${token}`
+      : `Script not found: ${token}`,
+  );
 }
 
 function isScript(token: string, cwd: string): boolean {
@@ -223,7 +232,7 @@ function isScript(token: string, cwd: string): boolean {
       return true;
     }
     if (isExplicitPath(token) || TS_EXTENSIONS.has(extension)) {
-      throw new ScriptError(`Script not found: ${token}`);
+      throw missingScript(token, file);
     }
     return false;
   }
@@ -297,16 +306,34 @@ export function commandName(spec: string): string {
   return spec.split('@')[0];
 }
 
-/** Whether `name` is installed in a `node_modules/.bin` from `cwd` up (`.cmd` on Windows). */
-export function hasLocalBin(name: string, cwd: string): boolean {
+/**
+ * The nearest `node_modules/.bin/<name>` from `cwd` up (`.cmd` on Windows), like the
+ * global CLI's `find_local_binary`. `vp exec` gets this path, not the name: it only
+ * searches the package and workspace roots and then `PATH`, which can pick another
+ * binary, or none.
+ */
+export function findLocalBin(name: string, cwd: string): string | undefined {
   const file = process.platform === 'win32' ? `${name}.cmd` : name;
   for (let dir = cwd; ; dir = path.dirname(dir)) {
-    if (isFile(path.join(dir, 'node_modules', '.bin', file))) {
-      return true;
+    const bin = path.join(dir, 'node_modules', '.bin', file);
+    if (isFile(bin)) {
+      return bin;
     }
     if (path.dirname(dir) === dir) {
-      return false;
+      return undefined;
     }
+  }
+}
+
+function isExecutable(file: string): boolean {
+  if (process.platform === 'win32') {
+    return true;
+  }
+  try {
+    accessSync(file, constants.X_OK);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -316,10 +343,10 @@ export type PackageInvocation =
 
 /**
  * How the project-local bin runs `vpx <pkg> [args...]` with this package's `vp`. A
- * binary installed in `node_modules/.bin`, or an existing file, runs with `vp exec`; a
- * versioned package, `--package`, `--shell-mode`, or a local package directory runs
- * with `vp dlx`. Global packages and `PATH` are not searched, so a binary that is not
- * installed is an error rather than a download.
+ * binary installed in `node_modules/.bin`, or an existing executable file, runs with
+ * `vp exec`; a versioned package, `--package`, `--shell-mode`, or a local package
+ * directory runs with `vp dlx`. Global packages and `PATH` are not searched, so a
+ * binary that is not installed is an error rather than a download.
  */
 export function packageInvocation(
   flags: VpxFlags,
@@ -340,13 +367,22 @@ export function packageInvocation(
     };
   }
   if (isExplicitPath(spec)) {
-    return isFile(path.resolve(cwd, spec))
-      ? { command: 'exec', args: [spec, ...rest] }
-      : { command: 'dlx', args: [...silent, spec, ...rest] };
+    const file = path.resolve(cwd, spec);
+    if (!isFile(file)) {
+      return { command: 'dlx', args: [...silent, spec, ...rest] };
+    }
+    if (!isExecutable(file)) {
+      return {
+        error: `'${spec}' is not executable`,
+        note: `Make it executable with \`chmod +x ${spec}\`.`,
+      };
+    }
+    return { command: 'exec', args: [spec, ...rest] };
   }
   const name = commandName(spec);
-  if (hasLocalBin(name, cwd)) {
-    return { command: 'exec', args: [name, ...rest] };
+  const bin = findLocalBin(name, cwd);
+  if (bin) {
+    return { command: 'exec', args: [bin, ...rest] };
   }
   return {
     error: `'${name}' is not installed in node_modules`,

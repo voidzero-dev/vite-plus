@@ -100,7 +100,7 @@ Scripts can use `vpx` as their interpreter. Make the file executable and keep it
 
 ### In `package.json` Scripts
 
-The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "vpx ./scripts/seed.ts"` works in `package.json` scripts without the global CLI.
+The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "vpx ./scripts/seed.ts"` works in `package.json` scripts without the global CLI. It runs them on the Node.js that started it, which inside `vp run` and package manager scripts is the project's version.
 
 ### tsconfig
 
