@@ -112,6 +112,14 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_script_ipc"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "ipc"
+comment = "An IPC channel from the process that starts vpx reaches the script in both directions, including messages sent right before it exits."
+steps = [["node", "parent.mjs"]]
+
+[[case]]
 name = "vpx_package_installed"
 vp = ["local", "global"]
 skip-platforms = ["windows"]

@@ -11,6 +11,7 @@
  * process loads the binding through `script-preload.cjs`.
  */
 
+import type { Serializable } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { constants } from 'node:os';
@@ -56,9 +57,47 @@ function prependNodeModulesBins(cwd: string, pathValue: string | undefined): str
 /**
  * Run `command` with inherited stdio and exit the way it exited. cross-spawn runs a
  * Windows `.cmd` shim from `node_modules/.bin`, which Node.js refuses to spawn directly.
+ *
+ * With `relayIpc`, an IPC channel this bin was started with (by `fork()`, or with an
+ * `ipc` stdio entry) is relayed to the child in both directions, as tsx does, so
+ * `process.send()` in a script reaches the process that started `vpx`. Messages use the
+ * default JSON serialization.
  */
-function runAndExit(command: string, args: string[], env: NodeJS.ProcessEnv): void {
-  const child = spawn(command, args, { stdio: 'inherit', env });
+function runAndExit(
+  command: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  { relayIpc = false } = {},
+): void {
+  const ipc = relayIpc && process.send !== undefined;
+  const child = spawn(command, args, {
+    stdio: ipc ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit',
+    env,
+  });
+  // Messages the child sent before exiting are still being relayed; exit after them.
+  let pendingSends = 0;
+  let exitAfterSends: (() => void) | undefined;
+  if (ipc) {
+    child.on('message', (message) => {
+      pendingSends++;
+      process.send!(message, undefined, undefined, () => {
+        pendingSends--;
+        if (pendingSends === 0) {
+          exitAfterSends?.();
+        }
+      });
+    });
+    process.on('message', (message) => {
+      if (child.connected) {
+        child.send(message as Serializable);
+      }
+    });
+    process.on('disconnect', () => {
+      if (child.connected) {
+        child.disconnect();
+      }
+    });
+  }
   // Terminal Ctrl+C reaches the child through the process group; wait for it.
   process.on('SIGINT', () => {});
   for (const signal of ['SIGTERM', 'SIGHUP'] as const) {
@@ -68,13 +107,21 @@ function runAndExit(command: string, args: string[], env: NodeJS.ProcessEnv): vo
     errorMsg(`vpx: Failed to run ${command}: ${error.message}`);
     process.exit(1);
   });
-  child.on('exit', (code, signal) => {
-    if (signal && process.platform !== 'win32') {
-      process.removeAllListeners(signal);
-      process.kill(process.pid, signal);
-      return;
+  // With IPC, `close` also waits for the channel, so every message has arrived.
+  child.on(ipc ? 'close' : 'exit', (code: number | null, signal: NodeJS.Signals | null) => {
+    const exit = () => {
+      if (signal && process.platform !== 'win32') {
+        process.removeAllListeners(signal);
+        process.kill(process.pid, signal);
+        return;
+      }
+      process.exit(code ?? (signal ? 128 + (constants.signals[signal] ?? 0) : 1));
+    };
+    if (pendingSends > 0) {
+      exitAfterSends = exit;
+    } else {
+      exit();
     }
-    process.exit(code ?? (signal ? 128 + (constants.signals[signal] ?? 0) : 1));
   });
 }
 
@@ -185,6 +232,7 @@ if (invocation) {
       ...invocation.nodeArgs,
     ],
     env,
+    { relayIpc: true },
   );
 } else {
   if (flags.tsconfig !== undefined) {
