@@ -16,6 +16,7 @@ import { parseStagedArgs } from '../../binding/index.js';
 import { resolveViteConfig } from '../resolve-vite-config.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
 import { errorMsg, log, printHeader } from '../utils/terminal.ts';
+import { createStagedLogger } from './logger.ts';
 
 const args = unwrapCliParseOutcome(parseStagedArgs(process.argv.slice(3)));
 const options: Options = {};
@@ -92,5 +93,8 @@ if (args.concurrent != null) {
   options.concurrent = args.concurrent;
 }
 
-const success = await lintStaged(options);
+const success = await lintStaged(
+  options,
+  options.debug || options.quiet ? undefined : createStagedLogger(),
+);
 process.exit(success ? 0 : 1);
