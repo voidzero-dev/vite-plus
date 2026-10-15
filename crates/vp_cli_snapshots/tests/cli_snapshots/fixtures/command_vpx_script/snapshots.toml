@@ -35,6 +35,7 @@ steps = [
   { argv = ["vpx", "seed.ts"], comment = "Missing bare name with a TypeScript extension", continue-on-failure = true },
   { argv = ["vpx", "--tsconfig", "missing.json", "./src/syntax.ts"], comment = "Missing tsconfig", continue-on-failure = true },
   { argv = ["vpx", "-p", "cowsay", "./src/syntax.ts"], comment = "--package selects package mode", continue-on-failure = true },
+  { argv = ["vpx", "-p", "cowsay", "./src/missing.ts"], comment = "A missing explicit path never falls through to a package download, even with --package", continue-on-failure = true },
 ]
 
 [[case]]

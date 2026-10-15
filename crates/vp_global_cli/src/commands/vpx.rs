@@ -117,12 +117,21 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
                 return 1;
             }
         }
-    } else if !cmd_spec.starts_with('-')
-        && matches!(vpx_script::detect(&positional, cwd), Ok(Some(_)))
-    {
-        let flag = if flags.shell_mode { "--shell-mode" } else { "--package" };
-        output::error(&format!("vpx: {flag} cannot be used when running a script"));
-        return 1;
+    } else if !cmd_spec.starts_with('-') {
+        match vpx_script::detect(&positional, cwd) {
+            Ok(Some(_)) => {
+                let flag = if flags.shell_mode { "--shell-mode" } else { "--package" };
+                output::error(&format!("vpx: {flag} cannot be used when running a script"));
+                return 1;
+            }
+            // A missing explicit path never falls through to `dlx`, `--package` or not.
+            // With `--shell-mode` the token is a shell command, not a path.
+            Err(error) if !flags.shell_mode && vpx_script::is_explicit_path(cmd_spec) => {
+                output::error(&format!("vpx: {error}"));
+                return 1;
+            }
+            _ => {}
+        }
     }
     if flags.tsconfig.is_some() {
         output::error("vpx: --tsconfig can only be used when running a script");
