@@ -57,6 +57,18 @@ impl Npm {
         Self { version: None }
     }
 
+    /// `pkg get`, `pkg set`, and `pkg delete` landed in npm 7.20.0.
+    /// Unknown versions are treated as current.
+    pub(crate) fn supports_v7_20_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(7, 20, 0))
+    }
+
+    /// `pkg fix` landed in npm 9.8.0.
+    /// Unknown versions are treated as current.
+    pub(crate) fn supports_v9_8_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(9, 8, 0))
+    }
+
     /// `approve-scripts` and `deny-scripts` landed in npm 11.16.0.
     /// Unknown versions are treated as current.
     pub(crate) fn supports_v11_16_commands(&self) -> bool {
@@ -79,6 +91,11 @@ impl PackageManagerDialect for Npm {
 }
 
 impl Pnpm {
+    /// `pkg get`, `pkg set`, `pkg delete`, and `pkg fix` landed in pnpm 11.3.0.
+    pub(crate) fn supports_v11_3_commands(&self) -> bool {
+        self.version >= Version::new(11, 3, 0)
+    }
+
     /// `approve-builds !<pkg>` deny syntax landed in pnpm 11.
     pub(crate) fn supports_v11_commands(&self) -> bool {
         self.version >= Version::new(11, 0, 0)
@@ -98,6 +115,11 @@ impl Yarn {
 }
 
 impl Bun {
+    /// `bun pm pkg get`, `set`, `delete`, and `fix` landed in Bun 1.2.19.
+    pub(crate) fn supports_v1_2_19_commands(&self) -> bool {
+        self.version >= Version::new(1, 2, 19)
+    }
+
     /// `bun pm version` landed in Bun 1.2.18.
     pub(crate) fn supports_v1_2_18_commands(&self) -> bool {
         self.version >= Version::new(1, 2, 18)

@@ -4,9 +4,22 @@ import { createVitest } from 'vite-plus/test/node';
 
 const runner = await createVitest({
   config: false, watch: false, reporters: [], ui: true, open: false,
-  api: { host: '127.0.0.1', port: 0 },
-}, defineConfig({}));
+  api: { host: '127.0.0.1' },
+}, defineConfig({
+  plugins: [{
+    name: 'ui-server-port',
+    // Vitest replaces a plain api.port: 0 with its default. Override it last.
+    enforce: 'post',
+    config: {
+      order: 'post',
+      handler(config) {
+        config.test.api.port = 0;
+      },
+    },
+  }],
+}));
 try {
+  assert.equal(runner.config.api.port, 0);
   if (!runner.vite.httpServer.listening) await runner.vite.listen(0);
   const base = `http://127.0.0.1:${runner.vite.httpServer.address().port}`;
   const ui = new URL(runner.config.uiBase, base);

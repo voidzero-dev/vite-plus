@@ -13,9 +13,9 @@ use crate::{
         AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, CiArgs, ConfigCommand, DedupeArgs,
         DeprecateArgs, DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs,
         LoginArgs, LogoutArgs, OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PatchArgs,
-        PatchCommitArgs, PingArgs, PruneArgs, PublishArgs, RebuildArgs, RemoveArgs, Resolution,
-        SearchArgs, StageCommand, TokenCommand, UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs,
-        WhoamiArgs, WhyArgs, resolve_for_manager as resolve_args_for_manager,
+        PatchCommitArgs, PingArgs, PkgCommand, PruneArgs, PublishArgs, RebuildArgs, RemoveArgs,
+        Resolution, SearchArgs, StageCommand, TokenCommand, UnlinkArgs, UpdateArgs, VersionArgs,
+        ViewArgs, WhoamiArgs, WhyArgs, resolve_for_manager as resolve_args_for_manager,
     },
 };
 
@@ -102,6 +102,10 @@ pub enum PmCommand {
 
     /// Forward the native package version command
     Version(VersionArgs),
+
+    /// Manage package.json fields
+    #[command(subcommand)]
+    Pkg(PkgCommand),
 
     /// Publish package to registry
     Publish(PublishArgs),
@@ -347,6 +351,7 @@ impl PmCommand {
             Self::List(args) => resolve_args_for_manager(manager, args),
             Self::View(args) => resolve_args_for_manager(manager, args),
             Self::Version(args) => resolve_args_for_manager(manager, args),
+            Self::Pkg(args) => resolve_args_for_manager(manager, args),
             Self::Publish(args) => resolve_args_for_manager(manager, args),
             Self::Stage(args) => resolve_args_for_manager(manager, args),
             Self::Owner(args) => resolve_args_for_manager(manager, args),
@@ -372,6 +377,7 @@ impl PmCommand {
             Self::Pack(args) => args.json,
             Self::View(args) => args.json,
             Self::Version(args) => args.json,
+            Self::Pkg(args) => matches!(args, PkgCommand::Get { .. }),
             Self::Publish(args) => args.json,
             Self::Audit(args) => args.json,
             Self::Search(args) => args.json,
@@ -476,6 +482,36 @@ mod tests {
             parse(&["pm", "stage", "ls"]).unwrap(),
             PackageManagerCommand::Pm(PmCommand::Stage(StageCommand::List { .. }))
         ));
+    }
+
+    #[test]
+    fn pkg_parses_and_resolves_nested_commands() {
+        for (client, version, program, prefix) in [
+            (PackageManagerType::Npm, "11.0.0", "npm", vec!["pkg"]),
+            (PackageManagerType::Pnpm, "11.3.0", "pnpm", vec!["pkg"]),
+            (PackageManagerType::Bun, "1.2.19", "bun", vec!["pm", "pkg"]),
+        ] {
+            for args in [
+                vec!["get"],
+                vec!["get", "name", "scripts.build"],
+                vec!["set", "scripts.build=vite build", "private=true", "--json"],
+                vec!["delete", "scripts.build", "description"],
+                vec!["fix"],
+            ] {
+                let mut argv = vec!["pm", "pkg"];
+                argv.extend(&args);
+                let parsed = parse(&argv).unwrap();
+                assert_eq!(parsed.is_quiet_or_machine_readable(), args[0] == "get");
+                let resolution =
+                    parsed.resolve_for_manager(&package_manager(client, version)).unwrap();
+                assert!(resolution.diagnostics.is_empty());
+                let command = expect_run(resolution.outcome);
+                assert_eq!(command.program, program);
+                let mut expected = prefix.clone();
+                expected.extend(args);
+                assert_eq!(command.args, expected);
+            }
+        }
     }
 
     #[test]

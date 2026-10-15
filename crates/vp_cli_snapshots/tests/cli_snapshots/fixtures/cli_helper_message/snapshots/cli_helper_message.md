@@ -419,6 +419,7 @@ Commands:
   list              List installed packages [alias: ls]
   view, info, show  View package information from the registry
   version           Forward the native package version command
+  pkg               Manage package.json fields
   publish           Publish package to registry
   stage             Stage a package for publishing (npm staged publishing workflow)
   owner             Manage package owners [alias: author]
