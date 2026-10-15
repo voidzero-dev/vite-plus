@@ -56,6 +56,7 @@ import { gunzipSync } from 'node:zlib';
 
 import { exitCodeFromClose } from './exit-code.ts';
 import { packLocalVitePlusPackages } from './pack-local-vite-plus.ts';
+import { setRegistryRequestDeadline } from './registry-request.ts';
 
 interface PackageManifest {
   name: string;
@@ -317,7 +318,7 @@ function serializeForRegistry(value: unknown, registry: string): string {
 
 function fetchUpstreamPackument(name: string): Promise<Packument | null> {
   return new Promise((resolve) => {
-    httpsGet(
+    const request = httpsGet(
       `${UPSTREAM_REGISTRY}/${name.replace('/', '%2F')}`,
       { headers: { accept: 'application/json', 'accept-encoding': 'gzip' }, agent: upstreamAgent },
       (upstream) => {
@@ -340,6 +341,7 @@ function fetchUpstreamPackument(name: string): Promise<Packument | null> {
         });
       },
     ).on('error', () => resolve(null));
+    setRegistryRequestDeadline(request);
   });
 }
 
@@ -384,12 +386,12 @@ function resolveLocalVersion(key: string): unknown {
   }
   const name = key.slice(0, separator);
   const specifier = key.slice(separator + 1);
-  const packument = localPackuments.get(name);
+  const packument = localPackuments.get(name) ?? (manifest[name] as Packument | undefined);
   if (!packument) {
     return undefined;
   }
-  const version = packument['dist-tags'][specifier] ?? specifier;
-  return packument.versions[version];
+  const version = packument['dist-tags']?.[specifier] ?? specifier;
+  return packument.versions?.[version];
 }
 
 // Stream the upstream response byte-for-byte. Unlike `fetch`, `https` does not
@@ -414,9 +416,11 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
   // Stream errors can fire after headers are already sent (e.g. the upstream
   // connection resets mid-tarball), so guard against a second writeHead.
   const fail = (error: Error) => {
-    if (!res.headersSent) {
-      res.writeHead(502);
+    if (res.headersSent) {
+      res.destroy(error);
+      return;
     }
+    res.writeHead(502);
     res.end(`proxy error: ${error.message}`);
   };
   // Forward the original method and body: npm-based clients POST to registry
@@ -481,6 +485,7 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
       },
     );
     upstreamRequest.on('error', fail);
+    setRegistryRequestDeadline(upstreamRequest);
     if (bodyless) {
       upstreamRequest.end();
     } else {
