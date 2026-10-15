@@ -192,7 +192,7 @@ Files: `packages/cli/src/script-preload.ts`, `script-register.ts`, `script-esm-h
 | TC39 decorators                | ✓ (esbuild lowers)                                    | ✗ (clear error)                                                                           | ✗                      |
 | tsconfig `paths`               | ✓                                                     | ✓ for `import`; not for `require()`                                                       | ✗                      |
 | tsconfig selection             | One per process, from the cwd; `paths` for every file | Nearest config that includes the file (tsc rules); a file no config includes gets neither | n/a                    |
-| `.js` → `.ts`, extensionless   | ✓                                                     | ✓                                                                                         | ✗                      |
+| `.js` → `.ts`, extensionless   | ✓                                                     | ✓ for `import`; not for `require()`                                                       | ✗                      |
 | `require()` of `.ts`, interop  | ✓ (compiles ESM to CJS if needed)                     | ✓ (`.cts` with ESM syntax is an error)                                                    | Partial                |
 | TypeScript in `node_modules`   | ✓                                                     | ✓                                                                                         | ✗                      |
 | Class fields, `using`          | Lowered to `target`                                   | Native unless `[[Set]]` fields or legacy decorators; `using` lowered on 22.x              | Native                 |
@@ -202,7 +202,8 @@ Files: `packages/cli/src/script-preload.ts`, `script-register.ts`, `script-esm-h
 
 ## Known Limitations
 
-- tsconfig `paths` apply to `import` only; `require()` uses Node.js' CommonJS resolution, as upstream.
+- `require()` uses Node.js' CommonJS resolution, as upstream: it applies no tsconfig `paths` and does not map `.js` to `.ts`. tsx does both.
+- A `.ts` file with `import` or `export` in a package without `"type"` runs as an ES module, as in Node.js, so `__filename`, `__dirname`, and `require` are undefined. tsx compiles it to CommonJS.
 - A file that no tsconfig includes resolves without `paths`. With a root config whose `include` is `["src"]`, a script in `scripts/` that imports an alias fails with `ERR_MODULE_NOT_FOUND`, while tsx resolves it. This is the most likely failure when moving from tsx; add the directory to `include` or pass `--tsconfig`. [oxc-node#835](https://github.com/oxc-project/oxc-node/issues/835) asks for a resolution-only fallback to the nearest tsconfig.
 - On in-thread releases without nodejs/node#62920 (22.22.3+, 24.11.1 to 24.17, 26.0, 26.1), `require()` inside a CommonJS module whose source another load hook supplied can fail. That needs a second loader, which is unsupported.
 - The local bin ignores `SIGINT`, so `kill -INT <bin pid>` does not stop the script; Ctrl+C does, through the process group. Forwarding it would deliver Ctrl+C twice; tsx avoids that with an IPC channel.
@@ -311,6 +312,7 @@ Package mode through the global `vpx` is unchanged. What changes:
 
 ## Open Items
 
+- A file name with `#` or `%` resolves to the wrong file, or none, because oxc-node returns the resolved path as an unencoded `file:` URL ([oxc-node#837](https://github.com/oxc-project/oxc-node/issues/837)). When the other file exists, it runs with exit code 0. To fix before merge: pin the upstream fix, then add snapshot cases that check the output, including when the other file exists.
 - Windows Ctrl+C through the `vp.exe` spawn-and-wait path is not verified.
 - [oxc-node#835](https://github.com/oxc-project/oxc-node/issues/835): `paths` for files outside every tsconfig's `include`.
 
