@@ -7,7 +7,7 @@ The real package managers and Vite+ commands still run. Other cases retain
 the real `degit` package.
 
 `template/` contains the `vite-plus/` template from
-[`sxzz/tsdown-templates` at `c1d30b48`](https://github.com/sxzz/tsdown-templates/tree/c1d30b48c445cc73d2da92be1db6f7c27cc0110c/vite-plus).
+[`sxzz/tsdown-templates` at `01a79e74`](https://github.com/sxzz/tsdown-templates/tree/01a79e7473ae2cb90af2b1312decc54c14b7cb91/vite-plus).
 `LICENSE` preserves its MIT license. Test runs never fetch or refresh this copy.
 
 After an intentional fixture change, regenerate both case tarballs and their
