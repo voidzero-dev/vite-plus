@@ -259,7 +259,7 @@ reqwest = { version = "0.13", default-features = false }
 rolldown-notify = "11.0.0"
 rolldown-notify-debouncer-full = "0.8.0"
 rustc-hash = "2.1.1"
-rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 same-file = "1.0.6"
 saphyr = { version = "0.2.1", default-features = false }
 schemars = "1.0.0"
@@ -267,7 +267,7 @@ self_cell = "1.2.0"
 semver = "1.0.26"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-serial_test = "4.0.0"
+serial_test = "3.2.0"
 sha1 = "0.11.0"
 sha2 = "0.11.0"
 shell-escape = "0.1.5"
