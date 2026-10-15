@@ -61,7 +61,7 @@ jobs:
     # them (code changes get `vp check` in cli-e2e-test). The required `done`
     # job waits for this check and propagates failures.
     if: needs.detect-changes.outputs.code-changed == 'false'
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
@@ -113,7 +113,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -144,7 +144,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows tests
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     env:
       XWIN_ACCEPT_LICENSE: '1'
       # The MSVC STL from xwin's VS17 manifest static-asserts a minimum Clang
@@ -269,7 +269,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Test (Linux x64 musl)
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     container:
       image: node:25-alpine3.21
     env:
@@ -321,7 +321,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -373,7 +373,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows CLI binaries
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -392,7 +392,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             test-node: 22.18.0
           - os: namespace-profile-mac-default
@@ -485,7 +485,7 @@ jobs:
           RUST_MIN_STACK: 8388608
 
       - name: Test global package install (powershell)
-        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
+        if: ${{ runner.os != 'Linux' }}
         shell: pwsh
         run: |
           $vpHome = Join-Path $HOME ".vite-plus"
@@ -667,7 +667,7 @@ jobs:
           fi
 
       - name: Test upgrade (powershell)
-        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
+        if: ${{ runner.os != 'Linux' }}
         shell: pwsh
         run: |
           $vpHome = Join-Path $HOME ".vite-plus"
@@ -883,7 +883,7 @@ jobs:
           vp --version
 
       - name: Test implode (powershell)
-        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
+        if: ${{ runner.os != 'Linux' }}
         shell: pwsh
         run: |
           $vpHome = Join-Path $HOME ".vite-plus"
@@ -943,7 +943,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1028,10 +1028,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
+        os: [ubuntu-latest, namespace-profile-mac-default]
         shard: [1, 2, 3]
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1303,7 +1303,7 @@ jobs:
     name: CLI E2E test (Linux x64 musl)
     needs:
       - download-previous-rolldown-binaries
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1386,7 +1386,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Cert-less image E2E test
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -1442,7 +1442,7 @@ jobs:
     name: Local CLI `vp install` E2E test
     needs:
       - build-cli-test-binaries
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
       github.event_name != 'pull_request' ||
