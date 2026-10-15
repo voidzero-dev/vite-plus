@@ -708,9 +708,6 @@ importers:
       hookable:
         specifier: ^6.0.1
         version: 6.1.2
-      magic-string:
-        specifier: ^1.0.0
-        version: 1.4.3
       oxc-parser:
         specifier: 'catalog:'
         version: 0.154.0
