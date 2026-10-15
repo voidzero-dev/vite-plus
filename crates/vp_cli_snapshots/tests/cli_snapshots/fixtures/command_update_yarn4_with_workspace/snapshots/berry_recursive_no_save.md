@@ -26,8 +26,8 @@ omitting packages re-resolves scoped and unscoped dependencies while preserving 
 ```
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + testnpm2@npm:1.0.1::__archiveUrl=https%3A%2F%2Fregistry.npmjs.org%2Ftestnpm2%2F-%2Ftestnpm2-1.0.1.tgz
-➤ YN0085: │ - testnpm2@npm:1.0.0::__archiveUrl=https%3A%2F%2Fregistry.npmjs.org%2Ftestnpm2%2F-%2Ftestnpm2-1.0.0.tgz
+➤ YN0085: │ + testnpm2@npm:1.0.1
+➤ YN0085: │ - testnpm2@npm:1.0.0
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
 ➤ YN0013: │ A package was added to the project (+ <size> KiB).
@@ -80,7 +80,7 @@ __metadata:
 
 "@test/scoped@npm:testnpm2@^1.0.0, testnpm2@npm:^1.0.0":
   version: 1.0.1
-  resolution: "testnpm2@npm:1.0.1::__archiveUrl=https%3A%2F%2Fregistry.npmjs.org%2Ftestnpm2%2F-%2Ftestnpm2-1.0.1.tgz"
+  resolution: "testnpm2@npm:1.0.1"
   checksum: 10c0/b09252bf701b618c424bf1a92e0a54171660c8dbfb3d4dd3862e9d311957fa3ed2fd07708b74d08d0656a5ce8dfce748c0b32002613452f1beb9cd822f878f95
   languageName: node
   linkType: hard
@@ -97,7 +97,7 @@ __metadata:
 
 "is-number@npm:6.0.0":
   version: 6.0.0
-  resolution: "is-number@npm:6.0.0::__archiveUrl=https%3A%2F%2Fregistry.npmjs.org%2Fis-number%2F-%2Fis-number-6.0.0.tgz"
+  resolution: "is-number@npm:6.0.0"
   checksum: 10c0/5da4c68401529675c575878d2760d66f18eaef4b014858577f6003daf66488d7fe4eae684b1e8574e3fa1bb447c6c6c56b8491d2b4b3239da2d32e5f6f218008
   languageName: node
   linkType: hard

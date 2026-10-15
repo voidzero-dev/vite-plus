@@ -1,7 +1,6 @@
 [[case]]
 name = "command_outdated_npm10_with_workspace"
 vp = "global"
-serial = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "install"], continue-on-failure = true },

@@ -1286,6 +1286,7 @@ jobs:
           RUST_BACKTRACE: '1'
           # Share immutable tarballs across nextest processes in this job.
           VP_SNAP_PACKAGES_DIR: ${{ runner.temp }}/snapshot-packages
+          VP_SNAP_REGISTRY_CACHE_DIR: ${{ runner.temp }}/snapshot-registry-cache
           VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
           # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
