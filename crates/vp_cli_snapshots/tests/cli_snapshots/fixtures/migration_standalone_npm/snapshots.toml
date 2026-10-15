@@ -2,7 +2,8 @@
 name = "migration_standalone_npm"
 vp = "global"
 serial = true
-skip-platforms = ["windows"]
+# Exceeded 50 seconds on Linux in CI run 38677540536.
+skip-platforms = ["windows", "linux"]
 unset-env = ["CI", "VP_SKIP_INSTALL"]
 local-registry = true
 steps = [
