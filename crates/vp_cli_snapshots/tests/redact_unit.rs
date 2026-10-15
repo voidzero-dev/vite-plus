@@ -283,6 +283,74 @@ fn masks_lint_staged_backup_hashes() {
 }
 
 #[test]
+fn masks_staged_debug_host_details_and_backup_ids() {
+    for (platform, git_build, max_arg_length) in [
+        ("darwin", "git version 2.50.1 (Apple Git-155)\ncpu: arm64\nshell-path: /bin/sh", 262_144),
+        ("linux", "git version 2.43.0\ncpu: x86_64\nsizeof-long: 8", 131_072),
+        ("win32", "git version 2.51.0.windows.1\ncpu: x86_64\nsizeof-long: 4", 8191),
+    ] {
+        let input = format!(
+            "lint-staged: Running `lint-staged@17.6.0` on Node.js v24.18.0 ({platform}) +0ms\n\
+             lint-staged: {git_build} +1ms\n\
+             lint-staged:validateOptions: Validated options: {{\n  maxArgLength: {max_arg_length},\n}} +2ms\n\
+             lint-staged:execGit: Running git command: [\n  'stash',\n  'store',\n  '--message',\n  'lint-staged automatic backup (2b0b82b1)',\n  'a07dfd4b9e2ac67cba4b16e9f24c6277744d1aba'\n] +3ms\n\
+             lint-staged:GitWorkflow: Created backup stash with commit hash a07dfd4b9e2ac67cba4b16e9f24c6277744d1aba +4ms\n\
+             lint-staged:execGit: Running git command: [ 'rev-parse', '--short', 'a07dfd4b9e2ac67cba4b16e9f24c6277744d1aba' ] +5ms\n\
+             ✔ Done backing up original state (a07dfd4)!\n\
+             commit 1111111111111111111111111111111111111111\n"
+        );
+        assert_eq!(
+            redact_output(input, &[], true),
+            "lint-staged: Running `lint-staged@<version>` on Node.js <version> (<platform>) +<duration>\n\
+             lint-staged: git version <git-build> +<duration>\n\
+             lint-staged:validateOptions: Validated options: {\n  maxArgLength: <n>,\n} +<duration>\n\
+             lint-staged:execGit: Running git command: [\n  'stash',\n  'store',\n  '--message',\n  'lint-staged automatic backup (<id>)',\n  '<hash>'\n] +<duration>\n\
+             lint-staged:GitWorkflow: Created backup stash with commit hash <hash> +<duration>\n\
+             lint-staged:execGit: Running git command: [ 'rev-parse', '--short', '<hash>' ] +<duration>\n\
+             ✔ Done backing up original state (<hash>)!\n\
+             commit 1111111111111111111111111111111111111111\n"
+        );
+    }
+}
+
+#[test]
+fn stabilizes_concurrent_staged_debug_reads_without_removing_messages() {
+    let banner = "lint-staged: Running `lint-staged@17.6.0` on Node.js v24.18.0 (darwin) +0ms\n";
+    let intent = "lint-staged:getIntentToAddFiles: Detected 0 files staged with \"--intent-to-add\": [] +0ms\n";
+    let read_head = "lint-staged:file: Reading file `<workspace>/.git/MERGE_HEAD` +0ms\n";
+    let no_head =
+        "lint-staged:file: File `<workspace>/.git/MERGE_HEAD` doesn't exist, ignoring... +0ms\n";
+    let read_mode = "lint-staged:file: Reading file `<workspace>/.git/MERGE_MODE` +0ms\n";
+    let no_mode =
+        "lint-staged:file: File `<workspace>/.git/MERGE_MODE` doesn't exist, ignoring... +0ms\n";
+    let boundary = "⋯ Running tasks for staged files…\n";
+    let expected = redact_output(
+        format!("{banner}{intent}{read_head}{no_head}{read_mode}{no_mode}{boundary}{read_head}"),
+        &[],
+        true,
+    );
+    for messages in [
+        [intent, read_head, read_mode, no_mode, no_head],
+        [read_head, no_head, intent, read_mode, no_mode],
+        [read_head, read_mode, no_head, no_mode, intent],
+    ] {
+        let input = format!("{banner}{}{boundary}{read_head}", messages.join(""));
+        let output = redact_output(input, &[], true);
+        assert_eq!(output, expected);
+        assert_eq!(output.matches("Reading file").count(), 3);
+        assert_eq!(output.matches("doesn't exist").count(), 2);
+        assert_eq!(output.matches("Detected 0 files").count(), 1);
+    }
+}
+
+#[test]
+fn preserves_staged_debug_like_fields_without_a_debug_banner() {
+    let input =
+        "git version 2.50.1\n  maxArgLength: 8191,\n'lint-staged automatic backup (2b0b82b1)'\n";
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
+}
+
+#[test]
 fn normalizes_managed_executable_paths_and_missing_commands() {
     let input = concat!(
         r#""bin_path": "<home>/.vite-plus/js_runtime/node/24.18.1/node.exe""#,

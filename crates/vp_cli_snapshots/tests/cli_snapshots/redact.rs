@@ -354,6 +354,39 @@ static YARN_LOCKFILE_CHECKSUM_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static STASH_HASH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"((?:git stash|Done backing up original state) \()[0-9a-f]+(\))").unwrap()
 });
+// `vp staged --debug` includes host details and randomly generated backup IDs.
+// Keep the diagnostic messages while masking only their variable fields.
+static STAGED_DEBUG_BANNER_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^(lint-staged: Running `lint-staged@)[^`]+(` on Node\.js <version> )\([^)]+\)",
+    )
+    .unwrap()
+});
+static STAGED_GIT_BUILD_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?ms)^lint-staged: git version .*? \+<duration>$").unwrap()
+});
+static STAGED_ARG_LENGTH_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)^(  maxArgLength: )\d+(,)$").unwrap());
+static STAGED_BACKUP_ID_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"('lint-staged automatic backup \()[0-9a-f]+(\)')").unwrap()
+});
+static STAGED_BACKUP_HASH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^lint-staged:GitWorkflow: Created backup stash with commit hash ([0-9a-f]+) \+<duration>$",
+    )
+    .unwrap()
+});
+// These independent file reads and the intent-to-add probe finish in any order.
+// Sort only adjacent messages from these operations; retain every message.
+static STAGED_PARALLEL_READS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(concat!(
+        r"(?m)(?:^lint-staged:(?:",
+        r"file: (?:Reading file|File) `[^`\n]+/\.git/MERGE_(?:HEAD|MODE|MSG)`[^\n]*",
+        r#"|getIntentToAddFiles: Detected 0 files staged with "--intent-to-add": \[\] \+<duration>"#,
+        r")\n){2,}",
+    ))
+    .unwrap()
+});
 // Package managers emit blank separator lines whose count races their own
 // progress rendering under a PTY; collapse runs so spacing is stable.
 static BLANK_RUN_RE: LazyLock<regex::Regex> =
@@ -672,6 +705,29 @@ pub fn redact_output(
     output = YARN_FILE_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
     output = YARN_LOCKFILE_CHECKSUM_RE.replace_all(&output, "${1}<hash>").into_owned();
     output = STASH_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
+
+    if STAGED_DEBUG_BANNER_RE.is_match(&output) {
+        output = STAGED_DEBUG_BANNER_RE
+            .replace_all(&output, "${1}<version>${2}(<platform>)")
+            .into_owned();
+        output = STAGED_GIT_BUILD_RE
+            .replace_all(&output, "lint-staged: git version <git-build> +<duration>")
+            .into_owned();
+        output = STAGED_ARG_LENGTH_RE.replace_all(&output, "${1}<n>${2}").into_owned();
+        output = STAGED_BACKUP_ID_RE.replace_all(&output, "${1}<id>${2}").into_owned();
+        if let Some(captures) = STAGED_BACKUP_HASH_RE.captures(&output) {
+            output = output.replace(&captures[1], "<hash>");
+        }
+        output = STAGED_PARALLEL_READS_RE
+            .replace_all(&output, |captures: &regex::Captures| {
+                let mut lines = captures[0].lines().collect::<Vec<_>>();
+                lines.sort_by_key(|line| {
+                    (line.split('`').nth(1).unwrap_or(""), !line.contains(": Reading file "))
+                });
+                format!("{}\n", lines.join("\n"))
+            })
+            .into_owned();
+    }
 
     // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
     // log name, live spinner frames, and timing-dependent pnpm/Bun diagnostics
