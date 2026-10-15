@@ -74,7 +74,7 @@ bun update <version> (<hash>)
 
     "utils": ["utils@workspace:packages/utils"],
 
-    "utils/is-number": ["is-number@7.0.0", "", {}, "sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng=="],
+    "utils/is-number": ["is-number@7.0.0", "http://127.0.0.1:<port>/is-number/-/is-number-7.0.0.tgz", {}, "sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng=="],
   }
 }
 ```

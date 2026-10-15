@@ -1,0 +1,569 @@
+{
+  "testnpm2": {
+    "_id": "testnpm2",
+    "_rev": "29-8fb08185012beac6ee779acb1ec3e26f",
+    "name": "testnpm2",
+    "time": {
+      "modified": "2022-06-27T05:33:14.474Z",
+      "created": "2015-07-18T03:01:26.187Z",
+      "0.0.1": "2015-07-18T03:01:26.187Z",
+      "0.0.2": "2015-07-18T03:05:15.290Z",
+      "0.0.3": "2015-07-18T03:13:59.614Z",
+      "0.0.4": "2015-07-18T03:27:34.134Z",
+      "0.0.5": "2015-07-18T03:34:04.517Z",
+      "0.0.6": "2015-07-18T03:44:19.300Z",
+      "0.0.7": "2015-07-18T03:58:01.493Z",
+      "0.0.8": "2015-07-18T04:07:17.636Z",
+      "1.0.0": "2015-07-18T18:23:11.382Z",
+      "1.0.1": "2015-07-18T18:23:59.560Z",
+      "2.0.0": "2018-04-08T09:30:53.747Z",
+      "2.0.1": "2018-04-08T09:35:07.572Z"
+    },
+    "maintainers": [
+      {
+        "name": "fengmk2",
+        "email": "fengmk2@gmail.com"
+      }
+    ],
+    "dist-tags": {
+      "latest": "1.0.1",
+      "release-1": "1.0.1"
+    },
+    "readme": "",
+    "versions": {
+      "1.0.0": {
+        "name": "testnpm2",
+        "version": "1.0.0",
+        "description": "",
+        "main": "index.js",
+        "scripts": {
+          "test": "echo \"Error: no test specified\" && exit 1"
+        },
+        "author": "",
+        "license": "ISC",
+        "_id": "testnpm2@1.0.0",
+        "_shasum": "3f9430987a1d4ff52c8c5162e99b5d8596efefa6",
+        "_from": ".",
+        "_npmVersion": "2.12.1",
+        "_nodeVersion": "2.3.4",
+        "_npmUser": {
+          "name": "fengmk2",
+          "email": "fengmk2@gmail.com"
+        },
+        "maintainers": [
+          {
+            "name": "fengmk2",
+            "email": "fengmk2@gmail.com"
+          }
+        ],
+        "dist": {
+          "shasum": "3f9430987a1d4ff52c8c5162e99b5d8596efefa6",
+          "tarball": "{REGISTRY}/testnpm2/-/testnpm2-1.0.0.tgz",
+          "integrity": "sha512-8gdtqxKad+83Iog2v514VsHsSk/R+we9j5/9zX9tB+QC2ubvB06zJ08k0PSl5uzviXByEMiWm7EzSbBAh2GZ/w==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEQCIDrEYCjkPJmoOzHB5eBvXAWfTInnWHAy7RBcGuNmKUN/AiA6m8AeoByYz7NVkcb++KDvfPO+gwVw7uaM1sRycIwZyA=="
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "1.0.1": {
+        "name": "testnpm2",
+        "version": "1.0.1",
+        "description": "",
+        "main": "index.js",
+        "scripts": {
+          "test": "echo \"Error: no test specified\" && exit 1"
+        },
+        "author": "",
+        "license": "ISC",
+        "_id": "testnpm2@1.0.1",
+        "_shasum": "8c7b209a673c360e540ab2777242171fd30fdee9",
+        "_from": ".",
+        "_npmVersion": "2.12.1",
+        "_nodeVersion": "2.3.4",
+        "_npmUser": {
+          "name": "fengmk2",
+          "email": "fengmk2@gmail.com"
+        },
+        "maintainers": [
+          {
+            "name": "fengmk2",
+            "email": "fengmk2@gmail.com"
+          }
+        ],
+        "dist": {
+          "shasum": "8c7b209a673c360e540ab2777242171fd30fdee9",
+          "tarball": "{REGISTRY}/testnpm2/-/testnpm2-1.0.1.tgz",
+          "integrity": "sha512-F4AQ+KmzhbOSlt7ae+X2O8IJktFZAcN6OK169TT4ny7M3e4Vje7NITZTOU31AtEk9L/Z8lrCrqinl/eY6WPuEw==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEQCICqyUi6OO0qltJG0Z2fI021Q87C6zFIWH9h2lb9PsyRKAiAHU26fIlW7Om8JPh2BEx72YAAVP2yXS2bvf9vzc/yjaw=="
+            }
+          ]
+        },
+        "directories": {}
+      }
+    },
+    "license": "ISC",
+    "readmeFilename": ""
+  },
+  "test-vite-plus-install": {
+    "_id": "test-vite-plus-install",
+    "name": "test-vite-plus-install",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "test-vite-plus-install",
+        "version": "1.0.0",
+        "description": "just for snap-test",
+        "main": "index.js",
+        "author": "",
+        "license": "MIT",
+        "scripts": {
+          "test": "echo \"Error: no test specified\" && exit 1"
+        },
+        "_id": "test-vite-plus-install@1.0.0",
+        "_integrity": "sha512-1tUZpG9YerpEquQ6jf5SnzNGP0tx02aiSF+h2UUErgWPJfPCAk/696KJGMjOVEqG6x6HeKjHZj2v6fZU+xGZ4g==",
+        "_resolved": "/private/var/folders/d7/5vmw5m15727gcsyvrqxyrr9h0000gn/T/1f7493b8d689388587ac709f1f7bbaaa/test-vite-plus-install-1.0.0.tgz",
+        "_from": "file:test-vite-plus-install-1.0.0.tgz",
+        "_nodeVersion": "22.20.0",
+        "_npmVersion": "10.9.3",
+        "dist": {
+          "integrity": "sha512-1tUZpG9YerpEquQ6jf5SnzNGP0tx02aiSF+h2UUErgWPJfPCAk/696KJGMjOVEqG6x6HeKjHZj2v6fZU+xGZ4g==",
+          "shasum": "74b163b5ea9aafcec9d71dcf9d1872a72b2e7efd",
+          "tarball": "{REGISTRY}/test-vite-plus-install/-/test-vite-plus-install-1.0.0.tgz",
+          "fileCount": 1,
+          "unpackedSize": 235,
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEYCIQC83BKWW/irUQav/opeoK660Bygjzw3TeadYVDIQ1UdnQIhAIGQZCAlM2ChSzc1aI8lmQpnoGtoIBczBwOYgLZLI/gg"
+            }
+          ]
+        },
+        "_npmUser": {
+          "name": "fengmk2",
+          "email": "fengmk2@gmail.com"
+        },
+        "directories": {},
+        "maintainers": [
+          {
+            "name": "fengmk2",
+            "email": "fengmk2@gmail.com"
+          }
+        ],
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/test-vite-plus-install_1.0.0_1760166590277_0.9487516044611353"
+        },
+        "_hasShrinkwrap": false
+      }
+    },
+    "time": {
+      "created": "2025-10-11T07:09:50.277Z",
+      "1.0.0": "2025-10-11T07:09:50.475Z",
+      "modified": "2025-10-11T07:09:50.835Z"
+    },
+    "maintainers": [
+      {
+        "name": "fengmk2",
+        "email": "fengmk2@gmail.com"
+      }
+    ],
+    "description": "just for snap-test",
+    "license": "MIT",
+    "readme": "ERROR: No README data found!",
+    "readmeFilename": "",
+    "_rev": "1-d52562037df1d209b9d7d4ef4c9c4fd3"
+  },
+  "test-vite-plus-other-optional": {
+    "_id": "test-vite-plus-other-optional",
+    "_rev": "2-ffc2f4702a0c68e6779c3dd26638e3cc",
+    "name": "test-vite-plus-other-optional",
+    "dist-tags": {
+      "latest": "1.1.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "test-vite-plus-other-optional",
+        "version": "1.0.0",
+        "author": "",
+        "license": "MIT",
+        "_id": "test-vite-plus-other-optional@1.0.0",
+        "maintainers": [
+          {
+            "name": "fengmk2",
+            "email": "fengmk2@gmail.com"
+          }
+        ],
+        "dist": {
+          "shasum": "fb841d0b4c2cc6685a191847c1cf722ab69d8f7c",
+          "tarball": "{REGISTRY}/test-vite-plus-other-optional/-/test-vite-plus-other-optional-1.0.0.tgz",
+          "fileCount": 1,
+          "integrity": "sha512-WdFD6xiv29vmgcfM7BSphW4/w+uk6fnc9rHPX/nBsmy84qr7r3kx5o2rWQZPWfauvL8KeJ5iKbHDguKt9I4YUg==",
+          "signatures": [
+            {
+              "sig": "MEUCIEmNGAg/JggmVK3SB87iFRr+TvNrhs8Zyntu5cn/bvc1AiEA+Oom7NSlIr4ELdUDYt6xt7OcC6TTJOM0nIOSH/rt6J4=",
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+            }
+          ],
+          "unpackedSize": 224
+        },
+        "main": "index.js",
+        "_from": "file:test-vite-plus-other-optional-1.0.0.tgz",
+        "scripts": {
+          "test": "echo \"Error: no test specified\" && exit 1"
+        },
+        "_npmUser": {
+          "name": "fengmk2",
+          "email": "fengmk2@gmail.com"
+        },
+        "_resolved": "/private/var/folders/d7/5vmw5m15727gcsyvrqxyrr9h0000gn/T/85bec7a92ae0c921726bfbb3a83b761e/test-vite-plus-other-optional-1.0.0.tgz",
+        "_integrity": "sha512-WdFD6xiv29vmgcfM7BSphW4/w+uk6fnc9rHPX/nBsmy84qr7r3kx5o2rWQZPWfauvL8KeJ5iKbHDguKt9I4YUg==",
+        "_npmVersion": "10.9.4",
+        "description": "",
+        "directories": {},
+        "_nodeVersion": "22.21.0",
+        "_hasShrinkwrap": false,
+        "_npmOperationalInternal": {
+          "tmp": "tmp/test-vite-plus-other-optional_1.0.0_1761631994541_0.785122904686832",
+          "host": "s3://npm-registry-packages-npm-production"
+        }
+      },
+      "1.1.0": {
+        "name": "test-vite-plus-other-optional",
+        "version": "1.1.0",
+        "description": "",
+        "main": "index.js",
+        "author": "",
+        "license": "MIT",
+        "scripts": {
+          "test": "echo \"Error: no test specified\" && exit 1"
+        },
+        "_id": "test-vite-plus-other-optional@1.1.0",
+        "_integrity": "sha512-P50VcTwTViGpe23894vSBo2gssfTJaUavmUkveBQ7ets+A4qK6ShJR5nL8aKD0M9j/ga50++4MINkFHTyD3beQ==",
+        "_resolved": "/private/var/folders/d7/5vmw5m15727gcsyvrqxyrr9h0000gn/T/3b6648904861f37de2d515940cf63e6b/test-vite-plus-other-optional-1.1.0.tgz",
+        "_from": "file:test-vite-plus-other-optional-1.1.0.tgz",
+        "_nodeVersion": "22.21.0",
+        "_npmVersion": "10.9.4",
+        "dist": {
+          "integrity": "sha512-P50VcTwTViGpe23894vSBo2gssfTJaUavmUkveBQ7ets+A4qK6ShJR5nL8aKD0M9j/ga50++4MINkFHTyD3beQ==",
+          "shasum": "300dcf161a77e7297505405a9867789e7a600091",
+          "tarball": "{REGISTRY}/test-vite-plus-other-optional/-/test-vite-plus-other-optional-1.1.0.tgz",
+          "fileCount": 1,
+          "unpackedSize": 224,
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEYCIQDCSme6AbBGQ3wFepzcwxmoJXJ4c7ObRq3WmAtwcL9yhgIhAO8Att+g2XQ8j4riakzjTnZo6D7rrd4NRicIw4OhDVxz"
+            }
+          ]
+        },
+        "_npmUser": {
+          "name": "fengmk2",
+          "email": "fengmk2@gmail.com"
+        },
+        "directories": {},
+        "maintainers": [
+          {
+            "name": "fengmk2",
+            "email": "fengmk2@gmail.com"
+          }
+        ],
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/test-vite-plus-other-optional_1.1.0_1761632025821_0.3001907321079851"
+        },
+        "_hasShrinkwrap": false
+      }
+    },
+    "time": {
+      "created": "2025-10-28T06:13:14.540Z",
+      "modified": "2025-10-28T06:13:46.210Z",
+      "1.0.0": "2025-10-28T06:13:14.745Z",
+      "1.1.0": "2025-10-28T06:13:46.017Z"
+    },
+    "license": "MIT",
+    "maintainers": [
+      {
+        "name": "fengmk2",
+        "email": "fengmk2@gmail.com"
+      }
+    ],
+    "readme": "ERROR: No README data found!",
+    "readmeFilename": ""
+  },
+  "test-vite-plus-package": {
+    "_id": "test-vite-plus-package",
+    "_rev": "4-a9205063cbb8d0ec8147d3688e434885",
+    "name": "test-vite-plus-package",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "test-vite-plus-package",
+        "version": "1.0.0",
+        "author": "",
+        "license": "MIT",
+        "_id": "test-vite-plus-package@1.0.0",
+        "maintainers": [
+          {
+            "name": "fengmk2",
+            "email": "fengmk2@gmail.com"
+          }
+        ],
+        "dist": {
+          "shasum": "ff439467784c8738812a5de732c24513b32ab584",
+          "tarball": "{REGISTRY}/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+          "fileCount": 1,
+          "integrity": "sha512-xj5hJUNL5vihX9TCYXbk8V5r+8MfqG2fDJcRdpQz6tlLob3vkFjsVM8pT5QjTzHS6lBXHd0r9TOMS8+sETjnpw==",
+          "signatures": [
+            {
+              "sig": "MEUCIDb7DnZovysqbeRmZivHhsKyA7cvKYMrq1AIn9ZgtBtoAiEAjp+igoe31fhBdeQgwFmSBtGFvjOPdEwFRVP19wOtbwA=",
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+            }
+          ],
+          "unpackedSize": 235
+        },
+        "main": "index.js",
+        "_from": "file:test-vite-plus-package-1.0.0.tgz",
+        "scripts": {
+          "test": "echo \"Error: no test specified\" && exit 1"
+        },
+        "_npmUser": {
+          "name": "fengmk2",
+          "email": "fengmk2@gmail.com"
+        },
+        "_resolved": "/private/var/folders/d7/5vmw5m15727gcsyvrqxyrr9h0000gn/T/9a39c169b8f2516a2b15e5afe73d3e7c/test-vite-plus-package-1.0.0.tgz",
+        "_integrity": "sha512-xj5hJUNL5vihX9TCYXbk8V5r+8MfqG2fDJcRdpQz6tlLob3vkFjsVM8pT5QjTzHS6lBXHd0r9TOMS8+sETjnpw==",
+        "_npmVersion": "10.9.3",
+        "description": "just for snap-test",
+        "directories": {},
+        "_nodeVersion": "22.20.0",
+        "_hasShrinkwrap": false,
+        "_npmOperationalInternal": {
+          "tmp": "tmp/test-vite-plus-package_1.0.0_1760433415907_0.725587526671376",
+          "host": "s3://npm-registry-packages-npm-production"
+        }
+      }
+    },
+    "time": {
+      "created": "2025-10-14T09:16:55.906Z",
+      "modified": "2025-10-27T11:26:27.234Z",
+      "1.0.0": "2025-10-14T09:16:56.086Z",
+      "1.1.0": "2025-10-27T09:03:09.582Z"
+    },
+    "license": "MIT",
+    "description": "just for snap-test",
+    "maintainers": [
+      {
+        "name": "fengmk2",
+        "email": "fengmk2@gmail.com"
+      }
+    ],
+    "readme": "",
+    "readmeFilename": ""
+  },
+  "test-vite-plus-package-optional": {
+    "_id": "test-vite-plus-package-optional",
+    "name": "test-vite-plus-package-optional",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "test-vite-plus-package-optional",
+        "version": "1.0.0",
+        "description": "just for snap-test",
+        "main": "index.js",
+        "author": "",
+        "license": "MIT",
+        "scripts": {
+          "test": "echo \"Error: no test specified\" && exit 1"
+        },
+        "_id": "test-vite-plus-package-optional@1.0.0",
+        "_integrity": "sha512-7rJ71VaETMzhK3Iwd14vutJtZt90MqUhu9KwnEEe55htLIIJs/WImI02NopwsV9Ra/Rqld4KkvbvOy6MD0b1sw==",
+        "_resolved": "/private/var/folders/d7/5vmw5m15727gcsyvrqxyrr9h0000gn/T/7801cd5ebbd7ee96e1461f58b5bd9d43/test-vite-plus-package-optional-1.0.0.tgz",
+        "_from": "file:test-vite-plus-package-optional-1.0.0.tgz",
+        "_nodeVersion": "22.20.0",
+        "_npmVersion": "10.9.3",
+        "dist": {
+          "integrity": "sha512-7rJ71VaETMzhK3Iwd14vutJtZt90MqUhu9KwnEEe55htLIIJs/WImI02NopwsV9Ra/Rqld4KkvbvOy6MD0b1sw==",
+          "shasum": "5815a3a6526aae5ae2d4a03eefcbec0ea489f69e",
+          "tarball": "{REGISTRY}/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+          "fileCount": 1,
+          "unpackedSize": 244,
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEQCIG2kAGpIyqqo6gmwKSBfBv5JTzePzri35pwd8M1iuFrVAiBQOGDbUX1LEf+dHACnKO/1Vtm7wpks9sb0JeOVdThNlQ=="
+            }
+          ]
+        },
+        "_npmUser": {
+          "name": "fengmk2",
+          "email": "fengmk2@gmail.com"
+        },
+        "directories": {},
+        "maintainers": [
+          {
+            "name": "fengmk2",
+            "email": "fengmk2@gmail.com"
+          }
+        ],
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/test-vite-plus-package-optional_1.0.0_1760602422385_0.6841124231375992"
+        },
+        "_hasShrinkwrap": false
+      }
+    },
+    "time": {
+      "created": "2025-10-16T08:13:42.384Z",
+      "1.0.0": "2025-10-16T08:13:42.558Z",
+      "modified": "2025-10-16T08:13:42.885Z"
+    },
+    "maintainers": [
+      {
+        "name": "fengmk2",
+        "email": "fengmk2@gmail.com"
+      }
+    ],
+    "description": "just for snap-test",
+    "license": "MIT",
+    "readme": "ERROR: No README data found!",
+    "readmeFilename": "",
+    "_rev": "1-a58f61915f997de720903a30cfb5c24c"
+  },
+  "test-vite-plus-top-package": {
+    "_id": "test-vite-plus-top-package",
+    "_rev": "2-513013acfd722d83329b71887e497260",
+    "name": "test-vite-plus-top-package",
+    "dist-tags": {
+      "latest": "1.1.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "test-vite-plus-top-package",
+        "version": "1.0.0",
+        "author": "",
+        "license": "MIT",
+        "_id": "test-vite-plus-top-package@1.0.0",
+        "maintainers": [
+          {
+            "name": "fengmk2",
+            "email": "fengmk2@gmail.com"
+          }
+        ],
+        "dist": {
+          "shasum": "957d0e37395ea4f242a0417e707b60d57ffbed8f",
+          "tarball": "{REGISTRY}/test-vite-plus-top-package/-/test-vite-plus-top-package-1.0.0.tgz",
+          "fileCount": 1,
+          "integrity": "sha512-5KN/rXWts++iUQadDZWv7F7acor7ihFiCSodQoizPcpMAtz85gczqHQwOwH9HEVXcDo/67X9KsL2HRfKQWHPLw==",
+          "signatures": [
+            {
+              "sig": "MEUCIQDeDMSiZOXf4ktSKv94OceoZLJzh2JoyOwEX28B8/f6UgIgaabJXK8PmfxcGFLZ/TYj5ChJBWvmcGx22G5/2DbV73o=",
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+            }
+          ],
+          "unpackedSize": 318
+        },
+        "main": "index.js",
+        "_from": "file:test-vite-plus-top-package-1.0.0.tgz",
+        "scripts": {
+          "test": "echo \"Error: no test specified\" && exit 1"
+        },
+        "_npmUser": {
+          "name": "fengmk2",
+          "email": "fengmk2@gmail.com"
+        },
+        "_resolved": "/private/var/folders/d7/5vmw5m15727gcsyvrqxyrr9h0000gn/T/26a31dd3160813c5a4d8e76abd201af7/test-vite-plus-top-package-1.0.0.tgz",
+        "_integrity": "sha512-5KN/rXWts++iUQadDZWv7F7acor7ihFiCSodQoizPcpMAtz85gczqHQwOwH9HEVXcDo/67X9KsL2HRfKQWHPLw==",
+        "_npmVersion": "10.9.4",
+        "description": "use deps on test-vite-plus-package",
+        "directories": {},
+        "_nodeVersion": "22.21.0",
+        "dependencies": {
+          "test-vite-plus-package": "1.0.0"
+        },
+        "_hasShrinkwrap": false,
+        "_npmOperationalInternal": {
+          "tmp": "tmp/test-vite-plus-top-package_1.0.0_1761555702696_0.7254356595912901",
+          "host": "s3://npm-registry-packages-npm-production"
+        }
+      },
+      "1.1.0": {
+        "name": "test-vite-plus-top-package",
+        "version": "1.1.0",
+        "description": "use deps on test-vite-plus-package",
+        "main": "index.js",
+        "author": "",
+        "license": "MIT",
+        "dependencies": {
+          "test-vite-plus-package": "1.1.0"
+        },
+        "scripts": {
+          "test": "echo \"Error: no test specified\" && exit 1"
+        },
+        "_id": "test-vite-plus-top-package@1.1.0",
+        "_integrity": "sha512-8L1G/+q/8RmirxFTVdAj/1tj959LJL7XwQ+or29k155zRZM8bw+hXKAVjpd0wRj/xNSzROr5+JMKgxsyLkieVw==",
+        "_resolved": "/private/var/folders/d7/5vmw5m15727gcsyvrqxyrr9h0000gn/T/3c6d33127d794bffec4069448a17df25/test-vite-plus-top-package-1.1.0.tgz",
+        "_from": "file:test-vite-plus-top-package-1.1.0.tgz",
+        "_nodeVersion": "22.21.0",
+        "_npmVersion": "10.9.4",
+        "dist": {
+          "integrity": "sha512-8L1G/+q/8RmirxFTVdAj/1tj959LJL7XwQ+or29k155zRZM8bw+hXKAVjpd0wRj/xNSzROr5+JMKgxsyLkieVw==",
+          "shasum": "f11b7e822172b06975a16a0ce141feb1bb2be476",
+          "tarball": "{REGISTRY}/test-vite-plus-top-package/-/test-vite-plus-top-package-1.1.0.tgz",
+          "fileCount": 1,
+          "unpackedSize": 318,
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEUCICw4k88NTxQOQ0FkPiOGbhjDOhOo/eS2ZUUoqfDBwCC5AiEAv8MAQfCli++zfbV2d+jVSNypE725aAcoqnH8U8z/N40="
+            }
+          ]
+        },
+        "_npmUser": {
+          "name": "fengmk2",
+          "email": "fengmk2@gmail.com"
+        },
+        "directories": {},
+        "maintainers": [
+          {
+            "name": "fengmk2",
+            "email": "fengmk2@gmail.com"
+          }
+        ],
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/test-vite-plus-top-package_1.1.0_1761555746085_0.7306399581466132"
+        },
+        "_hasShrinkwrap": false
+      }
+    },
+    "time": {
+      "created": "2025-10-27T09:01:42.695Z",
+      "modified": "2025-10-27T09:02:26.446Z",
+      "1.0.0": "2025-10-27T09:01:42.870Z",
+      "1.1.0": "2025-10-27T09:02:26.274Z"
+    },
+    "license": "MIT",
+    "description": "use deps on test-vite-plus-package",
+    "maintainers": [
+      {
+        "name": "fengmk2",
+        "email": "fengmk2@gmail.com"
+      }
+    ],
+    "readme": "ERROR: No README data found!",
+    "readmeFilename": ""
+  }
+}

@@ -5,7 +5,7 @@
 The unpinned pnpm shim resolves the latest version
 
 
-## `NPM_CONFIG_REGISTRY=http://127.0.0.1:9 pnpm --version`
+## `node assert-registry-cache.mjs pnpm`
 
 The unpinned shim reuses its fresh latest-version cache without registry access
 

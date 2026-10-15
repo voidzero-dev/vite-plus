@@ -987,6 +987,16 @@ fn expand_env_value(value: &str, cwd: &Path, case_env: &BTreeMap<String, OsStrin
     out
 }
 
+fn registry_env_alias(key: &str) -> Option<&'static str> {
+    match key {
+        "npm_config_registry" => Some("NPM_CONFIG_REGISTRY"),
+        "NPM_CONFIG_REGISTRY" => Some("npm_config_registry"),
+        "pnpm_config_registry" => Some("PNPM_CONFIG_REGISTRY"),
+        "PNPM_CONFIG_REGISTRY" => Some("pnpm_config_registry"),
+        _ => None,
+    }
+}
+
 fn step_context<'a>(
     step: &Step,
     case_env: &'a BTreeMap<String, OsString>,
@@ -1008,6 +1018,13 @@ fn step_context<'a>(
     } else {
         let mut env = case_env.clone();
         for (k, v) in &step.envs {
+            // Do not let a runner-provided lowercase alias mask an explicit
+            // uppercase registry override (or vice versa).
+            if let Some(alias) = registry_env_alias(k)
+                && !step.envs.iter().any(|(key, _)| key == alias)
+            {
+                env.remove(alias);
+            }
             // References resolve against the case env, never a sibling step
             // env, so the entries stay order-independent.
             env.insert(k.clone(), expand_env_value(v, &cwd, case_env));
@@ -1047,6 +1064,11 @@ struct RegistryHandle {
     /// them here keeps yarn/bun install cases from leaking caches on every
     /// platform.
     cache_dirs: Vec<PathBuf>,
+}
+
+struct SharedRegistry {
+    env: BTreeMap<String, OsString>,
+    _handle: RegistryHandle,
 }
 
 impl Drop for RegistryHandle {
@@ -1100,7 +1122,9 @@ impl Drop for RegistryHandle {
 fn start_local_registry(
     node: &Path,
     stage: &Path,
-    pack_dir: &Path,
+    pack_dir: Option<&Path>,
+    cache_dir: &Path,
+    request_log: Option<&Path>,
     case_env: &BTreeMap<String, OsString>,
 ) -> Result<(BTreeMap<String, OsString>, RegistryHandle), String> {
     use std::io::{BufRead as _, Read as _};
@@ -1114,10 +1138,27 @@ fn start_local_registry(
         .current_dir(stage)
         .env_clear()
         .envs(case_env)
-        .env("SNAP_LOCAL_VP_PACKAGES_DIR", pack_dir)
+        // Fixture preloads are inputs to the CLI under test, not this helper.
+        .env_remove("NODE_OPTIONS")
+        .env_remove("NODE_PATH")
+        .env_remove("SNAP_LOCAL_VP_PACKAGES_DIR")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    if let Some(pack_dir) = pack_dir {
+        cmd.env("SNAP_LOCAL_VP_PACKAGES_DIR", pack_dir);
+    }
+    if std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() != Ok("direct") {
+        cmd.arg("--snapshot-cache").arg(cache_dir);
+        cmd.arg("--snapshot-fixtures")
+            .arg(flavor::manifest_dir().join("tests/cli_snapshots/registry"));
+        if std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() == Ok("live") {
+            cmd.arg("--live");
+        }
+        if let Some(log) = request_log {
+            cmd.arg("--request-log").arg(log);
+        }
+    }
     // The server proxies to the developer's configured upstream (an internal
     // npm mirror in `~/.npmrc`); it must read the REAL user home to find it,
     // not the isolated case HOME from `baseline_env`, or mirror-only
@@ -1213,6 +1254,7 @@ fn run_case(
     runtime: &FlavorRuntime,
     snapshot_name: &str,
     local_registry_pack: Option<&Path>,
+    shared_registry_env: Option<&BTreeMap<String, OsString>>,
     report: &report::Report,
 ) -> Result<(), String> {
     let snapshots = vt_snapshot_test::Snapshots::new(fixture_path.join("snapshots"));
@@ -1253,30 +1295,66 @@ fn run_case(
     let case_path: OsString =
         case_env.get("PATH").cloned().unwrap_or_else(|| case_install.path_env.clone());
 
-    // local-registry cases: stand up a per-case npm registry (serving the
-    // packed checkout packages plus this fixture's mock-manifest/tarballs) and
-    // fold its registry env into every step. Held to the end of the case so
-    // its teardown removes the throwaway package-manager caches. Registry env
-    // never sets PATH, so folding it in after `case_path` is derived is safe.
+    // Cases without overlays share the HTTP server, but keep package-manager
+    // caches isolated. Packed checkout packages and fixture overlays retain a
+    // per-case server. Neither registry environment changes PATH.
     let registry_phase = report.phase("registry-startup");
-    let registry = if case.local_registry {
-        let pack_dir = local_registry_pack
-            .ok_or("internal error: local-registry case reached run_case without a packed dir")?;
+    let mut shared_bun_cache = None;
+    let (registry_env, registry) = if let Some(env) = shared_registry_env {
+        let mut env = env.clone();
+        // Bun cache/temp renames cannot cross filesystems. Windows CI places
+        // the run tree on ReFS, so retain the standalone helper's NTFS choice.
+        let cache_root = if cfg!(windows) && std::env::var_os("CI").is_some() {
+            std::env::var_os("USERPROFILE").map_or_else(std::env::temp_dir, PathBuf::from)
+        } else {
+            case_root.to_path_buf()
+        };
+        let cache = tempfile::Builder::new()
+            .prefix("vp-local-registry-bun-")
+            .tempdir_in(cache_root)
+            .map_err(|error| format!("failed to create Bun cache: {error}"))?;
+        let temporary = cache.path().join(".tmp");
+        std::fs::create_dir(&temporary).map_err(|error| error.to_string())?;
+        env.insert("YARN_GLOBAL_FOLDER".into(), case_root.join("yarn-cache").into_os_string());
+        env.insert("BUN_INSTALL_CACHE_DIR".into(), cache.path().as_os_str().into());
+        env.insert("BUN_TMPDIR".into(), temporary.clone().into_os_string());
+        env.insert("TMPDIR".into(), temporary.into_os_string());
+        shared_bun_cache = Some(cache);
+        (env, None)
+    } else if case.local_registry
+        || std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() != Ok("direct")
+    {
+        let cache_dir = std::env::var_os("VP_SNAP_REGISTRY_CACHE_DIR")
+            .map_or_else(|| tmpdir.join("registry-cache"), PathBuf::from);
+        let request_log = report.artifact_path("registry.jsonl")?;
         // Prefer the seed runtime's real node binary over the case's node
         // shim: the shim resolves the project's pinned runtime from its cwd,
         // and a fixture pinning an older Node (a `.node-version` under test)
         // must not pick the runtime executing this TypeScript helper.
         let registry_node = flavor::seed_runtime_node()
             .map_or_else(|| case_install.resolve_program("node", &case_path, &stage), Ok)?;
-        let (registry_env, handle) =
-            start_local_registry(&registry_node, &stage, pack_dir, &case_env)?;
-        for (key, value) in registry_env {
+        let (registry_env, handle) = start_local_registry(
+            &registry_node,
+            &stage,
+            local_registry_pack,
+            &cache_dir,
+            request_log.as_deref(),
+            &case_env,
+        )?;
+        (registry_env, Some(handle))
+    } else {
+        (BTreeMap::new(), None)
+    };
+    for (key, value) in registry_env {
+        // Explicit fixture settings (including intentionally unreachable
+        // registries) still win over the runner's defaults.
+        let overridden = |key: &str| {
+            case.env.contains_key(key) || case.unset_env.iter().any(|unset| unset == key)
+        };
+        if !overridden(&key) && !registry_env_alias(&key).is_some_and(overridden) {
             case_env.insert(key, value);
         }
-        Some(handle)
-    } else {
-        None
-    };
+    }
 
     drop(registry_phase);
 
@@ -1571,6 +1649,7 @@ fn run_case(
     }
 
     drop(registry);
+    drop(shared_bun_cache);
     drop(cleanup_phase);
 
     // Deferred so the cleanup above always runs, even for hung steps.
@@ -1747,6 +1826,8 @@ fn main() {
         /// VP_SNAP_PACKAGES_DIR also shares them across nextest processes;
         /// this cell avoids revalidating the directory for each local trial.
         local_registry_pack: std::sync::OnceLock<Result<Arc<Path>, String>>,
+        shared_registry: std::sync::OnceLock<Result<SharedRegistry, String>>,
+        registry_log: Option<PathBuf>,
     }
     impl LazyRuntimes {
         fn get(&self, flavor: Flavor) -> &Result<FlavorRuntime, String> {
@@ -1755,6 +1836,38 @@ fn main() {
                 Flavor::Local => &self.local,
             };
             cell.get_or_init(|| flavor::provision(flavor, &self.run_root))
+        }
+
+        fn shared_registry(&self) -> Result<&BTreeMap<String, OsString>, String> {
+            self.shared_registry
+                .get_or_init(|| {
+                    let stage = self.run_root.join("shared-registry");
+                    std::fs::create_dir_all(&stage).map_err(|error| error.to_string())?;
+                    let node = flavor::seed_runtime_node().map_or_else(
+                        || which::which("node").map_err(|error| error.to_string()),
+                        Ok,
+                    )?;
+                    let cache_dir = std::env::var_os("VP_SNAP_REGISTRY_CACHE_DIR")
+                        .map_or_else(|| self.run_root.join("registry-cache"), PathBuf::from);
+                    let helper_env = ["TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "WINDIR"]
+                        .into_iter()
+                        .filter_map(|key| {
+                            std::env::var_os(key).map(|value| (key.to_string(), value))
+                        })
+                        .collect();
+                    let (env, handle) = start_local_registry(
+                        &node,
+                        &stage,
+                        None,
+                        &cache_dir,
+                        self.registry_log.as_deref(),
+                        &helper_env,
+                    )?;
+                    Ok(SharedRegistry { env, _handle: handle })
+                })
+                .as_ref()
+                .map(|registry| &registry.env)
+                .map_err(Clone::clone)
         }
 
         /// Packs the checkout packages once and returns the shared dir. Reuses
@@ -1800,6 +1913,8 @@ fn main() {
         global: std::sync::OnceLock::new(),
         local: std::sync::OnceLock::new(),
         local_registry_pack: std::sync::OnceLock::new(),
+        shared_registry: std::sync::OnceLock::new(),
+        registry_log: artifacts.as_ref().map(|dir| dir.join("registry.jsonl")),
     });
 
     // Per-case wall times, printed slowest-first after the run. libtest-mimic
@@ -1884,6 +1999,17 @@ fn main() {
                                 "{fixture_name}_case_{case_index}_{}",
                                 flavor.as_str()
                             ));
+                            let shared_registry_phase = report.phase("shared-registry-startup");
+                            let shared_registry_env = if !case.local_registry
+                                && !fixture_path.join("mock-manifest.json").exists()
+                                && !fixture_path.join(".npmrc").exists()
+                                && std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() != Ok("direct")
+                            {
+                                Some(runtimes.shared_registry()?)
+                            } else {
+                                None
+                            };
+                            drop(shared_registry_phase);
                             let result = run_case(
                                 &tmp_dir_path,
                                 &case_root,
@@ -1893,6 +2019,7 @@ fn main() {
                                 runtime,
                                 &snapshot_name,
                                 local_registry_pack.as_deref(),
+                                shared_registry_env,
                                 &report,
                             );
                             // Reclaim each workspace while other workers can
@@ -1959,6 +2086,7 @@ fn main() {
     // exit() never returns, so the staged run tree must be dropped first or
     // every run would leave its full tempdir behind.
     let cleanup_phase = run_report.phase("run-cleanup");
+    drop(runtimes);
     drop(tmp_dir);
     drop(cleanup_phase);
     run_report
