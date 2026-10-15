@@ -48,6 +48,7 @@ export async function prepareWebdriverioProject(
     // Deleting client3 broadcasts a reconnect to client2 without awaiting it.
     // Wait for client2 to recreate the OPFS file before checking its handle.
     // Remove when upstream waits for the other client's asynchronous reconnect.
+    // Upstream test fixes: https://github.com/DallasHoff/sqlocal/pull/112
     await replaceOnce(
       join(root, 'test', 'delete-database-file.test.ts'),
       `\t\t\t\tif (type === 'opfs') {
@@ -66,6 +67,36 @@ export async function prepareWebdriverioProject(
 \t\t\t\t}
 
 \t\t\t\tawait client2.destroy();`,
+    );
+
+    // This case exports two databases and overwrites one three times. Allow
+    // enough time for OPFS I/O instead of using the one-second suite default.
+    await replaceOnce(
+      join(root, 'test', 'overwrite-database-file.test.ts'),
+      "it('should replace the contents of a database', async () => {",
+      "it('should replace the contents of a database', { timeout: type === 'opfs' ? 5000 : undefined }, async () => {",
+    );
+
+    // A peer query can arrive after the close broadcast but before reconnect.
+    // Wait for the peer's overwrite notification before checking its onInit state.
+    // Remove these patches when upstream synchronizes the peer query.
+    await replaceOnce(
+      join(root, 'test', 'overwrite-database-file.test.ts'),
+      'const db2 = new SQLocal({ databasePath, onInit });',
+      `const onConnect = vi.fn();
+\t\t\t\tconst db2 = new SQLocal({ databasePath, onInit, onConnect });`,
+    );
+    await replaceOnce(
+      join(root, 'test', 'overwrite-database-file.test.ts'),
+      `results.push(result3);
+\t\t\t\tconst [{ foreign_keys: result4 }] = await db2.sql\`PRAGMA foreign_keys\`;`,
+      `results.push(result3);
+\t\t\t\tif (type !== 'memory') {
+\t\t\t\t\tawait vi.waitFor(() => {
+\t\t\t\t\t\texpect(onConnect).toHaveBeenCalledWith('overwrite');
+\t\t\t\t\t});
+\t\t\t\t}
+\t\t\t\tconst [{ foreign_keys: result4 }] = await db2.sql\`PRAGMA foreign_keys\`;`,
     );
 
     // Vitest 5's browser server does not run the SQLocal plugin's middleware.
