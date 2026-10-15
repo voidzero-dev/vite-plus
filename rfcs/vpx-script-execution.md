@@ -1,6 +1,6 @@
 # RFC: Run TypeScript Scripts with `vpx`
 
-- Status: Draft (for review); prototype implemented and verified on Node.js 22, 24, and 26 (macOS)
+- Status: Draft (for review); implemented in [#2936](https://github.com/voidzero-dev/vite-plus/pull/2936) and covered by CI on Linux, macOS, and Windows with Node.js 22, 24, and 26
 - Related: [`vpx` command](./vpx-command.md), [JavaScript runtime management](./js-runtime.md), [CLI bundling](../packages/cli/BUNDLING.md), [Core binding resolution](./core-binding-resolution.md)
 - Upstream: [oxc-project/oxc-node](https://github.com/oxc-project/oxc-node) (v0.1.7; source vendored unpatched and compiled into the Vite+ native binding, as Rolldown is)
 - Prior art: [tsx](https://github.com/privatenumber/tsx) 4.23.15
@@ -369,7 +369,7 @@ Before this change, `BUNDLING.md` said the `rolldown` feature was release-only, 
 
 ### 4. Toolchain Metadata and Docs
 
-- `packages/cli/toolchain.config.json` registers `oxc-node` with a new `vendored` version source: the version comes from the vendored `@oxc-node/core` package.json and the revision from `.upstream-versions.json`. `vp toolchain` shows `compiles oxc-node@0.1.5 (<revision>)`, which compiles `oxc` and `oxc-resolver`.
+- `packages/cli/toolchain.config.json` registers `oxc-node` with a new `vendored` version source: the version comes from the vendored `@oxc-node/core` package.json and the revision from `.upstream-versions.json`. `vp toolchain` shows `compiles oxc-node@0.1.7 (<revision>)`, which compiles `oxc` and `oxc-resolver`.
 - `packages/cli/BUNDLING.md`: an "oxc-node Script Loader" section, plus the corrected feature description.
 - `docs/guide/vpx.md`: separate "Running Package Binaries" and "Running Scripts" sections, with the tsconfig defaults. `docs/guide/env.md` contrasts `vp node` with `vpx <file>`.
 - The `vpx --help` text (`VPX_HELP`) and the `command_vpx_pnpm*` snapshots that record it.
@@ -500,10 +500,10 @@ Other errors raised in the script, including transform errors, come from Node.js
 
 **Rationale**:
 
-- The crates are already there. Through `rolldown_binding`, the release binding links `oxc` (transformer, codegen, semantic), `oxc_resolver`, and `oxc_sourcemap` and exports `transform`, `resolveTsconfig`, and `ResolverFactory`. oxc-node adds about 2,700 lines of glue and no new crates.
+- The crates are already there. Through `rolldown_binding`, the release binding links `oxc` (transformer, codegen, semantic), `oxc_resolver`, and `oxc_sourcemap` and exports `transform`, `resolveTsconfig`, and `ResolverFactory`. oxc-node adds about 3,600 lines of glue and no new crates.
 - No new packages. `@oxc-node/core` would add a 17-target platform matrix (about 4 MB per platform) next to Vite+'s 8-target one, with its own install, version-check, and WASI-fallback paths.
 - Load cost is negligible. Measured on this machine (Node.js 22.18, macOS arm64): the 42 MB release binding loads in 2.3–3.2 ms warm and 17.9 ms cold; the 4.2 MB `@oxc-node/core` binding loads in 0.7–1.1 ms warm. Transform speed is identical, since it is the same oxc.
-- The blocking helper bug stops being an upstream dependency. The loader maps helper imports to `@oxc-project/runtime`, a `vite-plus` dependency, and the vendored copy carries fixes such as enum evaluation until they land upstream.
+- Fixes did not have to wait for an upstream release. The loader maps helper imports to `@oxc-project/runtime`, a `vite-plus` dependency, and while the bugs found here were being fixed upstream, the vendored copy carried the fixes as a patch, which v0.1.7 made unnecessary.
 - One oxc version for the whole toolchain. Rolldown, `vp lint`'s type-aware parsing, the static config extractor, and the script loader cannot drift apart.
 - The vendoring mechanism (`sync-remote`, `.upstream-versions.json`, workspace path deps, a Cargo feature, publish-time platform injection) exists and is exercised on every release.
 
@@ -560,7 +560,7 @@ Write `resolve`/`load` hooks in TypeScript against `transformSync`, `ResolverFac
 - **Pros**: no vendored Rust at all, and oxc lockstep for free.
 - **Cons**: reimplements format detection, the ESM-in-CommonJS re-parse, JSON module synthesis, and Windows file-URL handling that oxc-node has tests for; several NAPI calls per file instead of one.
 
-Kept as the fallback if vendoring proves harder than expected.
+Not needed: vendoring works, and since v0.1.7 without a patch.
 
 ## Edge Cases
 
@@ -644,9 +644,11 @@ Verified on macOS arm64 with Node.js 22.18, 24.11, 26.0, and 26.5, through the p
 - [x] Exit codes, and `128 + signal` through the project-local bin (SIGTERM gives 143).
 - [x] Release-build binary size growth (see [Performance](#performance)).
 
+- [x] Windows, in CI: paths, the loader URL, and exit codes in every snapshot case except watch mode and shebangs.
+
 Still to verify:
 
-- [ ] Windows: paths, loader URL, Ctrl+C, and exit codes (CI snapshot run).
+- [ ] Windows: Ctrl+C through the `vp.exe` spawn-and-wait path.
 
 ## Performance
 
