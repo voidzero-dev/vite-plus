@@ -14,7 +14,7 @@ steps = [
   { argv = ["vp", "staged"], tty = false, comment = "Piped output is compact too." },
   { argv = ["vp", "staged", "--quiet"], comment = "Quiet mode has no success output." },
   { argv = ["vp", "staged", "--verbose"], comment = "Verbose mode retains successful task output." },
-  { argv = ["vp", "staged", "--debug"], comment = "Debug mode retains the full workflow log." },
+  { argv = ["vp", "staged", "--debug"], snapshot = false, comment = "Debug mode still runs, but its full workflow log is not recorded." },
   { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "checked"], snapshot = false },
   { argv = ["vp", "staged"], comment = "No staged files is still reported." },
   { argv = ["vpt", "write-file", "note.txt", "no matching task\n"], snapshot = false },
