@@ -1304,10 +1304,12 @@ fn run_case(
         let mut env = env.clone();
         // Bun cache/temp renames cannot cross filesystems. Windows CI places
         // the run tree on ReFS, so retain the standalone helper's NTFS choice.
+        // Keep Unix temp paths outside the case tree: long fixture names can
+        // exceed the socket path limit used by the task runner and Chromium.
         let cache_root = if cfg!(windows) && std::env::var_os("CI").is_some() {
             std::env::var_os("USERPROFILE").map_or_else(std::env::temp_dir, PathBuf::from)
         } else {
-            case_root.to_path_buf()
+            std::env::temp_dir()
         };
         let cache = tempfile::Builder::new()
             .prefix("vp-local-registry-bun-")

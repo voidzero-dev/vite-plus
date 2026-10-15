@@ -103,6 +103,26 @@ it('can bypass response storage for a live-network benchmark', async () => {
   expect((await cache.get(url, 'application/json')).body.toString()).toBe('2');
 });
 
+it('bounds an unfinished download and releases its lock for another registry', async () => {
+  let complete = false;
+  const url = await upstream((_req, res) => {
+    if (complete) {
+      res.end('complete');
+      return;
+    }
+    const timer = setInterval(() => res.write('partial'), 5);
+    res.on('close', () => clearInterval(timer));
+  });
+  const dir = await directory();
+  const cache = new RegistryCache(dir, true, undefined, 100);
+  await expect(cache.get(url, 'application/octet-stream')).rejects.toMatchObject({
+    name: 'AbortError',
+  });
+  complete = true;
+  const next = new RegistryCache(dir);
+  expect((await next.get(url, 'application/octet-stream')).body.toString()).toBe('complete');
+});
+
 it('routes tarballs through the case registry without changing unrelated metadata', () => {
   const registry = 'http://127.0.0.1:1234';
   const cdn = 'https://cdn.example.test/package.tgz';
