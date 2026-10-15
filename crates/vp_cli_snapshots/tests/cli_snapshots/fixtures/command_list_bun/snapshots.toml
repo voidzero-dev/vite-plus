@@ -2,8 +2,9 @@
 name = "command_list_bun"
 vp = "global"
 skip-platforms = ["windows"]
+# The initial install also downloads Bun into the fresh case home.
 steps = [
-  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "install"], comment = "should install packages first", timeout = 180000, continue-on-failure = true },
   { argv = ["vp", "pm", "list", "--help"], comment = "should show help", continue-on-failure = true },
   { argv = ["vp", "pm", "list"], comment = "should list installed packages", continue-on-failure = true },
 ]
