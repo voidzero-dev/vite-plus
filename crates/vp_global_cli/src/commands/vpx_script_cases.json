@@ -120,6 +120,21 @@
       }
     },
     {
+      "name": "missing explicit path without an extension",
+      "args": ["./bin/missing"],
+      "expect": {
+        "error": "Script not found: ./bin/missing"
+      }
+    },
+    {
+      "name": "explicit path to a directory",
+      "files": {
+        "tools/package.json": "{}"
+      },
+      "args": ["./tools"],
+      "expect": "package"
+    },
+    {
       "name": "bare name with a JavaScript extension and no file",
       "args": ["highlight.js"],
       "expect": "package"

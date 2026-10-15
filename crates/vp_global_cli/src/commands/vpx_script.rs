@@ -218,12 +218,19 @@ fn is_script(token: &str, cwd: &AbsolutePath) -> Result<bool, ScriptError> {
         }
         return Ok(false);
     }
+    if !is_explicit_path(token) {
+        return Ok(false);
+    }
+    // A missing explicit path never falls through to a package download.
+    if !path.as_path().exists() {
+        return Err(ScriptError::NotFound(token.to_owned()));
+    }
     // `#!/usr/bin/env vpx` in an extensionless file. Without this, the `PATH`
     // lookup would exec the file, which re-enters `vpx` forever.
-    Ok(is_explicit_path(token) && path.as_path().is_file() && has_vpx_shebang(&path))
+    Ok(path.as_path().is_file() && has_vpx_shebang(&path))
 }
 
-pub fn is_explicit_path(token: &str) -> bool {
+fn is_explicit_path(token: &str) -> bool {
     if token.starts_with("./") || token.starts_with("../") || token.starts_with('/') {
         return true;
     }

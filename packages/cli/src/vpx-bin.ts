@@ -1,23 +1,31 @@
 /**
  * Project-local `vpx` bin (`node_modules/.bin/vpx`).
  *
- * Runs script files with the loader shipped in this package, so `vpx ./seed.ts`
- * works in package.json scripts without the global CLI. Everything else is
- * handed to the global `vpx`, which owns the package lookup chain.
+ * Package managers and `vp run` put `node_modules/.bin` first on `PATH`, so this bin,
+ * not the global `vpx`, runs in package.json scripts. It never hands off to the global
+ * CLI. Script files run with the loader shipped in this package. Package binaries run
+ * with this package's `vp exec` (installed in `node_modules/.bin`) or `vp dlx`
+ * (versioned, `--package`, `--shell-mode`); see `packageInvocation`.
  *
- * Kept free of the CLI bundle and the native binding: the script's own Node.js
- * process loads the binding through `script-register.js`.
+ * Script mode stays free of the CLI bundle and the native binding: the script's own
+ * Node.js process loads the binding through `script-register.js`.
  */
 
 import { spawn } from 'node:child_process';
-import { realpathSync, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { constants } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 
-import { detectScript, isFile, parseVpxArgs, ScriptError } from './vpx-script.ts';
+import {
+  detectScript,
+  isFile,
+  packageInvocation,
+  parseVpxArgs,
+  ScriptError,
+} from './vpx-script.ts';
 
 function errorMsg(message: string) {
   /* oxlint-disable-next-line no-console */
@@ -44,22 +52,6 @@ function prependNodeModulesBins(cwd: string, pathValue: string | undefined): str
   return [...bins, ...entries].join(path.delimiter);
 }
 
-/** The global `vpx` on PATH, skipping `node_modules/.bin` directories (this bin). */
-function findGlobalVpx(env: NodeJS.ProcessEnv): string | undefined {
-  const name = process.platform === 'win32' ? 'vpx.exe' : 'vpx';
-  const self = realpathSync(process.argv[1]);
-  for (const dir of (env[pathKey(env)] ?? '').split(path.delimiter)) {
-    if (!dir || path.basename(dir) === '.bin') {
-      continue;
-    }
-    const candidate = path.join(dir, name);
-    if (isFile(candidate) && realpathSync(candidate) !== self) {
-      return candidate;
-    }
-  }
-  return undefined;
-}
-
 /** Run `command` with inherited stdio and exit the way it exited. */
 function runAndExit(command: string, args: string[], env: NodeJS.ProcessEnv): void {
   const child = spawn(command, args, { stdio: 'inherit', env });
@@ -82,42 +74,81 @@ function runAndExit(command: string, args: string[], env: NodeJS.ProcessEnv): vo
   });
 }
 
-const LOCAL_HELP = `Run a script file with the Vite+ loader
+const LOCAL_HELP = `Execute a binary from node_modules/.bin or a remote npm package, or run a script file
 
-Usage: vpx [OPTIONS] [NODE_OPTIONS] <script> [args...]
+Usage: vpx [OPTIONS] <pkg[@version]> [args...]
+       vpx [OPTIONS] [NODE_OPTIONS] <script> [args...]
 
 Arguments:
-  <script>   Script file to run (.ts, .mts, .cts, .tsx, .js, .mjs, .cjs, .jsx)
-  [args...]  Arguments to pass to the script
+  <pkg[@version]>  Package binary to execute
+  <script>         Script file to run (.ts, .mts, .cts, .tsx, .js, .mjs, .cjs, .jsx)
+  [args...]        Arguments to pass to the command or script
 
 Options:
-      --tsconfig <PATH>  tsconfig.json to use when running the script
-  -v, --version          Print the vite-plus version
-  -h, --help             Print help
+  -p, --package <NAME>  Package(s) to download
+  -c, --shell-mode      Execute the command within a shell environment
+  -s, --silent          Suppress all output except the command's output
+      --tsconfig <PATH> tsconfig.json to use when running a script
+  -v, --version         Print the vite-plus version
+  -h, --help            Print help
+
+This project-local vpx runs in package.json scripts. It runs binaries installed in
+node_modules/.bin, and downloads a package only for a version, --package, or --shell-mode.
 
 Examples:
-  vpx ./scripts/seed.ts --dry-run   # Run a TypeScript script
-  vpx --watch ./server.ts           # Pass Node.js options before the script
-
-Running package binaries (vpx <pkg>) requires the global Vite+ CLI: https://viteplus.dev/guide/
+  vpx eslint .                           # Run eslint from node_modules/.bin
+  vpx create-vue@latest my-app           # Download and run create-vue
+  vpx -p cowsay -c 'echo "hi" | cowsay'  # Shell mode with package
+  vpx ./scripts/seed.ts --dry-run        # Run a TypeScript script
+  vpx --watch ./server.ts                # Pass Node.js options before the script
 `;
+
+function fail(message: string): never {
+  errorMsg(message);
+  process.exit(1);
+}
 
 const args = process.argv.slice(2);
 const cwd = process.cwd();
 const { flags, positional } = parseVpxArgs(args);
 
-let invocation;
-try {
-  invocation =
-    flags.packages.length === 0 && !flags.shellMode && !flags.help && !flags.version
-      ? detectScript(positional, cwd)
-      : undefined;
-} catch (error) {
-  if (!(error instanceof ScriptError)) {
-    throw error;
-  }
-  errorMsg(`vpx: ${error.message}`);
+if (flags.help) {
+  process.stdout.write(LOCAL_HELP);
+  process.exit(0);
+}
+if (flags.version) {
+  const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
+  process.stdout.write(`vite-plus v${version}\n`);
+  process.exit(0);
+}
+const [first, ...rest] = positional;
+if (first === undefined) {
+  errorMsg('vpx requires a command to run');
+  process.stderr.write('\nUsage: vpx <script> [args...]\n       vpx <pkg[@version]> [args...]\n');
   process.exit(1);
+}
+
+// Script mode is decided before package-spec parsing: script paths can contain `@`.
+const packageFlags = flags.packages.length > 0 || flags.shellMode;
+let invocation;
+if (!packageFlags || !first.startsWith('-')) {
+  try {
+    invocation = detectScript(positional, cwd);
+  } catch (error) {
+    if (!(error instanceof ScriptError)) {
+      throw error;
+    }
+    // A missing script never falls through to `dlx`, `--package` or not. With
+    // `--shell-mode` the token is a shell command, not a path.
+    if (!flags.shellMode) {
+      fail(`vpx: ${error.message}`);
+    }
+  }
+  if (invocation && packageFlags) {
+    fail(
+      `vpx: ${flags.shellMode ? '--shell-mode' : '--package'} cannot be used when running a script`,
+    );
+  }
 }
 
 if (invocation) {
@@ -130,8 +161,7 @@ if (invocation) {
   } else {
     const file = path.resolve(cwd, tsconfig);
     if (!isFile(file)) {
-      errorMsg(`vpx: tsconfig not found: ${tsconfig}`);
-      process.exit(1);
+      fail(`vpx: tsconfig not found: ${tsconfig}`);
     }
     env.VP_SCRIPT_TSCONFIG = file;
   }
@@ -150,23 +180,19 @@ if (invocation) {
     env,
   );
 } else {
-  const globalVpx = findGlobalVpx(process.env);
-  if (!globalVpx) {
-    if (flags.version) {
-      const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
-      process.stdout.write(`vite-plus v${version}\n`);
-      process.exit(0);
-    }
-    if (flags.help) {
-      // Without the global CLI this bin only runs scripts, so it describes just that.
-      process.stdout.write(LOCAL_HELP);
-      process.exit(0);
-    }
-    errorMsg(
-      'vpx: Running package binaries requires the global Vite+ CLI (https://viteplus.dev/guide/). ' +
-        'Use `vp exec` or `vp dlx` from a project-local install.',
-    );
+  if (flags.tsconfig !== undefined) {
+    fail('vpx: --tsconfig can only be used when running a script');
+  }
+  const result = packageInvocation(flags, [first, ...rest], cwd);
+  if ('error' in result) {
+    errorMsg(`vpx: ${result.error}`);
+    /* oxlint-disable-next-line no-console */
+    console.error(styleText(['dim', 'bold'], 'note:'), result.note);
     process.exit(1);
   }
-  runAndExit(globalVpx, args, process.env);
+  // Hand off to this package's \`vp exec\` / \`vp dlx\` in this process. A computed
+  // specifier keeps the CLI bundle and the native binding out of this entry.
+  process.argv = [...process.argv.slice(0, 2), result.command, ...result.args];
+  const cliEntry = new URL('./bin.js', import.meta.url).href;
+  await import(cliEntry);
 }

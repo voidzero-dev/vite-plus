@@ -227,10 +227,18 @@ function isScript(token: string, cwd: string): boolean {
     }
     return false;
   }
-  return isExplicitPath(token) && isFile(file) && hasVpxShebang(file);
+  if (!isExplicitPath(token)) {
+    return false;
+  }
+  // A missing explicit path never falls through to a package download.
+  const stats = statSync(file, { throwIfNoEntry: false });
+  if (!stats) {
+    throw new ScriptError(`Script not found: ${token}`);
+  }
+  return stats.isFile() && hasVpxShebang(file);
 }
 
-function isExplicitPath(token: string): boolean {
+export function isExplicitPath(token: string): boolean {
   if (token.startsWith('./') || token.startsWith('../') || token.startsWith('/')) {
     return true;
   }
@@ -269,4 +277,79 @@ function hasVpxShebang(file: string): boolean {
       const name = word.split(/[\\/]/).pop();
       return name === 'vpx' || name === 'vpx.exe';
     });
+}
+
+/** Whether a package spec names a version, as in `eslint@9` or `@vue/cli@5`. */
+export function hasVersionSpec(spec: string): boolean {
+  if (spec.startsWith('@')) {
+    const slash = spec.indexOf('/');
+    return slash !== -1 && spec.slice(slash + 1).includes('@');
+  }
+  return spec.includes('@');
+}
+
+/** The binary name a package spec runs: `eslint@9` → `eslint`, `@vue/cli@5` → `cli`. */
+export function commandName(spec: string): string {
+  if (spec.startsWith('@')) {
+    const slash = spec.indexOf('/');
+    return slash === -1 ? spec : spec.slice(slash + 1).split('@')[0];
+  }
+  return spec.split('@')[0];
+}
+
+/** Whether `name` is installed in a `node_modules/.bin` from `cwd` up (`.cmd` on Windows). */
+export function hasLocalBin(name: string, cwd: string): boolean {
+  const file = process.platform === 'win32' ? `${name}.cmd` : name;
+  for (let dir = cwd; ; dir = path.dirname(dir)) {
+    if (isFile(path.join(dir, 'node_modules', '.bin', file))) {
+      return true;
+    }
+    if (path.dirname(dir) === dir) {
+      return false;
+    }
+  }
+}
+
+export type PackageInvocation =
+  | { command: 'exec' | 'dlx'; args: string[] }
+  | { error: string; note: string };
+
+/**
+ * How the project-local bin runs `vpx <pkg> [args...]` with this package's `vp`. A
+ * binary installed in `node_modules/.bin`, or an existing file, runs with `vp exec`; a
+ * versioned package, `--package`, `--shell-mode`, or a local package directory runs
+ * with `vp dlx`. Global packages and `PATH` are not searched, so a binary that is not
+ * installed is an error rather than a download.
+ */
+export function packageInvocation(
+  flags: VpxFlags,
+  [spec, ...rest]: [string, ...string[]],
+  cwd: string,
+): PackageInvocation {
+  const silent = flags.silent ? ['--silent'] : [];
+  if (flags.packages.length > 0 || flags.shellMode || hasVersionSpec(spec)) {
+    return {
+      command: 'dlx',
+      args: [
+        ...flags.packages.flatMap((name) => ['--package', name]),
+        ...(flags.shellMode ? ['--shell-mode'] : []),
+        ...silent,
+        spec,
+        ...rest,
+      ],
+    };
+  }
+  if (isExplicitPath(spec)) {
+    return isFile(path.resolve(cwd, spec))
+      ? { command: 'exec', args: [spec, ...rest] }
+      : { command: 'dlx', args: [...silent, spec, ...rest] };
+  }
+  const name = commandName(spec);
+  if (hasLocalBin(name, cwd)) {
+    return { command: 'exec', args: [name, ...rest] };
+  }
+  return {
+    error: `'${name}' is not installed in node_modules`,
+    note: `Add it to devDependencies, or run \`vp dlx ${spec}\` to download and run it.`,
+  };
 }
