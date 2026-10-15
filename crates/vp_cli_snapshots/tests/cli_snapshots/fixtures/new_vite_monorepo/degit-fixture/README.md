@@ -14,5 +14,5 @@ After an intentional fixture change, regenerate both case tarballs and their
 integrity hashes from the repository root:
 
 ```sh
-python3 crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/new_vite_monorepo/degit-fixture/pack.py
+node crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/new_vite_monorepo/degit-fixture/pack.mjs
 ```
