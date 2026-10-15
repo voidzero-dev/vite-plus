@@ -153,11 +153,12 @@ Detection runs before any package-spec parsing, such as `@version` detection, be
 after parsing vpx options, let T = positional[0]
 
 if T starts with '-':                      # Node.js invocation; never a package bin today
-    script = first token after the Node.js options where is_script(token),
-             skipping the value of options that take a separate argument
-             (--import, --require, --loader, --experimental-loader, --watch-path,
-              --env-file, --inspect-port, --title, --conditions, -C, -r, …)
-    none found → forward to Node.js as-is (eval, print, stdin, REPL, --check)
+    script = first token after the Node.js options, skipping the value of
+             options that take a required value (every `--option=...` that
+             `node --help` lists on 22, 24, and 26: --import, --require, --env-file,
+             --test-coverage-include, --conditions, -C, -r, …)
+    script is a missing explicit path with a script extension → error "script not found"
+    otherwise → forward to Node.js as-is (a bare name, eval, print, stdin, REPL, --check)
 elif is_script(T):
     script = T
 else:
@@ -173,7 +174,7 @@ is_script(token):
     otherwise                           → not a script
 ```
 
-Detection decides the mode and which token gets the missing-file check. It never rewrites the arguments: Node.js receives every token in order, after `--import <loader>`, and parses its own options. The skip list exists only so that `vpx --import ./setup.ts ./main.ts` checks `./main.ts` rather than `./setup.ts`; the list is a best effort, and a wrong guess only moves the missing-file check to Node.js, which reports `Cannot find module` itself.
+Detection decides the mode and which token gets the missing-file check. It never rewrites the arguments: Node.js receives every token in order, after `--import <loader>`, and parses its own options. The skip list exists only so that `vpx --import ./setup.ts ./main.ts` checks `./main.ts` rather than `./setup.ts`. After Node.js options only a missing explicit path is an error: a bare name may be the value of an option the list lacks, such as a coverage glob, and that position never falls back to a package. A wrong guess therefore only moves the missing-file check to Node.js, which reports `Cannot find module` itself. Both CLIs declare the same list, checked against `vpx_script_cases.json`.
 
 The `T starts with '-'` branch is backward compatible. Today the first unknown option becomes the command name (`parse_vpx_args` in `crates/vp_global_cli/src/commands/vpx.rs`), so `vpx --inspect ./a.ts` ends up running `pnpm dlx --inspect ./a.ts`, which never ran a package.
 

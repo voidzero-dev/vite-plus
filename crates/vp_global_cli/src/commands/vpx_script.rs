@@ -23,33 +23,52 @@ const SCRIPT_EXTENSIONS: &[&str] = &[".ts", ".mts", ".cts", ".tsx", ".js", ".mjs
 /// A missing file with one of these is an error, never a package name.
 const TS_EXTENSIONS: &[&str] = &[".ts", ".mts", ".cts", ".tsx"];
 
-/// Node.js options that take their value as the next argument. Best effort: a
-/// missing entry only moves the missing-file check for the script to Node.js.
+/// Node.js options that take a required value, which may come as the next argument:
+/// those `node --help` lists as `--option=...` on Node.js 22, 24, and 26. Best effort:
+/// a missing entry only moves the missing-file check for the script to Node.js.
 const NODE_OPTIONS_WITH_VALUE: &[&str] = &[
     "-C",
     "-e",
     "-p",
     "-r",
+    "--allow-fs-read",
+    "--allow-fs-write",
+    "--build-sea",
+    "--build-snapshot-config",
     "--conditions",
     "--cpu-prof-dir",
+    "--cpu-prof-interval",
     "--cpu-prof-name",
+    "--debug-port",
     "--diagnostic-dir",
+    "--disable-proto",
     "--disable-warning",
     "--dns-result-order",
     "--env-file",
     "--env-file-if-exists",
     "--eval",
     "--experimental-config-file",
+    "--experimental-default-type",
     "--experimental-loader",
+    "--experimental-package-map",
+    "--experimental-sea-config",
+    "--experimental-test-isolation",
+    "--experimental-test-tag-filter",
     "--heap-prof-dir",
+    "--heap-prof-interval",
     "--heap-prof-name",
+    "--heapsnapshot-near-heap-limit",
     "--heapsnapshot-signal",
     "--icu-data-dir",
     "--import",
     "--input-type",
     "--inspect-port",
+    "--inspect-publish-uid",
     "--loader",
     "--localstorage-file",
+    "--max-http-header-size",
+    "--max-old-space-size-percentage",
+    "--network-family-autoselection-attempt-timeout",
     "--openssl-config",
     "--print",
     "--redirect-warnings",
@@ -63,16 +82,30 @@ const NODE_OPTIONS_WITH_VALUE: &[&str] = &[
     "--secure-heap-min",
     "--snapshot-blob",
     "--test-concurrency",
+    "--test-coverage-branches",
+    "--test-coverage-exclude",
+    "--test-coverage-functions",
+    "--test-coverage-include",
+    "--test-coverage-lines",
+    "--test-global-setup",
+    "--test-isolation",
     "--test-name-pattern",
+    "--test-random-seed",
     "--test-reporter",
     "--test-reporter-destination",
+    "--test-rerun-failures",
     "--test-shard",
     "--test-skip-pattern",
     "--test-timeout",
     "--title",
     "--tls-cipher-list",
     "--tls-keylog",
+    "--trace-event-categories",
+    "--trace-event-file-pattern",
+    "--trace-require-module",
     "--unhandled-rejections",
+    "--use-largepages",
+    "--v8-pool-size",
     "--watch-kill-signal",
     "--watch-path",
 ];
@@ -127,7 +160,7 @@ pub fn detect(
         if arg == "--" || arg == "-" || !arg.starts_with('-') {
             let script = if arg == "--" { positional.get(index + 1) } else { Some(arg) };
             if let Some(script) = script {
-                is_script(script, cwd)?;
+                check_script_after_options(script, cwd)?;
             }
             node_args.extend_from_slice(&positional[index..]);
             break;
@@ -154,6 +187,20 @@ pub fn detect(
     }
 
     Ok(Some(ScriptInvocation { node_args, tsconfig }))
+}
+
+/// After Node.js options, only a missing explicit path is an error. A bare name may
+/// be the value of an option missing from `NODE_OPTIONS_WITH_VALUE`, such as a
+/// coverage glob, and this position never falls back to a package, so Node.js
+/// reports a missing one itself.
+fn check_script_after_options(token: &str, cwd: &AbsolutePath) -> Result<(), ScriptError> {
+    if is_explicit_path(token)
+        && SCRIPT_EXTENSIONS.iter().any(|extension| token.ends_with(extension))
+        && !cwd.join(token).as_path().is_file()
+    {
+        return Err(ScriptError::NotFound(token.to_owned()));
+    }
+    Ok(())
 }
 
 /// Whether `token` names a script. A missing explicit path, or a missing file
@@ -351,6 +398,18 @@ mod tests {
         let (_global, global) = dist(&[PRELOAD_ENTRY]);
         assert_eq!(choose_loader_dir(Some(local), || Some(global.join("dist"))), None);
         assert_eq!(choose_loader_dir(None, || None), None);
+    }
+
+    /// `vpx_script_cases.json` also lists what `packages/cli/src/vpx-script.ts` must
+    /// declare, so the TypeScript port checks the same lists without parsing Rust.
+    #[test]
+    fn lists_match_the_shared_table() {
+        let table: Value = serde_json::from_str(include_str!("vpx_script_cases.json")).unwrap();
+        let list = |key: &str| -> Vec<&str> {
+            table[key].as_array().unwrap().iter().map(|item| item.as_str().unwrap()).collect()
+        };
+        assert_eq!(SCRIPT_EXTENSIONS, list("scriptExtensions"));
+        assert_eq!(NODE_OPTIONS_WITH_VALUE, list("nodeOptionsWithValue"));
     }
 
     /// The cases in `vpx_script_cases.json`, which

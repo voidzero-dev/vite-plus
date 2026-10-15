@@ -14,7 +14,13 @@ import {
   runtimeHelperSpecifier,
   SUPPORTED_NODE_RANGE,
 } from '../script-hooks.ts';
-import { detectScript, parseVpxArgs, ScriptError } from '../vpx-script.ts';
+import {
+  detectScript,
+  NODE_OPTIONS_WITH_VALUE,
+  parseVpxArgs,
+  SCRIPT_EXTENSIONS,
+  ScriptError,
+} from '../vpx-script.ts';
 
 const dirs: string[] = [];
 
@@ -35,15 +41,6 @@ afterEach(() => {
   }
 });
 
-/** String items of the list declared as `start`; lists end at `];` or `]);`. */
-function extractList(text: string, start: string): string[] | undefined {
-  return text
-    .slice(text.indexOf(start))
-    .split(/\]\)?;/, 1)[0]
-    .match(/"[^"]+"|'[^']+'/g)
-    ?.map((value) => value.slice(1, -1));
-}
-
 interface DetectionCase {
   name: string;
   files?: Record<string, string>;
@@ -51,7 +48,11 @@ interface DetectionCase {
   expect: 'package' | { error: string } | { script: string[]; tsconfig?: string };
 }
 
-const detectionCases: DetectionCase[] = JSON.parse(
+const detectionTable: {
+  scriptExtensions: string[];
+  nodeOptionsWithValue: string[];
+  cases: DetectionCase[];
+} = JSON.parse(
   readFileSync(
     path.join(
       import.meta.dirname,
@@ -59,11 +60,11 @@ const detectionCases: DetectionCase[] = JSON.parse(
     ),
     'utf8',
   ),
-).cases;
+);
 
 describe('detectScript', () => {
   // The global CLI runs the same cases (`vpx_script.rs`), so both decide the same way.
-  it.each(detectionCases)('$name', ({ files = {}, args, expect: expected }) => {
+  it.each(detectionTable.cases)('$name', ({ files = {}, args, expect: expected }) => {
     const cwd = project(files);
     const fill = (values: string[]) => values.map((value) => value.replaceAll('{cwd}', cwd));
     if (expected === 'package') {
@@ -79,21 +80,10 @@ describe('detectScript', () => {
     }
   });
 
-  it('matches the global CLI detection table', () => {
-    // Keep crates/vp_global_cli/src/commands/vpx_script.rs and this module in sync.
-    const rust = readFileSync(
-      path.join(import.meta.dirname, '../../../../crates/vp_global_cli/src/commands/vpx_script.rs'),
-      'utf8',
-    );
-    const source = readFileSync(path.join(import.meta.dirname, '../vpx-script.ts'), 'utf8');
-    expect(extractList(rust, 'NODE_OPTIONS_WITH_VALUE')?.length).toBeGreaterThan(10);
-    expect(extractList(rust, 'SCRIPT_EXTENSIONS')).toHaveLength(8);
-    expect(extractList(source, 'NODE_OPTIONS_WITH_VALUE')).toEqual(
-      extractList(rust, 'NODE_OPTIONS_WITH_VALUE'),
-    );
-    expect(extractList(source, 'SCRIPT_EXTENSIONS')).toEqual(
-      extractList(rust, 'SCRIPT_EXTENSIONS'),
-    );
+  it('declares the lists the global CLI declares', () => {
+    // vpx_script_cases.json holds the lists; vpx_script.rs checks its own against it too.
+    expect(SCRIPT_EXTENSIONS).toEqual(detectionTable.scriptExtensions);
+    expect([...NODE_OPTIONS_WITH_VALUE]).toEqual(detectionTable.nodeOptionsWithValue);
   });
 });
 

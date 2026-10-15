@@ -6,35 +6,53 @@
 import { closeSync, openSync, readSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-const SCRIPT_EXTENSIONS = ['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
+export const SCRIPT_EXTENSIONS = ['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
 const TS_EXTENSIONS = new Set(['.ts', '.mts', '.cts', '.tsx']);
 
-/** Node.js options that take their value as the next argument (best effort). */
-const NODE_OPTIONS_WITH_VALUE = new Set([
+/** Node.js options that take a required value, which may come as the next argument (best effort). */
+export const NODE_OPTIONS_WITH_VALUE = new Set([
   '-C',
   '-e',
   '-p',
   '-r',
+  '--allow-fs-read',
+  '--allow-fs-write',
+  '--build-sea',
+  '--build-snapshot-config',
   '--conditions',
   '--cpu-prof-dir',
+  '--cpu-prof-interval',
   '--cpu-prof-name',
+  '--debug-port',
   '--diagnostic-dir',
+  '--disable-proto',
   '--disable-warning',
   '--dns-result-order',
   '--env-file',
   '--env-file-if-exists',
   '--eval',
   '--experimental-config-file',
+  '--experimental-default-type',
   '--experimental-loader',
+  '--experimental-package-map',
+  '--experimental-sea-config',
+  '--experimental-test-isolation',
+  '--experimental-test-tag-filter',
   '--heap-prof-dir',
+  '--heap-prof-interval',
   '--heap-prof-name',
+  '--heapsnapshot-near-heap-limit',
   '--heapsnapshot-signal',
   '--icu-data-dir',
   '--import',
   '--input-type',
   '--inspect-port',
+  '--inspect-publish-uid',
   '--loader',
   '--localstorage-file',
+  '--max-http-header-size',
+  '--max-old-space-size-percentage',
+  '--network-family-autoselection-attempt-timeout',
   '--openssl-config',
   '--print',
   '--redirect-warnings',
@@ -48,16 +66,30 @@ const NODE_OPTIONS_WITH_VALUE = new Set([
   '--secure-heap-min',
   '--snapshot-blob',
   '--test-concurrency',
+  '--test-coverage-branches',
+  '--test-coverage-exclude',
+  '--test-coverage-functions',
+  '--test-coverage-include',
+  '--test-coverage-lines',
+  '--test-global-setup',
+  '--test-isolation',
   '--test-name-pattern',
+  '--test-random-seed',
   '--test-reporter',
   '--test-reporter-destination',
+  '--test-rerun-failures',
   '--test-shard',
   '--test-skip-pattern',
   '--test-timeout',
   '--title',
   '--tls-cipher-list',
   '--tls-keylog',
+  '--trace-event-categories',
+  '--trace-event-file-pattern',
+  '--trace-require-module',
   '--unhandled-rejections',
+  '--use-largepages',
+  '--v8-pool-size',
   '--watch-kill-signal',
   '--watch-path',
 ]);
@@ -143,7 +175,7 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
     if (arg === '--' || arg === '-' || !arg.startsWith('-')) {
       const script = arg === '--' ? positional[index + 1] : arg;
       if (script !== undefined) {
-        isScript(script, cwd);
+        checkScriptAfterOptions(script, cwd);
       }
       nodeArgs.push(...positional.slice(index));
       break;
@@ -165,6 +197,22 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
     }
   }
   return { nodeArgs, tsconfig };
+}
+
+/**
+ * After Node.js options, only a missing explicit path is an error. A bare name may be
+ * the value of an option missing from `NODE_OPTIONS_WITH_VALUE`, such as a coverage
+ * glob, and this position never falls back to a package, so Node.js reports a missing
+ * one itself.
+ */
+function checkScriptAfterOptions(token: string, cwd: string): void {
+  if (
+    isExplicitPath(token) &&
+    SCRIPT_EXTENSIONS.some((extension) => token.endsWith(extension)) &&
+    !isFile(path.resolve(cwd, token))
+  ) {
+    throw new ScriptError(`Script not found: ${token}`);
+  }
 }
 
 function isScript(token: string, cwd: string): boolean {
