@@ -44,62 +44,39 @@ function extractList(text: string, start: string): string[] | undefined {
     ?.map((value) => value.slice(1, -1));
 }
 
+interface DetectionCase {
+  name: string;
+  files?: Record<string, string>;
+  args: string[];
+  expect: 'package' | { error: string } | { script: string[]; tsconfig?: string };
+}
+
+const detectionCases: DetectionCase[] = JSON.parse(
+  readFileSync(
+    path.join(
+      import.meta.dirname,
+      '../../../../crates/vp_global_cli/src/commands/vpx_script_cases.json',
+    ),
+    'utf8',
+  ),
+).cases;
+
 describe('detectScript', () => {
-  it('runs an explicit path with a script extension', () => {
-    const cwd = project({ 'scripts/seed.ts': '' });
-    expect(detectScript(['./scripts/seed.ts', '--dry-run'], cwd)).toEqual({
-      nodeArgs: ['./scripts/seed.ts', '--dry-run'],
-    });
-  });
-
-  it('runs a bare relative path to an existing file', () => {
-    const cwd = project({ 'scripts/seed.ts': '' });
-    expect(detectScript(['scripts/seed.ts'], cwd)).toEqual({ nodeArgs: ['scripts/seed.ts'] });
-  });
-
-  it('reports a missing TypeScript file or explicit path instead of downloading', () => {
-    const cwd = project({});
-    expect(() => detectScript(['seed.ts'], cwd)).toThrow(
-      new ScriptError('Script not found: seed.ts'),
-    );
-    expect(() => detectScript(['./missing.js'], cwd)).toThrow(ScriptError);
-  });
-
-  it('keeps package names in package mode', () => {
-    const cwd = project({ 'deploy.sh': '#!/bin/sh\n' });
-    expect(detectScript(['eslint', '.'], cwd)).toBeUndefined();
-    expect(detectScript(['highlight.js'], cwd)).toBeUndefined();
-    expect(detectScript(['@vue/cli@5.0.0'], cwd)).toBeUndefined();
-    expect(detectScript(['./deploy.sh'], cwd)).toBeUndefined();
-  });
-
-  it('runs an extensionless file with a vpx shebang', () => {
-    const cwd = project({ 'bin/tool': '#!/usr/bin/env -S vpx --tsconfig x.json\n' });
-    const tool = path.join(cwd, 'bin/tool');
-    expect(detectScript([tool], cwd)).toEqual({ nodeArgs: [tool] });
-  });
-
-  it('forwards leading Node.js options and skips their values', () => {
-    const cwd = project({ 'main.ts': '' });
-    expect(detectScript(['--import', './setup.ts', './main.ts'], cwd)).toEqual({
-      nodeArgs: ['--import', './setup.ts', './main.ts'],
-      tsconfig: undefined,
-    });
-    expect(() => detectScript(['--watch', './missing.ts'], cwd)).toThrow(ScriptError);
-    expect(detectScript(['--eval', 'console.log(1)'], cwd)).toEqual({
-      nodeArgs: ['--eval', 'console.log(1)'],
-      tsconfig: undefined,
-    });
-  });
-
-  it('extracts --tsconfig from the Node.js options only', () => {
-    const cwd = project({ 'a.ts': '' });
-    expect(
-      detectScript(['--watch', '--tsconfig', 'x.json', './a.ts', '--tsconfig', 'y'], cwd),
-    ).toEqual({
-      nodeArgs: ['--watch', './a.ts', '--tsconfig', 'y'],
-      tsconfig: 'x.json',
-    });
+  // The global CLI runs the same cases (`vpx_script.rs`), so both decide the same way.
+  it.each(detectionCases)('$name', ({ files = {}, args, expect: expected }) => {
+    const cwd = project(files);
+    const fill = (values: string[]) => values.map((value) => value.replaceAll('{cwd}', cwd));
+    if (expected === 'package') {
+      expect(detectScript(fill(args), cwd)).toBeUndefined();
+    } else if ('error' in expected) {
+      expect(() => detectScript(fill(args), cwd)).toThrow(new ScriptError(expected.error));
+    } else {
+      const result = detectScript(fill(args), cwd);
+      expect({ nodeArgs: result?.nodeArgs, tsconfig: result?.tsconfig }).toEqual({
+        nodeArgs: fill(expected.script),
+        tsconfig: expected.tsconfig,
+      });
+    }
   });
 
   it('matches the global CLI detection table', () => {

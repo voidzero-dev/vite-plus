@@ -1,0 +1,144 @@
+{
+  "$comment": "Script detection cases shared by crates/vp_global_cli/src/commands/vpx_script.rs and packages/cli/src/__tests__/vpx-script.spec.ts, so the global vpx and the project-local bin decide the same way. `files` are created in a temporary project directory that is the cwd; `{cwd}` in `args` and `script` stands for that directory. `expect` is \"package\", { \"error\": message }, or { \"script\": Node.js arguments, \"tsconfig\": path }.",
+  "cases": [
+    {
+      "name": "explicit path with a script extension",
+      "files": { "scripts/seed.ts": "" },
+      "args": ["./scripts/seed.ts", "--dry-run"],
+      "expect": { "script": ["./scripts/seed.ts", "--dry-run"] }
+    },
+    {
+      "name": "bare relative path to an existing file",
+      "files": { "scripts/seed.ts": "" },
+      "args": ["scripts/seed.ts"],
+      "expect": { "script": ["scripts/seed.ts"] }
+    },
+    {
+      "name": "missing bare TypeScript file",
+      "args": ["seed.ts"],
+      "expect": { "error": "Script not found: seed.ts" }
+    },
+    {
+      "name": "missing explicit path",
+      "args": ["./missing.js"],
+      "expect": { "error": "Script not found: ./missing.js" }
+    },
+    {
+      "name": "bare name with a JavaScript extension and no file",
+      "args": ["highlight.js"],
+      "expect": "package"
+    },
+    {
+      "name": "scoped path, not a version spec",
+      "files": { "@scope/tool.ts": "" },
+      "args": ["./@scope/tool.ts"],
+      "expect": { "script": ["./@scope/tool.ts"] }
+    },
+    {
+      "name": "package name",
+      "args": ["eslint", "."],
+      "expect": "package"
+    },
+    {
+      "name": "package with a version",
+      "args": ["oxlint@1.85.0", "--version"],
+      "expect": "package"
+    },
+    {
+      "name": "scoped package with a version",
+      "args": ["@vue/cli@5.0.0"],
+      "expect": "package"
+    },
+    {
+      "name": "shell script without a vpx shebang",
+      "files": { "deploy.sh": "#!/bin/sh\necho hi\n" },
+      "args": ["./deploy.sh"],
+      "expect": "package"
+    },
+    {
+      "name": "extensionless file with a vpx shebang",
+      "files": { "bin/tool": "#!/usr/bin/env vpx\nconsole.log(1)\n" },
+      "args": ["{cwd}/bin/tool"],
+      "expect": { "script": ["{cwd}/bin/tool"] }
+    },
+    {
+      "name": "extensionless file with a vpx shebang that passes options",
+      "files": { "bin/tool": "#!/usr/bin/env -S vpx --tsconfig x.json\n" },
+      "args": ["{cwd}/bin/tool"],
+      "expect": { "script": ["{cwd}/bin/tool"] }
+    },
+    {
+      "name": "leading Node.js options stay before the script",
+      "files": { "server.ts": "" },
+      "args": ["--watch", "./server.ts", "--port", "3000"],
+      "expect": { "script": ["--watch", "./server.ts", "--port", "3000"] }
+    },
+    {
+      "name": "the value of --import is not the script",
+      "files": { "main.ts": "" },
+      "args": ["--import", "./setup.ts", "./main.ts"],
+      "expect": { "script": ["--import", "./setup.ts", "./main.ts"] }
+    },
+    {
+      "name": "the value of --env-file is not the script",
+      "files": { "main.ts": "", ".env": "" },
+      "args": ["--env-file", ".env", "./main.ts"],
+      "expect": { "script": ["--env-file", ".env", "./main.ts"] }
+    },
+    {
+      "name": "missing script after Node.js options",
+      "args": ["--watch", "./missing.ts"],
+      "expect": { "error": "Script not found: ./missing.ts" }
+    },
+    {
+      "name": "--eval without a script runs Node.js",
+      "args": ["--eval", "console.log(1)"],
+      "expect": { "script": ["--eval", "console.log(1)"] }
+    },
+    {
+      "name": "--inspect without a script runs Node.js",
+      "args": ["--inspect"],
+      "expect": { "script": ["--inspect"] }
+    },
+    {
+      "name": "stdin runs Node.js",
+      "args": ["-"],
+      "expect": { "script": ["-"] }
+    },
+    {
+      "name": "stdin with a value-taking option runs Node.js",
+      "args": ["--input-type", "module", "-"],
+      "expect": { "script": ["--input-type", "module", "-"] }
+    },
+    {
+      "name": "--tsconfig among the Node.js options is extracted",
+      "files": { "a.ts": "" },
+      "args": ["--watch", "--tsconfig", "tsconfig.scripts.json", "./a.ts"],
+      "expect": { "script": ["--watch", "./a.ts"], "tsconfig": "tsconfig.scripts.json" }
+    },
+    {
+      "name": "--tsconfig= is extracted, and one after the script belongs to the script",
+      "files": { "a.ts": "" },
+      "args": ["--watch", "--tsconfig=x.json", "./a.ts", "--tsconfig", "y"],
+      "expect": { "script": ["--watch", "./a.ts", "--tsconfig", "y"], "tsconfig": "x.json" }
+    },
+    {
+      "name": "--tsconfig without a value",
+      "files": { "a.ts": "" },
+      "args": ["--watch", "--tsconfig"],
+      "expect": { "error": "--tsconfig requires a path" }
+    },
+    {
+      "name": "arguments after the script belong to the script",
+      "files": { "a.ts": "" },
+      "args": ["./a.ts", "--", "--watch", "b.ts"],
+      "expect": { "script": ["./a.ts", "--", "--watch", "b.ts"] }
+    },
+    {
+      "name": "-- before the script is passed through",
+      "files": { "a.ts": "" },
+      "args": ["--", "./a.ts", "x"],
+      "expect": { "script": ["--", "./a.ts", "x"] }
+    }
+  ]
+}

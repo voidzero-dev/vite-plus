@@ -214,17 +214,25 @@ fn has_vpx_shebang(path: &AbsolutePath) -> bool {
 /// `vite-plus` first, so teams run the loader version pinned in their lockfile, then
 /// the global install.
 fn resolve_loader_dir(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let has_loader = |dir: &AbsolutePath| {
+    choose_loader_dir(JsExecutor::resolve_local_vite_plus_package_dir(cwd), || {
+        JsExecutor::new(None).get_scripts_dir().ok()
+    })
+}
+
+/// The project's `vite-plus/dist` when it ships both loader entries, else the global
+/// one. A project `vite-plus` too old for `vpx <script>` falls back to the global
+/// install; a change to the CLI/loader contract gets new entry names the same way.
+fn choose_loader_dir(
+    local_package_dir: Option<AbsolutePathBuf>,
+    global_dist: impl FnOnce() -> Option<AbsolutePathBuf>,
+) -> Option<AbsolutePathBuf> {
+    let has_loader = |dir: &AbsolutePathBuf| {
         dir.join(PRELOAD_ENTRY).as_path().is_file() && dir.join(IMPORT_ENTRY).as_path().is_file()
     };
-    if let Some(package_dir) = JsExecutor::resolve_local_vite_plus_package_dir(cwd) {
-        let dist = package_dir.join("dist");
-        if has_loader(&dist) {
-            return Some(dist);
-        }
-    }
-    let dist = JsExecutor::new(None).get_scripts_dir().ok()?;
-    has_loader(&dist).then_some(dist)
+    local_package_dir
+        .map(|dir| dir.join("dist"))
+        .filter(has_loader)
+        .or_else(|| global_dist().filter(has_loader))
 }
 
 /// Run Node.js with the script loader through the core `node` shim, so the
@@ -289,15 +297,12 @@ pub async fn execute(
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
     use tempfile::TempDir;
 
     use super::*;
 
-    fn args(values: &[&str]) -> Vec<String> {
-        values.iter().map(|value| (*value).to_owned()).collect()
-    }
-
-    fn project(files: &[(&str, &str)]) -> (TempDir, AbsolutePathBuf) {
+    fn project(files: &[(String, String)]) -> (TempDir, AbsolutePathBuf) {
         let dir = TempDir::new().unwrap();
         for (name, content) in files {
             let path = dir.path().join(name);
@@ -308,160 +313,88 @@ mod tests {
         (dir, cwd)
     }
 
-    fn script(node_args: &[&str], tsconfig: Option<&str>) -> Option<ScriptInvocation> {
-        Some(ScriptInvocation { node_args: args(node_args), tsconfig: tsconfig.map(str::to_owned) })
+    fn dist(files: &[&str]) -> (TempDir, AbsolutePathBuf) {
+        let files: Vec<(String, String)> =
+            files.iter().map(|file| (format!("dist/{file}"), String::new())).collect();
+        project(&files)
     }
 
     #[test]
-    fn explicit_path_with_script_extension_is_a_script() {
-        let (_dir, cwd) = project(&[("scripts/seed.ts", "")]);
-        let positional = args(&["./scripts/seed.ts", "--dry-run"]);
+    fn loader_comes_from_the_project_when_it_ships_both_entries() {
+        let (_local, local) = dist(&[PRELOAD_ENTRY, IMPORT_ENTRY]);
+        let (_global, global) = dist(&[PRELOAD_ENTRY, IMPORT_ENTRY]);
+        let global = global.join("dist");
         assert_eq!(
-            detect(&positional, &cwd),
-            Ok(script(&["./scripts/seed.ts", "--dry-run"], None))
-        );
-    }
-
-    #[test]
-    fn bare_relative_path_to_an_existing_file_is_a_script() {
-        let (_dir, cwd) = project(&[("scripts/seed.ts", "")]);
-        assert_eq!(
-            detect(&args(&["scripts/seed.ts"]), &cwd),
-            Ok(script(&["scripts/seed.ts"], None))
+            choose_loader_dir(Some(local.clone()), || Some(global)),
+            Some(local.join("dist"))
         );
     }
 
     #[test]
-    fn missing_typescript_file_is_an_error() {
-        let (_dir, cwd) = project(&[]);
-        assert_eq!(
-            detect(&args(&["seed.ts"]), &cwd),
-            Err(ScriptError::NotFound("seed.ts".to_owned()))
-        );
+    fn loader_falls_back_to_the_global_install_for_an_older_project() {
+        // A project vite-plus from before `vpx <script>`, or with only one entry.
+        let (_global, global) = dist(&[PRELOAD_ENTRY, IMPORT_ENTRY]);
+        let global = global.join("dist");
+        for local_files in [&[][..], &[PRELOAD_ENTRY][..], &[IMPORT_ENTRY][..]] {
+            let (_local, local) = dist(local_files);
+            assert_eq!(
+                choose_loader_dir(Some(local), || Some(global.clone())),
+                Some(global.clone())
+            );
+        }
+        assert_eq!(choose_loader_dir(None, || Some(global.clone())), Some(global.clone()));
     }
 
     #[test]
-    fn missing_explicit_path_is_an_error() {
-        let (_dir, cwd) = project(&[]);
-        assert_eq!(
-            detect(&args(&["./missing.js"]), &cwd),
-            Err(ScriptError::NotFound("./missing.js".to_owned()))
-        );
+    fn loader_is_missing_when_neither_install_ships_it() {
+        let (_local, local) = dist(&[]);
+        let (_global, global) = dist(&[PRELOAD_ENTRY]);
+        assert_eq!(choose_loader_dir(Some(local), || Some(global.join("dist"))), None);
+        assert_eq!(choose_loader_dir(None, || None), None);
     }
 
+    /// The cases in `vpx_script_cases.json`, which
+    /// `packages/cli/src/__tests__/vpx-script.spec.ts` runs against the project-local
+    /// bin's detection, so the two implementations cannot drift apart.
     #[test]
-    fn bare_name_with_javascript_extension_and_no_file_is_a_package() {
-        let (_dir, cwd) = project(&[]);
-        assert_eq!(detect(&args(&["highlight.js"]), &cwd), Ok(None));
-    }
-
-    #[test]
-    fn scoped_path_is_a_script_not_a_version_spec() {
-        let (_dir, cwd) = project(&[("@scope/tool.ts", "")]);
-        assert_eq!(
-            detect(&args(&["./@scope/tool.ts"]), &cwd),
-            Ok(script(&["./@scope/tool.ts"], None))
-        );
-    }
-
-    #[test]
-    fn package_names_stay_in_package_mode() {
-        let (_dir, cwd) = project(&[]);
-        assert_eq!(detect(&args(&["eslint", "."]), &cwd), Ok(None));
-        assert_eq!(detect(&args(&["oxlint@1.85.0", "--version"]), &cwd), Ok(None));
-        assert_eq!(detect(&args(&["@vue/cli@5.0.0"]), &cwd), Ok(None));
-    }
-
-    #[test]
-    fn shell_script_without_vpx_shebang_is_a_package_lookup() {
-        let (_dir, cwd) = project(&[("deploy.sh", "#!/bin/sh\necho hi\n")]);
-        assert_eq!(detect(&args(&["./deploy.sh"]), &cwd), Ok(None));
-    }
-
-    #[test]
-    fn extensionless_vpx_shebang_is_a_script() {
-        let (_dir, cwd) = project(&[("bin/tool", "#!/usr/bin/env vpx\nconsole.log(1)\n")]);
-        let tool = cwd.join("bin/tool").as_path().display().to_string();
-        assert_eq!(detect(&args(&[&tool]), &cwd), Ok(script(&[&tool], None)));
-
-        let (_dir, cwd) = project(&[("bin/tool", "#!/usr/bin/env -S vpx --tsconfig x.json\n")]);
-        let tool = cwd.join("bin/tool").as_path().display().to_string();
-        assert_eq!(detect(&args(&[&tool]), &cwd), Ok(script(&[&tool], None)));
-    }
-
-    #[test]
-    fn leading_node_options_are_forwarded_before_the_script() {
-        let (_dir, cwd) = project(&[("server.ts", "")]);
-        assert_eq!(
-            detect(&args(&["--watch", "./server.ts", "--port", "3000"]), &cwd),
-            Ok(script(&["--watch", "./server.ts", "--port", "3000"], None))
-        );
-    }
-
-    #[test]
-    fn option_values_are_not_mistaken_for_the_script() {
-        let (_dir, cwd) = project(&[("main.ts", ""), (".env", "")]);
-        assert_eq!(
-            detect(&args(&["--import", "./setup.ts", "./main.ts"]), &cwd),
-            Ok(script(&["--import", "./setup.ts", "./main.ts"], None))
-        );
-        assert_eq!(
-            detect(&args(&["--env-file", ".env", "./main.ts"]), &cwd),
-            Ok(script(&["--env-file", ".env", "./main.ts"], None))
-        );
-    }
-
-    #[test]
-    fn missing_script_after_node_options_is_an_error() {
-        let (_dir, cwd) = project(&[]);
-        assert_eq!(
-            detect(&args(&["--watch", "./missing.ts"]), &cwd),
-            Err(ScriptError::NotFound("./missing.ts".to_owned()))
-        );
-    }
-
-    #[test]
-    fn node_invocations_without_a_script_run_node() {
-        let (_dir, cwd) = project(&[]);
-        assert_eq!(
-            detect(&args(&["--eval", "console.log(1)"]), &cwd),
-            Ok(script(&["--eval", "console.log(1)"], None))
-        );
-        assert_eq!(detect(&args(&["--inspect"]), &cwd), Ok(script(&["--inspect"], None)));
-        assert_eq!(detect(&args(&["-"]), &cwd), Ok(script(&["-"], None)));
-        assert_eq!(
-            detect(&args(&["--input-type", "module", "-"]), &cwd),
-            Ok(script(&["--input-type", "module", "-"], None))
-        );
-    }
-
-    #[test]
-    fn tsconfig_among_node_options_is_extracted() {
-        let (_dir, cwd) = project(&[("a.ts", "")]);
-        assert_eq!(
-            detect(&args(&["--watch", "--tsconfig", "tsconfig.scripts.json", "./a.ts"]), &cwd),
-            Ok(script(&["--watch", "./a.ts"], Some("tsconfig.scripts.json")))
-        );
-        assert_eq!(
-            detect(&args(&["--watch", "--tsconfig=x.json", "./a.ts", "--tsconfig", "y"]), &cwd),
-            Ok(script(&["--watch", "./a.ts", "--tsconfig", "y"], Some("x.json")))
-        );
-        assert_eq!(
-            detect(&args(&["--watch", "--tsconfig"]), &cwd),
-            Err(ScriptError::MissingTsconfigValue)
-        );
-    }
-
-    #[test]
-    fn arguments_after_the_script_belong_to_the_script() {
-        let (_dir, cwd) = project(&[("a.ts", "")]);
-        assert_eq!(
-            detect(&args(&["./a.ts", "--", "--watch", "b.ts"]), &cwd),
-            Ok(script(&["./a.ts", "--", "--watch", "b.ts"], None))
-        );
-        assert_eq!(
-            detect(&args(&["--", "./a.ts", "x"]), &cwd),
-            Ok(script(&["--", "./a.ts", "x"], None))
-        );
+    fn shared_detection_cases() {
+        let table: Value = serde_json::from_str(include_str!("vpx_script_cases.json")).unwrap();
+        let cases = table["cases"].as_array().unwrap();
+        assert!(cases.len() > 20);
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            let files: Vec<(String, String)> = case
+                .get("files")
+                .and_then(Value::as_object)
+                .map(|files| {
+                    files
+                        .iter()
+                        .map(|(name, content)| (name.clone(), content.as_str().unwrap().to_owned()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let (_dir, cwd) = project(&files);
+            let root = cwd.as_path().display().to_string();
+            let strings = |value: &Value| -> Vec<String> {
+                value
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|item| item.as_str().unwrap().replace("{cwd}", &root))
+                    .collect()
+            };
+            let expected = match &case["expect"] {
+                Value::String(mode) if mode == "package" => Ok(None),
+                expect if expect.get("error").is_some() => {
+                    Err(expect["error"].as_str().unwrap().to_owned())
+                }
+                expect => Ok(Some(ScriptInvocation {
+                    node_args: strings(&expect["script"]),
+                    tsconfig: expect.get("tsconfig").and_then(Value::as_str).map(str::to_owned),
+                })),
+            };
+            let actual = detect(&strings(&case["args"]), &cwd).map_err(|error| error.to_string());
+            assert_eq!(actual, expected, "{name}");
+        }
     }
 }
