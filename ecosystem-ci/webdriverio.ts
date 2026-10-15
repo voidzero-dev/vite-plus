@@ -45,6 +45,29 @@ export async function prepareWebdriverioProject(
       '{ timeout: 10000 }',
     );
 
+    // Deleting client3 broadcasts a reconnect to client2 without awaiting it.
+    // Wait for client2 to recreate the OPFS file before checking its handle.
+    // Remove when upstream waits for the other client's asynchronous reconnect.
+    await replaceOnce(
+      join(root, 'test', 'delete-database-file.test.ts'),
+      `\t\t\t\tif (type === 'opfs') {
+\t\t\t\t\tawait expect(opfs?.getFileHandle(path)).resolves.instanceOf(
+\t\t\t\t\t\tFileSystemFileHandle
+\t\t\t\t\t);
+\t\t\t\t}
+
+\t\t\t\tawait client2.destroy();`,
+      `\t\t\t\tif (type === 'opfs') {
+\t\t\t\t\tawait vi.waitFor(async () => {
+\t\t\t\t\t\tawait expect(opfs?.getFileHandle(path)).resolves.instanceOf(
+\t\t\t\t\t\t\tFileSystemFileHandle
+\t\t\t\t\t\t);
+\t\t\t\t\t});
+\t\t\t\t}
+
+\t\t\t\tawait client2.destroy();`,
+    );
+
     // Vitest 5's browser server does not run the SQLocal plugin's middleware.
     // Keep the same isolation headers explicitly; OPFS tests assert isolation.
     // Remove when the upstream plugin supports the separate browser server.
