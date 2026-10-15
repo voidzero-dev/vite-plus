@@ -45,11 +45,8 @@ pub(crate) fn rewrite_pack_flags(script: &str) -> String {
 }
 
 fn rewrite_direct_pack_flags(script: &str) -> String {
-    let mut parser = brush_parser::Parser::new(
-        script.as_bytes(),
-        &brush_parser::ParserOptions::default(),
-        &brush_parser::SourceInfo::default(),
-    );
+    let mut parser =
+        brush_parser::Parser::new(script.as_bytes(), &brush_parser::ParserOptions::default());
     let Ok(mut program) = parser.parse_program() else { return script.to_owned() };
     let changed = visit_simple_commands(&mut program, &mut |cmd| {
         let words = collect_command_words(cmd);
@@ -99,11 +96,8 @@ fn rewrite_direct_pack_flags(script: &str) -> String {
 }
 
 fn rewrite_direct_script(script: &str, config: &ScriptRewriteConfig) -> String {
-    let mut parser = brush_parser::Parser::new(
-        script.as_bytes(),
-        &brush_parser::ParserOptions::default(),
-        &brush_parser::SourceInfo::default(),
-    );
+    let mut parser =
+        brush_parser::Parser::new(script.as_bytes(), &brush_parser::ParserOptions::default());
     let Ok(mut program) = parser.parse_program() else {
         return script.to_owned();
     };
@@ -162,17 +156,37 @@ fn visit_pipeline(
 ) -> bool {
     let mut changed = false;
     for cmd in &mut pipeline.seq {
-        match cmd {
-            ast::Command::Simple(simple) => {
-                changed |= visitor(simple);
-            }
-            ast::Command::Compound(compound, _redirects) => {
-                changed |= visit_compound_command(compound, visitor);
-            }
-            _ => {}
-        }
+        changed |= visit_command(cmd, visitor);
     }
     changed
+}
+
+fn visit_command(
+    cmd: &mut ast::Command,
+    visitor: &mut impl FnMut(&mut ast::SimpleCommand) -> bool,
+) -> bool {
+    match cmd {
+        ast::Command::Simple(simple) => visitor(simple),
+        ast::Command::Compound(compound, _redirects) => visit_compound_command(compound, visitor),
+        ast::Command::ExtendedTest(test, Some(redirects)) => {
+            // brush-parser 0.4 joins `]]` and its redirects without spaces.
+            // Use SimpleCommand's formatter for this parsed node so it inserts
+            // a separator before each redirect, without changing quoted text.
+            // This node is only serialized afterwards, not visited as a command.
+            *cmd = ast::Command::Simple(ast::SimpleCommand {
+                prefix: None,
+                word_or_name: Some(ast::Word { value: format!("[[ {test} ]]"), loc: None }),
+                suffix: Some(ast::CommandSuffix(
+                    std::mem::take(&mut redirects.0)
+                        .into_iter()
+                        .map(ast::CommandPrefixOrSuffixItem::IoRedirect)
+                        .collect(),
+                )),
+            });
+            false
+        }
+        _ => false,
+    }
 }
 
 fn visit_compound_command(
@@ -182,6 +196,7 @@ fn visit_compound_command(
     match cmd {
         ast::CompoundCommand::BraceGroup(bg) => visit_compound_list(&mut bg.list, visitor),
         ast::CompoundCommand::Subshell(sub) => visit_compound_list(&mut sub.list, visitor),
+        ast::CompoundCommand::Coprocess(coproc) => visit_command(&mut coproc.body, visitor),
         ast::CompoundCommand::IfClause(if_cmd) => {
             let mut changed = visit_compound_list(&mut if_cmd.condition, visitor);
             changed |= visit_compound_list(&mut if_cmd.then, visitor);
@@ -354,11 +369,8 @@ fn find_bunx_invocations(cmd: &ast::SimpleCommand) -> Vec<BunxInvocation> {
 }
 
 fn parse_single_simple_command(script: &str) -> Option<ast::SimpleCommand> {
-    let mut parser = brush_parser::Parser::new(
-        script.as_bytes(),
-        &brush_parser::ParserOptions::default(),
-        &brush_parser::SourceInfo::default(),
-    );
+    let mut parser =
+        brush_parser::Parser::new(script.as_bytes(), &brush_parser::ParserOptions::default());
     let mut program = parser.parse_program().ok()?;
     if program.complete_commands.len() != 1 {
         return None;
@@ -428,11 +440,8 @@ pub(crate) fn rewrite_bunx_commands(
     script: &str,
     mut rewrite_inner: impl FnMut(&str) -> String,
 ) -> String {
-    let mut parser = brush_parser::Parser::new(
-        script.as_bytes(),
-        &brush_parser::ParserOptions::default(),
-        &brush_parser::SourceInfo::default(),
-    );
+    let mut parser =
+        brush_parser::Parser::new(script.as_bytes(), &brush_parser::ParserOptions::default());
     let Ok(mut program) = parser.parse_program() else {
         return script.to_owned();
     };
@@ -661,6 +670,33 @@ mod tests {
         assert_eq!(normalize_pipe_spacing("cmd1 && cmd2"), "cmd1 && cmd2");
     }
 
+    #[test]
+    fn rewrite_coprocess_commands() {
+        let config = ScriptRewriteConfig {
+            source_command: "eslint",
+            target_subcommand: "lint",
+            boolean_flags: &["--cache"],
+            value_flags: &[],
+            flag_conversions: &[],
+        };
+        for (input, expected) in [
+            ("coproc eslint --cache .", "coproc vp lint ."),
+            ("coproc lint { eslint --cache .; }", "coproc lint { vp lint .; }"),
+            ("coproc (eslint --cache .)", "coproc ( vp lint . )"),
+            ("coproc echo  eslint --cache .", "coproc echo  eslint --cache ."),
+        ] {
+            assert_eq!(rewrite_script(input, &config), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn rewrite_coprocess_pack_flags() {
+        assert_eq!(
+            rewrite_pack_flags("coproc pack { vp pack --public-dir public; }"),
+            "coproc pack { vp pack --copy public; }"
+        );
+    }
+
     /// Minimal inner rewriter for bunx tests: `vite <args>` -> `vp <args>`.
     fn rewrite_vite_to_vp(inner: &str) -> String {
         match inner.split_once(' ') {
@@ -675,6 +711,14 @@ mod tests {
         assert_eq!(
             rewrite_bunx_commands("bunx --bun vite build", rewrite_vite_to_vp),
             "bunx --bun vp build"
+        );
+    }
+
+    #[test]
+    fn bunx_in_coprocess_is_a_launcher() {
+        assert_eq!(
+            rewrite_bunx_commands("coproc bunx --bun vite build", rewrite_vite_to_vp),
+            "coproc bunx --bun vp build"
         );
     }
 

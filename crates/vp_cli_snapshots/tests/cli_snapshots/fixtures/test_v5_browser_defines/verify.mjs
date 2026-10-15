@@ -39,6 +39,11 @@ try {
         ]);
       }
       assert.equal(runner.projects.length, count, name);
+      for (const project of runner.projects) {
+        if (project.config.browser.enabled) {
+          assert.equal(project.config.api.port, 0, `${name}: ${project.name} must use an OS-assigned port`);
+        }
+      }
       const servers = new Set(runner.projects.map((project) => project.vite));
       if (name === 'shared' || name === 'shared-node') assert.equal(servers.size, 1);
       if (name === 'separate') assert.equal(servers.size, 2);

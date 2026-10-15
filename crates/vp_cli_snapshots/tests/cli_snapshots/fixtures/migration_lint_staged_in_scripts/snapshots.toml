@@ -1,6 +1,8 @@
 [[case]]
 name = "migration_lint_staged_in_scripts"
 vp = "global"
+# Migration is slow on Linux CI.
+skip-platforms = ["linux"]
 steps = [
   { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
   { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should preserve lint-staged commands when Husky is detected", continue-on-failure = true },

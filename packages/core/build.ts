@@ -238,6 +238,22 @@ async function buildVite() {
     recursive: true,
   });
 
+  // `vp dev`, `vp build`, and `vp preview` start through Vite's bin script, as
+  // `vite` does (see BUNDLING.md). Point its CLI import at the `dist/vite` layout.
+  const viteBin = await readFile(join(rolldownViteSourceDir, 'bin', 'vite.js'), 'utf-8');
+  const viteBinCliImport = `import('../dist/node/cli.js')`;
+  if (!viteBin.includes(viteBinCliImport)) {
+    throw new Error(
+      `Expected vite bin/vite.js to contain \`${viteBinCliImport}\`; ` +
+        'update the bin/vite.js rewrite in packages/core/build.ts for the current upstream script.',
+    );
+  }
+  await mkdir(join(projectDir, 'dist/vite/bin'), { recursive: true });
+  await writeFile(
+    join(projectDir, 'dist/vite/bin/vite.js'),
+    viteBin.replaceAll(viteBinCliImport, `import('../node/cli.js')`),
+  );
+
   // Copy and rewrite .d.ts files
   // Normalize glob pattern to use forward slashes on Windows
   const dtsFiles = await glob(

@@ -69,12 +69,12 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           # Shares the Cargo cache with the Linux CLI test build job, which
           # builds the same target. Only that job saves it.
           save-cache: false
-          cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu
+          cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu-ci
 
       - uses: ./.github/actions/setup-ci-node
 
@@ -87,6 +87,7 @@ jobs:
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
+          profile: ci
           target: x86_64-unknown-linux-gnu
 
       - name: Run vp fmt --check
@@ -121,7 +122,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
@@ -327,7 +328,7 @@ jobs:
 
       - uses: ./.github/actions/setup-ci-node
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: lint
@@ -378,6 +379,7 @@ jobs:
       - uses: ./.github/actions/clone
       - uses: ./.github/actions/build-windows-cli
         with:
+          profile: ci
           save-cache: ${{ github.ref_name == 'main' }}
 
   cli-e2e-test:
@@ -950,10 +952,10 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: cli-snapshot-test-${{ matrix.target }}
+          cache-key: cli-snapshot-test-${{ matrix.target }}-ci
 
       - uses: ./.github/actions/setup-ci-node
 
@@ -966,6 +968,7 @@ jobs:
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
+          profile: ci
           target: ${{ matrix.target }}
 
       - name: Ensure no unexpected file changes after build
@@ -1305,10 +1308,10 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: cli-e2e-test-musl
+          cache-key: cli-e2e-test-musl-ci
 
       - uses: ./.github/actions/setup-ci-node
 
@@ -1322,6 +1325,7 @@ jobs:
       - name: Build with upstream (musl)
         uses: ./.github/actions/build-upstream
         with:
+          profile: ci
           target: x86_64-unknown-linux-musl
 
       # Run bootstrap-cli:ci and E2E tests inside an Alpine container where musl is native.
@@ -1388,7 +1392,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: certless-image-test

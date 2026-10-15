@@ -42,12 +42,12 @@ jobs:
 
       # Windows builds against the prebuilt binaries from build-windows-cli, so
       # it needs no Rust toolchain here.
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         if: ${{ !contains(inputs.target, 'windows') }}
         with:
-          # The CI CLI build caches these release dependencies and saves the cache.
+          # Reuse the CLI build job's Cargo cache for the ci profile.
           save-cache: false
-          cache-key: cli-snapshot-test-${{ inputs.target }}
+          cache-key: cli-snapshot-test-${{ inputs.target }}-ci
 
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
@@ -68,6 +68,7 @@ jobs:
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
+          profile: ci
           target: ${{ inputs.target }}
           skip-native: ${{ contains(inputs.target, 'windows') }}
 

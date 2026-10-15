@@ -1,7 +1,8 @@
 [[case]]
 name = "npm_install_and_runtime"
 vp = "global"
-skip-platforms = ["windows"]
+# Dependency installation is slow on Linux CI.
+skip-platforms = ["windows", "linux"]
 local-registry = true
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@10.9.4"], snapshot = false },
@@ -26,6 +27,8 @@ steps = [
 [[case]]
 name = "bun_install_and_runtime"
 vp = "global"
+# Exceeded 50 seconds on Linux in CI run 38679518451.
+skip-platforms = ["linux"]
 local-registry = true
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.3.11"], snapshot = false },

@@ -37,8 +37,8 @@ pub use package_manager::{
 pub use request::HttpClient;
 pub use resolution::{
     AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, ConfigCommand, DedupeArgs, DeprecateArgs,
-    DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs, LoginArgs, LogoutArgs,
-    OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PingArgs, PruneArgs, PublishArgs,
-    RebuildArgs, RemoveArgs, SearchArgs, StageCommand, TokenCommand, UnlinkArgs, UpdateArgs,
-    VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
+    DistTagCommand, DlxArgs, FundArgs, InstallArgs, LicensesCommand, LinkArgs, ListArgs, LoginArgs,
+    LogoutArgs, OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PingArgs, PruneArgs,
+    PublishArgs, RebuildArgs, RemoveArgs, SearchArgs, StageCommand, TokenCommand, UnlinkArgs,
+    UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
 };

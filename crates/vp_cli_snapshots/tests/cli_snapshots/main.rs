@@ -39,10 +39,11 @@ use flavor::{Flavor, FlavorRuntime};
 use redact::redact_output;
 use vt_pty_terminal_test::{CommandBuilder, ScreenSize, TestTerminal};
 
-/// Default per-step timeout. Windows CI needs longer due to process startup
-/// overhead and slower I/O. Individual steps override via `timeout` (ms).
-const STEP_TIMEOUT: Duration =
-    if cfg!(windows) { Duration::from_secs(60) } else { Duration::from_secs(50) };
+/// Cases have isolated package-manager installs. Downloading a native Bun or
+/// pnpm binary can exceed a minute on CI, before the command itself starts.
+/// Keep the same allowance as registry-backed installs on every platform.
+/// Individual steps override this via `timeout` (ms).
+const STEP_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Screen size for the PTY terminal. Large enough to avoid line wrapping.
 const SCREEN_SIZE: ScreenSize = ScreenSize { rows: 500, cols: 500 };
@@ -1279,12 +1280,6 @@ fn run_case(
 
     drop(registry_phase);
 
-    // Installs through the local registry are slower than pure vp commands, so
-    // local-registry steps get a 120s default (still overridable per step);
-    // everything else keeps the standard per-step default.
-    let step_default_timeout =
-        if case.local_registry { Duration::from_secs(120) } else { STEP_TIMEOUT };
-
     let stage_str = stage.to_str().unwrap().to_owned();
     let case_dirs = case_home.redaction_paths();
     let repo_root = flavor::repo_root();
@@ -1318,7 +1313,7 @@ fn run_case(
         let (step_env, step_cwd, program) =
             step_context(step, &case_env, &case_path, &stage, &case.cwd, &case_install)?;
         let step_env: &BTreeMap<String, OsString> = &step_env;
-        let timeout = step.timeout(step_default_timeout);
+        let timeout = step.timeout(STEP_TIMEOUT);
 
         let command_line = step.display_command_line(&case.cwd);
         let execution_phase = report.phase(format!("step-{}: {command_line}", step_index + 1));
@@ -1376,50 +1371,54 @@ fn run_case(
                 std::thread::spawn(move || {
                     let mut terminal = terminal;
 
-                    for interaction in interactions {
-                        match interaction {
-                            Interaction::ExpectMilestone(expect) => {
-                                output_for_thread.lock().unwrap().push_str(&format!(
-                                    "**→ expect-milestone:** `{}`\n\n",
-                                    expect.expect_milestone
-                                ));
-                                let milestone_screen =
-                                    terminal.reader.expect_milestone(&expect.expect_milestone);
-                                let mut output = output_for_thread.lock().unwrap();
-                                push_fenced_block(&mut output, &milestone_screen);
-                                output.push('\n');
-                            }
-                            Interaction::Write(write) => {
-                                output_for_thread
-                                    .lock()
-                                    .unwrap()
-                                    .push_str(&format!("**← write:** `{}`\n\n", write.write));
-                                terminal.writer.write_all(write.write.as_bytes()).unwrap();
-                                terminal.writer.flush().unwrap();
-                            }
-                            Interaction::WriteLine(write_line) => {
-                                output_for_thread.lock().unwrap().push_str(&format!(
-                                    "**← write-line:** `{}`\n\n",
-                                    write_line.write_line
-                                ));
-                                terminal
-                                    .writer
-                                    .write_line(write_line.write_line.as_bytes())
-                                    .unwrap();
-                            }
-                            Interaction::WriteKey(write_key) => {
-                                let key_name = write_key.write_key.as_str();
-                                output_for_thread
-                                    .lock()
-                                    .unwrap()
-                                    .push_str(&format!("**← write-key:** `{key_name}`\n\n"));
-                                terminal.writer.write_all(write_key.write_key.bytes()).unwrap();
-                                terminal.writer.flush().unwrap();
+                    // Killing a timed-out child can make a milestone wait panic.
+                    // Capture its final screen before propagating that panic.
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        for interaction in interactions {
+                            match interaction {
+                                Interaction::ExpectMilestone(expect) => {
+                                    output_for_thread.lock().unwrap().push_str(&format!(
+                                        "**→ expect-milestone:** `{}`\n\n",
+                                        expect.expect_milestone
+                                    ));
+                                    let milestone_screen =
+                                        terminal.reader.expect_milestone(&expect.expect_milestone);
+                                    let mut output = output_for_thread.lock().unwrap();
+                                    push_fenced_block(&mut output, &milestone_screen);
+                                    output.push('\n');
+                                }
+                                Interaction::Write(write) => {
+                                    output_for_thread
+                                        .lock()
+                                        .unwrap()
+                                        .push_str(&format!("**← write:** `{}`\n\n", write.write));
+                                    terminal.writer.write_all(write.write.as_bytes()).unwrap();
+                                    terminal.writer.flush().unwrap();
+                                }
+                                Interaction::WriteLine(write_line) => {
+                                    output_for_thread.lock().unwrap().push_str(&format!(
+                                        "**← write-line:** `{}`\n\n",
+                                        write_line.write_line
+                                    ));
+                                    terminal
+                                        .writer
+                                        .write_line(write_line.write_line.as_bytes())
+                                        .unwrap();
+                                }
+                                Interaction::WriteKey(write_key) => {
+                                    let key_name = write_key.write_key.as_str();
+                                    output_for_thread
+                                        .lock()
+                                        .unwrap()
+                                        .push_str(&format!("**← write-key:** `{key_name}`\n\n"));
+                                    terminal.writer.write_all(write_key.write_key.bytes()).unwrap();
+                                    terminal.writer.flush().unwrap();
+                                }
                             }
                         }
-                    }
 
-                    let status = terminal.reader.wait_for_exit().unwrap();
+                        terminal.reader.wait_for_exit().unwrap()
+                    }));
                     let screen = if formatted_snapshot {
                         render_formatted_screen(&terminal.reader.screen_contents_formatted())
                     } else {
@@ -1431,16 +1430,21 @@ fn run_case(
                         push_fenced_block(&mut output, &screen);
                     }
 
-                    let _ = tx.send(i64::from(status.exit_code()));
+                    let _ = tx.send(result);
                 });
 
                 match rx.recv_timeout(timeout) {
-                    Ok(exit_code) => {
+                    Ok(result) => {
+                        let status =
+                            result.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
                         let output = output.lock().unwrap().clone();
-                        (TerminationState::Exited(exit_code), output)
+                        (TerminationState::Exited(i64::from(status.exit_code())), output)
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         let _ = killer.kill();
+                        // Let the reader drain the PTY and save its screen. Bound
+                        // this wait because descendants may still hold the PTY.
+                        let _ = rx.recv_timeout(Duration::from_secs(2));
                         let output = output.lock().unwrap().clone();
                         (TerminationState::TimedOut, output)
                     }
@@ -1562,7 +1566,7 @@ fn run_case(
         // Cleanup honors the step timeout (output is discarded either way),
         // so a hung teardown can never wedge the whole suite.
         if let Ok(mut child) = cmd.spawn() {
-            let _ = wait_with_deadline(&mut child, step.timeout(step_default_timeout));
+            let _ = wait_with_deadline(&mut child, step.timeout(STEP_TIMEOUT));
         }
     }
 

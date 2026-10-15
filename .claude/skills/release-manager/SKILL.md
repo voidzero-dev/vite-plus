@@ -390,7 +390,7 @@ Auto-merge being enabled is not a completed merge. Confirm `mergedAt` and the me
      -q '.[] | "\(.environment.name) can_approve=\(.current_user_can_approve) reviewers=\([.reviewers[]?.reviewer.login] | join(","))"'
    ```
 
-4. `Release`: publishes the NAPI bindings (`@voidzero-dev/vite-plus-<platform>`) and standalone CLI packages (`@voidzero-dev/vite-plus-cli-<platform>`, via `packages/cli/publish-native-addons.ts`), then `@voidzero-dev/vite-plus-core` and `vite-plus` to npm (`--tag latest`). Each dependency tier waits for npm propagation before publication advances. It then creates the `vX.Y.Z` GitHub release (draft, with installer/binary assets, then undrafted). The generated body has only Published Packages and Installation sections.
+4. `Release`: publishes the NAPI bindings (`@voidzero-dev/vite-plus-<platform>`) and standalone CLI packages (`@voidzero-dev/vite-plus-cli-<platform>`, via `packages/cli/publish-native-addons.ts`), then `@voidzero-dev/vite-plus-core`, `vite-plus`, and `create-vite-plus` to npm (`--tag latest`). Each dependency tier waits for npm propagation before publication advances. It then creates the `vX.Y.Z` GitHub release (draft, with installer/binary assets, then undrafted). The generated body has only Published Packages and Installation sections.
 5. `publish-docker`: multi-arch toolchain image to `ghcr.io/voidzero-dev/vite-plus`, after npm publish (the image installs vp from npm).
 6. `deploy-docs`: deploys the production docs after a stable release is published. It is skipped for prereleases. When a prerelease is published to `latest` and its notes or CLI messages link to docs that production does not serve yet, ask the release manager whether to run `gh workflow run deploy-docs.yml --ref <ref>` once the `Release` job is publishing. Use the `vX.Y.Z` tag, or `main` while it still points at the release commit, and confirm the run's head SHA. The `vp` version that builds the docs does not need to match the release: the site and its install scripts come from the checked-out commit. The job authenticates with the `VOID_TOKEN` repository secret. When that token has expired, the job fails with `` `VOID_TOKEN` is invalid or expired `` and `discord-notify` is skipped. Ask someone with access to rotate the secret, then run `gh run rerun <run-id> --failed` to rerun the docs deployment and the Discord notification.
 7. `discord-notify`: announces to Discord after Docker publishing and docs deployment succeed (docs are skipped for prereleases).
@@ -446,6 +446,7 @@ The full package document can update before npm's separately cached installation
    ```bash
    npm view vite-plus version                       # X.Y.Z
    npm view @voidzero-dev/vite-plus-core version    # X.Y.Z
+   npm view create-vite-plus version                # X.Y.Z
    npm view @voidzero-dev/vite-plus-cli-darwin-arm64 version   # X.Y.Z, spot-check a native platform package
    npm view vite-plus dist-tags.latest              # X.Y.Z
    docker run --rm ghcr.io/voidzero-dev/vite-plus:X.Y.Z vp --version

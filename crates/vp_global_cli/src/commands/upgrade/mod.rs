@@ -266,6 +266,10 @@ async fn install_platform_and_main(
             new_version
         ));
         vp_shared::output::print_stdout_line(format_args!(
+            "\n  Run `vp migrate` in any Vite+ project using a version under {} to upgrade that project's Vite+ version.",
+            new_version
+        ));
+        vp_shared::output::print_stdout_line(format_args!(
             "\n  Release notes: https://github.com/voidzero-dev/vite-plus/releases/tag/v{}",
             new_version
         ));

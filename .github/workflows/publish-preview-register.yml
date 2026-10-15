@@ -320,6 +320,9 @@ jobs:
           # resolves, so an attacker-supplied value would change what installs
           # for a different PR.
           pr-url: ${{ needs.authorize.outputs.pr-url }}
+          # Must match the build workflow's pack step, which validates the same
+          # batch. The bridge's own WORKSPACE_PACKAGES must also allow each name.
+          workspace-packages: vite-plus,create-vite-plus,@voidzero-dev/vite-plus-*
 
   # Sticky comment with the resolved versions and per-package-manager registry
   # config. Separate job: it needs write permissions, and SR-5 keeps those away
@@ -383,6 +386,7 @@ jobs:
               '| --- | --- |',
               `| \`vite-plus\` | \`${version}\` |`,
               `| \`@voidzero-dev/vite-plus-core\` | \`${version}\` |`,
+              `| \`create-vite-plus\` | \`${version}\` |`,
               '',
               '**Install the Vite+ CLI built from this commit, then migrate a project:**',
               '',
@@ -413,6 +417,19 @@ jobs:
               '```bash',
               'vp migrate',
               '```',
+              '',
+              '**Or create a new project from this commit without installing the CLI:**',
+              '',
+              '```bash',
+              `export npm_config_registry=${bridge} pnpm_config_registry=${bridge}`,
+              `pnpm create vite-plus@${version} # or: npm create vite-plus@${version}`,
+              '```',
+              '```powershell',
+              `$env:npm_config_registry="${bridge}"; $env:pnpm_config_registry="${bridge}"`,
+              `pnpm create vite-plus@${version} # or: npm create vite-plus@${version}`,
+              '```',
+              '',
+              'pnpm 11+ reads `pnpm_config_registry`, npm and older pnpm read `npm_config_registry`. The new project pins this build, so keep the registry set for later installs, or configure it as below.',
               '',
               `**Or** point your package manager at the bridge registry \`${bridge}\`:`,
               '',

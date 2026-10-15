@@ -159,7 +159,7 @@ async function buildNapiBinding() {
     platform: true,
     jsBinding: 'index.cjs',
     dts: 'index.d.cts',
-    release: process.env.VP_CLI_DEBUG !== '1',
+    release: !passedInOptions.profile && process.env.VP_CLI_DEBUG !== '1',
     features: bindingFeatures,
   });
 
