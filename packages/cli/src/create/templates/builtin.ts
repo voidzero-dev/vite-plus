@@ -7,7 +7,7 @@ import colors from 'picocolors';
 import type { WorkspaceInfo } from '../../types/index.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
-import { setPackageName } from '../utils.ts';
+import { setLibraryGreeting, setPackageName } from '../utils.ts';
 import { executeGeneratorScaffold } from './generator.ts';
 import { removeNestedLibraryToolConfig } from './monorepo.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
@@ -50,6 +50,7 @@ export async function executeBuiltinTemplate(
     }
     const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
     setPackageName(fullPath, templateInfo.packageName);
+    setLibraryGreeting(fullPath);
     if (workspaceInfo.isMonorepo) {
       removeNestedLibraryToolConfig(fullPath);
     }

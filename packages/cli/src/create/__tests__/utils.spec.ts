@@ -12,6 +12,7 @@ import {
   formatTargetDir,
   getProjectDirFromPackageName,
   renameFiles,
+  setLibraryGreeting,
   shouldConfigureEditorsForCreate,
 } from '../utils.js';
 
@@ -402,5 +403,37 @@ describe('renameFiles', () => {
     write('_foo', 'bar\n');
     renameFiles(projectDir);
     expect(read('_foo')).toBe('bar\n');
+  });
+});
+
+describe('setLibraryGreeting', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-library-greeting-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rebrands the greeting in the source and test files', () => {
+    fs.mkdirSync(path.join(tmpDir, 'src'));
+    fs.mkdirSync(path.join(tmpDir, 'tests'));
+    fs.writeFileSync(path.join(tmpDir, 'src/index.ts'), 'return "Hello, tsdown!";\n');
+    fs.writeFileSync(path.join(tmpDir, 'tests/index.test.ts'), 'toBe("Hello, tsdown!");\n');
+
+    setLibraryGreeting(tmpDir);
+
+    expect(fs.readFileSync(path.join(tmpDir, 'src/index.ts'), 'utf8')).toBe(
+      'return "Hello, vite+!";\n',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'tests/index.test.ts'), 'utf8')).toBe(
+      'toBe("Hello, vite+!");\n',
+    );
+  });
+
+  it('ignores missing files', () => {
+    expect(() => setLibraryGreeting(tmpDir)).not.toThrow();
   });
 });

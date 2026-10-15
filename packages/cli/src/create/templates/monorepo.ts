@@ -13,7 +13,13 @@ import { templatesDir } from '../../utils/path.ts';
 import { editYamlFile, readYamlFile } from '../../utils/yaml.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
-import { copyDir, formatDisplayTargetDir, renameFiles, setPackageName } from '../utils.ts';
+import {
+  copyDir,
+  formatDisplayTargetDir,
+  renameFiles,
+  setLibraryGreeting,
+  setPackageName,
+} from '../utils.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
 import { type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
 
@@ -153,6 +159,7 @@ export async function executeMonorepoTemplate(
     : 'utils';
   const libraryProjectPath = path.join(fullPath, libraryDir);
   setPackageName(libraryProjectPath, libraryPackageName);
+  setLibraryGreeting(libraryProjectPath);
   removeNestedLibraryToolConfig(libraryProjectPath);
   // Perform auto-migration on the created library
   rewriteMonorepoProject(

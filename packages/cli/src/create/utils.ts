@@ -203,6 +203,25 @@ export function setPackageName(projectDir: string, packageName: string) {
   });
 }
 
+const LIBRARY_TEMPLATE_GREETING = { from: 'Hello, tsdown!', to: 'Hello, vite+!' } as const;
+
+/** Rebrand the greeting the shared library template ships with (it is authored for tsdown). */
+export function setLibraryGreeting(projectDir: string): void {
+  for (const file of ['src/index.ts', 'tests/index.test.ts']) {
+    const filePath = path.join(projectDir, file);
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+    const content = fs.readFileSync(filePath, 'utf8');
+    if (content.includes(LIBRARY_TEMPLATE_GREETING.from)) {
+      fs.writeFileSync(
+        filePath,
+        content.replaceAll(LIBRARY_TEMPLATE_GREETING.from, LIBRARY_TEMPLATE_GREETING.to),
+      );
+    }
+  }
+}
+
 const RENAME_FILES = {
   _gitignore: '.gitignore',
   _npmrc: '.npmrc',
