@@ -11,7 +11,7 @@
 ## `vpt chmod +x bin/commonjs/tool`
 
 
-## `vpx sh -c ./bin/tool.ts`
+## `sh -c ./bin/tool.ts`
 
 An executable .ts file
 
@@ -19,7 +19,7 @@ An executable .ts file
 hello from an executable .ts file
 ```
 
-## `vpx sh -c ./bin/tool`
+## `sh -c ./bin/tool`
 
 An extensionless file runs as JavaScript instead of re-entering vpx
 
@@ -27,7 +27,7 @@ An extensionless file runs as JavaScript instead of re-entering vpx
 hello from an extensionless file
 ```
 
-## `vpx sh -c ./bin/commonjs/tool`
+## `sh -c ./bin/commonjs/tool`
 
 In a package without type, an extensionless file with ES module syntax runs as an ES module
 

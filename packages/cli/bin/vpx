@@ -4,6 +4,6 @@ import module from 'node:module';
 if (module.enableCompileCache) {
   module.enableCompileCache();
 }
-// Script files run with the loader in this package; package binaries go to
-// the global `vpx`. See src/vpx-bin.ts.
+// Script files run with the loader in this package; package binaries run with
+// this package's `vp exec` or `vp dlx`. See src/vpx-bin.ts.
 await import('../dist/vpx-bin.js');

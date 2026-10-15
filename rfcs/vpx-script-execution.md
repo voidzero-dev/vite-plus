@@ -330,7 +330,10 @@ The detection rules are pure functions over `(tokens, cwd)` and are unit tested 
 
 - `"vpx": "./bin/vpx"` sits next to `vp` and `vpr`. The shim imports `dist/vpx-bin.js`, a separate entry that loads neither the CLI bundle nor the native binding; the script's own Node.js process loads the binding through the preload.
 - Script mode: the same detection rules (`vpx-script.ts`), then `spawn(process.execPath, ['--require', preload, '--import', registerUrl, ...nodeArgs], { stdio: 'inherit' })`, with the signal handling described in [Process Model](#process-model).
-- Package mode, `--help`, and `--version` go to the global `vpx` found on `PATH`, skipping `node_modules/.bin` directories. Without one, package mode prints that running package binaries needs the global CLI, and `--version` prints this package's version. Inside `vp run` and package manager scripts, where `node_modules/.bin/vpx` shadows the global shim, `vpx eslint .` therefore behaves as before, though it starts Node.js first: `vpx -h` takes about 28 ms through the local bin against 4 ms through the global binary.
+- Package mode runs with this package's own `vp`, never the global `vpx` (`packageInvocation` in `vpx-script.ts`). A binary installed in a `node_modules/.bin` from the cwd up runs with `vp exec`. `pkg@version`, `--package`, `--shell-mode`, and a local package directory run with `vp dlx`, with the options passed through. The bin hands off by importing `dist/bin.js` with the argv rewritten, as `vpr` does, so package mode starts one Node.js process.
+- Global packages and `PATH` are not searched. A binary that is not installed is an error with a hint to add it to `devDependencies` or run `vp dlx`, never a download.
+- `--help` prints the local bin's own help, and `--version` prints this package's version.
+- The local bin never hands off to the global `vpx`, so delegation stays one-directional: the global CLI delegates to the project's `vite-plus`, as `vp` does, and never the reverse. Two copies of the local bin on `PATH` therefore cannot spawn each other.
 - Both implementations run the same detection cases from `crates/vp_global_cli/src/commands/vpx_script_cases.json`, and a unit test checks that their lists of script extensions and value-taking Node.js options stay identical.
 
 ### 2. Loader Resolution
@@ -498,7 +501,7 @@ Other errors raised in the script, including transform errors, come from Node.js
 - Without it, `"seed": "vpx ./scripts/seed.ts"` in `package.json` works on a developer machine and fails in CI that only runs `npm i -D vite-plus`. tsx is a devDependency and has no such gap, so a tsx replacement must not introduce one.
 - `vp migrate` can only rewrite `tsx ./x.ts` to `vpx ./x.ts` if the result works wherever `tsx` worked.
 - `vpr` already set the precedent for a local shorthand bin that detects itself by `argv0`.
-- The local bin covers script mode and delegates package mode. It does not reimplement the lookup chain.
+- The local bin covers script mode, and runs package mode with the package's own `vp exec` and `vp dlx`. It searches only `node_modules/.bin`, the binaries the project declares, and does not reimplement the global lookup chain (global packages and `PATH`).
 
 ### 9. Why Compile oxc-node Into the Binding
 
@@ -598,7 +601,9 @@ There are no shebangs. `vpx scripts\a.ts` works through the file-exists rule; th
 
 ### Inside `vp run` and `package.json` Scripts
 
-With the global CLI installed, `node_modules/.bin/vpx` (the project-local bin) shadows the global shim on `PATH` inside `vp run` and package manager scripts. Both resolve the same loader and the same Node.js, so the difference is the extra parent process of the local bin: about 22–26 ms for a script (see [Performance](#performance)) and about 25 ms for package mode. Without the global CLI, only the local bin exists and package mode prints the existing "requires the global CLI" hint.
+With the global CLI installed, `node_modules/.bin/vpx` (the project-local bin) shadows the global shim on `PATH` inside `vp run` and package manager scripts. For a script, both resolve the same loader and the same Node.js, so the difference is the extra parent process of the local bin: about 22–26 ms (see [Performance](#performance)).
+
+For a package binary, the local bin searches only `node_modules/.bin`. A tool installed with `vp install -g`, or found only on `PATH`, is reported as not installed instead of running or downloading; a script can call such a tool by name, or use `vp exec`, which falls back to `PATH`. Package mode works the same with or without the global CLI, and costs what the local `vp exec` costs: about 40 ms for a no-op binary against 7 ms through the global binary (macOS arm64, medians of 20 runs).
 
 ## Testing Strategy
 
@@ -612,7 +617,7 @@ With the global CLI installed, `node_modules/.bin/vpx` (the project-local bin) s
 
 ### Snapshot Tests
 
-Every case runs in both flavors (`vp = ["local", "global"]`), and the global shim and the project-local bin record identical snapshots. The cases need a built `packages/cli` (dist and binding) in both flavors, because script mode loads the loader entries and the binding from the installed checkout package.
+Every case except `vpx_package_not_installed` runs in both flavors (`vp = ["local", "global"]`), and the global shim and the project-local bin record identical snapshots. The cases need a built `packages/cli` (dist and binding) in both flavors, because script mode loads the loader entries and the binding from the installed checkout package.
 
 `fixtures/command_vpx_script/` pins Node.js 22.18.0, the repository version CI prewarms, so it covers the `module.register()` path:
 
@@ -621,13 +626,15 @@ Every case runs in both flavors (`vp = ["local", "global"]`), and the global shi
 | `vpx_script_ts_syntax`           | Enum, namespace, parameter properties, legacy decorator, private field, lowered class field (helper)                                                                                                                                                                                                                                              |
 | `vpx_script_resolution`          | tsconfig `paths`, `.js` → `.ts`, extensionless import, JSON, `require()` of a CommonJS `.cts` (`export =`) with a class field; `--tsconfig` in both positions                                                                                                                                                                                     |
 | `vpx_script_args_and_options`    | Arguments and `--` after the script, exit code 7, `--env-file .env`, a TypeScript `--import` preload, `--eval` without a script                                                                                                                                                                                                                   |
-| `vpx_script_errors`              | Missing explicit path, missing bare `.ts`, missing tsconfig, `-p` with a script                                                                                                                                                                                                                                                                   |
+| `vpx_script_errors`              | Missing explicit path, missing bare `.ts`, missing tsconfig, `-p` with a script, `-p` with a missing explicit path or bare `.ts`, a missing extensionless explicit path                                                                                                                                                                           |
 | `vpx_script_module_formats`      | The `.cts` module-syntax error as the entry and when imported, a TypeScript `--require` preload, `fork()` and `Worker`, `--test`                                                                                                                                                                                                                  |
 | `vpx_script_ts_dependency`       | TypeScript packages in `node_modules`, through `import` (ESM) and `require()` (CommonJS)                                                                                                                                                                                                                                                          |
 | `vpx_script_tsconfig_transforms` | Classic and automatic JSX runtimes, native class fields, `verbatimModuleSyntax`, the decorator error                                                                                                                                                                                                                                              |
 | `vpx_script_jsx_custom`          | JSX with a runtime installed as a package: a classic factory imported from it (the import is kept), `react-jsx` and `react-jsxdev` with it as `jsxImportSource`, `@jsxImportSource` and `@jsxRuntime classic`/`@jsx`/`@jsxFrag` pragma comments, Hono's `@jsx` plus `@jsxImportSource` pair, `.jsx` with `allowJs`, and JSX in a CommonJS package |
 | `vpx_script_shebang` (Unix)      | An executable `.ts` file, an extensionless file with `#!/usr/bin/env vpx`, and an extensionless ES module in a package without `"type"`                                                                                                                                                                                                           |
 | `vpx_script_watch` (Unix)        | `--watch` restarts when an imported `.ts` file changes (driven by `verify-watch.mjs`)                                                                                                                                                                                                                                                             |
+| `vpx_package_installed` (Unix)   | A binary in `node_modules/.bin` runs from the project and a subdirectory, with its arguments (including `--help`) and exit code                                                                                                                                                                                                                   |
+| `vpx_package_not_installed`      | Local flavor only: a binary missing from `node_modules/.bin` is an error with a hint, not a download                                                                                                                                                                                                                                              |
 
 `fixtures/command_vpx_script_node22/` pins Node.js 22.23.2 for the `registerHooks()` path on 22.x, which never gets nodejs/node#62920 and lowers `using` to a runtime helper. `fixtures/command_vpx_script_node24/` pins Node.js 24.12.0 for the `registerHooks()` path on an LTS line, including an imported CommonJS module that `require()`s another file. `fixtures/command_vpx_script_node26/` pins Node.js 26.5.0 for the same path (ESM, `require()` of CommonJS `.cts`, native `using`, the `.cts` module-syntax error). `fixtures/command_vpx_script_old_node/` pins Node.js 20.18.0 for the unsupported-version error. These fixtures download their runtime in CI.
 
@@ -754,12 +761,13 @@ Compiling oxc-node in adds about 130 KB (0.3%), against about 4.2 MB for a separ
 
 ## Backward Compatibility
 
-Package mode is unchanged. Behavior changes only for invocations that run a file:
+Package mode through the global `vpx` is unchanged. Behavior changes only for invocations that run a file, and for `vpx` in `package.json` scripts:
 
 - `vpx <existing file with a script extension>` now runs the file. Previously an executable file with a shebang was exec'd through the `PATH` lookup, and a non-executable file fell through to `vp dlx`, which failed.
 - A bare name that matches both a local file and a package (`vpx highlight.js` with `./highlight.js` present) now runs the file, as `node` and `tsx` would.
 - Invocations whose first token after the `vpx` options starts with `-` previously reached `vp dlx` with that token as the package name and never ran a package. They now run Node.js. `vpx --version` previously printed the package manager's version through `pnpm dlx --version`; it now prints the Vite+ version, like `vp --version`.
 - `vite-plus` gains a `vpx` bin. Projects that already have a different `vpx` in `node_modules/.bin` (there is no such package on npm today) would see a bin conflict warning from their package manager.
+- In `package.json` scripts and `vp run`, that bin shadows the global shim. `vpx <name>` there runs only binaries installed in `node_modules/.bin`. A name found only in global packages or on `PATH` now fails with a hint instead of running, and a name found nowhere fails instead of being downloaded. `pkg@version`, `--package`, and `--shell-mode` still download.
 - No new platform packages; see [Performance](#performance) for the binding size. `vite-plus` gains `@oxc-project/runtime` (pure JavaScript helpers) as a dependency; `pirates` is bundled. The `@oxc-project/runtime` catalog pin follows Rolldown's, which `@voidzero-dev/vite-plus-core` also uses.
 
 ## Rollout
@@ -776,7 +784,7 @@ Package mode is unchanged. Behavior changes only for invocations that run a file
 3. **JavaScript files**: should `.js`, `.mjs`, `.cjs`, and `.jsx` also get the loader, for example so that `.js` can import `.ts`? (Proposed: yes.)
 4. **Node.js range**: should script mode require the Vite+ engines range (`^22.18.0 || ^24.11.0 || >=26.0.0`), or anything with `module.register()` (≥ 20.6)? Node.js 20 reached end of life in April 2026. (Proposed: the engines range.)
 5. **Loader source**: project `vite-plus` first, or always the global install? (Proposed: project first.)
-6. **Local bin scope**: Design Decision 8 ships a project-local `vpx` that handles script mode and delegates package mode. Should it instead implement the full lookup chain in JS, so that `vpx eslint .` also works without the global CLI? (Proposed: delegate; keep one implementation of the chain.)
+6. **Local bin scope** (resolved): the local bin runs package mode with the package's own `vp exec` (binaries in `node_modules/.bin`) and `vp dlx` (`pkg@version`, `--package`, `--shell-mode`), and never hands off to the global `vpx`. An earlier design forwarded package mode to the global `vpx` on `PATH`; that made delegation two-way, and two copies of the local bin on `PATH` spawned each other forever. A binary missing from `node_modules/.bin` is an error with a hint rather than a `PATH` lookup or a download.
 7. **`--require` ordering** (resolved): the loader is split into a CommonJS `--require` preload and an `--import`, so `--require ./setup.ts` works.
 8. **Extensionless TypeScript in shebang scripts** (resolved): not supported. An extensionless name does not tell TypeScript from JavaScript, so shebang scripts keep their `.ts` extension (see Edge Cases).
 9. **oxc version lockstep** (resolved): `upgrade-deps` bumps oxc-node to its latest stable tag, and `sync-remote` rewrites its `oxc` version to the workspace's; a tag that does not compile fails the upgrade loudly. `@oxc-project/runtime` follows Rolldown's pin.

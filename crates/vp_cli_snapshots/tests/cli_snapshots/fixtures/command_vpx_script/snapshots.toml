@@ -36,6 +36,8 @@ steps = [
   { argv = ["vpx", "--tsconfig", "missing.json", "./src/syntax.ts"], comment = "Missing tsconfig", continue-on-failure = true },
   { argv = ["vpx", "-p", "cowsay", "./src/syntax.ts"], comment = "--package selects package mode", continue-on-failure = true },
   { argv = ["vpx", "-p", "cowsay", "./src/missing.ts"], comment = "A missing explicit path never falls through to a package download, even with --package", continue-on-failure = true },
+  { argv = ["vpx", "-p", "cowsay", "seed.ts"], comment = "Nor does a missing bare name with a TypeScript extension", continue-on-failure = true },
+  { argv = ["vpx", "./bin/missing"], comment = "Nor a missing explicit path without an extension", continue-on-failure = true },
 ]
 
 [[case]]
@@ -97,14 +99,36 @@ steps = [
 name = "vpx_script_shebang"
 vp = ["local", "global"]
 skip-platforms = ["windows"]
+requires = ["sh"]
 comment = "#!/usr/bin/env vpx works for executable script files."
 steps = [
   { argv = ["vpt", "chmod", "+x", "bin/tool.ts"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "bin/tool"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "bin/commonjs/tool"], snapshot = false },
-  { argv = ["vpx", "sh", "-c", "./bin/tool.ts"], comment = "An executable .ts file" },
-  { argv = ["vpx", "sh", "-c", "./bin/tool"], comment = "An extensionless file runs as JavaScript instead of re-entering vpx" },
-  { argv = ["vpx", "sh", "-c", "./bin/commonjs/tool"], comment = "In a package without type, an extensionless file with ES module syntax runs as an ES module" },
+  { argv = ["sh", "-c", "./bin/tool.ts"], comment = "An executable .ts file" },
+  { argv = ["sh", "-c", "./bin/tool"], comment = "An extensionless file runs as JavaScript instead of re-entering vpx" },
+  { argv = ["sh", "-c", "./bin/commonjs/tool"], comment = "In a package without type, an extensionless file with ES module syntax runs as an ES module" },
+]
+
+[[case]]
+name = "vpx_package_installed"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+comment = "A package binary installed in node_modules/.bin runs from the project or a subdirectory, with its arguments and exit code."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules/.bin"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/.bin/fake-tool", "#!/bin/sh\necho \"fake-tool: $*\"\nexit 3\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "node_modules/.bin/fake-tool"], snapshot = false },
+  { argv = ["vpx", "fake-tool", "a", "--help"], comment = "Arguments, including --help, belong to the binary; exit code 3 propagates", continue-on-failure = true },
+  { argv = ["vpx", "fake-tool", "b"], cwd = "src", comment = "node_modules/.bin is found from a subdirectory", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_package_not_installed"
+vp = "local"
+comment = "The project-local vpx, which package.json scripts run, searches only node_modules/.bin, never global packages or PATH. A binary that is not installed is an error with a hint, not a download."
+steps = [
+  { argv = ["vpx", "fake-missing-tool", "."], continue-on-failure = true },
 ]
 
 [[case]]

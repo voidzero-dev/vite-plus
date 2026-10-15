@@ -51,3 +51,23 @@ A missing explicit path never falls through to a package download, even with --p
 ```
 error: vpx: Script not found: ./src/missing.ts
 ```
+
+## `vpx -p cowsay seed.ts`
+
+Nor does a missing bare name with a TypeScript extension
+
+**Exit code:** 1
+
+```
+error: vpx: Script not found: seed.ts
+```
+
+## `vpx ./bin/missing`
+
+Nor a missing explicit path without an extension
+
+**Exit code:** 1
+
+```
+error: vpx: Script not found: ./bin/missing
+```

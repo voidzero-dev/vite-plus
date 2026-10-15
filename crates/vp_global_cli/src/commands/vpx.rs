@@ -124,9 +124,9 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
                 output::error(&format!("vpx: {flag} cannot be used when running a script"));
                 return 1;
             }
-            // A missing explicit path never falls through to `dlx`, `--package` or not.
-            // With `--shell-mode` the token is a shell command, not a path.
-            Err(error) if !flags.shell_mode && vpx_script::is_explicit_path(cmd_spec) => {
+            // A missing script never falls through to `dlx`, `--package` or not. With
+            // `--shell-mode` the token is a shell command, not a path.
+            Err(error) if !flags.shell_mode => {
                 output::error(&format!("vpx: {error}"));
                 return 1;
             }

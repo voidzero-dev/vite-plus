@@ -15,8 +15,11 @@ import {
   SUPPORTED_NODE_RANGE,
 } from '../script-hooks.ts';
 import {
+  commandName,
   detectScript,
+  hasVersionSpec,
   NODE_OPTIONS_WITH_VALUE,
+  packageInvocation,
   parseVpxArgs,
   SCRIPT_EXTENSIONS,
   ScriptError,
@@ -109,6 +112,64 @@ describe('parseVpxArgs', () => {
       flags: { version: false },
       positional: ['./a.ts', '--version'],
     });
+  });
+});
+
+function runPackage(args: string[], cwd: string) {
+  const { flags, positional } = parseVpxArgs(args);
+  return packageInvocation(flags, positional as [string, ...string[]], cwd);
+}
+
+describe('packageInvocation', () => {
+  const bin =
+    process.platform === 'win32' ? 'node_modules/.bin/eslint.cmd' : 'node_modules/.bin/eslint';
+
+  it('parses package specs the way the global CLI does', () => {
+    expect(['eslint', 'eslint@9', '@vue/cli', '@vue/cli@5', '@scope'].map(hasVersionSpec)).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+    ]);
+    expect(['eslint@9', '@vue/cli@5.0.0', 'create-vue'].map(commandName)).toEqual([
+      'eslint',
+      'cli',
+      'create-vue',
+    ]);
+  });
+
+  it('runs a binary installed in node_modules/.bin, from a parent directory too', () => {
+    const dir = project({ [bin]: '', 'packages/app/.keep': '' });
+    expect(runPackage(['eslint', '.'], path.join(dir, 'packages/app'))).toEqual({
+      command: 'exec',
+      args: ['eslint', '.'],
+    });
+  });
+
+  it('reports a binary that is not installed instead of downloading it', () => {
+    expect(runPackage(['eslint', '.'], project({}))).toEqual({
+      error: "'eslint' is not installed in node_modules",
+      note: 'Add it to devDependencies, or run `vp dlx eslint` to download and run it.',
+    });
+  });
+
+  it('downloads a versioned package, and anything with --package or --shell-mode', () => {
+    const dir = project({ [bin]: '' });
+    expect(runPackage(['eslint@9', '.'], dir)).toEqual({ command: 'dlx', args: ['eslint@9', '.'] });
+    expect(runPackage(['-s', '-p', 'cowsay', '-c', 'echo hi | cowsay'], dir)).toEqual({
+      command: 'dlx',
+      args: ['--package', 'cowsay', '--shell-mode', '--silent', 'echo hi | cowsay'],
+    });
+  });
+
+  it('runs an existing file with exec and a local package directory with dlx', () => {
+    const dir = project({ 'deploy.sh': '', 'tools/package.json': '{}' });
+    expect(runPackage(['./deploy.sh', 'x'], dir)).toEqual({
+      command: 'exec',
+      args: ['./deploy.sh', 'x'],
+    });
+    expect(runPackage(['./tools'], dir)).toEqual({ command: 'dlx', args: ['./tools'] });
   });
 });
 

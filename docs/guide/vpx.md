@@ -14,7 +14,7 @@ The other commands give stricter control over where a binary comes from:
 - [`vp exec`](#vp-exec) runs a command from local `node_modules/.bin` directories, falling back to `PATH`.
 - [`vp dlx`](#vp-dlx) runs a package binary without adding it as a dependency.
 
-`vpx -v` or `vpx --version` prints the Vite+ version, like `vp --version`. Without the global CLI, the project-local `vpx` prints only its own `vite-plus` version.
+`vpx -v` or `vpx --version` prints the Vite+ version, like `vp --version`. In `package.json` scripts, `vpx` prints the version of the project's `vite-plus` package.
 
 ## Running Package Binaries
 
@@ -39,7 +39,12 @@ vpx oxlint@1.85.0 --version
 vpx -p cowsay -c 'echo "hi" | cowsay'
 ```
 
-Running package binaries needs the global Vite+ CLI. In `package.json` scripts, the `vpx` bin of the project's `vite-plus` package hands package commands to it.
+Package managers and `vp run` put `node_modules/.bin` first on `PATH`, so `package.json` scripts run the `vpx` bin of the project's `vite-plus` package. That bin does not need the global CLI, and it looks only in local `node_modules/.bin` directories. It runs an installed binary via `vp exec`, and `pkg@version`, `--package/-p`, or `--shell-mode` via `vp dlx`. A binary that is not installed is an error, so a script never downloads a package by accident:
+
+```
+error: vpx: 'eslint' is not installed in node_modules
+note: Add it to devDependencies, or run `vp dlx eslint` to download and run it.
+```
 
 ## Running Scripts
 
