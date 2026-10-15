@@ -56,7 +56,7 @@ import { gunzipSync } from 'node:zlib';
 
 import { exitCodeFromClose } from './exit-code.ts';
 import { packLocalVitePlusPackages } from './pack-local-vite-plus.ts';
-import { setRegistryRequestDeadline } from './registry-request.ts';
+import { setRegistryRequestTimeout } from './registry-request.ts';
 
 interface PackageManifest {
   name: string;
@@ -341,7 +341,7 @@ function fetchUpstreamPackument(name: string): Promise<Packument | null> {
         });
       },
     ).on('error', () => resolve(null));
-    setRegistryRequestDeadline(request);
+    setRegistryRequestTimeout(request);
   });
 }
 
@@ -485,7 +485,7 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
       },
     );
     upstreamRequest.on('error', fail);
-    setRegistryRequestDeadline(upstreamRequest);
+    setRegistryRequestTimeout(upstreamRequest);
     if (bodyless) {
       upstreamRequest.end();
     } else {
