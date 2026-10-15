@@ -238,22 +238,20 @@ async function buildVite() {
     recursive: true,
   });
 
-  // `vp dev`, `vp build`, and `vp preview` start through Vite's bin script,
-  // which sets the dev server's startup time (`ready in N ms`), maps
-  // `--debug`/`--filter` to `DEBUG`/`VITE_DEBUG_FILTER`, starts `--profile`
-  // sessions, and enables the module compile cache before loading the CLI.
+  // `vp dev`, `vp build`, and `vp preview` start through Vite's bin script, as
+  // `vite` does (see BUNDLING.md). Point its CLI import at the `dist/vite` layout.
   const viteBin = await readFile(join(rolldownViteSourceDir, 'bin', 'vite.js'), 'utf-8');
   const viteBinCliImport = `import('../dist/node/cli.js')`;
-  if (viteBin.split(viteBinCliImport).length !== 2) {
+  if (!viteBin.includes(viteBinCliImport)) {
     throw new Error(
-      `Expected vite bin/vite.js to contain \`${viteBinCliImport}\` once; ` +
+      `Expected vite bin/vite.js to contain \`${viteBinCliImport}\`; ` +
         'update the bin/vite.js rewrite in packages/core/build.ts for the current upstream script.',
     );
   }
   await mkdir(join(projectDir, 'dist/vite/bin'), { recursive: true });
   await writeFile(
     join(projectDir, 'dist/vite/bin/vite.js'),
-    viteBin.replace(viteBinCliImport, `import('../node/cli.js')`),
+    viteBin.replaceAll(viteBinCliImport, `import('../node/cli.js')`),
   );
 
   // Copy and rewrite .d.ts files

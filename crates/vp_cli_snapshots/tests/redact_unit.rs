@@ -37,6 +37,14 @@ fn masks_yarn_compound_elapsed_times_as_one_duration() {
 }
 
 #[test]
+fn masks_durations_with_a_space_before_the_unit() {
+    assert_eq!(
+        redact_output("  VITE+ v1.2.0  ready in 123 ms\n".to_owned(), &[], true),
+        "  VITE+ <version>  ready in <duration>\n"
+    );
+}
+
+#[test]
 fn omits_optional_yarn_step_timing_without_hiding_completion_text() {
     for suffix in ["", " in 999ms", " in 1s", " in 1s 0ms", " in 1m 2s"] {
         assert_eq!(

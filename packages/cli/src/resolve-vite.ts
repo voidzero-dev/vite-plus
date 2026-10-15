@@ -38,8 +38,7 @@ export async function vite(
   if (err) {
     throw err;
   }
-  // Start through Vite's bin script rather than `node/cli.js`, as `vite` does:
-  // it records the startup time and handles `--debug`, `--filter`, and `--profile`.
+  // Start through Vite's bin script, as `vite` does; see packages/core/BUNDLING.md.
   const viteDistDir = dirname(dirname(resolveCore('', resolveViteRoot(context))));
   const binPath = join(viteDistDir, 'bin', 'vite.js');
   if (!existsSync(binPath)) {

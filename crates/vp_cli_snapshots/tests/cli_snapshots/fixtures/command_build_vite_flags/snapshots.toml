@@ -1,12 +1,11 @@
 # `vp build`, `vp dev`, and `vp preview` start Vite through its bin script,
 # which maps `--debug`/`--filter` to DEBUG/VITE_DEBUG_FILTER and starts the
-# `--profile` session. Before #3053, vp ran `node/cli.js` directly, which
-# accepted these flags and ignored them.
+# `--profile` session.
 [[case]]
 name = "command_build_debug_filter"
 vp = "local"
 steps = [
-  { argv = ["vp", "build", "--debug", "config", "--filter", "loaded in"], comment = "--debug enables the vite:config logs, and --filter keeps only the line containing 'loaded in' (the resolved config dump is filtered out)" },
+  { argv = ["vp", "build", "--debug", "config", "--filter", "no config file"], comment = "--debug enables the vite:config logs, and --filter keeps only the line containing 'no config file' (the resolved config dump is filtered out)" },
 ]
 
 [[case]]
