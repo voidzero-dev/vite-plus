@@ -21,8 +21,8 @@ catalog:
   '@napi-rs/cli': ^3.10.0
   '@napi-rs/wasm-runtime': ~1.2.5
   '@nkzw/safe-word-list': ^3.1.0
-  '@oxc-node/cli': ^0.1.6
-  '@oxc-node/core': ^0.1.6
+  '@oxc-node/cli': ^0.1.7
+  '@oxc-node/core': ^0.1.7
   '@oxc-project/runtime': =0.154.0
   '@oxc-project/types': =0.154.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
@@ -140,7 +140,7 @@ catalog:
   vue: ^3.5.35
   web-tree-sitter: ^0.27.0
   ws: ^8.22.0
-  yaml: ^2.8.1
+  yaml: ^2.9.1
   # Keep generator option schemas compatible with bingo's Zod version.
   zod: ^4.4.3
   zx: ^8.1.2
