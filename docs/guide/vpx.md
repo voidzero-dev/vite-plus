@@ -99,7 +99,7 @@ The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "v
 
 ### tsconfig
 
-`vpx` reads compiler options from a tsconfig but does not type-check with it. Each file uses the nearest `tsconfig.json` above it that includes it through `files`, `include`, `exclude`, or project `references`, as `tsc` does, and `extends` is followed. Files in `node_modules` use no tsconfig. tsx, by contrast, applies one tsconfig, found from the working directory upward, to every file it includes, so `vpx` compiles a file the same way wherever it runs from.
+`vpx` reads compiler options from a tsconfig but does not type-check with it. Each file uses the nearest `tsconfig.json` above it that includes it through `files`, `include`, `exclude`, or project `references`, as `tsc` does, and `extends` is followed. Files in `node_modules` use no tsconfig, and neither does a file that no tsconfig includes. Such a file cannot use `paths` aliases either: with a root tsconfig whose `include` is `["src"]`, a script in `scripts/` that imports an alias fails with `ERR_MODULE_NOT_FOUND`. Add the directory to `include`, or pass `--tsconfig`. Because the config depends on the file's location, not on the working directory, `vpx` compiles a file the same way wherever it runs from.
 
 `--tsconfig <path>` applies one config to every file instead, including files that config does not include. Without `--tsconfig`, an `OXC_TSCONFIG_PATH` or `TS_NODE_PROJECT` environment variable does the same.
 
@@ -154,6 +154,8 @@ JSX that depends on a compiler plugin is not supported. `vpx` compiles JSX only 
 Without a tsconfig `jsx` option, tsx compiles JSX to `React.createElement()`, which needs `React` in scope, while `vpx` uses the automatic runtime. Set `"jsx": "react"` to keep the classic output.
 
 Because of that default, tsx ignores a lone `/** @jsxImportSource … */` comment unless the file also has `/** @jsxRuntime automatic */` or the tsconfig sets `"jsx": "react-jsx"`. `vpx` applies the comment on its own.
+
+tsx resolves `paths` for every file, including files outside the tsconfig's `include`, such as a `scripts/` directory next to `src/`. `vpx` applies `paths` only to files a tsconfig includes, so add those directories to `include` or pass `--tsconfig` (see [tsconfig](#tsconfig)).
 :::
 
 ## `vp exec`
