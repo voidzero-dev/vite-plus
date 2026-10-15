@@ -46,7 +46,7 @@ webpki-root-certs = { workspace = true }
 indicatif = { workspace = true, features = ["in_memory"] }
 serial_test = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "time"] }
+tokio = { workspace = true, features = ["macros", "rt"] }
 # Enables the `test-utils` feature for this crate's own tests and doctests
 # (a package's dev-dependencies are active when it is the tested target).
 vp_shared = { path = ".", features = ["test-utils"] }

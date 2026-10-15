@@ -255,7 +255,6 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 - **Purpose**: Per-request timeout, in seconds, for large downloads such as Node.js runtimes and package-manager tarballs
 - **Values**: Positive integer, at most `86400` (24 hours); invalid values are ignored with a warning
 - **Default**: `600` (10 minutes)
-- **Inactivity limit**: Requests also time out after 20 seconds without response data. Each read resets this limit, so active downloads can use the full total timeout.
 - **Example**:
   ```bash
   # Allow up to 30 minutes per download on a slow connection
