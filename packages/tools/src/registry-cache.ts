@@ -65,11 +65,13 @@ export class RegistryCache {
   private readonly directory: string;
   private readonly enabled: boolean;
   private readonly logFile?: string;
+  private readonly timeoutMs: number;
 
-  constructor(directory: string, enabled = true, logFile?: string) {
+  constructor(directory: string, enabled = true, logFile?: string, timeoutMs = 60_000) {
     this.directory = directory;
     this.enabled = enabled;
     this.logFile = logFile;
+    this.timeoutMs = timeoutMs;
   }
 
   record(event: string, url: string): void {
@@ -184,6 +186,9 @@ export class RegistryCache {
             'accept-encoding': new URL(url).pathname.endsWith('.tgz') ? 'identity' : 'gzip',
           },
           agent: url.startsWith('https:') ? this.agent : undefined,
+          // Bound the whole request, including connection setup and responses
+          // that keep sending data. Release the cache lock before a case times out.
+          signal: AbortSignal.timeout(this.timeoutMs),
         },
         (res: IncomingMessage) => {
           res.on('error', reject);
@@ -226,7 +231,6 @@ export class RegistryCache {
           });
         },
       );
-      req.setTimeout(60_000, () => req.destroy(new Error(`Registry request timed out: ${url}`)));
       req.on('error', reject);
       req.end();
     });
