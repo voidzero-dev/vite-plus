@@ -41,6 +41,8 @@ To select the project's Node.js version, Vite+ checks the current directory firs
 
 If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the latest LTS.
 
+These rules select Node.js for project commands. The installer uses the latest LTS by default. Only [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version) changes its dependency-installation runtime; [`setup-vp`](/guide/ci#node-js-during-installation) supplies this override from the CI inputs or project declarations.
+
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
 ::: tip Using pnpm with Vite+ runtime management
