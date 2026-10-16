@@ -242,15 +242,18 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
         if !skip_deps {
-            let node_version = runtime::resolve(&vt_path::current_dir()?).await?;
-            let preferred = runtime::supports_cli(&node_version).then_some(node_version.as_str());
-            if preferred.is_none() {
+            let node_version = runtime::resolve().await?;
+            let preferred =
+                node_version.as_deref().filter(|version| runtime::supports_cli(version));
+            if let Some(version) = node_version.as_deref().filter(|_| preferred.is_none()) {
                 output::info(&format!(
-                    "Project Node.js {node_version} does not support this Vite+ release; using a separate installation runtime."
+                    "Requested Node.js {version} does not support this Vite+ release; using a separate installation runtime."
                 ));
             }
             install::install_production_deps(&version_dir, registry, true, preferred).await?;
-            runtime::write_resolution(&node_version).await?;
+            if let Some(version) = node_version {
+                runtime::write_resolution(&version).await?;
+            }
         }
     }
     #[cfg(windows)]
