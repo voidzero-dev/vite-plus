@@ -176,6 +176,9 @@ catalogs:
     '@clack/core':
       specifier: ^1.5.1
       version: 1.5.1
+    '@e18e/eslint-plugin':
+      specifier: ^0.8.1
+      version: 0.8.1
     '@emnapi/core':
       specifier: 2.0.0-alpha.5
       version: 2.0.0-alpha.5
@@ -436,6 +439,9 @@ importers:
 
   .:
     devDependencies:
+      '@e18e/eslint-plugin':
+        specifier: 'catalog:'
+        version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.88.0(oxlint-tsgolint@7.0.2004)(vite-plus@packages+cli))
       '@emnapi/core':
         specifier: 'catalog:'
         version: 2.0.0-alpha.5
