@@ -26,6 +26,7 @@ import {
   resolveWithOxcNode,
   rewriteHelperRequires,
   SUPPORTED_NODE_RANGE,
+  withRequireAsyncModuleCode,
 } from './script-hooks.ts';
 
 if (!isSupportedNodeVersion(process.versions.node)) {
@@ -59,7 +60,12 @@ const transformer = new oxcNode.OxcTransformer(process.cwd(), HELPER_MODULE_NAME
 
 addHook(
   (code, filename) => {
-    const output = transformer.transform(filename, code);
+    let output;
+    try {
+      output = transformer.transform(filename, code);
+    } catch (error) {
+      throw withRequireAsyncModuleCode(error);
+    }
     const source = rewriteHelperRequires(output.source);
     const sourceMap = output.sourceMap;
     return sourceMap

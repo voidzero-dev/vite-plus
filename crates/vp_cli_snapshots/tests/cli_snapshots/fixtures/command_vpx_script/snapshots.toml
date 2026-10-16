@@ -14,6 +14,8 @@ steps = [
   { argv = ["vpx", "src/resolution.ts"], comment = "A bare relative path runs when the file exists" },
   { argv = ["vpx", "--tsconfig", "tsconfig.alt.json", "src/resolution.ts"], comment = "--tsconfig replaces per-file tsconfig selection" },
   { argv = ["vpx", "--no-warnings", "--tsconfig=tsconfig.alt.json", "src/resolution.ts"], comment = "--tsconfig is also recognized among Node.js options" },
+  { argv = ["vpx", "./main.ts"], cwd = "order", comment = "A .ts next to its compiled .js wins for ./dep.js and ./dep, as with tsc and tsx" },
+  { argv = ["vpx", "./scripts/seed.ts"], cwd = "outside-include", comment = "A file outside every tsconfig include resolves paths through the nearest tsconfig" },
 ]
 
 [[case]]
@@ -51,6 +53,8 @@ steps = [
   { argv = ["vpx", "--require", "./src/setup.cts", "./src/print-setup.ts"], comment = "A TypeScript --require preload runs after the loader" },
   { argv = ["vpx", "./src/fork.ts"], comment = "fork() and Worker inherit the loader" },
   { argv = ["vpx", "--test", "--test-reporter=dot", "./tests/enum.test.ts"], comment = "node:test runs .ts test files" },
+  { argv = ["vpx", "./src/data-url.ts"], comment = "data: URL imports keep Node.js' handling" },
+  { argv = ["vpx", "./src/require-tla.cts"], comment = "require() of a module with top-level await reports Node.js' error code" },
 ]
 
 [[case]]
@@ -109,6 +113,18 @@ steps = [
   { argv = ["sh", "-c", "./bin/tool.ts"], comment = "An executable .ts file" },
   { argv = ["sh", "-c", "./bin/tool"], comment = "An extensionless file runs as JavaScript instead of re-entering vpx" },
   { argv = ["sh", "-c", "./bin/commonjs/tool"], comment = "In a package without type, an extensionless file with ES module syntax runs as an ES module" },
+]
+
+[[case]]
+name = "vpx_script_file_names"
+vp = ["local", "global"]
+cwd = "names"
+comment = "File names with # and % run the named file, even when the name cut at the # or decoded at the % also exists."
+steps = [
+  { argv = ["vpx", "./main#hash.ts"], comment = "./main also exists" },
+  { argv = ["vpx", "./main%41.ts"], comment = "./mainA.ts also exists" },
+  { argv = ["vpx", "./main%file.ts"], comment = "Not a valid percent escape" },
+  { argv = ["vpx", "./hash#dir/main.ts"], comment = "A # in a directory name" },
 ]
 
 [[case]]
