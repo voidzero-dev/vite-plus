@@ -1,0 +1,54 @@
+name: Setup Rust
+description: Set up Rust with dependency caching for Cargo's current output layout.
+
+inputs:
+  components:
+    description: Space-separated Rust components.
+    required: false
+  tools:
+    description: Comma-separated Cargo tools.
+    required: false
+  restore-cache:
+    description: Whether to restore Cargo dependencies.
+    default: 'true'
+  save-cache:
+    description: Whether to save Cargo dependencies.
+    default: 'false'
+  cache-key:
+    description: Shared cache key prefix.
+    default: main
+  cache-workspace-crates:
+    description: Whether to include workspace crates in the cache.
+    default: 'false'
+  target-dir:
+    description: Custom Cargo target directory.
+    required: false
+
+runs:
+  using: composite
+  steps:
+    # Keep the upstream toolchain setup. Its bundled rust-cache v2.9.1
+    # removes dependencies with hyphenated names from Cargo's V2 layout.
+    # Use the released fix below until setup-rust includes it.
+    - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b
+      with:
+        components: ${{ inputs.components }}
+        restore-cache: false
+        target-dir: ${{ inputs.target-dir }}
+
+    - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      if: inputs.restore-cache == 'true'
+      with:
+        # Existing entries are immutable and can lack dependencies removed
+        # by v2.9.1. Start a new namespace so the corrected action saves them.
+        prefix-key: v1-rust
+        shared-key: ${{ inputs.cache-key }}
+        save-if: ${{ inputs.save-cache == 'true' }}
+        cache-workspace-crates: ${{ inputs.cache-workspace-crates }}
+        cache-targets: ${{ inputs.target-dir && 'false' || 'true' }}
+        cache-directories: ${{ inputs.target-dir || '' }}
+
+    - uses: taiki-e/install-action@711e1c3275189d76dcc4d34ddea63bf96ac49090 # v2.76.0
+      if: inputs.tools
+      with:
+        tool: ${{ inputs.tools }}

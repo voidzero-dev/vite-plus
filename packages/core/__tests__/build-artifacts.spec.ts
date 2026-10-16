@@ -28,15 +28,24 @@ describe('build artifacts', () => {
     expect(content).toContain('glob');
   });
 
+  it('should include the Vite bin script pointing at the bundled CLI', () => {
+    const binPath = path.join(distDir, 'vite/bin/vite.js');
+    expect(fs.existsSync(binPath), `${binPath} should exist`).toBe(true);
+
+    const content = fs.readFileSync(binPath, 'utf8');
+    expect(content).toContain(`import('../node/cli.js')`);
+    expect(fs.existsSync(path.resolve(path.dirname(binPath), '../node/cli.js'))).toBe(true);
+  });
+
   it('bundles JavaScript Yuku packages and keeps the native parser external', async () => {
-    await init;
+    await init();
     const tsdownDir = path.join(distDir, 'tsdown');
     const imports = fs.readdirSync(tsdownDir).flatMap((file) => {
       if (!file.endsWith('.js')) {
         return [];
       }
       const [imports] = parse(fs.readFileSync(path.join(tsdownDir, file), 'utf8'));
-      return imports.map((entry) => entry.n);
+      return imports.map((entry) => entry.specifier);
     });
     expect(imports).toContain('yuku-parser');
     expect(imports).not.toContain('yuku-ast');

@@ -1,0 +1,13 @@
+{
+  "name": "pm-licenses",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "npm@11.12.0",
+  "dependencies": {
+    "licensed-dep": "file:./licensed-dep"
+  },
+  "devDependencies": {
+    "unlicensed-dep": "file:./unlicensed-dep"
+  }
+}

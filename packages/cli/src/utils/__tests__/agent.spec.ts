@@ -344,14 +344,14 @@ describe('selectAgentTargets', () => {
 
 describe('selectAgentTargetPaths', () => {
   it('prompts with file-based targets and agent hints', async () => {
-    const multiselectSpy = vi.spyOn(prompts, 'multiselect').mockResolvedValue(['agents', 'claude']);
+    const multiselectSpy = vi.spyOn(prompts, 'multiselect').mockResolvedValue(['agents', 'gemini']);
 
     await expect(
       selectAgentTargetPaths({
         interactive: true,
         onCancel: vi.fn(),
       }),
-    ).resolves.toEqual(['AGENTS.md', 'CLAUDE.md']);
+    ).resolves.toEqual(['AGENTS.md', 'GEMINI.md']);
 
     expect(multiselectSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -363,15 +363,18 @@ describe('selectAgentTargetPaths', () => {
           expect.objectContaining({
             label: 'AGENTS.md',
             value: 'agents',
-            hint: expect.stringContaining('Codex'),
+            hint: expect.stringContaining('Claude Code, Codex'),
           }),
           expect.objectContaining({
-            label: 'CLAUDE.md',
-            value: 'claude',
-            hint: 'Claude Code',
+            label: 'GEMINI.md',
+            value: 'gemini',
+            hint: 'Gemini CLI',
           }),
         ]),
       }),
+    );
+    expect(multiselectSpy.mock.calls[0][0].options).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: 'claude' })]),
     );
   });
 });

@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from 'node:util';
 
 import stringWidth from 'fast-string-width';
 import color from 'picocolors';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import { box } from '../box.js';
 import { settings, updateSettings } from '../index.js';
@@ -12,6 +12,9 @@ import { note } from '../note.js';
 import { spinner } from '../spinner.js';
 import { stream } from '../stream.js';
 import { taskLog } from '../task-log.js';
+
+// common.ts selects symbols at module load, before test hooks run.
+vi.mock('is-unicode-supported', () => ({ default: () => true }));
 
 function capture(columns = 52, isTTY = false) {
   let content = '';

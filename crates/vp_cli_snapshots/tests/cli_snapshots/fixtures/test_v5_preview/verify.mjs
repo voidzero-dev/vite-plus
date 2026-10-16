@@ -44,6 +44,7 @@ try {
       browser: { enabled: true, provider, headless: false, instances: [{ browser: 'chromium' }] },
     },
   }));
+  assert.equal(runner.projects[0].config.api.port, 0);
   const result = await runner.start();
   assert.equal(result.unhandledErrors.length, 0, JSON.stringify(result.unhandledErrors));
   assert.equal(runner.state.getFiles().length, 1);

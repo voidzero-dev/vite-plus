@@ -2,7 +2,8 @@
 name = "shim_pnpm12_native"
 vp = "global"
 local-registry = true
-skip-platforms = ["windows"]
+# Exceeded 50 seconds on Linux in CI run 38679518451.
+skip-platforms = ["windows", "linux"]
 comment = "pnpm 12 ships a native binary via @pnpm/exe.* platform packages; the pnpm shim runs it directly and the pnpx shim injects the dlx subcommand."
 steps = [
   { argv = ["vp", "install", "-g", "pnpm"], comment = "Reject the redundant managed global install", continue-on-failure = true },

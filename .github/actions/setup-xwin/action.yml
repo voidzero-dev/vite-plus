@@ -25,7 +25,7 @@ runs:
     # symlinks the MSVC-style llvm-lib/llvm-dlltool (used by cc-rs to archive
     # C/C++ deps) and lld-link from there when the runner image has no matching
     # system LLVM.
-    - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+    - uses: ./.github/actions/setup-rust
       with:
         save-cache: ${{ inputs.save-cache }}
         cache-key: ${{ inputs.cache-key }}
@@ -34,9 +34,25 @@ runs:
     - run: rustup target add x86_64-pc-windows-msvc
       shell: bash
 
+    - name: Set Windows build versions
+      id: versions
+      shell: bash
+      run: |
+        {
+          echo "tools=${EXTRA_TOOLS:+$EXTRA_TOOLS,}cargo-xwin@$CARGO_XWIN_VERSION"
+          echo "sysroot-version=$SYSROOT_VERSION"
+          echo "sysroot-sha256=$SYSROOT_SHA256"
+        } >> "$GITHUB_OUTPUT"
+      env:
+        EXTRA_TOOLS: ${{ inputs.tools }}
+        # Renovate updates these pins. Keep the SDK version and checksum together.
+        CARGO_XWIN_VERSION: '0.23.1'
+        SYSROOT_VERSION: '2026-09-15'
+        SYSROOT_SHA256: 6aeecd2d25bcc90c72af09dc525dfdf7143c374d476dc4296692d42efb27a9b9
+
     - uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
       with:
-        tool: ${{ inputs.tools != '' && format('{0},cargo-xwin@0.23.1', inputs.tools) || 'cargo-xwin@0.23.1' }}
+        tool: ${{ steps.versions.outputs.tools }}
 
     # A packaged sysroot avoids unpacking Microsoft's installer archives
     # on every cache miss. Keep the clang-cl compiler driver.
@@ -74,7 +90,7 @@ runs:
           ~/.cache/cargo-xwin/windows-msvc-sysroot/include
           ~/.cache/cargo-xwin/windows-msvc-sysroot/lib/x86_64-unknown-windows-msvc
           ~/.cache/cargo-xwin/xwin
-        key: cargo-xwin-sysroot-2026-09-15-clang-cl-22-x64-v1
+        key: cargo-xwin-sysroot-${{ steps.versions.outputs.sysroot-version }}-${{ steps.versions.outputs.sysroot-sha256 }}-clang-cl-22-x64-v1
 
     - name: Download pinned Windows SDK
       if: steps.sysroot-cache.outputs.cache-hit != 'true'
@@ -111,5 +127,5 @@ runs:
         # cargo-xwin uses this marker to reuse the verified SDK layout.
         printf 'x86_64\n' > "$xwin/DONE"
       env:
-        SYSROOT_URL: https://github.com/trcrsired/windows-msvc-sysroot/releases/download/2026-09-15/windows-msvc-sysroot.tar.xz
-        SYSROOT_SHA256: 6aeecd2d25bcc90c72af09dc525dfdf7143c374d476dc4296692d42efb27a9b9
+        SYSROOT_URL: https://github.com/trcrsired/windows-msvc-sysroot/releases/download/${{ steps.versions.outputs.sysroot-version }}/windows-msvc-sysroot.tar.xz
+        SYSROOT_SHA256: ${{ steps.versions.outputs.sysroot-sha256 }}

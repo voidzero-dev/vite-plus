@@ -134,7 +134,9 @@ any case files left by a panic or an unsuccessful earlier cleanup attempt.
 Failed cases also write `error.txt`, `expected.md` (when present), `actual.md`
 (when a complete or partial snapshot was rendered), and `output.txt`. The output
 contains the last 1 MiB of unredacted rendered step output, including successful
-hidden steps; it is not the raw PTY byte stream. Artifacts survive temporary
+hidden steps; it is not the raw PTY byte stream. After a PTY timeout, the runner kills the
+child and waits up to two seconds for the reader to save the final screen,
+including when a milestone wait ends at EOF. Artifacts survive temporary
 workspace cleanup. CI uploads these files and timings on successful and failed
 runs. Listing tests with `--list` neither packs packages nor creates artifacts.
 
@@ -192,7 +194,7 @@ A step is a bare argv array or a table:
                               #   any other name resolves from the case env
                               #   (`PATH = "${workspace}/bin${PATH_SEPARATOR}${PATH}"`
                               #   is the shell's `PATH="$(pwd)/bin:$PATH"`)
-  timeout = 120000,           # ms, default 50s
+  timeout = 120000,           # ms, default 120s (includes cold package-manager downloads)
   snapshot = false,           # omit the screen while the step succeeds
                               #   (failures always keep their output)
   continue-on-failure = true, # a failing step skips the rest of its line,
@@ -304,3 +306,14 @@ Fixture trees are excluded from repo-wide fmt, lint, typecheck, and vitest
 (`vite.config.ts`, `tsconfig.json`); recorded snapshots and
 `snapshots.toml` are runner metadata and never appear inside the staged
 workspace a test runs in.
+
+Test servers must request port `0` so the OS selects an available port at bind
+time. Fixed ports can be reserved on Windows, where `EACCES` does not trigger
+Vite's port-in-use fallback. Vitest 5.0.4 replaces a plain `test.api.port: 0`
+with its default, including when it comes from `--api.port=0`. Set the port in
+a post-configuration hook instead; see
+[`test_v5_browser_defines/config.mjs`](fixtures/test_v5_browser_defines/config.mjs)
+for independent, inherited, referenced, and injected projects, and
+[`test_v5_optional_packages/verify-ui.mjs`](fixtures/test_v5_optional_packages/verify-ui.mjs)
+for the UI server. Assert that each resolved API port is `0` so regressions fail
+on every platform, even when the default port is available.

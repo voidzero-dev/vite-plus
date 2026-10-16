@@ -79,7 +79,8 @@ watch-check:
 [unix]
 test:
   RUST_MIN_STACK=8388608 cargo test $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || [ "$n" = "vp_trampoline" ] || echo -n "-p $n "; done) -p vite-plus-cli
-  cd crates/vp_trampoline && cargo test
+  # Run from the repository root to avoid the shim's build-std configuration.
+  cargo test --manifest-path crates/vp_trampoline/Cargo.toml --target-dir "${CARGO_TARGET_DIR:-target}"
 
 [windows]
 test:

@@ -11,19 +11,19 @@ For most of use cases, we recommend to use Vite+ cli to install in a project or 
 ::: code-group
 
 ```bash [pnpm]
-pnpm dlx --package=vite-plus vp create
+pnpm create vite-plus
 ```
 
 ```bash [npm]
-npx --package=vite-plus vp create
+npm create vite-plus@latest
 ```
 
 ```bash [Yarn]
-yarn dlx --package vite-plus vp create
+yarn create vite-plus
 ```
 
 ```bash [Bun]
-bunx --package vite-plus vp create
+bun create vite-plus
 ```
 
 :::

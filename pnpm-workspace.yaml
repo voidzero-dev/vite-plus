@@ -8,11 +8,8 @@ packages:
   - vite/packages/*
 catalog:
   '@babel/core': ^7.29.7
-  '@babel/parser': ^7.29.8
   '@babel/preset-env': ^7.29.7
   '@babel/preset-typescript': ^7.29.7
-  '@babel/traverse': ^7.29.8
-  '@babel/types': ^7.29.8
   '@clack/core': ^1.5.1
   '@emnapi/core': 2.0.0-alpha.5
   '@emnapi/runtime': 2.0.0-alpha.5
@@ -21,8 +18,8 @@ catalog:
   '@napi-rs/cli': ^3.10.0
   '@napi-rs/wasm-runtime': ~1.2.5
   '@nkzw/safe-word-list': ^3.1.0
-  '@oxc-node/cli': ^0.1.6
-  '@oxc-node/core': ^0.1.6
+  '@oxc-node/cli': ^0.1.7
+  '@oxc-node/core': ^0.1.7
   '@oxc-project/runtime': =0.154.0
   '@oxc-project/types': =0.154.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
@@ -35,12 +32,10 @@ catalog:
   '@tsdown/css': ^0.23.1
   '@tsdown/exe': ^0.23.1
   '@types/babel__core': 7.20.5
-  '@types/babel__traverse': ^7.28.0
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
   '@types/fs-extra': ^11.0.4
   '@types/lodash-es': ^4.17.12
-  '@types/mocha': 10.0.10
   '@types/node': 24.10.3
   '@types/picomatch': ^4.0.0
   '@types/react': ^19.1.8
@@ -51,18 +46,16 @@ catalog:
   '@types/validate-npm-package-name': ^4.0.2
   '@types/ws': ^8.18.0
   '@typescript/native-preview': 7.0.0-dev.20260707.2
-  '@vitejs/plugin-react': ^5.1.2
-  '@vitest/browser': 5.0.4
-  '@vitest/browser-playwright': 5.0.4
-  '@vitest/browser-preview': 5.0.4
+  '@vitest/browser': 5.0.5
+  '@vitest/browser-playwright': 5.0.5
+  '@vitest/browser-preview': 5.0.5
   '@vitest/browser-webdriverio': 5.0.0
-  '@vitest/mocker': 5.0.4
-  '@vitest/pretty-format': 5.0.4
-  '@vitest/snapshot': 5.0.4
-  '@vitest/spy': 5.0.4
-  '@vitest/utils': 5.0.4
+  '@vitest/mocker': 5.0.5
+  '@vitest/pretty-format': 5.0.5
+  '@vitest/snapshot': 5.0.5
+  '@vitest/spy': 5.0.5
+  '@vitest/utils': 5.0.5
   '@voidzero-dev/vitepress-theme': 5.0.7
-  '@vueuse/core': ^14.0.0
   acorn: ^8.17.0
   acorn-import-assertions: ^1.9.0
   astring: ^1.9.0
@@ -96,9 +89,7 @@ catalog:
   lodash-es: ^4.17.21
   micromatch: ^4.0.9
   minimatch: ^10.0.3
-  mocha: ^11.7.5
   nanotar: ^0.3.0
-  next: ^15.4.3
   oxc-minify: =0.154.0
   oxc-parser: =0.154.0
   oxc-transform: =0.154.0
@@ -129,18 +120,18 @@ catalog:
   typescript: ^6.0.0
   unified: ^11.0.5
   valibot: 1.5.0
-  validate-npm-package-name: ^7.0.2
+  validate-npm-package-name: ^8.0.0
   verkit: ^0.5.0
   vitepress: ^2.0.0-alpha.15
   vitepress-plugin-graphviz: ^0.1.0
   vitepress-plugin-group-icons: ^1.7.1
   vitepress-plugin-llms: ^1.1.0
   vitepress-plugin-og: ^0.0.5
-  vitest: 5.0.4
+  vitest: 5.0.5
   vue: ^3.5.35
   web-tree-sitter: ^0.27.0
   ws: ^8.22.0
-  yaml: ^2.8.1
+  yaml: ^2.9.1
   # Keep generator option schemas compatible with bingo's Zod version.
   zod: ^4.4.3
   zx: ^8.1.2

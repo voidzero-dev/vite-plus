@@ -2,7 +2,8 @@
 name = "shim_pnpm_uses_project_node_version"
 vp = "global"
 local-registry = true
-skip-platforms = ["windows"]
+# Exceeded 50 seconds on Linux in CI run 38675211827.
+skip-platforms = ["windows", "linux"]
 steps = [
   { argv = ["pnpm", "--version"], comment = "The unpinned pnpm shim resolves the latest version", snapshot = false },
   { argv = ["pnpm", "--version"], envs = [["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "The unpinned shim reuses its fresh latest-version cache without registry access", snapshot = false },

@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@iconify/vue": "^5.0.0",
-    "mermaid": "^11.13.0",
+    "mermaid": "^12.0.0",
     "reka-ui": "^2.7.0",
     "vitepress-plugin-group-icons": "^1.7.5",
     "vitepress-plugin-llms": "^1.12.2",

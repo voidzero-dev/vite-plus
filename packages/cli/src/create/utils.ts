@@ -4,6 +4,7 @@ import path from 'node:path';
 import validateNpmPackageName from 'validate-npm-package-name';
 import { parseDocument } from 'yaml';
 
+import { PackageManager } from '../types/index.ts';
 import {
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -74,6 +75,26 @@ export function shouldConfigureEditorsForCreate({
     return true;
   }
   return hasExplicitEditorOptIn(editor);
+}
+
+// Package managers stamp `npm_config_user_agent` (`pnpm/11.0.0 npm/? node/v24.0.0 ...`) on what they launch, e.g. `pnpm create vite-plus`; `vp run` prefixes it with `vp/<version>`, so it never matches.
+export function detectLauncherPackageManager(): PackageManager | undefined {
+  const name = process.env.npm_config_user_agent?.split('/')[0];
+  return Object.values(PackageManager).find((packageManager) => packageManager === name);
+}
+
+export function formatLocalVpCommand(packageManager: PackageManager, command: string) {
+  switch (packageManager) {
+    case PackageManager.pnpm:
+      return `pnpm exec ${command}`;
+    case PackageManager.yarn:
+      return `yarn exec ${command}`;
+    case PackageManager.bun:
+      return `bunx ${command}`;
+    case PackageManager.npm:
+    default:
+      return `npx ${command}`;
+  }
 }
 
 // Helper functions for file operations
