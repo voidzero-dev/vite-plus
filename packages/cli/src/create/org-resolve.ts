@@ -1,6 +1,7 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { findWorkspaceRoot, hasViteConfig, resolveViteConfig } from '../resolve-vite-config.ts';
+import { hasViteConfig, resolveViteConfig } from '../resolve-vite-config.ts';
+import { findWorkspaceRoot } from '../utils/package.ts';
 import { cancelAndExit } from '../utils/prompts.ts';
 import {
   CreateConfigSchemaError,

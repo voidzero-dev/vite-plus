@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { withConfigMetadataResolution } from './define-config.ts';
 import { VITE_CONFIG_FILES } from './utils/constants.ts';
+import { findWorkspaceRoot } from './utils/package.ts';
 
 /**
  * Find a vite config file by walking up from `startDir` to `stopDir`.
@@ -40,39 +41,6 @@ export function findViteConfig(dir: string): string | undefined {
 
 export function hasViteConfig(dir: string): boolean {
   return findViteConfig(dir) !== undefined;
-}
-
-/**
- * Find the workspace root by walking up from `startDir` looking for
- * monorepo indicators (pnpm-workspace.yaml, workspaces in package.json, lerna.json).
- */
-export function findWorkspaceRoot(startDir: string): string | undefined {
-  let dir = path.resolve(startDir);
-  while (true) {
-    if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
-      return dir;
-    }
-    const pkgPath = path.join(dir, 'package.json');
-    if (fs.existsSync(pkgPath)) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-        if (pkg.workspaces) {
-          return dir;
-        }
-      } catch {
-        // Skip malformed package.json and continue searching parent directories
-      }
-    }
-    if (fs.existsSync(path.join(dir, 'lerna.json'))) {
-      return dir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      break;
-    }
-    dir = parent;
-  }
-  return undefined;
 }
 
 export interface ResolveViteConfigOptions {
