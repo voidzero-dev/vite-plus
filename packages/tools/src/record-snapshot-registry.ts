@@ -10,10 +10,12 @@ const directory = fileURLToPath(
 );
 const manifestPath = path.join(directory, 'manifest.json');
 const previous = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
-const manifest: Record<string, unknown> = {};
+const manifest: Record<string, unknown> = { ...previous };
+const requested = process.argv.slice(2);
+const names = requested.length ? requested : Object.keys(previous);
 await mkdir(path.join(directory, 'tarballs'), { recursive: true });
 
-for (const name of Object.keys(previous).toSorted()) {
+for (const name of names.toSorted()) {
   const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, {
     signal: AbortSignal.timeout(30_000),
   });

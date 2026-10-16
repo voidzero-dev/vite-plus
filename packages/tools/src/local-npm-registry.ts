@@ -206,10 +206,19 @@ const fixtureManifest: Record<string, unknown> = existsSync('./mock-manifest.jso
   ? (JSON.parse(readFileSync('./mock-manifest.json', 'utf-8')) as Record<string, unknown>)
   : {};
 
-const sharedManifest: Record<string, unknown> =
-  snapshotFixtures && !live
-    ? JSON.parse(readFileSync(path.join(snapshotFixtures, 'manifest.json'), 'utf8'))
-    : {};
+const sharedManifest: Record<string, unknown> = {};
+if (snapshotFixtures) {
+  // Authored packages have no public-registry counterpart. Keep them available
+  // in comparison modes; only published recordings are disabled by --live.
+  for (const filename of live
+    ? ['local/manifest.json']
+    : ['manifest.json', 'local/manifest.json']) {
+    Object.assign(
+      sharedManifest,
+      JSON.parse(readFileSync(path.join(snapshotFixtures, filename), 'utf8')),
+    );
+  }
+}
 const manifest = { ...sharedManifest, ...fixtureManifest };
 const snapshotCache = snapshotCacheDir
   ? new RegistryCache(snapshotCacheDir, !live, requestLog)
@@ -565,16 +574,24 @@ const server = createServer(async (req, res) => {
       try {
         // Async read: local tarballs run tens of MB, and a synchronous read
         // would stall the proxied requests of the same in-flight install.
-        const localPath = localTarballs.get(tarMatch[1]) ?? path.resolve('./tarballs', tarMatch[1]);
-        const bytes = await readFile(
-          existsSync(localPath) || !snapshotFixtures || live
-            ? localPath
-            : path.join(snapshotFixtures, 'tarballs', tarMatch[1]),
-        );
-        snapshotCache?.record('fixture', key);
-        res.writeHead(200, { 'content-type': 'application/octet-stream' });
-        res.end(bytes);
-        return;
+        const candidates = [
+          localTarballs.get(tarMatch[1]),
+          path.resolve('./tarballs', tarMatch[1]),
+        ];
+        if (snapshotFixtures) {
+          candidates.push(path.join(snapshotFixtures, 'local/tarballs', tarMatch[1]));
+          if (!live) {
+            candidates.push(path.join(snapshotFixtures, 'tarballs', tarMatch[1]));
+          }
+        }
+        const localPath = candidates.find((candidate) => candidate && existsSync(candidate));
+        if (localPath) {
+          const bytes = await readFile(localPath);
+          snapshotCache?.record('fixture', key);
+          res.writeHead(200, { 'content-type': 'application/octet-stream' });
+          res.end(bytes);
+          return;
+        }
       } catch {
         // fall through to proxy
       }

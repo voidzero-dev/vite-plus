@@ -30,17 +30,10 @@ pnpm shim downloads the native binary and resolves the pinned packageManager ver
 12.0.0-beta.0
 ```
 
-## `pnpx --silent cowsay hello`
+## `pnpx --silent vp-test-echo hello`
 
 pnpx shim injects dlx so the native binary runs the package
 
 ```
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+hello
 ```

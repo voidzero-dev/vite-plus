@@ -4,6 +4,6 @@ vp = ["local", "global"]
 local-registry = true
 steps = [
   { argv = ["vp", "dlx", "--help"], comment = "should show help message", continue-on-failure = true },
-  { argv = ["vp", "dlx", "-s", "cowsay", "hello"], comment = "should run cowsay with pnpm dlx", continue-on-failure = true },
-  { argv = ["vp", "dlx", "-s", "cowsay@1.6.0", "hello"], comment = "should run specific version", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "vp-test-echo", "hello"], comment = "should run vp-test-echo with pnpm dlx", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "vp-test-echo@1.0.0", "hello"], comment = "should run specific version", continue-on-failure = true },
 ]
