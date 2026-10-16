@@ -18,12 +18,12 @@ multiple binaries. CommonJS entry points work with Yarn PnP without an ESM loade
 Regenerate `local/tarballs/` and `local/manifest.json` after editing their source:
 
 ```sh
-python3 crates/vp_cli_snapshots/tests/cli_snapshots/registry/pack.py
+node crates/vp_cli_snapshots/tests/cli_snapshots/registry/pack.mjs
 ```
 
-Packing uses fixed timestamps and file modes. It needs no network access and
-does not run package scripts. The npm refresh command below does not change
-these local packages.
+Packing uses Node.js builtins with fixed timestamps and file modes. It needs no
+network access and does not run package scripts. The npm refresh command below
+does not change these local packages.
 The `live` and `direct` comparison modes also serve authored packages locally,
 because they have no public-registry counterpart.
 
