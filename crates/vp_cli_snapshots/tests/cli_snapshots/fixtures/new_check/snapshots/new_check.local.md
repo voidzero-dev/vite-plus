@@ -17,6 +17,7 @@ Arguments:
 
 Options:
   --directory <DIR>                      Target directory for the generated project
+  --force                                Scaffold into a non-empty directory, keeping existing files
   --agent <NAME>                         Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
   --no-agent                             Skip writing coding agent instructions
   --editor <NAME>                        Write editor config files for the specified editor

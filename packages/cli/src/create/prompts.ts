@@ -85,13 +85,38 @@ export function suggestAvailableTargetDir(defaultTargetDir: string, cwd: string)
   return suggestedTargetDir;
 }
 
-export async function checkProjectDirExists(projectDirFullPath: string, interactive?: boolean) {
+export interface CheckProjectDirOptions {
+  /**
+   * Whether the template can scaffold into a non-empty directory while keeping
+   * the files already there. Only templates that Vite+ scaffolds itself can.
+   */
+  canKeepExisting?: boolean;
+  /** `--force`: keep the existing files without prompting. */
+  keepExisting?: boolean;
+}
+
+/**
+ * Make sure the project directory can be scaffolded into.
+ *
+ * Returns `true` when the directory is not empty and its files must be kept.
+ */
+export async function checkProjectDirExists(
+  projectDirFullPath: string,
+  interactive?: boolean,
+  options?: CheckProjectDirOptions,
+): Promise<boolean> {
   if (isTargetDirAvailable(projectDirFullPath)) {
-    return;
+    return false;
+  }
+  const canKeepExisting = options?.canKeepExisting ?? false;
+  if (canKeepExisting && options?.keepExisting) {
+    return true;
   }
   if (!interactive) {
     prompts.log.info(
-      'Use --directory to specify a different location or remove the directory first',
+      canKeepExisting
+        ? 'Use --directory to specify a different location, remove the directory first, or pass --force to keep the existing files'
+        : 'Use --directory to specify a different location or remove the directory first',
     );
     cancelAndExit(`Target directory "${projectDirFullPath}" is not empty`, 1);
   }
@@ -108,6 +133,14 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
         label: 'Remove existing files and continue',
         value: 'yes',
       },
+      ...(canKeepExisting
+        ? [
+            {
+              label: 'Keep existing files and continue',
+              value: 'keep',
+            },
+          ]
+        : []),
     ],
   });
 
@@ -119,9 +152,12 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
     case 'yes':
       emptyDir(projectDirFullPath);
       break;
+    case 'keep':
+      return true;
     case 'no':
       cancelAndExit();
   }
+  return false;
 }
 
 function isEmpty(path: string) {

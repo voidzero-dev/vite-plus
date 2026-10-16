@@ -3591,6 +3591,7 @@ export interface ConfigArgs {
 export interface CreateArgs {
   templateName?: string;
   directory?: string;
+  force?: boolean;
   agent?: false | string | Array<string>;
   editor?: false | string;
   git?: boolean;
