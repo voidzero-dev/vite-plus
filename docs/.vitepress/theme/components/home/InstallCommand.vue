@@ -10,6 +10,11 @@ type CommandCard = {
 
 const commandCards: CommandCard[] = [
   {
+    id: 'macos-homebrew',
+    label: 'macOS (Homebrew)',
+    command: 'brew install vite-plus',
+  },
+  {
     id: 'unix',
     label: 'macOS / Linux',
     command: `curl -fsSL ${__DOCS_INSTALL_SH_URL__} | bash`,

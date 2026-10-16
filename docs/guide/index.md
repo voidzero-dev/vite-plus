@@ -16,6 +16,12 @@ Building with an AI assistant? View and copy a prompt to create a new project, m
 
 The commands below install the global `vp` CLI, which manages Node.js and package managers and makes `vp` available across projects. If you only need the frontend toolchain in a single project, you can install the [project-local CLI](/guide/local-cli#install) instead.
 
+### macOS (Homebrew)
+
+```bash
+brew install vite-plus
+```
+
 ### macOS / Linux
 
 ```bash
