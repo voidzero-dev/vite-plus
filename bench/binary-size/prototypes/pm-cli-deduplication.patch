@@ -1,0 +1,80 @@
+diff --git a/crates/vp_pm_cli/src/resolution/resolve.rs b/crates/vp_pm_cli/src/resolution/resolve.rs
+index 3abb67dc4..d0d0606ba 100644
+--- a/crates/vp_pm_cli/src/resolution/resolve.rs
++++ b/crates/vp_pm_cli/src/resolution/resolve.rs
+@@ -65,0 +66,11 @@ where
++    bind_manager_environment(manager, &mut resolution)?;
++    Ok(resolution)
++}
++
++// This work is independent of the command's argument type. Keep one copy for
++// all command variants, including when release LTO can see the generic caller.
++#[inline(never)]
++fn bind_manager_environment(
++    manager: &PackageManager,
++    resolution: &mut Resolution,
++) -> Result<(), Error> {
+@@ -97 +108 @@ where
+-    Ok(resolution)
++    Ok(())
+diff --git a/crates/vp_pm_cli/src/resolution/support.rs b/crates/vp_pm_cli/src/resolution/support.rs
+index 448202cad..76fc54603 100644
+--- a/crates/vp_pm_cli/src/resolution/support.rs
++++ b/crates/vp_pm_cli/src/resolution/support.rs
+@@ -68 +68 @@ pub(crate) struct VersionRule {
+-    original: String,
++    original: &'static str,
+@@ -96 +96 @@ impl PmSupportRule {
+-        original: &str,
++        original: &'static str,
+@@ -99,4 +99 @@ impl PmSupportRule {
+-        Self {
+-            name,
+-            version: Some(VersionRule { operator, original: original.to_string(), normalized }),
+-        }
++        Self { name, version: Some(VersionRule { operator, original, normalized }) }
+@@ -138,0 +136,29 @@ mod tests {
++    #[test]
++    fn version_rules_keep_release_and_prerelease_boundaries() {
++        #[pm_args]
++        #[derive(clap::Args)]
++        struct VersionArgs {
++            #[arg(long, not_supported(bun < "1.4"))]
++            release: bool,
++            #[arg(long, not_supported(bun < "1.4.0-beta.2"))]
++            prerelease: bool,
++        }
++
++        let args = VersionArgs { release: true, prerelease: true };
++        for (version, messages) in [
++            (
++                "1.4.0-beta.1",
++                Some(
++                    "bun < 1.4 does not support --release.\nbun < 1.4.0-beta.2 does not support --prerelease.",
++                ),
++            ),
++            ("1.4.0-beta.2", Some("bun < 1.4 does not support --release.")),
++            ("1.4.0", None),
++            ("1.4.1", None),
++        ] {
++            let mut diagnostics = Diagnostics::default();
++            args.diagnose(&bun(version), &mut diagnostics);
++            assert_eq!(diagnostics.unsupported_options_error().as_deref(), messages, "{version}");
++        }
++    }
++
+diff --git a/crates/vp_pm_cli_macros/src/lib.rs b/crates/vp_pm_cli_macros/src/lib.rs
+index eaa4f72d3..fbbdd988c 100644
+--- a/crates/vp_pm_cli_macros/src/lib.rs
++++ b/crates/vp_pm_cli_macros/src/lib.rs
+@@ -446,0 +447,7 @@ impl Clause {
++                let version = Version::parse(normalized).expect("validated version literal");
++                let normalized = if version.pre.is_empty() && version.build.is_empty() {
++                    let (major, minor, patch) = (version.major, version.minor, version.patch);
++                    quote!(::semver::Version::new(#major, #minor, #patch))
++                } else {
++                    quote!(::semver::Version::parse(#normalized).expect("pm_args emitted a valid semver version"))
++                };
+@@ -452 +459 @@ impl Clause {
+-                        ::semver::Version::parse(#normalized).expect("pm_args emitted a valid semver version"),
++                        #normalized,
