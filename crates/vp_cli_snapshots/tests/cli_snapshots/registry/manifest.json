@@ -565,5 +565,2215 @@
     ],
     "readme": "ERROR: No README data found!",
     "readmeFilename": ""
+  },
+  "is-number": {
+    "_id": "is-number",
+    "_rev": "43-3fe877efbeead423ee53a12d5ca44395",
+    "name": "is-number",
+    "description": "Returns true if a number or string value is a finite number. Useful for regex matches, parsing, user input, etc.",
+    "dist-tags": {
+      "latest": "7.0.0"
+    },
+    "versions": {
+      "0.1.0": {
+        "name": "is-number",
+        "description": "Is the value a number?",
+        "version": "0.1.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "licenses": [
+          {
+            "type": "MIT",
+            "url": "https://github.com/jonschlinkert/is-number/blob/master/LICENSE-MIT"
+          }
+        ],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha -R spec"
+        },
+        "devDependencies": {
+          "verb-tag-jscomments": ">= 0.2.0",
+          "verb": ">= 0.2.6",
+          "mocha": "*"
+        },
+        "keywords": [
+          "docs",
+          "documentation",
+          "generate",
+          "generator",
+          "markdown",
+          "templates",
+          "verb"
+        ],
+        "_id": "is-number@0.1.0",
+        "_shasum": "4407a37aec259352affb5548886744ba4903f8bd",
+        "_from": ".",
+        "_npmVersion": "1.4.9",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          }
+        ],
+        "dist": {
+          "shasum": "4407a37aec259352affb5548886744ba4903f8bd",
+          "tarball": "{REGISTRY}/is-number/-/is-number-0.1.0.tgz",
+          "integrity": "sha512-WWl3iAruYOePW5iMf0IMcPiTsOTOu/FFsPyfx/ywixw7VmN6dI3/8/rgo4pdN6kVVjC5ByZ0Zk8xHLGEUSCdYA==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEUCIQCGbjmJymNMyy+kX9QMWNiNDpyXcRARCBG/qWG5AH3BHwIgYPJPxD0DLlmMlQ82J2/kw9xjNGwnqmZwv1iu2dhCtQo="
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "0.1.1": {
+        "name": "is-number",
+        "description": "Is the value a number? Has extensive tests.",
+        "version": "0.1.1",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "licenses": [
+          {
+            "type": "MIT",
+            "url": "https://github.com/jonschlinkert/is-number/blob/master/LICENSE-MIT"
+          }
+        ],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha -R spec"
+        },
+        "devDependencies": {
+          "verb-tag-jscomments": ">= 0.2.0",
+          "verb": ">= 0.2.6",
+          "mocha": "*"
+        },
+        "keywords": [
+          "coerce",
+          "coercion",
+          "integer",
+          "is",
+          "istype",
+          "javascript",
+          "math",
+          "number",
+          "test",
+          "type",
+          "typeof",
+          "util",
+          "utility",
+          "value"
+        ],
+        "_id": "is-number@0.1.1",
+        "_shasum": "69a7af116963d47206ec9bd9b48a14216f1e3806",
+        "_from": ".",
+        "_npmVersion": "1.4.9",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          }
+        ],
+        "dist": {
+          "shasum": "69a7af116963d47206ec9bd9b48a14216f1e3806",
+          "tarball": "{REGISTRY}/is-number/-/is-number-0.1.1.tgz",
+          "integrity": "sha512-la5kPULwIgkSSaZj9w7/A1uHqOBAgOhDUKQ5CkfL8LZ4Si6r4+2D0hI6b4o60MW4Uj2yNJARWIZUDPxlvOYQcw==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEUCIGGOUnPaovBe5O7zmgOovRl4e6Dzx6aMobYRtKHOiWV+AiEA4Qufb/miuS6rDGp7Zd20/e0JoxviUgTnqu21xGF2DhY="
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "1.0.0": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "1.0.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": {
+          "type": "MIT",
+          "url": "https://github.com/jonschlinkert/is-number/blob/master/LICENSE-MIT"
+        },
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha -R spec"
+        },
+        "files": ["index.js"],
+        "devDependencies": {
+          "benchmarked": "^0.1.3",
+          "chalk": "^0.5.1"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is number",
+          "is",
+          "is-number",
+          "istype",
+          "kind of",
+          "math",
+          "number",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "gitHead": "3183207ab31bb09c65ad8999c39090a3c0530526",
+        "_id": "is-number@1.0.0",
+        "_shasum": "de821e3936a8996badeb879ca6f93605e769d498",
+        "_from": ".",
+        "_npmVersion": "1.4.28",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          }
+        ],
+        "dist": {
+          "shasum": "de821e3936a8996badeb879ca6f93605e769d498",
+          "tarball": "{REGISTRY}/is-number/-/is-number-1.0.0.tgz",
+          "integrity": "sha512-chlxkgJp4PZIiff6kUe/MWLp5+soELWNYA2IsOTus1YwKj8d9JZS6QsU7Ryqwhb1f4i0nQ5SsoUj6d5kGgq0KQ==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEUCIQD2AOAMGpyuvqtfmVFBdULwtBCwI1cATJ1E2SXCu7KrqAIgN3FVeMU5CjRuw21s50tzEalrZmgvbJxkjizEvjLl+Xk="
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "1.1.0": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "1.1.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": {
+          "type": "MIT",
+          "url": "https://github.com/jonschlinkert/is-number/blob/master/LICENSE-MIT"
+        },
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha -R spec"
+        },
+        "files": ["index.js"],
+        "devDependencies": {
+          "benchmarked": "^0.1.3",
+          "chalk": "^0.5.1"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is number",
+          "is",
+          "is-number",
+          "istype",
+          "kind of",
+          "math",
+          "number",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "gitHead": "3183207ab31bb09c65ad8999c39090a3c0530526",
+        "_id": "is-number@1.1.0",
+        "_shasum": "620db9e22fded44d43d8e3e47044319083d31855",
+        "_from": ".",
+        "_npmVersion": "1.4.28",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          }
+        ],
+        "dist": {
+          "shasum": "620db9e22fded44d43d8e3e47044319083d31855",
+          "tarball": "{REGISTRY}/is-number/-/is-number-1.1.0.tgz",
+          "integrity": "sha512-zRllTDrNKDRvVEhjEqDVkT9eKzC7HJ+9SFbfBdZnbjBVt9t0SwbEn0F/NSwdk5GkkEdKZA6ZQ0Hfd4akty5Pfg==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEYCIQDnVnl9/SgNEemmb1M0T1tlfm4YRTqvWw3ja961FsqrVAIhANd7v0o1uT3CVfC9pzaFfvmwZcKBnxD+UHWlKvlIU4SJ"
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "1.1.1": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "1.1.1",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": {
+          "type": "MIT",
+          "url": "https://github.com/jonschlinkert/is-number/blob/master/LICENSE"
+        },
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "devDependencies": {
+          "benchmarked": "^0.1.3",
+          "chalk": "^0.5.1"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is number",
+          "is",
+          "is-number",
+          "istype",
+          "kind of",
+          "math",
+          "number",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "gitHead": "5184d76c622b97d45486340a85147c6d59d14e25",
+        "_id": "is-number@1.1.1",
+        "_shasum": "e393e7ec07c17770dbb67941e7f89c675feb110f",
+        "_from": ".",
+        "_npmVersion": "2.5.1",
+        "_nodeVersion": "0.12.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          }
+        ],
+        "dist": {
+          "shasum": "e393e7ec07c17770dbb67941e7f89c675feb110f",
+          "tarball": "{REGISTRY}/is-number/-/is-number-1.1.1.tgz",
+          "integrity": "sha512-3/f2eabVTjIGjSVaQIIv33g1d2tYdSUnCNJuPpHcjwRzx8A2IPtCB2ayK2R3aS7SCF/LHlTjdaRjNmfG+RpFlA==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEQCIA1MN/tZFRjbwiG0H63P4dD6Qsem1lVPlOlJuJfdJP8iAiAoX6Lk3FLlI0dqigZPFyFZi1CXFk0W8dN9yJw7P2IW+Q=="
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "1.1.2": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "1.1.2",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": {
+          "type": "MIT",
+          "url": "https://github.com/jonschlinkert/is-number/blob/master/LICENSE"
+        },
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "devDependencies": {
+          "benchmarked": "^0.1.3",
+          "chalk": "^0.5.1",
+          "mocha": "^2.1.0"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is number",
+          "is",
+          "is-number",
+          "istype",
+          "kind of",
+          "math",
+          "number",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "gitHead": "a902495bca1f471beaa8deb6193ba628bf80c0e4",
+        "_id": "is-number@1.1.2",
+        "_shasum": "9d82409f3a8a8beecf249b1bc7dada49829966e4",
+        "_from": ".",
+        "_npmVersion": "2.5.1",
+        "_nodeVersion": "0.12.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          }
+        ],
+        "dist": {
+          "shasum": "9d82409f3a8a8beecf249b1bc7dada49829966e4",
+          "tarball": "{REGISTRY}/is-number/-/is-number-1.1.2.tgz",
+          "integrity": "sha512-dRKHHq76sZAXFf823ziHIOx5fXbuV1IrR892LugLDmyEBVMZzGoske4sY6lf+l3YPH/VyWNiKzNDXAPiQhx9Yg==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEYCIQCpH37H0WboBtQM2deQbMGTh2WMRYWVosLWdpoz+wqyoQIhAIutpIYs8sNTY2MaxDpnJmvhoUfxrNVDIUs4+J5JffHf"
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "2.0.0": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "2.0.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": {
+          "type": "MIT",
+          "url": "https://github.com/jonschlinkert/is-number/blob/master/LICENSE"
+        },
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "devDependencies": {
+          "benchmarked": "^0.1.3",
+          "chalk": "^0.5.1",
+          "mocha": "^2.1.0"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is number",
+          "is",
+          "is-number",
+          "istype",
+          "kind of",
+          "math",
+          "number",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "gitHead": "d5ac0584ee9ae7bd9288220a39780f155b9ad4c8",
+        "_id": "is-number@2.0.0",
+        "_shasum": "451c78bfe6c427f37bc2a406226e0cde449f3b5a",
+        "_from": ".",
+        "_npmVersion": "2.5.1",
+        "_nodeVersion": "0.12.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          }
+        ],
+        "dist": {
+          "shasum": "451c78bfe6c427f37bc2a406226e0cde449f3b5a",
+          "tarball": "{REGISTRY}/is-number/-/is-number-2.0.0.tgz",
+          "integrity": "sha512-LRme8p0WzIN9lrlP9/wJKs6242c9KYvDj6JlW9N9Up28wFxzyLNyNtnWu1j9nIuoWliquNRQx6+/OZ5mI2yVpQ==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEQCIEJz5PkAW3hcxfgUxotR5OLxeQFXF+vEsj3qRlIMuZj9AiAH3YXd7HMtFrJZqPGBE7DOjTqFWYWiPbm696CW+v1zDA=="
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "2.0.1": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "2.0.1",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": {
+          "type": "MIT",
+          "url": "https://github.com/jonschlinkert/is-number/blob/master/LICENSE"
+        },
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "devDependencies": {
+          "benchmarked": "^0.1.3",
+          "chalk": "^0.5.1",
+          "mocha": "^2.1.0"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is number",
+          "is",
+          "is-number",
+          "istype",
+          "kind of",
+          "math",
+          "number",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "dependencies": {
+          "kind-of": "^1.1.0"
+        },
+        "gitHead": "bb9b2e19a9aa2ed4b1e7a5d27e43417c8c9570c0",
+        "_id": "is-number@2.0.1",
+        "_shasum": "a3754e651f0df489f290ee0a1102c87cc5a0db02",
+        "_from": ".",
+        "_npmVersion": "2.5.1",
+        "_nodeVersion": "0.12.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          }
+        ],
+        "dist": {
+          "shasum": "a3754e651f0df489f290ee0a1102c87cc5a0db02",
+          "tarball": "{REGISTRY}/is-number/-/is-number-2.0.1.tgz",
+          "integrity": "sha512-lDXqMCs22DpNe5F5HqfrhwdCWXjlMccky+nhZ1+iFjnGvL7F7R7Q6Fd1FswLUrqueFab/6/k1Wd9LkIXJcBSWA==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEQCIBlSPRMBjwALDvd9fjWuuBR4PSdICIZh8q3IucTdXt6xAiA/4FirIMH2gtXtxkCZ/FLtO2+W5CJQVYHnvPGUY6nIaA=="
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "2.0.2": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "2.0.2",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": {
+          "type": "MIT",
+          "url": "https://github.com/jonschlinkert/is-number/blob/master/LICENSE"
+        },
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "devDependencies": {
+          "benchmarked": "^0.1.3",
+          "chalk": "^0.5.1",
+          "mocha": "^2.1.0"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is number",
+          "is",
+          "is-number",
+          "istype",
+          "kind of",
+          "math",
+          "number",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "dependencies": {
+          "kind-of": "^1.1.0"
+        },
+        "gitHead": "63d5b26c793194bf7f341a7203e0e5568c753539",
+        "_id": "is-number@2.0.2",
+        "_shasum": "c7542a0f420610655834cd3825bc2f0eb72afe21",
+        "_from": ".",
+        "_npmVersion": "2.5.1",
+        "_nodeVersion": "0.12.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          }
+        ],
+        "dist": {
+          "shasum": "c7542a0f420610655834cd3825bc2f0eb72afe21",
+          "tarball": "{REGISTRY}/is-number/-/is-number-2.0.2.tgz",
+          "integrity": "sha512-MzbGCUNsyTujsn2O9E2wL8n65cXdeWV1Jgd8khIA8VuN1q9ExsYQD6CwUwX6i8VGNLQy1skQugZ5RkvM1vbeqA==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEUCIF9XsZ2zEA+6vg8VayjaUNxJIUDkYbvrvxC4uW8u0L3iAiEAgmolYRoJJEsPK3k30eWySMUIHqn3GHaYsWysUhMsqjs="
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "2.1.0": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "2.1.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "repository": {
+          "type": "git",
+          "url": "git+https://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": "MIT",
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "dependencies": {
+          "kind-of": "^3.0.2"
+        },
+        "devDependencies": {
+          "benchmarked": "^0.1.3",
+          "chalk": "^0.5.1",
+          "mocha": "*"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is",
+          "is number",
+          "is-number",
+          "istype",
+          "kind of",
+          "math",
+          "number",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "verb": {
+          "related": {
+            "list": ["kind-of", "is-primitive", "even", "odd", "is-even", "is-odd"]
+          }
+        },
+        "gitHead": "d06c6e2cc048d3cad016cb8dfb055bb14d86fffa",
+        "_id": "is-number@2.1.0",
+        "_shasum": "01fcbbb393463a548f2f466cce16dece49db908f",
+        "_from": ".",
+        "_npmVersion": "3.3.6",
+        "_nodeVersion": "5.0.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          },
+          {
+            "name": "doowb",
+            "email": "brian.woodward@gmail.com"
+          }
+        ],
+        "dist": {
+          "shasum": "01fcbbb393463a548f2f466cce16dece49db908f",
+          "tarball": "{REGISTRY}/is-number/-/is-number-2.1.0.tgz",
+          "integrity": "sha512-QUzH43Gfb9+5yckcrSA0VBDwEtDUchrk4F6tfJZQuNzDJbEDB9cZNzSfXGQ1jqmdDY/kl41lUOWM9syA8z8jlg==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEUCIBsAMHxq3xfm/burDf3PmG8CCLKR4UncouEdSDdRwglAAiEAxMTfaixUr2K2XsrRDCg7R6dRYawh8RqjO/VkIJSFNA8="
+            }
+          ]
+        },
+        "directories": {}
+      },
+      "3.0.0": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "3.0.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "contributors": [
+          {
+            "name": "Charlike Mike Reagent",
+            "url": "http://www.tunnckocore.tk"
+          },
+          {
+            "name": "Jon Schlinkert",
+            "email": "jon.schlinkert@sellside.com",
+            "url": "http://twitter.com/jonschlinkert"
+          }
+        ],
+        "repository": {
+          "type": "git",
+          "url": "git+https://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": "MIT",
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "dependencies": {
+          "kind-of": "^3.0.2"
+        },
+        "devDependencies": {
+          "benchmarked": "^0.2.5",
+          "chalk": "^1.1.3",
+          "gulp-format-md": "^0.1.10",
+          "mocha": "^3.0.2"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is",
+          "is-nan",
+          "is-num",
+          "is-number",
+          "istype",
+          "kind",
+          "math",
+          "nan",
+          "num",
+          "number",
+          "numeric",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "verb": {
+          "related": {
+            "list": ["even", "is-even", "is-odd", "is-primitive", "kind-of", "odd"]
+          },
+          "toc": false,
+          "layout": "default",
+          "tasks": ["readme"],
+          "plugins": ["gulp-format-md"],
+          "lint": {
+            "reflinks": true
+          },
+          "reflinks": ["verb", "verb-generate-readme"]
+        },
+        "gitHead": "af885e2e890b9ef0875edd2b117305119ee5bdc5",
+        "_id": "is-number@3.0.0",
+        "_shasum": "24fd6201a4782cf50561c810276afc7d12d71195",
+        "_from": ".",
+        "_npmVersion": "3.10.3",
+        "_nodeVersion": "6.3.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "maintainers": [
+          {
+            "name": "jonschlinkert",
+            "email": "github@sellside.com"
+          },
+          {
+            "name": "doowb",
+            "email": "brian.woodward@gmail.com"
+          }
+        ],
+        "dist": {
+          "shasum": "24fd6201a4782cf50561c810276afc7d12d71195",
+          "tarball": "{REGISTRY}/is-number/-/is-number-3.0.0.tgz",
+          "integrity": "sha512-4cboCqIpliH+mAvFNegjZQ4kgKc3ZUhQVr3HvWbSh5q3WH2v82ct+T2Y1hdU5Gdtorx/cLifQjqCbL7bpznLTg==",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEUCIEpkuzJnkIAtuDMAI3VLqzFNwNANap4m9nyeUneW72kRAiEAtsctBWg1OtEaj2FSH+9ViALZU1O0hQFCVzwGMWHfVnk="
+            }
+          ]
+        },
+        "_npmOperationalInternal": {
+          "host": "packages-12-west.internal.npmjs.com",
+          "tmp": "tmp/is-number-3.0.0.tgz_1473555089490_0.21388969756662846"
+        },
+        "directories": {}
+      },
+      "4.0.0": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "4.0.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "contributors": [
+          {
+            "name": "Jon Schlinkert",
+            "url": "http://twitter.com/jonschlinkert"
+          },
+          {
+            "name": "tunnckoCore",
+            "url": "https://i.am.charlike.online"
+          }
+        ],
+        "repository": {
+          "type": "git",
+          "url": "git+https://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": "MIT",
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "devDependencies": {
+          "benchmarked": "^2.0.0",
+          "chalk": "^2.1.0",
+          "gulp-format-md": "^1.0.0",
+          "mocha": "^3.0.1"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is",
+          "is-nan",
+          "is-num",
+          "is-number",
+          "istype",
+          "kind",
+          "math",
+          "nan",
+          "num",
+          "number",
+          "numeric",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "verb": {
+          "related": {
+            "list": ["even", "is-even", "is-odd", "is-primitive", "kind-of", "odd"]
+          },
+          "toc": false,
+          "layout": "default",
+          "tasks": ["readme"],
+          "plugins": ["gulp-format-md"],
+          "lint": {
+            "reflinks": true
+          }
+        },
+        "gitHead": "0c6b15a88bc10cd47f67a09506399dfc9ddc075d",
+        "_id": "is-number@4.0.0",
+        "_npmVersion": "5.4.2",
+        "_nodeVersion": "8.7.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "dist": {
+          "integrity": "sha512-rSklcAIlf1OmFdyAqbnWTLVelsQ58uvZ66S/ZyawjWqIviTWCjg2PzVGw8WUA+nNuPTqb4wgA+NszrJ+08LlgQ==",
+          "shasum": "0026e37f5454d73e356dfe6564699867c6a7f0ff",
+          "tarball": "{REGISTRY}/is-number/-/is-number-4.0.0.tgz",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEQCIA4Ju8vfTa5OmCg3qagXNvXHR0wp4GYpv4Jrzzx1Tr6yAiANs8hwximKkGyecUuMhc9/ipdFOP6u5xqFY1kkP37rHQ=="
+            }
+          ]
+        },
+        "maintainers": [
+          {
+            "email": "brian.woodward@gmail.com",
+            "name": "doowb"
+          },
+          {
+            "email": "github@sellside.com",
+            "name": "jonschlinkert"
+          }
+        ],
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages",
+          "tmp": "tmp/is-number-4.0.0.tgz_1508219035603_0.08690439746715128"
+        },
+        "directories": {}
+      },
+      "5.0.0": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "5.0.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "contributors": [
+          {
+            "name": "Jon Schlinkert",
+            "url": "http://twitter.com/jonschlinkert"
+          },
+          {
+            "name": "Olsten Larck",
+            "url": "https://i.am.charlike.online"
+          },
+          {
+            "name": "Rouven Weßling",
+            "url": "www.rouvenwessling.de"
+          }
+        ],
+        "repository": {
+          "type": "git",
+          "url": "git+https://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": "MIT",
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "devDependencies": {
+          "benchmarked": "^2.0.0",
+          "chalk": "^2.1.0",
+          "gulp-format-md": "^1.0.0",
+          "mocha": "^3.0.1"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is",
+          "is-nan",
+          "is-num",
+          "is-number",
+          "istype",
+          "kind",
+          "math",
+          "nan",
+          "num",
+          "number",
+          "numeric",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "verb": {
+          "toc": false,
+          "layout": "default",
+          "tasks": ["readme"],
+          "related": {
+            "list": ["isobject", "is-plain-object", "is-primitive", "kind-of"]
+          },
+          "plugins": ["gulp-format-md"],
+          "lint": {
+            "reflinks": true
+          }
+        },
+        "gitHead": "7ed43573445149edf10f56967e8d943520ebb1db",
+        "_id": "is-number@5.0.0",
+        "_npmVersion": "5.6.0",
+        "_nodeVersion": "9.1.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "dist": {
+          "integrity": "sha512-LmVHHP5dTJwrwZg2Jjqp7K5jpvcnYvYD1LMpvGadMsMv5+WXoDSLBQ0+zmuBJmuZGh2J2K845ygj/YukxUnr4A==",
+          "shasum": "c393bc471e65de1a10a6abcb20efeb12d2b88166",
+          "tarball": "{REGISTRY}/is-number/-/is-number-5.0.0.tgz",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEUCIFRVCaHiES/v9QeFGm0LXGwQmnzQ7rRyYgSkAV0/RfEIAiEAovG90UvuzqTelvVuQdatpyiQ0H43CXLZupcrA2vb2Bs="
+            }
+          ]
+        },
+        "maintainers": [
+          {
+            "email": "me@rouvenwessling.de",
+            "name": "realityking"
+          },
+          {
+            "email": "brian.woodward@gmail.com",
+            "name": "doowb"
+          },
+          {
+            "email": "github@sellside.com",
+            "name": "jonschlinkert"
+          }
+        ],
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages",
+          "tmp": "tmp/is-number-5.0.0.tgz_1517195201147_0.7769706172402948"
+        },
+        "directories": {}
+      },
+      "6.0.0": {
+        "name": "is-number",
+        "description": "Returns true if the value is a number. comprehensive tests.",
+        "version": "6.0.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "contributors": [
+          {
+            "name": "Jon Schlinkert",
+            "url": "http://twitter.com/jonschlinkert"
+          },
+          {
+            "name": "Olsten Larck",
+            "url": "https://i.am.charlike.online"
+          },
+          {
+            "name": "Rouven Weßling",
+            "url": "www.rouvenwessling.de"
+          }
+        ],
+        "repository": {
+          "type": "git",
+          "url": "git+https://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": "MIT",
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.10.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "devDependencies": {
+          "benchmarked": "^2.0.0",
+          "chalk": "^2.1.0",
+          "gulp-format-md": "^1.0.0",
+          "mocha": "^3.0.1"
+        },
+        "keywords": [
+          "check",
+          "coerce",
+          "coercion",
+          "integer",
+          "is",
+          "is-nan",
+          "is-num",
+          "is-number",
+          "istype",
+          "kind",
+          "math",
+          "nan",
+          "num",
+          "number",
+          "numeric",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "verb": {
+          "toc": false,
+          "layout": "default",
+          "tasks": ["readme"],
+          "related": {
+            "list": ["isobject", "is-plain-object", "is-primitive", "kind-of"]
+          },
+          "plugins": ["gulp-format-md"],
+          "lint": {
+            "reflinks": true
+          }
+        },
+        "gitHead": "b0953635829711e7dceec0eaa92bc56521a546eb",
+        "_id": "is-number@6.0.0",
+        "_npmVersion": "5.8.0",
+        "_nodeVersion": "9.9.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "dist": {
+          "integrity": "sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg==",
+          "shasum": "e6d15ad31fc262887cccf217ae5f9316f81b1995",
+          "tarball": "{REGISTRY}/is-number/-/is-number-6.0.0.tgz",
+          "fileCount": 4,
+          "unpackedSize": 8960,
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEUCIHw0y05qyjN2G0Uw0DINiC25SvWlVSgd2UD/ddJM8scPAiEArxOqwwCq3PKUhw7VEm21DI141kJs/ktPkaANlO5cGOs="
+            }
+          ]
+        },
+        "maintainers": [
+          {
+            "email": "brian.woodward@gmail.com",
+            "name": "doowb"
+          },
+          {
+            "email": "github@sellside.com",
+            "name": "jonschlinkert"
+          },
+          {
+            "email": "me@rouvenwessling.de",
+            "name": "realityking"
+          }
+        ],
+        "directories": {},
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages",
+          "tmp": "tmp/is-number_6.0.0_1522515759840_0.005598684369539919"
+        },
+        "_hasShrinkwrap": false
+      },
+      "7.0.0": {
+        "name": "is-number",
+        "description": "Returns true if a number or string value is a finite number. Useful for regex matches, parsing, user input, etc.",
+        "version": "7.0.0",
+        "homepage": "https://github.com/jonschlinkert/is-number",
+        "author": {
+          "name": "Jon Schlinkert",
+          "url": "https://github.com/jonschlinkert"
+        },
+        "contributors": [
+          {
+            "name": "Jon Schlinkert",
+            "url": "http://twitter.com/jonschlinkert"
+          },
+          {
+            "name": "Olsten Larck",
+            "url": "https://i.am.charlike.online"
+          },
+          {
+            "name": "Rouven Weßling",
+            "url": "www.rouvenwessling.de"
+          }
+        ],
+        "repository": {
+          "type": "git",
+          "url": "git+https://github.com/jonschlinkert/is-number.git"
+        },
+        "bugs": {
+          "url": "https://github.com/jonschlinkert/is-number/issues"
+        },
+        "license": "MIT",
+        "files": ["index.js"],
+        "main": "index.js",
+        "engines": {
+          "node": ">=0.12.0"
+        },
+        "scripts": {
+          "test": "mocha"
+        },
+        "devDependencies": {
+          "ansi": "^0.3.1",
+          "benchmark": "^2.1.4",
+          "gulp-format-md": "^1.0.0",
+          "mocha": "^3.5.3"
+        },
+        "keywords": [
+          "cast",
+          "check",
+          "coerce",
+          "coercion",
+          "finite",
+          "integer",
+          "is",
+          "isnan",
+          "is-nan",
+          "is-num",
+          "is-number",
+          "isnumber",
+          "isfinite",
+          "istype",
+          "kind",
+          "math",
+          "nan",
+          "num",
+          "number",
+          "numeric",
+          "parseFloat",
+          "parseInt",
+          "test",
+          "type",
+          "typeof",
+          "value"
+        ],
+        "verb": {
+          "toc": false,
+          "layout": "default",
+          "tasks": ["readme"],
+          "related": {
+            "list": ["is-plain-object", "is-primitive", "isobject", "kind-of"]
+          },
+          "plugins": ["gulp-format-md"],
+          "lint": {
+            "reflinks": true
+          }
+        },
+        "gitHead": "98e8ff1da1a89f93d1397a24d7413ed15421c139",
+        "_id": "is-number@7.0.0",
+        "_npmVersion": "6.1.0",
+        "_nodeVersion": "10.0.0",
+        "_npmUser": {
+          "name": "jonschlinkert",
+          "email": "github@sellside.com"
+        },
+        "dist": {
+          "integrity": "sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==",
+          "shasum": "7535345b896734d5f80c4d06c50955527a14f12b",
+          "tarball": "{REGISTRY}/is-number/-/is-number-7.0.0.tgz",
+          "fileCount": 4,
+          "unpackedSize": 9615,
+          "npm-signature": "-----BEGIN PGP SIGNATURE-----\r\nVersion: OpenPGP.js v3.0.4\r\nComment: https://openpgpjs.org\r\n\r\nwsFcBAEBCAAQBQJbPOMKCRA9TVsSAnZWagAABmIP/iUfV7gQnAsn2vRNKWIu\nlxkfXFutnV1Bo5P8mlv37Zg+PN5/Ri/RATtKGEosAvHL/HK2HkFH+rLYkupg\nCYaAVXNOJiFN9vK61YYp0TB0PBtGDQ2UwcElxDQ8OP6Djni4fl2fLjVZ+JeN\nPF1bKPE6oMevNg3GtNMrb1QKZNGjplOKFmlmm9fe653LHwIH1zPYy6QQ+cgG\nQ8Czmhdf+NuX8WXqR1h5mHTKCCVAqzcpJ21uX9292aoWlzlijzg9cc8KEPEY\ncbUjJf4NMLs89/8G6tcpDP5qoVjQnWIgfM0mDXt4P7ESdqjusdyNa+3eS/Yi\nsQuevXmth+41kvQaVy7rLbeAssWNbc7IJ+X1qpgnUqTz4rtiAaRnZ6rzAE2s\nrr723lN2H7ALlnDVm5qzXLTTjHwbdYMYuaYHTOMovytYWeRnwhfNCpKeQcEe\nUYR3sm2tEdxsMI5ciu5ULGj/PEKnSOsQcq2y4QjNFz4F5ReXiv+CtphQubAr\nVkKwrjIovN97YXmyrkfJB1zCInCMUz11YgRY0wNaCJPJ4E0V4KdfWgCEyt+F\nqKcdylewrOAma06WozqUXzRH3uNNbMTfsE1nGqbcofJPNBre/VriCwF7zS/H\nLhGfCe6LJuY2Q+2Eel1vtwnY+vAoaWrr7QisjcvywYHvqWlRob2IxC1Ygp3A\nvUY+\r\n=M7jx\r\n-----END PGP SIGNATURE-----\r\n",
+          "signatures": [
+            {
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA",
+              "sig": "MEUCIGex85Xx5rKhEgNSkg7z5bBu7vbcFbJnWJZbV3f9Td8GAiEA5wzgLXU41sE6ezCKGrmzsyMtm6M+2OhefJJhkzPEAoc="
+            }
+          ]
+        },
+        "maintainers": [
+          {
+            "email": "brian.woodward@gmail.com",
+            "name": "doowb"
+          },
+          {
+            "email": "github@sellside.com",
+            "name": "jonschlinkert"
+          },
+          {
+            "email": "me@rouvenwessling.de",
+            "name": "realityking"
+          }
+        ],
+        "directories": {},
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages",
+          "tmp": "tmp/is-number_7.0.0_1530716938183_0.28831183290614004"
+        },
+        "_hasShrinkwrap": false
+      }
+    },
+    "readme": "# is-number [![NPM version](https://img.shields.io/npm/v/is-number.svg?style=flat)](https://www.npmjs.com/package/is-number) [![NPM monthly downloads](https://img.shields.io/npm/dm/is-number.svg?style=flat)](https://npmjs.org/package/is-number) [![NPM total downloads](https://img.shields.io/npm/dt/is-number.svg?style=flat)](https://npmjs.org/package/is-number) [![Linux Build Status](https://img.shields.io/travis/jonschlinkert/is-number.svg?style=flat&label=Travis)](https://travis-ci.org/jonschlinkert/is-number)\n\n> Returns true if the value is a finite number.\n\nPlease consider following this project's author, [Jon Schlinkert](https://github.com/jonschlinkert), and consider starring the project to show your :heart: and support.\n\n## Install\n\nInstall with [npm](https://www.npmjs.com/):\n\n```sh\n$ npm install --save is-number\n```\n\n## Why is this needed?\n\nIn JavaScript, it's not always as straightforward as it should be to reliably check if a value is a number. It's common for devs to use `+`, `-`, or `Number()` to cast a string value to a number (for example, when values are returned from user input, regex matches, parsers, etc). But there are many non-intuitive edge cases that yield unexpected results:\n\n```js\nconsole.log(+[]); //=> 0\nconsole.log(+''); //=> 0\nconsole.log(+'   '); //=> 0\nconsole.log(typeof NaN); //=> 'number'\n```\n\nThis library offers a performant way to smooth out edge cases like these.\n\n## Usage\n\n```js\nconst isNumber = require('is-number');\n```\n\nSee the [tests](./test.js) for more examples.\n\n### true\n\n```js\nisNumber(5e3);               // true\nisNumber(0xff);              // true\nisNumber(-1.1);              // true\nisNumber(0);                 // true\nisNumber(1);                 // true\nisNumber(1.1);               // true\nisNumber(10);                // true\nisNumber(10.10);             // true\nisNumber(100);               // true\nisNumber('-1.1');            // true\nisNumber('0');               // true\nisNumber('012');             // true\nisNumber('0xff');            // true\nisNumber('1');               // true\nisNumber('1.1');             // true\nisNumber('10');              // true\nisNumber('10.10');           // true\nisNumber('100');             // true\nisNumber('5e3');             // true\nisNumber(parseInt('012'));   // true\nisNumber(parseFloat('012')); // true\n```\n\n### False\n\nEverything else is false, as you would expect:\n\n```js\nisNumber(Infinity);          // false\nisNumber(NaN);               // false\nisNumber(null);              // false\nisNumber(undefined);         // false\nisNumber('');                // false\nisNumber('   ');             // false\nisNumber('foo');             // false\nisNumber([1]);               // false\nisNumber([]);                // false\nisNumber(function () {});    // false\nisNumber({});                // false\n```\n\n## Release history\n\n### 7.0.0\n\n* Refactor. Now uses `.isFinite` if it exists.\n* Performance is about the same as v6.0 when the value is a string or number. But it's now 3x-4x faster when the value is not a string or number.\n\n### 6.0.0\n\n* Optimizations, thanks to @benaadams.\n\n### 5.0.0\n\n**Breaking changes**\n\n* removed support for `instanceof Number` and `instanceof String`\n\n## Benchmarks\n\nAs with all benchmarks, take these with a grain of salt. See the [benchmarks](./benchmark/index.js) for more detail.\n\n```\n# all\nv7.0 x 413,222 ops/sec ±2.02% (86 runs sampled)\nv6.0 x 111,061 ops/sec ±1.29% (85 runs sampled)\nparseFloat x 317,596 ops/sec ±1.36% (86 runs sampled)\nfastest is 'v7.0'\n\n# string\nv7.0 x 3,054,496 ops/sec ±1.05% (89 runs sampled)\nv6.0 x 2,957,781 ops/sec ±0.98% (88 runs sampled)\nparseFloat x 3,071,060 ops/sec ±1.13% (88 runs sampled)\nfastest is 'parseFloat,v7.0'\n\n# number\nv7.0 x 3,146,895 ops/sec ±0.89% (89 runs sampled)\nv6.0 x 3,214,038 ops/sec ±1.07% (89 runs sampled)\nparseFloat x 3,077,588 ops/sec ±1.07% (87 runs sampled)\nfastest is 'v6.0'\n```\n\n## About\n\n<details>\n<summary><strong>Contributing</strong></summary>\n\nPull requests and stars are always welcome. For bugs and feature requests, [please create an issue](../../issues/new).\n\n</details>\n\n<details>\n<summary><strong>Running Tests</strong></summary>\n\nRunning and reviewing unit tests is a great way to get familiarized with a library and its API. You can install dependencies and run tests with the following command:\n\n```sh\n$ npm install && npm test\n```\n\n</details>\n\n<details>\n<summary><strong>Building docs</strong></summary>\n\n_(This project's readme.md is generated by [verb](https://github.com/verbose/verb-generate-readme), please don't edit the readme directly. Any changes to the readme must be made in the [.verb.md](.verb.md) readme template.)_\n\nTo generate the readme, run the following command:\n\n```sh\n$ npm install -g verbose/verb#dev verb-generate-readme && verb\n```\n\n</details>\n\n### Related projects\n\nYou might also be interested in these projects:\n\n* [is-plain-object](https://www.npmjs.com/package/is-plain-object): Returns true if an object was created by the `Object` constructor. | [homepage](https://github.com/jonschlinkert/is-plain-object \"Returns true if an object was created by the `Object` constructor.\")\n* [is-primitive](https://www.npmjs.com/package/is-primitive): Returns `true` if the value is a primitive.  | [homepage](https://github.com/jonschlinkert/is-primitive \"Returns `true` if the value is a primitive. \")\n* [isobject](https://www.npmjs.com/package/isobject): Returns true if the value is an object and not an array or null. | [homepage](https://github.com/jonschlinkert/isobject \"Returns true if the value is an object and not an array or null.\")\n* [kind-of](https://www.npmjs.com/package/kind-of): Get the native type of a value. | [homepage](https://github.com/jonschlinkert/kind-of \"Get the native type of a value.\")\n\n### Contributors\n\n| **Commits** | **Contributor** | \n| --- | --- |\n| 49 | [jonschlinkert](https://github.com/jonschlinkert) |\n| 5 | [charlike-old](https://github.com/charlike-old) |\n| 1 | [benaadams](https://github.com/benaadams) |\n| 1 | [realityking](https://github.com/realityking) |\n\n### Author\n\n**Jon Schlinkert**\n\n* [LinkedIn Profile](https://linkedin.com/in/jonschlinkert)\n* [GitHub Profile](https://github.com/jonschlinkert)\n* [Twitter Profile](https://twitter.com/jonschlinkert)\n\n### License\n\nCopyright © 2018, [Jon Schlinkert](https://github.com/jonschlinkert).\nReleased under the [MIT License](LICENSE).\n\n***\n\n_This file was generated by [verb-generate-readme](https://github.com/verbose/verb-generate-readme), v0.6.0, on June 15, 2018._",
+    "maintainers": [
+      {
+        "email": "brian.woodward@gmail.com",
+        "name": "doowb"
+      },
+      {
+        "email": "github@sellside.com",
+        "name": "jonschlinkert"
+      },
+      {
+        "email": "me@rouvenwessling.de",
+        "name": "realityking"
+      }
+    ],
+    "time": {
+      "modified": "2023-05-26T16:12:33.057Z",
+      "created": "2014-09-22T01:58:51.592Z",
+      "0.1.0": "2014-09-22T01:58:51.592Z",
+      "0.1.1": "2014-09-22T03:37:27.931Z",
+      "1.0.0": "2015-01-24T10:16:54.470Z",
+      "1.1.0": "2015-01-24T10:33:21.598Z",
+      "1.1.1": "2015-03-05T18:37:07.633Z",
+      "1.1.2": "2015-03-05T18:57:33.841Z",
+      "2.0.0": "2015-05-02T08:11:57.926Z",
+      "2.0.1": "2015-05-03T04:27:13.630Z",
+      "2.0.2": "2015-05-03T05:59:55.976Z",
+      "2.1.0": "2015-11-22T13:56:56.624Z",
+      "3.0.0": "2016-09-11T00:51:30.912Z",
+      "4.0.0": "2017-10-17T05:43:56.559Z",
+      "5.0.0": "2018-01-29T03:06:41.225Z",
+      "6.0.0": "2018-03-31T17:02:39.953Z",
+      "7.0.0": "2018-07-04T15:08:58.238Z"
+    },
+    "homepage": "https://github.com/jonschlinkert/is-number",
+    "keywords": [
+      "cast",
+      "check",
+      "coerce",
+      "coercion",
+      "finite",
+      "integer",
+      "is",
+      "isnan",
+      "is-nan",
+      "is-num",
+      "is-number",
+      "isnumber",
+      "isfinite",
+      "istype",
+      "kind",
+      "math",
+      "nan",
+      "num",
+      "number",
+      "numeric",
+      "parseFloat",
+      "parseInt",
+      "test",
+      "type",
+      "typeof",
+      "value"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/jonschlinkert/is-number.git"
+    },
+    "author": {
+      "name": "Jon Schlinkert",
+      "url": "https://github.com/jonschlinkert"
+    },
+    "bugs": {
+      "url": "https://github.com/jonschlinkert/is-number/issues"
+    },
+    "readmeFilename": "README.md",
+    "license": "MIT",
+    "users": {
+      "jonschlinkert": true,
+      "antanst": true,
+      "rocket0191": true,
+      "papasavva": true,
+      "456wyc": true,
+      "maycon_ribeiro": true,
+      "leix3041": true,
+      "snowdream": true,
+      "fizzvr": true,
+      "jameskrill": true,
+      "rioli": true,
+      "gugadev": true,
+      "fearnbuster": true,
+      "flumpus-dev": true
+    },
+    "contributors": [
+      {
+        "name": "Jon Schlinkert",
+        "url": "http://twitter.com/jonschlinkert"
+      },
+      {
+        "name": "Olsten Larck",
+        "url": "https://i.am.charlike.online"
+      },
+      {
+        "name": "Rouven Weßling",
+        "url": "www.rouvenwessling.de"
+      }
+    ]
+  },
+  "yocto-queue": {
+    "_id": "yocto-queue",
+    "_rev": "10-ed85a82b9a53e454f61a3431f121fdf7",
+    "name": "yocto-queue",
+    "dist-tags": {
+      "latest": "1.2.2"
+    },
+    "versions": {
+      "0.0.0": {
+        "name": "yocto-queue",
+        "version": "0.0.0",
+        "keywords": [
+          "queue",
+          "data",
+          "structure",
+          "algorithm",
+          "queues",
+          "queuing",
+          "list",
+          "array",
+          "linkedlist",
+          "fifo",
+          "enqueue",
+          "dequeue",
+          "data-structure"
+        ],
+        "author": {
+          "url": "https://sindresorhus.com",
+          "name": "Sindre Sorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "license": "MIT",
+        "_id": "yocto-queue@0.0.0",
+        "maintainers": [
+          {
+            "name": "sindresorhus",
+            "email": "sindresorhus@gmail.com"
+          }
+        ],
+        "homepage": "https://github.com/sindresorhus/nano-queue#readme",
+        "bugs": {
+          "url": "https://github.com/sindresorhus/nano-queue/issues"
+        },
+        "dist": {
+          "shasum": "97d0fce807d9e50873aec71074e895788e327cf3",
+          "tarball": "{REGISTRY}/yocto-queue/-/yocto-queue-0.0.0.tgz",
+          "fileCount": 5,
+          "integrity": "sha512-QbJ6TKmdZpVKysgkTWf2m5Jp7q6yIsYpH0P5J053mEPgMsu29gLx1Zdvy+xY+vtU+nWmMVC8mPoD+4hDrmedFg==",
+          "signatures": [
+            {
+              "sig": "MEYCIQDprlSwOT/KUvu3RWJ0jHXUh8yFbi0R0SKtTR1NfSLqKQIhAOqLCZjAe2wf9MV9V9zib/GeV6fg6Kl9lmxUH9Gkmxam",
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+            }
+          ],
+          "unpackedSize": 6060,
+          "npm-signature": "-----BEGIN PGP SIGNATURE-----\r\nVersion: OpenPGP.js v3.0.13\r\nComment: https://openpgpjs.org\r\n\r\nwsFcBAEBCAAQBQJfvKFVCRA9TVsSAnZWagAARuAP+wezd/duXRl1ljnIrUN7\n/w5lNtB5wefcWi/Ro5LLeiYUkFhxAesT7SrMixtxLR02PBQBldg8VIjYHlaH\nGVx8xtE6nItLGHcUVhmQ1teXRuVY84PXsWzo7VWowNvh7oMeGNkrv4P4k8BB\nEnFx9Enmo5pcFwFjwq4+aAH/vltL7KeNeCoJWuxBd/DFowLUHzU3MV0c+UJB\nZogOS0Nvj3lQ2P7o6NJqkLKVVrvAptjOK93eQc42J6mkACLZ1n+CKkn6xd9s\nVkQooZiA9dUb5856Fh1mYOzYKuEKsxxFyxYck+3vtC3H3I4eBhvcVNRHlUiR\nzjzv9RKvgJRpfnU63B1seeb25mriKqN/f0cGA9ekLed/2iOLxON7BDlq0+Zs\nXcBA/gN5dRS37U7qwykzHfiZXec+n2P/RJmfetKs5hJeqoS6tRFpJsXg+031\nrtQjqtkV0HYP0TZXeU2QQWt0CapXfb5nwdz90ud/cLVjLfmGoeUD/Wiz4UYT\nGL1yLP319WAKYVJE6YJFZnyY8WBYhVwMyNdvOksMWGDNChi4DHx+FBcixuSy\nK0rYx5qHdU4ALl3wkTKK5I1QHYtrVeRxVyOYjUvPb8ew4ZcPaSdlShaunQiv\ngh+12kjSufkoLlN2Qj4LW657OubdQN6nASn8AT2BPUVrs6wC2P73mvnZx55J\nYix1\r\n=Nth0\r\n-----END PGP SIGNATURE-----\r\n"
+        },
+        "engines": {
+          "node": ">=10"
+        },
+        "funding": "https://github.com/sponsors/sindresorhus",
+        "gitHead": "d0c1a94cb05a698f8e2a99555f8cf8585e9869d2",
+        "scripts": {
+          "test": "xo && ava && tsd"
+        },
+        "_npmUser": {
+          "name": "sindresorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "repository": {
+          "url": "git+https://github.com/sindresorhus/nano-queue.git",
+          "type": "git"
+        },
+        "_npmVersion": "6.14.9",
+        "description": "Tiny queue data structure",
+        "directories": {},
+        "_nodeVersion": "10.22.1",
+        "_hasShrinkwrap": false,
+        "devDependencies": {
+          "xo": "^0.35.0",
+          "ava": "^2.4.0",
+          "tsd": "^0.13.1"
+        },
+        "_npmOperationalInternal": {
+          "tmp": "tmp/yocto-queue_0.0.0_1606197588704_0.1585882120213571",
+          "host": "s3://npm-registry-packages"
+        }
+      },
+      "0.1.0": {
+        "name": "yocto-queue",
+        "version": "0.1.0",
+        "keywords": [
+          "queue",
+          "data",
+          "structure",
+          "algorithm",
+          "queues",
+          "queuing",
+          "list",
+          "array",
+          "linkedlist",
+          "fifo",
+          "enqueue",
+          "dequeue",
+          "data-structure"
+        ],
+        "author": {
+          "url": "https://sindresorhus.com",
+          "name": "Sindre Sorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "license": "MIT",
+        "_id": "yocto-queue@0.1.0",
+        "maintainers": [
+          {
+            "name": "sindresorhus",
+            "email": "sindresorhus@gmail.com"
+          }
+        ],
+        "homepage": "https://github.com/sindresorhus/yocto-queue#readme",
+        "bugs": {
+          "url": "https://github.com/sindresorhus/yocto-queue/issues"
+        },
+        "dist": {
+          "shasum": "0294eb3dee05028d31ee1a5fa2c556a6aaf10a1b",
+          "tarball": "{REGISTRY}/yocto-queue/-/yocto-queue-0.1.0.tgz",
+          "fileCount": 5,
+          "integrity": "sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==",
+          "signatures": [
+            {
+              "sig": "MEYCIQDT6PTeFAw+w2P0CanG3paScSDLRLBiZjcK25Jh2KvzfQIhAKTn5VxVaUWC1f0cOT5b/wdosBeinflqpF9rUUUuiekj",
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+            }
+          ],
+          "unpackedSize": 6027,
+          "npm-signature": "-----BEGIN PGP SIGNATURE-----\r\nVersion: OpenPGP.js v3.0.13\r\nComment: https://openpgpjs.org\r\n\r\nwsFcBAEBCAAQBQJfvKKwCRA9TVsSAnZWagAAGXMP+gOOaFATY9WhVgSiN4ZI\nwyHaog6af9hieXnM+eZf3YLHnC5caM20SxdnHcvILsuf9K0pqkMXtzC9Ghgs\njnFaQ65BLvEwz7wByXB799QoCNv3YOoEKEwvqg81fTEJwVpPB7/1LD/phu2j\n3wcWbfyUBYQUHrFqZeb7eR1CnHDxov6odtBxLs84USK+0+8fLmO4wn30Quwl\nyVGrlNm3X4NmuJFetHLUhfFjIL3cBlfG191/DeNPPhqVBxx2Uj2l9oUX5eVW\nIVkL0s7OxQn8L8VN/YxOqus+kitnku2Jb4hVo/yUzZcx5w+KPMMNBnHqljNm\nGUbrfQBHtUJiZOB684vsR8TFAc6ZWrIAzXKtcejof/qEkGV/60iS63xANr2w\ntEYoNsAlDVBZYqXXbV7rwyBAIEM7SvrVsvGWMS8tAgnMUD0pf2TO1mOP7ph8\nWGlMuJegqEBg9HoHdXtfpQEIq8s76XGnROX1Y+OFXdHiWCYo2US9PsIMXRQ4\notOcWRV/DIXXmKn+pFM8CaE09NpIJBPLCeMtxHSR2qCCS4dCTx7kD09oFdF6\nMETv0Y0/5nPZjUMLsY2xBjp10ntpzH+4iTWmYYhBlNrcNpc/eoZIBMyS3+Ot\n3ZE7p9eNKNW6sdD/pQycDV0S1565FymQaOdB4RAUR26/zayYuZFlqva9hXWR\nMel2\r\n=rCXP\r\n-----END PGP SIGNATURE-----\r\n"
+        },
+        "engines": {
+          "node": ">=10"
+        },
+        "funding": "https://github.com/sponsors/sindresorhus",
+        "gitHead": "af91c37f51aecf607ca2261b907b9d86b6a69e77",
+        "scripts": {
+          "test": "xo && ava && tsd"
+        },
+        "_npmUser": {
+          "name": "sindresorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "repository": {
+          "url": "git+https://github.com/sindresorhus/yocto-queue.git",
+          "type": "git"
+        },
+        "_npmVersion": "6.14.9",
+        "description": "Tiny queue data structure",
+        "directories": {},
+        "_nodeVersion": "10.22.1",
+        "_hasShrinkwrap": false,
+        "devDependencies": {
+          "xo": "^0.35.0",
+          "ava": "^2.4.0",
+          "tsd": "^0.13.1"
+        },
+        "_npmOperationalInternal": {
+          "tmp": "tmp/yocto-queue_0.1.0_1606197935700_0.6375493777344527",
+          "host": "s3://npm-registry-packages"
+        }
+      },
+      "1.0.0": {
+        "name": "yocto-queue",
+        "version": "1.0.0",
+        "keywords": [
+          "queue",
+          "data",
+          "structure",
+          "algorithm",
+          "queues",
+          "queuing",
+          "list",
+          "array",
+          "linkedlist",
+          "fifo",
+          "enqueue",
+          "dequeue",
+          "data-structure"
+        ],
+        "author": {
+          "url": "https://sindresorhus.com",
+          "name": "Sindre Sorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "license": "MIT",
+        "_id": "yocto-queue@1.0.0",
+        "maintainers": [
+          {
+            "name": "sindresorhus",
+            "email": "sindresorhus@gmail.com"
+          }
+        ],
+        "homepage": "https://github.com/sindresorhus/yocto-queue#readme",
+        "bugs": {
+          "url": "https://github.com/sindresorhus/yocto-queue/issues"
+        },
+        "dist": {
+          "shasum": "7f816433fb2cbc511ec8bf7d263c3b58a1a3c251",
+          "tarball": "{REGISTRY}/yocto-queue/-/yocto-queue-1.0.0.tgz",
+          "fileCount": 5,
+          "integrity": "sha512-9bnSc/HEW2uRy67wc+T8UwauLuPJVn28jb+GtJY16iiKWyvmYJRXVT4UamsAEGQfPohgr2q4Tq0sQbQlxTfi1g==",
+          "signatures": [
+            {
+              "sig": "MEUCIQCgpquEkkrOvziIIdkPS60Zmbl1a3cy9CW+fyss6yD+gQIgex85tTH7ZLeMp/djFhHgZ7e9HvigzwOiEE7hUPg+4rI=",
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+            }
+          ],
+          "unpackedSize": 6409,
+          "npm-signature": "-----BEGIN PGP SIGNATURE-----\r\nVersion: OpenPGP.js v3.0.13\r\nComment: https://openpgpjs.org\r\n\r\nwsFcBAEBCAAQBQJhFbNRCRA9TVsSAnZWagAAyWcQAKEhMtwhQLcTexqOYTrf\np094W6yti0MY6bltGszSDhfoXBVgMBlou8YSk/s7EF/Fbl6356tMK6OClWWf\nvU2kaUWeSdlngv+S5baQ7fk9liA29jIGOHKXgt4h6XFzSfLA9b5hVbmQ0QBR\n37Fj96bt0756N7N/8J2lXREiPvOwkZ7QMhv5l1W8WV11j2QWn5Z64vCehbXJ\ns4M7leEOBA3/+HZYSdgBhK9Xm42+TJP3VtiyXZMnz+evPlydAvt1DmwPDbIx\nVU68PvQIA0/+RgtjiRD6rAX3LD2CG4g2YmdjBXYgq+xlTW76EM11aZbqCkkI\nfv/qevquZsYOn2JWwYHd2dRs7/xTm+AcLV2sdV0hS/bVeQx4AqBWwyA9uk2E\nOiYZ9KcfkQxMNae7+1Bw6bPL5dwpO5vim6OZ7+Wo7Qa83Bk/piK4r9cAZuOK\nYq4F0yxntA6+rHMSQ4EYluiN+mrqVqn2um7WvAO857YRSuOQf6cBt+zfEq3N\nnR3Iqm6V108sjxv79y3U1REAV7l2YZGGQH3BsM+XjVmjqmvlTxWDm/Uyhlzj\nMhw13HW32uWvkY8bIN5iEYKuaT5eDltFSVN83WFv0+kOV1hmvm2b8u4ZDFCS\n6n8rREm+yYSpgaLXf+VA/cTzqPmkOqp8qwwfk6DbJDNhATWdDt4h4TazXUrX\npIJG\r\n=Vcs5\r\n-----END PGP SIGNATURE-----\r\n"
+        },
+        "type": "module",
+        "engines": {
+          "node": ">=12.20"
+        },
+        "exports": "./index.js",
+        "funding": "https://github.com/sponsors/sindresorhus",
+        "gitHead": "2e57f8c95e5e1f40379c6f85d18aee962662eb22",
+        "scripts": {
+          "test": "ava && tsd",
+          "//test": "xo && ava && tsd"
+        },
+        "_npmUser": {
+          "name": "sindresorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "repository": {
+          "url": "git+https://github.com/sindresorhus/yocto-queue.git",
+          "type": "git"
+        },
+        "_npmVersion": "7.10.0",
+        "description": "Tiny queue data structure",
+        "directories": {},
+        "_nodeVersion": "12.22.1",
+        "_hasShrinkwrap": false,
+        "devDependencies": {
+          "xo": "^0.44.0",
+          "ava": "^3.15.0",
+          "tsd": "^0.17.0"
+        },
+        "_npmOperationalInternal": {
+          "tmp": "tmp/yocto-queue_1.0.0_1628812112939_0.12892570466581454",
+          "host": "s3://npm-registry-packages"
+        }
+      },
+      "1.1.0": {
+        "name": "yocto-queue",
+        "version": "1.1.0",
+        "keywords": [
+          "queue",
+          "data",
+          "structure",
+          "algorithm",
+          "queues",
+          "queuing",
+          "list",
+          "array",
+          "linkedlist",
+          "fifo",
+          "enqueue",
+          "dequeue",
+          "data-structure"
+        ],
+        "author": {
+          "url": "https://sindresorhus.com",
+          "name": "Sindre Sorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "license": "MIT",
+        "_id": "yocto-queue@1.1.0",
+        "homepage": "https://github.com/sindresorhus/yocto-queue#readme",
+        "bugs": {
+          "url": "https://github.com/sindresorhus/yocto-queue/issues"
+        },
+        "dist": {
+          "shasum": "1c567759666a1b3bd4af7897551bacb488f482b9",
+          "tarball": "{REGISTRY}/yocto-queue/-/yocto-queue-1.1.0.tgz",
+          "fileCount": 5,
+          "integrity": "sha512-cMojmlnwkAgIXqga+2sXshlgrrcI0QEPJ5n58pEvtuFo4PaekfomlCudArDD7hj8Hkswjl0/x4eu4q+Xa0WFgQ==",
+          "signatures": [
+            {
+              "sig": "MEMCIBpz2l02dc+IEJeIXYkEL7q+UfXMrMpZ+GbFeMM06ImMAh8U5YQZMtJ0jzdmnMjh6lMEOBoDyzkJnl24jy6esEij",
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+            }
+          ],
+          "unpackedSize": 6782
+        },
+        "type": "module",
+        "types": "./index.d.ts",
+        "engines": {
+          "node": ">=12.20"
+        },
+        "exports": "./index.js",
+        "funding": "https://github.com/sponsors/sindresorhus",
+        "gitHead": "812e5ed7f3334637922f4cd6ac6c2ce8f5c70c75",
+        "scripts": {
+          "test": "ava && tsd",
+          "//test": "xo && ava && tsd"
+        },
+        "_npmUser": {
+          "name": "sindresorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "repository": {
+          "url": "git+https://github.com/sindresorhus/yocto-queue.git",
+          "type": "git"
+        },
+        "_npmVersion": "10.6.0",
+        "description": "Tiny queue data structure",
+        "directories": {},
+        "sideEffects": false,
+        "_nodeVersion": "22.2.0",
+        "_hasShrinkwrap": false,
+        "devDependencies": {
+          "xo": "^0.44.0",
+          "ava": "^3.15.0",
+          "tsd": "^0.17.0"
+        },
+        "_npmOperationalInternal": {
+          "tmp": "tmp/yocto-queue_1.1.0_1719607810647_0.20351033896965798",
+          "host": "s3://npm-registry-packages"
+        }
+      },
+      "1.1.1": {
+        "name": "yocto-queue",
+        "version": "1.1.1",
+        "keywords": [
+          "queue",
+          "data",
+          "structure",
+          "algorithm",
+          "queues",
+          "queuing",
+          "list",
+          "array",
+          "linkedlist",
+          "fifo",
+          "enqueue",
+          "dequeue",
+          "data-structure"
+        ],
+        "author": {
+          "url": "https://sindresorhus.com",
+          "name": "Sindre Sorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "license": "MIT",
+        "_id": "yocto-queue@1.1.1",
+        "homepage": "https://github.com/sindresorhus/yocto-queue#readme",
+        "bugs": {
+          "url": "https://github.com/sindresorhus/yocto-queue/issues"
+        },
+        "dist": {
+          "shasum": "fef65ce3ac9f8a32ceac5a634f74e17e5b232110",
+          "tarball": "{REGISTRY}/yocto-queue/-/yocto-queue-1.1.1.tgz",
+          "fileCount": 5,
+          "integrity": "sha512-b4JR1PFR10y1mKjhHY9LaGo6tmrgjit7hxVIeAmyMw3jegXR4dhYqLaQF5zMXZxY7tLpMyJeLjr1C4rLmkVe8g==",
+          "signatures": [
+            {
+              "sig": "MEYCIQCdLjdFMTJ0o0roXbP5W2/Csjm7qpUPvIYcpMipNBCxawIhAN1Xs1rVm3mtAOEjVbsV/Uw34t0K67v8yCarb+MZX+id",
+              "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+            }
+          ],
+          "unpackedSize": 6873
+        },
+        "type": "module",
+        "types": "./index.d.ts",
+        "engines": {
+          "node": ">=12.20"
+        },
+        "exports": "./index.js",
+        "funding": "https://github.com/sponsors/sindresorhus",
+        "gitHead": "0ac610dfa4e5cbd929b2e9b8fc34f5417f2f788b",
+        "scripts": {
+          "test": "ava && tsd",
+          "//test": "xo && ava && tsd"
+        },
+        "_npmUser": {
+          "name": "sindresorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "repository": {
+          "url": "git+https://github.com/sindresorhus/yocto-queue.git",
+          "type": "git"
+        },
+        "_npmVersion": "10.6.0",
+        "description": "Tiny queue data structure",
+        "directories": {},
+        "sideEffects": false,
+        "_nodeVersion": "18.20.2",
+        "_hasShrinkwrap": false,
+        "devDependencies": {
+          "xo": "^0.44.0",
+          "ava": "^3.15.0",
+          "tsd": "^0.17.0"
+        },
+        "_npmOperationalInternal": {
+          "tmp": "tmp/yocto-queue_1.1.1_1719699170246_0.38023407968029876",
+          "host": "s3://npm-registry-packages"
+        }
+      },
+      "1.2.0": {
+        "name": "yocto-queue",
+        "version": "1.2.0",
+        "keywords": [
+          "queue",
+          "data",
+          "structure",
+          "algorithm",
+          "queues",
+          "queuing",
+          "list",
+          "array",
+          "linkedlist",
+          "fifo",
+          "enqueue",
+          "dequeue",
+          "data-structure"
+        ],
+        "author": {
+          "url": "https://sindresorhus.com",
+          "name": "Sindre Sorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "license": "MIT",
+        "_id": "yocto-queue@1.2.0",
+        "maintainers": [
+          {
+            "name": "sindresorhus",
+            "email": "sindresorhus@gmail.com"
+          }
+        ],
+        "homepage": "https://github.com/sindresorhus/yocto-queue#readme",
+        "bugs": {
+          "url": "https://github.com/sindresorhus/yocto-queue/issues"
+        },
+        "dist": {
+          "shasum": "4a29a93e7591328fa31768701e6ea66962401f79",
+          "tarball": "{REGISTRY}/yocto-queue/-/yocto-queue-1.2.0.tgz",
+          "fileCount": 5,
+          "integrity": "sha512-KHBC7z61OJeaMGnF3wqNZj+GGNXOyypZviiKpQeiHirG5Ib1ImwcLBH70rbMSkKfSmUNBsdf2PwaEJtKvgmkNw==",
+          "signatures": [
+            {
+              "sig": "MEUCIFV/r/0QkfoMQhCpy6dY7VOJ/GZR8tIfAavJlnHTj73cAiEAkCUkWm1S5nJ7UxI4ThQGFm0F8NCY89iPK84N1RloV/4=",
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+            }
+          ],
+          "unpackedSize": 8047
+        },
+        "type": "module",
+        "types": "./index.d.ts",
+        "engines": {
+          "node": ">=12.20"
+        },
+        "exports": "./index.js",
+        "funding": "https://github.com/sponsors/sindresorhus",
+        "gitHead": "6f20a6fad9323285e9f7c04dd1232ccc5e931e7e",
+        "scripts": {
+          "test": "ava && tsd",
+          "//test": "xo && ava && tsd"
+        },
+        "_npmUser": {
+          "name": "sindresorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "repository": {
+          "url": "git+https://github.com/sindresorhus/yocto-queue.git",
+          "type": "git"
+        },
+        "_npmVersion": "10.9.2",
+        "description": "Tiny queue data structure",
+        "directories": {},
+        "sideEffects": false,
+        "_nodeVersion": "23.6.1",
+        "_hasShrinkwrap": false,
+        "devDependencies": {
+          "xo": "^0.44.0",
+          "ava": "^3.15.0",
+          "tsd": "^0.17.0"
+        },
+        "_npmOperationalInternal": {
+          "tmp": "tmp/yocto-queue_1.2.0_1741264180240_0.4540003960919774",
+          "host": "s3://npm-registry-packages-npm-production"
+        }
+      },
+      "1.2.1": {
+        "name": "yocto-queue",
+        "version": "1.2.1",
+        "keywords": [
+          "queue",
+          "data",
+          "structure",
+          "algorithm",
+          "queues",
+          "queuing",
+          "list",
+          "array",
+          "linkedlist",
+          "fifo",
+          "enqueue",
+          "dequeue",
+          "data-structure"
+        ],
+        "author": {
+          "url": "https://sindresorhus.com",
+          "name": "Sindre Sorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "license": "MIT",
+        "_id": "yocto-queue@1.2.1",
+        "maintainers": [
+          {
+            "name": "sindresorhus",
+            "email": "sindresorhus@gmail.com"
+          }
+        ],
+        "homepage": "https://github.com/sindresorhus/yocto-queue#readme",
+        "bugs": {
+          "url": "https://github.com/sindresorhus/yocto-queue/issues"
+        },
+        "dist": {
+          "shasum": "36d7c4739f775b3cbc28e6136e21aa057adec418",
+          "tarball": "{REGISTRY}/yocto-queue/-/yocto-queue-1.2.1.tgz",
+          "fileCount": 5,
+          "integrity": "sha512-AyeEbWOu/TAXdxlV9wmGcR0+yh2j3vYPGOECcIj2S7MkrLyC7ne+oye2BKTItt0ii2PHk4cDy+95+LshzbXnGg==",
+          "signatures": [
+            {
+              "sig": "MEQCIEyKBZiu/jOlIsCxPvNN2SvDlRNzBVV13SSBlIWKwEKCAiBncBhwnNx4BEqBBp+AAqC7l3tOyHiVtiiazKWlTJiWsQ==",
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+            }
+          ],
+          "unpackedSize": 8009
+        },
+        "type": "module",
+        "types": "./index.d.ts",
+        "engines": {
+          "node": ">=12.20"
+        },
+        "exports": "./index.js",
+        "funding": "https://github.com/sponsors/sindresorhus",
+        "gitHead": "ce72d41de87b2a4ec7c50e10480300bee674d845",
+        "scripts": {
+          "test": "ava && tsd",
+          "//test": "xo && ava && tsd"
+        },
+        "_npmUser": {
+          "name": "sindresorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "repository": {
+          "url": "git+https://github.com/sindresorhus/yocto-queue.git",
+          "type": "git"
+        },
+        "_npmVersion": "10.9.2",
+        "description": "Tiny queue data structure",
+        "directories": {},
+        "sideEffects": false,
+        "_nodeVersion": "23.6.1",
+        "_hasShrinkwrap": false,
+        "devDependencies": {
+          "xo": "^0.44.0",
+          "ava": "^3.15.0",
+          "tsd": "^0.17.0"
+        },
+        "_npmOperationalInternal": {
+          "tmp": "tmp/yocto-queue_1.2.1_1742622578234_0.5609364464617448",
+          "host": "s3://npm-registry-packages-npm-production"
+        }
+      },
+      "1.2.2": {
+        "name": "yocto-queue",
+        "version": "1.2.2",
+        "description": "Tiny queue data structure",
+        "license": "MIT",
+        "repository": {
+          "type": "git",
+          "url": "git+https://github.com/sindresorhus/yocto-queue.git"
+        },
+        "funding": "https://github.com/sponsors/sindresorhus",
+        "author": {
+          "name": "Sindre Sorhus",
+          "email": "sindresorhus@gmail.com",
+          "url": "https://sindresorhus.com"
+        },
+        "type": "module",
+        "exports": "./index.js",
+        "types": "./index.d.ts",
+        "sideEffects": false,
+        "engines": {
+          "node": ">=12.20"
+        },
+        "scripts": {
+          "//test": "xo && ava && tsd",
+          "test": "ava && tsd"
+        },
+        "keywords": [
+          "queue",
+          "data",
+          "structure",
+          "algorithm",
+          "queues",
+          "queuing",
+          "list",
+          "array",
+          "linkedlist",
+          "fifo",
+          "enqueue",
+          "dequeue",
+          "data-structure"
+        ],
+        "devDependencies": {
+          "ava": "^3.15.0",
+          "tsd": "^0.17.0",
+          "xo": "^0.44.0"
+        },
+        "gitHead": "b07eac099753833b29d06c614149904445739776",
+        "_id": "yocto-queue@1.2.2",
+        "bugs": {
+          "url": "https://github.com/sindresorhus/yocto-queue/issues"
+        },
+        "homepage": "https://github.com/sindresorhus/yocto-queue#readme",
+        "_nodeVersion": "20.19.5",
+        "_npmVersion": "11.6.1",
+        "dist": {
+          "integrity": "sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ==",
+          "shasum": "3e09c95d3f1aa89a58c114c99223edf639152c00",
+          "tarball": "{REGISTRY}/yocto-queue/-/yocto-queue-1.2.2.tgz",
+          "fileCount": 5,
+          "unpackedSize": 8117,
+          "signatures": [
+            {
+              "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+              "sig": "MEUCIQCJyFekh31SS2I6zmPz4Y8XejALOaWqv16iMDodrpOELAIgYwagvuPrCKN0MFov2xqQdEk0ChfY1xXzsPmH8lPF/qE="
+            }
+          ]
+        },
+        "_npmUser": {
+          "name": "sindresorhus",
+          "email": "sindresorhus@gmail.com"
+        },
+        "directories": {},
+        "maintainers": [
+          {
+            "name": "sindresorhus",
+            "email": "sindresorhus@gmail.com"
+          }
+        ],
+        "_npmOperationalInternal": {
+          "host": "s3://npm-registry-packages-npm-production",
+          "tmp": "tmp/yocto-queue_1.2.2_1762842728792_0.5515543026142684"
+        },
+        "_hasShrinkwrap": false
+      }
+    },
+    "time": {
+      "created": "2020-11-24T05:59:48.704Z",
+      "modified": "2025-11-11T06:32:09.168Z",
+      "0.0.0": "2020-11-24T05:59:48.904Z",
+      "0.1.0": "2020-11-24T06:05:35.875Z",
+      "1.0.0": "2021-08-12T23:48:33.113Z",
+      "1.1.0": "2024-06-28T20:50:10.833Z",
+      "1.1.1": "2024-06-29T22:12:50.399Z",
+      "1.2.0": "2025-03-06T12:29:40.450Z",
+      "1.2.1": "2025-03-22T05:49:38.400Z",
+      "1.2.2": "2025-11-11T06:32:08.991Z"
+    },
+    "bugs": {
+      "url": "https://github.com/sindresorhus/yocto-queue/issues"
+    },
+    "author": {
+      "name": "Sindre Sorhus",
+      "email": "sindresorhus@gmail.com",
+      "url": "https://sindresorhus.com"
+    },
+    "license": "MIT",
+    "homepage": "https://github.com/sindresorhus/yocto-queue#readme",
+    "keywords": [
+      "queue",
+      "data",
+      "structure",
+      "algorithm",
+      "queues",
+      "queuing",
+      "list",
+      "array",
+      "linkedlist",
+      "fifo",
+      "enqueue",
+      "dequeue",
+      "data-structure"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/sindresorhus/yocto-queue.git"
+    },
+    "description": "Tiny queue data structure",
+    "maintainers": [
+      {
+        "name": "sindresorhus",
+        "email": "sindresorhus@gmail.com"
+      }
+    ],
+    "readme": "# yocto-queue [![](https://badgen.net/bundlephobia/minzip/yocto-queue)](https://bundlephobia.com/result?p=yocto-queue)\n\n> Tiny queue data structure\n\nYou should use this package instead of an array if you do a lot of `Array#push()` and `Array#shift()` on large arrays, since `Array#shift()` has [linear time complexity](https://medium.com/@ariel.salem1989/an-easy-to-use-guide-to-big-o-time-complexity-5dcf4be8a444#:~:text=O(N)%E2%80%94Linear%20Time) *O(n)* while `Queue#dequeue()` has [constant time complexity](https://medium.com/@ariel.salem1989/an-easy-to-use-guide-to-big-o-time-complexity-5dcf4be8a444#:~:text=O(1)%20%E2%80%94%20Constant%20Time) *O(1)*. That makes a huge difference for large arrays.\n\n> A [queue](https://en.wikipedia.org/wiki/Queue_(abstract_data_type)) is an ordered list of elements where an element is inserted at the end of the queue and is removed from the front of the queue. A queue works based on the first-in, first-out ([FIFO](https://en.wikipedia.org/wiki/FIFO_(computing_and_electronics))) principle.\n\n## Install\n\n```sh\nnpm install yocto-queue\n```\n\n## Usage\n\n```js\nimport Queue from 'yocto-queue';\n\nconst queue = new Queue();\n\nqueue.enqueue('🦄');\nqueue.enqueue('🌈');\n\nconsole.log(queue.size);\n//=> 2\n\nconsole.log(...queue);\n//=> '🦄 🌈'\n\nconsole.log(queue.dequeue());\n//=> '🦄'\n\nconsole.log(queue.dequeue());\n//=> '🌈'\n```\n\n## API\n\n### `queue = new Queue()`\n\nThe instance is an [`Iterable`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols), which means you can iterate over the queue front to back with a “for…of” loop. Using the iterator will not remove the items from the queue. If you want that, use [`drain()`](#drain) instead.\n\nYou can also use spreading to convert the queue to an array. Don't do this unless you really need to though, since it's slow.\n\n#### `.enqueue(value)`\n\nAdd a value to the queue.\n\n#### `.dequeue()`\n\nRemove the next value in the queue.\n\nReturns the removed value or `undefined` if the queue is empty.\n\n#### `.peek()`\n\nGet the next value in the queue without removing it.\n\nReturns the value or `undefined` if the queue is empty.\n\n#### `.drain()`\n\nReturns an iterator that dequeues items as you consume it.\n\nThis allows you to empty the queue while processing its items.\n\nIf you want to not remove items as you consume it, use the `Queue` object as an iterator.\n\n#### `.clear()`\n\nClear the queue.\n\n#### `.size`\n\nThe size of the queue.\n\n## Related\n\n- [quick-lru](https://github.com/sindresorhus/quick-lru) - Simple “Least Recently Used” (LRU) cache\n",
+    "readmeFilename": "readme.md",
+    "users": {
+      "flumpus-dev": true
+    }
   }
 }

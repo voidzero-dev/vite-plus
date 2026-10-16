@@ -4,5 +4,5 @@ vp = "global"
 local-registry = true
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vpx", "-s", "cowsay", "hello"], comment = "should work without package.json", continue-on-failure = true },
+  { argv = ["vpx", "-s", "vp-test-echo", "hello"], comment = "should work without package.json", continue-on-failure = true },
 ]

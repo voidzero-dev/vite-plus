@@ -151,11 +151,14 @@ release downloads or Git hosts, are outside this log.
 
 For a network comparison, run the same cases with eight workers first with
 `VP_SNAP_REGISTRY_MODE=live`, then with the variable unset. Both runs route
-registry traffic through the logger; `live` disables the shared fixture data and
+registry traffic through the logger; `live` disables published recordings and
 response cache. `VP_SNAP_REGISTRY_MODE=direct` restores the original routing for
 an independent wall-time baseline, but cannot log traffic that bypasses the
 local registry. Keep builds unchanged and use fresh response directories.
 Local tarball URLs can cause snapshot differences in comparison modes.
+Locally authored packages remain local in both comparison modes because no
+published version exists. Cases that use them must set `local-registry = true`
+so `direct` mode also starts their registry.
 
 With `VP_SNAP_ARTIFACTS_DIR` set, each runner process creates a unique `run-*`
 directory. `runner/timing.json` records discovery, test execution, and final

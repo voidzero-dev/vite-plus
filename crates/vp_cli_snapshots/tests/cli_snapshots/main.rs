@@ -1148,16 +1148,19 @@ fn start_local_registry(
     if let Some(pack_dir) = pack_dir {
         cmd.env("SNAP_LOCAL_VP_PACKAGES_DIR", pack_dir);
     }
+    cmd.arg("--snapshot-fixtures").arg(flavor::manifest_dir().join("tests/cli_snapshots/registry"));
     if std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() != Ok("direct") {
         cmd.arg("--snapshot-cache").arg(cache_dir);
-        cmd.arg("--snapshot-fixtures")
-            .arg(flavor::manifest_dir().join("tests/cli_snapshots/registry"));
         if std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() == Ok("live") {
             cmd.arg("--live");
         }
         if let Some(log) = request_log {
             cmd.arg("--request-log").arg(log);
         }
+    } else {
+        // Direct routing still needs locally authored packages, which have no
+        // public-registry counterpart. Do not enable published recordings.
+        cmd.arg("--live");
     }
     // The server proxies to the developer's configured upstream (an internal
     // npm mirror in `~/.npmrc`); it must read the REAL user home to find it,

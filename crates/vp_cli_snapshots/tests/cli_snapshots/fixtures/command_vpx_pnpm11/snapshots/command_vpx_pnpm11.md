@@ -26,17 +26,10 @@ Examples:
   vpx -p cowsay -c 'echo "hi" | cowsay'                  # Shell mode with package
 ```
 
-## `vpx -s cowsay hello`
+## `vpx -s vp-test-echo hello`
 
-should run cowsay via dlx fallback
+should run vp-test-echo via dlx fallback
 
 ```
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+hello
 ```
