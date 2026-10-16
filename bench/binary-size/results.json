@@ -425,5 +425,136 @@
       "additional_bytes_to_remove": 6912,
       "additional_fraction_of_candidate_percent": 50.0
     }
-  ]
+  ],
+  "cli_profile_benchmark": {
+    "source_commit": "a4e9c5932e069b5aea5b9c0136222ddada73bed0",
+    "evidence": "evidence/cli-profile-benchmark.json",
+    "cpu": "Apple M4 Max",
+    "platform": "macOS-26.2-arm64-arm-64bit",
+    "binaries": {
+      "baseline": {
+        "bytes": 7991312,
+        "sha256": "8c7696daad2fcdb7842613fba238e5475eef6078b1ca8f8984899e49750b36b1"
+      },
+      "candidate": {
+        "bytes": 4954496,
+        "sha256": "9b6a8879912330090415905119baed4e99eead050208271fe7200b1c44bb298d"
+      }
+    },
+    "results": {
+      "help": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.0816875,
+          "cpu_median_ms": 3.954499999999861
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 4.156166499999999,
+          "cpu_median_ms": 3.9955000000000407
+        },
+        "change_ms": 0.0744789999999993,
+        "change_percent": 1.824710980446187
+      },
+      "env-current": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.350229000000001,
+          "cpu_median_ms": 4.251000000000005
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 4.497354,
+          "cpu_median_ms": 4.386999999999919
+        },
+        "change_ms": 0.14712499999999906,
+        "change_percent": 3.382005866817561
+      },
+      "env-current-deep": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.952729,
+          "cpu_median_ms": 4.771500000000373
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 5.130375,
+          "cpu_median_ms": 4.979500000000137
+        },
+        "change_ms": 0.1776460000000002,
+        "change_percent": 3.586830613990788
+      },
+      "env-which": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.3614795,
+          "cpu_median_ms": 4.210999999999743
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 4.4957705,
+          "cpu_median_ms": 4.413500000000958
+        },
+        "change_ms": 0.13429100000000016,
+        "change_percent": 3.0790239871584912
+      },
+      "node-startup": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 32.9604375,
+          "cpu_median_ms": 31.20450000000119
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 33.063417,
+          "cpu_median_ms": 31.37150000000144
+        },
+        "change_ms": 0.10297950000000355,
+        "change_percent": 0.3124336562583707
+      },
+      "npm-version": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 70.225958,
+          "cpu_median_ms": 66.86099999999584
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 70.22149999999999,
+          "cpu_median_ms": 66.94549999999566
+        },
+        "change_ms": -0.00445800000001384,
+        "change_percent": -0.006348080007700929
+      },
+      "install-cached": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.231,
+          "cpu_median_ms": 4.147999999993601
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 4.3736455,
+          "cpu_median_ms": 4.249500000007345
+        },
+        "change_ms": 0.14264550000000042,
+        "change_percent": 3.3714370125266013
+      },
+      "install-fresh": {
+        "baseline": {
+          "count": 30,
+          "wall_median_ms": 1067.9336875,
+          "cpu_median_ms": 1036.4390000000085
+        },
+        "candidate": {
+          "count": 30,
+          "wall_median_ms": 1127.104625,
+          "cpu_median_ms": 1103.9085000000027
+        },
+        "change_ms": 59.170937500000036,
+        "change_percent": 5.540693976843958
+      }
+    },
+    "scope": "Standalone CLI only. Three interleaved rounds on macOS ARM64 with warm OS caches; fresh Node installations use loopback HTTP with signature and checksum verification. Full application builds and Linux/Windows performance remain unmeasured."
+  }
 }
