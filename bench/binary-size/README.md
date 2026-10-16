@@ -81,6 +81,50 @@ on their target platforms. Linux builds use `cargo zigbuild` with
 `RUSTFLAGS='--cfg tokio_unstable'` to omit the GNU linker warning flag that Zig
 rejects. Windows builds use `cargo xwin` with Homebrew LLVM on `PATH`.
 
+### Standalone CLI performance
+
+The CLI timing comparison uses fresh `opt-level=3` and `opt-level="z"` release
+builds from commit `a4e9c5932`, with the same pinned toolchain, target, features,
+and remaining profile settings. Measurements run on an Apple M4 Max with macOS
+ARM64. These are separate from the earlier NAPI experiments below.
+
+Aggregate median wall times:
+
+| Workload                                            |          `3` |          `z` | Extra time | Change |
+| --------------------------------------------------- | -----------: | -----------: | ---------: | -----: |
+| `vp --help`                                         |     4.082 ms |     4.156 ms |   0.074 ms |  +1.8% |
+| `vp env current node --json`                        |     4.350 ms |     4.497 ms |   0.147 ms |  +3.4% |
+| Same command, 20 directories below the project root |     4.953 ms |     5.130 ms |   0.178 ms |  +3.6% |
+| `vp env which node`                                 |     4.361 ms |     4.496 ms |   0.134 ms |  +3.1% |
+| `vp node -e ''`                                     |    32.960 ms |    33.063 ms |   0.103 ms |  +0.3% |
+| `vp env exec npm --version`                         |    70.226 ms |    70.221 ms |  -0.004 ms | -0.01% |
+| `vp env install 22.13.1`, already installed         |     4.231 ms |     4.374 ms |   0.143 ms |  +3.4% |
+| Same install, runtime absent, loopback mirror       | 1,067.934 ms | 1,127.105 ms |  59.171 ms |  +5.5% |
+
+The three fresh-install rounds show slowdowns of 7.2%, 6.9%, and 4.8%.
+Node startup changes by less than 0.5% in every round; npm startup differences
+change sign and remain within 0.2%. Short environment commands consistently add
+about 0.1–0.2 ms. These builds reduce the executable from 7,991,312 to 4,954,496
+bytes (38.0%). The complete samples, CPU times, output hashes, and binary hashes
+are in [the CLI timing evidence](evidence/cli-profile-benchmark.json).
+
+[benchmark-cli.py](benchmark-cli.py) runs each command in a new process with an
+isolated `VP_HOME` and setup markers. Each round uses three warmups per variant
+and balanced, randomized adjacent pairs. Ordinary commands have 120 pairs per
+round; fresh installs have 10. There are three rounds. Wall times include process
+launch and output capture. OS filesystem caches remain warm.
+
+The installation workload uses the official Node.js `22.13.1` archive and signed
+checksum file served from memory over loopback HTTP. It includes signature and
+checksum verification, archive extraction, and installation. Removal of the prior
+installation and the resulting binary's hash check are outside the timer. No
+internet transfer is timed. Other workloads make no mirror requests.
+
+The runner checks successful exit codes and matching stdout/stderr for every
+invocation, and checks the installed Node.js binary after every fresh install.
+These measurements do not cover cold filesystem caches, Linux, Windows, full
+application builds, or all package-manager operations.
+
 ### NAPI performance
 
 The synthetic benchmark uses 1,500 exported functions, TypeScript transformation
@@ -100,8 +144,9 @@ materialized-file fast path does not decompress the helpers again.
 
 ## Optimization priorities
 
-Start with a dedicated size profile for the standalone CLI and installer, with
-command latency and installation benchmarks before release. Pursue embedded
+Start with a dedicated size profile for the standalone CLI and installer, and
+extend the command latency and installation measurements to Linux and Windows
+before release. Pursue embedded
 artifact compression independently in Vite Task. Keep Oxc and Rolldown at their
 original optimization level until a selective profile passes representative
 build benchmarks. Do not add the profile and compression percentages: a combined
@@ -238,6 +283,24 @@ node bench/binary-size/measure.cjs path/to/vp path/to/vite-plus.node
 node bench/binary-size/benchmark-napi.cjs path/to/vite-plus.node
 python3 bench/binary-size/analyze-macho.py path/to/unstripped-binary \
   --cxxfilt /opt/homebrew/opt/llvm/bin/llvm-cxxfilt
+```
+
+For the CLI timing comparison, build with the default symbol stripping and set
+`CARGO_PROFILE_RELEASE_OPT_LEVEL` to `3` and then `z`, saving each executable
+before the next build. The runner copies the binaries into temporary directories
+and creates their setup markers. Prepare the official archive and signed
+checksum file, then run:
+
+```sh
+mkdir -p tmp/binary-size/cli-speed/mirror/v22.13.1
+curl --fail --location https://nodejs.org/dist/v22.13.1/node-v22.13.1-darwin-arm64.tar.gz \
+  -o tmp/binary-size/cli-speed/mirror/v22.13.1/node-v22.13.1-darwin-arm64.tar.gz
+curl --fail --location https://nodejs.org/dist/v22.13.1/SHASUMS256.txt.asc \
+  -o tmp/binary-size/cli-speed/mirror/v22.13.1/SHASUMS256.txt.asc
+python3 bench/binary-size/benchmark-cli.py \
+  --baseline path/to/opt-3/vp --candidate path/to/opt-z/vp \
+  --mirror tmp/binary-size/cli-speed/mirror \
+  --output tmp/binary-size/cli-speed/results.json
 ```
 
 The Mach-O analyzer estimates symbol extents from the next symbol boundary.
