@@ -68,3 +68,19 @@ node:test runs .ts test files
 ```
 .
 ```
+
+## `vpx ./src/data-url.ts`
+
+data: URL imports keep Node.js' handling
+
+```
+data: URL import: 7
+```
+
+## `vpx ./src/require-tla.cts`
+
+require() of a module with top-level await reports Node.js' error code
+
+```
+require() of top-level await: ERR_REQUIRE_ASYNC_MODULE
+```

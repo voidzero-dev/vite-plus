@@ -80,6 +80,25 @@ export function rewriteHelperRequires(code: string): string {
 }
 
 /**
+ * The first line of oxc-node's error for `require()` of an ES module with top-level
+ * await, worded as Node.js words it.
+ */
+const REQUIRE_ASYNC_MODULE_MESSAGE =
+  'require() cannot be used on an ESM graph with top-level await. Use import() instead.';
+
+/**
+ * Give oxc-node's `require()`-with-top-level-await error the code Node.js uses, which
+ * code catches to fall back to `import()`; the binding can only report `GenericFailure`.
+ * Mirrors upstream's `register.mjs` (oxc-project/oxc-node#842).
+ */
+export function withRequireAsyncModuleCode(error: unknown): unknown {
+  if (error instanceof Error && error.message.startsWith(REQUIRE_ASYNC_MODULE_MESSAGE)) {
+    (error as NodeJS.ErrnoException).code = 'ERR_REQUIRE_ASYNC_MODULE';
+  }
+  return error;
+}
+
+/**
  * Whether this request comes from `require()`. Only `module.registerHooks()` shows
  * `require()` to the hooks; those requests stay on Node.js' CommonJS resolution and
  * the `pirates` hook. A CommonJS context never carries `importAttributes`.

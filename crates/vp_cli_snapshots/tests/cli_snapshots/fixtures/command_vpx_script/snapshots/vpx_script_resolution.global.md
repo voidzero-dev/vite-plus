@@ -28,3 +28,19 @@ hello vpx from alt
 hello vpx from alt
 4 6 42 cts counter=1
 ```
+
+## `cd order && vpx ./main.ts`
+
+A .ts next to its compiled .js wins for ./dep.js and ./dep, as with tsc and tsx
+
+```
+./dep.js -> dep.ts | ./dep -> dep.ts
+```
+
+## `cd outside-include && vpx ./scripts/seed.ts`
+
+A file outside every tsconfig include resolves paths through the nearest tsconfig
+
+```
+alias from scripts/: src/name.ts
+```

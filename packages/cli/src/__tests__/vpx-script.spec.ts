@@ -11,6 +11,7 @@ import {
   HELPER_MODULE_NAME,
   isSupportedNodeVersion,
   rewriteHelperRequires,
+  withRequireAsyncModuleCode,
   runtimeHelperSpecifier,
   SUPPORTED_NODE_RANGE,
 } from '../script-hooks.ts';
@@ -280,5 +281,14 @@ describe('script hooks', () => {
     expect(code).toContain(`process.getBuiltinModule("node:module").createRequire("file://`);
     expect(code).toContain('("@oxc-project/runtime/helpers/defineProperty");');
     expect(rewriteHelperRequires('require("./local")')).toBe('require("./local")');
+  });
+
+  it("gives require() of a module with top-level await Node.js' error code", () => {
+    const tla = new Error(
+      'require() cannot be used on an ESM graph with top-level await. Use import() instead.\n  /x/dep.mts:1:1',
+    );
+    expect(withRequireAsyncModuleCode(tla)).toMatchObject({ code: 'ERR_REQUIRE_ASYNC_MODULE' });
+    const other = new Error('Failed to parse /x/a.ts');
+    expect((withRequireAsyncModuleCode(other) as NodeJS.ErrnoException).code).toBeUndefined();
   });
 });
