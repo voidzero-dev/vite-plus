@@ -157,9 +157,9 @@ anyhow = "1.0.98"
 append-only-vec = "0.1.7"
 arcstr = { version = "1.2.0", default-features = false }
 ariadne = { package = "rolldown-ariadne", version = "0.6.0" }
-ast-grep-config = "0.50.0"
-ast-grep-core = "0.50.0"
-ast-grep-language = { version = "0.50.0", default-features = false, features = [
+ast-grep-config = "0.51.0"
+ast-grep-core = "0.51.0"
+ast-grep-language = { version = "0.51.0", default-features = false, features = [
   "tree-sitter-bash",
   "tree-sitter-typescript",
 ] }
