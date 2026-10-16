@@ -386,6 +386,9 @@ struct Case {
     /// Serve the packed checkout packages through the local npm registry.
     #[serde(default, rename = "local-registry")]
     local_registry: bool,
+    /// Keep registry request counters private for tests of metadata caching.
+    #[serde(default, rename = "isolated-registry")]
+    isolated_registry: bool,
     /// Seed the case's `VP_HOME` with an already-provisioned managed JS
     /// runtime (see `flavor::js_runtime_seed_dir`). Default true; runtime
     /// provisioning tests set false to start from a genuinely empty home.
@@ -1068,7 +1071,7 @@ struct RegistryHandle {
 
 struct SharedRegistry {
     env: BTreeMap<String, OsString>,
-    _handle: RegistryHandle,
+    _handle: Option<RegistryHandle>,
 }
 
 impl Drop for RegistryHandle {
@@ -1299,8 +1302,8 @@ fn run_case(
         case_env.get("PATH").cloned().unwrap_or_else(|| case_install.path_env.clone());
 
     // Cases without overlays share the HTTP server, but keep package-manager
-    // caches isolated. Packed checkout packages and fixture overlays retain a
-    // per-case server. Neither registry environment changes PATH.
+    // caches isolated. Fixture overlays retain a per-case server. Neither
+    // registry environment changes PATH.
     let registry_phase = report.phase("registry-startup");
     let mut shared_bun_cache = None;
     let (registry_env, registry) = if let Some(env) = shared_registry_env {
@@ -1832,6 +1835,7 @@ fn main() {
         /// this cell avoids revalidating the directory for each local trial.
         local_registry_pack: std::sync::OnceLock<Result<Arc<Path>, String>>,
         shared_registry: std::sync::OnceLock<Result<SharedRegistry, String>>,
+        packed_registry: std::sync::OnceLock<Result<SharedRegistry, String>>,
         registry_log: Option<PathBuf>,
     }
     impl LazyRuntimes {
@@ -1843,36 +1847,52 @@ fn main() {
             cell.get_or_init(|| flavor::provision(flavor, &self.run_root))
         }
 
-        fn shared_registry(&self) -> Result<&BTreeMap<String, OsString>, String> {
-            self.shared_registry
-                .get_or_init(|| {
-                    let stage = self.run_root.join("shared-registry");
-                    std::fs::create_dir_all(&stage).map_err(|error| error.to_string())?;
-                    let node = flavor::seed_runtime_node().map_or_else(
-                        || which::which("node").map_err(|error| error.to_string()),
-                        Ok,
-                    )?;
-                    let cache_dir = std::env::var_os("VP_SNAP_REGISTRY_CACHE_DIR")
-                        .map_or_else(|| self.run_root.join("registry-cache"), PathBuf::from);
-                    let helper_env = ["TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "WINDIR"]
-                        .into_iter()
-                        .filter_map(|key| {
-                            std::env::var_os(key).map(|value| (key.to_string(), value))
-                        })
-                        .collect();
-                    let (env, handle) = start_local_registry(
-                        &node,
-                        &stage,
-                        None,
-                        &cache_dir,
-                        self.registry_log.as_deref(),
-                        &helper_env,
-                    )?;
-                    Ok(SharedRegistry { env, _handle: handle })
-                })
-                .as_ref()
-                .map(|registry| &registry.env)
-                .map_err(Clone::clone)
+        fn shared_registry(
+            &self,
+            pack_dir: Option<&Path>,
+        ) -> Result<&BTreeMap<String, OsString>, String> {
+            let (cell, name) = if pack_dir.is_some() {
+                (&self.packed_registry, "packed-registry")
+            } else {
+                (&self.shared_registry, "shared-registry")
+            };
+            cell.get_or_init(|| {
+                let external_env = if pack_dir.is_some() {
+                    "VP_SNAP_PACKED_REGISTRY_ENV"
+                } else {
+                    "VP_SNAP_SHARED_REGISTRY_ENV"
+                };
+                if let Ok(value) = std::env::var(external_env) {
+                    let env: BTreeMap<String, String> = serde_json::from_str(&value)
+                        .map_err(|error| format!("invalid shared registry environment: {error}"))?;
+                    return Ok(SharedRegistry {
+                        env: env.into_iter().map(|(key, value)| (key, value.into())).collect(),
+                        _handle: None,
+                    });
+                }
+                let stage = self.run_root.join(name);
+                std::fs::create_dir_all(&stage).map_err(|error| error.to_string())?;
+                let node = flavor::seed_runtime_node()
+                    .map_or_else(|| which::which("node").map_err(|error| error.to_string()), Ok)?;
+                let cache_dir = std::env::var_os("VP_SNAP_REGISTRY_CACHE_DIR")
+                    .map_or_else(|| self.run_root.join("registry-cache"), PathBuf::from);
+                let helper_env = ["TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "WINDIR"]
+                    .into_iter()
+                    .filter_map(|key| std::env::var_os(key).map(|value| (key.to_string(), value)))
+                    .collect();
+                let (env, handle) = start_local_registry(
+                    &node,
+                    &stage,
+                    pack_dir,
+                    &cache_dir,
+                    self.registry_log.as_deref(),
+                    &helper_env,
+                )?;
+                Ok(SharedRegistry { env, _handle: Some(handle) })
+            })
+            .as_ref()
+            .map(|registry| &registry.env)
+            .map_err(Clone::clone)
         }
 
         /// Packs the checkout packages once and returns the shared dir. Reuses
@@ -1919,6 +1939,7 @@ fn main() {
         local: std::sync::OnceLock::new(),
         local_registry_pack: std::sync::OnceLock::new(),
         shared_registry: std::sync::OnceLock::new(),
+        packed_registry: std::sync::OnceLock::new(),
         registry_log: artifacts.as_ref().map(|dir| dir.join("registry.jsonl")),
     });
 
@@ -2005,12 +2026,13 @@ fn main() {
                                 flavor.as_str()
                             ));
                             let shared_registry_phase = report.phase("shared-registry-startup");
-                            let shared_registry_env = if !case.local_registry
+                            let shared_registry_env = if !case.isolated_registry
                                 && !fixture_path.join("mock-manifest.json").exists()
+                                && !fixture_path.join("tarballs").exists()
                                 && !fixture_path.join(".npmrc").exists()
                                 && std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() != Ok("direct")
                             {
-                                Some(runtimes.shared_registry()?)
+                                Some(runtimes.shared_registry(local_registry_pack.as_deref())?)
                             } else {
                                 None
                             };

@@ -37,6 +37,8 @@
 //                         and env exports instead of wrapping a command
 //   --snapshot-cache <dir> share successful upstream GETs for one snapshot run
 //   --snapshot-fixtures <dir> serve recorded manifest.json and tarballs/ data
+//   --snapshot-runner    wrap a test runner with a shared registry; the runner
+//                         still gives each case its own package-manager caches
 //   --request-log <file>  write registry request events as JSON lines
 //   --live                bypass shared fixtures and response storage for measurement
 //   --ps                  list running local registry processes
@@ -77,6 +79,7 @@ let packagesDir = process.env.SNAP_LOCAL_VP_PACKAGES_DIR;
 let pack = false;
 let packTo: string | undefined;
 let serve = false;
+let snapshotRunner = false;
 let snapshotCacheDir: string | undefined;
 let snapshotFixtures: string | undefined;
 let requestLog: string | undefined;
@@ -100,6 +103,8 @@ for (let i = 0; i < flags.length; i++) {
     live = true;
   } else if (flags[i] === '--serve') {
     serve = true;
+  } else if (flags[i] === '--snapshot-runner') {
+    snapshotRunner = true;
   } else if (flags[i] === '--ps') {
     listProcesses = true;
   } else if (flags[i] === '--kill') {
@@ -108,6 +113,19 @@ for (let i = 0; i < flags.length; i++) {
     console.error(`local-npm-registry: unknown option ${flags[i]}`);
     process.exit(2);
   }
+}
+
+if (snapshotRunner) {
+  if (serve || packTo || command.length === 0) {
+    console.error('local-npm-registry: --snapshot-runner requires a command after --');
+    process.exit(2);
+  }
+  if (['live', 'direct'].includes(process.env.VP_SNAP_REGISTRY_MODE ?? '')) {
+    live = true;
+  }
+}
+if (requestLog) {
+  mkdirSync(path.dirname(requestLog), { recursive: true });
 }
 
 // `--ps` / `--kill`: troubleshoot registry processes left behind by
@@ -302,7 +320,11 @@ const localPackuments = new Map<string, Packument>(); // package name -> local-o
 const LOCAL_PACKAGE_TIME = '2020-01-01T00:00:00.000Z';
 const VITE_PLUS_PLATFORM_PACKAGE_PREFIX = '@voidzero-dev/vite-plus-cli-';
 const SLSA_PROVENANCE_V1 = 'https://slsa.dev/provenance/v1';
-if (packagesDir) {
+let localPackagesLoaded = false;
+function loadLocalPackages(): void {
+  if (!packagesDir || localPackagesLoaded) {
+    return;
+  }
   for (const basename of readdirSync(packagesDir)) {
     if (!basename.endsWith('.tgz')) {
       continue;
@@ -342,6 +364,12 @@ if (packagesDir) {
       },
     });
   }
+  localPackagesLoaded = true;
+}
+// A snapshot wrapper starts before nextest workers prepare the archives. The
+// runner validates them under its package lock before making any requests.
+if (!snapshotRunner) {
+  loadLocalPackages();
 }
 
 // Serialize a manifest/packument with its `{REGISTRY}` placeholders (only our
@@ -548,6 +576,7 @@ const server = createServer(async (req, res) => {
   }
   requests++;
   try {
+    loadLocalPackages();
     const key = decodeURIComponent(req.url ?? '/').replace(/^\/+/, '');
     if (localPackuments.has(key) || Object.hasOwn(manifest, key)) {
       snapshotCache?.record('fixture', key);
@@ -715,13 +744,27 @@ server.listen(0, '127.0.0.1', () => {
   }
 
   const [cmd, ...cmdArgs] = command as [string, ...string[]];
+  const childEnv = snapshotRunner
+    ? {
+        ...process.env,
+        [packagesDir ? 'VP_SNAP_PACKED_REGISTRY_ENV' : 'VP_SNAP_SHARED_REGISTRY_ENV']:
+          JSON.stringify(registryEnv),
+      }
+    : { ...process.env, ...registryEnv };
   const child = spawn(cmd, cmdArgs, {
-    env: { ...process.env, ...registryEnv },
+    env: childEnv,
     stdio: 'inherit',
   });
-  child.on('exit', (code, signal) => {
+  const finish = (exitCode: number) => {
     cleanupRegistryEnv(registryEnv);
-    const exitCode = exitCodeFromClose(code, signal);
+    server.closeAllConnections();
     server.close(() => process.exit(exitCode));
+  };
+  child.on('error', (error) => {
+    console.error(`local-npm-registry: ${error.message}`);
+    finish(1);
+  });
+  child.on('exit', (code, signal) => {
+    finish(exitCodeFromClose(code, signal));
   });
 });

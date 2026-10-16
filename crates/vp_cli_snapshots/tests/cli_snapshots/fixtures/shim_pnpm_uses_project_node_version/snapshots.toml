@@ -2,6 +2,7 @@
 name = "shim_pnpm_uses_project_node_version"
 vp = "global"
 local-registry = true
+isolated-registry = true
 # Exceeded 50 seconds on Linux in CI run 38675211827.
 skip-platforms = ["windows", "linux"]
 steps = [
@@ -18,6 +19,7 @@ steps = [
 name = "shim_bun_default_latest_matches_fallback"
 vp = "global"
 local-registry = true
+isolated-registry = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');const {writeFileSync}=require('node:fs');writeFileSync(process.env.VP_HOME+'/bun-fallback-version',execFileSync('bun',['--version'],{encoding:'utf8'}))"], snapshot = false },
