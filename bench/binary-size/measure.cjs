@@ -16,6 +16,6 @@ const artifacts = Object.fromEntries(
     ];
   }),
 );
-console.log(
-  JSON.stringify({ node: process.version, zlib: process.versions.zlib, artifacts }, null, 2),
+process.stdout.write(
+  JSON.stringify({ node: process.version, zlib: process.versions.zlib, artifacts }, null, 2) + '\n',
 );

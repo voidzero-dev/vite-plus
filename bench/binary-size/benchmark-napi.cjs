@@ -2,10 +2,10 @@
 // baseline. These synthetic kernels are a regression screen, not an application
 // build benchmark; do not use them alone to approve a release profile change.
 const { createHash } = require('node:crypto');
-const { resolve } = require('node:path');
+const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 
-const binding = require(resolve(process.argv[2]));
+const binding = require(path.resolve(process.argv[2]));
 const source = Array.from(
   { length: 1500 },
   (_, i) =>
@@ -30,7 +30,9 @@ const tasks = {
 
 const results = {};
 for (const [name, run] of Object.entries(tasks)) {
-  for (let i = 0; i < 5; i++) run();
+  for (let i = 0; i < 5; i++) {
+    run();
+  }
   const samples = [];
   for (let i = 0; i < 25; i++) {
     const start = performance.now();
@@ -39,16 +41,16 @@ for (const [name, run] of Object.entries(tasks)) {
   }
   const output = JSON.stringify(run());
   results[name] = {
-    median_ms: [...samples].sort((a, b) => a - b)[Math.floor(samples.length / 2)],
+    median_ms: samples.toSorted((a, b) => a - b)[Math.floor(samples.length / 2)],
     samples_ms: samples,
     output_sha256: createHash('sha256').update(output).digest('hex'),
     output_bytes: Buffer.byteLength(output),
   };
 }
-console.log(
+process.stdout.write(
   JSON.stringify(
     { node: process.version, source_bytes: Buffer.byteLength(source), results },
     null,
     2,
-  ),
+  ) + '\n',
 );

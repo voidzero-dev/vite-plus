@@ -29,7 +29,7 @@ export function binaryArtifacts() {
       asset: archive,
       member,
     });
-    return [
+    const artifacts = [
       cli('`vp`', windows ? 'vp.exe' : 'vp'),
       {
         name: `NAPI (${label})`,
@@ -37,17 +37,15 @@ export function binaryArtifacts() {
         package: `@voidzero-dev/vite-plus-${platform}`,
         member: `package/vite-plus.${platform}.node`,
       },
-      ...(windows
-        ? [
-            cli('Trampoline', 'vp-shim.exe'),
-            {
-              name: `Installer (${label})`,
-              path: `vp-setup-${target}/vp-setup.exe`,
-              asset: `vp-setup-${target}.exe`,
-            },
-          ]
-        : []),
     ];
+    if (windows) {
+      artifacts.push(cli('Trampoline', 'vp-shim.exe'), {
+        name: `Installer (${label})`,
+        path: `vp-setup-${target}/vp-setup.exe`,
+        asset: `vp-setup-${target}.exe`,
+      });
+    }
+    return artifacts;
   });
 }
 
@@ -67,13 +65,19 @@ export function measureBinary(bytes) {
 
 async function download(url, { allowMissing = false } = {}) {
   const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
-  if (allowMissing && response.status === 404) return null;
-  if (!response.ok) throw new Error(`Download failed (${response.status}): ${url}`);
+  if (allowMissing && response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Download failed (${response.status}): ${url}`);
+  }
   const chunks = [];
   let size = 0;
   for await (const chunk of response.body) {
     size += chunk.length;
-    if (size > maxBytes) throw new Error(`Download exceeds the size limit: ${url}`);
+    if (size > maxBytes) {
+      throw new Error(`Download exceeds the size limit: ${url}`);
+    }
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -85,7 +89,9 @@ export function createReleaseLoader(release, directory) {
   const version = releaseVersion(release);
   const downloads = new Map();
   async function cachedDownload(url) {
-    if (!downloads.has(url)) downloads.set(url, download(url));
+    if (!downloads.has(url)) {
+      downloads.set(url, download(url));
+    }
     return downloads.get(url);
   }
   return async (artifact) => {
@@ -96,7 +102,9 @@ export function createReleaseLoader(release, directory) {
         `https://registry.npmjs.org/${encodeURIComponent(artifact.package)}/${version}`,
         { allowMissing: true },
       );
-      if (!metadataBytes) return null;
+      if (!metadataBytes) {
+        return null;
+      }
       const metadata = JSON.parse(metadataBytes.toString('utf8'));
       if (metadata.name !== artifact.package || metadata.version !== version) {
         throw new Error(`Unexpected npm package: ${artifact.package}@${version}`);
@@ -107,13 +115,17 @@ export function createReleaseLoader(release, directory) {
       }
       bytes = await cachedDownload(url.href);
     } else {
-      if (!release.assets.some((asset) => asset.name === artifact.asset)) return null;
+      if (!release.assets.some((asset) => asset.name === artifact.asset)) {
+        return null;
+      }
       bytes = await cachedDownload(
         `${repository}/releases/download/${release.tag_name}/${artifact.asset}`,
       );
       zip = artifact.asset.endsWith('.zip');
     }
-    if (!artifact.member) return bytes;
+    if (!artifact.member) {
+      return bytes;
+    }
     const options = { maxBuffer: maxBytes, timeout: 30_000 };
     if (zip) {
       const archive = join(directory, artifact.asset);
@@ -127,8 +139,12 @@ export function createReleaseLoader(release, directory) {
 function formatSize(bytes, signed = false) {
   const absolute = Math.abs(bytes);
   const sign = bytes < 0 ? '-' : signed && bytes > 0 ? '+' : '';
-  if (absolute >= 1024 ** 2) return `${sign}${(absolute / 1024 ** 2).toFixed(2)} MiB`;
-  if (absolute >= 1024) return `${sign}${(absolute / 1024).toFixed(2)} KiB`;
+  if (absolute >= 1024 ** 2) {
+    return `${sign}${(absolute / 1024 ** 2).toFixed(2)} MiB`;
+  }
+  if (absolute >= 1024) {
+    return `${sign}${(absolute / 1024).toFixed(2)} KiB`;
+  }
   return `${sign}${absolute} B`;
 }
 
@@ -139,7 +155,9 @@ function formatDelta(base, preview) {
 
 export function renderSizeReport({ release, headSha, runUrl, rows }) {
   releaseVersion(release);
-  if (!/^[a-f0-9]{40}$/.test(headSha)) throw new Error('Invalid preview commit');
+  if (!/^[a-f0-9]{40}$/.test(headSha)) {
+    throw new Error('Invalid preview commit');
+  }
   const table = (format) => [
     '| Binary | Latest release | Preview | Change |',
     '| --- | ---: | ---: | ---: |',
