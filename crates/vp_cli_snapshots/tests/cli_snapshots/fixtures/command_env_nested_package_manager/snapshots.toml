@@ -1,0 +1,10 @@
+# https://github.com/voidzero-dev/vite-plus/issues/3013
+[[case]]
+name = "command_env_nested_package_manager"
+vp = "global"
+steps = [
+  { argv = ["node", "prepare-npm.cjs"], snapshot = false },
+  { argv = ["vp", "env", "current", "pm", "--json"], cwd = "svc", comment = "a nested project outside the workspace packages uses its own packageManager" },
+  { argv = ["vpt", "cp", "member-workspace.yaml", "pnpm-workspace.yaml"], snapshot = false },
+  { argv = ["vp", "env", "current", "pm", "--json"], cwd = "svc", comment = "a workspace package uses the workspace's packageManager, even when it declares its own" },
+]
