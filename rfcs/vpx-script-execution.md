@@ -216,13 +216,14 @@ Files: `packages/cli/src/script-preload.ts`, `script-register.ts`, `script-esm-h
 
 These upstream issues found in end-to-end testing against tsx are still open:
 
-| Issue                                                              | Effect under `vpx`                                                                                |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| [oxc-node#844](https://github.com/oxc-project/oxc-node/issues/844) | A missing `TS_NODE_PROJECT` file, or a tsconfig that fails to parse, is skipped without a warning |
-| [oxc-node#845](https://github.com/oxc-project/oxc-node/issues/845) | `--preserve-symlinks` is ignored; `OXC_LOG` writes to stdout                                      |
-| [oxc-node#846](https://github.com/oxc-project/oxc-node/issues/846) | A BOM before a shebang is a parse error                                                           |
-| [oxc#27741](https://github.com/oxc-project/oxc/issues/27741)       | `accessor` fields are not lowered, so Node.js rejects them                                        |
-| [oxc#27742](https://github.com/oxc-project/oxc/issues/27742)       | Legacy decorators on static members run before those on later instance members, unlike tsc        |
+| Issue                                                              | Effect under `vpx`                                                                                 |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| [oxc-node#844](https://github.com/oxc-project/oxc-node/issues/844) | A missing `TS_NODE_PROJECT` file, or a tsconfig that fails to parse, is skipped without a warning  |
+| [oxc-node#845](https://github.com/oxc-project/oxc-node/issues/845) | `--preserve-symlinks` is ignored; `OXC_LOG` writes to stdout                                       |
+| [oxc-node#846](https://github.com/oxc-project/oxc-node/issues/846) | A BOM before a shebang is a parse error                                                            |
+| [oxc-node#856](https://github.com/oxc-project/oxc-node/issues/856) | `import './a#b.ts'` loads a file named `a#b.ts` if one exists; Node.js reads `#b.ts` as a fragment |
+| [oxc#27741](https://github.com/oxc-project/oxc/issues/27741)       | `accessor` fields are not lowered, so Node.js rejects them                                         |
+| [oxc#27742](https://github.com/oxc-project/oxc/issues/27742)       | Legacy decorators on static members run before those on later instance members, unlike tsc         |
 
 ## Errors
 
