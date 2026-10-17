@@ -151,6 +151,17 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_package_installed_windows"
+vp = ["local", "global"]
+skip-platforms = ["linux", "macos"]
+comment = "On Windows, a .cmd binary in node_modules/.bin runs through cmd.exe with its arguments and exit code."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules/.bin"], snapshot = false },
+  { argv = ["vpt", "cp", "win-tools/fake-tool.cmd", "node_modules/.bin/fake-tool.cmd"], snapshot = false },
+  { argv = ["vpx", "fake-tool", "a", "--help"], comment = "Arguments, including --help, belong to the binary; exit code 3 propagates", continue-on-failure = true },
+]
+
+[[case]]
 name = "vpx_package_not_installed"
 vp = "local"
 comment = "The project-local vpx, which package.json scripts run, searches only node_modules/.bin, never global packages or PATH. A binary that is not installed is an error with a hint, not a download."
