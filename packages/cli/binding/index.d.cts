@@ -3697,6 +3697,13 @@ export interface DownloadPackageManagerResult {
 export declare function ensureBlockingStdio(): void;
 
 /**
+ * Find the monorepo root containing `cwd` with the same rules as `vp run` and `vp install`.
+ *
+ * Returns `null` when `cwd` is not inside a pnpm or `package.json` workspace.
+ */
+export declare function findMonorepoRoot(cwd: string): string | null;
+
+/**
  * Resolved on-disk category roots from [`vp_shared::EnvConfig`].
  *
  * JavaScript must not read `VP_HOME` / `VP_*_DIR` / `XDG_*` itself;
