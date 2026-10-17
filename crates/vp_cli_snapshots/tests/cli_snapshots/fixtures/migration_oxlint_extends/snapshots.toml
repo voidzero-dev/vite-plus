@@ -1,0 +1,24 @@
+[[case]]
+name = "migration_oxlint_extends"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+# Use one lint thread so diagnostic order is stable across the three runs.
+# Ignore the generated Vite config so each run checks the same source files.
+steps = [
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json"], comment = "Original inherited errors, warnings, and overrides", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "Path extends become imports of shared TypeScript configs" },
+  { argv = ["vpt", "print-file", "shared/nested/first.ts"], comment = "Nested imports preserve overrides and their plugin declarations" },
+  { argv = ["vpt", "print-file", "shared/base.ts"] },
+  { argv = ["vpt", "print-file", "shared/second.ts"], comment = "Relative plugin paths resolve from the shared module" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"] },
+  { argv = ["vpt", "print-file", "shared/second.jsonc"], comment = "Shared JSON configs are retained" },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "Generated config types accept the resolved inheritance" },
+  { argv = ["vp", "lint", "--threads=1"], comment = "The diagnostics and exit code match the original config without a config flag", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "A second migration leaves the config unchanged" },
+  { argv = ["vp", "lint", "--threads=1"], comment = "The diagnostics and exit code remain unchanged after the second migration", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", "shared/base.ts", '"no-debugger": "error"', '"no-debugger": "warn"'], comment = "Edits to the shared TS config propagate through its imports" },
+  { argv = ["vp", "lint", "--threads=1"], comment = "The edited base rule now warns in index.js; the test override remains a warning", continue-on-failure = true },
+]

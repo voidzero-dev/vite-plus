@@ -23,6 +23,16 @@ On a project that already depends on `vite-plus`, `vp migrate` performs an upgra
 
 When a default upgrade skips setup actions that would apply, it prints a hint to run `vp migrate --full`. Fresh (non Vite+) projects always run the full migration.
 
+## Oxlint JSON Inheritance
+
+When `.oxlintrc.json` or `.oxlintrc.jsonc` uses `extends`, `vp migrate` resolves each file path relative to the config that declares it. It creates shared TypeScript configs and imports them through `lint.extends`, including nested inheritance. Oxlint applies the existing merge order, rule severities, and overrides. Plain `vp lint` uses the migrated rules without a `-c` flag.
+
+Migration assumes ESM projects. Shared configs become sibling `.ts` files. Generated TypeScript configs use `.js` import specifiers, which Vite and TypeScript resolve to the generated source files without changing compiler settings. Workspace consumers reuse the same generated modules. Edit these TypeScript files to update shared settings. Original shared JSON and JSONC files remain available to other consumers; edits to those originals do not update the migrated configs.
+
+JS-plugin declarations stay in their original config or override. Relative plugin paths become absolute paths at runtime through `fileURLToPath(new URL(..., import.meta.url))`. Explicit inherited `typeAware` and `typeCheck` settings take precedence over migration defaults.
+
+Missing files, invalid JSON, inheritance cycles, conflicting output files, and package-local plugins that resolve differently from the Vite config directory produce a warning and leave the original config in place. Configs outside the project or workspace, configs inside `node_modules`, CommonJS Vite configs, and an existing `lint` block require a manual merge. The root JSON config is removed only after a successful migration. `vp lint` continues to reject string paths in `lint.extends`; path resolution happens only during migration.
+
 ## Pack Configuration
 
 `vp migrate` updates static `pack` objects in `vite.config.*` and exported objects in `tsdown.config.*` for [tsdown 0.23](https://github.com/rolldown/tsdown/releases/tag/v0.23.0). This also runs on existing Vite+ projects without `--full`, including workspace packages. Arrays and direct objects returned by `defineConfig` callbacks are supported. JSON tsdown configs receive the same updates after they merge into `vite.config.ts`.
