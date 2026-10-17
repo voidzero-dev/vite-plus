@@ -97,15 +97,20 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
   }
 
   // Handle directory if it exists and is not empty
+  const isSymlink = fs.lstatSync(projectDirFullPath).isSymbolicLink();
   const overwrite = await prompts.select({
-    message: `Target directory "${projectDirFullPath}" is not empty. Please choose how to proceed:`,
+    message: isSymlink
+      ? `Target directory "${projectDirFullPath}" is a symbolic link to "${fs.realpathSync(projectDirFullPath)}", which is not empty. Please choose how to proceed:`
+      : `Target directory "${projectDirFullPath}" is not empty. Please choose how to proceed:`,
     options: [
       {
         label: 'Cancel operation',
         value: 'no',
       },
       {
-        label: 'Remove existing files and continue',
+        label: isSymlink
+          ? 'Remove the symbolic link and continue'
+          : 'Remove existing files and continue',
         value: 'yes',
       },
     ],
@@ -129,8 +134,14 @@ function isEmpty(path: string) {
   return files.length === 0 || (files.length === 1 && files[0] === '.git');
 }
 
-function emptyDir(dir: string) {
-  if (!fs.existsSync(dir)) {
+export function emptyDir(dir: string) {
+  const stat = fs.lstatSync(dir, { throwIfNoEntry: false });
+  if (!stat) {
+    return;
+  }
+  // Remove a symlinked target itself, never the contents of the directory it points to.
+  if (stat.isSymbolicLink()) {
+    fs.unlinkSync(dir);
     return;
   }
   for (const file of fs.readdirSync(dir)) {
