@@ -27,7 +27,7 @@ When a default upgrade skips setup actions that would apply, it prints a hint to
 
 When `.oxlintrc.json` or `.oxlintrc.jsonc` uses `extends`, `vp migrate` resolves each file path relative to the config that declares it. It creates shared TypeScript configs and imports them through `lint.extends`, including nested inheritance. Oxlint applies the existing merge order, rule severities, and overrides. Plain `vp lint` uses the migrated rules without a `-c` flag.
 
-Shared configs become sibling `.ts` files, or `.mts` files outside ESM packages. Generated TypeScript configs use `.js` or `.mjs` import specifiers, which Vite and TypeScript resolve to the generated source files without changing compiler settings. Workspace consumers reuse the same generated modules. Edit these TypeScript files to update shared settings. Original shared JSON and JSONC files remain available to other consumers; edits to those originals do not update the migrated configs.
+Migration assumes ESM projects. Shared configs become sibling `.ts` files. Generated TypeScript configs use `.js` import specifiers, which Vite and TypeScript resolve to the generated source files without changing compiler settings. Workspace consumers reuse the same generated modules. Edit these TypeScript files to update shared settings. Original shared JSON and JSONC files remain available to other consumers; edits to those originals do not update the migrated configs.
 
 JS-plugin declarations stay in their original config or override. Relative plugin paths become absolute paths at runtime through `fileURLToPath(new URL(..., import.meta.url))`. Explicit inherited `typeAware` and `typeCheck` settings take precedence over migration defaults.
 

@@ -6,7 +6,6 @@ import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
 import type { OxlintConfig } from 'oxlint';
 
 import { analyzeMigrationSource, ResolverFactory } from '../../../binding/index.js';
-import { readJsonFile } from '../../utils/json.ts';
 import { detectConfigs } from '../detector.ts';
 import { ensureSvelteRuneGlobals } from '../migrator.ts';
 import type { OxlintConfigFile, OxlintModulePlan } from './shared.ts';
@@ -74,31 +73,14 @@ export function prepareOxlintConfigs(
   return configs;
 }
 
-function moduleExtension(filename: string): '.ts' | '.mts' {
-  let directory = path.dirname(filename);
-  for (;;) {
-    const packageJson = path.join(directory, 'package.json');
-    if (fs.existsSync(packageJson)) {
-      return readJsonFile(packageJson).type === 'module' ? '.ts' : '.mts';
-    }
-    const parent = path.dirname(directory);
-    if (parent === directory) {
-      return '.mts';
-    }
-    directory = parent;
-  }
-}
-
 function relativeImport(from: string, to: string): string {
   const relative = path.relative(path.dirname(from), to).split(path.sep).join('/');
   if (path.isAbsolute(relative)) {
     throw new Error(`Cannot import an Oxlint config across drives: ${to}`);
   }
-  // Vite and TypeScript resolve .js/.mjs imports to .ts/.mts source files.
+  // Vite and TypeScript resolve .js imports to .ts source files.
   // This also works with NodeNext without changing allowImportingTsExtensions.
-  const specifier = /\.[cm]?ts$/.test(from)
-    ? relative.replace(/\.mts$/, '.mjs').replace(/\.ts$/, '.js')
-    : relative;
+  const specifier = /\.m?ts$/.test(from) ? relative.replace(/\.ts$/, '.js') : relative;
   return specifier.startsWith('../') ? specifier : `./${specifier}`;
 }
 
@@ -198,7 +180,7 @@ export function prepareOxlintConfigModules(
   root.extends.forEach(validate);
 
   function generate(file: OxlintConfigFile): string {
-    const filename = file.filename.replace(/\.jsonc?$/i, '') + moduleExtension(file.filename);
+    const filename = file.filename.replace(/\.jsonc?$/i, '') + '.ts';
     const existing = modules.get(filename);
     if (existing && existing.file !== file) {
       throw new Error(`Multiple Oxlint configs would create ${filename}`);
@@ -209,7 +191,7 @@ export function prepareOxlintConfigModules(
     if (existing) {
       return filename;
     }
-    const runtimePath = filename.replace(/\.mts$/, '.mjs').replace(/\.ts$/, '.js');
+    const runtimePath = filename.replace(/\.ts$/, '.js');
     if (fs.existsSync(filename) || fs.existsSync(runtimePath)) {
       throw new Error(
         `Cannot create shared Oxlint config because ${filename} or ${runtimePath} already exists`,
