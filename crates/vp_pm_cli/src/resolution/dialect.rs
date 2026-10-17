@@ -105,6 +105,11 @@ impl Pnpm {
     pub(crate) fn supports_v11_commands(&self) -> bool {
         self.version >= Version::new(11, 0, 0)
     }
+
+    /// Native `team` commands landed in pnpm 11.13.0.
+    pub(crate) fn supports_v11_13_commands(&self) -> bool {
+        self.version >= Version::new(11, 13, 0)
+    }
 }
 
 impl Yarn {
