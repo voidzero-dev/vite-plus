@@ -1,6 +1,7 @@
 //! First-start installation followed by command execution through the deployed binary.
 
 mod external;
+mod runtime;
 mod shell;
 
 use std::{path::Path, process::ExitCode};
@@ -241,7 +242,18 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
         if !skip_deps {
-            install::install_production_deps(&version_dir, registry, true).await?;
+            let node_version = runtime::resolve().await?;
+            let preferred =
+                node_version.as_deref().filter(|version| runtime::supports_cli(version));
+            if let Some(version) = node_version.as_deref().filter(|_| preferred.is_none()) {
+                output::info(&format!(
+                    "Requested Node.js {version} does not support this Vite+ release; using a separate installation runtime."
+                ));
+            }
+            install::install_production_deps(&version_dir, registry, true, preferred).await?;
+            if let Some(version) = node_version {
+                runtime::write_resolution(&version).await?;
+            }
         }
     }
     #[cfg(windows)]

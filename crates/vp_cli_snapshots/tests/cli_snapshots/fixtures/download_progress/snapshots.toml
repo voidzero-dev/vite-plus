@@ -28,9 +28,9 @@ name = "installation_progress_interactive"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [{ argv = ["node", "install.mjs", "interactive"], interactions = [
-  { expect-milestone = "install:prepare:ready" },
-  { write-key = "enter" },
   { expect-milestone = "install:download:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:prepare:ready" },
   { write-key = "enter" },
   { expect-milestone = "install:dependencies:ready" },
   { write-key = "enter" },
@@ -41,9 +41,9 @@ name = "installation_progress_failure"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [{ argv = ["node", "install.mjs", "interactive", "failure"], interactions = [
-  { expect-milestone = "install:prepare:ready" },
-  { write-key = "enter" },
   { expect-milestone = "install:download:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:prepare:ready" },
   { write-key = "enter" },
   { expect-milestone = "install:dependencies:ready" },
   { write-key = "enter" },
