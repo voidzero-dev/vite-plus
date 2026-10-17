@@ -106,7 +106,7 @@ The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "v
 
 `vpx` reads compiler options from a tsconfig but does not type-check with it. Each file uses the nearest `tsconfig.json` above it that includes it through `files`, `include`, `exclude`, or project `references`, as `tsc` does, and `extends` is followed. Files in `node_modules` use no tsconfig, and neither does a file that no tsconfig includes, so it gets the defaults below. Such a file still resolves `paths` aliases through the nearest `tsconfig.json` above it, as tsx does: with a root tsconfig whose `include` is `["src"]`, a script in `scripts/` can import the same aliases as `src/`. Because the config depends on the file's location, not on the working directory, `vpx` compiles a file the same way wherever it runs from.
 
-`--tsconfig <path>` applies one config to every file instead, including files that config does not include. Without `--tsconfig`, an `OXC_TSCONFIG_PATH` or `TS_NODE_PROJECT` environment variable does the same.
+`--tsconfig <path>` applies one config to every file instead, including files that config does not include. Without `--tsconfig`, an `OXC_TSCONFIG_PATH` or `TS_NODE_PROJECT` environment variable does the same. If it names a file that does not exist, or a tsconfig fails to parse, `vpx` prints a warning and runs without that config.
 
 A file that no tsconfig applies to runs as if its `compilerOptions` were empty:
 
