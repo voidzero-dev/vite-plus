@@ -50,6 +50,9 @@ vt_str = { workspace = true }
 vt_workspace = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true }
+
 [dev-dependencies]
 serial_test = { workspace = true }
 temp-env = { workspace = true }

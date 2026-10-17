@@ -2,6 +2,10 @@
 
 mod external;
 mod shell;
+#[cfg(windows)]
+mod windows_path;
+#[cfg(all(test, windows))]
+mod windows_tests;
 
 use std::{path::Path, process::ExitCode};
 
@@ -274,14 +278,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         if deploy {
             remove_previous_install(previous_install.as_deref()).await?;
         }
-        if std::env::var(env_vars::VP_SELF_SETUP_NO_MODIFY_PATH).as_deref() != Ok("1") {
-            if let Err(error) = shell::configure().await {
-                output::warn(&format!(
-                    "Could not configure shell profiles: {error}. Add {} to PATH manually.",
-                    dirs.bin.as_path().display()
-                ));
-            }
-        }
+        configure_shells().await?;
         let mut settings = config::load_config().await?;
         if let Some(mode) = node_override.or(default_mode) {
             settings.node_shim_mode = mode;
@@ -302,8 +299,8 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
 
     // Existing Windows installs also need the fallback directory in their persistent PATH.
     #[cfg(windows)]
-    if in_place && std::env::var(env_vars::VP_SELF_SETUP_NO_MODIFY_PATH).as_deref() != Ok("1") {
-        shell::configure().await?;
+    if in_place {
+        configure_shells().await?;
     }
 
     // 2. Activate a standalone download; an upgrade hook must not overwrite rollback history.
@@ -343,6 +340,28 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         tokio::fs::write(version_dir.join("bin").join(SELF_SETUP_MARKER), b"").await?;
     }
     Ok(binary)
+}
+
+async fn configure_shells() -> Result<(), Error> {
+    if std::env::var(env_vars::VP_SELF_SETUP_NO_MODIFY_PATH).as_deref() == Ok("1") {
+        return Ok(());
+    }
+    let dirs = &EnvConfig::get().dirs;
+    // Windows PATH is required even when an optional shell (such as an older
+    // Nushell) cannot be configured. Do not mark setup complete if this fails.
+    #[cfg(windows)]
+    windows_path::configure(&dirs.bin, &dirs.fallback_bin())
+        .map_err(|error| Error::Other(format!("Could not configure user PATH: {error}").into()))?;
+    if let Err(error) = shell::configure().await {
+        #[cfg(windows)]
+        output::warn(&format!("Could not configure shell profiles: {error}."));
+        #[cfg(not(windows))]
+        output::warn(&format!(
+            "Could not configure shell profiles: {error}. Add {} to PATH manually.",
+            dirs.bin.as_path().display()
+        ));
+    }
+    Ok(())
 }
 
 fn interactive() -> bool {
