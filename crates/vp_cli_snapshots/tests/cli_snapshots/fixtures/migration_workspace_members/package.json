@@ -1,0 +1,7 @@
+{
+  "name": "migration-workspace-members",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}
