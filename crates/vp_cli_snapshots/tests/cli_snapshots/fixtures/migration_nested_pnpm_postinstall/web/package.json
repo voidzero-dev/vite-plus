@@ -1,0 +1,11 @@
+{
+  "name": "web",
+  "private": true,
+  "scripts": {
+    "postinstall": "echo 'postinstall from web/package.json'"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

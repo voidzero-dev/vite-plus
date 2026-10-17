@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { type WorkspacePackage } from '../../types/index.ts';
+import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
@@ -12,6 +12,7 @@ import {
   OXLINT_PLUGINS_PACKAGE,
   packageOwnsOxlintApi,
   PLAYWRIGHT_PROVIDER,
+  isPlainRecord,
   readPackageJsonIfExists,
   type DependencyBag,
 } from './shared.ts';
@@ -171,6 +172,77 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
 // Built plugins can still load the original API after migration. Skip installed
 // source and VCS metadata; dependency peer contracts are checked separately.
 const OXLINT_RETENTION_SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn']);
+
+// Capture independent install roots before creating the parent's workspace file.
+// An existing workspace boundary owns its descendants; do not split its members.
+export function collectStandalonePnpmProjects(projectPath: string): string[] {
+  const projects: string[] = [];
+  const directories = [projectPath];
+  for (const directory of directories) {
+    if (fs.existsSync(path.join(directory, 'pnpm-workspace.yaml'))) {
+      continue;
+    }
+    if (fs.existsSync(path.join(directory, 'package.json'))) {
+      let pkg: Record<string, unknown>;
+      try {
+        pkg = readJsonFile(path.join(directory, 'package.json'));
+      } catch {
+        continue;
+      }
+      if (!isPlainRecord(pkg) || (directory === projectPath && Object.hasOwn(pkg, 'workspaces'))) {
+        continue;
+      }
+      const packageManager =
+        typeof pkg.packageManager === 'string' && !pkg.packageManager.includes('@')
+          ? undefined
+          : pkg.packageManager;
+      const devEnginePackageManager = isPlainRecord(pkg.devEngines)
+        ? pkg.devEngines.packageManager
+        : undefined;
+      const devEngineEntries = (
+        Array.isArray(devEnginePackageManager) ? devEnginePackageManager : [devEnginePackageManager]
+      )
+        .filter(
+          (entry: unknown): entry is Record<string, unknown> & { name: string } =>
+            isPlainRecord(entry) && typeof entry.name === 'string' && entry.name.trim().length > 0,
+        )
+        .map((entry) => ({ name: entry.name.trim(), onFail: entry.onFail }));
+      const supportedDevEngine = devEngineEntries.find((entry) =>
+        Object.values(PackageManager).some((name) => name === entry.name),
+      );
+      const lastDevEngine = devEngineEntries.at(-1);
+      if (
+        directory !== projectPath &&
+        fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) &&
+        (packageManager === undefined ||
+          (typeof packageManager === 'string' && packageManager.startsWith('pnpm@'))) &&
+        (packageManager !== undefined ||
+          devEngineEntries.length === 0 ||
+          supportedDevEngine?.name === 'pnpm' ||
+          (supportedDevEngine === undefined &&
+            (lastDevEngine?.onFail === 'ignore' || lastDevEngine?.onFail === 'warn')))
+      ) {
+        projects.push(directory);
+      }
+    }
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (
+        entry.isDirectory() &&
+        !VITEST_SCAN_SKIP_DIRS.has(entry.name) &&
+        !OXLINT_RETENTION_SKIP_DIRS.has(entry.name)
+      ) {
+        directories.push(path.join(directory, entry.name));
+      }
+    }
+  }
+  return projects;
+}
 
 /**
  * Detect whether a package uses vitest's browser mode.
