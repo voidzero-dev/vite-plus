@@ -101,7 +101,7 @@ try {
   const [code, signal] = await once(child, 'exit');
   assert.equal(signal, null);
   assert.equal(code, failure ? 1 : 0);
-  assert.deepEqual(phases, ['prepare', 'download', 'dependencies']);
+  assert.deepEqual(phases, ['download', 'prepare', 'dependencies']);
   if (failure) {
     assert.equal(stdout, '');
     const log = readFileSync(join(home, 'upgrade.log'), 'utf8');
