@@ -122,8 +122,77 @@ internet transfer is timed. Other workloads make no mirror requests.
 
 The runner checks successful exit codes and matching stdout/stderr for every
 invocation, and checks the installed Node.js binary after every fresh install.
-These measurements do not cover cold filesystem caches, Linux, Windows, full
-application builds, or all package-manager operations.
+These CLI-only measurements do not cover cold filesystem caches, Linux, Windows,
+application builds, or all package-manager operations. The next comparison
+measures full `vp build` commands through the bundled Rolldown.
+
+### Rolldown build performance
+
+[benchmark-rolldown.py](benchmark-rolldown.py) compares the same standalone
+executables through `vp build`. **Both executables retain fat LTO.** Only the
+standalone executable changes from `opt-level=3` to `opt-level="z"`. Both use the
+same preview JavaScript packages and NAPI addon from commit `a4e9c5932`. The addon
+contains Rolldown and Oxc and retains `opt-level=3` with fat LTO.
+
+The benchmark runs on Apple M4 Max with macOS ARM64, Node.js `22.23.2`, Vite
+`8.3.4`, and Rolldown `1.2.14`. It includes these workloads:
+
+- `three10x-bundle`: ten separate copies of the three.js `r108` source, following
+  [Rolldown's benchmark input](https://github.com/rolldown/rolldown/blob/c9a8cda42bc0fdd84c7b4b4e6d7f95ae83e8b5f7/scripts/misc/setup-benchmark-input/threejs-10x.js).
+  All ten namespaces remain in the output. The build processes 3,693 modules.
+- `three10x-minify-sourcemap`: the same input with Oxc minification and external
+  source maps.
+- `typescript-code-split-minify-sourcemap`: 2,000 generated TypeScript modules,
+  24,000 used functions, optional chaining, nullish coalescing, and unused
+  exports. The build targets ES2015, produces 20 dynamic entry chunks, and uses
+  Oxc minification and external source maps. Including entry points and helpers,
+  it processes 2,025 modules and produces 22 JavaScript chunks.
+
+Median wall times across 60 samples per variant per workload:
+
+| Workload                                 |       `3` |       `z` | Change | 95% interval for change |
+| ---------------------------------------- | --------: | --------: | -----: | ----------------------: |
+| `three10x-bundle`                        | 525.01 ms | 528.21 ms | +0.61% |        -0.37% to +1.54% |
+| `three10x-minify-sourcemap`              | 660.91 ms | 665.47 ms | +0.69% |        -0.70% to +1.02% |
+| `typescript-code-split-minify-sourcemap` | 401.94 ms | 401.38 ms | -0.14% |        -0.85% to +0.64% |
+
+No workload shows a consistent slowdown. Differences change sign across rounds,
+and all three confidence intervals include zero. The intervals use 10,000
+bootstrap resamples of adjacent pairs within each round. They describe sampling
+uncertainty on this host, not performance guarantees for other projects or hosts.
+
+Each workload has three rounds of 20 balanced, randomized adjacent pairs, with
+three warmups per variant in each round. Each sample starts a new `vp build`
+process. The timer includes CLI and Node startup, bundling, configured transforms,
+and output writes. Output removal and hash checks occur outside the timer. OS
+filesystem caches stay warm; no task cache or persistent bundler process is used.
+Compressed-size reporting is disabled for both variants.
+
+Untimed probe builds confirm the Rolldown version, module and chunk counts,
+Node executable, and loaded native addon. Both variants load the same addon with
+SHA-256 `d55572198e5ea18cb1d3f71a014b9b48c83fae8ad110b7ef139bb315d0e07e3b`.
+Every build must succeed and produce identical output paths and bytes, including
+source maps. The [evidence](evidence/rolldown-profile-benchmark.json) contains all
+samples, execution order, artifact hashes, and confidence intervals.
+
+To reproduce, prepare a release build of `packages/cli` and its core dependency,
+then build both standalone profiles from the same commit. Obtain three.js `r108`
+at commit `7e0a78beb9317e580d7fa4da9b5b12be051c6feb` and run:
+
+```sh
+python3 bench/binary-size/benchmark-rolldown.py \
+  --baseline /path/to/opt-level-3/vp \
+  --candidate /path/to/opt-level-z/vp \
+  --binary-source-commit <commit> \
+  --cli packages/cli \
+  --node /path/to/node \
+  --three-src /path/to/three.js/src \
+  --output bench/binary-size/evidence/rolldown-profile-benchmark.json
+```
+
+These results compare the profiles shipped by this PR. They do not measure
+disabling fat LTO, changing the NAPI optimization level, cold caches, or Linux
+and Windows build performance.
 
 ### NAPI performance
 

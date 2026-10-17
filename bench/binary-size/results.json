@@ -555,6 +555,57 @@
         "change_percent": 5.540693976843958
       }
     },
-    "scope": "Standalone CLI only. Three interleaved rounds on macOS ARM64 with warm OS caches; fresh Node installations use loopback HTTP with signature and checksum verification. Full application builds and Linux/Windows performance remain unmeasured."
+    "scope": "Standalone CLI only. Three interleaved rounds on macOS ARM64 with warm OS caches; fresh Node installations use loopback HTTP with signature and checksum verification. These workloads do not measure bundling or Linux/Windows performance; see rolldown_build_performance for full build measurements."
+  },
+  "rolldown_build_performance": {
+    "binary_source_commit": "a4e9c5932e069b5aea5b9c0136222ddada73bed0",
+    "evidence": "evidence/rolldown-profile-benchmark.json",
+    "baseline_profile": "Standalone opt-level=3, fat LTO; NAPI opt-level=3, fat LTO",
+    "candidate_profile": "Standalone opt-level=z, fat LTO; identical NAPI opt-level=3, fat LTO",
+    "results": {
+      "three10x-bundle": {
+        "baseline": {
+          "count": 60,
+          "wall_median_ms": 525.010104,
+          "cpu_median_ms": 1414.179500000003
+        },
+        "candidate": {
+          "count": 60,
+          "wall_median_ms": 528.2095205,
+          "cpu_median_ms": 1417.6124999999988
+        },
+        "change_percent": 0.6094009383103449,
+        "change_percent_95pct_bootstrap_ci": [-0.37301050642988276, 1.5439326167003609]
+      },
+      "three10x-minify-sourcemap": {
+        "baseline": {
+          "count": 60,
+          "wall_median_ms": 660.9096460000001,
+          "cpu_median_ms": 1606.4654999999846
+        },
+        "candidate": {
+          "count": 60,
+          "wall_median_ms": 665.467521,
+          "cpu_median_ms": 1607.0614999999862
+        },
+        "change_percent": 0.6896366284840028,
+        "change_percent_95pct_bootstrap_ci": [-0.7029099873636424, 1.0160827443221887]
+      },
+      "typescript-code-split-minify-sourcemap": {
+        "baseline": {
+          "count": 60,
+          "wall_median_ms": 401.94291699999997,
+          "cpu_median_ms": 1588.4634999999605
+        },
+        "candidate": {
+          "count": 60,
+          "wall_median_ms": 401.37658350000004,
+          "cpu_median_ms": 1591.023000000007
+        },
+        "change_percent": -0.14089898740520246,
+        "change_percent_95pct_bootstrap_ci": [-0.85460009661944, 0.6420565255943034]
+      }
+    },
+    "scope": "Full vp build commands through bundled Rolldown 1.2.14 and Vite 8.3.4 on Apple M4 Max, macOS ARM64, Node 22.23.2. Sixty samples per variant per workload, warm filesystem caches, fresh processes and clean output directories. No consistent slowdown in these workloads. Disabling fat LTO, changing NAPI optimization, cold caches, and Linux/Windows performance are not measured."
   }
 }
