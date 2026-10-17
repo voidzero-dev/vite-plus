@@ -25,11 +25,13 @@ When a default upgrade skips setup actions that would apply, it prints a hint to
 
 ## Oxlint JSON Inheritance
 
-When `.oxlintrc.json` or `.oxlintrc.jsonc` uses `extends`, `vp migrate` resolves each file path relative to the config that declares it. It copies the inherited configs into `lint.extends` as objects, including nested inheritance. Oxlint applies the existing merge order, rule severities, and overrides. Plain `vp lint` uses the migrated rules without a `-c` flag.
+When `.oxlintrc.json` or `.oxlintrc.jsonc` uses `extends`, `vp migrate` resolves each file path relative to the config that declares it. It creates shared TypeScript configs and imports them through `lint.extends`, including nested inheritance. Oxlint applies the existing merge order, rule severities, and overrides. Plain `vp lint` uses the migrated rules without a `-c` flag.
 
-Shared JSON and JSONC files are retained. The generated config contains a copy of their settings; later edits to the shared files do not update that copy. Relative JS-plugin declarations move to `lint.jsPlugins`, with their paths rebased to the Vite config directory. Explicit inherited `typeAware` and `typeCheck` settings take precedence over migration defaults.
+Shared configs become sibling `.ts` files, or `.mts` files outside ESM packages. Generated TypeScript configs use `.js` or `.mjs` import specifiers, which Vite and TypeScript resolve to the generated source files without changing compiler settings. Workspace consumers reuse the same generated modules. Edit these TypeScript files to update shared settings. Original shared JSON and JSONC files remain available to other consumers; edits to those originals do not update the migrated configs.
 
-Missing files, invalid JSON, inheritance cycles, and package-local plugins that resolve differently from the Vite config directory produce a warning and leave the original config in place. An existing `lint` block also requires a manual merge. The root JSON config is removed only after a successful migration. `vp lint` continues to reject string paths in `lint.extends`; path resolution happens only during migration.
+JS-plugin declarations stay in their original config or override. Relative plugin paths become absolute paths at runtime through `fileURLToPath(new URL(..., import.meta.url))`. Explicit inherited `typeAware` and `typeCheck` settings take precedence over migration defaults.
+
+Missing files, invalid JSON, inheritance cycles, conflicting output files, and package-local plugins that resolve differently from the Vite config directory produce a warning and leave the original config in place. Configs outside the project or workspace, configs inside `node_modules`, CommonJS Vite configs, and an existing `lint` block require a manual merge. The root JSON config is removed only after a successful migration. `vp lint` continues to reject string paths in `lint.extends`; path resolution happens only during migration.
 
 ## Pack Configuration
 
