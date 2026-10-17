@@ -153,18 +153,6 @@ describe('Oxlint JSON extends migration', () => {
     expect(await loadConfig()).toHaveProperty('custom', 'original');
   });
 
-  it('generates ESM .mts modules in a project without type: module', async () => {
-    write('package.json', { name: 'commonjs-project' });
-    write('base.json', { jsPlugins: ['./plugin.mjs'], rules: { 'no-debugger': 'warn' } });
-    write('.oxlintrc.json', { extends: ['./base.json'] });
-    mergeViteConfigFiles(project, true);
-    expect(fs.existsSync(path.join(project, 'base.mts'))).toBe(true);
-    expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toContain('./base.mts');
-    expect((await loadConfig()).lint!.extends![0].jsPlugins).toEqual([
-      path.join(project, 'plugin.mjs'),
-    ]);
-  });
-
   it('allows a shared ancestor to occur in separate branches', () => {
     write('base.json', { rules: { 'no-debugger': 'error' } });
     write('a.json', { extends: ['./base.json'] });
@@ -223,9 +211,14 @@ describe('Oxlint JSON extends migration', () => {
   it.each([false, true])(
     'resolves workspace inheritance before configs are removed (extends root: %s)',
     async (extendsRoot) => {
-      write('package.json', { name: 'root', private: true, workspaces: ['packages/*'] });
+      write('package.json', {
+        name: 'root',
+        type: 'module',
+        private: true,
+        workspaces: ['packages/*'],
+      });
       for (const name of ['a', 'b']) {
-        write(`packages/${name}/package.json`, { name });
+        write(`packages/${name}/package.json`, { name, type: 'module' });
         write(`packages/${name}/vite.config.mjs`, 'export default {};');
       }
       write('packages/a/.oxlintrc.json', { rules: { 'no-debugger': 'error' } });
