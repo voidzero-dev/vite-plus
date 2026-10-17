@@ -9,6 +9,6 @@
   },
   "ignorePatterns": [
     "shared/**",
-    "verify-lint.mjs"
+    "vite.config.ts"
   ]
 }

@@ -1,16 +1,55 @@
 # migration_oxlint_extends
 
-## `node verify-lint.mjs --before`
+## `vp lint --threads=1 -c .oxlintrc.json`
 
 Original inherited errors, warnings, and overrides
 
+**Exit code:** 1
+
 ```
-vp lint -c .oxlintrc.json: 3 errors and 2 warnings
-example.test.js: error override(no-bar)
-example.test.js: warning eslint(no-debugger)
-index.js: error eslint(no-debugger)
-index.js: error local(no-foo)
-index.js: warning eslint(no-console)
+
+  ⚠ eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[example.test.js:1:1]
+ 1 │ debugger;
+   · ─────────
+ 2 │ export const bar = 1;
+   ╰────
+  help: Remove the debugger statement
+
+  × override(no-bar): Do not use bar.
+   ╭─[example.test.js:2:14]
+ 1 │ debugger;
+ 2 │ export const bar = 1;
+   ·              ───
+   ╰────
+
+  × eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[index.js:1:1]
+ 1 │ debugger;
+   · ─────────
+ 2 │ console.log("test");
+   ╰────
+  help: Remove the debugger statement
+
+  ⚠ eslint(no-console): Unexpected console statement.
+   ╭─[index.js:2:1]
+ 1 │ debugger;
+ 2 │ console.log("test");
+   · ───────────
+ 3 │ alert("allowed");
+   ╰────
+  help: Delete this console statement.
+
+  × local(no-foo): Do not use foo.
+   ╭─[index.js:4:14]
+ 3 │ alert("allowed");
+ 4 │ export const foo = 1;
+   ·              ───
+ 5 │ export const bar = 1;
+   ╰────
+
+Found 2 warnings and 3 errors.
+Finished in <duration> on 2 files with <n> rules using <n> threads.
 ```
 
 ## `vp migrate --no-interactive --no-agent --no-editor --no-hooks`
@@ -72,7 +111,7 @@ export default defineConfig({
       "local/no-foo": "error",
       "vite-plus/prefer-vite-plus-imports": "error",
     },
-    ignorePatterns: ["shared/**", "verify-lint.mjs"],
+    ignorePatterns: ["shared/**", "vite.config.ts"],
     jsPlugins: [
       {
         name: "override",
@@ -114,17 +153,56 @@ Generated config types accept the resolved inheritance
 ```
 ```
 
-## `node verify-lint.mjs`
+## `vp lint --threads=1`
 
-Plain vp lint preserves inherited severity and override matching
+The diagnostics and exit code match the original config without a config flag
+
+**Exit code:** 1
 
 ```
-vp lint: 3 errors and 2 warnings
-example.test.js: error override(no-bar)
-example.test.js: warning eslint(no-debugger)
-index.js: error eslint(no-debugger)
-index.js: error local(no-foo)
-index.js: warning eslint(no-console)
+
+  ⚠ eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[example.test.js:1:1]
+ 1 │ debugger;
+   · ─────────
+ 2 │ export const bar = 1;
+   ╰────
+  help: Remove the debugger statement
+
+  × override(no-bar): Do not use bar.
+   ╭─[example.test.js:2:14]
+ 1 │ debugger;
+ 2 │ export const bar = 1;
+   ·              ───
+   ╰────
+
+  × eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[index.js:1:1]
+ 1 │ debugger;
+   · ─────────
+ 2 │ console.log("test");
+   ╰────
+  help: Remove the debugger statement
+
+  ⚠ eslint(no-console): Unexpected console statement.
+   ╭─[index.js:2:1]
+ 1 │ debugger;
+ 2 │ console.log("test");
+   · ───────────
+ 3 │ alert("allowed");
+   ╰────
+  help: Delete this console statement.
+
+  × local(no-foo): Do not use foo.
+   ╭─[index.js:4:14]
+ 3 │ alert("allowed");
+ 4 │ export const foo = 1;
+   ·              ───
+ 5 │ export const bar = 1;
+   ╰────
+
+Found 2 warnings and 3 errors.
+Finished in <duration> on 2 files with <n> rules using <n> threads.
 ```
 
 ## `vp migrate --no-interactive --no-agent --no-editor --no-hooks`
@@ -182,7 +260,7 @@ export default defineConfig({
       "local/no-foo": "error",
       "vite-plus/prefer-vite-plus-imports": "error",
     },
-    ignorePatterns: ["shared/**", "verify-lint.mjs"],
+    ignorePatterns: ["shared/**", "vite.config.ts"],
     jsPlugins: [
       {
         name: "override",
@@ -199,15 +277,54 @@ export default defineConfig({
 });
 ```
 
-## `node verify-lint.mjs`
+## `vp lint --threads=1`
 
-Inherited behavior survives the second migration
+The diagnostics and exit code remain unchanged after the second migration
+
+**Exit code:** 1
 
 ```
-vp lint: 3 errors and 2 warnings
-example.test.js: error override(no-bar)
-example.test.js: warning eslint(no-debugger)
-index.js: error eslint(no-debugger)
-index.js: error local(no-foo)
-index.js: warning eslint(no-console)
+
+  ⚠ eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[example.test.js:1:1]
+ 1 │ debugger;
+   · ─────────
+ 2 │ export const bar = 1;
+   ╰────
+  help: Remove the debugger statement
+
+  × override(no-bar): Do not use bar.
+   ╭─[example.test.js:2:14]
+ 1 │ debugger;
+ 2 │ export const bar = 1;
+   ·              ───
+   ╰────
+
+  × eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[index.js:1:1]
+ 1 │ debugger;
+   · ─────────
+ 2 │ console.log("test");
+   ╰────
+  help: Remove the debugger statement
+
+  ⚠ eslint(no-console): Unexpected console statement.
+   ╭─[index.js:2:1]
+ 1 │ debugger;
+ 2 │ console.log("test");
+   · ───────────
+ 3 │ alert("allowed");
+   ╰────
+  help: Delete this console statement.
+
+  × local(no-foo): Do not use foo.
+   ╭─[index.js:4:14]
+ 3 │ alert("allowed");
+ 4 │ export const foo = 1;
+   ·              ───
+ 5 │ export const bar = 1;
+   ╰────
+
+Found 2 warnings and 3 errors.
+Finished in <duration> on 2 files with <n> rules using <n> threads.
 ```
