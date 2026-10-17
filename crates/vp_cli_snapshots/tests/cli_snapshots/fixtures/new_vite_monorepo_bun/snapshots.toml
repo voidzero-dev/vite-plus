@@ -2,6 +2,7 @@
 name = "new_vite_monorepo_bun"
 vp = "global"
 skip-platforms = ["windows"]
+# Reuse the fixed library input documented in ../new_vite_monorepo/degit-fixture/README.md.
 steps = [
   { argv = ["vp", "create", "vite:monorepo", "--no-interactive", "--package-manager", "bun", "--git"], comment = "create monorepo with bun", snapshot = false, continue-on-failure = true },
   { argv = ["vpt", "list-dir", "vite-plus-monorepo"], comment = "check files created", continue-on-failure = true },
