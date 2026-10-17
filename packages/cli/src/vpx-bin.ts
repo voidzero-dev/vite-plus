@@ -61,7 +61,7 @@ function prependNodeModulesBins(cwd: string, pathValue: string | undefined): str
  * With `relayIpc`, an IPC channel this bin was started with (by `fork()`, or with an
  * `ipc` stdio entry) is relayed to the child in both directions, as tsx does, so
  * `process.send()` in a script reaches the process that started `vpx`. Messages use the
- * default JSON serialization.
+ * default JSON serialization; a message it cannot serialize, or a handle, is not relayed.
  */
 function runAndExit(
   command: string,
@@ -74,22 +74,45 @@ function runAndExit(
     stdio: ipc ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit',
     env,
   });
-  // Messages the child sent before exiting are still being relayed; exit after them.
+  // Exit once the child has exited and, with IPC, its channel has closed and every
+  // message it sent has been relayed. `close` alone is not enough: it never fires when
+  // this side disconnects the channel first.
+  let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+  let channelClosed = !ipc;
   let pendingSends = 0;
-  let exitAfterSends: (() => void) | undefined;
+  const exitWhenDone = () => {
+    if (!exited || !channelClosed || pendingSends > 0) {
+      return;
+    }
+    const { code, signal } = exited;
+    if (signal && process.platform !== 'win32') {
+      process.removeAllListeners(signal);
+      process.kill(process.pid, signal);
+      return;
+    }
+    process.exit(code ?? (signal ? 128 + (constants.signals[signal] ?? 0) : 1));
+  };
   if (ipc) {
     child.on('message', (message) => {
       pendingSends++;
       process.send!(message, undefined, undefined, () => {
         pendingSends--;
-        if (pendingSends === 0) {
-          exitAfterSends?.();
-        }
+        exitWhenDone();
       });
     });
+    // Node.js emits a channel's messages before its `disconnect`, whichever side closed it.
+    child.on('disconnect', () => {
+      channelClosed = true;
+      exitWhenDone();
+    });
     process.on('message', (message) => {
-      if (child.connected) {
+      if (!child.connected) {
+        return;
+      }
+      try {
         child.send(message as Serializable);
+      } catch (error) {
+        errorMsg(`vpx: Failed to relay an IPC message to the script: ${(error as Error).message}`);
       }
     });
     process.on('disconnect', () => {
@@ -107,21 +130,9 @@ function runAndExit(
     errorMsg(`vpx: Failed to run ${command}: ${error.message}`);
     process.exit(1);
   });
-  // With IPC, `close` also waits for the channel, so every message has arrived.
-  child.on(ipc ? 'close' : 'exit', (code: number | null, signal: NodeJS.Signals | null) => {
-    const exit = () => {
-      if (signal && process.platform !== 'win32') {
-        process.removeAllListeners(signal);
-        process.kill(process.pid, signal);
-        return;
-      }
-      process.exit(code ?? (signal ? 128 + (constants.signals[signal] ?? 0) : 1));
-    };
-    if (pendingSends > 0) {
-      exitAfterSends = exit;
-    } else {
-      exit();
-    }
+  child.on('exit', (code, signal) => {
+    exited = { code, signal };
+    exitWhenDone();
   });
 }
 
