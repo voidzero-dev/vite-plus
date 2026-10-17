@@ -6,7 +6,7 @@ use vt_path::AbsolutePathBuf;
 
 use super::{
     resolver::SubcommandResolver,
-    types::{CapturedCommandOutput, EnvMap, SynthesizableSubcommand, exit_status_from},
+    types::{EnvMap, ResolvedSubcommand, SynthesizableSubcommand, exit_status_from},
 };
 
 /// Resolve a subcommand into a prepared `tokio::process::Command`.
@@ -17,7 +17,14 @@ async fn resolve_and_build_command(
     cwd: &AbsolutePathBuf,
 ) -> Result<tokio::process::Command, Error> {
     let resolved = resolver.resolve(subcommand, envs, cwd).await.map_err(Error::Anyhow)?;
+    build_command(&resolved, cwd)
+}
 
+/// Prepare a `tokio::process::Command` for an already resolved subcommand.
+fn build_command(
+    resolved: &ResolvedSubcommand,
+    cwd: &AbsolutePathBuf,
+) -> Result<tokio::process::Command, Error> {
     // Resolve the program path using `which` to handle Windows .cmd/.bat files (PATHEXT)
     let program_path = vp_command::resolve_bin(
         resolved.program.as_ref().to_str().unwrap_or_default(),
@@ -30,6 +37,18 @@ async fn resolve_and_build_command(
         .env_clear()
         .envs(resolved.envs.iter().map(|(k, v)| (k.inner(), v)));
     Ok(cmd)
+}
+
+/// Spawn the internal `vp check --raw` runner with piped stdio.
+pub(crate) fn spawn_check_raw(
+    resolver: &SubcommandResolver,
+    envs: &Arc<EnvMap>,
+    cwd: &AbsolutePathBuf,
+) -> Result<tokio::process::Child, Error> {
+    let resolved = resolver.resolve_check_raw(envs).map_err(Error::Anyhow)?;
+    let mut cmd = build_command(&resolved, cwd)?;
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.spawn().map_err(|e| Error::Anyhow(e.into()))
 }
 
 /// Resolve a single subcommand and execute it, returning its exit status.
@@ -93,33 +112,4 @@ pub(super) async fn resolve_and_execute_with_filter(
     }
 
     Ok(exit_status_from(output.status))
-}
-
-pub(crate) async fn resolve_and_capture_output(
-    resolver: &SubcommandResolver,
-    subcommand: SynthesizableSubcommand,
-    envs: &Arc<EnvMap>,
-    cwd: &AbsolutePathBuf,
-    force_color_if_terminal: bool,
-) -> Result<CapturedCommandOutput, Error> {
-    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd).await?;
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-    // Capturing output hides the terminal from the child. Preserve colors only when
-    // the parent supports them, without overriding an explicit FORCE_COLOR value.
-    if force_color_if_terminal
-        && console::colors_enabled()
-        && !cmd.as_std().get_envs().any(|(key, _)| key == "FORCE_COLOR")
-    {
-        cmd.env("FORCE_COLOR", "1");
-    }
-
-    let child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-    let output = child.wait_with_output().await.map_err(|e| Error::Anyhow(e.into()))?;
-
-    Ok(CapturedCommandOutput {
-        status: exit_status_from(output.status),
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-    })
 }
