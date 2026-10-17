@@ -21,6 +21,8 @@ The GitHub Action sets up Vite+, the required Node.js version, and the package m
   with:
     node-version: '24'
     cache: true
+    task-cache: true
+- run: vp install
 - run: vp check
 - run: vp test
 - run: vp build
@@ -28,9 +30,14 @@ The GitHub Action sets up Vite+, the required Node.js version, and the package m
 
 `setup-vp` runs `vp install` by default. If you set `run-install: false`, make sure to add a `vp install` step before running other commands. With `cache: true`, `setup-vp` handles dependency caching for you automatically.
 
-::: tip
-`setup-vp` caches package-manager data. To reuse Vite Task results across CI runs, add a separate [GitHub Actions cache for Vite Task](/guide/github-actions-cache).
-:::
+### Caching
+
+Vite+ offers two different caching functions which interact with GitHub Actions Cache.
+
+- With `cache: true`, `setup-vp` handles dependency caching for you automatically.
+  - You can manually choose the lockfile manifest with `cache-dependency-path`, leaving it blank will auto-infer it for you.
+- With `task-cache: true`, `setup-vp` handles saving and restoring the Vite+ task cache between runs for you.
+  - Please read the [GitHub Actions Cache](/guide/github-actions-cache) page to learn more.
 
 ## GitLab CI/CD
 
