@@ -56,7 +56,7 @@ it('keeps local documentation anchors valid', () => {
     'utf8',
   );
   const localSections = source.slice(source.indexOf('const localSections'));
-  const headings = [...guide.matchAll(/^## (.+)$/gm)].map((match) =>
+  const headings = Array.from(guide.matchAll(/^## (.+)$/gm), (match) =>
     match[1].toLowerCase().replaceAll(' ', '-'),
   );
   for (const match of localSections.matchAll(/'[^']+': '([^']+)'/g)) {

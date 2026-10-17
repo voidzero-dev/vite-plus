@@ -222,7 +222,7 @@ export function rewriteStandaloneProject(
       for (const key in pkg.pnpm?.overrides) {
         if (key.includes('>')) {
           const splits = key.split('>');
-          if (splits[splits.length - 1].trim() === 'vite') {
+          if (splits.at(-1)!.trim() === 'vite') {
             delete pkg.pnpm.overrides[key];
           }
         }
