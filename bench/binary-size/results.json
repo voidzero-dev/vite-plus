@@ -1,0 +1,611 @@
+{
+  "source_commit": "006e9700a62aab9d791889cdfaac31a67767e63d",
+  "reference_url": "https://github.com/voidzero-dev/vite-plus/pull/1783#issuecomment-5308800690",
+  "reference_head_commit": "1438b2b217b4ab48e9fa7a36feee61ebfc9fd41c",
+  "target": "At least 50% reduction for each individual binary; report raw and gzip separately.",
+  "ci_baselines": {
+    "x86_64-unknown-linux-gnu": {
+      "vp": {
+        "path": "target/x86_64-unknown-linux-gnu/release/vp",
+        "raw": 10709192,
+        "gzip": 4721549
+      },
+      "napi": {
+        "path": "packages/cli/binding/vite-plus.linux-x64-gnu.node",
+        "raw": 36207360,
+        "gzip": 14476751
+      },
+      "cliDist": {
+        "path": "packages/cli/dist",
+        "files": 208,
+        "raw": 2304913
+      },
+      "coreDist": {
+        "path": "packages/core/dist",
+        "files": 108,
+        "raw": 4282554
+      }
+    },
+    "aarch64-apple-darwin": {
+      "vp": {
+        "path": "target/aarch64-apple-darwin/release/vp",
+        "raw": 7991312,
+        "gzip": 4133413
+      },
+      "napi": {
+        "path": "packages/cli/binding/vite-plus.darwin-arm64.node",
+        "raw": 43540800,
+        "gzip": 18850341
+      }
+    },
+    "x86_64-pc-windows-msvc": {
+      "vp": {
+        "path": "target/x86_64-pc-windows-msvc/release/vp.exe",
+        "raw": 8687616,
+        "gzip": 3836041
+      },
+      "napi": {
+        "path": "packages/cli/binding/vite-plus.win32-x64-msvc.node",
+        "raw": 32083968,
+        "gzip": 13121406
+      },
+      "trampoline": {
+        "path": "target/x86_64-pc-windows-msvc/release/vp-shim.exe",
+        "raw": 13824,
+        "gzip": 7258
+      },
+      "installer": {
+        "path": "target/x86_64-pc-windows-msvc/release/vp-setup.exe",
+        "raw": 3808768,
+        "gzip": 1866173
+      }
+    }
+  },
+  "local_measurements": {
+    "node": "v22.23.2",
+    "zlib": "1.2.12",
+    "artifacts": {
+      "tmp/binary-size/vp-o3/vp": {
+        "raw": 7963056,
+        "gzip": 3955720,
+        "sha256": "35c91a3e34d8544f0cf50ab976b9cf9227855ec6d3573f8478985432d6a18716"
+      },
+      "tmp/binary-size/vp-z/vp": {
+        "raw": 4943936,
+        "gzip": 2878525,
+        "sha256": "c9501b136ebf46377738080c51e5794d936c3e53c0f4405c68d467e443d1f02b"
+      },
+      "tmp/binary-size/vp-z-std/vp": {
+        "raw": 4631296,
+        "gzip": 2721957,
+        "sha256": "d32a32c349541503aa9ae5ab852027999c4e1d74a42b13bfc5942140cfc1a6ff"
+      },
+      "tmp/binary-size/napi-o3/vite-plus.node": {
+        "raw": 43305840,
+        "gzip": 17932754,
+        "sha256": "12f03ee0f194a9d3bfdf266fe15eda81738dded7afad7aa1016f54361ff8740e"
+      },
+      "tmp/binary-size/vp-z-std-pm/vp": {
+        "raw": 4614576,
+        "gzip": 2711066,
+        "sha256": "6511ed7b5652d9dfd2113fce91f5475e252dcaccac0f5dfa3ec01daccf8091ec"
+      },
+      "tmp/binary-size/windows-vp-o3/vp.exe": {
+        "raw": 8688640,
+        "gzip": 3752298,
+        "sha256": "09a38ae775e58f4463cc2daf03dcf907f217b8c5d206d2d44eccb11d37e2187c"
+      },
+      "tmp/binary-size/windows-vp-z/vp.exe": {
+        "raw": 5436928,
+        "gzip": 2502076,
+        "sha256": "32db03d309f557221218d1ba971ffa810b030ff4b4aa356f8812e450fa7e3ccd"
+      },
+      "tmp/binary-size/linux-vp-z-std/vp": {
+        "raw": 7229544,
+        "gzip": 3236902,
+        "sha256": "9a86e3252bd2d9a262a3b8d85ada8b78ab6919d386728fb4efcf3cc08140a8c9"
+      },
+      "tmp/binary-size/windows-installer-o3/vp-setup.exe": {
+        "raw": 3808256,
+        "gzip": 1833351,
+        "sha256": "63de54eda776fd07f67427959532ef60f15c8c5d0d8aabb46cd45a0147cce862"
+      },
+      "tmp/binary-size/windows-installer-z/vp-setup.exe": {
+        "raw": 2947072,
+        "gzip": 1476680,
+        "sha256": "e54afc33c9d1f5f98bd81b3d11f98bac285cf841e4cf465884392d2e3ecb8d94"
+      },
+      "tmp/binary-size/trampoline-target/x86_64-pc-windows-msvc/release/vp-shim.exe": {
+        "raw": 13824,
+        "gzip": 7080,
+        "sha256": "d7e59b12000638ddfb0ad911650ea486bee1f2c6fe817cef6d7d997dbdf494f8"
+      },
+      "tmp/binary-size/napi-z/vite-plus.node": {
+        "raw": 31779504,
+        "gzip": 13785606,
+        "sha256": "57cd56ba928f1b01fb31fb4e327ce06a72c682b66629e9aa8351b2da7b89bff8"
+      },
+      "tmp/binary-size/napi-compressed-o3/vite-plus.node": {
+        "raw": 32980192,
+        "gzip": 16362251,
+        "sha256": "e939919465a16685da9867456bdb48931fc785ae09d77bbde907e011a2170f10"
+      },
+      "tmp/binary-size/linux-vp-o3/vp": {
+        "raw": 10667136,
+        "gzip": 4596742,
+        "sha256": "3bce61ce18dc8064c4b27c59640bf82f22f6559d8db3b035496b223af6149ad1"
+      },
+      "tmp/binary-size/linux-vp-z/vp": {
+        "raw": 7500528,
+        "gzip": 3379698,
+        "sha256": "edef36e23dc494f12fc53ea91cd543dc590634e8b1d9effe6243e4417b6d7416"
+      },
+      "tmp/binary-size/vp-o3-pm/vp": {
+        "raw": 7897392,
+        "gzip": 3929795,
+        "sha256": "7e0b3781b07862b2be2a585e7d2834af25c43d3558e214948a303257b649864f"
+      },
+      "tmp/binary-size/linux-napi-o3/vite-plus.node": {
+        "raw": 35672200,
+        "gzip": 13924515,
+        "sha256": "0a22ebb63b92bcbfd4742f648f1e2a7b42623bb2c1d05510d1d308c34cfde0af"
+      },
+      "tmp/binary-size/windows-napi-o3/vite-plus.node": {
+        "raw": 32076288,
+        "gzip": 12825527,
+        "sha256": "92dfb2b0094ab7fdf4b4979e3379b476db61f53030eb107d52c41639669a2572"
+      },
+      "tmp/binary-size/linux-napi-compressed-o3/vite-plus.node": {
+        "raw": 35016840,
+        "gzip": 13864549,
+        "sha256": "58c4ff98128eb411d3c8c0f7999b3e59668f35edb2438600523a1d5226cf3b18"
+      },
+      "tmp/binary-size/windows-napi-compressed-o3/vite-plus.node": {
+        "raw": 31751680,
+        "gzip": 12798980,
+        "sha256": "0671edcd3b2bdcd9a0a3e25383640c985e048c8c2b9fd37efeffd392cb8a8fc7"
+      }
+    }
+  },
+  "constraints": [
+    "Preserve existing commands and offline task helpers.",
+    "Preserve signature verification and panic diagnostics.",
+    "Benchmark performance-sensitive Oxc/Rolldown code before changing its optimization level.",
+    "Splitting or moving payloads does not count as a reduction in total shipped bytes."
+  ],
+  "findings": [
+    {
+      "id": "vp-opt-z",
+      "measured": true,
+      "raw_reduction_percent": 37.91408725494333,
+      "scope": "macOS ARM64 standalone vp; same local source and toolchain"
+    },
+    {
+      "id": "vp-opt-z-build-std",
+      "measured": true,
+      "raw_reduction_percent": 41.84021812731192,
+      "scope": "macOS ARM64; backtrace and panic-unwind std features retained; optimize_for_size enabled"
+    },
+    {
+      "id": "napi-opt-z",
+      "measured": true,
+      "raw_reduction_percent": 26.616123829949956,
+      "status": "Do not ship as a blanket profile: synthetic transform/minify kernels approximately 2.8x slower."
+    },
+    {
+      "id": "embedded-artifacts",
+      "measured": true,
+      "raw_reduction_percent": 23.84354627459022,
+      "gzip_reduction_percent": 8.757734590013333,
+      "scope": "macOS ARM64 NAPI at original opt-level=3. Upstream patch in ../binary-size-vite-task."
+    },
+    {
+      "id": "tree-sitter",
+      "measured": false,
+      "scope": "Three C grammars retained (Bash, TypeScript, TSX). TypeScript and TSX parser objects are approximately 1.4 MB each. Evaluate language specialization or Oxc migration; do not count static archive bytes as final binary savings."
+    },
+    {
+      "id": "pm-cli-generics",
+      "measured": true,
+      "scope": "macOS ARM64 at original O3 profile. Extraction of shared environment setup plus compile-time construction of release semver rules. Adds 16,720 bytes of savings after z and size-oriented std. Sibling worktree: ../binary-size-pm-cli.",
+      "raw_reduction_bytes": 65664,
+      "raw_reduction_percent": 0.8246080399283873
+    },
+    {
+      "id": "linux-vp-opt-z",
+      "measured": true,
+      "raw_reduction_percent": 29.685643831671406,
+      "scope": "Linux x64 cross build with cargo-zigbuild; RUSTFLAGS=--cfg tokio_unstable omits unsupported GNU linker warning option."
+    },
+    {
+      "id": "linux-vp-opt-z-build-std",
+      "measured": true,
+      "raw_reduction_percent": 32.22600705568956,
+      "scope": "Linux x64 cross build; not executed on Linux."
+    },
+    {
+      "id": "windows-vp-opt-z",
+      "measured": true,
+      "raw_reduction_percent": 37.424867413081905,
+      "scope": "Windows x64 cross build; not executed on Windows."
+    },
+    {
+      "id": "windows-installer-opt-z",
+      "measured": true,
+      "raw_reduction_percent": 22.613605808012906,
+      "scope": "Optimize installer dependencies for size as well as the installer crate. Cross build; not executed on Windows."
+    },
+    {
+      "id": "windows-trampoline",
+      "measured": true,
+      "raw_reduction_percent": 0,
+      "scope": "Baseline reproduced at 13,824 bytes. No new reduction demonstrated."
+    },
+    {
+      "id": "linux-napi-compressed-helpers",
+      "measured": true,
+      "raw_reduction_percent": 1.8371729245743151,
+      "gzip_reduction_percent": 0.4306505468951727,
+      "scope": "Matched x64 cross builds with original opt-level=3. Not executed on the target platform."
+    },
+    {
+      "id": "windows-napi-compressed-helpers",
+      "measured": true,
+      "raw_reduction_percent": 1.0119874219859826,
+      "gzip_reduction_percent": 0.20698564667167574,
+      "scope": "Matched x64 cross builds with original opt-level=3. Not executed on the target platform."
+    }
+  ],
+  "not_complete": [
+    "No individual artifact has a validated production-ready 50% reduction.",
+    "Full application performance and CLI regression tests have not been run.",
+    "Linux and Windows cross-built binaries have not been executed on their target platforms."
+  ],
+  "toolchain": "rustc 1.99.0-nightly (73dc9167f 2026-08-01)\nbinary: rustc\ncommit-hash: 73dc9167f1cd099e525c9ade2e068d1907b78564\ncommit-date: 2026-08-01\nhost: aarch64-apple-darwin\nrelease: 1.99.0-nightly\nLLVM version: 22.1.8",
+  "upstream_patch_base": "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc",
+  "caveats": [
+    "Local artifacts are not byte-identical to the canonical CI artifacts. Percentages use matched local builds, never CI-to-local comparisons.",
+    "Unstripped symbol extents include alignment and anonymous data. Large constant extents cannot be attributed wholly to the preceding named symbol.",
+    "All profile variants preserve panic abort hooks; no fmt-debug suppression or immediate-abort strategy was used.",
+    "Profile and compression savings must not be added: no combined NAPI variant has been measured. The global size profile fails the synthetic performance screen."
+  ],
+  "compression_benchmark_medians_ms": {
+    "napi-o3": {
+      "parse": 4.362104499999987,
+      "transform": 2.1320625000000035,
+      "minify": 2.0724164999999743,
+      "invalidSyntax": 0.002728999999987991
+    },
+    "napi-compressed-o3": {
+      "parse": 4.376646000000001,
+      "transform": 2.1449790000000064,
+      "minify": 2.0550839999999653,
+      "invalidSyntax": 0.002625000000023192
+    }
+  },
+  "compression_output_hashes_match": true,
+  "validation": {
+    "compression": "3 materialization tests, 2 shebang tests, 1 spawn test, targeted clippy passed on macOS. Linux and Windows x64 NAPI cross builds also passed; target-platform runtime tests remain outstanding.",
+    "pm_prototype": "724 resolution tests, 10 macro tests, targeted clippy passed on macOS.",
+    "vp_smoke": "Four native help outputs and exit codes match baseline, z, z+std, z+std+PM.",
+    "napi": "Synthetic parse/transform/minify/invalid-syntax output hashes match. Eight interleaved process runs compare baseline with compression."
+  },
+  "napi_profile_benchmark": {
+    "napi-o3": {
+      "parse": {
+        "median_ms": 4.6273330000000215,
+        "output_sha256": "8f0cefe1734ec38969d896c9deaf9129d35f8aaba6b7bb616ed70470a0bc449a",
+        "output_bytes": 480411
+      },
+      "transform": {
+        "median_ms": 2.1946250000000873,
+        "output_sha256": "df91b38d73152c9e12ceb1ae508f4aa857e2a989286428624f71d6ac8cfe41b9",
+        "output_bytes": 559715
+      },
+      "minify": {
+        "median_ms": 2.1785419999998794,
+        "output_sha256": "e7fbc927fd470a4c103077b2a2654f0427e0e43a2f99921afc4151f550752d72",
+        "output_bytes": 301699
+      },
+      "invalidSyntax": {
+        "median_ms": 0.0027919999999994616,
+        "output_sha256": "0de6b95128f6de6b315da6a4e7eda46ba5de2835c2be7c4630b7a95739d6bcf8",
+        "output_bytes": 287
+      }
+    },
+    "napi-z": {
+      "parse": {
+        "median_ms": 8.688375000000065,
+        "output_sha256": "8f0cefe1734ec38969d896c9deaf9129d35f8aaba6b7bb616ed70470a0bc449a",
+        "output_bytes": 480411
+      },
+      "transform": {
+        "median_ms": 6.041207999999983,
+        "output_sha256": "df91b38d73152c9e12ceb1ae508f4aa857e2a989286428624f71d6ac8cfe41b9",
+        "output_bytes": 559715
+      },
+      "minify": {
+        "median_ms": 6.149583000000121,
+        "output_sha256": "e7fbc927fd470a4c103077b2a2654f0427e0e43a2f99921afc4151f550752d72",
+        "output_bytes": 301699
+      },
+      "invalidSyntax": {
+        "median_ms": 0.005958999999847947,
+        "output_sha256": "0de6b95128f6de6b315da6a4e7eda46ba5de2835c2be7c4630b7a95739d6bcf8",
+        "output_bytes": 287
+      }
+    }
+  },
+  "prototypes": {
+    "compression": {
+      "repository": "https://github.com/voidzero-dev/vite-task",
+      "base": "9ba4cc93379cf2d7a6c7e657285bb8a00e8339dc",
+      "branch": "perf/compress-embedded-artifacts",
+      "worktree": "../binary-size-vite-task",
+      "patch": "prototypes/embedded-artifact-compression.patch"
+    },
+    "pm_cli": {
+      "repository": "https://github.com/voidzero-dev/vite-plus",
+      "base": "006e9700a62aab9d791889cdfaac31a67767e63d",
+      "branch": "perf/pm-cli-size-prototype",
+      "worktree": "../binary-size-pm-cli",
+      "patch": "prototypes/pm-cli-deduplication.patch"
+    }
+  },
+  "remaining_budgets": [
+    {
+      "artifact": "macOS ARM64 vp",
+      "baseline_raw": 7963056,
+      "candidate_raw": 4614576,
+      "raw_reduction_percent": 42.050187767108504,
+      "target_raw": 3981528,
+      "additional_bytes_to_remove": 633048,
+      "additional_fraction_of_candidate_percent": 13.71844347129617
+    },
+    {
+      "artifact": "Linux x64 vp",
+      "baseline_raw": 10667136,
+      "candidate_raw": 7229544,
+      "raw_reduction_percent": 32.22600705568956,
+      "target_raw": 5333568,
+      "additional_bytes_to_remove": 1895976,
+      "additional_fraction_of_candidate_percent": 26.225388489232515
+    },
+    {
+      "artifact": "Windows x64 vp",
+      "baseline_raw": 8688640,
+      "candidate_raw": 5436928,
+      "raw_reduction_percent": 37.424867413081905,
+      "target_raw": 4344320,
+      "additional_bytes_to_remove": 1092608,
+      "additional_fraction_of_candidate_percent": 20.096054242395706
+    },
+    {
+      "artifact": "macOS ARM64 NAPI",
+      "baseline_raw": 43305840,
+      "candidate_raw": 32980192,
+      "raw_reduction_percent": 23.84354627459022,
+      "target_raw": 21652920,
+      "additional_bytes_to_remove": 11327272,
+      "additional_fraction_of_candidate_percent": 34.345682402334106
+    },
+    {
+      "artifact": "Linux x64 NAPI",
+      "baseline_raw": 35672200,
+      "candidate_raw": 35016840,
+      "raw_reduction_percent": 1.8371729245743151,
+      "target_raw": 17836100,
+      "additional_bytes_to_remove": 17180740,
+      "additional_fraction_of_candidate_percent": 49.064221671629994
+    },
+    {
+      "artifact": "Windows x64 NAPI",
+      "baseline_raw": 32076288,
+      "candidate_raw": 31751680,
+      "raw_reduction_percent": 1.0119874219859826,
+      "target_raw": 16038144,
+      "additional_bytes_to_remove": 15713536,
+      "additional_fraction_of_candidate_percent": 49.488833346770946
+    },
+    {
+      "artifact": "Windows x64 installer",
+      "baseline_raw": 3808256,
+      "candidate_raw": 2947072,
+      "raw_reduction_percent": 22.613605808012906,
+      "target_raw": 1904128,
+      "additional_bytes_to_remove": 1042944,
+      "additional_fraction_of_candidate_percent": 35.38915913829048
+    },
+    {
+      "artifact": "Windows x64 trampoline",
+      "baseline_raw": 13824,
+      "candidate_raw": 13824,
+      "raw_reduction_percent": 0.0,
+      "target_raw": 6912,
+      "additional_bytes_to_remove": 6912,
+      "additional_fraction_of_candidate_percent": 50.0
+    }
+  ],
+  "cli_profile_benchmark": {
+    "source_commit": "a4e9c5932e069b5aea5b9c0136222ddada73bed0",
+    "evidence": "evidence/cli-profile-benchmark.json",
+    "cpu": "Apple M4 Max",
+    "platform": "macOS-26.2-arm64-arm-64bit",
+    "binaries": {
+      "baseline": {
+        "bytes": 7991312,
+        "sha256": "8c7696daad2fcdb7842613fba238e5475eef6078b1ca8f8984899e49750b36b1"
+      },
+      "candidate": {
+        "bytes": 4954496,
+        "sha256": "9b6a8879912330090415905119baed4e99eead050208271fe7200b1c44bb298d"
+      }
+    },
+    "results": {
+      "help": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.0816875,
+          "cpu_median_ms": 3.954499999999861
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 4.156166499999999,
+          "cpu_median_ms": 3.9955000000000407
+        },
+        "change_ms": 0.0744789999999993,
+        "change_percent": 1.824710980446187
+      },
+      "env-current": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.350229000000001,
+          "cpu_median_ms": 4.251000000000005
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 4.497354,
+          "cpu_median_ms": 4.386999999999919
+        },
+        "change_ms": 0.14712499999999906,
+        "change_percent": 3.382005866817561
+      },
+      "env-current-deep": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.952729,
+          "cpu_median_ms": 4.771500000000373
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 5.130375,
+          "cpu_median_ms": 4.979500000000137
+        },
+        "change_ms": 0.1776460000000002,
+        "change_percent": 3.586830613990788
+      },
+      "env-which": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.3614795,
+          "cpu_median_ms": 4.210999999999743
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 4.4957705,
+          "cpu_median_ms": 4.413500000000958
+        },
+        "change_ms": 0.13429100000000016,
+        "change_percent": 3.0790239871584912
+      },
+      "node-startup": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 32.9604375,
+          "cpu_median_ms": 31.20450000000119
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 33.063417,
+          "cpu_median_ms": 31.37150000000144
+        },
+        "change_ms": 0.10297950000000355,
+        "change_percent": 0.3124336562583707
+      },
+      "npm-version": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 70.225958,
+          "cpu_median_ms": 66.86099999999584
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 70.22149999999999,
+          "cpu_median_ms": 66.94549999999566
+        },
+        "change_ms": -0.00445800000001384,
+        "change_percent": -0.006348080007700929
+      },
+      "install-cached": {
+        "baseline": {
+          "count": 360,
+          "wall_median_ms": 4.231,
+          "cpu_median_ms": 4.147999999993601
+        },
+        "candidate": {
+          "count": 360,
+          "wall_median_ms": 4.3736455,
+          "cpu_median_ms": 4.249500000007345
+        },
+        "change_ms": 0.14264550000000042,
+        "change_percent": 3.3714370125266013
+      },
+      "install-fresh": {
+        "baseline": {
+          "count": 30,
+          "wall_median_ms": 1067.9336875,
+          "cpu_median_ms": 1036.4390000000085
+        },
+        "candidate": {
+          "count": 30,
+          "wall_median_ms": 1127.104625,
+          "cpu_median_ms": 1103.9085000000027
+        },
+        "change_ms": 59.170937500000036,
+        "change_percent": 5.540693976843958
+      }
+    },
+    "scope": "Standalone CLI only. Three interleaved rounds on macOS ARM64 with warm OS caches; fresh Node installations use loopback HTTP with signature and checksum verification. These workloads do not measure bundling or Linux/Windows performance; see rolldown_build_performance for full build measurements."
+  },
+  "rolldown_build_performance": {
+    "binary_source_commit": "a4e9c5932e069b5aea5b9c0136222ddada73bed0",
+    "evidence": "evidence/rolldown-profile-benchmark.json",
+    "baseline_profile": "Standalone opt-level=3, fat LTO; NAPI opt-level=3, fat LTO",
+    "candidate_profile": "Standalone opt-level=z, fat LTO; identical NAPI opt-level=3, fat LTO",
+    "results": {
+      "three10x-bundle": {
+        "baseline": {
+          "count": 60,
+          "wall_median_ms": 525.010104,
+          "cpu_median_ms": 1414.179500000003
+        },
+        "candidate": {
+          "count": 60,
+          "wall_median_ms": 528.2095205,
+          "cpu_median_ms": 1417.6124999999988
+        },
+        "change_percent": 0.6094009383103449,
+        "change_percent_95pct_bootstrap_ci": [-0.37301050642988276, 1.5439326167003609]
+      },
+      "three10x-minify-sourcemap": {
+        "baseline": {
+          "count": 60,
+          "wall_median_ms": 660.9096460000001,
+          "cpu_median_ms": 1606.4654999999846
+        },
+        "candidate": {
+          "count": 60,
+          "wall_median_ms": 665.467521,
+          "cpu_median_ms": 1607.0614999999862
+        },
+        "change_percent": 0.6896366284840028,
+        "change_percent_95pct_bootstrap_ci": [-0.7029099873636424, 1.0160827443221887]
+      },
+      "typescript-code-split-minify-sourcemap": {
+        "baseline": {
+          "count": 60,
+          "wall_median_ms": 401.94291699999997,
+          "cpu_median_ms": 1588.4634999999605
+        },
+        "candidate": {
+          "count": 60,
+          "wall_median_ms": 401.37658350000004,
+          "cpu_median_ms": 1591.023000000007
+        },
+        "change_percent": -0.14089898740520246,
+        "change_percent_95pct_bootstrap_ci": [-0.85460009661944, 0.6420565255943034]
+      }
+    },
+    "scope": "Full vp build commands through bundled Rolldown 1.2.14 and Vite 8.3.4 on Apple M4 Max, macOS ARM64, Node 22.23.2. Sixty samples per variant per workload, warm filesystem caches, fresh processes and clean output directories. No consistent slowdown in these workloads. Disabling fat LTO, changing NAPI optimization, cold caches, and Linux/Windows performance are not measured."
+  }
+}
