@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { withConfigMetadataResolution } from './define-config.ts';
 import { VITE_CONFIG_FILES } from './utils/constants.ts';
 
 /**
@@ -76,6 +75,8 @@ export function findWorkspaceRoot(startDir: string): string | undefined {
 }
 
 export interface ResolveViteConfigOptions {
+  /** Use a config file already found by the caller. */
+  configFile?: string;
   traverseUp?: boolean;
 }
 
@@ -83,11 +84,15 @@ export interface ResolveViteConfigOptions {
  * Resolve vite.config.ts and return the config object.
  */
 export async function resolveViteConfig(cwd: string, options?: ResolveViteConfigOptions) {
+  const { withConfigMetadataResolution } = await import('./define-config.ts');
   const { resolveConfig } = await import('./index.js');
 
   // This loads the config purely to read a non-plugin block (lint/fmt/pack/run/
   // staged/create…), so skip the user's plugin factory while it evaluates.
   return withConfigMetadataResolution(async () => {
+    if (options?.configFile) {
+      return resolveConfig({ root: cwd, configFile: options.configFile }, 'build');
+    }
     if (options?.traverseUp && !hasViteConfig(cwd)) {
       const workspaceRoot = findWorkspaceRoot(cwd);
       if (workspaceRoot) {
@@ -106,8 +111,15 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
   if (err) {
     throw err;
   }
+  // Rust asks for metadata at the selected workspace root. With no config
+  // there, none of these fields exist; avoid initializing Vite and Vitest.
+  // Check on every call so a newly created config is still observed.
+  const configFile = findViteConfig(viteConfigCwd);
+  if (!configFile) {
+    return '{}';
+  }
   try {
-    const config = await resolveViteConfig(viteConfigCwd);
+    const config = await resolveViteConfig(viteConfigCwd, { configFile });
 
     return JSON.stringify({
       configFile: config.configFile,
