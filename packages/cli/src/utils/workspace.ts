@@ -32,7 +32,7 @@ export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string
   }
   return globSync(
     patterns.map((pattern) => `${pattern}/package.json`),
-    { absolute: true, cwd },
+    { absolute: true, cwd, expandDirectories: false },
   );
 }
 
@@ -134,6 +134,7 @@ export function discoverWorkspacePackages(
       absolute: false,
       cwd: rootDir,
       ignore: ['**/node_modules/**'],
+      expandDirectories: false,
     },
   );
   for (const packageJsonRelativePath of packageJsonRelativePaths) {

@@ -150,6 +150,8 @@ function collectGithubActionFiles(projectPath: string): string[] {
     cwd: path.join(projectPath, '.github'),
     absolute: true,
     caseSensitiveMatch: false,
+    // Otherwise a directory named like `ci.yml` also matches as `ci.yml/**`.
+    expandDirectories: false,
   } as const;
   const workflows = globSync('workflows/*.{yml,yaml}', globOptions);
   const compositeActions = globSync('**/action.{yml,yaml}', {
