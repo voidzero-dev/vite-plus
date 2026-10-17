@@ -1,0 +1,17 @@
+[[case]]
+name = "migration_oxlint_extends"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["node", "verify-lint.mjs", "--before"], comment = "Original inherited errors, warnings, and overrides" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "Path extends become config objects; relative plugins move to the root lint config" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"] },
+  { argv = ["vpt", "print-file", "shared/second.jsonc"], comment = "Shared JSON configs are retained" },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "Generated config types accept the resolved inheritance" },
+  { argv = ["node", "verify-lint.mjs"], comment = "Plain vp lint preserves inherited severity and override matching" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "A second migration leaves the config unchanged" },
+  { argv = ["node", "verify-lint.mjs"], comment = "Inherited behavior survives the second migration" },
+]

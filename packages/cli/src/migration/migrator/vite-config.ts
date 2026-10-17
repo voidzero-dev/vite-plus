@@ -2,11 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
 import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
 
 import {
   hasConfigKey,
+  ResolverFactory,
   mergeJsonConfig,
   mergeTsdownConfig,
   migrateTaskCacheConfig,
@@ -17,11 +19,12 @@ import {
 import {
   createDefaultVitePlusLintConfig,
   ensureVitePlusImportRuleDefaults,
+  PREFER_VITE_PLUS_IMPORTS_RULE,
 } from '../../oxlint-plugin-config.ts';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from '../../utils/constants.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
-import { editJsonFile, isJsonFile, readJsonFile, writeJsonFile } from '../../utils/json.ts';
+import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
@@ -47,6 +50,117 @@ const SVELTE_RUNE_GLOBALS = {
   $inspect: 'readonly',
   $host: 'readonly',
 } satisfies Record<string, 'readonly'>;
+
+/** Resolve JSON inheritance once, during migration. Keep the tree so Oxlint
+ * still controls rule aliases, category precedence, plugins, and overrides.
+ */
+export function resolveOxlintConfigExtends(configPath: string): OxlintConfig {
+  const rootDir = path.dirname(path.resolve(configPath));
+  const inheritedJsPlugins: NonNullable<OxlintConfig['jsPlugins']> = [];
+  let pluginResolver: ResolverFactory | undefined;
+
+  function visit(filename: string, stack: string[]): OxlintConfig {
+    const canonicalPath = fs.realpathSync(filename);
+    if (stack.includes(canonicalPath)) {
+      throw new Error(`Circular Oxlint extends: ${[...stack, canonicalPath].join(' -> ')}`);
+    }
+    const errors: ParseError[] = [];
+    const config = parseJsonc(fs.readFileSync(filename, 'utf8'), errors, {
+      allowTrailingComma: true,
+    }) as Record<string, unknown>;
+    if (errors.length > 0 || !config || typeof config !== 'object' || Array.isArray(config)) {
+      throw new Error(`Invalid Oxlint JSON config: ${filename}`);
+    }
+    delete config.$schema;
+    if (config.extends !== undefined) {
+      if (
+        !Array.isArray(config.extends) ||
+        config.extends.some((entry) => typeof entry !== 'string')
+      ) {
+        throw new Error(`Expected an array of file paths in ${filename}: extends`);
+      }
+      config.extends = config.extends.map((entry: string) =>
+        visit(path.resolve(path.dirname(filename), entry), [...stack, canonicalPath]),
+      );
+    }
+    if (stack.length > 0) {
+      const lintConfig = config as OxlintConfig;
+      for (const layer of [lintConfig, ...(lintConfig.overrides ?? [])]) {
+        if (!layer.jsPlugins) {
+          continue;
+        }
+        layer.jsPlugins = layer.jsPlugins.filter((entry) => {
+          const specifier = typeof entry === 'string' ? entry : entry.specifier;
+          if (!/^\.{1,2}(?:[/\\]|$)/.test(specifier)) {
+            // An object extends has no origin directory. Do not silently load a
+            // different version of a package-local plugin after moving it.
+            if (!path.isAbsolute(specifier) && path.dirname(filename) !== rootDir) {
+              pluginResolver ??= new ResolverFactory({
+                conditionNames: ['module-sync', 'node', 'import'],
+              });
+              const original = pluginResolver.sync(path.dirname(filename), specifier);
+              const migrated = pluginResolver.sync(rootDir, specifier);
+              if (original.path && original.path !== migrated.path) {
+                throw new Error(
+                  `JS plugin "${specifier}" in ${filename} resolves differently from the Vite config directory; migrate this plugin manually`,
+                );
+              }
+            }
+            return true;
+          }
+          // Oxlint loads JS plugins globally, even those declared in overrides.
+          // Hoist relative paths to the root, where they remain supported. Keep
+          // them relative: absolute paths change string plugins' inferred names.
+          const relative = path
+            .relative(rootDir, path.resolve(path.dirname(filename), specifier))
+            .split(path.sep)
+            .join('/');
+          if (path.isAbsolute(relative)) {
+            throw new Error(`Cannot rebase JS plugin "${specifier}" in ${filename} across drives`);
+          }
+          const rebased = relative.startsWith('../') ? relative : `./${relative}`;
+          inheritedJsPlugins.push(
+            typeof entry === 'string' ? rebased : { ...entry, specifier: rebased },
+          );
+          return false;
+        });
+        if (layer.jsPlugins.length === 0) {
+          delete layer.jsPlugins;
+        }
+      }
+    }
+    return config;
+  }
+
+  const config = visit(configPath, []);
+  if (inheritedJsPlugins.length > 0) {
+    config.jsPlugins = [...(config.jsPlugins ?? []), ...inheritedJsPlugins];
+  }
+  return config;
+}
+
+function oxlintConfigLayers(config: OxlintConfig): OxlintConfig[] {
+  return [...(config.extends ?? []).flatMap(oxlintConfigLayers), config];
+}
+
+// Resolve every workspace entry before merging any of them: a root or sibling
+// .oxlintrc.json can itself be an extends target and be deleted by its migration.
+export function prepareOxlintConfigs(projectPaths: string[]): Map<string, OxlintConfig | Error> {
+  const configs = new Map<string, OxlintConfig | Error>();
+  for (const projectPath of projectPaths) {
+    const filename = detectConfigs(projectPath).oxlintConfig;
+    if (!filename) {
+      continue;
+    }
+    const configPath = path.join(projectPath, filename);
+    try {
+      configs.set(configPath, resolveOxlintConfigExtends(configPath));
+    } catch (error) {
+      configs.set(configPath, error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+  return configs;
+}
 
 // Add Svelte's built-in rune globals to migrated Svelte overrides.
 // https://github.com/oxc-project/oxc/issues/20191
@@ -251,6 +365,7 @@ export function mergeViteConfigFiles(
   // (correct for the top-level standalone/monorepo callers, where
   // projectPath IS the workspace root).
   workspaceRoot?: string,
+  preparedOxlintConfigs?: Map<string, OxlintConfig | Error>,
 ): void {
   const configs = detectConfigs(projectPath);
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
@@ -258,47 +373,112 @@ export function mergeViteConfigFiles(
   }
   const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
   if (configs.oxlintConfig) {
-    // Inject options.typeAware and options.typeCheck defaults before merging
-    const fullOxlintPath = path.join(projectPath, configs.oxlintConfig);
-    const oxlintJson = readJsonFile(fullOxlintPath, true) as OxlintConfig;
-    if (!oxlintJson.options) {
-      oxlintJson.options = {};
-    }
-    // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
-    if (!hasBaseUrlInTsconfig(projectPath)) {
-      if (oxlintJson.options.typeAware === undefined) {
-        oxlintJson.options.typeAware = true;
-      }
-      if (oxlintJson.options.typeCheck === undefined) {
-        oxlintJson.options.typeCheck = true;
-      }
-    } else {
-      warnMigration(BASEURL_TSCONFIG_WARNING, report);
-    }
-    // Drop references to plugins / jsPlugins / rules that won't resolve
-    // at lint time (e.g. `@oxlint/migrate` translating `@unocss/eslint-config`
-    // → `eslint-plugin-unocss` even when that package isn't installed).
-    // Resolve workspace package paths against `workspaceRoot` when the
-    // caller is processing a sub-package — otherwise the sanitizer would
-    // mistakenly look for `subPath/<sibling-pkg-path>` and miss the
-    // hoisted deps it's supposed to see.
-    sanitizeMigratedOxlintConfig(
-      oxlintJson,
-      collectInstalledPackageNames(workspaceRoot ?? projectPath, packages),
+    mergeOxlintConfigFile(
+      projectPath,
+      viteConfig,
+      configs.oxlintConfig,
+      silent,
       report,
+      packages,
+      workspaceRoot,
+      preparedOxlintConfigs,
     );
-    ensureSvelteRuneGlobals(oxlintJson);
-    const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
-    // writeJsonFile preserves the user file's existing indent/newline (and adds a
-    // trailing newline) instead of forcing 2-space + no EOL.
-    writeJsonFile(fullOxlintPath, normalizedOxlintConfig as Record<string, unknown>);
-    // merge oxlint config into vite.config.ts
-    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint', silent, report);
   }
   if (configs.oxfmtConfig) {
     // merge oxfmt config into vite.config.ts
     mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxfmtConfig, 'fmt', silent, report);
   }
+}
+
+function mergeOxlintConfigFile(
+  projectPath: string,
+  viteConfig: string,
+  oxlintConfig: string,
+  silent: boolean,
+  report?: MigrationReport,
+  packages?: WorkspacePackage[],
+  workspaceRoot?: string,
+  preparedOxlintConfigs?: Map<string, OxlintConfig | Error>,
+): void {
+  // Inject options.typeAware and options.typeCheck defaults before merging
+  const fullOxlintPath = path.join(projectPath, oxlintConfig);
+  let oxlintJson: OxlintConfig;
+  try {
+    const prepared = preparedOxlintConfigs?.get(fullOxlintPath);
+    if (prepared instanceof Error) {
+      throw prepared;
+    }
+    oxlintJson = prepared ?? resolveOxlintConfigExtends(fullOxlintPath);
+  } catch (error) {
+    warnMigration(
+      `Could not migrate ${displayRelative(fullOxlintPath)}: ${String(error)}. The original config was preserved; use vp lint -c ${oxlintConfig} until it is migrated manually.`,
+      report,
+    );
+    return;
+  }
+  // Never discard an inheritance tree when a lint block already exists.
+  if (oxlintJson.extends?.length && hasConfigKey(path.join(projectPath, viteConfig), 'lint')) {
+    warnMigration(
+      `Preserved ${displayRelative(fullOxlintPath)} because ${viteConfig} already has a lint config. Merge its inherited rules manually.`,
+      report,
+    );
+    return;
+  }
+  const layers = oxlintConfigLayers(oxlintJson);
+  const inheritedOptions: NonNullable<OxlintConfig['options']> = {};
+  for (const layer of layers) {
+    Object.assign(inheritedOptions, layer.options);
+  }
+  if (!oxlintJson.options) {
+    oxlintJson.options = {};
+  }
+  // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
+  if (!hasBaseUrlInTsconfig(projectPath)) {
+    if (inheritedOptions.typeAware === undefined) {
+      oxlintJson.options.typeAware = true;
+    }
+    if (inheritedOptions.typeCheck === undefined) {
+      oxlintJson.options.typeCheck = true;
+    }
+  } else {
+    warnMigration(BASEURL_TSCONFIG_WARNING, report);
+  }
+  // Drop references to plugins / jsPlugins / rules that won't resolve
+  // at lint time (e.g. `@oxlint/migrate` translating `@unocss/eslint-config`
+  // → `eslint-plugin-unocss` even when that package isn't installed).
+  // Resolve workspace package paths against `workspaceRoot` when the
+  // caller is processing a sub-package — otherwise the sanitizer would
+  // mistakenly look for `subPath/<sibling-pkg-path>` and miss the
+  // hoisted deps it's supposed to see.
+  // A pre-existing inheritance tree can declare JS plugins in another layer,
+  // including local plugins whose namespace is only known at runtime. The
+  // ESLint migration sanitizer cannot validate these rules independently.
+  if (!oxlintJson.extends?.length) {
+    sanitizeMigratedOxlintConfig(
+      oxlintJson,
+      collectInstalledPackageNames(workspaceRoot ?? projectPath, packages),
+      report,
+    );
+  }
+  for (const layer of layers) {
+    ensureSvelteRuneGlobals(layer);
+  }
+  const inheritedImportRule = layers.findLast(
+    (layer) => layer.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE] !== undefined,
+  )?.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE];
+  const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
+  if (inheritedImportRule !== undefined) {
+    normalizedOxlintConfig.rules![PREFER_VITE_PLUS_IMPORTS_RULE] = inheritedImportRule;
+  }
+  mergeAndRemoveJsonConfig(
+    projectPath,
+    viteConfig,
+    oxlintConfig,
+    'lint',
+    silent,
+    report,
+    JSON.stringify(normalizedOxlintConfig, null, 2),
+  );
 }
 
 /**
@@ -311,6 +491,11 @@ export function injectLintTypeCheckDefaults(
   silent = false,
   report?: MigrationReport,
 ): void {
+  // An unresolved JSON inheritance tree needs manual attention. Do not mask it
+  // with a new lint block, which would also prevent a later migration retry.
+  if (detectConfigs(projectPath).oxlintConfig) {
+    return;
+  }
   if (hasBaseUrlInTsconfig(projectPath)) {
     warnMigration(BASEURL_TSCONFIG_WARNING, report);
     return;
@@ -406,6 +591,7 @@ function mergeAndRemoveJsonConfig(
   configKey: string,
   silent = false,
   report?: MigrationReport,
+  configContent?: string,
 ): void {
   const fullViteConfigPath = path.join(projectPath, viteConfigPath);
   const fullJsonConfigPath = path.join(projectPath, jsonConfigPath);
@@ -424,7 +610,21 @@ function mergeAndRemoveJsonConfig(
     }
     return;
   }
-  const result = mergeJsonConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
+  // Only delete the original JSON after a successful merge. Resolved lint
+  // configs contain object extends, which JSON Oxlint configs do not accept.
+  let result;
+  if (configContent === undefined) {
+    result = mergeJsonConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
+  } else {
+    const tempDir = fs.mkdtempSync(path.join(projectPath, '.vite-plus-lint-'));
+    try {
+      const tempConfig = path.join(tempDir, 'config.json');
+      fs.writeFileSync(tempConfig, configContent);
+      result = mergeJsonConfig(fullViteConfigPath, tempConfig, configKey);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
     fs.unlinkSync(fullJsonConfigPath);
