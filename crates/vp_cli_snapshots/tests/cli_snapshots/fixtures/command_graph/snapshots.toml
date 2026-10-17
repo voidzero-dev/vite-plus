@@ -1,0 +1,11 @@
+[[case]]
+name = "command_graph"
+vp = "global"
+comment = "Lists workspace packages with their internal dependencies; external packages are omitted."
+steps = [["vp", "graph"]]
+
+[[case]]
+name = "command_graph_json"
+vp = "global"
+comment = "Prints the same graph as JSON for scripts and agents."
+steps = [["vp", "graph", "--json"]]

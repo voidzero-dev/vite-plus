@@ -1,0 +1,1 @@
+{"name":"@acme/ui","dependencies":{"@acme/utils":"workspace:*"},"peerDependencies":{"react":"1.0.0"}}

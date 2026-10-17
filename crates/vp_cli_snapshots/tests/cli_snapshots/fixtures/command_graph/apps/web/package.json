@@ -1,0 +1,1 @@
+{"name":"@acme/web","dependencies":{"@acme/ui":"workspace:*","react":"1.0.0"},"devDependencies":{"@acme/utils":"workspace:*"}}
