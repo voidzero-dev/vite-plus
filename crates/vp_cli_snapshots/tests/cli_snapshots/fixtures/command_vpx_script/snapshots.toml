@@ -154,11 +154,12 @@ steps = [
 name = "vpx_package_installed_windows"
 vp = ["local", "global"]
 skip-platforms = ["linux", "macos"]
-comment = "On Windows, a .cmd binary in node_modules/.bin runs through cmd.exe with its arguments and exit code."
+comment = "On Windows, a cmd-shim style .cmd binary in node_modules/.bin runs through cmd.exe and passes its arguments and exit code through."
 steps = [
   { argv = ["vpt", "mkdir", "-p", "node_modules/.bin"], snapshot = false },
   { argv = ["vpt", "cp", "win-tools/fake-tool.cmd", "node_modules/.bin/fake-tool.cmd"], snapshot = false },
-  { argv = ["vpx", "fake-tool", "a", "--help"], comment = "Arguments, including --help, belong to the binary; exit code 3 propagates", continue-on-failure = true },
+  { argv = ["vpt", "cp", "win-tools/fake-tool.js", "node_modules/.bin/fake-tool.js"], snapshot = false },
+  { argv = ["vpx", "fake-tool", "a", "--help", "b c"], comment = "Arguments, including --help and one with a space, reach the program unchanged; exit code 3 propagates", continue-on-failure = true },
 ]
 
 [[case]]
