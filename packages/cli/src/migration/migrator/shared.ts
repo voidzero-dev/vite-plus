@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import type { OxlintConfig } from 'oxlint';
 import { coerce, satisfies } from 'verkit';
 
 import { VITEST_VERSION, VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
@@ -36,6 +37,20 @@ export function getCommandStartIndex(argv: readonly string[]): number {
     start++;
   }
   return start;
+}
+
+export interface OxlintConfigFile {
+  filename: string;
+  config: OxlintConfig;
+  extends: OxlintConfigFile[];
+  // Set only after a successful merge, so workspace consumers reuse the same module.
+  modulePath?: string;
+}
+
+export interface OxlintModulePlan {
+  configContent: string;
+  imports: string[];
+  modules: Map<string, { file: OxlintConfigFile; content: string }>;
 }
 
 // All known lint-staged config file names.

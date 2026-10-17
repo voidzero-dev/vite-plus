@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { loadConfigFromFile } from 'vite';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
 import {
@@ -24,8 +24,18 @@ describe('Oxlint JSON extends migration', () => {
     return filenamePath;
   }
 
+  async function loadConfig(directory = project) {
+    const result = await loadConfigFromFile(
+      { command: 'build', mode: 'test' },
+      path.join(directory, 'vite.config.mjs'),
+      directory,
+      'silent',
+    );
+    return result!.config;
+  }
+
   beforeEach(() => {
-    project = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-oxlint-extends-'));
+    project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'vp-oxlint-extends-')));
     write('package.json', { name: 'extends-test', type: 'module' });
     write('vite.config.mjs', 'export default {};');
   });
@@ -58,7 +68,7 @@ describe('Oxlint JSON extends migration', () => {
     const report = createMigrationReport();
     mergeViteConfigFiles(project, true, report);
     const configPath = path.join(project, 'vite.config.mjs');
-    const { default: config } = await import(pathToFileURL(configPath).href);
+    const config = await loadConfig();
     expect(config.lint).toMatchObject({
       extends: [
         {
@@ -86,15 +96,128 @@ describe('Oxlint JSON extends migration', () => {
     expect(report.mergedConfigCount).toBe(1);
   });
 
+  it('keeps shared module edits live through nested imports', async () => {
+    write('base.json', { rules: { 'no-debugger': 'warn' } });
+    write('first.json', { extends: ['./base.json'] });
+    write('second.json', { extends: ['./base.json'] });
+    write('.oxlintrc.json', { extends: ['./first.json', './second.json'] });
+    mergeViteConfigFiles(project, true);
+
+    const modulePath = path.join(project, 'base.ts');
+    expect(fs.readFileSync(path.join(project, 'first.ts'), 'utf8')).toContain('./base.js');
+    expect(fs.readFileSync(path.join(project, 'second.ts'), 'utf8')).toContain('./base.js');
+    fs.writeFileSync(modulePath, fs.readFileSync(modulePath, 'utf8').replace('"warn"', '"error"'));
+    const config = await loadConfig();
+    for (const branch of config.lint!.extends!) {
+      expect(branch.extends![0].rules!['no-debugger']).toBe('error');
+    }
+  });
+
+  it.each(['base.ts', 'base.js'])('preserves configs when %s already exists', (filename) => {
+    write('base.json', { rules: { 'no-debugger': 'warn' } });
+    const original = 'export default { rules: { "no-debugger": "off" } };';
+    write(filename, original);
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    const report = createMigrationReport();
+    mergeViteConfigFiles(project, true, report);
+    expect(fs.readFileSync(path.join(project, filename), 'utf8')).toBe(original);
+    expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
+    expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
+      'export default {};',
+    );
+    expect(report.warnings[0]).toContain('already exists');
+  });
+
+  it('does not create partial modules when two JSON sources map to the same TS file', () => {
+    write('base.json', { rules: { 'no-debugger': 'warn' } });
+    write('base.jsonc', { rules: { 'no-console': 'warn' } });
+    write('.oxlintrc.json', { extends: ['./base.json', './base.jsonc'] });
+    const report = createMigrationReport();
+    mergeViteConfigFiles(project, true, report);
+    expect(report.warnings[0]).toContain('Multiple Oxlint configs');
+    expect(fs.existsSync(path.join(project, 'base.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
+  });
+
+  it('avoids import binding conflicts and preserves existing config content', async () => {
+    write(
+      'vite.config.mjs',
+      'const oxlintConfig1 = "original"; export default { custom: oxlintConfig1 };',
+    );
+    write('base.json', { rules: { 'no-debugger': 'warn' } });
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    mergeViteConfigFiles(project, true);
+    expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toContain(
+      'import oxlintConfig2',
+    );
+    expect(await loadConfig()).toHaveProperty('custom', 'original');
+  });
+
+  it('generates ESM .mts modules in a project without type: module', async () => {
+    write('package.json', { name: 'commonjs-project' });
+    write('base.json', { jsPlugins: ['./plugin.mjs'], rules: { 'no-debugger': 'warn' } });
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    mergeViteConfigFiles(project, true);
+    expect(fs.existsSync(path.join(project, 'base.mts'))).toBe(true);
+    expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toContain('./base.mts');
+    expect((await loadConfig()).lint!.extends![0].jsPlugins).toEqual([
+      path.join(project, 'plugin.mjs'),
+    ]);
+  });
+
   it('allows a shared ancestor to occur in separate branches', () => {
     write('base.json', { rules: { 'no-debugger': 'error' } });
     write('a.json', { extends: ['./base.json'] });
     write('b.json', { extends: ['./base.json'] });
     const root = write('.oxlintrc.json', { extends: ['./a.json', './b.json'] });
-    expect(resolveOxlintConfigExtends(root).extends).toEqual([
+    expect(resolveOxlintConfigExtends(root).config.extends).toEqual([
       { extends: [{ rules: { 'no-debugger': 'error' } }] },
       { extends: [{ rules: { 'no-debugger': 'error' } }] },
     ]);
+  });
+
+  it('encodes URL characters in relative plugin paths', async () => {
+    write('base.json', { jsPlugins: ['./plugin #1%.mjs'] });
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    mergeViteConfigFiles(project, true);
+    expect((await loadConfig()).lint!.extends![0].jsPlugins).toEqual([
+      path.join(project, 'plugin #1%.mjs'),
+    ]);
+  });
+
+  it('preserves external shared configs without writing outside the project', () => {
+    write('external/base.json', { rules: { 'no-debugger': 'warn' } });
+    write('app/vite.config.mjs', 'export default {};');
+    write('app/.oxlintrc.json', { extends: ['../external/base.json'] });
+    const report = createMigrationReport();
+    mergeViteConfigFiles(path.join(project, 'app'), true, report);
+    expect(report.warnings[0]).toContain('outside the project');
+    expect(fs.existsSync(path.join(project, 'external/base.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(project, 'app/.oxlintrc.json'))).toBe(true);
+  });
+
+  it('removes newly created modules if writing a module fails', () => {
+    write('base.json', { rules: { 'no-debugger': 'warn' } });
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    const report = createMigrationReport();
+    const writeFile = fs.writeFileSync;
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation((file, data, options) => {
+      if (typeof file === 'number') {
+        throw new Error('module write failed');
+      }
+      return writeFile(file, data, options);
+    });
+    try {
+      mergeViteConfigFiles(project, true, report);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(report.warnings[0]).toContain('module write failed');
+    expect(fs.existsSync(path.join(project, 'base.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
+    expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
+      'export default {};',
+    );
   });
 
   it.each([false, true])(
@@ -140,18 +263,16 @@ describe('Oxlint JSON extends migration', () => {
         report,
       );
 
-      const { default: root } = await import(
-        pathToFileURL(path.join(project, 'vite.config.mjs')).href
-      );
-      const { default: sibling } = await import(
-        pathToFileURL(path.join(project, 'packages/b/vite.config.mjs')).href
-      );
-      const inheritedRoot = extendsRoot ? root.lint.extends[0] : root.lint.extends[0].extends[0];
+      const root = await loadConfig();
+      const sibling = await loadConfig(path.join(project, 'packages/b'));
+      const inheritedRoot = extendsRoot
+        ? root.lint!.extends![0]
+        : root.lint!.extends![0].extends![0];
       const inheritedSibling = extendsRoot
-        ? sibling.lint.extends[0].extends[0]
-        : sibling.lint.extends[0];
-      expect(inheritedRoot.rules['no-debugger']).toBe('error');
-      expect(inheritedSibling.rules['no-debugger']).toBe('error');
+        ? sibling.lint!.extends![0].extends![0]
+        : sibling.lint!.extends![0];
+      expect(inheritedRoot.rules!['no-debugger']).toBe('error');
+      expect(inheritedSibling.rules!['no-debugger']).toBe('error');
       for (const dir of ['', 'packages/a', 'packages/b']) {
         expect(fs.existsSync(path.join(project, dir, '.oxlintrc.json'))).toBe(false);
       }
@@ -171,7 +292,7 @@ describe('Oxlint JSON extends migration', () => {
     });
     const configPath = write('.oxlintrc.json', { extends: ['./shared/base.json'] });
 
-    expect(resolveOxlintConfigExtends(configPath).extends?.[0]).toEqual({
+    expect(resolveOxlintConfigExtends(configPath).config.extends?.[0]).toEqual({
       jsPlugins: ['eslint-plugin-test'],
       rules: { 'test/custom': 'error' },
     });
@@ -201,13 +322,12 @@ describe('Oxlint JSON extends migration', () => {
 
     mergeViteConfigFiles(project, true);
 
-    const { default: config } = await import(
-      pathToFileURL(path.join(project, 'vite.config.mjs')).href
-    );
-    expect(config.lint.rules['vite-plus/prefer-vite-plus-imports']).toBe('off');
+    const config = await loadConfig();
+    expect(config.lint!.rules!['vite-plus/prefer-vite-plus-imports']).toBeUndefined();
+    expect(config.lint!.extends![0].rules!['vite-plus/prefer-vite-plus-imports']).toBe('off');
   });
 
-  it('rebases inherited JS plugins, including overrides, without embedding machine paths', async () => {
+  it('keeps inherited JS plugins and overrides in their modules with portable absolute paths', async () => {
     write('shared/base.json', {
       jsPlugins: [{ name: 'import', specifier: './plugin.mjs' }],
       overrides: [{ files: ['**/*.js'], jsPlugins: ['../override.mjs'] }],
@@ -221,15 +341,23 @@ describe('Oxlint JSON extends migration', () => {
 
     const configPath = path.join(project, 'vite.config.mjs');
     expect(fs.readFileSync(configPath, 'utf8')).not.toContain(project);
-    const { default: config } = await import(pathToFileURL(configPath).href);
-    expect(config.lint.jsPlugins).toContainEqual({
-      name: 'import',
-      specifier: './shared/plugin.mjs',
-    });
-    expect(config.lint.jsPlugins).toContain('./override.mjs');
-    expect(config.lint.extends[0].jsPlugins).toBeUndefined();
-    expect(config.lint.extends[0].overrides[0].jsPlugins).toBeUndefined();
-    expect(config.lint.rules['import/custom-rule']).toBe('error');
+    const config = await loadConfig();
+    expect(config.lint!.extends![0].jsPlugins).toEqual([
+      {
+        name: 'import',
+        specifier: path.join(project, 'shared/plugin.mjs'),
+      },
+    ]);
+    expect(config.lint!.extends![0].overrides![0].jsPlugins).toEqual([
+      path.join(project, 'override.mjs'),
+    ]);
+    expect(config.lint!.jsPlugins).toEqual([
+      { name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' },
+    ]);
+    const module = fs.readFileSync(path.join(project, 'shared/base.ts'), 'utf8');
+    expect(module).toContain('import.meta.url');
+    expect(module).not.toContain(project);
+    expect(config.lint!.rules!['import/custom-rule']).toBe('error');
   });
 
   it.each([
@@ -267,7 +395,8 @@ describe('Oxlint JSON extends migration', () => {
 
     expect(fs.readFileSync(source, 'utf8')).toBe(original);
     expect(report.mergedConfigCount).toBe(0);
-    expect(report.warnings[0]).toContain('Failed to merge');
+    expect(report.warnings[0]).toContain('ESM default export');
+    expect(fs.existsSync(path.join(project, 'base.ts'))).toBe(false);
     expect(fs.readdirSync(project).some((file) => file.startsWith('.vite-plus-lint-'))).toBe(false);
   });
 
@@ -284,5 +413,16 @@ describe('Oxlint JSON extends migration', () => {
     expect(fs.readFileSync(source, 'utf8')).toBe(original);
     expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(viteConfig);
     expect(report.warnings[0]).toContain('already has a lint config');
+  });
+
+  it('creates no shared modules when the config merger does not support the export shape', () => {
+    write('base.json', { rules: { 'no-debugger': 'warn' } });
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    write('vite.config.mjs', 'const makeConfig = () => ({}); export default makeConfig();');
+    const report = createMigrationReport();
+    mergeViteConfigFiles(project, true, report);
+    expect(report.warnings[0]).toContain('Failed to merge');
+    expect(fs.existsSync(path.join(project, 'base.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
   });
 });
