@@ -48,7 +48,6 @@ import {
   cancelAndExit,
   type CommandRunSummary,
   defaultInteractive,
-  downloadPackageManager,
   promptGitHooks,
   resolveGitInit,
   runViteFmt,
@@ -71,6 +70,7 @@ import {
   type OrgResolution,
   resolveOrgManifestForCreate,
 } from './org-resolve.ts';
+import { resolveCreatePackageManager } from './package-manager.ts';
 import {
   checkProjectDirExists,
   promptPackageNameAndTargetDir,
@@ -690,8 +690,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       : 'latest';
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
-  // ensure the package manager is installed by vite-plus
-  const downloadResult = await downloadPackageManager(
+  const downloadResult = await resolveCreatePackageManager(
     packageManager,
     packageManagerVersion,
     options.interactive,
