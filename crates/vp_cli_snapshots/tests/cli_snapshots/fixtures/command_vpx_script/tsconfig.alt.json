@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "baseUrl": ".",
+    "paths": { "@lib/*": ["alt/*"] }
+  }
+}

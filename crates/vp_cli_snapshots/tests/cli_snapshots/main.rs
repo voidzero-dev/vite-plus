@@ -689,7 +689,7 @@ impl CaseHome {
         let bin_dir = package_dir.join("bin");
         std::fs::create_dir_all(shim_dir)
             .map_err(|e| format!("failed to create local package shim dir: {e}"))?;
-        for name in ["vp", "vpr", "oxfmt", "oxlint"] {
+        for name in ["vp", "vpr", "vpx", "oxfmt", "oxlint"] {
             let script = bin_dir.join(name);
             if !script.is_file() {
                 continue;

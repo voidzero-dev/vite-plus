@@ -483,11 +483,17 @@ fn path_variants(path: &str, label: &'static str) -> Vec<(String, &'static str)>
         .into_iter()
         .flatten()
         .flat_map(|p| {
-            [
-                p.to_owned(),
-                p.cow_replace('\\', r"\\").into_owned(),
-                p.cow_replace('\\', "/").into_owned(),
-            ]
+            let forward = p.cow_replace('\\', "/").into_owned();
+            // A file URL keeps the slash before a drive letter (`file:///D:/ws`) and
+            // percent-encodes its path, so also redact that spelling: the URL becomes
+            // `file://<label>` on every platform. Parsed as a string, so Windows-style
+            // paths work on Unix too.
+            let url_path = url::Url::parse(&["file:///", forward.trim_start_matches('/')].concat())
+                .ok()
+                .map(|url| url.path().to_owned());
+            [p.to_owned(), p.cow_replace('\\', r"\\").into_owned(), forward]
+                .into_iter()
+                .chain(url_path)
         })
         .collect();
     variants.sort_by_key(|v| std::cmp::Reverse(v.len()));

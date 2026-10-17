@@ -1068,3 +1068,4 @@ module.exports.shouldPrintVitePlusHeader = nativeBinding.shouldPrintVitePlusHead
 module.exports.upsertJsonConfig = nativeBinding.upsertJsonConfig;
 module.exports.vitePlusHeader = nativeBinding.vitePlusHeader;
 module.exports.wrapLazyPlugins = nativeBinding.wrapLazyPlugins;
+module.exports.oxcNode = nativeBinding.oxcNode;

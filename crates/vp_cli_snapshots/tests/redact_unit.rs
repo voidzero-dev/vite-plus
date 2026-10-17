@@ -674,8 +674,30 @@ fn redacts_forward_slash_windows_path_variants() {
     let input = "at file:///E:/Temp/ws/src/main.ts\n".to_owned();
     assert_eq!(
         redact_output(input, &[("E:\\Temp\\ws", "<workspace>")], true),
-        "at file:///<workspace>/src/main.ts\n"
+        "at file://<workspace>/src/main.ts\n"
     );
+}
+
+#[test]
+fn file_urls_redact_to_one_spelling_on_every_platform() {
+    // The slash before a Windows drive letter is part of the URL, not the path.
+    let windows = "Failed to transform file:///D:/a/ws/main.ts\n".to_owned();
+    let unix = "Failed to transform file:///tmp/ws/main.ts\n".to_owned();
+    let expected = "Failed to transform file://<workspace>/main.ts\n";
+    assert_eq!(redact_output(windows, &[("D:\\a\\ws", "<workspace>")], true), expected);
+    assert_eq!(redact_output(unix, &[("/tmp/ws", "<workspace>")], true), expected);
+}
+
+#[test]
+fn file_urls_with_percent_encoded_paths_redact() {
+    let windows = "at file:///C:/Users/First%20Last/ws/main.ts\n".to_owned();
+    let unix = "at file:///home/first%20last/ws/main.ts\n".to_owned();
+    let expected = "at file://<workspace>/main.ts\n";
+    assert_eq!(
+        redact_output(windows, &[("C:\\Users\\First Last\\ws", "<workspace>")], true),
+        expected
+    );
+    assert_eq!(redact_output(unix, &[("/home/first last/ws", "<workspace>")], true), expected);
 }
 
 #[cfg(windows)]
