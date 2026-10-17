@@ -1197,6 +1197,7 @@ async function main() {
       coreMigrationResult.scripts ||
       coreMigrationResult.tsconfigTypes ||
       coreMigrationResult.imports ||
+      coreMigrationResult.oxcConfigs ||
       coreMigrationResult.tsdownConfig ||
       coreMigrationResult.taskCacheConfig
     ) {

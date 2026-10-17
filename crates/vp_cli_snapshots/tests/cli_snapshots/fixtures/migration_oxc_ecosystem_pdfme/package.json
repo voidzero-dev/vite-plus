@@ -1,0 +1,18 @@
+{
+  "name": "migration-oxc-ecosystem-pdfme",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.16.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "scripts": {
+    "lint": "vp run --filter '@pdfme/*' lint",
+    "lint:root": "vp lint --config .oxlintrc.json packages/common/src",
+    "fmt": "vp run --filter '@pdfme/*' fmt",
+    "fmt:check": "vp fmt -c .oxfmtrc.json packages/common/src --check"
+  }
+}

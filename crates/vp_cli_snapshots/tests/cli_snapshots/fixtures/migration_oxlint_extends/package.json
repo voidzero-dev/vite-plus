@@ -1,0 +1,14 @@
+{
+  "name": "migration-oxlint-extends",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.8.0",
+  "scripts": {
+    "lint": "oxlint"
+  },
+  "devDependencies": {
+    "oxlint": "1.88.0",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.4"
+  }
+}

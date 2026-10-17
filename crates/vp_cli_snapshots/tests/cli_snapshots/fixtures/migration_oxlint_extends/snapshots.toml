@@ -1,0 +1,26 @@
+[[case]]
+name = "migration_oxlint_extends"
+vp = ["global", "local"]
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Regression for #3089: a fresh migration must preserve JSON extends, inherited rules, and a type-safe Vite config."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", "shared/oxlint-config.json"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vp", "lint"],
+  ["vp", "lint", "-c", ".oxlintrc.json"],
+  ["vp", "exec", "tsc", "-p", "."],
+  { argv = ["vpt", "write-file", "src/index.ts", "debugger;\nexport const value = 1;\n"], snapshot = false },
+  { argv = ["vp", "lint", "-c", ".oxlintrc.json"], comment = "the command in the migration warning must enforce the inherited rule as an error", continue-on-failure = true },
+  { argv = ["vpt", "write-file", "src/index.ts", "export const value = 1;\n"], snapshot = false, continue-on-failure = true },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vp", "lint"],
+  ["vp", "lint", "-c", ".oxlintrc.json"],
+  ["vp", "exec", "tsc", "-p", "."],
+  { argv = ["vpt", "write-file", "src/index.ts", "debugger;\nexport const value = 1;\n"], snapshot = false },
+  { argv = ["vp", "lint", "-c", ".oxlintrc.json"], comment = "the retained JSON config must still enforce the inherited rule after a second migration", continue-on-failure = true },
+]

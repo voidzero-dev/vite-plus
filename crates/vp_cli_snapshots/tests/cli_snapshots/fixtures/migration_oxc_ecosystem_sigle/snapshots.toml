@@ -1,0 +1,21 @@
+[[case]]
+name = "migration_oxc_ecosystem_sigle"
+vp = "global"
+comment = "Reproduces the two app-level JSON extends configs in https://github.com/vite-plus-ecosystem-ci/sigle/pull/8, with a shared base to verify inherited rules."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", "apps/sigle/.oxlintrc.json"],
+  ["vpt", "print-file", "apps/custom-domain/.oxlintrc.json"],
+  { argv = ["vpt", "print-file", "apps/sigle/vite.config.ts"], comment = "JSON extends paths must not be copied into the existing Vite config" },
+  { argv = ["vpt", "stat-file", "apps/custom-domain/vite.config.ts", "--assert-not", "file"], comment = "an app without a Vite config must keep its JSON config" },
+  { argv = ["vp", "lint", "-c", ".oxlintrc.json", "src"], cwd = "apps/sigle" },
+  { argv = ["vp", "lint", "--config", ".oxlintrc.json", "src"], cwd = "apps/custom-domain" },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "apps/sigle/vite.config.ts"],
+  ["vpt", "stat-file", "apps/custom-domain/vite.config.ts", "--assert-not", "file"],
+  { argv = ["vpt", "write-file", "apps/sigle/src/index.ts", "console.log('hello');\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "apps/custom-domain/src/index.ts", "console.log('hello');\n"], snapshot = false },
+  { argv = ["vp", "lint", "-c", ".oxlintrc.json", "src"], cwd = "apps/sigle", comment = "the app must still load its inherited JSON rule", continue-on-failure = true },
+  { argv = ["vp", "lint", "--config", ".oxlintrc.json", "src"], cwd = "apps/custom-domain", comment = "the app without vite.config.ts must also load its inherited JSON rule", continue-on-failure = true },
+]
