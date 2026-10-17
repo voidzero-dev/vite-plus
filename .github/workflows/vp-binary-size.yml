@@ -431,7 +431,6 @@ jobs:
             ];
             const rows = [
               `| Installed CLI including \`node_modules\` (Linux x64) | Disk usage | ${formatSize(baseLinux.artifacts.cliInstalled.disk)} | ${formatSize(headLinux.artifacts.cliInstalled.disk)} | ${formatDelta(baseLinux.artifacts.cliInstalled.disk, headLinux.artifacts.cliInstalled.disk)} |`,
-              `| Installed CLI including \`node_modules\` (Linux x64) | Apparent size | ${formatSize(baseLinux.artifacts.cliInstalled.raw)} | ${formatSize(headLinux.artifacts.cliInstalled.raw)} | ${formatDelta(baseLinux.artifacts.cliInstalled.raw, headLinux.artifacts.cliInstalled.raw)} |`,
               ...distArtifacts.map(
                 (artifact) =>
                   `| ${artifact.name} | Directory total | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
@@ -450,7 +449,7 @@ jobs:
               'The dist rows use the Linux build. The core total excludes `.node` files to match the release artifact.',
               'Installed CLI totals include the packed `packages/cli`, core, and production dependencies in a clean Linux x64 `node_modules` tree.',
               'The installation uses `npm install --omit=dev --legacy-peer-deps`, including Linux native packages. It excludes development dependencies, optional peers, the standalone `vp` executable, Node.js, and package-manager caches.',
-              'Disk usage measures allocated bytes with `du --block-size=1`; apparent size also uses `--apparent-size`.',
+              'Disk usage measures installed space with `du --summarize --block-size=1`, equivalent to `du -sh` before rounding.',
               '',
               '| Artifact | Format | Base | PR | Change |',
               '| --- | --- | ---: | ---: | ---: |',
