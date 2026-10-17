@@ -1,3 +1,3 @@
 @echo off
-echo fake-tool: %*
-exit /b 3
+node "%~dp0fake-tool.js" %*
+exit /b %ERRORLEVEL%
