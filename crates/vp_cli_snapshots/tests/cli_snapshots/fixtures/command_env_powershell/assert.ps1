@@ -117,6 +117,7 @@ if ($env:VP_NODE_VERSION -ne "22.18.0") {
     throw "file-based VP_NODE_VERSION mismatch: expected 22.18.0, got $env:VP_NODE_VERSION"
 }
 
+. (Join-Path $PSScriptRoot "assert-arguments.ps1")
 . (Join-Path $PSScriptRoot "assert-status.ps1")
 
 Write-Output "PowerShell environment checks passed"
