@@ -19,5 +19,15 @@ child.on('message', () => received++);
 child.send('burst');
 const [code] = await once(child, 'exit');
 await new Promise((resolve) => setImmediate(resolve));
-clearTimeout(timer);
 console.log('messages before exit', received, 'exit code', code);
+
+// The parent closes the channel first; the script's exit code still comes back.
+const second = spawn('vpx', ['./wait-for-disconnect.ts'], {
+  stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+});
+second.send('ping');
+await once(second, 'message');
+second.disconnect();
+const [secondCode] = await once(second, 'exit');
+console.log('exit code after the parent disconnects', secondCode);
+clearTimeout(timer);

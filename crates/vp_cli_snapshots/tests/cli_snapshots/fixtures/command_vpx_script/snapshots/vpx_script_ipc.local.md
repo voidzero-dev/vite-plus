@@ -7,4 +7,5 @@ An IPC channel from the process that starts vpx reaches the script in both direc
 ```
 reply {"echo":"ping"}
 messages before exit 100 exit code 3
+exit code after the parent disconnects 4
 ```
