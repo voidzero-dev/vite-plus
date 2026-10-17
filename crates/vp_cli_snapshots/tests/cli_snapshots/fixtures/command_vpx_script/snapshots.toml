@@ -4,6 +4,7 @@ vp = ["local", "global"]
 comment = "TypeScript syntax that Node.js type stripping rejects runs through the oxc-node loader."
 steps = [
   { argv = ["vpx", "./src/syntax.ts"], comment = "Enums, namespaces, parameter properties, decorators, and a lowered class field" },
+  { argv = ["vpx", "./src/bom-shebang.ts"], comment = "A byte order mark before a shebang, as Windows editors save it" },
 ]
 
 [[case]]
@@ -125,6 +126,7 @@ steps = [
   { argv = ["vpx", "./main%41.ts"], comment = "./mainA.ts also exists" },
   { argv = ["vpx", "./main%file.ts"], comment = "Not a valid percent escape" },
   { argv = ["vpx", "./hash#dir/main.ts"], comment = "A # in a directory name" },
+  { argv = ["vpx", "./fragment.ts"], comment = "In an import, # starts a URL fragment, even when a#b.ts exists" },
 ]
 
 [[case]]

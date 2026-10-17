@@ -33,3 +33,11 @@ A # in a directory name
 ```
 ran hash#dir/main.ts
 ```
+
+## `vpx ./fragment.ts`
+
+In an import, # starts a URL fragment, even when a#b.ts exists
+
+```
+loaded a.ts: in an import, #b.ts is a fragment
+```
