@@ -28,6 +28,23 @@ defaults:
     shell: bash
 
 jobs:
+  fallow:
+    name: Fallow audit
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: fallow-rs/fallow@fccff887da0d83db1711379e0a3696dfc2460fdd # v3.33.1
+        with:
+          command: audit
+          version: '3.33.1'
+          gate: new-only
+
   detect-changes:
     runs-on: ubuntu-latest
     permissions:
@@ -1647,6 +1664,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - fallow
       - docs-fmt
       - test
       - build-windows-tests

@@ -173,6 +173,14 @@ You can run this command to build, test and check if there are any snapshot chan
 pnpm bootstrap-cli && pnpm test && git status
 ```
 
+Pull requests also run [Fallow](https://github.com/fallow-rs/fallow) to check for new unused code, duplication, and complexity findings. The audit compares the pull request with its base; existing findings do not fail the check. Run the same version locally with:
+
+```bash
+pnpm dlx fallow@3.33.1 audit --base origin/main
+```
+
+The audit needs Git history for the base comparison, but does not need a build or installed project dependencies. [`.fallowrc.jsonc`](.fallowrc.jsonc) defines additional entry points and excludes fixture projects, templates, and generated code.
+
 ## CLI Snapshot Tests (PTY runner)
 
 CLI output and interactive flows (prompts, pickers, keystrokes, ctrl-c) are tested with the PTY snapshot suite in `crates/vp_cli_snapshots/`. Every step runs in a real pseudo-terminal; snapshots are Markdown files compared with real pass/fail semantics. **Write new CLI tests here**, one fixture directory per scenario with a `snapshots.toml` declaring the cases.
