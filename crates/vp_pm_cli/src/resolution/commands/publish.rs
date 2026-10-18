@@ -8,11 +8,11 @@ use crate::resolution::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct PublishArgs {
     /// Tarball or folder to publish
-    #[arg(value_name = "TARBALL|FOLDER")]
+    #[arg(value_name = "TARBALL|FOLDER", not_supported(yarn >= "2"))]
     pub(crate) target: Option<String>,
 
     /// Preview without publishing
-    #[arg(long)]
+    #[arg(long, not_supported(yarn < "4.9.3"))]
     pub(crate) dry_run: bool,
 
     /// Publish tag
@@ -24,7 +24,7 @@ pub struct PublishArgs {
     pub(crate) access: Option<String>,
 
     /// One-time password for authentication
-    #[arg(long, value_name = "OTP")]
+    #[arg(long, value_name = "OTP", not_supported(yarn < "1.12.1", yarn >= "2" && < "3.2.0"))]
     pub(crate) otp: Option<String>,
 
     /// Skip git checks
@@ -40,23 +40,23 @@ pub struct PublishArgs {
     pub(crate) report_summary: bool,
 
     /// Publish with provenance
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(yarn < "4.9.0", bun))]
     pub(crate) provenance: bool,
 
     /// Force publish
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(yarn, bun))]
     pub(crate) force: bool,
 
     /// Output in JSON format
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(yarn >= "2" && < "4.9.3", bun))]
     pub(crate) json: bool,
 
     /// Publish all workspace packages
-    #[arg(short = 'r', long, not_supported(bun))]
+    #[arg(short = 'r', long, not_supported(yarn, bun))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(bun))]
+    #[arg(long, value_name = "PATTERN", not_supported(yarn, bun))]
     pub(crate) filter: Option<Vec<String>>,
 
     /// Additional arguments
@@ -108,7 +108,17 @@ impl Resolve<PublishArgs> for Npm {
 
 impl Resolve<PublishArgs> for Yarn {
     fn resolve(&self, args: &PublishArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_publish(args)
+        let mut cmd = CommandBuilder::new("yarn");
+        if self.is_berry() {
+            cmd.arg("npm");
+        }
+        cmd.arg("publish");
+        push_common_publish_args(&mut cmd, args);
+        cmd.arg_if("--provenance", args.provenance)
+            .arg_if("--force", args.force)
+            .arg_if("--json", args.json)
+            .extend(args.pass_through_args.iter());
+        cmd.into()
     }
 }
 
@@ -177,33 +187,19 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn1_publish_uses_npm() {
+    fn test_yarn1_publish_is_native() {
         let command = expect_run(resolve(&yarn("1.22.0"), PublishArgs::default()).outcome);
 
-        assert_eq!(command.program, "npm");
+        assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["publish"]);
     }
 
     #[test]
-    fn test_yarn2_publish_uses_npm() {
+    fn test_yarn2_publish_is_native() {
         let command = expect_run(resolve(&yarn("4.0.0"), PublishArgs::default()).outcome);
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish"]);
-    }
-
-    #[test]
-    fn test_yarn_publish_with_tag() {
-        let command = expect_run(
-            resolve(
-                &yarn("4.0.0"),
-                PublishArgs { tag: Some("beta".to_string()), ..Default::default() },
-            )
-            .outcome,
-        );
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish", "--tag", "beta"]);
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["npm", "publish"]);
     }
 
     #[test]
@@ -255,17 +251,54 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_publish_with_filter() {
-        let command = expect_run(
-            resolve(
-                &yarn("1.22.0"),
-                PublishArgs { filter: Some(vec!["app".to_string()]), ..Default::default() },
-            )
-            .outcome,
-        );
+    fn test_yarn_publish_rejects_workspace_selection() {
+        for version in ["1.22.22", "4.9.3"] {
+            expect_unsupported(
+                resolve(&yarn(version), PublishArgs { recursive: true, ..Default::default() }),
+                &["yarn does not support --recursive."],
+            );
+            expect_unsupported(
+                resolve(
+                    &yarn(version),
+                    PublishArgs { filter: Some(vec!["app".into()]), ..Default::default() },
+                ),
+                &["yarn does not support --filter."],
+            );
+        }
+    }
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish", "--workspace", "app"]);
+    #[test]
+    fn test_yarn_publish_target_is_classic_only() {
+        for target in ["pkg.tgz", "./packages/app"] {
+            let args = PublishArgs { target: Some(target.into()), ..Default::default() };
+            let command = expect_run(resolve(&yarn("1.22.22"), args.clone()).outcome);
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec!["publish", target]);
+            for version in ["2.0.0", "4.9.3"] {
+                expect_unsupported(
+                    resolve(&yarn(version), args.clone()),
+                    &["yarn >= 2 does not support TARBALL|FOLDER."],
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_yarn_publish_dry_run_version_boundary() {
+        let args = parse_args::<PublishArgs>(["--dry-run"]).unwrap();
+        for version in ["1.22.22", "2.4.3", "4.9.2", "4.9.3-rc.1"] {
+            expect_unsupported(
+                resolve(&yarn(version), args.clone()),
+                &["yarn < 4.9.3 does not support --dry-run."],
+            );
+        }
+        for version in ["4.9.3", "4.9.4"] {
+            let resolution = resolve(&yarn(version), args.clone());
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec!["npm", "publish", "--dry-run"]);
+        }
     }
 
     #[test]
@@ -291,14 +324,24 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_publish_json_is_forwarded_to_npm() {
-        for version in ["1.22.22", "2.4.2", "3.6.0", "4.10.3"] {
-            let resolution =
-                resolve(&yarn(version), PublishArgs { json: true, ..Default::default() });
+    fn test_yarn_publish_json_version_boundary() {
+        let args = parse_args::<PublishArgs>(["--json"]).unwrap();
+        for version in ["2.0.0", "4.9.2", "4.9.3-rc.1"] {
+            expect_unsupported(
+                resolve(&yarn(version), args.clone()),
+                &["yarn >= 2 && < 4.9.3 does not support --json."],
+            );
+        }
+        for (version, expected) in [
+            ("1.22.22", vec!["publish", "--json"]),
+            ("4.9.3", vec!["npm", "publish", "--json"]),
+            ("4.10.3", vec!["npm", "publish", "--json"]),
+        ] {
+            let resolution = resolve(&yarn(version), args.clone());
             assert!(resolution.diagnostics.is_empty());
             let command = expect_run(resolution.outcome);
-            assert_eq!(command.program, "npm");
-            assert_eq!(command.args, vec!["publish", "--json"]);
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, expected);
         }
     }
 
@@ -365,13 +408,50 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_publish_provenance() {
-        let command = expect_run(
-            resolve(&yarn("4.0.0"), PublishArgs { provenance: true, ..Default::default() }).outcome,
-        );
+    fn test_yarn_publish_preserves_supported_common_flags() {
+        let args = PublishArgs {
+            tag: Some("beta".into()),
+            access: Some("public".into()),
+            otp: Some("123456".into()),
+            json: true,
+            pass_through_args: vec!["--help".into()],
+            ..Default::default()
+        };
+        for (version, prefix) in [("1.22.22", vec!["publish"]), ("4.9.3", vec!["npm", "publish"])] {
+            let resolution = resolve(&yarn(version), args.clone());
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, "yarn");
+            assert_eq!(
+                command.args,
+                [
+                    prefix,
+                    vec![
+                        "--tag", "beta", "--access", "public", "--otp", "123456", "--json",
+                        "--help"
+                    ]
+                ]
+                .concat()
+            );
+        }
+    }
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish", "--provenance"]);
+    #[test]
+    fn test_yarn_publish_provenance_version_boundary() {
+        let args = parse_args::<PublishArgs>(["--provenance"]).unwrap();
+        for version in ["1.22.22", "2.4.3", "4.8.1", "4.9.0-rc.1"] {
+            expect_unsupported(
+                resolve(&yarn(version), args.clone()),
+                &["yarn < 4.9.0 does not support --provenance."],
+            );
+        }
+        for version in ["4.9.0", "4.9.3"] {
+            let resolution = resolve(&yarn(version), args.clone());
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec!["npm", "publish", "--provenance"]);
+        }
     }
 
     #[test]
@@ -410,17 +490,57 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_publish_otp() {
-        let command = expect_run(
-            resolve(
-                &yarn("1.22.0"),
-                PublishArgs { otp: Some("999999".to_string()), ..Default::default() },
-            )
-            .outcome,
-        );
+    fn test_yarn_publish_otp_version_boundary() {
+        let args = parse_args::<PublishArgs>(["--otp", "999999"]).unwrap();
+        for version in ["1.12.0", "1.12.1-rc.1"] {
+            expect_unsupported(
+                resolve(&yarn(version), args.clone()),
+                &["yarn < 1.12.1 does not support --otp."],
+            );
+        }
+        for version in ["2.0.0", "3.1.1", "3.2.0-rc.1"] {
+            expect_unsupported(
+                resolve(&yarn(version), args.clone()),
+                &["yarn >= 2 && < 3.2.0 does not support --otp."],
+            );
+        }
+        for (version, expected) in [
+            ("1.12.1", vec!["publish", "--otp", "999999"]),
+            ("3.2.0", vec!["npm", "publish", "--otp", "999999"]),
+            ("4.9.3", vec!["npm", "publish", "--otp", "999999"]),
+        ] {
+            let resolution = resolve(&yarn(version), args.clone());
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, expected);
+        }
+    }
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["publish", "--otp", "999999"]);
+    #[test]
+    fn test_yarn_publish_rejects_force() {
+        let args = parse_args::<PublishArgs>(["--force"]).unwrap();
+        for version in ["1.22.22", "4.9.3"] {
+            expect_unsupported(
+                resolve(&yarn(version), args.clone()),
+                &["yarn does not support --force."],
+            );
+        }
+    }
+
+    #[test]
+    fn test_yarn_publish_preserves_raw_unsupported_flags() {
+        let args =
+            parse_args::<PublishArgs>(["--", "--dry-run", "--force", "--json", "--otp", "123456"])
+                .unwrap();
+        for (version, prefix) in [("1.22.22", vec!["publish"]), ("2.4.3", vec!["npm", "publish"])] {
+            let resolution = resolve(&yarn(version), args.clone());
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                [prefix, vec!["--dry-run", "--force", "--json", "--otp", "123456"]].concat()
+            );
+        }
     }
 
     #[test]
@@ -492,13 +612,13 @@ mod tests {
         let args = parse_args::<PublishArgs>(["--", "--no-git-checks"]).unwrap();
         assert!(!args.no_git_checks);
         assert_eq!(args.pass_through_args, vec!["--no-git-checks"]);
-        for resolution in [
-            resolve(&npm("12.0.2"), args.clone()),
-            resolve(&yarn("4.18.0"), args.clone()),
-            resolve(&bun("1.4.2"), args),
+        for (resolution, expected) in [
+            (resolve(&npm("12.0.2"), args.clone()), vec!["publish", "--no-git-checks"]),
+            (resolve(&yarn("4.18.0"), args.clone()), vec!["npm", "publish", "--no-git-checks"]),
+            (resolve(&bun("1.4.2"), args), vec!["publish", "--no-git-checks"]),
         ] {
             assert!(resolution.diagnostics.is_empty());
-            assert_eq!(expect_run(resolution.outcome).args, vec!["publish", "--no-git-checks"]);
+            assert_eq!(expect_run(resolution.outcome).args, expected);
         }
     }
 

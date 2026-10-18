@@ -117,7 +117,7 @@ should support json output
       "testnpm2": {
         "from": "testnpm2",
         "version": "1.0.1",
-        "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+        "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
         "path": "<workspace>/node_modules/.pnpm/testnpm2@1.0.1/node_modules/testnpm2"
       }
     }

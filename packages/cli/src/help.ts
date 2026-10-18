@@ -824,6 +824,7 @@ const commandHelpDocs = {
             label: '--quiet',
             description: 'Disable reporting on warnings, only errors are reported',
           },
+          { label: '--deny-warnings', description: 'Treat lint warnings as errors' },
           { label: '--no-fmt', description: 'Skip format check' },
           {
             label: '--no-lint',
