@@ -10,12 +10,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { expect, it } from 'vitest';
 
 it('refreshes selected versions, removes obsolete tarballs, and preserves other packages', () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'vp-record-registry-test-'));
+  // Exercise URL escaping as well as Windows drive-letter paths.
+  const root = mkdtempSync(path.join(tmpdir(), 'vp-record-registry-test-#'));
   try {
     const directory = path.join(root, 'crates/vp_cli_snapshots/tests/cli_snapshots/registry');
     cpSync(
@@ -72,10 +73,14 @@ it('refreshes selected versions, removes obsolete tarballs, and preserves other 
         return new Response(readFileSync(path.join(${JSON.stringify(directory)}, 'tarballs', basename)));
       };`,
     );
-    execFileSync(process.execPath, ['--import', mock, script, 'is-number', 'yocto-queue'], {
-      cwd: root,
-      timeout: 10_000,
-    });
+    execFileSync(
+      process.execPath,
+      ['--import', pathToFileURL(mock).href, script, 'is-number', 'yocto-queue'],
+      {
+        cwd: root,
+        timeout: 10_000,
+      },
+    );
     expect(JSON.parse(readFileSync(manifestPath, 'utf8'))).toEqual(original);
     expect(existsSync(path.join(directory, 'tarballs/is-number-0.1.0.tgz'))).toBe(false);
     expect(existsSync(path.join(directory, 'tarballs/yocto-queue-0.0.0.tgz'))).toBe(false);
