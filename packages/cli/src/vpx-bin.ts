@@ -47,9 +47,56 @@ function childEnv(cwd: string): NodeJS.ProcessEnv {
   return env;
 }
 
+/** Signals Node.js ignores; an ignored signal stays ignored across exec. */
+const IGNORED_SIGNALS = ['SIGPIPE', 'SIGXFSZ'] as const;
+const ignoreSignal = () => {};
+
+interface StdioStream {
+  _handle?: { setBlocking?: (blocking: boolean) => number };
+}
+
 /**
- * Run `command` with inherited stdio and exit the way it exited. cross-spawn runs a
- * Windows `.cmd` shim from `node_modules/.bin`, which Node.js refuses to spawn directly.
+ * Replace this process with `command`, as the global `vpx` does on Unix, so the caller's
+ * PID, every signal sent to it, and the exit status belong to the script or binary.
+ * Returns on Windows, which has no exec, so the caller spawns instead.
+ *
+ * The new program starts as a spawned child would: libuv gives a child blocking stdio
+ * and default signal dispositions, while Node.js ignores SIGPIPE and makes a pipe it
+ * opened for stdio non-blocking (loading `node:util` opens stderr), which
+ * `process.execve()` passes on (nodejs/node#66824). Removing a signal listener restores
+ * the default disposition.
+ */
+function execInPlace(command: string, args: string[], env: NodeJS.ProcessEnv): void {
+  if (process.platform === 'win32' || typeof process.execve !== 'function') {
+    return;
+  }
+  for (const signal of IGNORED_SIGNALS) {
+    process.on(signal, ignoreSignal).off(signal, ignoreSignal);
+  }
+  for (const stream of [process.stdin, process.stdout, process.stderr]) {
+    /* oxlint-disable-next-line no-underscore-dangle -- Node.js has no public API for this */
+    (stream as StdioStream)._handle?.setBlocking?.(true);
+  }
+  // A failed exec aborts most supported Node.js versions instead of throwing, so a
+  // binary execs through `/bin/sh`, which reports one it cannot run as a terminal does.
+  const [file, argv] =
+    command === process.execPath
+      ? [command, [command, ...args]]
+      : ['/bin/sh', ['/bin/sh', '-c', 'exec "$0" "$@"', command, ...args]];
+  try {
+    process.execve(file, argv, env);
+  } catch {
+    for (const signal of IGNORED_SIGNALS) {
+      process.on(signal, ignoreSignal);
+    }
+  }
+}
+
+/**
+ * Run `command` with inherited stdio and exit the way it exited. On Unix, it execs
+ * `command` in place unless this bin has an IPC channel, which exec would close.
+ * cross-spawn runs a Windows `.cmd` shim from `node_modules/.bin`, which Node.js refuses
+ * to spawn directly.
  *
  * With `relayIpc`, an IPC channel this bin was started with (by `fork()`, or with an
  * `ipc` stdio entry) is relayed to the child in both directions, as tsx does, so
@@ -62,6 +109,9 @@ function runAndExit(
   env: NodeJS.ProcessEnv,
   { relayIpc = false } = {},
 ): void {
+  if (process.send === undefined) {
+    execInPlace(command, args, env);
+  }
   const ipc = relayIpc && process.send !== undefined;
   const child = spawn(command, args, {
     stdio: ipc ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit',

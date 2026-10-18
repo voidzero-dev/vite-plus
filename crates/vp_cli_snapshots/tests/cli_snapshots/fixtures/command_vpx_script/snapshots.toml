@@ -140,6 +140,14 @@ comment = "An IPC channel from the process that starts vpx reaches the script in
 steps = [["node", "parent.mjs"]]
 
 [[case]]
+name = "vpx_script_signals"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "signals"
+comment = "A signal sent to the PID of vpx reaches the script, as tools that stop a TypeScript runner send it."
+steps = [["node", "parent.mjs"]]
+
+[[case]]
 name = "vpx_package_installed"
 vp = ["local", "global"]
 skip-platforms = ["windows"]
