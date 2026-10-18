@@ -42,7 +42,7 @@ should preview using native yarn npm publish without publishing
 
 ```
 ➤ YN0000: package.json
-➤ YN0000: [DRY RUN] Package would be published to https://registry.yarnpkg.com with tag latest
+➤ YN0000: [DRY RUN] Package would be published to http://127.0.0.1:<port> with tag latest
 ➤ YN0000: Done in <duration>
 ```
 
@@ -52,7 +52,7 @@ should preserve supported native JSON output without publishing
 
 ```
 {"file":"package.json"}
-{"name":"command-publish-yarn4","version":"1.0.0","registry":"https://registry.yarnpkg.com","tag":"latest","files":["package.json"],"access":null,"dryRun":true,"published":false,"message":"[DRY RUN] Package would be published to https://registry.yarnpkg.com with tag latest","provenance":false}
+{"name":"command-publish-yarn4","version":"1.0.0","registry":"http://127.0.0.1:<port>","tag":"latest","files":["package.json"],"access":null,"dryRun":true,"published":false,"message":"[DRY RUN] Package would be published to http://127.0.0.1:<port> with tag latest","provenance":false}
 ```
 
 ## `vp pm publish --force -- --help`
