@@ -75,51 +75,51 @@ export function prepareOxlintConfigs(
   return configs;
 }
 
+function collectConfigFiles(file: OxlintConfigFile, target: Set<OxlintConfigFile>): void {
+  if (target.has(file)) {
+    return;
+  }
+  target.add(file);
+  for (const child of file.extends) {
+    collectConfigFiles(child, target);
+  }
+}
+
 /** Retained JSON consumers still need their full inheritance graph on disk. */
 export function removeMigratedOxlintConfigs(
   configs: Map<string, OxlintConfigMigration | Error>,
 ): void {
   const files = new Set<OxlintConfigFile>();
+  const retained = new Set<OxlintConfigFile>();
   const removableSources = new Set<OxlintConfigFile>();
-  function collect(file: OxlintConfigFile): void {
-    if (files.has(file)) {
-      return;
-    }
-    files.add(file);
-    file.extends.forEach(collect);
-  }
+  const removalCandidates = new Map<string, OxlintConfigFile>();
   for (const [filename, migration] of configs) {
     // An unreadable graph can contain references we could not discover.
     // Preserve all candidates rather than break that consumer's fallback.
     if (migration instanceof Error) {
       return;
     }
-    collect(migration.file);
+    const { file, migrated } = migration;
+    collectConfigFiles(file, files);
+    if (!migrated) {
+      collectConfigFiles(file, retained);
+      continue;
+    }
+    removalCandidates.set(filename, file);
     // Unlinking a workspace symlink leaves its shared JSON target on disk.
-    if (migration.migrated && !fs.lstatSync(filename).isSymbolicLink()) {
-      removableSources.add(migration.file);
+    if (!fs.lstatSync(filename).isSymbolicLink()) {
+      removableSources.add(file);
     }
-  }
-  const retained = new Set<OxlintConfigFile>();
-  function retain(file: OxlintConfigFile): void {
-    if (retained.has(file)) {
-      return;
-    }
-    retained.add(file);
-    file.extends.forEach(retain);
   }
   for (const file of files) {
     if (!removableSources.has(file)) {
-      file.extends.forEach(retain);
+      for (const child of file.extends) {
+        collectConfigFiles(child, retained);
+      }
     }
   }
-  for (const migration of configs.values()) {
-    if (!(migration instanceof Error) && !migration.migrated) {
-      retain(migration.file);
-    }
-  }
-  for (const [filename, migration] of configs) {
-    if (!(migration instanceof Error) && migration.migrated && !retained.has(migration.file)) {
+  for (const [filename, file] of removalCandidates) {
+    if (!retained.has(file)) {
       fs.unlinkSync(filename);
     }
   }
@@ -139,20 +139,23 @@ function relativeImport(from: string, to: string): string {
 function printConfig(
   config: OxlintConfig,
   inheritedNames: string[],
-  pluginExpression?: (specifier: string) => string,
-  ignorePatternsExpression?: string,
+  {
+    pluginExpression,
+    ignorePatternsExpression,
+  }: {
+    pluginExpression?: (specifier: string) => string;
+    ignorePatternsExpression?: string;
+  } = {},
 ): string {
-  const printPlugin = (entry: NonNullable<OxlintConfig['jsPlugins']>[number]): string => {
+  function printPlugin(entry: NonNullable<OxlintConfig['jsPlugins']>[number]): string {
     const specifier = typeof entry === 'string' ? entry : entry.specifier;
     const expression = pluginExpression?.(specifier) ?? JSON.stringify(specifier);
     return typeof entry === 'string'
       ? expression
       : `{ "name": ${JSON.stringify(entry.name)}, "specifier": ${expression} }`;
-  };
-  return `{
-${Object.entries(config)
-  .map(([key, value]) => {
-    let code = JSON.stringify(value, null, 2);
+  }
+  const properties = Object.entries(config).map(([key, value]) => {
+    let code: string;
     if (key === 'extends') {
       code = `[${inheritedNames.join(', ')}]`;
     } else if (key === 'ignorePatterns' && ignorePatternsExpression) {
@@ -160,12 +163,17 @@ ${Object.entries(config)
     } else if (key === 'jsPlugins' && Array.isArray(config.jsPlugins)) {
       code = `[${config.jsPlugins.map(printPlugin).join(', ')}]`;
     } else if (key === 'overrides' && config.overrides) {
-      code = `[${config.overrides.map((override) => printConfig(override, [], pluginExpression)).join(',\n')}]`;
+      code = `[${config.overrides.map((override) => printConfig(override, [], { pluginExpression })).join(',\n')}]`;
+    } else {
+      code = JSON.stringify(value, null, 2);
     }
     return `  ${JSON.stringify(key)}: ${code.replaceAll('\n', '\n  ')}`;
-  })
-  .join(',\n')}
-}`;
+  });
+  return `{\n${properties.join(',\n')}\n}`;
+}
+
+function isRelativePluginPath(specifier: string): boolean {
+  return /^\.{1,2}(?:[/\\]|$)/.test(specifier);
 }
 
 /** Generate portable shared modules, leaving their plugins in their original layers. */
@@ -176,6 +184,7 @@ export function prepareOxlintConfigModules(
   workspaceRoot: string,
 ): OxlintModulePlan {
   viteConfigPath = fs.realpathSync(viteConfigPath);
+  const viteConfigDir = path.dirname(viteConfigPath);
   const source = fs.readFileSync(viteConfigPath, 'utf8');
   const names = new Set<string>();
   const { ast } = JSON.parse(analyzeMigrationSource(viteConfigPath, source), (key, value) => {
@@ -211,22 +220,24 @@ export function prepareOxlintConfigModules(
         `Shared Oxlint config is outside the project or in node_modules: ${file.filename}`,
       );
     }
+    const configDir = path.dirname(file.filename);
     for (const layer of [file.config, ...(file.config.overrides ?? [])]) {
       for (const entry of layer.jsPlugins ?? []) {
         const specifier = typeof entry === 'string' ? entry : entry.specifier;
         if (
-          !/^\.{1,2}(?:[/\\]|$)/.test(specifier) &&
-          !path.isAbsolute(specifier) &&
-          path.dirname(file.filename) !== path.dirname(viteConfigPath)
+          isRelativePluginPath(specifier) ||
+          path.isAbsolute(specifier) ||
+          configDir === viteConfigDir
         ) {
-          resolver ??= new ResolverFactory({ conditionNames: ['module-sync', 'node', 'import'] });
-          const original = resolver.sync(path.dirname(file.filename), specifier);
-          const migrated = resolver.sync(path.dirname(viteConfigPath), specifier);
-          if (original.path && original.path !== migrated.path) {
-            throw new Error(
-              `JS plugin "${specifier}" in ${file.filename} resolves differently from the Vite config directory; migrate this plugin manually`,
-            );
-          }
+          continue;
+        }
+        resolver ??= new ResolverFactory({ conditionNames: ['module-sync', 'node', 'import'] });
+        const original = resolver.sync(configDir, specifier);
+        const migrated = resolver.sync(viteConfigDir, specifier);
+        if (original.path && original.path !== migrated.path) {
+          throw new Error(
+            `JS plugin "${specifier}" in ${file.filename} resolves differently from the Vite config directory; migrate this plugin manually`,
+          );
         }
       }
     }
@@ -253,7 +264,8 @@ export function prepareOxlintConfigModules(
         `Cannot create shared Oxlint config because ${filename} or ${runtimePath} already exists`,
       );
     }
-    modules.set(filename, { file, content: '' });
+    const module = { file, content: '' };
+    modules.set(filename, module);
     const imports = ['import type { OxlintConfig } from "vite-plus/lint";'];
     const inherited = file.extends.map((child, index) => {
       const name = `oxlintConfig${index + 1}`;
@@ -263,24 +275,21 @@ export function prepareOxlintConfigModules(
       return name;
     });
     let needsFileUrl = false;
-    const pluginExpression = (specifier: string): string => {
-      if (/^\.{1,2}(?:[/\\]|$)/.test(specifier)) {
+    function pluginExpression(specifier: string): string {
+      if (isRelativePluginPath(specifier)) {
         needsFileUrl = true;
         const url = specifier.replaceAll('\\', '/').split('/').map(encodeURIComponent).join('/');
         return `fileURLToPath(new URL(${JSON.stringify(url)}, import.meta.url))`;
       }
       return JSON.stringify(specifier);
-    };
+    }
     const config = structuredClone(file.config);
     ensureSvelteRuneGlobals(config);
-    const body = printConfig(config, inherited, pluginExpression);
+    const body = printConfig(config, inherited, { pluginExpression });
     if (needsFileUrl) {
       imports.unshift('import { fileURLToPath } from "node:url";');
     }
-    modules.set(filename, {
-      file,
-      content: `${imports.join('\n')}\n\nexport default ${body} satisfies OxlintConfig;\n`,
-    });
+    module.content = `${imports.join('\n')}\n\nexport default ${body} satisfies OxlintConfig;\n`;
     return filename;
   }
 
@@ -298,12 +307,9 @@ export function prepareOxlintConfigModules(
     return name;
   });
   return {
-    configContent: printConfig(
-      config,
-      inherited,
-      undefined,
-      root.shared ? `${inherited[0]}.ignorePatterns` : undefined,
-    ),
+    configContent: printConfig(config, inherited, {
+      ignorePatternsExpression: root.shared ? `${inherited[0]}.ignorePatterns` : undefined,
+    }),
     imports,
     modules,
   };

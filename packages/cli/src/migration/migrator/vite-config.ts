@@ -317,14 +317,13 @@ function mergeOxlintConfigFile(
   const { file } = migration;
   // Keep shared rules in one module, including for the workspace that owns it.
   // Ignore patterns only apply at the top level, so keep them local as well.
-  const oxlintJson: OxlintConfig = file.shared
-    ? {
-        extends: [structuredClone(file.config)],
-        ...(file.config.ignorePatterns !== undefined
-          ? { ignorePatterns: file.config.ignorePatterns }
-          : {}),
-      }
-    : structuredClone(file.config);
+  let oxlintJson: OxlintConfig = structuredClone(file.config);
+  if (file.shared) {
+    oxlintJson = { extends: [oxlintJson] };
+    if (file.config.ignorePatterns !== undefined) {
+      oxlintJson.ignorePatterns = file.config.ignorePatterns;
+    }
+  }
   // Never discard an inheritance tree when a lint block already exists.
   if (oxlintJson.extends?.length && hasConfigKey(path.join(projectPath, viteConfig), 'lint')) {
     warnMigration(
@@ -372,14 +371,11 @@ function mergeOxlintConfigFile(
   for (const layer of layers) {
     ensureSvelteRuneGlobals(layer);
   }
-  const inheritedImportRule = layers.findLast(
+  const hasInheritedImportRule = layers.some(
     (layer) => layer.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE] !== undefined,
-  )?.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE];
+  );
   const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
-  if (
-    inheritedImportRule !== undefined &&
-    oxlintJson.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE] === undefined
-  ) {
+  if (hasInheritedImportRule && oxlintJson.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE] === undefined) {
     // Keep the shared rule live: copying its value into the root would mask later edits.
     delete normalizedOxlintConfig.rules![PREFER_VITE_PLUS_IMPORTS_RULE];
   }
@@ -560,49 +556,7 @@ function mergeAndRemoveJsonConfig(
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   }
-  if (result.updated) {
-    const originalViteConfig = fs.readFileSync(fullViteConfigPath, 'utf8');
-    const writtenModules: string[] = [];
-    try {
-      for (const [filename, module] of modulePlan?.modules ?? []) {
-        const descriptor = fs.openSync(filename, 'wx');
-        writtenModules.push(filename);
-        try {
-          fs.writeFileSync(descriptor, module.content);
-        } finally {
-          fs.closeSync(descriptor);
-        }
-      }
-      let content = result.content;
-      if (modulePlan?.imports.length) {
-        const offset = content.startsWith('#!') ? content.indexOf('\n') + 1 : 0;
-        content =
-          content.slice(0, offset) + modulePlan.imports.join('\n') + '\n' + content.slice(offset);
-      }
-      fs.writeFileSync(fullViteConfigPath, content);
-      if (!deferRemoval) {
-        fs.unlinkSync(fullJsonConfigPath);
-      }
-    } catch (error) {
-      for (const filename of writtenModules) {
-        fs.unlinkSync(filename);
-      }
-      fs.writeFileSync(fullViteConfigPath, originalViteConfig);
-      throw error;
-    }
-    for (const [filename, module] of modulePlan?.modules ?? []) {
-      module.file.modulePath = filename;
-    }
-    if (report) {
-      report.mergedConfigCount++;
-    }
-    if (!silent) {
-      prompts.log.success(
-        `✔ Merged ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
-      );
-    }
-    return true;
-  } else {
+  if (!result.updated) {
     warnMigration(
       `Failed to merge ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
       report,
@@ -613,6 +567,48 @@ function mergeAndRemoveJsonConfig(
     );
     return false;
   }
+
+  const originalViteConfig = fs.readFileSync(fullViteConfigPath, 'utf8');
+  const writtenModules: string[] = [];
+  try {
+    for (const [filename, module] of modulePlan?.modules ?? []) {
+      const descriptor = fs.openSync(filename, 'wx');
+      writtenModules.push(filename);
+      try {
+        fs.writeFileSync(descriptor, module.content);
+      } finally {
+        fs.closeSync(descriptor);
+      }
+    }
+    let content = result.content;
+    if (modulePlan?.imports.length) {
+      const offset = content.startsWith('#!') ? content.indexOf('\n') + 1 : 0;
+      content =
+        content.slice(0, offset) + modulePlan.imports.join('\n') + '\n' + content.slice(offset);
+    }
+    fs.writeFileSync(fullViteConfigPath, content);
+    if (!deferRemoval) {
+      fs.unlinkSync(fullJsonConfigPath);
+    }
+  } catch (error) {
+    for (const filename of writtenModules) {
+      fs.unlinkSync(filename);
+    }
+    fs.writeFileSync(fullViteConfigPath, originalViteConfig);
+    throw error;
+  }
+  for (const [filename, module] of modulePlan?.modules ?? []) {
+    module.file.modulePath = filename;
+  }
+  if (report) {
+    report.mergedConfigCount++;
+  }
+  if (!silent) {
+    prompts.log.success(
+      `✔ Merged ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
+    );
+  }
+  return true;
 }
 
 /**
