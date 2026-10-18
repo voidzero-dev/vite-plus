@@ -264,6 +264,7 @@ impl HttpClient {
                 .with_min_delay(Duration::from_millis(self.min_delay))
                 .with_max_times(self.max_times),
         )
+        .when(|error| !is_not_found(error))
         .await
     }
 
@@ -614,10 +615,15 @@ async fn download_and_extract_tgz_once(
 ///   from a `spawn_blocking` panic, …) is permanent and is not retried.
 fn is_retryable_download_error(err: &Error) -> bool {
     match err {
-        Error::Reqwest(e) => e.status() != Some(StatusCode::NOT_FOUND),
+        Error::Reqwest(_) => !is_not_found(err),
         Error::Io(_) | Error::IoWithPath { .. } | Error::HashMismatch { .. } => true,
         _ => false,
     }
+}
+
+/// A registry 404 means the package, version, or dist-tag does not exist, so retrying cannot help.
+pub(crate) fn is_not_found(err: &Error) -> bool {
+    matches!(err, Error::Reqwest(e) if e.status() == Some(StatusCode::NOT_FOUND))
 }
 
 /// Compute the digest of a file in chunks.

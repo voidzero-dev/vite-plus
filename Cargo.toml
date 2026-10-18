@@ -157,9 +157,9 @@ anyhow = "1.0.98"
 append-only-vec = "0.1.7"
 arcstr = { version = "1.2.0", default-features = false }
 ariadne = { package = "rolldown-ariadne", version = "0.6.0" }
-ast-grep-config = "0.50.0"
-ast-grep-core = "0.50.0"
-ast-grep-language = { version = "0.50.0", default-features = false, features = [
+ast-grep-config = "0.51.0"
+ast-grep-core = "0.51.0"
+ast-grep-language = { version = "0.51.0", default-features = false, features = [
   "tree-sitter-bash",
   "tree-sitter-typescript",
 ] }
@@ -214,7 +214,7 @@ js-semver = "1.0.0"
 json-escape-simd = "3"
 json-strip-comments = "3"
 jsonschema = { version = "0.58.0", default-features = false }
-junction = "1.4.1"
+junction = "2.0.0"
 libtest-mimic = "0.8.2"
 memchr = "2.7.4"
 mimalloc-safe = "0.1.62"
@@ -259,7 +259,7 @@ reqwest = { version = "0.13", default-features = false }
 rolldown-notify = "11.0.0"
 rolldown-notify-debouncer-full = "0.8.0"
 rustc-hash = "2.1.1"
-rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 same-file = "1.0.6"
 saphyr = { version = "0.2.1", default-features = false }
 schemars = "1.0.0"
@@ -321,7 +321,7 @@ webpki-root-certs = "1.0.9"
 which = "8.0.6"
 winreg = "0.56.0"
 xxhash-rust = "0.8.15"
-zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+zip = { version = "9.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
 oxc = { version = "0.154.0", features = [
