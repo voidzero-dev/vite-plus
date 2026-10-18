@@ -108,23 +108,16 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
     let cmd_spec = &positional[0];
 
     // Script mode is decided before package-spec parsing: script paths can contain `@`.
-    if flags.packages.is_empty() && !flags.shell_mode {
+    let package_flags = !flags.packages.is_empty() || flags.shell_mode;
+    if !package_flags || !cmd_spec.starts_with('-') {
         match vpx_script::detect(&positional, cwd) {
-            Ok(Some(invocation)) => {
-                return vpx_script::execute(invocation, flags.tsconfig, cwd).await;
-            }
-            Ok(None) => {}
-            Err(error) => {
-                output::error(&format!("vpx: {error}"));
-                return 1;
-            }
-        }
-    } else if !cmd_spec.starts_with('-') {
-        match vpx_script::detect(&positional, cwd) {
-            Ok(Some(_)) => {
+            Ok(Some(_)) if package_flags => {
                 let flag = if flags.shell_mode { "--shell-mode" } else { "--package" };
                 output::error(&format!("vpx: {flag} cannot be used when running a script"));
                 return 1;
+            }
+            Ok(Some(invocation)) => {
+                return vpx_script::execute(invocation, flags.tsconfig, cwd).await;
             }
             // A missing script never falls through to `dlx`, `--package` or not. With
             // `--shell-mode` the token is a shell command, not a path.
@@ -144,7 +137,7 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
     let cmd_name = extract_command_name(cmd_spec);
 
     // If no version spec and no --package flag, try local → global → PATH lookup
-    if !has_version_spec(cmd_spec) && flags.packages.is_empty() && !flags.shell_mode {
+    if !has_version_spec(cmd_spec) && !package_flags {
         // An explicit path runs as a program; fail clearly here rather than in `dlx`.
         if let Err(error) = vpx_script::check_explicit_program(cmd_spec, cwd) {
             output::error(&format!("vpx: {}", error.error));
@@ -157,11 +150,13 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
         // 1. Try local node_modules/.bin
         if let Some(local_bin) = find_local_binary(cwd, &cmd_name) {
             tracing::debug!("vpx: found local binary at {}", local_bin.as_path().display());
-            let mut child_env = ToolPathEnv::from_env();
-            if let Err(error) = prepend_node_modules_bin_to_path(cwd, &mut child_env) {
-                output::error(&format!("vpx: {error}"));
-                return 1;
-            }
+            let child_env = match local_bin_env(cwd) {
+                Ok(env) => env,
+                Err(error) => {
+                    output::error(&format!("vpx: {error}"));
+                    return 1;
+                }
+            };
             let cmd_args: Vec<String> = positional[1..].to_vec();
             return crate::shim::exec::exec_tool(&local_bin, &cmd_args, child_env);
         }
@@ -175,11 +170,13 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
         // 3. Try system PATH (excluding vite-plus bin dir)
         if let Some(path_bin) = find_on_path(&cmd_name) {
             tracing::debug!("vpx: found on PATH at {}", path_bin.as_path().display());
-            let mut child_env = ToolPathEnv::from_env();
-            if let Err(error) = prepend_node_modules_bin_to_path(cwd, &mut child_env) {
-                output::error(&format!("vpx: {error}"));
-                return 1;
-            }
+            let child_env = match local_bin_env(cwd) {
+                Ok(env) => env,
+                Err(error) => {
+                    output::error(&format!("vpx: {error}"));
+                    return 1;
+                }
+            };
             let cmd_args: Vec<String> = positional[1..].to_vec();
             return crate::shim::exec::exec_tool(&path_bin, &cmd_args, child_env);
         }
@@ -291,7 +288,15 @@ fn find_on_path(cmd: &str) -> Option<AbsolutePathBuf> {
 ///
 /// Walks up from cwd and prepends each existing `node_modules/.bin` directory
 /// to PATH so that sub-processes also resolve local binaries first.
-pub(crate) fn prepend_node_modules_bin_to_path(
+/// This process's environment with every `node_modules/.bin` from `cwd` up first on
+/// `PATH`, nearest first.
+pub(crate) fn local_bin_env(cwd: &AbsolutePath) -> std::io::Result<ToolPathEnv> {
+    let mut env = ToolPathEnv::from_env();
+    prepend_node_modules_bin_to_path(cwd, &mut env)?;
+    Ok(env)
+}
+
+fn prepend_node_modules_bin_to_path(
     cwd: &AbsolutePath,
     env: &mut ToolPathEnv,
 ) -> std::io::Result<()> {
@@ -466,8 +471,7 @@ mod tests {
     /// bin's port of these two functions.
     #[test]
     fn shared_package_specs() {
-        let table: serde_json::Value =
-            serde_json::from_str(include_str!("vpx_script_cases.json")).unwrap();
+        let table = super::vpx_script::shared_table();
         let specs = table["packageSpecs"].as_array().unwrap();
         assert!(!specs.is_empty());
         for case in specs {

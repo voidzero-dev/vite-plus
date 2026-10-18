@@ -247,7 +247,7 @@ function isScript(token: string, cwd: string): boolean {
   return stats.isFile() && hasVpxShebang(file);
 }
 
-export function isExplicitPath(token: string): boolean {
+function isExplicitPath(token: string): boolean {
   if (token.startsWith('./') || token.startsWith('../') || token.startsWith('/')) {
     return true;
   }
@@ -306,18 +306,28 @@ export function commandName(spec: string): string {
   return spec.split('@')[0];
 }
 
-/** The nearest `node_modules/.bin/<name>` from `cwd` up (`.cmd` on Windows), like the global CLI's `find_local_binary`. */
-export function findLocalBin(name: string, cwd: string): string | undefined {
-  const file = process.platform === 'win32' ? `${name}.cmd` : name;
+/** Every `node_modules/.bin` path from `cwd` up to the root, nearest first, whether or not it exists. */
+export function nodeModulesBinPaths(cwd: string): string[] {
+  const paths: string[] = [];
   for (let dir = cwd; ; dir = path.dirname(dir)) {
-    const bin = path.join(dir, 'node_modules', '.bin', file);
-    if (isFile(bin)) {
-      return bin;
-    }
+    paths.push(path.join(dir, 'node_modules', '.bin'));
     if (path.dirname(dir) === dir) {
-      return undefined;
+      return paths;
     }
   }
+}
+
+/** The nearest `node_modules/.bin/<name>` from `cwd` up (`.cmd` on Windows), like the global CLI's `find_local_binary`. */
+function findLocalBin(name: string, cwd: string): { file: string; stats: Stats } | undefined {
+  const fileName = process.platform === 'win32' ? `${name}.cmd` : name;
+  for (const dir of nodeModulesBinPaths(cwd)) {
+    const file = path.join(dir, fileName);
+    const stats = statSync(file, { throwIfNoEntry: false });
+    if (stats?.isFile()) {
+      return { file, stats };
+    }
+  }
+  return undefined;
 }
 
 /** An executable mode bit, as the global CLI checks; always true on Windows. */
@@ -396,14 +406,14 @@ export function packageInvocation(
   const name = commandName(spec);
   const bin = findLocalBin(name, cwd);
   if (bin) {
-    if (!isExecutable(statSync(bin))) {
-      const relative = path.relative(cwd, bin);
+    if (!isExecutable(bin.stats)) {
+      const relative = path.relative(cwd, bin.file);
       return {
         error: `'${relative}' is not executable`,
         note: `Reinstall dependencies with \`vp install\`, or make it executable with \`chmod +x ${relative}\`.`,
       };
     }
-    return { command: 'run', file: bin, args: rest };
+    return { command: 'run', file: bin.file, args: rest };
   }
   return {
     error: `'${name}' is not installed in node_modules`,

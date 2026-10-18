@@ -13,7 +13,7 @@
  */
 
 import type { LoadFnOutput, LoadHookSync, ResolveHookSync } from 'node:module';
-import { createRequire, registerHooks, setSourceMapsSupport } from 'node:module';
+import Module, { registerHooks, setSourceMapsSupport } from 'node:module';
 import path from 'node:path';
 
 import { addHook } from 'pirates';
@@ -23,8 +23,9 @@ import {
   HELPER_MODULE_NAME,
   isCommonJsRequire,
   isSupportedNodeVersion,
+  loadOxcNode,
   resolveWithOxcNode,
-  rewriteHelperRequires,
+  routeHelperRequires,
   SUPPORTED_NODE_RANGE,
   withRequireAsyncModuleCode,
 } from './script-hooks.ts';
@@ -38,9 +39,7 @@ if (!isSupportedNodeVersion(process.versions.node)) {
 
 // Loaded after the version check so the native addon never loads on an
 // unsupported Node.js.
-const { oxcNode } = createRequire(import.meta.url)(
-  '../binding/index.cjs',
-) as typeof import('../binding/index.js');
+const oxcNode = loadOxcNode();
 
 // `vpx --tsconfig` pins one config for every file. It must be set before the first
 // transform or resolve; the off-thread hooks load the same native library, so they
@@ -51,6 +50,7 @@ oxcNode.setTsconfigPath(process.env.VP_SCRIPT_TSCONFIG);
 oxcNode.setTransformDeps('typescript');
 
 setSourceMapsSupport(true, { nodeModules: true, generatedCode: true });
+routeHelperRequires(Module as never);
 
 const EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.cjs', '.cts', '.es6', '.es'];
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
@@ -66,7 +66,7 @@ addHook(
     } catch (error) {
       throw withRequireAsyncModuleCode(error);
     }
-    const source = rewriteHelperRequires(output.source);
+    const source = output.source;
     const sourceMap = output.sourceMap;
     return sourceMap
       ? source + SOURCEMAP_PREFIX + Buffer.from(sourceMap, 'utf8').toString('base64')

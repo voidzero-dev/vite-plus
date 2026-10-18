@@ -36,7 +36,6 @@ pub fn transforms_dep(path: String) -> bool {
 #[allow(clippy::type_complexity)]
 pub fn create_resolve<'env>(
     env: &'env Env,
-    options: OxcResolveOptions,
     specifier: String,
     context: ResolveContext,
     next_resolve: Function<
@@ -45,6 +44,8 @@ pub fn create_resolve<'env>(
         Either<ResolveFnOutput, PromiseRaw<'env, ResolveFnOutput>>,
     >,
 ) -> Result<Either<ResolveFnOutput, PromiseRaw<'env, ResolveFnOutput>>> {
+    // Only oxc-node's WASI build reads the options, so this addon passes none.
+    let options = OxcResolveOptions { get_current_directory: None };
     ::oxc_node::create_resolve(env, options, specifier, context, next_resolve)
 }
 

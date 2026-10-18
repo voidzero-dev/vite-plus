@@ -33,7 +33,9 @@ function oxcVersion(cargoToml: string, file: string): string {
 
 /** Point oxc-node's `oxc` dependency at `version`. */
 export function setOxcVersion(cargoToml: string, version: string): string {
-  oxcVersion(cargoToml, 'oxc-node/Cargo.toml');
+  if (!parseCargoOxcVersions(cargoToml).has('oxc')) {
+    throw new Error('[patch-oxc-node] Could not find the `oxc` dependency in oxc-node/Cargo.toml');
+  }
   return replaceCargoCrateVersion(cargoToml, 'oxc', version);
 }
 

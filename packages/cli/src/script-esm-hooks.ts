@@ -5,16 +5,11 @@
  */
 
 import type { LoadHook, ResolveHook } from 'node:module';
-import { createRequire } from 'node:module';
 import { isMainThread, MessageChannel } from 'node:worker_threads';
 
-import { HELPER_MODULE_NAME, resolveWithOxcNode } from './script-hooks.ts';
+import { HELPER_MODULE_NAME, loadOxcNode, resolveWithOxcNode } from './script-hooks.ts';
 
-// Required, not imported: importing `index.js` makes this thread translate the whole
-// CommonJS binding for ESM, and `module.register()` waits for that (5-13 ms).
-const { oxcNode } = createRequire(import.meta.url)(
-  '../binding/index.cjs',
-) as typeof import('../binding/index.js');
+const oxcNode = loadOxcNode();
 
 // Keep the loader worker alive, as upstream does.
 if (!isMainThread) {

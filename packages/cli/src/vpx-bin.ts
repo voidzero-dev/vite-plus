@@ -14,16 +14,17 @@
 import type { Serializable } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { constants } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 
 import spawn from 'cross-spawn';
 
+import { exitCodeFromClose } from './utils/command.ts';
 import {
   detectScript,
   isFile,
+  nodeModulesBinPaths,
   packageInvocation,
   parseVpxArgs,
   ScriptError,
@@ -34,24 +35,16 @@ function errorMsg(message: string) {
   console.error(styleText(['red', 'bold'], 'error:'), message);
 }
 
-function pathKey(env: NodeJS.ProcessEnv): string {
-  return Object.keys(env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH';
-}
-
-/** Prepend every `node_modules/.bin` from `cwd` up, nearest first, like the global CLI. */
-function prependNodeModulesBins(cwd: string, pathValue: string | undefined): string {
-  const entries = (pathValue ?? '').split(path.delimiter).filter(Boolean);
-  const bins: string[] = [];
-  for (let dir = cwd; ; dir = path.dirname(dir)) {
-    const bin = path.join(dir, 'node_modules', '.bin');
-    if (statSync(bin, { throwIfNoEntry: false })?.isDirectory() && !entries.includes(bin)) {
-      bins.push(bin);
-    }
-    if (path.dirname(dir) === dir) {
-      break;
-    }
-  }
-  return [...bins, ...entries].join(path.delimiter);
+/** This process's environment with every existing `node_modules/.bin` from `cwd` up first on PATH, nearest first, like the global CLI. */
+function childEnv(cwd: string): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  const key = Object.keys(env).find((name) => name.toUpperCase() === 'PATH') ?? 'PATH';
+  const entries = (env[key] ?? '').split(path.delimiter).filter(Boolean);
+  const bins = nodeModulesBinPaths(cwd).filter(
+    (bin) => !entries.includes(bin) && statSync(bin, { throwIfNoEntry: false })?.isDirectory(),
+  );
+  env[key] = [...bins, ...entries].join(path.delimiter);
+  return env;
 }
 
 /**
@@ -90,7 +83,7 @@ function runAndExit(
       process.kill(process.pid, signal);
       return;
     }
-    process.exit(code ?? (signal ? 128 + (constants.signals[signal] ?? 0) : 1));
+    process.exit(exitCodeFromClose(code, signal));
   };
   if (ipc) {
     child.on('message', (message) => {
@@ -165,8 +158,12 @@ Examples:
   vpx --watch ./server.ts                # Pass Node.js options before the script
 `;
 
-function fail(message: string): never {
+function fail(message: string, note?: string): never {
   errorMsg(message);
+  if (note) {
+    /* oxlint-disable-next-line no-console */
+    console.error(styleText(['dim', 'bold'], 'note:'), note);
+  }
   process.exit(1);
 }
 
@@ -217,9 +214,7 @@ if (!packageFlags || !first.startsWith('-')) {
 }
 
 if (invocation) {
-  const env = { ...process.env };
-  const key = pathKey(env);
-  env[key] = prependNodeModulesBins(cwd, env[key]);
+  const env = childEnv(cwd);
   const tsconfig = invocation.tsconfig ?? flags.tsconfig;
   if (tsconfig === undefined) {
     delete env.VP_SCRIPT_TSCONFIG;
@@ -251,20 +246,12 @@ if (invocation) {
   }
   const result = packageInvocation(flags, [first, ...rest], cwd);
   if ('error' in result) {
-    errorMsg(`vpx: ${result.error}`);
-    if (result.note) {
-      /* oxlint-disable-next-line no-console */
-      console.error(styleText(['dim', 'bold'], 'note:'), result.note);
-    }
-    process.exit(1);
+    fail(`vpx: ${result.error}`, result.note);
   }
   if (result.command === 'run') {
     // As the global CLI runs a local binary: the file itself, with every
     // `node_modules/.bin` from the cwd up first on PATH.
-    const env = { ...process.env };
-    const key = pathKey(env);
-    env[key] = prependNodeModulesBins(cwd, env[key]);
-    runAndExit(result.file, result.args, env);
+    runAndExit(result.file, result.args, childEnv(cwd));
   } else {
     // Hand off to this package's `vp dlx` in this process. A computed specifier
     // keeps the CLI bundle and the native binding out of this entry.

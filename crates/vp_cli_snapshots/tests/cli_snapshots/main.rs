@@ -692,8 +692,15 @@ impl CaseHome {
         let bin_dir = package_dir.join("bin");
         std::fs::create_dir_all(shim_dir)
             .map_err(|e| format!("failed to create local package shim dir: {e}"))?;
-        for name in ["vp", "vpr", "vpx", "oxfmt", "oxlint"] {
-            let script = bin_dir.join(name);
+        // One shim per file in `bin/`, as Unix flavors put the whole directory on PATH.
+        let entries = std::fs::read_dir(&bin_dir)
+            .map_err(|e| format!("failed to read local package bin dir: {e}"))?;
+        for entry in entries {
+            let script =
+                entry.map_err(|e| format!("failed to read local package bin dir: {e}"))?.path();
+            let Some(name) = script.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
             if !script.is_file() {
                 continue;
             }

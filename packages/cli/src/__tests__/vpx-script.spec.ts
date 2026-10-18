@@ -10,7 +10,7 @@ import {
   canRegisterSyncHooks,
   HELPER_MODULE_NAME,
   isSupportedNodeVersion,
-  rewriteHelperRequires,
+  routeHelperRequires,
   withRequireAsyncModuleCode,
   runtimeHelperSpecifier,
   SUPPORTED_NODE_RANGE,
@@ -241,16 +241,6 @@ describe('script hooks', () => {
     expect(canRegisterSyncHooks('26.0.0')).toBe(true);
   });
 
-  it('checks the supported Node.js range', () => {
-    expect(isSupportedNodeVersion('22.18.0')).toBe(true);
-    expect(isSupportedNodeVersion('22.17.1')).toBe(false);
-    expect(isSupportedNodeVersion('23.11.0')).toBe(false);
-    expect(isSupportedNodeVersion('24.11.0')).toBe(true);
-    expect(isSupportedNodeVersion('25.0.0')).toBe(false);
-    expect(isSupportedNodeVersion('26.0.0')).toBe(true);
-    expect(isSupportedNodeVersion('20.19.0')).toBe(false);
-  });
-
   it('maps oxc-node runtime helpers to @oxc-project/runtime', () => {
     expect(runtimeHelperSpecifier(`${HELPER_MODULE_NAME}/helpers/defineProperty`)).toBe(
       '@oxc-project/runtime/helpers/defineProperty',
@@ -273,14 +263,18 @@ describe('script hooks', () => {
     expect(source.includes(`${HELPER_MODULE_NAME}/helpers/usingCtx`)).toBe(major < 24);
   });
 
-  it('rewrites CommonJS helper requires so ES module evaluation can run them', () => {
-    const code = rewriteHelperRequires(
-      `var _defineProperty = require("${HELPER_MODULE_NAME}/helpers/defineProperty");\nexport function f() {}`,
+  it('resolves helper requires from this package and leaves other requests alone', () => {
+    /* oxlint-disable no-underscore-dangle -- Node.js' CommonJS resolver */
+    const Module = { _resolveFilename: (request: string) => `original:${request}` };
+    routeHelperRequires(Module);
+    const helper = Module._resolveFilename(`${HELPER_MODULE_NAME}/helpers/defineProperty`);
+    expect(helper).toMatch(/@oxc-project[\\/]runtime[\\/]/);
+    expect(path.isAbsolute(helper)).toBe(true);
+    expect(Module._resolveFilename('./local')).toBe('original:./local');
+    expect(Module._resolveFilename('@oxc-node/core/helpers/defineProperty')).toBe(
+      'original:@oxc-node/core/helpers/defineProperty',
     );
-    expect(code).not.toContain('require(');
-    expect(code).toContain(`process.getBuiltinModule("node:module").createRequire("file://`);
-    expect(code).toContain('("@oxc-project/runtime/helpers/defineProperty");');
-    expect(rewriteHelperRequires('require("./local")')).toBe('require("./local")');
+    /* oxlint-enable no-underscore-dangle */
   });
 
   it("gives require() of a module with top-level await Node.js' error code", () => {

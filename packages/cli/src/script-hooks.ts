@@ -2,7 +2,21 @@
  * Shared pieces of the `vpx <script>` loader (see `script-preload.ts`).
  */
 
+import { createRequire } from 'node:module';
+
 type OxcNodeBinding = typeof import('../binding/index.js').oxcNode;
+
+/**
+ * The oxc-node hooks compiled into the Vite+ binding. Required, not imported: importing
+ * `index.js` makes a `module.register()` hooks thread translate the whole CommonJS
+ * binding for ESM, and `module.register()` waits for that (5-13 ms).
+ */
+export function loadOxcNode(): OxcNodeBinding {
+  const binding = createRequire(import.meta.url)(
+    '../binding/index.cjs',
+  ) as typeof import('../binding/index.js');
+  return binding.oxcNode;
+}
 
 /** Must match `engines.node` in package.json; `__tests__/vpx-script.spec.ts` checks it. */
 export const SUPPORTED_NODE_RANGE = '^22.18.0 || ^24.11.0 || >=26.0.0';
@@ -67,16 +81,34 @@ export function runtimeHelperSpecifier(specifier: string): string | undefined {
 /** URL that runtime helper imports resolve from: this package. */
 const HELPERS_PARENT_URL = import.meta.url;
 
-const HELPER_REQUIRE = `require("${OXC_NODE_HELPERS}`;
-const RUNTIME_HELPER_REQUIRE = `process.getBuiltinModule("node:module").createRequire(${JSON.stringify(HELPERS_PARENT_URL)})("${RUNTIME_HELPERS}`;
+interface CommonJsModule {
+  _resolveFilename: (
+    this: unknown,
+    request: string,
+    parent: unknown,
+    isMain: boolean,
+    options?: unknown,
+  ) => string;
+}
 
 /**
  * CommonJS output (a file without `import`/`export`) loads helpers with `require()`,
- * which the `module.register()` hooks on Node.js 22 and 24 never see. Load them from
- * this package instead of the user's file.
+ * which never reaches the `module.register()` hooks, while `registerHooks()` hands it
+ * to Node.js' CommonJS resolution. Both go through `Module._resolveFilename`, so this
+ * wraps it to resolve the helpers from this package, as upstream's `register.mjs` does.
+ * The mapped specifier is not a helper specifier, so resolving it falls through.
  */
-export function rewriteHelperRequires(code: string): string {
-  return code.replaceAll(HELPER_REQUIRE, RUNTIME_HELPER_REQUIRE);
+export function routeHelperRequires(Module: CommonJsModule): void {
+  /* oxlint-disable no-underscore-dangle -- Node.js' CommonJS resolver */
+  const resolveFilename = Module._resolveFilename;
+  const requireFromHere = createRequire(HELPERS_PARENT_URL);
+  Module._resolveFilename = function (request, parent, isMain, options) {
+    const helper = runtimeHelperSpecifier(request);
+    return helper
+      ? requireFromHere.resolve(helper)
+      : resolveFilename.call(this, request, parent, isMain, options);
+  };
+  /* oxlint-enable no-underscore-dangle */
 }
 
 /**
@@ -107,9 +139,6 @@ export function isCommonJsRequire(context: { importAttributes?: unknown } | unde
   return context?.importAttributes === undefined;
 }
 
-// Only the WASI build of oxc-node reads these options; they match upstream's hooks.
-const RESOLVE_OPTIONS = { getCurrentDirectory: () => process.cwd() };
-
 /**
  * The resolve hook for both hook paths: runtime helpers resolve from this package,
  * `require()` stays on Node.js' resolution, and everything else goes through oxc-node.
@@ -127,10 +156,5 @@ export function resolveWithOxcNode<Context extends { importAttributes?: unknown 
   if (isCommonJsRequire(context)) {
     return nextResolve(specifier, context);
   }
-  return oxcNode.createResolve(
-    RESOLVE_OPTIONS,
-    specifier,
-    context as never,
-    nextResolve as never,
-  ) as Result;
+  return oxcNode.createResolve(specifier, context as never, nextResolve as never) as Result;
 }

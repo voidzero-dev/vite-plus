@@ -8,7 +8,7 @@
 
 use std::io::Read as _;
 
-use vp_shared::{ToolPathEnv, env_vars, output};
+use vp_shared::{env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::js_executor::JsExecutor;
@@ -384,11 +384,13 @@ pub async fn execute(
         }
     }
 
-    let mut env = ToolPathEnv::from_env();
-    if let Err(error) = super::vpx::prepend_node_modules_bin_to_path(cwd, &mut env) {
-        output::error(&format!("vpx: {error}"));
-        return 1;
-    }
+    let env = match super::vpx::local_bin_env(cwd) {
+        Ok(env) => env,
+        Err(error) => {
+            output::error(&format!("vpx: {error}"));
+            return 1;
+        }
+    };
 
     let mut args = Vec::with_capacity(invocation.node_args.len() + 4);
     // The preload registers the hooks before any user `--require`; the `--import`
@@ -406,12 +408,33 @@ pub async fn execute(
     Box::pin(crate::shim::dispatch("node", &args, env)).await
 }
 
+/// The cases both CLIs run, from `vpx_script_cases.json`.
+#[cfg(test)]
+pub(crate) fn shared_table() -> serde_json::Value {
+    serde_json::from_str(include_str!("vpx_script_cases.json")).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
     use tempfile::TempDir;
 
     use super::*;
+
+    /// A temporary project holding a shared case's `files`; the project directory is the cwd.
+    fn case_project(case: &Value) -> (TempDir, AbsolutePathBuf) {
+        let files: Vec<(String, String)> = case
+            .get("files")
+            .and_then(Value::as_object)
+            .map(|files| {
+                files
+                    .iter()
+                    .map(|(name, content)| (name.clone(), content.as_str().unwrap().to_owned()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        project(&files)
+    }
 
     fn project(files: &[(String, String)]) -> (TempDir, AbsolutePathBuf) {
         let dir = TempDir::new().unwrap();
@@ -468,23 +491,13 @@ mod tests {
     /// `checkExplicitProgram` runs too.
     #[test]
     fn shared_explicit_programs() {
-        let table: Value = serde_json::from_str(include_str!("vpx_script_cases.json")).unwrap();
+        let table = shared_table();
         for case in table["explicitPrograms"].as_array().unwrap() {
             let name = case["name"].as_str().unwrap();
             if cfg!(not(unix)) && case.get("unixOnly").and_then(Value::as_bool) == Some(true) {
                 continue;
             }
-            let files: Vec<(String, String)> = case
-                .get("files")
-                .and_then(Value::as_object)
-                .map(|files| {
-                    files
-                        .iter()
-                        .map(|(name, content)| (name.clone(), content.as_str().unwrap().to_owned()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let (_dir, cwd) = project(&files);
+            let (_dir, cwd) = case_project(case);
             #[cfg(unix)]
             for file in case.get("executable").and_then(Value::as_array).into_iter().flatten() {
                 use std::os::unix::fs::PermissionsExt;
@@ -508,7 +521,7 @@ mod tests {
     /// declare, so the TypeScript port checks the same lists without parsing Rust.
     #[test]
     fn lists_match_the_shared_table() {
-        let table: Value = serde_json::from_str(include_str!("vpx_script_cases.json")).unwrap();
+        let table = shared_table();
         let list = |key: &str| -> Vec<&str> {
             table[key].as_array().unwrap().iter().map(|item| item.as_str().unwrap()).collect()
         };
@@ -521,22 +534,12 @@ mod tests {
     /// bin's detection, so the two implementations cannot drift apart.
     #[test]
     fn shared_detection_cases() {
-        let table: Value = serde_json::from_str(include_str!("vpx_script_cases.json")).unwrap();
+        let table = shared_table();
         let cases = table["cases"].as_array().unwrap();
         assert!(cases.len() > 20);
         for case in cases {
             let name = case["name"].as_str().unwrap();
-            let files: Vec<(String, String)> = case
-                .get("files")
-                .and_then(Value::as_object)
-                .map(|files| {
-                    files
-                        .iter()
-                        .map(|(name, content)| (name.clone(), content.as_str().unwrap().to_owned()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let (_dir, cwd) = project(&files);
+            let (_dir, cwd) = case_project(case);
             let root = cwd.as_path().display().to_string();
             let strings = |value: &Value| -> Vec<String> {
                 value
