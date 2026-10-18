@@ -150,8 +150,9 @@ const DIRECTORY_PARENT = 'vpx-directory-parent';
  *
  * Node.js resolves the entry point and `--import` preloads against the working
  * directory's URL, which ends in `/`. oxc-node reads a parent URL as a file and resolves
- * from the directory above it, or fails at `/`, so it gets a file in that directory,
- * while Node.js' own resolution keeps the original URL for its messages.
+ * from the directory above it, or fails at `/` (oxc-project/oxc-node#862), so it gets a
+ * file in that directory, while Node.js' own resolution keeps the original URL for its
+ * messages.
  */
 export function resolveWithOxcNode<
   Context extends { importAttributes?: unknown; parentURL?: string },
