@@ -1,9 +1,10 @@
 # Registry fixtures
 
-`manifest.json` records the published npm metadata for small test packages
+`manifest.json` records selected published npm versions for small test packages
 used by the package-manager snapshots. Their tarballs are
 the original published bytes, with their original integrity hashes. Only
 `dist.tarball` URLs change to `{REGISTRY}` placeholders when recording data.
+Metadata omits unused versions, their timestamps, and tags that refer to them.
 No package-manager or toolchain implementation is mocked.
 
 `packages/` contains two dependency-free CLI packages authored for the tests.
@@ -29,8 +30,13 @@ because they have no public-registry counterpart.
 
 The recorded `is-number` and `yocto-queue` packages supply the unchanged inputs
 for update, list, remove, and patch cases. These tests exercise real package
-contents and version ranges, so the fixtures keep the published versions and
-tarball bytes.
+contents and version ranges, so the fixtures keep the original tarball bytes.
+Only the versions needed by these cases and their dependencies are recorded:
+
+| Package       | Versions                  | Coverage                                                                            |
+| ------------- | ------------------------- | ----------------------------------------------------------------------------------- |
+| `is-number`   | `6.0.0`, `7.0.0`          | Initial installation, update target, and patching                                   |
+| `yocto-queue` | `0.1.0`, `1.0.0`, `1.2.2` | Initial installation, in-range update, and a newer version outside the update range |
 
 The registry serves these fixtures before forwarding requests upstream.
 A case's `mock-manifest.json` and `tarballs/` take precedence over shared data.
@@ -44,6 +50,10 @@ node packages/tools/src/record-snapshot-registry.ts
 
 The command fetches metadata and tarballs from `https://registry.npmjs.org`,
 checks each tarball's SHA-512 integrity, and updates the recorded files.
+`selectedVersions` in the recorder limits these two packages to the versions
+above. The command removes tarballs for versions dropped from the manifest.
+If the published `latest` tag changes, update the selection explicitly before
+refreshing so it still covers the required ranges.
 Review the changes and re-record affected snapshots. Test runs never refresh
 these files. Pass package names to add or refresh only those packages:
 

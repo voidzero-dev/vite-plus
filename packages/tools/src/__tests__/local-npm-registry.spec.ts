@@ -133,17 +133,25 @@ it.each([false, true])(
       );
       const log = path.join(root, 'requests.jsonl');
       const probe = `
+      const assert = require('node:assert/strict');
       const { createHash } = require('node:crypto');
       (async () => {
         const registry = process.env.NPM_CONFIG_REGISTRY;
+        const selected = {
+          'is-number': ['6.0.0', '7.0.0'],
+          'yocto-queue': ['0.1.0', '1.0.0', '1.2.2'],
+        };
         for (const name of ${JSON.stringify(packages)}) {
           const metadata = await (await fetch(registry + '/' + name)).json();
           const version = await (await fetch(registry + '/' + name + '/latest')).json();
-          const bytes = Buffer.from(await (await fetch(version.dist.tarball)).arrayBuffer());
-          const integrity = 'sha512-' + createHash('sha512').update(bytes).digest('base64');
-          if (integrity !== version.dist.integrity) throw new Error('tarball integrity mismatch');
           if (version.version !== metadata['dist-tags'].latest) throw new Error('version mismatch');
-          if (!version.dist.tarball.startsWith(registry + '/')) throw new Error('remote tarball');
+          if (selected[name]) assert.deepEqual(Object.keys(metadata.versions), selected[name]);
+          for (const recorded of Object.values(metadata.versions)) {
+            if (!recorded.dist.tarball.startsWith(registry + '/')) throw new Error('remote tarball');
+            const bytes = Buffer.from(await (await fetch(recorded.dist.tarball)).arrayBuffer());
+            const integrity = 'sha512-' + createHash('sha512').update(bytes).digest('base64');
+            if (integrity !== recorded.dist.integrity) throw new Error('tarball integrity mismatch');
+          }
           console.log(version.name + '@' + version.version);
         }
         const override = await (await fetch(registry + '/testnpm2/fixture-tag')).json();
@@ -189,7 +197,7 @@ it.each([false, true])(
           .trim()
           .split('\n')
           .map((line) => JSON.parse(line).event),
-      ).toEqual(Array(packages.length * 3 + 1).fill('fixture'));
+      ).toEqual(Array(live ? 7 : 20).fill('fixture'));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
