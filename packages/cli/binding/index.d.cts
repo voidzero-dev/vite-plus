@@ -1897,6 +1897,7 @@ export declare class BindingNormalizedOptions {
   get assetFilenames(): string | undefined;
   get dir(): string | null;
   get file(): string | null;
+  get charset(): 'ascii' | 'utf8';
   get format(): 'es' | 'cjs' | 'iife' | 'umd';
   get exports(): 'default' | 'named' | 'none' | 'auto';
   get esModule(): boolean | 'if-default-prop';
@@ -2182,6 +2183,7 @@ export interface BindingChecksOptions {
   largeBarrelModules?: boolean;
   sourcemapBroken?: boolean;
   namespaceConflict?: boolean;
+  shimmedExport?: boolean;
 }
 
 export interface BindingChunkImportMap {
@@ -2743,6 +2745,7 @@ export interface BindingLog {
   id?: string;
   code?: string;
   exporter?: string;
+  binding?: string;
   plugin?: string;
   /** Location information (line, column, file) */
   loc?: BindingLogLocation;
@@ -2849,6 +2852,7 @@ export interface BindingOutputOptions {
   postFooter?: string | ((chunk: BindingRenderedChunk) => MaybePromise<VoidNullable<string>>);
   dir?: string;
   file?: string;
+  charset?: 'ascii' | 'utf8';
   esModule?: boolean | 'if-default-prop';
   exports?: 'default' | 'named' | 'none' | 'auto';
   extend?: boolean;

@@ -14,12 +14,3 @@ pub async fn execute(
 ) -> Result<ExitStatus, Error> {
     super::delegate::execute(cwd, "create", args, raw_subcommand).await
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_create_command_module_exists() {
-        // Basic test to ensure the module compiles
-        assert!(true);
-    }
-}

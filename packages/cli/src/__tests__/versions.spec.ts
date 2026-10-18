@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import url from 'node:url';
 
-import { globSync } from 'glob';
+import { globSync } from 'tinyglobby';
 import { describe, expect, it } from 'vitest';
 
 const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');

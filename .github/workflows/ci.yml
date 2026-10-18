@@ -61,7 +61,7 @@ jobs:
     # them (code changes get `vp check` in cli-e2e-test). The required `done`
     # job waits for this check and propagates failures.
     if: needs.detect-changes.outputs.code-changed == 'false'
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
@@ -69,12 +69,12 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           # Shares the Cargo cache with the Linux CLI test build job, which
           # builds the same target. Only that job saves it.
           save-cache: false
-          cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu
+          cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu-ci
 
       - uses: ./.github/actions/setup-ci-node
 
@@ -87,6 +87,7 @@ jobs:
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
+          profile: ci
           target: x86_64-unknown-linux-gnu
 
       - name: Run vp fmt --check
@@ -112,7 +113,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -121,7 +122,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
@@ -143,7 +144,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows tests
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     env:
       XWIN_ACCEPT_LICENSE: '1'
       # The MSVC STL from xwin's VS17 manifest static-asserts a minimum Clang
@@ -268,7 +269,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Test (Linux x64 musl)
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     container:
       image: node:25-alpine3.21
     env:
@@ -320,14 +321,14 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
       - uses: ./.github/actions/setup-ci-node
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: lint
@@ -372,12 +373,13 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows CLI binaries
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
       - uses: ./.github/actions/build-windows-cli
         with:
+          profile: ci
           save-cache: ${{ github.ref_name == 'main' }}
 
   cli-e2e-test:
@@ -390,7 +392,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             test-node: 22.18.0
           - os: namespace-profile-mac-default
@@ -483,7 +485,7 @@ jobs:
           RUST_MIN_STACK: 8388608
 
       - name: Test global package install (powershell)
-        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
+        if: ${{ runner.os != 'Linux' }}
         shell: pwsh
         run: |
           $vpHome = Join-Path $HOME ".vite-plus"
@@ -665,7 +667,7 @@ jobs:
           fi
 
       - name: Test upgrade (powershell)
-        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
+        if: ${{ runner.os != 'Linux' }}
         shell: pwsh
         run: |
           $vpHome = Join-Path $HOME ".vite-plus"
@@ -881,7 +883,7 @@ jobs:
           vp --version
 
       - name: Test implode (powershell)
-        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
+        if: ${{ runner.os != 'Linux' }}
         shell: pwsh
         run: |
           $vpHome = Join-Path $HOME ".vite-plus"
@@ -941,7 +943,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -950,10 +952,10 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: cli-snapshot-test-${{ matrix.target }}
+          cache-key: cli-snapshot-test-${{ matrix.target }}-ci
 
       - uses: ./.github/actions/setup-ci-node
 
@@ -966,6 +968,7 @@ jobs:
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
+          profile: ci
           target: ${{ matrix.target }}
 
       - name: Ensure no unexpected file changes after build
@@ -1025,10 +1028,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
+        os: [ubuntu-latest, namespace-profile-mac-default]
         shard: [1, 2, 3]
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1300,15 +1303,15 @@ jobs:
     name: CLI E2E test (Linux x64 musl)
     needs:
       - download-previous-rolldown-binaries
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: cli-e2e-test-musl
+          cache-key: cli-e2e-test-musl-ci
 
       - uses: ./.github/actions/setup-ci-node
 
@@ -1322,6 +1325,7 @@ jobs:
       - name: Build with upstream (musl)
         uses: ./.github/actions/build-upstream
         with:
+          profile: ci
           target: x86_64-unknown-linux-musl
 
       # Run bootstrap-cli:ci and E2E tests inside an Alpine container where musl is native.
@@ -1382,13 +1386,13 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Cert-less image E2E test
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: certless-image-test
@@ -1438,7 +1442,7 @@ jobs:
     name: Local CLI `vp install` E2E test
     needs:
       - build-cli-test-binaries
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
       github.event_name != 'pull_request' ||

@@ -59,6 +59,8 @@ function typeDiagnostics(source: string, separator: string = path.sep): string[]
 }
 
 describe('package.json exports map', () => {
+  // The first full type check in this file takes up to about 3 s on the Alpine musl
+  // runner, so a slow runner pushes it past Vitest's 5 s default.
   it('checks Playwright options with only declared dependencies available', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vite-plus-provider-types-'));
     try {
@@ -110,7 +112,7 @@ alias({ contextOptions: { reducedMotion: 'bogus' } });
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it('provides the bundled Vitest Vite peer without relying on project dependencies', () => {
     const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));

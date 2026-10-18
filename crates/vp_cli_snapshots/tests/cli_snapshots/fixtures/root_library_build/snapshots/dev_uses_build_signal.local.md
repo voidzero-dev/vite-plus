@@ -8,7 +8,7 @@ The same root intent signal applies to `vp dev`.
 
 ```
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help
@@ -18,7 +18,7 @@ The same root intent signal applies to `vp dev`.
 
 ```
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help

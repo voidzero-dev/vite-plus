@@ -24,6 +24,7 @@ on:
       - '.github/scripts/test-install-bootstrap.ps1'
       - '.github/scripts/test-install-provenance.sh'
       - '.github/scripts/test-install-provenance.ps1'
+      - '.github/scripts/pin-install-node.sh'
       - '.github/workflows/test-standalone-install.yml'
 
 concurrency:
@@ -33,6 +34,10 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  # New Node.js releases can appear before both musl archives are available.
+  MUSL_NODE_VERSION: '24.21.0'
 
 jobs:
   test-install-sh:
@@ -162,7 +167,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
 
       - name: Test shared provenance resolver
         run: cargo test -p vp_setup registry
@@ -261,7 +266,7 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
 
       - name: Shell config paths preserve metacharacters
         run: |
@@ -826,10 +831,12 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
             -e CI=true \
+            -e VP_NODE_VERSION=${{ env.MUSL_NODE_VERSION }} \
             alpine:3.21 sh -c "
               # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               export VP_HOME=\"\$HOME/.vite-plus\"
+              sh /workspace/.github/scripts/pin-install-node.sh
               cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
@@ -851,7 +858,7 @@ jobs:
                 echo \"Found shim: \$BIN_PATH/\$shim\"
               done
               vp env doctor
-              vp env run --node 24 -- node -p \"process.versions\"
+              vp env run --node \"\$VP_NODE_VERSION\" -- node -p \"process.versions\"
 
               # Test create command
               vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
@@ -884,10 +891,12 @@ jobs:
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
             -e CI=true \
+            -e VP_NODE_VERSION=${{ env.MUSL_NODE_VERSION }} \
             alpine:3.21 sh -c "
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               export VP_HOME=\"\$HOME/.vite-plus\"
+              sh /workspace/.github/scripts/pin-install-node.sh
               cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
@@ -911,7 +920,7 @@ jobs:
               vp env doctor
 
               export VP_LOG=trace
-              vp env run --node 24 -- node -p \"process.versions\"
+              vp env run --node \"\$VP_NODE_VERSION\" -- node -p \"process.versions\"
 
               # FIXME: QEMU doesn't support all syscalls needed by rolldown/tsdown
               # vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
@@ -1498,7 +1507,7 @@ jobs:
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           target-dir: ${{ format('{0}/target', env.DEV_DRIVE) }}
 

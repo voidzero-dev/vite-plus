@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+
+// Keep Unicode snapshots independent of the host terminal and platform.
+vi.mock('is-unicode-supported', () => ({ default: () => true }));
 
 type PromptConfig = {
   render: (this: Record<string, unknown>) => string;

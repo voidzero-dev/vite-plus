@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: false
           cache-key: lint
@@ -55,6 +55,7 @@ jobs:
           update_json packages/cli/package.json
           update_json packages/core/package.json
           update_json packages/prompts/package.json
+          update_json packages/create-vite-plus/package.json
           update_toml packages/cli/binding/Cargo.toml
           update_toml crates/vp_global_cli/Cargo.toml
 

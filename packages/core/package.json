@@ -1,6 +1,6 @@
 {
   "name": "@voidzero-dev/vite-plus-core",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -126,9 +126,8 @@
     "@tsdown/exe": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@vitejs/devtools": "^0.7.6",
-    "es-module-lexer": "^1.7.0",
+    "es-module-lexer": "^3.0.0",
     "hookable": "^6.0.1",
-    "magic-string": "^0.30.21",
     "oxc-parser": "catalog:",
     "oxfmt": "catalog:",
     "picocolors": "catalog:",
@@ -240,7 +239,7 @@
   },
   "bundledVersions": {
     "vite": "8.3.4",
-    "rolldown": "1.2.13",
+    "rolldown": "1.2.14",
     "tsdown": "0.23.1"
   }
 }

@@ -1,7 +1,7 @@
 name: 'Setup cargo-xwin'
 description: >-
   Install the Rust toolchain and cargo-xwin for cross-compiling to
-  x86_64-pc-windows-msvc on Linux, with the MSVC CRT / Windows SDK cached.
+  x86_64-pc-windows-msvc on Linux, with a pinned MSVC sysroot.
 
 inputs:
   cache-key:
@@ -25,7 +25,7 @@ runs:
     # symlinks the MSVC-style llvm-lib/llvm-dlltool (used by cc-rs to archive
     # C/C++ deps) and lld-link from there when the runner image has no matching
     # system LLVM.
-    - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+    - uses: ./.github/actions/setup-rust
       with:
         save-cache: ${{ inputs.save-cache }}
         cache-key: ${{ inputs.cache-key }}
@@ -34,15 +34,98 @@ runs:
     - run: rustup target add x86_64-pc-windows-msvc
       shell: bash
 
+    - name: Set Windows build versions
+      id: versions
+      shell: bash
+      run: |
+        {
+          echo "tools=${EXTRA_TOOLS:+$EXTRA_TOOLS,}cargo-xwin@$CARGO_XWIN_VERSION"
+          echo "sysroot-version=$SYSROOT_VERSION"
+          echo "sysroot-sha256=$SYSROOT_SHA256"
+        } >> "$GITHUB_OUTPUT"
+      env:
+        EXTRA_TOOLS: ${{ inputs.tools }}
+        # Renovate updates these pins. Keep the SDK version and checksum together.
+        CARGO_XWIN_VERSION: '0.23.1'
+        SYSROOT_VERSION: '2026-09-15'
+        SYSROOT_SHA256: 6aeecd2d25bcc90c72af09dc525dfdf7143c374d476dc4296692d42efb27a9b9
+
     - uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
       with:
-        tool: ${{ inputs.tools != '' && format('{0},cargo-xwin', inputs.tools) || 'cargo-xwin' }}
+        tool: ${{ steps.versions.outputs.tools }}
 
-    # Downloading and unpacking the MSVC CRT/Windows SDK dominates cold wall
-    # time (~10 minutes); the unpacked result is immutable for a given manifest
-    # version, so cache it (combined restore + post-job save). Bump the key when
-    # bumping cargo-xwin.
+    # A packaged sysroot avoids unpacking Microsoft's installer archives
+    # on every cache miss. Keep the clang-cl compiler driver.
+    - name: Select packaged Windows SDK
+      shell: bash
+      run: |
+        # The pinned C++ headers require Clang 22.
+        if [ ! -x /usr/lib/llvm-22/bin/clang ]; then
+          curl --fail --location --retry 3 https://apt.llvm.org/llvm-snapshot.gpg.key \
+            --output "$RUNNER_TEMP/llvm.asc"
+          test "$(gpg --show-keys --with-colons "$RUNNER_TEMP/llvm.asc" | awk -F: '$1 == "fpr" { print $10; exit }')" \
+            = 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
+          sudo install -m 644 "$RUNNER_TEMP/llvm.asc" /usr/share/keyrings/vp-llvm.asc
+          llvm_codename="$(lsb_release -cs)"
+          echo "deb [signed-by=/usr/share/keyrings/vp-llvm.asc] https://apt.llvm.org/$llvm_codename/ llvm-toolchain-$llvm_codename-22 main" \
+            | sudo tee /etc/apt/sources.list.d/vp-llvm.list
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends clang-22
+        fi
+        /usr/lib/llvm-22/bin/clang --version
+        echo /usr/lib/llvm-22/bin >> "$GITHUB_PATH"
+        # Detours enumerates remote memory from a null base address. Clang 22
+        # otherwise optimizes the injection function into unreachable code.
+        {
+          echo 'XWIN_CROSS_COMPILER=clang-cl'
+          echo 'XWIN_ARCH=x86_64'
+          echo "CL_FLAGS=${CL_FLAGS:-} -fno-delete-null-pointer-checks"
+        } >> "$GITHUB_ENV"
+
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: sysroot-cache
       with:
-        path: ~/.cache/cargo-xwin
-        key: cargo-xwin-msvc-17
+        # This action only builds x64. Other architecture libraries are unused.
+        path: |
+          ~/.cache/cargo-xwin/windows-msvc-sysroot/include
+          ~/.cache/cargo-xwin/windows-msvc-sysroot/lib/x86_64-unknown-windows-msvc
+          ~/.cache/cargo-xwin/xwin
+        key: cargo-xwin-sysroot-${{ steps.versions.outputs.sysroot-version }}-${{ steps.versions.outputs.sysroot-sha256 }}-clang-cl-22-x64-v1
+
+    - name: Download pinned Windows SDK
+      if: steps.sysroot-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        archive="$RUNNER_TEMP/windows-msvc-sysroot.tar.xz"
+        sysroot="$HOME/.cache/cargo-xwin/windows-msvc-sysroot"
+        curl --fail --location --retry 3 "$SYSROOT_URL" --output "$archive"
+        echo "$SYSROOT_SHA256  $archive" | sha256sum --check
+        mkdir -p "$sysroot"
+        tar -xJf "$archive" --strip-components=1 -C "$sysroot"
+        # SQLite uses the Windows spelling on this case-sensitive filesystem.
+        ln -s windows.h "$sysroot/include/Windows.h"
+        # Clang must use its own intrinsic definitions, not MSVC declarations.
+        clang_headers="$(clang -print-resource-dir)/include"
+        for header in "$sysroot/include/__msvc_vcruntime_intrinsics/"*; do
+          if [ -f "$clang_headers/$(basename "$header")" ]; then
+            rm "$header"
+          fi
+        done
+        rm "$archive"
+        # Keep the established MSVC compiler driver and runtime flags.
+        xwin="$HOME/.cache/cargo-xwin/xwin"
+        mkdir -p "$xwin/crt/lib" "$xwin/sdk/include" "$xwin/sdk/lib/um" "$xwin/sdk/lib/ucrt"
+        ln -s ../../windows-msvc-sysroot/include/c++/msvcstl "$xwin/crt/include"
+        for include in ucrt um winrt; do
+          ln -s ../../../windows-msvc-sysroot/include "$xwin/sdk/include/$include"
+        done
+        ln -s ../../../windows-msvc-sysroot/include/__msvc_vcruntime_intrinsics "$xwin/sdk/include/shared"
+        ln -s ../../../windows-msvc-sysroot/lib/x86_64-unknown-windows-msvc "$xwin/crt/lib/x86_64"
+        for library in um ucrt; do
+          ln -s ../../../../windows-msvc-sysroot/lib/x86_64-unknown-windows-msvc "$xwin/sdk/lib/$library/x86_64"
+        done
+        # cargo-xwin uses this marker to reuse the verified SDK layout.
+        printf 'x86_64\n' > "$xwin/DONE"
+      env:
+        SYSROOT_URL: https://github.com/trcrsired/windows-msvc-sysroot/releases/download/${{ steps.versions.outputs.sysroot-version }}/windows-msvc-sysroot.tar.xz
+        SYSROOT_SHA256: ${{ steps.versions.outputs.sysroot-sha256 }}

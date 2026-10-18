@@ -1,6 +1,10 @@
 name: 'Build with Upstream Repositories'
 description: 'Builds Vite+ with the upstream repositories'
 inputs:
+  profile:
+    description: 'Cargo profile for native builds (release or ci).'
+    required: false
+    default: 'release'
   target:
     description: 'The target platform'
     required: true
@@ -30,6 +34,8 @@ runs:
     # (packages/cli/package.json is modified by syncTestPackageExports during build-ts).
     - uses: ./.github/actions/compute-native-cache-input-hash
       id: native-cache-inputs
+      with:
+        profile: ${{ inputs.profile }}
 
     # Include the documentation origin so preview binaries cannot reuse release links.
     - name: Compute NAPI binding cache key
@@ -123,8 +129,9 @@ runs:
       shell: bash
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       run: |
-        pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET} --use-napi-cross
+        pnpm --filter=vite-plus build-native --profile "$INPUTS_PROFILE" --target ${INPUTS_TARGET} --use-napi-cross
       env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
@@ -134,8 +141,9 @@ runs:
       shell: bash
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       run: |
-        pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET} -x
+        pnpm --filter=vite-plus build-native --profile "$INPUTS_PROFILE" --target ${INPUTS_TARGET} -x
       env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
@@ -145,8 +153,9 @@ runs:
       shell: bash
       if: steps.native.outputs.build == 'true' && !contains(inputs.target, 'linux')
       run: |
-        pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET}
+        pnpm --filter=vite-plus build-native --profile "$INPUTS_PROFILE" --target ${INPUTS_TARGET}
       env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
 
@@ -154,8 +163,9 @@ runs:
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       shell: bash
       run: |
-        pnpm exec napi build --use-napi-cross --target ${INPUTS_TARGET} --release -p vp_global_cli
+        pnpm exec napi build --use-napi-cross --target ${INPUTS_TARGET} --profile "$INPUTS_PROFILE" -p vp_global_cli
       env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
@@ -165,8 +175,9 @@ runs:
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       shell: bash
       run: |
-        pnpm exec napi build -x --target ${INPUTS_TARGET} --release -p vp_global_cli
+        pnpm exec napi build -x --target ${INPUTS_TARGET} --profile "$INPUTS_PROFILE" -p vp_global_cli
       env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
@@ -175,8 +186,9 @@ runs:
     - name: Build Rust CLI binary (non-Linux targets)
       if: steps.native.outputs.build == 'true' && !contains(inputs.target, 'linux')
       shell: bash
-      run: cargo build --release --target ${INPUTS_TARGET} -p vp_global_cli
+      run: cargo build --profile "$INPUTS_PROFILE" --target ${INPUTS_TARGET} -p vp_global_cli
       env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
         INPUTS_TARGET: ${{ inputs.target }}
 
     # The helper builds the excluded trampoline from its crate directory.
@@ -191,8 +203,25 @@ runs:
     - name: Build installer binary (Windows only)
       if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
-      run: cargo build --release --target ${INPUTS_TARGET} -p vp_installer
+      run: cargo build --profile "$INPUTS_PROFILE" --target ${INPUTS_TARGET} -p vp_installer
       env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
+        INPUTS_TARGET: ${{ inputs.target }}
+
+    # Keep the artifact layout used by installers and test consumers.
+    - name: Stage native CLI binaries
+      if: steps.native.outputs.build == 'true' && inputs.profile != 'release'
+      shell: bash
+      run: |
+        target_dir="${CARGO_TARGET_DIR:-target}/$INPUTS_TARGET"
+        mkdir -p "$target_dir/release"
+        if [[ "$INPUTS_TARGET" == *windows* ]]; then
+          cp "$target_dir/$INPUTS_PROFILE/vp.exe" "$target_dir/$INPUTS_PROFILE/vp-setup.exe" "$target_dir/release/"
+        else
+          cp "$target_dir/$INPUTS_PROFILE/vp" "$target_dir/release/"
+        fi
+      env:
+        INPUTS_PROFILE: ${{ inputs.profile }}
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Save NAPI binding cache

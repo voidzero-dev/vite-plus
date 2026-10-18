@@ -26,6 +26,8 @@ steps = [
 [[case]]
 name = "nested_bun_resolves_project_version"
 vp = "global"
+# First-use Bun installation is slow on Linux CI.
+skip-platforms = ["linux"]
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.3.11"], snapshot = false },
   { argv = ["vp", "env", "on", "bun"], snapshot = false },

@@ -57,6 +57,7 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 2. **Add RewriteImportsPlugin** - Rewrites vite/rolldown imports at build time
 3. **Rewrite static paths** - Fixes `VITE_PACKAGE_DIR`, `CLIENT_ENTRY`, `BUNDLED_DEV_CLIENT_ENTRY`, `ENV_ENTRY` constants
 4. **Copy additional files** - `misc/`, `.d.ts` files, `types/`, `client.d.ts`
+5. **Copy the bin script** - `bin/vite.js`, with its CLI import pointed at `../node/cli.js`. `vp dev`, `vp build`, and `vp preview` start through it, as `vite` does, so the startup time (`ready in N ms`), `--debug`, `--filter`, `--profile`, and Node's compile cache work
 
 **Input**: `vite/packages/vite/`
 **Output**: `dist/vite/`
@@ -212,6 +213,8 @@ dist/
 │   ├── plugins-index.mjs
 │   └── ...
 ├── vite/                  # Vite
+│   ├── bin/
+│   │   └── vite.js        # Entry for vp dev/build/preview
 │   ├── node/
 │   │   ├── index.js
 │   │   ├── index.d.ts

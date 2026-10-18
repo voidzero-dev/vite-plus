@@ -55,6 +55,8 @@ steps = [
 [[case]]
 name = "vite_task_lifecycle_env_bun"
 vp = "local"
+# Exceeded 50 seconds on Linux in CI run 38675211827.
+skip-platforms = ["linux"]
 comment = """
 Boundary coverage with Vite+'s real managed Bun distribution. The narrow #2317
 fix does not emulate Bun's lifecycle environment, so both values stay undefined.

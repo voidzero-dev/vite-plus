@@ -12,8 +12,10 @@ use std::{borrow::Cow, sync::LazyLock};
 static UUID_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}").unwrap()
 });
+// One optional space covers units printed apart from the number, as in
+// Vite's dev banner (`ready in 123 ms`).
 static DURATION_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)?(ns|µs|ms|s)\b").unwrap());
+    LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)? ?(ns|µs|ms|s)\b").unwrap());
 // Yarn prints elapsed times as one or several units (999ms vs 1s 0ms).
 // Match the entire elapsed field, not adjacent values in timing tables.
 static YARN_ELAPSED_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
@@ -253,6 +255,14 @@ static SPINNER_FRAME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static PNPM_PROGRESS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?m)^(Progress: resolved .*|Packages: \+\d+|\++)\n?").unwrap()
 });
+// Successful registry requests can emit a warning solely because of network
+// latency. Keep request errors and other warnings in the snapshot.
+static PNPM_SLOW_REQUEST_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^[ \t\u{2009}]*WARN[ \t\u{2009}]+Request took <duration>: https?://\S+[ \t]*(?:\n|$)",
+    )
+    .unwrap()
+});
 // pnpm conditionally explains whether packages were cloned or hard-linked and
 // prints platform-specific store paths. The block depends on store state and
 // filesystem capabilities rather than fixture behavior, so strip it.
@@ -263,10 +273,10 @@ static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     .unwrap()
 });
 // Bun emits this warning based on filesystem timing, sometimes after a
-// same-line lifecycle progress indicator. Neither is part of the build result.
+// same-line lifecycle or resolution progress indicator. Neither is part of the result.
 static BUN_SLOW_FILESYSTEM_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r"(?m)^[ \t]*(?:⚙\u{FE0F}?[ \t]+\S+[ \t]+\[\d+/\d+\][ \t]+)?warn: Slow filesystem detected\. If [^\n]+ is a network drive, consider setting \$BUN_INSTALL_CACHE_DIR to a local folder\.(?:\n|$)",
+        r"(?m)^[ \t]*(?:[⚙🔍]\u{FE0F}?[ \t]+\S+[ \t]+\[\d+/\d+\][ \t]+)?warn: Slow filesystem detected\. If [^\n]+ is a network drive, consider setting \$BUN_INSTALL_CACHE_DIR to a local folder\.(?:\n|$)",
     )
     .unwrap()
 });
@@ -672,6 +682,7 @@ pub fn redact_output(
     output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
+    output = PNPM_SLOW_REQUEST_RE.replace_all(&output, "").into_owned();
     output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
     output = BUN_SLOW_FILESYSTEM_RE.replace_all(&output, "").into_owned();
 
