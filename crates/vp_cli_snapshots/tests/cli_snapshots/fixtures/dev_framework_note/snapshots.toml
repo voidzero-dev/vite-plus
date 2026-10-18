@@ -1,7 +1,7 @@
 [[case]]
 name = "dev_framework_note"
 vp = ["local", "global"]
-comment = "Framework dependencies without a dev script get a hint. Vite still starts."
+comment = "Framework dependencies without a dev script or task get a hint. Vite still starts."
 steps = [
   { argv = ["vp", "dev"], interactions = [
     { "expect-milestone" = "dev-server:ready" },
@@ -12,6 +12,49 @@ steps = [
     { "write-line" = "q" },
   ] },
   { argv = ["vp", "dev"], cwd = "default-package", comment = "The hint uses the resolved defaultPackage, which depends on Nuxt, not the caller's Astro dependency.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "cp", "-r", "app", "app with spaces"], snapshot = false },
+  { argv = ["vp", "-C", "app with spaces", "dev"], comment = "The directory instruction identifies paths with spaces without requiring shell-specific quoting.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "dev_framework_note_picker"
+vp = ["local", "global"]
+comment = "The hint identifies the package selected in the workspace picker."
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - app\n  - plain\n"], snapshot = false },
+  { argv = ["vp", "dev"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write" = "nuxt-app" },
+    { "expect-milestone" = "package-select:nuxt-app:0" },
+    { "write-key" = "enter" },
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "dev_framework_note_tasks"
+vp = ["local", "global"]
+comment = "Configured dev tasks suppress the raw framework command hint, including tasks from dynamic config. Other tasks do not suppress it."
+steps = [
+  { argv = ["vpt", "write-file", "app/vite.config.ts", "import base from '../vite.config.ts';\nexport default { ...base, clearScreen: false, run: { tasks: { dev: { command: 'nuxt dev --host' } } } };\n"], snapshot = false },
+  { argv = ["vp", "-C", "app", "dev"], comment = "A static dev task must not get a suggestion to bypass its command options.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "write-file", "app/vite.config.ts", "import base from '../vite.config.ts';\nconst tasks = { dev: { command: 'nuxt dev --host' } };\nexport default { ...base, clearScreen: false, run: { tasks } };\n"], snapshot = false },
+  { argv = ["vp", "-C", "app", "dev"], comment = "A dev task that needs runtime config resolution also suppresses the hint.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "write-file", "app/vite.config.ts", "import base from '../vite.config.ts';\nexport default { ...base, clearScreen: false, run: { tasks: { build: { command: 'nuxt build' } } } };\n"], snapshot = false },
+  { argv = ["vp", "-C", "app", "dev"], comment = "A build task does not suppress the dev hint.", interactions = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },

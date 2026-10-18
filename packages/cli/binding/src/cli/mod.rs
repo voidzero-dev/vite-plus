@@ -63,7 +63,7 @@ async fn execute_direct_subcommand(
         app_target::AppTarget::CurrentDir => cwd,
     };
 
-    if framework_note::print(&subcommand, cwd)
+    if framework_note::print(&subcommand, cwd, retargeted || explicit_chdir)
         && let SynthesizableSubcommand::Dev { args } = &mut subcommand
     {
         // Vite runs in a child process and cannot see the parent's output.

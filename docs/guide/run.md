@@ -64,7 +64,7 @@ With [shell completion](/guide/env#shell-completion) enabled, press Tab after `v
 
 Use `vp run <name>` when you want your project's command. For example, in an Astro project with a `"dev": "astro dev"` script, `vp run dev` starts Astro. `vp dev` starts the built-in Vite dev server.
 
-If your Astro or Nuxt project has no `dev` script, running `vp dev` without arguments prints a hint to use `vp exec astro dev` or `vp exec nuxt dev`. The command still starts the Vite dev server.
+If your Astro or Nuxt project has no `dev` script or task, running `vp dev` without arguments can print a hint to use `vp exec astro dev` or `vp exec nuxt dev`. The command still starts the Vite dev server.
 
 ## Caching
 
