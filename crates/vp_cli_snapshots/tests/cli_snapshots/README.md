@@ -170,9 +170,11 @@ response cache. `VP_SNAP_REGISTRY_MODE=direct` restores the original routing for
 an independent wall-time baseline, but cannot log traffic that bypasses the
 local registry. Keep builds unchanged and use fresh response directories.
 Local tarball URLs can cause snapshot differences in comparison modes.
-Locally authored packages remain local in both comparison modes because no
-published version exists. Cases that use them must set `local-registry = true`
-so `direct` mode also starts their registry.
+Fixture overlays remain active in both comparison modes. Cases with a
+`mock-manifest.json` or `tarballs/` start a private registry even in `direct`
+mode, so fixed templates remain the same test inputs. Cases that use shared
+locally authored packages must set `local-registry = true` so `direct` mode
+also starts their registry; these packages have no published version.
 
 With `VP_SNAP_ARTIFACTS_DIR` set, each runner process creates a unique `run-*`
 directory. `runner/timing.json` records discovery, test execution, and final

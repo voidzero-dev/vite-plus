@@ -1302,8 +1302,8 @@ fn run_case(
         case_env.get("PATH").cloned().unwrap_or_else(|| case_install.path_env.clone());
 
     // Cases without overlays share the HTTP server, but keep package-manager
-    // caches isolated. Fixture overlays retain a per-case server. Neither
-    // registry environment changes PATH.
+    // caches isolated. Fixture overlays retain a per-case server in every
+    // mode, including direct mode. Neither registry environment changes PATH.
     let registry_phase = report.phase("registry-startup");
     let mut shared_bun_cache = None;
     let (registry_env, registry) = if let Some(env) = shared_registry_env {
@@ -1330,6 +1330,8 @@ fn run_case(
         shared_bun_cache = Some(cache);
         (env, None)
     } else if case.local_registry
+        || stage.join("mock-manifest.json").exists()
+        || stage.join("tarballs").exists()
         || std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() != Ok("direct")
     {
         let cache_dir = std::env::var_os("VP_SNAP_REGISTRY_CACHE_DIR")
