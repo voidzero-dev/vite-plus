@@ -23,6 +23,27 @@ steps = [
 ]
 
 [[case]]
+name = "dev_framework_note_vitepress"
+vp = ["local", "global"]
+comment = "VitePress hints use the detected documentation root and are suppressed for Vite apps."
+steps = [
+  { argv = ["vp", "-C", "site", "dev"], comment = "Documentation under docs/ needs a root argument.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "cp", "-r", "site/docs/.vitepress", "site/.vitepress"], snapshot = false },
+  { argv = ["vp", "-C", "site", "dev"], comment = "Configuration at the package root takes precedence.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "write-file", "site/index.html", "<div id='app'></div>"], snapshot = false },
+  { argv = ["vp", "-C", "site", "dev"], comment = "A Vite app with a documentation dependency gets no framework hint.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
 name = "dev_framework_note_picker"
 vp = ["local", "global"]
 comment = "The hint identifies the package selected in the workspace picker."

@@ -1,0 +1,8 @@
+{
+  "name": "vitepress-site",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "vitepress": "*"
+  }
+}
