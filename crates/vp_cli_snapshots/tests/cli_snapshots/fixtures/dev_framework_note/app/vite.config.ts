@@ -1,1 +1,3 @@
-export { default } from '../vite.config.ts';
+import base from '../vite.config.ts';
+
+export default { ...base, run: {} };

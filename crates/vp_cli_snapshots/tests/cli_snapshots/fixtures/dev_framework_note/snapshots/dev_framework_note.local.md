@@ -1,13 +1,13 @@
 # dev_framework_note
 
-Framework dependencies without a dev script get a hint. Vite still starts.
+Framework dependencies without a dev script or task get a hint. Vite still starts.
 
 ## `vp dev`
 
 **→ expect-milestone:** `dev-server:ready`
 
 ```
-note: This package depends on Astro and has no dev npm script. `vp dev` starts the Vite dev server. To start the Astro dev server, run `vp exec astro dev` from this package.
+note: This package depends on Astro and has no dev script or task. `vp dev` starts the Vite dev server. To start the Astro dev server, run `vp exec astro dev`.
 
   VITE+ <version>  ready in <duration>
 
@@ -18,7 +18,7 @@ note: This package depends on Astro and has no dev npm script. `vp dev` starts t
 **← write-line:** `q`
 
 ```
-note: This package depends on Astro and has no dev npm script. `vp dev` starts the Vite dev server. To start the Astro dev server, run `vp exec astro dev` from this package.
+note: This package depends on Astro and has no dev script or task. `vp dev` starts the Vite dev server. To start the Astro dev server, run `vp exec astro dev`.
 
   VITE+ <version>  ready in <duration>
 
@@ -32,7 +32,7 @@ q
 **→ expect-milestone:** `dev-server:ready`
 
 ```
-note: This package depends on Nuxt and has no dev npm script. `vp dev` starts the Vite dev server. To start the Nuxt dev server, run `vp exec nuxt dev` from this package.
+note: This package depends on Nuxt and has no dev script or task. `vp dev` starts the Vite dev server. To start the Nuxt dev server, change to `<workspace>/app` and run `vp exec nuxt dev`.
 
   VITE+ <version>  ready in <duration>
 
@@ -43,7 +43,7 @@ note: This package depends on Nuxt and has no dev npm script. `vp dev` starts th
 **← write-line:** `q`
 
 ```
-note: This package depends on Nuxt and has no dev npm script. `vp dev` starts the Vite dev server. To start the Nuxt dev server, run `vp exec nuxt dev` from this package.
+note: This package depends on Nuxt and has no dev script or task. `vp dev` starts the Vite dev server. To start the Nuxt dev server, change to `<workspace>/app` and run `vp exec nuxt dev`.
 
   VITE+ <version>  ready in <duration>
 
@@ -60,7 +60,7 @@ The hint uses the resolved defaultPackage, which depends on Nuxt, not the caller
 
 ```
 note: vp dev: using ../app (defaultPackage in vite.config.ts)
-note: This package depends on Nuxt and has no dev npm script. `vp dev` starts the Vite dev server. To start the Nuxt dev server, run `vp exec nuxt dev` from this package.
+note: This package depends on Nuxt and has no dev script or task. `vp dev` starts the Vite dev server. To start the Nuxt dev server, change to `<workspace>/app` and run `vp exec nuxt dev`.
 
   VITE+ <version>  ready in <duration>
 
@@ -72,7 +72,37 @@ note: This package depends on Nuxt and has no dev npm script. `vp dev` starts th
 
 ```
 note: vp dev: using ../app (defaultPackage in vite.config.ts)
-note: This package depends on Nuxt and has no dev npm script. `vp dev` starts the Vite dev server. To start the Nuxt dev server, run `vp exec nuxt dev` from this package.
+note: This package depends on Nuxt and has no dev script or task. `vp dev` starts the Vite dev server. To start the Nuxt dev server, change to `<workspace>/app` and run `vp exec nuxt dev`.
+
+  VITE+ <version>  ready in <duration>
+
+  ➜  Local:   http://127.0.0.1:<port>/
+  ➜  press h + enter to show help
+q
+```
+
+## `vpt cp -r app 'app with spaces'`
+
+
+## `vp -C 'app with spaces' dev`
+
+The directory instruction identifies paths with spaces without requiring shell-specific quoting.
+
+**→ expect-milestone:** `dev-server:ready`
+
+```
+note: This package depends on Nuxt and has no dev script or task. `vp dev` starts the Vite dev server. To start the Nuxt dev server, change to `<workspace>/app with spaces` and run `vp exec nuxt dev`.
+
+  VITE+ <version>  ready in <duration>
+
+  ➜  Local:   http://127.0.0.1:<port>/
+  ➜  press h + enter to show help
+```
+
+**← write-line:** `q`
+
+```
+note: This package depends on Nuxt and has no dev script or task. `vp dev` starts the Vite dev server. To start the Nuxt dev server, change to `<workspace>/app with spaces` and run `vp exec nuxt dev`.
 
   VITE+ <version>  ready in <duration>
 
