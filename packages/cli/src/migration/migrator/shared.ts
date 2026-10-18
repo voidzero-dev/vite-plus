@@ -43,6 +43,10 @@ export interface OxlintConfigFile {
   filename: string;
   config: OxlintConfig;
   extends: OxlintConfigFile[];
+  // A dependency must use the same generated module in its owning workspace.
+  shared?: boolean;
+  // Workspace JSON removal waits until every consumer's outcome is known.
+  migrated?: boolean;
   // Set only after a successful merge, so workspace consumers reuse the same module.
   modulePath?: string;
 }

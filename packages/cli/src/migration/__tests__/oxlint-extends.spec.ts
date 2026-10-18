@@ -34,6 +34,46 @@ describe('Oxlint JSON extends migration', () => {
     return result!.config;
   }
 
+  function createWorkspace(names = ['a', 'b']) {
+    write('package.json', {
+      name: 'root',
+      type: 'module',
+      private: true,
+      workspaces: ['packages/*'],
+    });
+    for (const name of names) {
+      write(`packages/${name}/package.json`, { name, type: 'module' });
+      write(`packages/${name}/vite.config.mjs`, 'export default {};');
+    }
+  }
+
+  function migrateWorkspace(names = ['a', 'b']) {
+    const report = createMigrationReport();
+    rewriteMonorepo(
+      {
+        rootDir: project,
+        isMonorepo: true,
+        monorepoScope: '',
+        workspacePatterns: ['packages/*'],
+        parentDirs: ['packages'],
+        packageManager: PackageManager.npm,
+        packageManagerVersion: '11.0.0',
+        downloadPackageManager: {
+          name: PackageManager.npm,
+          installDir: project,
+          binPrefix: project,
+          packageName: 'npm',
+          version: '11.0.0',
+        },
+        packages: names.map((name) => ({ name, path: `packages/${name}` })),
+      },
+      true,
+      true,
+      report,
+    );
+    return report;
+  }
+
   beforeEach(() => {
     project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'vp-oxlint-extends-')));
     write('package.json', { name: 'extends-test', type: 'module' });
@@ -209,18 +249,9 @@ describe('Oxlint JSON extends migration', () => {
   });
 
   it.each([false, true])(
-    'resolves workspace inheritance before configs are removed (extends root: %s)',
+    'shares live modules with their owning workspace (extends root: %s)',
     async (extendsRoot) => {
-      write('package.json', {
-        name: 'root',
-        type: 'module',
-        private: true,
-        workspaces: ['packages/*'],
-      });
-      for (const name of ['a', 'b']) {
-        write(`packages/${name}/package.json`, { name, type: 'module' });
-        write(`packages/${name}/vite.config.mjs`, 'export default {};');
-      }
+      createWorkspace();
       write('packages/a/.oxlintrc.json', { rules: { 'no-debugger': 'error' } });
       write('packages/b/.oxlintrc.json', {
         extends: [extendsRoot ? '../../.oxlintrc.json' : '../a/.oxlintrc.json'],
@@ -228,50 +259,85 @@ describe('Oxlint JSON extends migration', () => {
       write('.oxlintrc.json', {
         extends: [extendsRoot ? './packages/a/.oxlintrc.json' : './packages/b/.oxlintrc.json'],
       });
-      const report = createMigrationReport();
-
-      rewriteMonorepo(
-        {
-          rootDir: project,
-          isMonorepo: true,
-          monorepoScope: '',
-          workspacePatterns: ['packages/*'],
-          parentDirs: ['packages'],
-          packageManager: PackageManager.npm,
-          packageManagerVersion: '11.0.0',
-          downloadPackageManager: {
-            name: PackageManager.npm,
-            installDir: project,
-            binPrefix: project,
-            packageName: 'npm',
-            version: '11.0.0',
-          },
-          packages: [
-            { name: 'a', path: 'packages/a' },
-            { name: 'b', path: 'packages/b' },
-          ],
-        },
-        true,
-        true,
-        report,
-      );
-
-      const root = await loadConfig();
-      const sibling = await loadConfig(path.join(project, 'packages/b'));
-      const inheritedRoot = extendsRoot
-        ? root.lint!.extends![0]
-        : root.lint!.extends![0].extends![0];
-      const inheritedSibling = extendsRoot
-        ? sibling.lint!.extends![0].extends![0]
-        : sibling.lint!.extends![0];
-      expect(inheritedRoot.rules!['no-debugger']).toBe('error');
-      expect(inheritedSibling.rules!['no-debugger']).toBe('error');
+      const report = migrateWorkspace();
+      const modulePath = path.join(project, 'packages/a/.oxlintrc.ts');
+      for (const severity of ['error', 'warn']) {
+        if (severity === 'warn') {
+          fs.writeFileSync(
+            modulePath,
+            fs.readFileSync(modulePath, 'utf8').replace('"error"', '"warn"'),
+          );
+        }
+        const root = await loadConfig();
+        const sibling = await loadConfig(path.join(project, 'packages/b'));
+        const owner = await loadConfig(path.join(project, 'packages/a'));
+        expect(root.lint!.extends![0].extends![0].rules!['no-debugger']).toBe(severity);
+        expect(sibling.lint!.extends![0].extends![0].rules!['no-debugger']).toBe(severity);
+        expect(owner.lint!.extends![0].rules!['no-debugger']).toBe(severity);
+        expect(owner.lint!.rules!['no-debugger']).toBeUndefined();
+        expect(owner.lint!.options).toEqual({ typeAware: true, typeCheck: true });
+        expect(owner.lint!.extends![0].options).toBeUndefined();
+      }
       for (const dir of ['', 'packages/a', 'packages/b']) {
         expect(fs.existsSync(path.join(project, dir, '.oxlintrc.json'))).toBe(false);
       }
       expect(report.warnings).toEqual([]);
     },
   );
+
+  it('retains transitive JSON dependencies of a workspace whose module output conflicts', async () => {
+    createWorkspace(['a', 'b', 'c']);
+    const root = write('.oxlintrc.json', { rules: { 'no-debugger': 'error' } });
+    const shared = write('packages/a/.oxlintrc.json', { extends: ['../../.oxlintrc.json'] });
+    const consumer = write('packages/b/.oxlintrc.json', {
+      extends: ['../a/.oxlintrc.json', './extra.json'],
+    });
+    write('packages/b/extra.json', {});
+    write('packages/b/extra.ts', 'export default {};');
+    write('packages/c/.oxlintrc.json', { rules: { 'no-console': 'warn' } });
+    const original = [root, shared, consumer].map((file) => fs.readFileSync(file, 'utf8'));
+
+    const report = migrateWorkspace(['a', 'b', 'c']);
+
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('already exists');
+    expect([root, shared, consumer].map((file) => fs.readFileSync(file, 'utf8'))).toEqual(original);
+    const fallback = resolveOxlintConfigExtends(consumer);
+    expect(fallback.config.extends![0].extends![0].rules!['no-debugger']).toBe('error');
+    expect((await loadConfig()).lint!.extends![0].rules!['no-debugger']).toBe('error');
+    expect((await loadConfig(path.join(project, 'packages/a'))).lint).toBeDefined();
+    expect((await loadConfig(path.join(project, 'packages/b'))).lint).toBeUndefined();
+    expect(fs.existsSync(path.join(project, 'packages/c/.oxlintrc.json'))).toBe(false);
+    expect(fs.readFileSync(path.join(project, 'packages/b/extra.ts'), 'utf8')).toBe(
+      'export default {};',
+    );
+  });
+
+  it('retains dependencies of shared JSON files even when all workspace consumers migrate', () => {
+    createWorkspace(['a']);
+    write('.oxlintrc.json', { rules: { 'no-debugger': 'error' } });
+    const shared = write('shared.json', { extends: ['./.oxlintrc.json'] });
+    write('packages/a/.oxlintrc.json', { extends: ['../../shared.json'] });
+
+    const report = migrateWorkspace(['a']);
+
+    expect(report.warnings).toEqual([]);
+    expect(resolveOxlintConfigExtends(shared).config.extends![0].rules!['no-debugger']).toBe(
+      'error',
+    );
+    expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.json'))).toBe(false);
+  });
+
+  it('preserves JSON candidates when a failed graph leaves its dependencies unknown', () => {
+    createWorkspace(['a']);
+    const root = write('.oxlintrc.json', { rules: { 'no-debugger': 'error' } });
+    write('packages/a/.oxlintrc.json', { extends: ['./missing.json', '../../.oxlintrc.json'] });
+
+    const report = migrateWorkspace(['a']);
+
+    expect(report.warnings).toHaveLength(1);
+    expect(fs.existsSync(root)).toBe(true);
+  });
 
   it('retains a bare plugin when it resolves to the same package from both directories', () => {
     write('node_modules/eslint-plugin-test/package.json', {

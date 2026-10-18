@@ -311,7 +311,14 @@ function mergeOxlintConfigFile(
     );
     return;
   }
-  const oxlintJson = structuredClone(file.config);
+  if (file.migrated) {
+    return;
+  }
+  // Keep shared rules in one module, including for the workspace that owns it.
+  // Only migration defaults belong in the local lint block.
+  const oxlintJson: OxlintConfig = file.shared
+    ? { extends: [structuredClone(file.config)] }
+    : structuredClone(file.config);
   // Never discard an inheritance tree when a lint block already exists.
   if (oxlintJson.extends?.length && hasConfigKey(path.join(projectPath, viteConfig), 'lint')) {
     warnMigration(
@@ -372,7 +379,7 @@ function mergeOxlintConfigFile(
   }
   try {
     const plan =
-      file.extends.length > 0
+      file.shared || file.extends.length > 0
         ? prepareOxlintConfigModules(
             file,
             normalizedOxlintConfig,
@@ -380,7 +387,7 @@ function mergeOxlintConfigFile(
             workspaceRoot ?? projectPath,
           )
         : undefined;
-    mergeAndRemoveJsonConfig(
+    file.migrated = mergeAndRemoveJsonConfig(
       projectPath,
       viteConfig,
       oxlintConfig,
@@ -389,6 +396,7 @@ function mergeOxlintConfigFile(
       report,
       plan?.configContent ?? JSON.stringify(normalizedOxlintConfig, null, 2),
       plan,
+      preparedOxlintConfigs !== undefined,
     );
   } catch (error) {
     warnMigration(
@@ -510,7 +518,8 @@ function mergeAndRemoveJsonConfig(
   report?: MigrationReport,
   configContent?: string,
   modulePlan?: OxlintModulePlan,
-): void {
+  deferRemoval = false,
+): boolean {
   const fullViteConfigPath = path.join(projectPath, viteConfigPath);
   const fullJsonConfigPath = path.join(projectPath, jsonConfigPath);
   // Skip merge when the key is already present in vite.config.ts — the Rust
@@ -520,13 +529,15 @@ function mergeAndRemoveJsonConfig(
   // AST-based check ignores comments, string-literal occurrences, and nested
   // keys (e.g. `plugins: [{ fmt: ... }]`).
   if (hasConfigKey(fullViteConfigPath, configKey)) {
-    fs.unlinkSync(fullJsonConfigPath);
+    if (!deferRemoval) {
+      fs.unlinkSync(fullJsonConfigPath);
+    }
     if (!silent) {
       prompts.log.info(
-        `${configKey} config already present in ${displayRelative(fullViteConfigPath)} — removed redundant ${displayRelative(fullJsonConfigPath)}`,
+        `${configKey} config already present in ${displayRelative(fullViteConfigPath)} — ${deferRemoval ? 'deferred removal of' : 'removed redundant'} ${displayRelative(fullJsonConfigPath)}`,
       );
     }
-    return;
+    return true;
   }
   // Only delete the original JSON after a successful merge. Resolved lint
   // configs contain object extends, which JSON Oxlint configs do not accept.
@@ -563,7 +574,9 @@ function mergeAndRemoveJsonConfig(
           content.slice(0, offset) + modulePlan.imports.join('\n') + '\n' + content.slice(offset);
       }
       fs.writeFileSync(fullViteConfigPath, content);
-      fs.unlinkSync(fullJsonConfigPath);
+      if (!deferRemoval) {
+        fs.unlinkSync(fullJsonConfigPath);
+      }
     } catch (error) {
       for (const filename of writtenModules) {
         fs.unlinkSync(filename);
@@ -582,6 +595,7 @@ function mergeAndRemoveJsonConfig(
         `✔ Merged ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
       );
     }
+    return true;
   } else {
     warnMigration(
       `Failed to merge ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
@@ -591,6 +605,7 @@ function mergeAndRemoveJsonConfig(
       `Please complete the merge manually and follow the instructions in the documentation: ${documentationUrl('/config/')}`,
       report,
     );
+    return false;
   }
 }
 

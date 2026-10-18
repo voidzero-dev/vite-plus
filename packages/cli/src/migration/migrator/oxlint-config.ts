@@ -39,12 +39,14 @@ export function resolveOxlintConfigExtends(
   ) {
     throw new Error(`Expected an array of file paths in ${filename}: extends`);
   }
-  const children = ((inherited ?? []) as string[]).map((entry) =>
-    resolveOxlintConfigExtends(path.resolve(path.dirname(filename), entry), cache, [
+  const children = ((inherited ?? []) as string[]).map((entry) => {
+    const child = resolveOxlintConfigExtends(path.resolve(path.dirname(filename), entry), cache, [
       ...stack,
       filename,
-    ]),
-  );
+    ]);
+    child.shared = true;
+    return child;
+  });
   if (inherited !== undefined) {
     config.extends = children.map((child) => child.config);
   }
@@ -71,6 +73,44 @@ export function prepareOxlintConfigs(
     }
   }
   return configs;
+}
+
+/** Retained JSON consumers still need their full inheritance graph on disk. */
+export function removeMigratedOxlintConfigs(configs: Map<string, OxlintConfigFile | Error>): void {
+  const files = new Set<OxlintConfigFile>();
+  function collect(file: OxlintConfigFile): void {
+    if (files.has(file)) {
+      return;
+    }
+    files.add(file);
+    file.extends.forEach(collect);
+  }
+  for (const file of configs.values()) {
+    // An unreadable graph can contain references we could not discover.
+    // Preserve all candidates rather than break that consumer's fallback.
+    if (file instanceof Error) {
+      return;
+    }
+    collect(file);
+  }
+  const retained = new Set<OxlintConfigFile>();
+  function retain(file: OxlintConfigFile): void {
+    if (retained.has(file)) {
+      return;
+    }
+    retained.add(file);
+    file.extends.forEach(retain);
+  }
+  for (const file of files) {
+    if (!file.migrated) {
+      retain(file);
+    }
+  }
+  for (const [filename, file] of configs) {
+    if (!(file instanceof Error) && file.migrated && !retained.has(file)) {
+      fs.unlinkSync(filename);
+    }
+  }
 }
 
 function relativeImport(from: string, to: string): string {
@@ -177,7 +217,8 @@ export function prepareOxlintConfigModules(
     }
     file.extends.forEach(validate);
   }
-  root.extends.forEach(validate);
+  const importedFiles = root.shared ? [root] : root.extends;
+  importedFiles.forEach(validate);
 
   function generate(file: OxlintConfigFile): string {
     const filename = file.filename.replace(/\.jsonc?$/i, '') + '.ts';
@@ -230,7 +271,7 @@ export function prepareOxlintConfigModules(
 
   const imports: string[] = [];
   let nextName = 1;
-  const inherited = root.extends.map((file) => {
+  const inherited = importedFiles.map((file) => {
     let name: string;
     do {
       name = `oxlintConfig${nextName++}`;
