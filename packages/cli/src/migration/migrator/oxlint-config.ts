@@ -8,7 +8,7 @@ import type { OxlintConfig } from 'oxlint';
 import { analyzeMigrationSource, ResolverFactory } from '../../../binding/index.js';
 import { detectConfigs } from '../detector.ts';
 import { ensureSvelteRuneGlobals } from '../migrator.ts';
-import type { OxlintConfigFile, OxlintModulePlan } from './shared.ts';
+import type { OxlintConfigFile, OxlintConfigMigration, OxlintModulePlan } from './shared.ts';
 
 /** Read the inheritance graph before migration removes any workspace configs. */
 export function resolveOxlintConfigExtends(
@@ -57,8 +57,8 @@ export function resolveOxlintConfigExtends(
 
 export function prepareOxlintConfigs(
   projectPaths: string[],
-): Map<string, OxlintConfigFile | Error> {
-  const configs = new Map<string, OxlintConfigFile | Error>();
+): Map<string, OxlintConfigMigration | Error> {
+  const configs = new Map<string, OxlintConfigMigration | Error>();
   const cache = new Map<string, OxlintConfigFile>();
   for (const projectPath of projectPaths) {
     const filename = detectConfigs(projectPath).oxlintConfig;
@@ -67,7 +67,7 @@ export function prepareOxlintConfigs(
     }
     const configPath = path.join(projectPath, filename);
     try {
-      configs.set(configPath, resolveOxlintConfigExtends(configPath, cache));
+      configs.set(configPath, { file: resolveOxlintConfigExtends(configPath, cache) });
     } catch (error) {
       configs.set(configPath, error instanceof Error ? error : new Error(String(error)));
     }
@@ -76,8 +76,11 @@ export function prepareOxlintConfigs(
 }
 
 /** Retained JSON consumers still need their full inheritance graph on disk. */
-export function removeMigratedOxlintConfigs(configs: Map<string, OxlintConfigFile | Error>): void {
+export function removeMigratedOxlintConfigs(
+  configs: Map<string, OxlintConfigMigration | Error>,
+): void {
   const files = new Set<OxlintConfigFile>();
+  const removableSources = new Set<OxlintConfigFile>();
   function collect(file: OxlintConfigFile): void {
     if (files.has(file)) {
       return;
@@ -85,13 +88,17 @@ export function removeMigratedOxlintConfigs(configs: Map<string, OxlintConfigFil
     files.add(file);
     file.extends.forEach(collect);
   }
-  for (const file of configs.values()) {
+  for (const [filename, migration] of configs) {
     // An unreadable graph can contain references we could not discover.
     // Preserve all candidates rather than break that consumer's fallback.
-    if (file instanceof Error) {
+    if (migration instanceof Error) {
       return;
     }
-    collect(file);
+    collect(migration.file);
+    // Unlinking a workspace symlink leaves its shared JSON target on disk.
+    if (migration.migrated && !fs.lstatSync(filename).isSymbolicLink()) {
+      removableSources.add(migration.file);
+    }
   }
   const retained = new Set<OxlintConfigFile>();
   function retain(file: OxlintConfigFile): void {
@@ -102,12 +109,17 @@ export function removeMigratedOxlintConfigs(configs: Map<string, OxlintConfigFil
     file.extends.forEach(retain);
   }
   for (const file of files) {
-    if (!file.migrated) {
-      retain(file);
+    if (!removableSources.has(file)) {
+      file.extends.forEach(retain);
     }
   }
-  for (const [filename, file] of configs) {
-    if (!(file instanceof Error) && file.migrated && !retained.has(file)) {
+  for (const migration of configs.values()) {
+    if (!(migration instanceof Error) && !migration.migrated) {
+      retain(migration.file);
+    }
+  }
+  for (const [filename, migration] of configs) {
+    if (!(migration instanceof Error) && migration.migrated && !retained.has(migration.file)) {
       fs.unlinkSync(filename);
     }
   }

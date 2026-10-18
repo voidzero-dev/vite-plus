@@ -35,7 +35,7 @@ import {
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
-  type OxlintConfigFile,
+  type OxlintConfigMigration,
   type OxlintModulePlan,
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
@@ -260,7 +260,7 @@ export function mergeViteConfigFiles(
   // (correct for the top-level standalone/monorepo callers, where
   // projectPath IS the workspace root).
   workspaceRoot?: string,
-  preparedOxlintConfigs?: Map<string, OxlintConfigFile | Error>,
+  preparedOxlintConfigs?: Map<string, OxlintConfigMigration | Error>,
 ): void {
   const configs = detectConfigs(projectPath);
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
@@ -293,17 +293,17 @@ function mergeOxlintConfigFile(
   report?: MigrationReport,
   packages?: WorkspacePackage[],
   workspaceRoot?: string,
-  preparedOxlintConfigs?: Map<string, OxlintConfigFile | Error>,
+  preparedOxlintConfigs?: Map<string, OxlintConfigMigration | Error>,
 ): void {
   // Inject options.typeAware and options.typeCheck defaults before merging
   const fullOxlintPath = path.join(projectPath, oxlintConfig);
-  let file: OxlintConfigFile;
+  let migration: OxlintConfigMigration;
   try {
     const prepared = preparedOxlintConfigs?.get(fullOxlintPath);
     if (prepared instanceof Error) {
       throw prepared;
     }
-    file = prepared ?? resolveOxlintConfigExtends(fullOxlintPath);
+    migration = prepared ?? { file: resolveOxlintConfigExtends(fullOxlintPath) };
   } catch (error) {
     warnMigration(
       `Could not migrate ${displayRelative(fullOxlintPath)}: ${String(error)}. The original config was preserved; use vp lint -c ${oxlintConfig} until it is migrated manually.`,
@@ -311,9 +311,10 @@ function mergeOxlintConfigFile(
     );
     return;
   }
-  if (file.migrated) {
+  if (migration.migrated) {
     return;
   }
+  const { file } = migration;
   // Keep shared rules in one module, including for the workspace that owns it.
   // Ignore patterns only apply at the top level, so keep them local as well.
   const oxlintJson: OxlintConfig = file.shared
@@ -392,7 +393,7 @@ function mergeOxlintConfigFile(
             workspaceRoot ?? projectPath,
           )
         : undefined;
-    file.migrated = mergeAndRemoveJsonConfig(
+    migration.migrated = mergeAndRemoveJsonConfig(
       projectPath,
       viteConfig,
       oxlintConfig,

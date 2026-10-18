@@ -329,6 +329,79 @@ describe('Oxlint JSON extends migration', () => {
     }
   });
 
+  it.each([false, true])(
+    'migrates both symlinked workspace configs (shared target extends root: %s)',
+    async (extendsRoot) => {
+      createWorkspace();
+      const root = write('.oxlintrc.json', { rules: { 'no-console': 'off' } });
+      const shared = write('shared/lint.json', {
+        ...(extendsRoot ? { extends: ['../.oxlintrc.json'] } : {}),
+        rules: { 'no-console': 'error' },
+        options: { typeAware: false, typeCheck: false },
+      });
+      const original = fs.readFileSync(shared, 'utf8');
+      for (const name of ['a', 'b']) {
+        fs.symlinkSync(
+          '../../shared/lint.json',
+          path.join(project, `packages/${name}/.oxlintrc.json`),
+        );
+      }
+
+      const report = migrateWorkspace();
+
+      expect(report.warnings).toEqual([]);
+      for (const name of ['a', 'b']) {
+        const directory = path.join(project, `packages/${name}`);
+        const { lint } = await loadConfig(directory);
+        expect(lint!.rules!['no-console']).toBe('error');
+        expect(lint!.options).toEqual({ typeAware: false, typeCheck: false });
+        expect(fs.existsSync(path.join(directory, '.oxlintrc.json'))).toBe(false);
+        if (extendsRoot) {
+          expect(lint!.extends![0].rules!['no-console']).toBe('off');
+        }
+      }
+      expect(fs.readFileSync(shared, 'utf8')).toBe(original);
+      // Removing the links leaves their target on disk, so its dependencies must remain too.
+      expect(fs.existsSync(root)).toBe(extendsRoot);
+      if (extendsRoot) {
+        expect(resolveOxlintConfigExtends(shared).config.extends![0].rules!['no-console']).toBe(
+          'off',
+        );
+      }
+    },
+  );
+
+  it('preserves a failed symlinked consumer after its sibling completes migration', async () => {
+    createWorkspace();
+    write('.oxlintrc.json', { rules: { 'no-console': 'off' } });
+    write('shared/lint.json', {
+      extends: ['../.oxlintrc.json'],
+      rules: { 'no-console': 'error' },
+    });
+    for (const name of ['a', 'b']) {
+      fs.symlinkSync(
+        '../../shared/lint.json',
+        path.join(project, `packages/${name}/.oxlintrc.json`),
+      );
+    }
+    const original = "export { default } from './another-config.mjs';";
+    const viteConfig = write('packages/b/vite.config.mjs', original);
+
+    const report = migrateWorkspace();
+
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('ESM default export');
+    expect((await loadConfig(path.join(project, 'packages/a'))).lint!.rules!['no-console']).toBe(
+      'error',
+    );
+    expect(fs.readFileSync(viteConfig, 'utf8')).toBe(original);
+    const preserved = path.join(project, 'packages/b/.oxlintrc.json');
+    expect(fs.lstatSync(preserved).isSymbolicLink()).toBe(true);
+    expect(resolveOxlintConfigExtends(preserved).config.extends![0].rules!['no-console']).toBe(
+      'off',
+    );
+  });
+
   it('retains transitive JSON dependencies of a workspace whose module output conflicts', async () => {
     createWorkspace(['a', 'b', 'c']);
     const root = write('.oxlintrc.json', { rules: { 'no-debugger': 'error' } });
