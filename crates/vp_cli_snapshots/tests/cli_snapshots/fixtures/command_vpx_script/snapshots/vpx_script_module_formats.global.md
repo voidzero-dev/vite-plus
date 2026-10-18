@@ -69,6 +69,14 @@ node:test runs .ts test files
 .
 ```
 
+## `vpx --test --test-reporter=dot ./tests/**/*.test.ts`
+
+A test glob reaches node:test as a pattern, not a script path
+
+```
+.
+```
+
 ## `vpx ./src/data-url.ts`
 
 data: URL imports keep Node.js' handling

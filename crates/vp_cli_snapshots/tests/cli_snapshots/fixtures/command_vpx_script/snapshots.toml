@@ -55,6 +55,7 @@ steps = [
   { argv = ["vpx", "--require", "./src/setup.cts", "./src/print-setup.ts"], comment = "A TypeScript --require preload runs after the loader" },
   { argv = ["vpx", "./src/fork.ts"], comment = "fork() and Worker inherit the loader" },
   { argv = ["vpx", "--test", "--test-reporter=dot", "./tests/enum.test.ts"], comment = "node:test runs .ts test files" },
+  { argv = ["vpx", "--test", "--test-reporter=dot", "./tests/**/*.test.ts"], comment = "A test glob reaches node:test as a pattern, not a script path" },
   { argv = ["vpx", "./src/data-url.ts"], comment = "data: URL imports keep Node.js' handling" },
   { argv = ["vpx", "./src/require-tla.cts"], comment = "require() of a module with top-level await reports Node.js' error code" },
 ]

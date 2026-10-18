@@ -39,7 +39,7 @@ Repositories use `tsx` to run `scripts/*.ts`. Vite+ manages the Node.js version 
 
 ## Non-Goals
 
-Type checking (`vp check`); a TypeScript REPL or TypeScript in `-e`/`-p`; a tsx-style `watch` subcommand (use Node.js `--watch` and `--watch-path`); a programmatic API or public `node --import vite-plus/…` entry (see [Future Enhancements](#future-enhancements)); an on-disk transform cache; `target` downleveling; Bun and Deno.
+Type checking (`vp check`); a TypeScript REPL or TypeScript in `-e`/`-p` or `--check`; a tsx-style `watch` subcommand (use Node.js `--watch` and `--watch-path`); a programmatic API or public `node --import vite-plus/…` entry (see [Future Enhancements](#future-enhancements)); an on-disk transform cache; `target` downleveling; Bun and Deno.
 
 ## Command Syntax
 
@@ -53,7 +53,7 @@ vpx [VPX_OPTIONS] [NODE_OPTIONS] <script> [args...]
 
 `vpx` options are parsed first, so `-p`, `-c`, `-h`, and `-v` keep their `vpx` meaning; Node.js has the long forms, and `vp node --version` prints the Node.js version. `vpx --version` prints the same report as `vp --version`.
 
-When the first positional token starts with `-` and no script follows, `vpx` forwards the arguments to Node.js with the loader: `--eval`, `--print`, `--check ./a.ts`, `-` (stdin), `--inspect` (REPL). The loader does not transform eval or REPL input. The help text lives in `VPX_HELP` in `crates/vp_global_cli/src/commands/vpx.rs` and the `command_vpx_pnpm*` snapshots.
+When the first positional token starts with `-` and no script follows, `vpx` forwards the arguments to Node.js with the loader: `--eval`, `--print`, `--check ./a.ts`, `-` (stdin), `--inspect` (REPL). The loader does not transform eval or REPL input, and Node.js reads a `--check` file without it, as with tsx. The help text lives in `VPX_HELP` in `crates/vp_global_cli/src/commands/vpx.rs` and the `command_vpx_pnpm*` snapshots.
 
 ## Script Detection
 
@@ -66,8 +66,9 @@ if T starts with '-':                      # Node.js invocation; a leading optio
     script = first token after the Node.js options (the token after `--`, or `-` for stdin),
              skipping the value of options that take one (every `--option=...` that
              `node --help` lists on 22, 24, and 26: --import, --require, --env-file, -r, …)
-    after -e, --eval, -p, -pe, --print, or --run, no token is a script: Node.js runs that
-             code or package script and passes the rest as arguments
+    after -e, --eval, -p, -pe, --print, --run, or --test, no token is a script: Node.js
+             runs that code or package script, or takes test files and globs
+    option names match with `_` for `-` (--redirect_warnings), as Node.js accepts
     script is a missing explicit path with a script extension → error
     otherwise → forward to Node.js as-is
 elif is_script(T):

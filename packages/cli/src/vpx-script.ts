@@ -96,8 +96,9 @@ export const NODE_OPTIONS_WITH_VALUE = new Set([
 ]);
 
 /**
- * Node.js options after which positionals are arguments, not an entry file: the code of
- * `--eval` / `--print`, or the package script of `--run`, runs instead.
+ * Node.js options after which positionals are not an entry file: the code of `--eval` /
+ * `--print` or the package script of `--run` runs instead, and `--test` takes test files
+ * and globs.
  */
 export const NODE_OPTIONS_WITHOUT_ENTRY = new Set([
   '-e',
@@ -106,10 +107,16 @@ export const NODE_OPTIONS_WITHOUT_ENTRY = new Set([
   '-pe',
   '--print',
   '--run',
+  '--test',
 ]);
 
-function takesNoEntry(option: string): boolean {
-  return NODE_OPTIONS_WITHOUT_ENTRY.has(option.split('=', 1)[0]);
+/**
+ * The option an argument names, without `=value`. Node.js accepts `_` for `-` in long
+ * option names, as in `--redirect_warnings`.
+ */
+function nodeOptionName(arg: string): string {
+  const name = arg.split('=', 1)[0];
+  return name.startsWith('--') ? `--${name.slice(2).replaceAll('_', '-')}` : name;
 }
 
 export interface VpxFlags {
@@ -210,9 +217,14 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
       tsconfig = arg.slice('--tsconfig='.length);
       continue;
     }
-    entry &&= !takesNoEntry(arg);
+    const name = nodeOptionName(arg);
+    entry &&= !NODE_OPTIONS_WITHOUT_ENTRY.has(name);
     nodeArgs.push(arg);
-    if (NODE_OPTIONS_WITH_VALUE.has(arg) && positional[index + 1] !== undefined) {
+    if (
+      !arg.includes('=') &&
+      NODE_OPTIONS_WITH_VALUE.has(name) &&
+      positional[index + 1] !== undefined
+    ) {
       nodeArgs.push(positional[++index]);
     }
   }

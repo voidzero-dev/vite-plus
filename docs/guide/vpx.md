@@ -166,7 +166,7 @@ Most scripts that run with tsx run with `vpx` unchanged. These differences can n
 - **Signals**: tsx turns `SIGINT` and `SIGTERM` into exit codes 130 and 143 and runs `process.on('exit')` handlers first. Under `vpx` the signal ends the script, as it does under Node.js, so clean up in a `process.on('SIGINT')` or `process.on('SIGTERM')` handler.
 - **Node.js version**: `vpx` needs Node.js `^22.18.0 || ^24.11.0 || >=26.0.0`, while tsx also runs on older releases.
 - **Watch mode**: `tsx watch` becomes `vpx --watch`, which is Node.js `--watch`. It has no `--include`, `--exclude`, or `--clear-screen` options and no rerun on Enter; use `--watch-path` to watch more files. Node.js waits for a script that ignores `SIGTERM` to exit before it restarts, where tsx kills it after a few seconds; pass `--watch-kill-signal=SIGKILL` to restart at once.
-- **Eval and REPL**: `vpx --eval` and the REPL do not transform TypeScript.
+- **Eval, REPL, and `--check`**: `vpx --eval`, the REPL, and `vpx --check` do not transform TypeScript.
 - **`node --import tsx`**: `vpx` has no equivalent for tools that must start `node` themselves.
 - **Other loaders**: remove `--import tsx` from `NODE_OPTIONS`. Two loaders registered together compete for the same files.
 

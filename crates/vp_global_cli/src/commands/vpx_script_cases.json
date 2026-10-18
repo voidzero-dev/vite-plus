@@ -85,7 +85,7 @@
     "--watch-kill-signal",
     "--watch-path"
   ],
-  "nodeOptionsWithoutEntry": ["-e", "--eval", "-p", "-pe", "--print", "--run"],
+  "nodeOptionsWithoutEntry": ["-e", "--eval", "-p", "-pe", "--print", "--run", "--test"],
   "packageSpecs": [
     { "spec": "eslint", "versioned": false, "command": "eslint" },
     { "spec": "eslint@9", "versioned": true, "command": "eslint" },
@@ -371,6 +371,28 @@
       "args": ["--run", "build", "./missing.ts"],
       "expect": {
         "script": ["--run", "build", "./missing.ts"]
+      }
+    },
+    {
+      "name": "--test files and globs are not an entry file",
+      "args": ["--test", "./tests/**/*.test.ts"],
+      "expect": {
+        "script": ["--test", "./tests/**/*.test.ts"]
+      }
+    },
+    {
+      "name": "an underscore spelling of an option takes its value",
+      "files": { "main.ts": "" },
+      "args": ["--redirect_warnings", "./warnings.ts", "./main.ts"],
+      "expect": {
+        "script": ["--redirect_warnings", "./warnings.ts", "./main.ts"]
+      }
+    },
+    {
+      "name": "an underscore spelling of an option with = takes no value",
+      "args": ["--redirect_warnings=w.log", "./missing.ts"],
+      "expect": {
+        "error": "Script not found: ./missing.ts"
       }
     },
     {

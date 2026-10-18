@@ -111,13 +111,21 @@ const NODE_OPTIONS_WITH_VALUE: &[&str] = &[
     "--watch-path",
 ];
 
-/// Node.js options after which positionals are arguments, not an entry file: the code of
-/// `--eval` / `--print`, or the package script of `--run`, runs instead.
-const NODE_OPTIONS_WITHOUT_ENTRY: &[&str] = &["-e", "--eval", "-p", "-pe", "--print", "--run"];
+/// Node.js options after which positionals are not an entry file: the code of `--eval` /
+/// `--print` or the package script of `--run` runs instead, and `--test` takes test files
+/// and globs.
+const NODE_OPTIONS_WITHOUT_ENTRY: &[&str] =
+    &["-e", "--eval", "-p", "-pe", "--print", "--run", "--test"];
 
-fn takes_no_entry(option: &str) -> bool {
-    let name = option.split_once('=').map_or(option, |(name, _)| name);
-    NODE_OPTIONS_WITHOUT_ENTRY.contains(&name)
+/// Whether `options` lists the option `name` (an argument without `=value`). Node.js
+/// accepts `_` for `-` in long option names, as in `--redirect_warnings`.
+fn lists_option(options: &[&str], name: &str) -> bool {
+    options.iter().any(|option| {
+        option.len() == name.len()
+            && option.bytes().zip(name.bytes()).enumerate().all(|(index, (expected, actual))| {
+                expected == actual || (index >= 2 && expected == b'-' && actual == b'_')
+            })
+    })
 }
 
 /// A `vpx` invocation that runs Node.js with the script loader.
@@ -189,9 +197,11 @@ pub fn detect(
             index += 1;
             continue;
         }
-        entry &= !takes_no_entry(arg);
+        let name = arg.split_once('=').map_or(arg.as_str(), |(name, _)| name);
+        entry &= !lists_option(NODE_OPTIONS_WITHOUT_ENTRY, name);
         node_args.push(arg.clone());
-        if NODE_OPTIONS_WITH_VALUE.contains(&arg.as_str())
+        if name.len() == arg.len()
+            && lists_option(NODE_OPTIONS_WITH_VALUE, name)
             && let Some(value) = positional.get(index + 1)
         {
             node_args.push(value.clone());
