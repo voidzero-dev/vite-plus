@@ -350,6 +350,14 @@ fn resolve_loader_dir(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     choose_loader_dir(JsExecutor::resolve_local_vite_plus_package_dir(cwd), || {
         JsExecutor::new(None).get_scripts_dir().ok()
     })
+    .map(real_dir)
+}
+
+/// `dir` with symlinks resolved. pnpm links `vite-plus` into its store, where the native
+/// binding package sits next to it; under `--preserve-symlinks` Node.js would resolve the
+/// binding from the link instead and not find it.
+fn real_dir(dir: AbsolutePathBuf) -> AbsolutePathBuf {
+    dunce::canonicalize(dir.as_path()).ok().and_then(AbsolutePathBuf::new).unwrap_or(dir)
 }
 
 /// The project's `vite-plus/dist` when it ships both loader entries, else the global
@@ -499,6 +507,17 @@ mod tests {
             );
         }
         assert_eq!(choose_loader_dir(None, || Some(global.clone())), Some(global.clone()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn loader_dir_resolves_symlinks() {
+        let (_store, store) = dist(&[PRELOAD_ENTRY, IMPORT_ENTRY]);
+        let (_project, project) = project(&[]);
+        let link = project.join("vite-plus");
+        std::os::unix::fs::symlink(store.as_path(), link.as_path()).unwrap();
+        let real = AbsolutePathBuf::new(dunce::canonicalize(store.as_path()).unwrap()).unwrap();
+        assert_eq!(real_dir(link.join("dist")), real.join("dist"));
     }
 
     #[test]
