@@ -140,8 +140,10 @@ export function isCommonJsRequire(context: { importAttributes?: unknown } | unde
 }
 
 /**
- * The resolve hook for both hook paths: runtime helpers resolve from this package,
- * `require()` stays on Node.js' resolution, and everything else goes through oxc-node.
+ * The resolve hook for both hook paths: `require()` stays on Node.js' resolution, where
+ * `routeHelperRequires` maps runtime helpers (it resolves from the requiring file and
+ * ignores a `parentURL`), runtime helper imports resolve from this package, and
+ * everything else goes through oxc-node.
  */
 export function resolveWithOxcNode<Context extends { importAttributes?: unknown }, Result>(
   oxcNode: OxcNodeBinding,
@@ -149,12 +151,12 @@ export function resolveWithOxcNode<Context extends { importAttributes?: unknown 
   context: Context,
   nextResolve: (specifier: string, context?: Context) => Result,
 ): Result {
+  if (isCommonJsRequire(context)) {
+    return nextResolve(specifier, context);
+  }
   const helper = runtimeHelperSpecifier(specifier);
   if (helper) {
     return nextResolve(helper, { ...context, parentURL: HELPERS_PARENT_URL });
-  }
-  if (isCommonJsRequire(context)) {
-    return nextResolve(specifier, context);
   }
   return oxcNode.createResolve(specifier, context as never, nextResolve as never) as Result;
 }
