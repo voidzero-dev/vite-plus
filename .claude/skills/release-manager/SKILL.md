@@ -159,7 +159,7 @@ Merging this PR will trigger the release workflow.
 - **A breaking change needs its migration path.** State what existing installs or projects do by default, then how to move to the new behaviour deliberately, then what that costs. Link the guide rather than restating it, and say plainly when doing nothing is a valid choice.
 - Highlights: up to 5 new capabilities a vite-plus user will notice, plus security fixes. Bug fixes go in Fixes & Enhancements even when they are prominent, so the section may hold only one or two entries. Skip developer-tooling-only conveniences. Each highlight ends with `, by @<author>`, same as every other entry.
 - Entry format: `Description ([#N](https://github.com/voidzero-dev/vite-plus/pull/N)), by @author`. Describe the user-visible behavior, not the implementation. Group supporting implementation PRs under the user-visible change they enable instead of giving them separate entries. Never include defensive edge cases or internal mechanics unless users need them to use or understand the feature; use concrete behavior instead of internal UI taxonomy that needs extra context. For a fix to an intermittent failure, say that it was rare and when it happened, so the entry does not read as if it always failed. When a PR carries over a superseded PR from another author (its body says so, or `gh pr view N --json commits` lists their commits), credit both authors.
-- **Upstream dependency upgrade PRs** (`feat(deps): upgrade upstream dependencies`): consolidate all of them into one Features entry with net oldest-to-latest version changes (e.g. `vite 8.0.16 -> 8.1.2`), listing every PR number. Check the upgraded range for security fixes (search the upstream changelog for CVE/GHSA); if present, add a dedicated security entry quoting severity and linking the advisory. When oxfmt or oxlint changed version, add one clause telling users the new versions can flag code that passed before, so they should run `vp fmt` after upgrading if their CI runs `vp check`; in ecosystem testing this is reliably the largest single class of post-upgrade CI failures.
+- **Upstream dependency upgrade PRs** (`feat(deps): upgrade upstream dependencies`): consolidate all of them into one Features entry with net oldest-to-latest version changes (e.g. `vite 8.0.16 -> 8.1.2`), listing every PR number. Check the upgraded range for security fixes (search the upstream changelog for CVE/GHSA); if present, add a dedicated security entry quoting severity and linking the advisory. When oxfmt or oxlint changed version, add one clause telling users the new versions can flag code that passed before, so they should run `vp fmt` after upgrading if their CI runs `vp check`; in ecosystem testing this is reliably the largest single class of post-upgrade CI failures. Put this entry last in Features as a parent bullet carrying the PR links and credits, with one sub-item per upgraded tool and one per user-facing consequence (new formatting or lint behavior, migration changes, compatibility notes); a single long line is hard to read.
 - **vite-task bumps** (`bump vite-task to <commit>`): expand the full rev range (compare `Cargo.toml` at `v<prev>` vs the release branch), run `git log <old>..<new>` in the local vite-task checkout, and read vite-task's `CHANGELOG.md` at the new commit for wording. Promote user-visible upstream changes into Features / Fixes with `[vite-task#N](https://github.com/voidzero-dev/vite-task/pull/N)` links, crediting the upstream PR author (`gh pr view N --repo voidzero-dev/vite-task --json author`). Cross-repo link format is `[vite-task#N]` / `[vite#N]`, not `[owner/repo#N]`.
 - New Contributors: copy from `generate-notes`, exclude bots (`renovate[bot]`, `voidzero-guard[bot]`, `github-actions[bot]`), list as inline `@mentions`. `generate-notes` only covers vite-plus, so also add first-time contributors from the expanded vite-task range: an author is new when `gh api -X GET search/issues -f q='repo:voidzero-dev/vite-task is:pr is:merged author:<login> merged:<<date of the range start>' -q .total_count` is 0. List them with the others, without a repository label, in the release notes and the Discord thanks line.
 
@@ -180,14 +180,14 @@ vite and rolldown are built from pinned commits, so link the commit. The npm-ins
 ### Style rules
 
 - No em dashes or en dashes anywhere in the title or body. Use commas, colons, or parentheses.
-- Lead the title and opening theme with the most important user-visible behavior. Avoid vague benefit-only wording that the body must explain.
+- Keep the PR title plain (`release: vX.Y.Z`) and the GitHub release title plain (`vite-plus vX.Y.Z`); the theme goes in the opening sentence. Lead the opening theme with the most important user-visible behavior. Avoid vague benefit-only wording that the body must explain.
 - When naming a package version in prose or a heading, use one inline literal, `package@version`. Keep separate version columns in tables.
 - Link unfamiliar technical abbreviations to the relevant documentation section; keep the short abbreviation as the link text.
 - The Upgrade section is a `vp upgrade` code block.
 - Apply via a temp file, never a heredoc (heredoc quoting can escape backticks inside the table and break rendering):
 
 ```bash
-gh pr edit <PR#> --repo voidzero-dev/vite-plus --title "release: vX.Y.Z: <theme>" --body-file /tmp/pr-body.md
+gh pr edit <PR#> --repo voidzero-dev/vite-plus --title "release: vX.Y.Z" --body-file /tmp/pr-body.md
 ```
 
 ### Validate before finishing
@@ -352,7 +352,7 @@ Two long-run mechanics worth knowing: `vp migrate` installs Vite+ git hooks in t
 
 Two fork-CI blockers are worth fixing rather than reporting, both on the **test branch only** so the tracked branch stays clean against upstream. A fork whose workflows never trigger on `pull_request` reports "no checks" and proves nothing: add a minimal workflow that runs `vp run build` through whatever setup the project already uses. A fork whose workflows target third-party runners (self-hosted labels such as `blacksmith-*`) queues every job forever, because those labels only resolve for the upstream org: map them to GitHub-hosted equivalents, replacing the longest label first so an `-arm` suffix is not left half-rewritten. Runner-specific _actions_ need more than a label swap and are usually not worth fixing. The same applies to `depot-*` and `namespace-profile-*` labels. GitHub-hosted runners are smaller than most of these, so heavy suites can start timing out after the swap; classify those timeouts as fork infrastructure.
 
-Closing a cycle's PRs with `--delete-branch` removes their test branches, but each closed PR's commits stay reachable at `refs/pull/<N>/head`. Before a new sweep, list the non-upgrade commits on the previous cycle's PRs (supply-chain exemptions, runner-label maps, added workflows), fetch them, and cherry-pick them onto the new test branches. Re-apply by hand when upstream drift makes a cherry-pick conflict.
+Closing a cycle's PRs with `--delete-branch` removes their test branches, but each closed PR's commits stay reachable at `refs/pull/<N>/head`. Find the previous cycle's PR per repository (`gh pr list --repo vite-plus-ecosystem-ci/<repo> --state all`); an org-wide `gh search` stops at 100 results and silently misses forks. Before a new sweep, list the non-upgrade commits on the previous cycle's PRs (supply-chain exemptions, runner-label maps, added workflows), fetch them, and cherry-pick them onto the new test branches. Re-apply by hand when upstream drift makes a cherry-pick conflict. Commits made after the upgrade commit (formatting of migrate-written files, regenerated lockfiles, restored dependencies) only apply after migrating: retry them after the new upgrade commit, take the new lockfile when only lockfiles conflict, and drop a formatting commit that would add migrate-generated `package.json` or workspace keys before migrate runs.
 
 ## 5. Release-branch CI
 
@@ -364,12 +364,13 @@ Fixes for CI failures go through a **separate PR to `main`**, never as commits o
 git checkout release/vX.Y.Z && git merge origin/main --no-edit && git push origin release/vX.Y.Z
 ```
 
-Do not assume the merge brought in only the fix PR: `main` may have accumulated several. Before merging, list everything that will come in with `git log origin/release/vX.Y.Z..origin/main --oneline`, then add a changelog entry for **every** newly included PR and rerun the step 3 validation (its missing/extra diff against `generate-notes` catches any entry you missed).
+Do not assume the merge brought in only the fix PR: `main` may have accumulated several. Before merging, list everything that will come in with `git log origin/release/vX.Y.Z..origin/main --oneline`, then add a changelog entry for **every** newly included PR and rerun the step 3 validation (its missing/extra diff against `generate-notes` catches any entry you missed). When the merged commits change bundled tool versions or `vp migrate` behavior, rebuild the preview (step 4) and repeat the smoke test on the new build: start each fork from its current test branch so earlier fixes carry over, open new fork PRs, close the superseded ones, and report results per build.
 
 Known release-branch-only failure modes:
 
 - **Binding version drift**: CI's no-unexpected-changes guard reports a diff flipping version strings in `binding/index.cjs`. Fix: step 2.
 - **Registry flakes**: registry-bound fixtures can time out (about 50s) and look like regressions. Rerun before diagnosing, and never commit a `[timeout]` snapshot.
+- **New RustSec advisories**: Security Analysis runs cargo-deny only when `Cargo.lock` changes, and the version bump always changes it. An advisory published since `main` last touched `Cargo.lock` therefore fails first on the release PR. The check is not required; trace which dependency pulls the crate in and let the release manager decide whether to fix it before or after the release.
 
 ## 6. Merge
 
@@ -435,7 +436,7 @@ The full package document can update before npm's separately cached installation
 
      ```bash
      gh release edit vX.Y.Z --repo voidzero-dev/vite-plus \
-       --title "vite-plus vX.Y.Z: <theme>" --notes-file /tmp/release-notes.md
+       --title "vite-plus vX.Y.Z" --notes-file /tmp/release-notes.md
      ```
 
    - Keep the review draft, body-only notes file, and live release aligned after requested edits. Read back the live title and body to verify the update. Normalize CRLF and LF before comparing the approved file with the live body, because GitHub can change line endings. Re-run the step 3 validation greps, plus `grep -c 'Merging this PR'` (must be 0).
