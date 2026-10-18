@@ -1,4 +1,5 @@
 mod analysis;
+mod raw;
 
 use std::{sync::Arc, time::Instant};
 
@@ -7,15 +8,15 @@ use vp_shared::output;
 use vt::ExitStatus;
 use vt_path::AbsolutePathBuf;
 
-use self::analysis::{
-    LintMessageKind, analyze_fmt_check_output, analyze_lint_output, format_count, format_elapsed,
-    json_bool, lint_config_type_check_enabled, print_error_block, print_pass_line,
-    print_stdout_block, print_summary_line,
+use self::{
+    analysis::{
+        LintMessageKind, analyze_fmt_check_output, analyze_lint_output, format_count,
+        format_elapsed, json_bool, lint_config_type_check_enabled, print_error_block,
+        print_pass_line, print_stdout_block, print_summary_line,
+    },
+    raw::{RawCheck, RawCheckStep},
 };
-use crate::cli::{
-    CapturedCommandOutput, EnvMap, SubcommandResolver, SynthesizableSubcommand,
-    resolve_and_capture_output,
-};
+use crate::cli::{CapturedCommandOutput, EnvMap, SubcommandResolver};
 
 /// Execute the `vp check` composite command (fmt + lint + optional type checks).
 pub(crate) async fn execute_check(
@@ -82,6 +83,9 @@ pub(crate) async fn execute_check(
         return Ok(ExitStatus(1));
     }
 
+    // 1. Plan the steps. The `vp check --raw` runner executes them in one
+    // process and stops at the first failing step, like the reporting below.
+    let mut steps = Vec::new();
     if !no_fmt {
         let mut args = fmt_config_args.clone();
         if !fix {
@@ -93,19 +97,58 @@ pub(crate) async fn execute_check(
         if has_paths {
             args.extend(paths.iter().cloned());
         }
-        let fmt_start = Instant::now();
+        steps.push(RawCheckStep::fmt(args));
+    }
+    if run_lint_phase {
+        let mut args = config_args(resolved_vite_config.lint.is_some());
+        // oxlint cannot auto-fix type diagnostics, so `--fix` is dropped on the
+        // type-check-only path.
+        if fix && lint_enabled {
+            args.push("--fix".to_string());
+        }
+        if quiet {
+            args.push("--quiet".to_string());
+        }
+        // `vp check` parses oxlint's human-readable summary output to print
+        // unified pass/fail lines. When `GITHUB_ACTIONS=true`, oxlint auto-switches
+        // to the GitHub reporter, which omits that summary on success and makes the
+        // parser think linting never started. Force the default reporter here so the
+        // captured output is stable across local and CI environments.
+        args.push("--format=default".to_string());
+        if !lint_enabled && type_check_enabled {
+            args.push("--type-check-only".to_string());
+        }
+        if suppress_unmatched {
+            args.push("--no-error-on-unmatched-pattern".to_string());
+        }
+        if has_paths {
+            args.extend(paths.iter().cloned());
+        }
+        steps.push(RawCheckStep::lint(args));
+    }
+    // Re-run fmt after lint --fix, since lint fixes can break formatting
+    // (e.g. the curly rule adding braces to if-statements).
+    let refmt = fix && !no_fmt && lint_enabled;
+    if refmt {
+        let mut args = fmt_config_args;
+        if suppress_unmatched {
+            args.push("--no-error-on-unmatched-pattern".to_string());
+        }
+        if has_paths {
+            args.extend(paths);
+        }
+        steps.push(RawCheckStep::fmt(args));
+    }
+    // fmt is the runner's first step, so its duration starts at the spawn.
+    let fmt_start = Instant::now();
+    let mut raw = RawCheck::spawn(resolver, &steps, envs, cwd).await?;
+
+    // 2. Report each step as the runner finishes it.
+    if !no_fmt {
         if fix {
             fmt_fix_started = Some(fmt_start);
         }
-        let captured = resolve_and_capture_output(
-            resolver,
-            SynthesizableSubcommand::Fmt { args },
-            envs,
-            cwd,
-            false,
-        )
-        .await?;
-        let (fmt_status, combined_output) = combine_output(captured);
+        let (fmt_status, combined_output) = combine_output(raw.next_step().await?);
         status = fmt_status;
 
         if !fix {
@@ -160,45 +203,13 @@ pub(crate) async fn execute_check(
                     "Formatting failed during fix",
                 );
             }
-            return Ok(status);
+            return raw.finish(status).await;
         }
     }
 
     if run_lint_phase {
         let lint_message_kind = LintMessageKind::from_flags(lint_enabled, type_check_enabled);
-        let mut args = config_args(resolved_vite_config.lint.is_some());
-        // oxlint cannot auto-fix type diagnostics, so `--fix` is dropped on the
-        // type-check-only path.
-        if fix && lint_enabled {
-            args.push("--fix".to_string());
-        }
-        if quiet {
-            args.push("--quiet".to_string());
-        }
-        // `vp check` parses oxlint's human-readable summary output to print
-        // unified pass/fail lines. When `GITHUB_ACTIONS=true`, oxlint auto-switches
-        // to the GitHub reporter, which omits that summary on success and makes the
-        // parser think linting never started. Force the default reporter here so the
-        // captured output is stable across local and CI environments.
-        args.push("--format=default".to_string());
-        if !lint_enabled && type_check_enabled {
-            args.push("--type-check-only".to_string());
-        }
-        if suppress_unmatched {
-            args.push("--no-error-on-unmatched-pattern".to_string());
-        }
-        if has_paths {
-            args.extend(paths.iter().cloned());
-        }
-        let captured = resolve_and_capture_output(
-            resolver,
-            SynthesizableSubcommand::Lint { args },
-            envs,
-            cwd,
-            true,
-        )
-        .await?;
-        let (lint_status, combined_output) = combine_output(captured);
+        let (lint_status, combined_output) = combine_output(raw.next_step().await?);
         status = lint_status;
 
         match analyze_lint_output(&combined_output) {
@@ -260,29 +271,12 @@ pub(crate) async fn execute_check(
             if fix && !no_fmt {
                 flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
             }
-            return Ok(status);
+            return raw.finish(status).await;
         }
     }
 
-    // Re-run fmt after lint --fix, since lint fixes can break formatting
-    // (e.g. the curly rule adding braces to if-statements).
-    if fix && !no_fmt && lint_enabled {
-        let mut args = fmt_config_args;
-        if suppress_unmatched {
-            args.push("--no-error-on-unmatched-pattern".to_string());
-        }
-        if has_paths {
-            args.extend(paths.into_iter());
-        }
-        let captured = resolve_and_capture_output(
-            resolver,
-            SynthesizableSubcommand::Fmt { args },
-            envs,
-            cwd,
-            false,
-        )
-        .await?;
-        let (refmt_status, combined_output) = combine_output(captured);
+    if refmt {
+        let (refmt_status, combined_output) = combine_output(raw.next_step().await?);
         status = refmt_status;
         if status != ExitStatus::SUCCESS {
             print_error_block(
@@ -290,7 +284,7 @@ pub(crate) async fn execute_check(
                 &combined_output,
                 "Formatting failed after lint fixes were applied",
             );
-            return Ok(status);
+            return raw.finish(status).await;
         }
         flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
     }
@@ -301,7 +295,7 @@ pub(crate) async fn execute_check(
         flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
     }
 
-    Ok(status)
+    raw.finish(status).await
 }
 
 fn flush_deferred_pass_lines(

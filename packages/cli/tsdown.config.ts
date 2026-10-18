@@ -64,6 +64,7 @@ export default defineConfig([
       'config/bin': './src/config/bin.ts',
       'hooks/bin': './src/hooks/bin.ts',
       'staged/bin': './src/staged/bin.ts',
+      'check/raw': './src/check/raw.ts',
     },
     outDir: 'dist',
     format: 'esm',
