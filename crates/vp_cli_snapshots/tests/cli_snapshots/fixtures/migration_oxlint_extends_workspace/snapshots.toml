@@ -46,3 +46,28 @@ steps = [
   { argv = ["vp", "lint", "index.js"], comment = "The migrated owner uses its shared module", continue-on-failure = true },
   { argv = ["vp", "lint", "index.js"], cwd = "packages/a", comment = "The migrated intermediate owner uses its shared module", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_workspace_owner_ignores"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "rm", "packages/b/extra.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "ignorePatterns", '["generated/**"]'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "rules.no-debugger", '"error"'], snapshot = false },
+  { argv = ["vpt", "write-file", "index.js", "export const clean = true;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/a/index.js", "export const clean = true;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "generated/built.js", "debugger;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/a/generated/built.js", "debugger;\n"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js", "generated/built.js"], comment = "The original owner excludes its generated file" },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js", "generated/built.js"], cwd = "packages/a", comment = "The dependent does not inherit the owner's ignore patterns", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.mjs"], comment = "The owner's top-level ignore patterns reference its shared module" },
+  { argv = ["vpt", "print-file", "packages/a/vite.config.mjs"], comment = "The dependent does not receive top-level ignore patterns" },
+  { argv = ["vp", "lint", "--threads=1", "index.js", "generated/built.js"], comment = "The owner still excludes the generated file and exits successfully" },
+  { argv = ["vp", "lint", "--threads=1", "index.js", "generated/built.js"], cwd = "packages/a", comment = "The dependent still reports the same diagnostic and exit code", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", ".oxlintrc.ts", '"generated/**"', '"other/**"'], comment = "Edit the shared ignore patterns once" },
+  { argv = ["vp", "lint", "--threads=1", "index.js", "generated/built.js"], comment = "The owner follows the edit and now reports the generated file", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "index.js", "generated/built.js"], cwd = "packages/a", comment = "The dependent's diagnostics remain unchanged", continue-on-failure = true },
+]

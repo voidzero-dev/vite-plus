@@ -128,6 +128,7 @@ function printConfig(
   config: OxlintConfig,
   inheritedNames: string[],
   pluginExpression?: (specifier: string) => string,
+  ignorePatternsExpression?: string,
 ): string {
   const printPlugin = (entry: NonNullable<OxlintConfig['jsPlugins']>[number]): string => {
     const specifier = typeof entry === 'string' ? entry : entry.specifier;
@@ -142,6 +143,8 @@ ${Object.entries(config)
     let code = JSON.stringify(value, null, 2);
     if (key === 'extends') {
       code = `[${inheritedNames.join(', ')}]`;
+    } else if (key === 'ignorePatterns' && ignorePatternsExpression) {
+      code = ignorePatternsExpression;
     } else if (key === 'jsPlugins' && Array.isArray(config.jsPlugins)) {
       code = `[${config.jsPlugins.map(printPlugin).join(', ')}]`;
     } else if (key === 'overrides' && config.overrides) {
@@ -282,5 +285,14 @@ export function prepareOxlintConfigModules(
     );
     return name;
   });
-  return { configContent: printConfig(config, inherited), imports, modules };
+  return {
+    configContent: printConfig(
+      config,
+      inherited,
+      undefined,
+      root.shared ? `${inherited[0]}.ignorePatterns` : undefined,
+    ),
+    imports,
+    modules,
+  };
 }

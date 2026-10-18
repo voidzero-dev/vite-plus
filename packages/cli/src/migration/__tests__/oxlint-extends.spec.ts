@@ -285,6 +285,50 @@ describe('Oxlint JSON extends migration', () => {
     },
   );
 
+  it('keeps ignore patterns live at each shared owner without applying them to dependents', async () => {
+    createWorkspace();
+    write(
+      'vite.config.mjs',
+      'const oxlintConfig1 = "original"; export default { custom: oxlintConfig1 };',
+    );
+    write('.oxlintrc.json', {
+      ignorePatterns: ['generated/**'],
+      rules: { 'no-debugger': 'error' },
+    });
+    write('packages/a/.oxlintrc.json', {
+      extends: ['../../.oxlintrc.json'],
+      ignorePatterns: ['local/**'],
+    });
+    write('packages/b/.oxlintrc.json', { extends: ['../a/.oxlintrc.json'] });
+
+    const report = migrateWorkspace();
+
+    expect(report.warnings).toEqual([]);
+    expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toContain(
+      'oxlintConfig2.ignorePatterns',
+    );
+    for (const updated of [false, true]) {
+      if (updated) {
+        const rootModule = path.join(project, '.oxlintrc.ts');
+        fs.writeFileSync(
+          rootModule,
+          fs.readFileSync(rootModule, 'utf8').replace('generated/**', 'built/**'),
+        );
+        const packageModule = path.join(project, 'packages/a/.oxlintrc.ts');
+        fs.writeFileSync(
+          packageModule,
+          fs.readFileSync(packageModule, 'utf8').replace('local/**', 'vendor/**'),
+        );
+      }
+      const owner = await loadConfig();
+      const intermediate = await loadConfig(path.join(project, 'packages/a'));
+      const dependent = await loadConfig(path.join(project, 'packages/b'));
+      expect(owner.lint!.ignorePatterns).toEqual([updated ? 'built/**' : 'generated/**']);
+      expect(intermediate.lint!.ignorePatterns).toEqual([updated ? 'vendor/**' : 'local/**']);
+      expect(dependent.lint!.ignorePatterns).toBeUndefined();
+    }
+  });
+
   it('retains transitive JSON dependencies of a workspace whose module output conflicts', async () => {
     createWorkspace(['a', 'b', 'c']);
     const root = write('.oxlintrc.json', { rules: { 'no-debugger': 'error' } });

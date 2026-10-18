@@ -315,9 +315,14 @@ function mergeOxlintConfigFile(
     return;
   }
   // Keep shared rules in one module, including for the workspace that owns it.
-  // Only migration defaults belong in the local lint block.
+  // Ignore patterns only apply at the top level, so keep them local as well.
   const oxlintJson: OxlintConfig = file.shared
-    ? { extends: [structuredClone(file.config)] }
+    ? {
+        extends: [structuredClone(file.config)],
+        ...(file.config.ignorePatterns !== undefined
+          ? { ignorePatterns: file.config.ignorePatterns }
+          : {}),
+      }
     : structuredClone(file.config);
   // Never discard an inheritance tree when a lint block already exists.
   if (oxlintJson.extends?.length && hasConfigKey(path.join(projectPath, viteConfig), 'lint')) {
