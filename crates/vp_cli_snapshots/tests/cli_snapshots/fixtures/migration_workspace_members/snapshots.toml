@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_workspace_members"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "migrate a workspace without a lockfile or package-manager declaration", timeout = 120000 },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the selected pnpm manager retains the workspace members" },
+  { argv = ["vp", "run", "-r", "build"], comment = "both migrated workspace members remain runnable", snapshot = false },
+  { argv = ["vpt", "stat-file", "packages/a/dist/index.html", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "packages/b/dist/index.html", "--assert", "file"] },
+]
