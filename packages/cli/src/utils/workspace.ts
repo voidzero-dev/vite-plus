@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { globSync } from 'glob';
 import { minimatch } from 'minimatch';
+import { globSync } from 'tinyglobby';
 import { Scalar, YAMLSeq } from 'yaml';
 
 import { detectWorkspace as detectWorkspaceBinding } from '../../binding/index.js';
@@ -32,7 +32,7 @@ export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string
   }
   return globSync(
     patterns.map((pattern) => `${pattern}/package.json`),
-    { absolute: true, cwd },
+    { absolute: true, cwd, expandDirectories: false },
   );
 }
 
@@ -134,6 +134,7 @@ export function discoverWorkspacePackages(
       absolute: false,
       cwd: rootDir,
       ignore: ['**/node_modules/**'],
+      expandDirectories: false,
     },
   );
   for (const packageJsonRelativePath of packageJsonRelativePaths) {
@@ -148,10 +149,9 @@ export function discoverWorkspacePackages(
     }
     packages.push({
       name: pkg.name,
-      // glob returns native separators; normalize to forward slashes so the
-      // path compares cleanly against workspace-pattern-derived values like
-      // `parentDirs` on Windows (path.join accepts either separator).
-      path: path.dirname(packageJsonRelativePath).split(path.sep).join('/'),
+      // Keep tinyglobby's forward slashes so the path compares cleanly against
+      // workspace-pattern-derived values like `parentDirs` on Windows.
+      path: path.posix.dirname(packageJsonRelativePath),
       description: pkg.description,
       version: pkg.version,
     });

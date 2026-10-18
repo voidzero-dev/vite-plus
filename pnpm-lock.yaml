@@ -389,6 +389,9 @@ catalogs:
     tinyexec:
       specifier: ^1.0.1
       version: 1.3.1
+    tinyglobby:
+      specifier: ^0.2.15
+      version: 0.2.17
     tsdown:
       specifier: ^0.23.1
       version: 0.23.1
@@ -566,9 +569,6 @@ importers:
       detect-newline:
         specifier: 'catalog:'
         version: 4.0.1
-      glob:
-        specifier: 'catalog:'
-        version: 13.0.0
       jsonc-parser:
         specifier: 'catalog:'
         version: 3.3.1
@@ -584,6 +584,9 @@ importers:
       picocolors:
         specifier: 'catalog:'
         version: 1.1.1
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
       tsdown:
         specifier: 'catalog:'
         version: 0.23.1(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.1)(@tsdown/exe@0.23.1)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.7.6(@devframes/json-render@1.0.0(@devframes/hub@1.0.0(@devframes/agentic@1.0.0)(crossws@0.4.12(srvx@1.0.5))(devframe@1.0.0))(devframe@1.0.0))(crossws@0.4.12(srvx@1.0.5))(srvx@1.0.5)(vite@packages+core))(@volar/typescript@2.4.28(typescript@6.0.3))(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@6.0.3)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@6.0.3))
