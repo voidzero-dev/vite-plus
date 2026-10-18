@@ -50,6 +50,12 @@ steps = [{ argv = ["node", "install.mjs", "interactive", "failure"], interaction
 ] }]
 
 [[case]]
+name = "installation_resolution_retry"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "resolution-retry"], tty = false }]
+
+[[case]]
 name = "installation_progress_non_tty"
 vp = "global"
 skip-platforms = ["windows"]
