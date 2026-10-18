@@ -26,6 +26,18 @@ greeting from-env-file
 setup ran true
 ```
 
+## `vpx --import ./src/setup ./src/args.ts`
+
+An extensionless --import preload resolves from the working directory
+
+**Exit code:** 7
+
+```
+args []
+greeting (unset)
+setup ran true
+```
+
 ## `vpx --eval 'console.log('\''eval without a script'\'')'`
 
 Node.js invocations without a script still run Node.js
