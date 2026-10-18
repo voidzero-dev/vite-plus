@@ -28,6 +28,8 @@ This guide applies to this repository; `CLAUDE.md` points here. For changes to t
 
 ## Checks and Tests
 
+Prefer local fixtures or mock servers for tests that depend on external services. Use real network requests only when they are necessary to verify the behavior under test, and explain that need in the test. Reuse existing test infrastructure, preserve behavioral coverage, and keep mutable state isolated between cases.
+
 For behavior changes, find nearby tests before editing and add or update coverage in the same area. Choose checks for the changed layer:
 
 | Change                         | Validation                                                                                                                         |
@@ -47,6 +49,8 @@ Validate `vp check`, lint, format, and type-check changes end-to-end: bundled-to
 Write new CLI tests, including interactive flows, in `crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/`. Read the [snapshot runner instructions](crates/vp_cli_snapshots/tests/cli_snapshots/README.md) before adding cases; they define `snapshots.toml`, CLI flavors, `vpt` helpers, and prompt milestones. See [the RFC](rfcs/interactive-snapshot-tests.md) for design rationale.
 
 - Steps are argv arrays without an implicit shell. Use `vpt` helpers instead of coreutils for portable file operations.
+- For package-manager cases, prefer the runner's local registry, [shared registry fixtures](crates/vp_cli_snapshots/tests/cli_snapshots/registry/README.md), and response cache over new public-registry requests. Keep package-manager caches isolated per case, and refresh recorded fixtures only through the explicit maintenance command.
+- For changes to network use or scheduling, compare request counts and elapsed time with the same cases, worker count, and initial cache state. Do not remove assertions or share mutable case state to improve speed.
 - Local-flavor cases require a fresh `packages/cli/dist`. Use `just snapshot-test-global <filter>` when no JS build is available.
 - For intended snapshot changes, run `UPDATE_SNAPSHOTS=1 just snapshot-test <filter>`. Review and commit the recorded `.md` files with the fixture; mismatches fail the run and produce `.md.new` files.
 

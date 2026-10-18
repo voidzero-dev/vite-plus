@@ -23,17 +23,17 @@ should list installed packages
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
       "overridden": false
     },
     "test-vite-plus-package": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
       "overridden": false
     },
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false
     }
   }
@@ -51,7 +51,7 @@ should list specific package
   "dependencies": {
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false
     }
   }
@@ -69,17 +69,17 @@ should list packages with depth limit
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
       "overridden": false
     },
     "test-vite-plus-package": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
       "overridden": false
     },
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false
     }
   }
@@ -110,7 +110,7 @@ should list packages with extended info
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
       "overridden": false,
       "name": "test-vite-plus-package-optional",
       "integrity": "sha512-7rJ71VaETMzhK3Iwd14vutJtZt90MqUhu9KwnEEe55htLIIJs/WImI02NopwsV9Ra/Rqld4KkvbvOy6MD0b1sw==",
@@ -125,7 +125,7 @@ should list packages with extended info
     },
     "test-vite-plus-package": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
       "overridden": false,
       "name": "test-vite-plus-package",
       "integrity": "sha512-xj5hJUNL5vihX9TCYXbk8V5r+8MfqG2fDJcRdpQz6tlLob3vkFjsVM8pT5QjTzHS6lBXHd0r9TOMS8+sETjnpw==",
@@ -140,7 +140,7 @@ should list packages with extended info
     },
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false,
       "name": "testnpm2",
       "integrity": "sha512-F4AQ+KmzhbOSlt7ae+X2O8IJktFZAcN6OK169TT4ny7M3e4Vje7NITZTOU31AtEk9L/Z8lrCrqinl/eY6WPuEw==",
@@ -167,17 +167,17 @@ should list packages in parseable format
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
       "overridden": false
     },
     "test-vite-plus-package": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
       "overridden": false
     },
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false
     }
   }
@@ -195,12 +195,12 @@ should exclude dev dependencies using --omit dev
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
       "overridden": false
     },
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false
     }
   }
@@ -218,17 +218,17 @@ include installed dev dependencies in a production environment
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
       "overridden": false
     },
     "test-vite-plus-package": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
       "overridden": false
     },
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false
     }
   }
@@ -246,17 +246,17 @@ should exclude optional dependencies (uses --omit optional)
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
       "overridden": false
     },
     "test-vite-plus-package": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
       "overridden": false
     },
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false
     }
   }
@@ -274,12 +274,12 @@ should exclude peer dependencies (uses --omit peer)
   "dependencies": {
     "test-vite-plus-package": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
       "overridden": false
     },
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false
     }
   }
@@ -297,17 +297,17 @@ should support pass through arguments
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
       "overridden": false
     },
     "test-vite-plus-package": {
       "version": "1.0.0",
-      "resolved": "https://registry.npmjs.org/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+      "resolved": "http://127.0.0.1:<port>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
       "overridden": false
     },
     "testnpm2": {
       "version": "1.0.1",
-      "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
       "overridden": false
     }
   }

@@ -24,8 +24,10 @@ Documentation: https://viteplus.dev/guide/package-management
 
 ## `vp pm owner list testnpm2`
 
-should list package owners (uses npm owner)
+should preserve native pnpm owner errors without retrying npm
+
+**Exit code:** 1
 
 ```
-fengmk2 <fengmk2@gmail.com>
+[ERR_PNPM_PACKAGE_NOT_FOUND] Package "testnpm2" not found in registry
 ```

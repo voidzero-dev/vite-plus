@@ -528,10 +528,10 @@ export async function migrateTsupToTsdown(
       }
     }
     for (const [configPath, sharedConfig] of sharedConfigs) {
-      const message = `${displayRelative(configPath, projectPath)} is shared by ${[
-        ...sharedConfig.consumers.values(),
-      ]
-        .map((consumer) => consumer.label)
+      const message = `${displayRelative(configPath, projectPath)} is shared by ${Array.from(
+        sharedConfig.consumers.values(),
+        (consumer) => consumer.label,
+      )
         .toSorted()
         .join(', ')}. It was preserved and must be migrated manually.`;
       if (options?.report) {

@@ -11,6 +11,7 @@ catalog:
   '@babel/preset-env': ^7.29.7
   '@babel/preset-typescript': ^7.29.7
   '@clack/core': ^1.5.1
+  '@e18e/eslint-plugin': ^0.8.1
   '@emnapi/core': 2.0.0-alpha.5
   '@emnapi/runtime': 2.0.0-alpha.5
   '@iconify/vue': ^5.0.0

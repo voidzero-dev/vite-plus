@@ -348,7 +348,7 @@ export function rewritePnpmWorkspaceYaml(
     for (const key of updatedOverrideKeys) {
       if (key.value.includes('>')) {
         const splits = key.value.split('>');
-        if (splits[splits.length - 1].trim() === 'vite') {
+        if (splits.at(-1)!.trim() === 'vite') {
           updatedOverrides.delete(key);
         }
       }
@@ -1253,7 +1253,7 @@ export function rewriteRootWorkspacePackageJson(
       for (const key in pkg.pnpm?.overrides) {
         if (key.includes('>')) {
           const splits = key.split('>');
-          if (splits[splits.length - 1].trim() === 'vite') {
+          if (splits.at(-1)!.trim() === 'vite') {
             delete pkg.pnpm.overrides[key];
           }
         }

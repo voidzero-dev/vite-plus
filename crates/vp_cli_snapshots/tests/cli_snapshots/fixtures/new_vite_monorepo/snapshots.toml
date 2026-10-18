@@ -2,6 +2,7 @@
 name = "new_vite_monorepo"
 vp = "global"
 skip-platforms = ["windows"]
+# mock-manifest.json fixes the remote library input; see degit-fixture/README.md.
 steps = [
   { argv = ["vp", "create", "vite:monorepo", "--no-interactive", "--git", "--editor", "vscode"], comment = "create monorepo with default values", snapshot = false, continue-on-failure = true },
   { argv = ["vpt", "list-dir", "vite-plus-monorepo"], comment = "check files created", continue-on-failure = true },
