@@ -160,7 +160,7 @@ The loader is resolved from the project's `vite-plus` first (`JsExecutor::resolv
 - `--help` prints the local bin's own help; `--version` prints `vite-plus v<version>`.
 - Both CLIs run the shared case table `vpx_script_cases.json`: detection `cases`, `packageSpecs`, and `explicitPrograms`. A unit test checks that their extension and value-taking-option lists are identical.
 
-For a script, the local bin and the global shim resolve the same loader and Node.js; the difference is the local bin's own Node.js startup before it execs the script, about 21–29 ms against the global shim's 3–8 ms ([Performance](#performance)).
+For a script, the local bin and the global shim resolve the same loader and Node.js; the difference is the local bin's own Node.js startup before it execs the script, about 23–30 ms against the global shim's 5–10 ms ([Performance](#performance)).
 
 ## Native Side
 
@@ -285,27 +285,27 @@ Each cell is `vpx` / tsx with a warm cache / tsx without a cache, in ms. The glo
 
 | Scenario    |   Node.js 22.18 |  Node.js 24.12 |   Node.js 26.5 |
 | ----------- | --------------: | -------------: | -------------: |
-| `hello`     |    50 / 68 / 76 |   33 / 46 / 63 |   36 / 38 / 61 |
-| `esm-app`   |  90 / 119 / 141 |  72 / 93 / 234 |  73 / 90 / 215 |
-| `cjs-app`   |  91 / 136 / 289 | 73 / 112 / 263 | 75 / 104 / 256 |
-| `large-cjs` | 119 / 122 / 225 | 100 / 90 / 274 |  91 / 75 / 256 |
-| `large-esm` | 102 / 106 / 199 |  83 / 76 / 178 |  84 / 69 / 171 |
+| `hello`     |    51 / 68 / 75 |   34 / 46 / 63 |   37 / 38 / 61 |
+| `esm-app`   |  94 / 124 / 141 |  75 / 94 / 217 |  77 / 92 / 216 |
+| `cjs-app`   |  94 / 143 / 289 | 75 / 116 / 261 | 77 / 113 / 257 |
+| `large-cjs` | 121 / 122 / 229 | 100 / 90 / 273 |  93 / 76 / 258 |
+| `large-esm` | 103 / 107 / 200 |  84 / 75 / 177 |  86 / 69 / 173 |
 
-The project-local `vpx`, which `package.json` scripts run, starts the script in a child Node.js process, so it is compared with the `tsx` CLI:
+The project-local `vpx`, which `package.json` scripts run, starts its own Node.js before it execs the script, as the `tsx` CLI starts a parent process, so it is compared with the `tsx` CLI:
 
 | Scenario    |   Node.js 22.18 |   Node.js 24.12 |    Node.js 26.5 |
 | ----------- | --------------: | --------------: | --------------: |
-| `hello`     |   65 / 99 / 107 |    50 / 82 / 96 |    56 / 72 / 94 |
-| `esm-app`   | 107 / 158 / 174 |  94 / 133 / 276 |  95 / 127 / 249 |
-| `cjs-app`   | 108 / 174 / 325 |  91 / 146 / 295 |  95 / 142 / 291 |
-| `large-cjs` | 136 / 154 / 262 | 116 / 122 / 302 | 111 / 109 / 291 |
-| `large-esm` | 118 / 137 / 231 | 101 / 107 / 210 | 104 / 103 / 205 |
+| `hello`     |  66 / 103 / 110 |    52 / 83 / 96 |    57 / 72 / 94 |
+| `esm-app`   | 113 / 165 / 177 |  93 / 134 / 250 |  98 / 134 / 249 |
+| `cjs-app`   | 112 / 184 / 327 |  93 / 155 / 296 |  99 / 155 / 291 |
+| `large-cjs` | 139 / 155 / 265 | 118 / 122 / 305 | 113 / 111 / 294 |
+| `large-esm` | 122 / 139 / 232 | 103 / 108 / 210 | 107 / 104 / 206 |
 
-- The global shim's startup, Node.js resolution, and loader lookup take 3–8 ms, usually 7. The local bin's own Node.js startup adds 21–29 ms before it execs the script, about what the `tsx` CLI's parent process adds.
-- On `hello`, `esm-app`, and `cjs-app`, `vpx` beats tsx's warm cache on every version: by 5–35% through the global shim and 22–39% through the local bin.
-- Without tsx's cache, `vpx` takes 34–72% less time everywhere.
-- tsx's cache wins only on the 1.8 MB files through the global shim on 24.12 and 26.5, by 7–16 ms, because `vpx` transforms them on every run; a persistent transform cache would only help such files. Against the `tsx` CLI, the local bin is faster or level.
-- On `hello`, the loader alone beats plain `node` type stripping on every version (26–42 against 44–48 ms). With the shim, the global `vpx` is 2 ms slower on 22.18 and 11–12 ms faster on 24.12 and 26.5.
+- The global shim's startup, Node.js resolution, and loader lookup take 5–10 ms, usually 8. The local bin's own Node.js startup adds 23–30 ms before it execs the script, against 32–42 ms for the `tsx` CLI's parent process. Exec in place keeps startup within 2 ms of spawning the script; it saves the second process, not time.
+- On `hello`, `esm-app`, and `cjs-app`, `vpx` beats tsx's warm cache on every version: by 4–36% through the global shim and 22–40% through the local bin.
+- Without tsx's cache, `vpx` takes 33–71% less time everywhere.
+- tsx's cache wins only on the 1.8 MB files through the global shim on 24.12 and 26.5, by 9–17 ms, because `vpx` transforms them on every run; a persistent transform cache would only help such files. Against the `tsx` CLI, the local bin is faster or level.
+- On `hello`, the loader alone beats plain `node` type stripping on every version (26–41 against 44–48 ms). With the shim, the global `vpx` is 3 ms slower on 22.18 and 10–11 ms faster on 24.12 and 26.5.
 - Compiling oxc-node into the binding adds about 130 KB (0.3%) to the release `libvite_plus_cli.dylib` on macOS arm64, against about 4.2 MB for a separate `@oxc-node/core` platform package; its load cost is within the noise above.
 
 ## Security Considerations

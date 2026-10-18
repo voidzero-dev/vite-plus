@@ -183,7 +183,7 @@ function commands(scenario: string, entry: string, nodeVersion: string): Command
     { label: '`node --import tsx` (1 process)', args: ['--import', tsxLoader, entry], env },
     { label: '`node --import tsx`, no cache', args: ['--import', tsxLoader, entry], env: noCache },
     // Both start the script in a child Node.js process.
-    { label: '`vpx` local bin (2 processes)', args: [vpxBin, entry], env },
+    { label: '`vpx` local bin (exec on Unix)', args: [vpxBin, entry], env },
     { label: '`tsx` CLI (2 processes)', args: [tsxCli, entry], env },
     { label: '`tsx` CLI, no cache', args: [tsxCli, entry], env: noCache },
     ...(scenario === 'hello' ? [{ label: '`node` type stripping', args: [entry], env }] : []),
