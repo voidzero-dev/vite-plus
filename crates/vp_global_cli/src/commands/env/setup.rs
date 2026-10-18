@@ -217,14 +217,7 @@ fn is_owned_shim(path: &vt_path::AbsolutePath, current_exe: &std::path::Path) ->
 /// Resolve placement independently for Node.js and each package-manager family.
 pub(super) fn shim_dir(settings: &super::config::Config, tool: &str) -> vt_path::AbsolutePathBuf {
     let dirs = &vp_shared::EnvConfig::get().dirs;
-    let mode = if tool == "node" {
-        settings.node_shim_mode
-    } else if let Some(kind) = vp_pm_cli::PackageManagerType::from_tool(tool) {
-        settings.package_manager_shim_mode_for(kind)
-    } else {
-        super::config::ShimMode::Managed
-    };
-    match mode {
+    match settings.shim_mode_for_tool(tool) {
         super::config::ShimMode::Managed => dirs.bin.clone(),
         super::config::ShimMode::SystemFirst => dirs.fallback_bin(),
     }

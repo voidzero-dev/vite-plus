@@ -18,6 +18,7 @@ import {
   dropDeadOxlintPluginsDependency,
   dropRemovePackageOverrideKeys,
   ensurePnpmWorkspaceExoticSubdepsSetting,
+  ensurePnpmWorkspacePackages,
   ensureStandalonePnpmWorkspace,
   findYarnWorkspaceHoisting,
   hasDirectVitePlusInstallEntry,
@@ -449,6 +450,7 @@ export function rewriteMonorepo(
       providerCatalogAdditions,
       usesWebdriverio,
     );
+    ensurePnpmWorkspacePackages(workspaceInfo.rootDir, workspaceInfo.workspacePatterns);
     if (usePnpmWorkspaceSettings && isForceOverrideMode()) {
       migratePnpmOverridesToWorkspaceYaml(workspaceInfo.rootDir, {
         [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
