@@ -59,6 +59,8 @@ With [shell completion](/guide/env#shell-completion) enabled, press Tab after `v
 
 If the project defines that script or task, run it with `vp run <name>`. For example, with a `"dev": "astro dev"` script, `vp run dev` starts Astro, while `vp dev` ignores the script and starts Vite.
 
+If a package depends on Astro or Nuxt but has no `dev` script, `vp dev` without arguments prints a hint to use `vp exec astro dev` or `vp exec nuxt dev`. The Vite dev server still starts. The hint uses the package selected by `-C` or `defaultPackage` and is not shown when a script starts `vp dev`.
+
 ## Caching
 
 `package.json` scripts are not cached by default. Use `--cache` to enable caching:

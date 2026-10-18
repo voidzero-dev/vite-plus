@@ -1,0 +1,47 @@
+[[case]]
+name = "dev_framework_note"
+vp = ["local", "global"]
+comment = "Framework dependencies without a dev script get a hint. Vite still starts."
+steps = [
+  { argv = ["vp", "dev"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "-C", "app", "dev"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "dev"], cwd = "default-package", comment = "The hint uses the resolved defaultPackage, which depends on Nuxt, not the caller's Astro dependency.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "dev_framework_note_suppression"
+vp = ["local", "global"]
+comment = "Explicit Vite arguments, script execution, and packages without a direct framework dependency get no framework hint."
+steps = [
+  { argv = ["vp", "dev", "--host", "127.0.0.1"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "dev"], envs = [["VP_RUN", "1"]], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "dev"], envs = [["npm_lifecycle_event", "start"]], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "dev"], cwd = "plain", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "write-file", "package.json", '{"name":"framework-note","type":"module","dependencies":{"astro":"*"},"scripts":{"dev":"astro dev"}}'], snapshot = false },
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "export default {", "export default { clearScreen: false,"], snapshot = false },
+  { argv = ["vp", "dev"], comment = "An existing dev script gets only the existing vpr note.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]

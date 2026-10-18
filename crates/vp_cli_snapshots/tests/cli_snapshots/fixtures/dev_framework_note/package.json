@@ -1,0 +1,8 @@
+{
+  "name": "framework-note",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "astro": "*"
+  }
+}
