@@ -21,6 +21,7 @@ import {
   detectScript,
   hasVersionSpec,
   NODE_OPTIONS_WITH_VALUE,
+  NODE_OPTIONS_WITHOUT_ENTRY,
   packageInvocation,
   parseVpxArgs,
   SCRIPT_EXTENSIONS,
@@ -56,6 +57,7 @@ interface DetectionCase {
 const detectionTable: {
   scriptExtensions: string[];
   nodeOptionsWithValue: string[];
+  nodeOptionsWithoutEntry: string[];
   packageSpecs: { spec: string; versioned: boolean; command: string }[];
   explicitPrograms: {
     name: string;
@@ -98,6 +100,7 @@ describe('detectScript', () => {
     // vpx_script_cases.json holds the lists; vpx_script.rs checks its own against it too.
     expect(SCRIPT_EXTENSIONS).toEqual(detectionTable.scriptExtensions);
     expect([...NODE_OPTIONS_WITH_VALUE]).toEqual(detectionTable.nodeOptionsWithValue);
+    expect([...NODE_OPTIONS_WITHOUT_ENTRY]).toEqual(detectionTable.nodeOptionsWithoutEntry);
   });
 });
 

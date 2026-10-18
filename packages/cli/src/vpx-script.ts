@@ -14,6 +14,7 @@ export const NODE_OPTIONS_WITH_VALUE = new Set([
   '-C',
   '-e',
   '-p',
+  '-pe',
   '-r',
   '--allow-fs-read',
   '--allow-fs-write',
@@ -94,6 +95,23 @@ export const NODE_OPTIONS_WITH_VALUE = new Set([
   '--watch-path',
 ]);
 
+/**
+ * Node.js options after which positionals are arguments, not an entry file: the code of
+ * `--eval` / `--print`, or the package script of `--run`, runs instead.
+ */
+export const NODE_OPTIONS_WITHOUT_ENTRY = new Set([
+  '-e',
+  '--eval',
+  '-p',
+  '-pe',
+  '--print',
+  '--run',
+]);
+
+function takesNoEntry(option: string): boolean {
+  return NODE_OPTIONS_WITHOUT_ENTRY.has(option.split('=', 1)[0]);
+}
+
 export interface VpxFlags {
   packages: string[];
   shellMode: boolean;
@@ -170,11 +188,12 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
   // A leading option never named a package bin, so this always runs Node.js.
   const nodeArgs: string[] = [];
   let tsconfig: string | undefined;
+  let entry = true;
   for (let index = 0; index < positional.length; index++) {
     const arg = positional[index];
     if (arg === '--' || arg === '-' || !arg.startsWith('-')) {
       const script = arg === '--' ? positional[index + 1] : arg;
-      if (script !== undefined) {
+      if (script !== undefined && entry) {
         checkScriptAfterOptions(script, cwd);
       }
       nodeArgs.push(...positional.slice(index));
@@ -191,6 +210,7 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
       tsconfig = arg.slice('--tsconfig='.length);
       continue;
     }
+    entry &&= !takesNoEntry(arg);
     nodeArgs.push(arg);
     if (NODE_OPTIONS_WITH_VALUE.has(arg) && positional[index + 1] !== undefined) {
       nodeArgs.push(positional[++index]);

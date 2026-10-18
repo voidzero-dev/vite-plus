@@ -1,10 +1,11 @@
 {
-  "$comment": "Script detection cases shared by crates/vp_global_cli/src/commands/vpx_script.rs and packages/cli/src/__tests__/vpx-script.spec.ts, so the global vpx and the project-local bin decide the same way. `files` are created in a temporary project directory that is the cwd; `{cwd}` in `args` and `script` stands for that directory. `expect` is \"package\", { \"error\": message }, or { \"script\": Node.js arguments, \"tsconfig\": path }. `scriptExtensions` and `nodeOptionsWithValue` are the lists both implementations must declare. `packageSpecs` gives, for a package spec, whether it names a version and which binary it runs. `explicitPrograms` checks an explicit path that package mode runs as a program: `executable` lists the files made executable, `expect` is \"ok\" or { \"error\", \"note\" }, and `unixOnly` cases depend on mode bits.",
+  "$comment": "Script detection cases shared by crates/vp_global_cli/src/commands/vpx_script.rs and packages/cli/src/__tests__/vpx-script.spec.ts, so the global vpx and the project-local bin decide the same way. `files` are created in a temporary project directory that is the cwd; `{cwd}` in `args` and `script` stands for that directory. `expect` is \"package\", { \"error\": message }, or { \"script\": Node.js arguments, \"tsconfig\": path }. `scriptExtensions`, `nodeOptionsWithValue`, and `nodeOptionsWithoutEntry` are the lists both implementations must declare. `packageSpecs` gives, for a package spec, whether it names a version and which binary it runs. `explicitPrograms` checks an explicit path that package mode runs as a program: `executable` lists the files made executable, `expect` is \"ok\" or { \"error\", \"note\" }, and `unixOnly` cases depend on mode bits.",
   "scriptExtensions": [".ts", ".mts", ".cts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"],
   "nodeOptionsWithValue": [
     "-C",
     "-e",
     "-p",
+    "-pe",
     "-r",
     "--allow-fs-read",
     "--allow-fs-write",
@@ -84,6 +85,7 @@
     "--watch-kill-signal",
     "--watch-path"
   ],
+  "nodeOptionsWithoutEntry": ["-e", "--eval", "-p", "-pe", "--print", "--run"],
   "packageSpecs": [
     { "spec": "eslint", "versioned": false, "command": "eslint" },
     { "spec": "eslint@9", "versioned": true, "command": "eslint" },
@@ -327,6 +329,55 @@
       "args": ["--eval", "console.log(1)"],
       "expect": {
         "script": ["--eval", "console.log(1)"]
+      }
+    },
+    {
+      "name": "arguments after --eval code are not an entry file",
+      "args": ["--eval", "console.log(process.argv)", "./missing.ts"],
+      "expect": {
+        "script": ["--eval", "console.log(process.argv)", "./missing.ts"]
+      }
+    },
+    {
+      "name": "arguments after -e code are not an entry file",
+      "args": ["-e", "1", "./missing.ts"],
+      "expect": {
+        "script": ["-e", "1", "./missing.ts"]
+      }
+    },
+    {
+      "name": "arguments after -p code and -- are not an entry file",
+      "args": ["--no-warnings", "-p", "1", "--", "./missing.ts"],
+      "expect": {
+        "script": ["--no-warnings", "-p", "1", "--", "./missing.ts"]
+      }
+    },
+    {
+      "name": "-pe takes code like --print",
+      "args": ["-pe", "./missing.ts", "./other.ts"],
+      "expect": {
+        "script": ["-pe", "./missing.ts", "./other.ts"]
+      }
+    },
+    {
+      "name": "arguments after --print= code are not an entry file",
+      "args": ["--print=process.argv.length", "./missing.ts"],
+      "expect": {
+        "script": ["--print=process.argv.length", "./missing.ts"]
+      }
+    },
+    {
+      "name": "arguments after a --run package script are not an entry file",
+      "args": ["--run", "build", "./missing.ts"],
+      "expect": {
+        "script": ["--run", "build", "./missing.ts"]
+      }
+    },
+    {
+      "name": "--check still checks its entry file",
+      "args": ["--check", "./missing.ts"],
+      "expect": {
+        "error": "Script not found: ./missing.ts"
       }
     },
     {

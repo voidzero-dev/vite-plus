@@ -27,6 +27,7 @@ steps = [
   { argv = ["vpx", "./src/args.ts", "a", "--", "--flag"], comment = "Arguments after the script belong to it; exit code 7 propagates", continue-on-failure = true },
   { argv = ["vpx", "--env-file", ".env", "--import", "./src/setup.ts", "./src/args.ts"], comment = "Node.js options before the script, including a TypeScript --import preload", continue-on-failure = true },
   { argv = ["vpx", "--eval", "console.log('eval without a script')"], comment = "Node.js invocations without a script still run Node.js" },
+  { argv = ["vpx", "--eval", "console.log(process.argv.slice(1))", "./src/missing.ts"], comment = "After --eval code, a path is an argument, not a script to check" },
 ]
 
 [[case]]

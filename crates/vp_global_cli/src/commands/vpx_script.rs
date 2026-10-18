@@ -30,6 +30,7 @@ const NODE_OPTIONS_WITH_VALUE: &[&str] = &[
     "-C",
     "-e",
     "-p",
+    "-pe",
     "-r",
     "--allow-fs-read",
     "--allow-fs-write",
@@ -110,6 +111,15 @@ const NODE_OPTIONS_WITH_VALUE: &[&str] = &[
     "--watch-path",
 ];
 
+/// Node.js options after which positionals are arguments, not an entry file: the code of
+/// `--eval` / `--print`, or the package script of `--run`, runs instead.
+const NODE_OPTIONS_WITHOUT_ENTRY: &[&str] = &["-e", "--eval", "-p", "-pe", "--print", "--run"];
+
+fn takes_no_entry(option: &str) -> bool {
+    let name = option.split_once('=').map_or(option, |(name, _)| name);
+    NODE_OPTIONS_WITHOUT_ENTRY.contains(&name)
+}
+
 /// A `vpx` invocation that runs Node.js with the script loader.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ScriptInvocation {
@@ -157,11 +167,12 @@ pub fn detect(
     // from it on belongs to the script.
     let mut node_args = Vec::with_capacity(positional.len());
     let mut tsconfig = None;
+    let mut entry = true;
     let mut index = 0;
     while let Some(arg) = positional.get(index) {
         if arg == "--" || arg == "-" || !arg.starts_with('-') {
             let script = if arg == "--" { positional.get(index + 1) } else { Some(arg) };
-            if let Some(script) = script {
+            if let Some(script) = script.filter(|_| entry) {
                 check_script_after_options(script, cwd)?;
             }
             node_args.extend_from_slice(&positional[index..]);
@@ -178,6 +189,7 @@ pub fn detect(
             index += 1;
             continue;
         }
+        entry &= !takes_no_entry(arg);
         node_args.push(arg.clone());
         if NODE_OPTIONS_WITH_VALUE.contains(&arg.as_str())
             && let Some(value) = positional.get(index + 1)
@@ -527,6 +539,7 @@ mod tests {
         };
         assert_eq!(SCRIPT_EXTENSIONS, list("scriptExtensions"));
         assert_eq!(NODE_OPTIONS_WITH_VALUE, list("nodeOptionsWithValue"));
+        assert_eq!(NODE_OPTIONS_WITHOUT_ENTRY, list("nodeOptionsWithoutEntry"));
     }
 
     /// The cases in `vpx_script_cases.json`, which

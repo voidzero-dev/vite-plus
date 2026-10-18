@@ -33,3 +33,11 @@ Node.js invocations without a script still run Node.js
 ```
 eval without a script
 ```
+
+## `vpx --eval console.log(process.argv.slice(1)) ./src/missing.ts`
+
+After --eval code, a path is an argument, not a script to check
+
+```
+[ './src/missing.ts' ]
+```

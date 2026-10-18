@@ -66,6 +66,8 @@ if T starts with '-':                      # Node.js invocation; a leading optio
     script = first token after the Node.js options (the token after `--`, or `-` for stdin),
              skipping the value of options that take one (every `--option=...` that
              `node --help` lists on 22, 24, and 26: --import, --require, --env-file, -r, …)
+    after -e, --eval, -p, -pe, --print, or --run, no token is a script: Node.js runs that
+             code or package script and passes the rest as arguments
     script is a missing explicit path with a script extension → error
     otherwise → forward to Node.js as-is
 elif is_script(T):
@@ -98,6 +100,7 @@ After Node.js options, only a missing explicit path is an error: a bare name may
 | `vpx ./@scope/tool.ts`                     | script  | Detection runs before `@version` parsing                   |
 | `vpx --import ./setup.ts ./main.ts`        | script  | `./setup.ts` is the value of `--import`                    |
 | `vpx --eval 'console.log(1)'`              | node    | No script token; forwarded with the loader                 |
+| `vpx --eval '…' ./missing.ts`              | node    | After `--eval`, `./missing.ts` is an argument              |
 | `vpx /abs/bin/tool` (`#!/usr/bin/env vpx`) | script  | Shebang guard; otherwise `vpx` would exec itself in a loop |
 | `vpx ./deploy.sh`                          | package | No script extension; runs as a program, without the loader |
 
