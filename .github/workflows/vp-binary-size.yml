@@ -47,7 +47,7 @@ jobs:
         run: |
           MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           echo "sha=$MERGE_BASE" >> "$GITHUB_OUTPUT"
-          if git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- .github/workflows/vp-binary-size.yml .github/scripts/measure-installed-cli.mjs; then
+          if git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- .github/workflows/vp-binary-size.yml; then
             echo "workflow_changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "workflow_changed=true" >> "$GITHUB_OUTPUT"
@@ -112,22 +112,6 @@ jobs:
       RELEASE_BUILD: 'true'
       VERSION: '0.0.0-native-size'
     steps:
-      # Use the same measurement code for both revisions, including when the
-      # merge base predates this script. Neither build job has write permissions.
-      - name: Check out unpacked-size measurement script
-        if: matrix.settings.platform == 'linux'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          path: size-tools
-          sparse-checkout: .github/scripts/measure-installed-cli.mjs
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
-
-      - name: Preserve unpacked-size measurement script
-        if: matrix.settings.platform == 'linux'
-        run: cp size-tools/.github/scripts/measure-installed-cli.mjs "$RUNNER_TEMP/measure-installed-cli.mjs"
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ matrix.source == 'base' && needs.inputs.outputs.merge_base_sha || github.event.pull_request.head.sha }}
@@ -249,12 +233,6 @@ jobs:
           writeFileSync(process.env.SIZE_FILE, `${JSON.stringify(result, null, 2)}\n`);
           console.log(JSON.stringify(result, null, 2));
           NODE
-
-      - name: Measure unpacked CLI with production dependencies
-        if: matrix.settings.platform == 'linux'
-        env:
-          SIZE_FILE: ${{ runner.temp }}/native-size-${{ matrix.source }}-${{ matrix.settings.platform }}.json
-        run: node "$RUNNER_TEMP/measure-installed-cli.mjs" --output "$SIZE_FILE"
 
       - name: Upload size measurements
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -402,22 +380,11 @@ jobs:
               }
               return `${sign}${absolute.toLocaleString('en-US')} B`;
             };
-            const formatUnpackedSize = (bytes, includePlus = false) => {
-              const absolute = Math.abs(bytes);
-              const sign = bytes < 0 ? '-' : includePlus && bytes > 0 ? '+' : '';
-              if (absolute >= 1_000_000) {
-                return `${sign}${(absolute / 1_000_000).toFixed(1)} MB`;
-              }
-              if (absolute >= 1_000) {
-                return `${sign}${(absolute / 1_000).toFixed(1)} kB`;
-              }
-              return `${sign}${absolute.toLocaleString('en-US')} B`;
-            };
-            const formatDelta = (base, head, format = formatSize) => {
+            const formatDelta = (base, head) => {
               const delta = head - base;
               const percent = base === 0 ? 0 : (delta / base) * 100;
               const sign = delta > 0 ? '+' : '';
-              return `${format(delta, true)} (${sign}${percent.toFixed(2)}%)`;
+              return `${formatSize(delta, true)} (${sign}${percent.toFixed(2)}%)`;
             };
 
             const shortSha = process.env.HEAD_SHA.slice(0, 7);
@@ -441,7 +408,6 @@ jobs:
               },
             ];
             const rows = [
-              `| CLI including dependencies (Linux x64 glibc) | Total unpacked | ${formatUnpackedSize(baseLinux.artifacts.cliUnpacked.totalSize)} (${baseLinux.artifacts.cliUnpacked.dependencyCount} deps) | ${formatUnpackedSize(headLinux.artifacts.cliUnpacked.totalSize)} (${headLinux.artifacts.cliUnpacked.dependencyCount} deps) | ${formatDelta(baseLinux.artifacts.cliUnpacked.totalSize, headLinux.artifacts.cliUnpacked.totalSize, formatUnpackedSize)} |`,
               ...distArtifacts.map(
                 (artifact) =>
                   `| ${artifact.name} | Directory total | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
@@ -458,9 +424,6 @@ jobs:
               '',
               'Final release artifacts built by the canonical `build-upstream` and `build-windows-cli` actions.',
               'The dist rows use the Linux build. The core total excludes `.node` files to match the release artifact.',
-              'The CLI total uses the [npmx unpacked-size metric](https://github.com/npmx-dev/npmx.dev/blob/eafa727d13b1296938fb9f6d1ca0d8899f6bdf93/server/utils/install-size.ts): package payload bytes plus registry `dist.unpackedSize` for dependencies, in decimal MB.',
-              'It resolves production and optional dependencies for Linux x64 glibc, counts each package name once, and follows npm aliases so the bundled core is included. Dependency counts exclude the CLI itself.',
-              'It excludes development and peer dependencies, filesystem allocation, install-time files, the standalone `vp` executable, Node.js, and package-manager caches.',
               '',
               '| Artifact | Format | Base | PR | Change |',
               '| --- | --- | ---: | ---: | ---: |',

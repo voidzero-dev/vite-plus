@@ -1,10 +1,6 @@
 [default]
-extend-ignore-re = [
-  # Vitest v4 used this misspelled directory; the migrator must recognize it.
-  '\.vitest-attachements\b',
-  # Git patch metadata contains abbreviated object hashes, not prose.
-  '(?m)^index [0-9a-f]+\.\.[0-9a-f]+(?: [0-7]{6})?$',
-]
+# Vitest v4 used this misspelled directory; the migrator must recognize it.
+extend-ignore-re = ['\.vitest-attachements\b']
 
 [default.extend-words]
 pn = "pn" # pnpm short alias
@@ -22,8 +18,6 @@ PnP = "PnP"
 
 [files]
 extend-exclude = [
-  # Generated symbol names must match the compiled binaries.
-  "bench/binary-size/evidence/*-symbol-estimates.json",
   "crates/fspy_detours_sys/detours",
   "crates/fspy_detours_sys/src/generated_bindings.rs",
   "packages/cli/src/oxfmt-config.ts",
