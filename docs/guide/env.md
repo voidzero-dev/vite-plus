@@ -192,6 +192,7 @@ The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShe
   Existing `.node-version` and top-level `packageManager` fields keep being updated for compatibility. An existing `.nvmrc` is updated when it is the effective Node source in the current directory. Its comments and other non-version content are preserved. Otherwise Vite+ writes the matching `devEngines` entry.
 
   Use `--target node-version`, `--target nvmrc`, `--target dev-engines`, or `--target package-manager` to choose the pin source explicitly. This does not change the project directory. Package-manager output shows the absolute file path and field that was updated, or the target before an existing overwrite prompt. Pinning in a child directory does not modify an inherited `.nvmrc`.
+
 - `vp env unpin` (alias for `vp env pin --unpin`) removes both effective pins by default. Append a selector to remove one. Node.js removal uses the current directory. Package-manager removal uses the workspace root manifest, or the current project manifest outside a workspace. `--target` selects the pin source within that scope. The output identifies the removed package-manager field, or the fields checked when no matching pin is found. Lower-priority declarations are not deleted.
 - `vp env use` activates the complete project environment. Explicit specs override selected components; `--unset` clears both unless scoped.
 - `vp env install` installs the complete resolved environment, a selected component, or explicit specs.
