@@ -3,10 +3,10 @@ name = "migration_oxlint_extends"
 vp = "local"
 local-registry = true
 unset-env = ["VP_SKIP_INSTALL"]
-# Use one lint thread so diagnostic order is stable across the three runs.
-# Ignore the generated Vite config so each run checks the same source files.
+# Lint each file separately because directory traversal order differs across platforms.
 steps = [
-  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json"], comment = "Original inherited errors, warnings, and overrides", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original inherited errors and warnings", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "example.test.js"], comment = "Original override rules and plugin", continue-on-failure = true },
   { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
   { argv = ["vpt", "print-file", "vite.config.ts"], comment = "Path extends become imports of shared TypeScript configs" },
   { argv = ["vpt", "print-file", "shared/nested/first.ts"], comment = "Nested imports preserve overrides and their plugin declarations" },
@@ -15,10 +15,13 @@ steps = [
   { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"] },
   { argv = ["vpt", "print-file", "shared/second.jsonc"], comment = "Shared JSON configs are retained" },
   { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "Generated config types accept the resolved inheritance" },
-  { argv = ["vp", "lint", "--threads=1"], comment = "The diagnostics and exit code match the original config without a config flag", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The diagnostics and exit code match the original config without a config flag", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "example.test.js"], comment = "The override diagnostics and exit code match the original config", continue-on-failure = true },
   { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
   { argv = ["vpt", "print-file", "vite.config.ts"], comment = "A second migration leaves the config unchanged" },
-  { argv = ["vp", "lint", "--threads=1"], comment = "The diagnostics and exit code remain unchanged after the second migration", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The diagnostics and exit code remain unchanged after the second migration", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "example.test.js"], comment = "The override diagnostics and exit code also remain unchanged", continue-on-failure = true },
   { argv = ["vpt", "replace-file-content", "shared/base.ts", '"no-debugger": "error"', '"no-debugger": "warn"'], comment = "Edits to the shared TS config propagate through its imports" },
-  { argv = ["vp", "lint", "--threads=1"], comment = "The edited base rule now warns in index.js; the test override remains a warning", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The edited base rule now warns in index.js", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "example.test.js"], comment = "The test override remains unchanged after the shared config edit", continue-on-failure = true },
 ]

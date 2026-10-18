@@ -1,27 +1,12 @@
 # migration_oxlint_extends
 
-## `vp lint --threads=1 -c .oxlintrc.json`
+## `vp lint --threads=1 -c .oxlintrc.json index.js`
 
-Original inherited errors, warnings, and overrides
+Original inherited errors and warnings
 
 **Exit code:** 1
 
 ```
-
-  ⚠ eslint(no-debugger): `debugger` statement is not allowed
-   ╭─[example.test.js:1:1]
- 1 │ debugger;
-   · ─────────
- 2 │ export const bar = 1;
-   ╰────
-  help: Remove the debugger statement
-
-  × override(no-bar): Do not use bar.
-   ╭─[example.test.js:2:14]
- 1 │ debugger;
- 2 │ export const bar = 1;
-   ·              ───
-   ╰────
 
   × eslint(no-debugger): `debugger` statement is not allowed
    ╭─[index.js:1:1]
@@ -48,8 +33,35 @@ Original inherited errors, warnings, and overrides
  5 │ export const bar = 1;
    ╰────
 
-Found 2 warnings and 3 errors.
-Finished in <duration> on 2 files with <n> rules using <n> threads.
+Found 1 warning and 2 errors.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
+```
+
+## `vp lint --threads=1 -c .oxlintrc.json example.test.js`
+
+Original override rules and plugin
+
+**Exit code:** 1
+
+```
+
+  ⚠ eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[example.test.js:1:1]
+ 1 │ debugger;
+   · ─────────
+ 2 │ export const bar = 1;
+   ╰────
+  help: Remove the debugger statement
+
+  × override(no-bar): Do not use bar.
+   ╭─[example.test.js:2:14]
+ 1 │ debugger;
+ 2 │ export const bar = 1;
+   ·              ───
+   ╰────
+
+Found 1 warning and 1 error.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
 ## `vp migrate --no-interactive --no-agent --no-editor --no-hooks`
@@ -178,28 +190,13 @@ Generated config types accept the resolved inheritance
 ```
 ```
 
-## `vp lint --threads=1`
+## `vp lint --threads=1 index.js`
 
 The diagnostics and exit code match the original config without a config flag
 
 **Exit code:** 1
 
 ```
-
-  ⚠ eslint(no-debugger): `debugger` statement is not allowed
-   ╭─[example.test.js:1:1]
- 1 │ debugger;
-   · ─────────
- 2 │ export const bar = 1;
-   ╰────
-  help: Remove the debugger statement
-
-  × override(no-bar): Do not use bar.
-   ╭─[example.test.js:2:14]
- 1 │ debugger;
- 2 │ export const bar = 1;
-   ·              ───
-   ╰────
 
   × eslint(no-debugger): `debugger` statement is not allowed
    ╭─[index.js:1:1]
@@ -226,8 +223,35 @@ The diagnostics and exit code match the original config without a config flag
  5 │ export const bar = 1;
    ╰────
 
-Found 2 warnings and 3 errors.
-Finished in <duration> on 2 files with <n> rules using <n> threads.
+Found 1 warning and 2 errors.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
+```
+
+## `vp lint --threads=1 example.test.js`
+
+The override diagnostics and exit code match the original config
+
+**Exit code:** 1
+
+```
+
+  ⚠ eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[example.test.js:1:1]
+ 1 │ debugger;
+   · ─────────
+ 2 │ export const bar = 1;
+   ╰────
+  help: Remove the debugger statement
+
+  × override(no-bar): Do not use bar.
+   ╭─[example.test.js:2:14]
+ 1 │ debugger;
+ 2 │ export const bar = 1;
+   ·              ───
+   ╰────
+
+Found 1 warning and 1 error.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
 ## `vp migrate --no-interactive --no-agent --no-editor --no-hooks`
@@ -264,28 +288,13 @@ export default defineConfig({
 });
 ```
 
-## `vp lint --threads=1`
+## `vp lint --threads=1 index.js`
 
 The diagnostics and exit code remain unchanged after the second migration
 
 **Exit code:** 1
 
 ```
-
-  ⚠ eslint(no-debugger): `debugger` statement is not allowed
-   ╭─[example.test.js:1:1]
- 1 │ debugger;
-   · ─────────
- 2 │ export const bar = 1;
-   ╰────
-  help: Remove the debugger statement
-
-  × override(no-bar): Do not use bar.
-   ╭─[example.test.js:2:14]
- 1 │ debugger;
- 2 │ export const bar = 1;
-   ·              ───
-   ╰────
 
   × eslint(no-debugger): `debugger` statement is not allowed
    ╭─[index.js:1:1]
@@ -312,20 +321,13 @@ The diagnostics and exit code remain unchanged after the second migration
  5 │ export const bar = 1;
    ╰────
 
-Found 2 warnings and 3 errors.
-Finished in <duration> on 2 files with <n> rules using <n> threads.
+Found 1 warning and 2 errors.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
-## `vpt replace-file-content shared/base.ts '"no-debugger": "error"' '"no-debugger": "warn"'`
+## `vp lint --threads=1 example.test.js`
 
-Edits to the shared TS config propagate through its imports
-
-```
-```
-
-## `vp lint --threads=1`
-
-The edited base rule now warns in index.js; the test override remains a warning
+The override diagnostics and exit code also remain unchanged
 
 **Exit code:** 1
 
@@ -345,6 +347,25 @@ The edited base rule now warns in index.js; the test override remains a warning
  2 │ export const bar = 1;
    ·              ───
    ╰────
+
+Found 1 warning and 1 error.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
+```
+
+## `vpt replace-file-content shared/base.ts '"no-debugger": "error"' '"no-debugger": "warn"'`
+
+Edits to the shared TS config propagate through its imports
+
+```
+```
+
+## `vp lint --threads=1 index.js`
+
+The edited base rule now warns in index.js
+
+**Exit code:** 1
+
+```
 
   ⚠ eslint(no-debugger): `debugger` statement is not allowed
    ╭─[index.js:1:1]
@@ -371,6 +392,33 @@ The edited base rule now warns in index.js; the test override remains a warning
  5 │ export const bar = 1;
    ╰────
 
-Found 3 warnings and 2 errors.
-Finished in <duration> on 2 files with <n> rules using <n> threads.
+Found 2 warnings and 1 error.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
+```
+
+## `vp lint --threads=1 example.test.js`
+
+The test override remains unchanged after the shared config edit
+
+**Exit code:** 1
+
+```
+
+  ⚠ eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[example.test.js:1:1]
+ 1 │ debugger;
+   · ─────────
+ 2 │ export const bar = 1;
+   ╰────
+  help: Remove the debugger statement
+
+  × override(no-bar): Do not use bar.
+   ╭─[example.test.js:2:14]
+ 1 │ debugger;
+ 2 │ export const bar = 1;
+   ·              ───
+   ╰────
+
+Found 1 warning and 1 error.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
