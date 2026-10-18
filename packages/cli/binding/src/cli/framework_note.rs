@@ -7,7 +7,7 @@ use console::style;
 use vp_shared::output;
 use vt_path::AbsolutePath;
 
-use super::{script_note, types::SynthesizableSubcommand};
+use super::{app_target, script_note, types::SynthesizableSubcommand};
 
 /// Returns whether the hint was printed, so the caller can keep it visible.
 pub(super) fn print(
@@ -22,10 +22,10 @@ pub(super) fn print(
     {
         return false;
     }
-    let Some((name, bin, package_dir)) = detect(cwd) else { return false };
+    let Some((name, command, package_dir)) = detect(cwd) else { return false };
     let built_in = style("`vp dev`").for_stderr().blue().bright().to_string();
     let framework_command =
-        style(format!("`vp exec {bin} dev`")).for_stderr().blue().bright().to_string();
+        style(format!("`vp exec {command}`")).for_stderr().blue().bright().to_string();
     // Retargeting changes the child process's directory, not the user's shell.
     // Name the package directory explicitly instead of assuming it is the cwd.
     let action = if show_directory || package_dir != cwd {
@@ -56,16 +56,22 @@ fn detect(cwd: &AbsolutePath) -> Option<(&'static str, &'static str, &AbsolutePa
     }
     // These frameworks use their own dev commands. Do not include frameworks
     // such as SvelteKit that start their dev server through the Vite CLI.
-    let (name, bin) =
-        [("Astro", "astro"), ("Nuxt", "nuxt")].into_iter().find(|(_, dependency)| {
-            ["dependencies", "devDependencies", "optionalDependencies"].iter().any(|field| {
-                manifest
-                    .get(field)
-                    .and_then(|deps| deps.get(dependency))
-                    .is_some_and(serde_json::Value::is_string)
-            })
-        })?;
-    match vp_static_config::resolve_static_config(package.path).get("run") {
+    let (name, dependency, mut command) = [
+        ("Astro", "astro", "astro dev"),
+        ("Nuxt", "nuxt", "nuxt dev"),
+        ("VitePress", "vitepress", "vitepress dev"),
+    ]
+    .into_iter()
+    .find(|(_, dependency, _)| {
+        ["dependencies", "devDependencies"].iter().any(|field| {
+            manifest
+                .get(field)
+                .and_then(|deps| deps.get(dependency))
+                .is_some_and(serde_json::Value::is_string)
+        })
+    })?;
+    let config = vp_static_config::resolve_static_config(package.path);
+    match config.get("run") {
         Some(vp_static_config::FieldValue::Json(run)) => {
             if run.get("tasks").and_then(|tasks| tasks.get("dev")).is_some() {
                 return None;
@@ -76,7 +82,21 @@ fn detect(cwd: &AbsolutePath) -> Option<(&'static str, &'static str, &AbsolutePa
         Some(vp_static_config::FieldValue::NonStatic) => return None,
         None => {}
     }
-    Some((name, bin, package.path))
+    if dependency == "vitepress" {
+        // A Vite app can also depend on VitePress for its documentation. Avoid
+        // a docs hint for that app, and only suggest a known documentation root.
+        if app_target::root_has_intent_signal(&config, package.path, "dev") {
+            return None;
+        }
+        command = if package.path.join(".vitepress").as_path().is_dir() {
+            "vitepress dev"
+        } else if package.path.join("docs/.vitepress").as_path().is_dir() {
+            "vitepress dev docs"
+        } else {
+            return None;
+        };
+    }
+    Some((name, command, package.path))
 }
 
 #[cfg(test)]
@@ -93,14 +113,19 @@ mod tests {
     fn detects_direct_framework_dependencies_without_a_dev_script() {
         let temp = TempDir::new().unwrap();
         let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        for field in ["dependencies", "devDependencies", "optionalDependencies"] {
-            for (name, dependency) in [("Astro", "astro"), ("Nuxt", "nuxt")] {
+        fs::create_dir(root.join(".vitepress")).unwrap();
+        for field in ["dependencies", "devDependencies"] {
+            for (name, dependency, command) in [
+                ("Astro", "astro", "astro dev"),
+                ("Nuxt", "nuxt", "nuxt dev"),
+                ("VitePress", "vitepress", "vitepress dev"),
+            ] {
                 fs::write(
                     root.join("package.json"),
                     json!({ field: { dependency: "*" } }).to_string(),
                 )
                 .unwrap();
-                assert_eq!(detect(&root), Some((name, dependency, &*root)));
+                assert_eq!(detect(&root), Some((name, command, &*root)));
             }
         }
     }
@@ -109,10 +134,15 @@ mod tests {
     fn skips_existing_scripts_and_unrelated_dependencies() {
         let temp = TempDir::new().unwrap();
         let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        fs::create_dir(root.join(".vitepress")).unwrap();
         for manifest in [
             json!({ "dependencies": { "astro": "*" }, "scripts": { "dev": "astro dev" } }),
             json!({ "dependencies": { "nuxt": "*" }, "scripts": { "dev": "vp dev" } }),
+            json!({ "devDependencies": { "vitepress": "*" }, "scripts": { "dev": "vitepress dev" } }),
             json!({ "peerDependencies": { "astro": "*" } }),
+            json!({ "peerDependencies": { "vitepress": "*" } }),
+            json!({ "optionalDependencies": { "astro": "*", "nuxt": "*", "vitepress": "*" } }),
+            json!({ "dependencies": { "@solidjs/start": "*", "vinxi": "*" } }),
             json!({ "dependencies": { "@astrojs/react": "*", "@nuxt/kit": "*", "@sveltejs/kit": "*", "vue": "*", "react": "*" } }),
             json!({}),
         ] {
@@ -133,7 +163,7 @@ mod tests {
         assert_eq!(detect(&source), None);
 
         fs::write(child.join("package.json"), r#"{"devDependencies":{"nuxt":"*"}}"#).unwrap();
-        assert_eq!(detect(&source), Some(("Nuxt", "nuxt", &*child)));
+        assert_eq!(detect(&source), Some(("Nuxt", "nuxt dev", &*child)));
 
         fs::write(
             child.join("vite.config.ts"),
@@ -175,7 +205,34 @@ mod tests {
             "import base from './base'; export default { ...base, run: {} };",
         ] {
             fs::write(root.join("vite.config.ts"), config).unwrap();
-            assert_eq!(detect(&root), Some(("Astro", "astro", &*root)), "{config}");
+            assert_eq!(detect(&root), Some(("Astro", "astro dev", &*root)), "{config}");
+        }
+    }
+
+    #[test]
+    fn detects_vitepress_roots_without_overriding_vite_app_intent() {
+        let temp = TempDir::new().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        fs::write(root.join("package.json"), r#"{"devDependencies":{"vitepress":"*"}}"#).unwrap();
+        // A dependency alone does not identify which directory contains the docs.
+        assert_eq!(detect(&root), None);
+        fs::create_dir_all(root.join("docs/.vitepress")).unwrap();
+        assert_eq!(detect(&root), Some(("VitePress", "vitepress dev docs", &*root)));
+        assert_eq!(detect(&root.join("docs")), Some(("VitePress", "vitepress dev docs", &*root)));
+
+        fs::create_dir(root.join(".vitepress")).unwrap();
+        assert_eq!(detect(&root), Some(("VitePress", "vitepress dev", &*root)));
+        fs::write(root.join("index.html"), "<div id='app'></div>").unwrap();
+        assert_eq!(detect(&root), None);
+        fs::remove_file(root.join("index.html")).unwrap();
+        for config in [
+            "export default { root: 'app' };",
+            "export default { build: { lib: { entry: 'src/index.ts' } } };",
+            "export default { run: { tasks: { dev: { command: 'vitepress dev docs' } } } };",
+            "export default () => ({});",
+        ] {
+            fs::write(root.join("vite.config.ts"), config).unwrap();
+            assert_eq!(detect(&root), None, "{config}");
         }
     }
 

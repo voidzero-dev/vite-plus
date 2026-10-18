@@ -51,7 +51,7 @@ fn app_command_parts(subcommand: &SynthesizableSubcommand) -> Option<(&'static s
 /// A declared field is sufficient. Vite reports invalid values after the
 /// command starts. Dev, build, and preview use the same union of configuration
 /// and source `index.html` signals.
-fn root_has_intent_signal(
+pub(super) fn root_has_intent_signal(
     config: &vp_static_config::FieldMap,
     dir: &AbsolutePath,
     command: &str,
