@@ -1494,7 +1494,7 @@ describe('migrateSetupVpVersion', () => {
   it('updates exact v1 references in workflows and composite actions', () => {
     const workflowsDir = path.join(tmpDir, '.github', 'workflows');
     const actionDir = path.join(tmpDir, '.github', 'actions', 'setup');
-    fs.mkdirSync(path.join(workflowsDir, 'nested'), { recursive: true });
+    fs.mkdirSync(path.join(workflowsDir, 'nested.yml'), { recursive: true });
     fs.mkdirSync(actionDir, { recursive: true });
 
     const workflowPath = path.join(workflowsDir, 'ci.yml');
@@ -1517,7 +1517,7 @@ describe('migrateSetupVpVersion', () => {
       actionPath,
       'runs:\n  using: composite\n  steps:\n    - uses : voidzero-dev/setup-vp@v1\n',
     );
-    const nestedWorkflowPath = path.join(workflowsDir, 'nested', 'ignored.yml');
+    const nestedWorkflowPath = path.join(workflowsDir, 'nested.yml', 'ignored.yml');
     fs.writeFileSync(nestedWorkflowPath, '- uses: voidzero-dev/setup-vp@v1\n');
     const report = createMigrationReport();
 
