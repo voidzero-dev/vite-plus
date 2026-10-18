@@ -16,6 +16,7 @@ import {
   SUPPORTED_NODE_RANGE,
 } from '../script-hooks.ts';
 import {
+  canExecDirectly,
   checkExplicitProgram,
   commandName,
   detectScript,
@@ -149,6 +150,48 @@ describe('checkExplicitProgram', () => {
       expect(checkExplicitProgram(token, cwd)).toEqual(expected === 'ok' ? undefined : expected);
     },
   );
+});
+
+describe.skipIf(process.platform === 'win32')('canExecDirectly', () => {
+  it('runs a native binary or a script with a native interpreter without the shell', () => {
+    const dir = project({
+      'sh.sh': '#!/bin/sh\nexit 0\n',
+      'env.js': '#!/usr/bin/env node\n',
+      'spaced.sh': '#! /bin/sh -e\n',
+      'plain.js': 'console.log(1);\n',
+      'missing.sh': '#!/missing/interpreter\n',
+      'relative.sh': '#!sh\n',
+      'crlf.sh': '#!/bin/sh\r\nexit 0\r\n',
+      'mode.sh': '#!/bin/sh\n',
+    });
+    writeFileSync(path.join(dir, 'nested.sh'), `#!${path.join(dir, 'sh.sh')}\n`);
+    const file = (name: string) => path.join(dir, name);
+    // Every file but `mode.sh` has the execute bit.
+    for (const name of [
+      'sh.sh',
+      'env.js',
+      'spaced.sh',
+      'plain.js',
+      'missing.sh',
+      'relative.sh',
+      'crlf.sh',
+      'nested.sh',
+    ]) {
+      chmodSync(file(name), 0o755);
+    }
+
+    expect(canExecDirectly(process.execPath)).toBe(true);
+    expect(['sh.sh', 'env.js', 'spaced.sh'].filter((name) => canExecDirectly(file(name)))).toEqual([
+      'sh.sh',
+      'env.js',
+      'spaced.sh',
+    ]);
+    // The shell reports these, as a terminal does: no `#!` line, an interpreter that does
+    // not exist, is relative, keeps the `\r` the kernel reads, or is itself a script,
+    // and a file without the execute bit.
+    const viaShell = ['plain.js', 'missing.sh', 'relative.sh', 'crlf.sh', 'nested.sh', 'mode.sh'];
+    expect(viaShell.filter((name) => canExecDirectly(file(name)))).toEqual([]);
+  });
 });
 
 describe('packageInvocation', () => {

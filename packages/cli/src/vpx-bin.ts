@@ -22,6 +22,7 @@ import spawn from 'cross-spawn';
 
 import { exitCodeFromClose } from './utils/command.ts';
 import {
+  canExecDirectly,
   detectScript,
   isFile,
   nodeModulesBinPaths,
@@ -78,9 +79,10 @@ function execInPlace(command: string, args: string[], env: NodeJS.ProcessEnv): v
     (stream as StdioStream)._handle?.setBlocking?.(true);
   }
   // A failed exec aborts most supported Node.js versions instead of throwing, so a
-  // binary execs through `/bin/sh`, which reports one it cannot run as a terminal does.
+  // binary `canExecDirectly` cannot vouch for execs through `/bin/sh`, which reports one
+  // it cannot run as a terminal does. Skipping the shell saves its startup.
   const [file, argv] =
-    command === process.execPath
+    command === process.execPath || canExecDirectly(command)
       ? [command, [command, ...args]]
       : ['/bin/sh', ['/bin/sh', '-c', 'exec "$0" "$@"', command, ...args]];
   try {

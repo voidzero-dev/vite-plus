@@ -3,7 +3,15 @@
  * `crates/vp_global_cli/src/commands/vpx_script.rs`; keep the two in sync.
  */
 
-import { closeSync, openSync, readSync, type Stats, statSync } from 'node:fs';
+import {
+  accessSync,
+  closeSync,
+  constants,
+  openSync,
+  readSync,
+  type Stats,
+  statSync,
+} from 'node:fs';
 import path from 'node:path';
 
 export const SCRIPT_EXTENSIONS = ['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
@@ -293,20 +301,23 @@ export function isFile(file: string): boolean {
   return statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
 }
 
-function hasVpxShebang(file: string): boolean {
-  const head = Buffer.alloc(256);
-  let read = 0;
+/** The first `length` bytes of `file`, or none when it cannot be read. */
+function readHead(file: string, length: number): Buffer {
+  const head = Buffer.alloc(length);
   try {
     const fd = openSync(file, 'r');
     try {
-      read = readSync(fd, head, 0, head.length, 0);
+      return head.subarray(0, readSync(fd, head, 0, length, 0));
     } finally {
       closeSync(fd);
     }
   } catch {
-    return false;
+    return head.subarray(0, 0);
   }
-  const text = head.subarray(0, read).toString('utf8');
+}
+
+function hasVpxShebang(file: string): boolean {
+  const text = readHead(file, 256).toString('utf8');
   if (!text.startsWith('#!')) {
     return false;
   }
@@ -318,6 +329,45 @@ function hasVpxShebang(file: string): boolean {
       const name = word.split(/[\\/]/).pop();
       return name === 'vpx' || name === 'vpx.exe';
     });
+}
+
+/** The magic numbers of executables the kernel runs: Mach-O (thin and fat) on macOS, ELF elsewhere. */
+const NATIVE_MAGIC =
+  process.platform === 'darwin'
+    ? ['feedface', 'feedfacf', 'cefaedfe', 'cffaedfe', 'cafebabe', 'bebafeca']
+    : ['7f454c46'];
+
+function isExecutableFile(file: string): boolean {
+  try {
+    accessSync(file, constants.X_OK);
+  } catch {
+    return false;
+  }
+  return isFile(file);
+}
+
+function isNativeExecutable(file: string): boolean {
+  return isExecutableFile(file) && NATIVE_MAGIC.includes(readHead(file, 4).toString('hex'));
+}
+
+/**
+ * Whether exec can run `file` itself: an executable native binary, or an executable
+ * script whose `#!` interpreter is one. A failed `process.execve()` aborts most supported
+ * Node.js versions instead of throwing, so the project-local bin runs anything else
+ * through `/bin/sh`, which reports a file it cannot run as a terminal does. The
+ * interpreter keeps a trailing `\r`, as the kernel reads it.
+ */
+export function canExecDirectly(file: string): boolean {
+  if (!isExecutableFile(file)) {
+    return false;
+  }
+  const head = readHead(file, 256);
+  if (head.subarray(0, 2).toString('latin1') !== '#!') {
+    return isNativeExecutable(file);
+  }
+  const line = head.subarray(2).toString('utf8').split('\n', 1)[0];
+  const interpreter = line.replace(/^[ \t]+/, '').split(/[ \t]/, 1)[0];
+  return path.isAbsolute(interpreter) && isNativeExecutable(interpreter);
 }
 
 /** Whether a package spec names a version, as in `eslint@9` or `@vue/cli@5`. */
