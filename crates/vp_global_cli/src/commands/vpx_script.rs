@@ -434,6 +434,14 @@ pub async fn execute(
 
     // stdout belongs to the script; route vp's own output to stderr.
     output::route_user_output_to_stderr();
+    // As `vp node` does: dispatch assumes the shell's PATH lookup already preferred a
+    // system-first Node.js, so repeat that lookup here.
+    if let Ok(config) = super::env::config::load_config().await
+        && config.shim_mode_for_tool("node") == super::env::config::ShimMode::SystemFirst
+        && let Some(node) = crate::shim::dispatch::find_system_tool("node")
+    {
+        return crate::shim::exec::exec_tool(&node, &args, env);
+    }
     // Boxed: shim dispatch is also what routes `vpx` here.
     Box::pin(crate::shim::dispatch("node", &args, env)).await
 }
