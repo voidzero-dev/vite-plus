@@ -7,12 +7,12 @@ should show help
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp why [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Show why a package is installed
 
 Arguments:
-  <PACKAGES>...           Package(s) to check
+  [PACKAGES]...           Package(s) to check
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:

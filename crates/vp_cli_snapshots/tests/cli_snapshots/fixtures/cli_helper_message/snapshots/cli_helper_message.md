@@ -117,7 +117,7 @@ Options:
   -f, --force                  Force reinstall all dependencies
   --ignore-scripts             Do not run lifecycle scripts
   --no-lockfile                Don't read or generate lockfile
-  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@2+ only)
+  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@4+ only)
   --shamefully-hoist           Create flat `node_modules` (pnpm only)
   --resolution-only            Re-run resolution for peer dependency analysis (pnpm only)
   --silent                     Suppress output (silent mode)
@@ -349,12 +349,12 @@ show why help message
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp why [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Show why a package is installed
 
 Arguments:
-  <PACKAGES>...           Package(s) to check
+  [PACKAGES]...           Package(s) to check
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:

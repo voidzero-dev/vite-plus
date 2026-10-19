@@ -29,15 +29,15 @@ pub struct UpdateArgs {
     pub(crate) ignore_node_mismatch: bool,
 
     /// Update recursively in all workspace packages
-    #[arg(short = 'r', long, not_supported(yarn < "2"))]
+    #[arg(short = 'r', long, not_supported(npm < "8.1.0", yarn < "2"))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(bun < "1.4", yarn >= "2"))]
+    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn >= "2"))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long, not_supported(yarn, bun))]
+    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Update devDependencies
@@ -45,7 +45,7 @@ pub struct UpdateArgs {
     pub(crate) dev: bool,
 
     /// Update dependencies (production)
-    #[arg(short = 'P', long, not_supported(yarn >= "2"))]
+    #[arg(short = 'P', long, not_supported(yarn >= "2", bun < "1.4"))]
     pub(crate) prod: bool,
 
     /// Interactive mode
@@ -53,7 +53,7 @@ pub struct UpdateArgs {
     pub(crate) interactive: bool,
 
     /// Exclude optionalDependencies
-    #[arg(long, not_supported(yarn >= "2"))]
+    #[arg(long, not_supported(yarn >= "2", bun < "1.4"))]
     pub(crate) no_optional: bool,
 
     /// Update lockfile only, don't modify package.json
@@ -162,6 +162,20 @@ impl Yarn {
 
 impl Resolve<UpdateArgs> for Bun {
     fn resolve(&self, args: &UpdateArgs, _diag: &mut Diagnostics) -> CommandResolution {
+        if !self.supports_v1_4_commands() && !args.interactive {
+            for (option, active) in
+                [("--recursive", args.recursive), ("--filter", !args.filter.is_empty())]
+            {
+                if active {
+                    return CommandResolution::InvalidArgument(
+                        vt_str::format!(
+                            "bun < 1.4 does not support {option} without --interactive."
+                        )
+                        .to_string(),
+                    );
+                }
+            }
+        }
         let mut cmd = CommandBuilder::new("bun");
         cmd.arg("update")
             .repeated("--filter", args.filter.iter())
@@ -169,14 +183,8 @@ impl Resolve<UpdateArgs> for Bun {
             .arg_if("--dev", args.dev)
             .arg_if("--interactive", args.interactive)
             .arg_if("--production", args.prod);
-        if args.no_optional {
-            if self.supports_v1_4_commands() {
-                cmd.arg("--no-optional");
-            } else {
-                cmd.arg("--omit").arg("optional");
-            }
-        }
-        cmd.arg_if("--no-save", args.no_save)
+        cmd.arg_if("--no-optional", args.no_optional)
+            .arg_if("--no-save", args.no_save)
             .arg_if("--recursive", args.recursive)
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
@@ -795,25 +803,21 @@ mod tests {
         expect_unsupported(
             resolve(&bun("1.3.14"), args),
             &[
-                "bun < 1.4 does not support --filter.",
                 "bun does not support --workspace-root.",
                 "bun < 1.4 does not support --dev.",
+                "bun < 1.4 does not support --prod.",
+                "bun < 1.4 does not support --no-optional.",
             ],
         );
     }
 
     #[test]
     fn test_bun_update_prod_and_optional_selection() {
-        for version in ["1.3.14", "1.4.0-beta.1", "1.4.0"] {
-            let optional_flags =
-                if version == "1.4.0" { vec!["--no-optional"] } else { vec!["--omit", "optional"] };
+        for version in ["1.4.0", "1.4.1"] {
             for (flags, expected) in [
                 (vec!["-P"], vec!["update", "--production"]),
-                (vec!["--no-optional"], [vec!["update"], optional_flags.clone()].concat()),
-                (
-                    vec!["-P", "--no-optional"],
-                    [vec!["update", "--production"], optional_flags].concat(),
-                ),
+                (vec!["--no-optional"], vec!["update", "--no-optional"]),
+                (vec!["-P", "--no-optional"], vec!["update", "--production", "--no-optional"]),
             ] {
                 let args = parse_args::<UpdateArgs>(flags).unwrap();
                 let resolution = resolve(&bun(version), args);
@@ -835,7 +839,7 @@ mod tests {
 
     #[test]
     fn test_bun_update_recursive() {
-        for version in ["1.3.11", "1.4.0"] {
+        for version in ["1.4.0", "1.4.1"] {
             let options = UpdateArgs { recursive: true, ..Default::default() };
             let resolution = resolve(&bun(version), options);
             assert!(resolution.diagnostics.is_empty());
@@ -860,6 +864,9 @@ mod tests {
     fn test_bun_update_rejects_filter_before_1_4() {
         let options = UpdateArgs { filter: vec!["web".to_string()], ..Default::default() };
         let resolution = resolve(&bun("1.3.11"), options);
-        expect_unsupported(resolution, &["bun < 1.4 does not support --filter."]);
+        expect_unsupported(
+            resolution,
+            &["bun < 1.4 does not support --filter without --interactive."],
+        );
     }
 }
