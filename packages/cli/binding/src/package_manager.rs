@@ -196,6 +196,20 @@ pub fn find_monorepo_root(cwd: String) -> Result<Option<String>> {
     }
 }
 
+/// Resolve the npm registry for packages in `scope` (without `@`) from the npm config at `cwd`.
+#[napi]
+pub fn resolve_npm_registry(cwd: String, scope: Option<String>) -> Result<String> {
+    let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+    Ok(vp_pm_cli::npm_registry_for_scope(&cwd, scope.as_deref()))
+}
+
+/// Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`.
+#[napi]
+pub fn resolve_npm_authorization(cwd: String, url: String) -> Result<Option<String>> {
+    let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+    Ok(vp_pm_cli::npm_authorization_for_url(&cwd, &url))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
