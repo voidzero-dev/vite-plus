@@ -31,7 +31,9 @@ Migration assumes ESM projects. Shared configs become sibling `.ts` files. Gener
 
 JS-plugin declarations stay in their original config or override. Relative plugin paths become absolute paths at runtime through `fileURLToPath(new URL(..., import.meta.url))`. Explicit inherited `typeAware` and `typeCheck` settings take precedence over migration defaults.
 
-A shared config's owner keeps `ignorePatterns` at the top level of its `lint` block through a reference to the shared module. Edits to that array apply to the owner. Other consumers do not inherit these patterns.
+A shared config's owner keeps `env`, `globals`, `settings`, and `ignorePatterns` at the top level of its `lint` block through references to the shared module. Edits to these fields apply to the owner. Other consumers do not inherit them.
+
+Generated modules include a source marker. A later migration attempt reuses these modules without replacing user edits, so a preserved consumer can migrate after its conflict is resolved. Existing modules without a matching marker remain conflicts.
 
 Missing files, invalid JSON, inheritance cycles, conflicting output files, and package-local plugins that resolve differently from the Vite config directory produce a warning and leave the original config in place. Configs outside the project or workspace, configs inside `node_modules`, CommonJS Vite configs, and an existing `lint` block require a manual merge. Workspace JSON removal waits until all migration outcomes are known. Preserved JSON consumers retain their transitive dependencies, including configs whose owners migrated successfully. If an inheritance graph cannot be read, its workspace JSON files are kept. `vp lint` continues to reject string paths in `lint.extends`; path resolution happens only during migration.
 

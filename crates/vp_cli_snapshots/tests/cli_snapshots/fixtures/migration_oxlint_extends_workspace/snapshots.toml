@@ -98,3 +98,60 @@ steps = [
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The first migrated consumer keeps the same diagnostic and exit code", continue-on-failure = true },
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "The second migrated consumer keeps the same diagnostic and exit code", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_workspace_retry"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Package b cannot migrate while extra.ts conflicts with its JSON config" },
+  { argv = ["vpt", "replace-file-content", ".oxlintrc.ts", '"no-debugger": "warn"', '"no-debugger": "error"'], comment = "Edit the shared module created by the successful owner" },
+  { argv = ["vpt", "rm", "packages/b/extra.ts"], comment = "Remove the conflict before retrying" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Retry reuses previously generated modules" },
+  { argv = ["vpt", "print-file", "packages/b/vite.config.mjs"] },
+  { argv = ["vpt", "stat-file", "packages/b/.oxlintrc.json", "--assert", "missing"] },
+  { argv = ["vpt", "print-file", ".oxlintrc.ts"], comment = "The user's shared rule edit is preserved" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "The recovered consumer uses the edited shared rule without a config flag", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_workspace_owner_fields"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "rm", "packages/b/extra.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "env", '{"browser":true}'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "globals", '{"fixtureGlobal":"readonly"}'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "settings", '{"fixture":{"enabled":true}}'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "jsPlugins", '["./settings-plugin.mjs"]'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "rules", '{"no-undef":"error"}'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "overrides", '[{"files":["settings.js"],"rules":{"fixture/require-setting":"error"}}]'], snapshot = false },
+  { argv = ["vpt", "write-file", "env.js", "export const value = window;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "globals.js", "export const value = fixtureGlobal;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "settings.js", "export const value = 1;\n"], snapshot = false },
+  { argv = ["vpt", "cp", "env.js", "packages/a/env.js"], snapshot = false },
+  { argv = ["vpt", "cp", "globals.js", "packages/a/globals.js"], snapshot = false },
+  { argv = ["vpt", "cp", "settings.js", "packages/a/settings.js"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "env.js"], comment = "The original owner uses its environment, globals, and plugin settings" },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "globals.js"], comment = "The original owner uses its environment, globals, and plugin settings" },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "settings.js"], comment = "The original owner uses its environment, globals, and plugin settings" },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "env.js"], cwd = "packages/a", comment = "A dependent does not inherit the owner's local fields", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "globals.js"], cwd = "packages/a", comment = "A dependent does not inherit the owner's local fields", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "settings.js"], cwd = "packages/a", comment = "A dependent does not inherit the owner's local fields", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.mjs"], comment = "The owner references its fields at the top level" },
+  { argv = ["vp", "lint", "--threads=1", "env.js"], comment = "The owner retains its exclusions from no-undef and the plugin diagnostic" },
+  { argv = ["vp", "lint", "--threads=1", "globals.js"], comment = "The owner retains its exclusions from no-undef and the plugin diagnostic" },
+  { argv = ["vp", "lint", "--threads=1", "settings.js"], comment = "The owner retains its exclusions from no-undef and the plugin diagnostic" },
+  { argv = ["vp", "lint", "--threads=1", "env.js"], cwd = "packages/a", comment = "The dependent retains the same diagnostics and exit code", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "globals.js"], cwd = "packages/a", comment = "The dependent retains the same diagnostics and exit code", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "settings.js"], cwd = "packages/a", comment = "The dependent retains the same diagnostics and exit code", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", ".oxlintrc.ts", "browser: true", "browser: false"] },
+  { argv = ["vpt", "replace-file-content", ".oxlintrc.ts", 'fixtureGlobal: "readonly"', 'fixtureGlobal: "off"'] },
+  { argv = ["vpt", "replace-file-content", ".oxlintrc.ts", "enabled: true", "enabled: false"] },
+  { argv = ["vp", "lint", "--threads=1", "env.js"], comment = "Shared-module edits update all three owner fields", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "globals.js"], comment = "Shared-module edits update all three owner fields", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "settings.js"], comment = "Shared-module edits update all three owner fields", continue-on-failure = true },
+]

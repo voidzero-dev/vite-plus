@@ -10,6 +10,7 @@ import {
   injectLintTypeCheckDefaults,
   mergeViteConfigFiles,
   resolveOxlintConfigExtends,
+  retryPreservedOxlintConfigs,
   rewriteMonorepo,
 } from '../migrator.ts';
 import { createMigrationReport } from '../report.ts';
@@ -428,6 +429,100 @@ describe('Oxlint JSON extends migration', () => {
     expect(fs.readFileSync(path.join(project, 'packages/b/extra.ts'), 'utf8')).toBe(
       'export default {};',
     );
+  });
+
+  it('reuses edited modules on a retry after another workspace could not be merged', async () => {
+    createWorkspace();
+    write('.oxlintrc.json', { rules: { 'no-debugger': 'warn' } });
+    write('packages/a/.oxlintrc.json', { extends: ['../../.oxlintrc.json'] });
+    write('packages/b/.oxlintrc.json', { extends: ['../a/.oxlintrc.json'] });
+    write('packages/b/vite.config.mjs', "export { default } from './other.mjs';");
+    expect(migrateWorkspace().warnings).toHaveLength(1);
+
+    const modulePath = path.join(project, '.oxlintrc.ts');
+    const edited = fs.readFileSync(modulePath, 'utf8').replace('"warn"', '"error"');
+    fs.writeFileSync(modulePath, edited);
+    write('packages/b/vite.config.mjs', 'export default {};');
+
+    const report = createMigrationReport();
+    expect(
+      retryPreservedOxlintConfigs(
+        project,
+        true,
+        report,
+        ['a', 'b'].map((name) => ({ name, path: `packages/${name}` })),
+      ),
+    ).toBe(true);
+
+    expect(report.warnings).toEqual([]);
+    expect(fs.existsSync(path.join(project, 'packages/b/.oxlintrc.json'))).toBe(false);
+    expect(fs.readFileSync(modulePath, 'utf8')).toBe(edited);
+    const { lint } = await loadConfig(path.join(project, 'packages/b'));
+    expect(lint!.extends![0].extends![0].rules!['no-debugger']).toBe('error');
+  });
+
+  it('does not retry unrelated JSON configs in an existing Vite+ project', () => {
+    write('base.json', { rules: { 'no-debugger': 'error' } });
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    const report = createMigrationReport();
+
+    expect(retryPreservedOxlintConfigs(project, true, report)).toBe(false);
+    expect(report.warnings).toEqual([]);
+    expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
+    expect(fs.existsSync(path.join(project, 'base.ts'))).toBe(false);
+    expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
+      'export default {};',
+    );
+  });
+
+  it('does not reuse a generated module for a different JSON source', () => {
+    write('base.json', { rules: { 'no-debugger': 'warn' } });
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    mergeViteConfigFiles(project, true);
+    const original = fs.readFileSync(path.join(project, 'base.ts'), 'utf8');
+    write('base.jsonc', { rules: { 'no-debugger': 'error' } });
+    write('vite.config.mjs', 'export default {};');
+    write('.oxlintrc.json', { extends: ['./base.jsonc'] });
+
+    const report = createMigrationReport();
+    mergeViteConfigFiles(project, true, report);
+
+    expect(report.warnings[0]).toContain('already exists');
+    expect(fs.readFileSync(path.join(project, 'base.ts'), 'utf8')).toBe(original);
+    expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
+  });
+
+  it('keeps owner env, globals, and settings live without applying them to dependents', async () => {
+    createWorkspace(['a']);
+    write('.oxlintrc.json', {
+      env: { browser: true },
+      globals: { fixtureGlobal: 'readonly' },
+      settings: { fixture: { enabled: true } },
+    });
+    write('packages/a/.oxlintrc.json', { extends: ['../../.oxlintrc.json'] });
+    expect(migrateWorkspace(['a']).warnings).toEqual([]);
+
+    for (const enabled of [true, false]) {
+      if (!enabled) {
+        const modulePath = path.join(project, '.oxlintrc.ts');
+        fs.writeFileSync(
+          modulePath,
+          fs
+            .readFileSync(modulePath, 'utf8')
+            .replace('"browser": true', '"browser": false')
+            .replace('"readonly"', '"off"')
+            .replace('"enabled": true', '"enabled": false'),
+        );
+      }
+      const owner = await loadConfig();
+      const dependent = await loadConfig(path.join(project, 'packages/a'));
+      expect(owner.lint!.env).toEqual({ browser: enabled });
+      expect(owner.lint!.globals).toEqual({ fixtureGlobal: enabled ? 'readonly' : 'off' });
+      expect(owner.lint!.settings).toEqual({ fixture: { enabled } });
+      expect(dependent.lint!.env).toBeUndefined();
+      expect(dependent.lint!.globals).toBeUndefined();
+      expect(dependent.lint!.settings).toBeUndefined();
+    }
   });
 
   it('retains dependencies of shared JSON files even when all workspace consumers migrate', () => {

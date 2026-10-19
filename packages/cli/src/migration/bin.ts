@@ -77,6 +77,7 @@ import {
   rewriteStandaloneProject,
   planVitestV5Migration,
   refreshVitestV5Migration,
+  retryPreservedOxlintConfigs,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   vitestV5NeedsMigration,
@@ -1198,6 +1199,17 @@ async function main() {
       coreMigrationResult.imports ||
       coreMigrationResult.tsdownConfig ||
       coreMigrationResult.taskCacheConfig
+    ) {
+      didMigrate = true;
+    }
+
+    if (
+      retryPreservedOxlintConfigs(
+        workspaceInfoOptional.rootDir,
+        true,
+        report,
+        workspaceInfoOptional.packages,
+      )
     ) {
       didMigrate = true;
     }

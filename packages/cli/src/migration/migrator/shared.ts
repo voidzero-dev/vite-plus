@@ -39,13 +39,16 @@ export function getCommandStartIndex(argv: readonly string[]): number {
   return start;
 }
 
+// Oxlint does not inherit these fields through `extends`.
+export const OXLINT_OWNER_CONFIG_KEYS = new Set(['env', 'globals', 'settings', 'ignorePatterns']);
+
 export interface OxlintConfigFile {
   filename: string;
   config: OxlintConfig;
   extends: OxlintConfigFile[];
   // A dependency must use the same generated module in its owning workspace.
   shared?: boolean;
-  // Set only after a successful merge, so workspace consumers reuse the same module.
+  // A committed or previously generated module that workspace consumers can reuse.
   modulePath?: string;
 }
 

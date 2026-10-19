@@ -25,3 +25,26 @@ steps = [
   { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The edited base rule now warns in index.js", continue-on-failure = true },
   { argv = ["vp", "lint", "--threads=1", "example.test.js"], comment = "The test override remains unchanged after the shared config edit", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_type_options"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "shared/base.json", "options", '{"typeAware":true,"typeCheck":true}'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "rules.typescript/no-floating-promises", '"error"'], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.json", '{"compilerOptions":{"target":"ESNext","strict":true},"include":["*.ts"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "type-error.ts", "export const value: string = 1;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "type-aware.ts", "Promise.resolve(1);\n"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "type-error.ts"], comment = "Inherited typeCheck reports the original TypeScript diagnostic", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "type-aware.ts"], comment = "Inherited typeAware enables no-floating-promises", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "Local options stay empty so inherited settings remain live" },
+  { argv = ["vp", "lint", "--threads=1", "type-error.ts"], comment = "Imported typeCheck produces the same diagnostic and exit code", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "type-aware.ts"], comment = "Imported typeAware produces the same diagnostic and exit code", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", "shared/base.ts", "typeAware: true", "typeAware: false"] },
+  { argv = ["vpt", "replace-file-content", "shared/base.ts", "typeCheck: true", "typeCheck: false"] },
+  { argv = ["vp", "lint", "--threads=1", "type-error.ts"], comment = "Disabling the shared options removes the TypeScript diagnostic" },
+  { argv = ["vp", "lint", "--threads=1", "type-aware.ts"], comment = "Disabling the shared options removes the type-aware diagnostic" },
+]

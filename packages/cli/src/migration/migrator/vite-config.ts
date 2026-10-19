@@ -28,7 +28,10 @@ import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
+  hasGeneratedOxlintConfig,
+  prepareOxlintConfigs,
   readRulesYaml,
+  removeMigratedOxlintConfigs,
   resolveOxlintConfigExtends,
   prepareOxlintConfigModules,
   sanitizeMigratedOxlintConfig,
@@ -37,6 +40,7 @@ import { type MigrationReport } from '../report.ts';
 import {
   type OxlintConfigMigration,
   type OxlintModulePlan,
+  OXLINT_OWNER_CONFIG_KEYS,
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
   infoMigration,
@@ -285,6 +289,44 @@ export function mergeViteConfigFiles(
   }
 }
 
+/** Resume partial migrations without applying lint setup to other existing Vite+ projects. */
+export function retryPreservedOxlintConfigs(
+  workspaceRoot: string,
+  silent = false,
+  report?: MigrationReport,
+  packages?: WorkspacePackage[],
+): boolean {
+  const prepared = prepareOxlintConfigs([
+    workspaceRoot,
+    ...(packages ?? []).map((pkg) => path.join(workspaceRoot, pkg.path)),
+  ]);
+  let updated = false;
+  for (const [filename, migration] of prepared) {
+    if (migration instanceof Error || !hasGeneratedOxlintConfig(migration.file)) {
+      continue;
+    }
+    const projectPath = path.dirname(filename);
+    const configs = detectConfigs(projectPath);
+    if (configs.viteConfig && hasConfigKey(path.join(projectPath, configs.viteConfig), 'lint')) {
+      continue;
+    }
+    const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
+    mergeOxlintConfigFile(
+      projectPath,
+      viteConfig,
+      path.basename(filename),
+      silent,
+      report,
+      packages,
+      workspaceRoot,
+      prepared,
+    );
+    updated ||= migration.migrated === true;
+  }
+  removeMigratedOxlintConfigs(prepared);
+  return updated;
+}
+
 function mergeOxlintConfigFile(
   projectPath: string,
   viteConfig: string,
@@ -316,13 +358,17 @@ function mergeOxlintConfigFile(
   }
   const { file } = migration;
   // Keep shared rules in one module, including for the workspace that owns it.
-  // Ignore patterns only apply at the top level, so keep them local as well.
+  // Fields that Oxlint does not inherit must also remain in the owner's local block.
   let oxlintJson: OxlintConfig = structuredClone(file.config);
   if (file.shared) {
-    oxlintJson = { extends: [oxlintJson] };
-    if (file.config.ignorePatterns !== undefined) {
-      oxlintJson.ignorePatterns = file.config.ignorePatterns;
-    }
+    oxlintJson = {
+      extends: [oxlintJson],
+      ...Object.fromEntries(
+        Object.entries(file.config).filter(
+          ([key, value]) => OXLINT_OWNER_CONFIG_KEYS.has(key) && value !== undefined,
+        ),
+      ),
+    };
   }
   // Never discard an inheritance tree when a lint block already exists.
   if (oxlintJson.extends?.length && hasConfigKey(path.join(projectPath, viteConfig), 'lint')) {
