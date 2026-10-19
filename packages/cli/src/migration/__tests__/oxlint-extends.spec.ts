@@ -996,7 +996,7 @@ describe('Oxlint JSON extends migration', () => {
     expect(fs.readdirSync(project).some((file) => file.startsWith('.vite-plus-lint-'))).toBe(false);
   });
 
-  it('preserves an inheritance tree when a lint config already exists', () => {
+  it('retries a preserved inheritance tree after removing a conflicting lint block', async () => {
     write('base.json', { rules: { 'no-debugger': 'error' } });
     const source = write('.oxlintrc.json', { extends: ['./base.json'] });
     const original = fs.readFileSync(source, 'utf8');
@@ -1007,8 +1007,57 @@ describe('Oxlint JSON extends migration', () => {
     mergeViteConfigFiles(project, true, report);
 
     expect(fs.readFileSync(source, 'utf8')).toBe(original);
-    expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(viteConfig);
+    const configPath = path.join(project, 'vite.config.mjs');
+    expect(fs.readFileSync(configPath, 'utf8')).toBe(
+      `${viteConfig}\n// vp migrate: pending .oxlintrc.json.\n`,
+    );
     expect(report.warnings[0]).toContain('already has a lint config');
+
+    fs.writeFileSync(
+      configPath,
+      fs.readFileSync(configPath, 'utf8').replace(viteConfig, 'export default {};'),
+    );
+    const retryReport = createMigrationReport();
+    expect(retryPreservedOxlintConfigs(project, true, retryReport)).toBe(true);
+    expect(retryReport.warnings).toEqual([]);
+    expect(fs.existsSync(source)).toBe(false);
+    expect((await loadConfig()).lint!.extends![0].rules!['no-debugger']).toBe('error');
+  });
+
+  it.each([
+    '// @ts-check',
+    '// @ts-nocheck',
+    '/// <reference types="node" />',
+    '/** @jsxImportSource react */',
+  ])(
+    'keeps %s before generated imports and statement directives on their original statement',
+    (pragma) => {
+      write('base.json', { rules: { 'no-debugger': 'error' } });
+      write('.oxlintrc.json', { extends: ['./base.json'] });
+      const header = `#!/usr/bin/env node\n${pragma}\n`;
+      write('vite.config.mjs', `${header}// @ts-expect-error\nexport default {};`);
+
+      mergeViteConfigFiles(project, true);
+
+      const source = fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8');
+      expect(source).toContain(`${header}import oxlintConfig1`);
+      expect(source).toContain('// @ts-expect-error\nexport default');
+    },
+  );
+
+  it('keeps shebangs and directive prologues before imports without moving triple-slash statement directives', () => {
+    write('base.json', { rules: { 'no-debugger': 'error' } });
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    write(
+      'vite.config.mjs',
+      '#!/usr/bin/env node\n"";\n"use client";\n/// @ts-expect-error\nexport default {};',
+    );
+
+    mergeViteConfigFiles(project, true);
+
+    const source = fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8');
+    expect(source).toMatch(/^#!\/usr\/bin\/env node\n["']{2};\n["']use client["'];\nimport /);
+    expect(source).toContain('/// @ts-expect-error\nexport default');
   });
 
   it('creates no shared modules when the config merger does not support the export shape', () => {

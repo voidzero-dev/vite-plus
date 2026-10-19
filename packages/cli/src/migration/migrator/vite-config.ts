@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import type { Program } from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
 
 import {
+  analyzeMigrationSource,
   hasConfigKey,
   mergeJsonConfig,
   mergeTsdownConfig,
@@ -405,6 +407,7 @@ function mergeOxlintConfigFile(
   }
   // Never discard an inheritance tree when a lint block already exists.
   if (oxlintJson.extends?.length && hasConfigKey(path.join(projectPath, viteConfig), 'lint')) {
+    recordPendingMigration();
     warnMigration(
       `Preserved ${displayRelative(fullOxlintPath)} because ${viteConfig} already has a lint config. Merge its inherited rules manually.`,
       report,
@@ -599,6 +602,35 @@ function injectConfigDefaults(
   }
 }
 
+function configImportOffset(filename: string, source: string): number {
+  const { ast, comments } = JSON.parse(analyzeMigrationSource(filename, source)) as {
+    ast: { node: Program };
+    comments: Array<{ start: number; end: number }>;
+  };
+  let offset = ast.node.hashbang?.end ?? 0;
+  for (const statement of ast.node.body) {
+    if (statement.type !== 'ExpressionStatement' || typeof statement.directive !== 'string') {
+      break;
+    }
+    offset = statement.end;
+  }
+  const firstStatement = ast.node.body[0]?.start ?? source.length;
+  for (const comment of comments) {
+    if (comment.end > firstStatement) {
+      break;
+    }
+    const text = source.slice(comment.start, comment.end);
+    // File pragmas must precede imports; next-statement directives must stay in place.
+    if (
+      /^\/\/\/\s*</.test(text) ||
+      /@(?:ts-(?:no)?check|jsx(?:Frag|Runtime|ImportSource)?)\b/.test(text)
+    ) {
+      offset = Math.max(offset, comment.end);
+    }
+  }
+  return offset;
+}
+
 function mergeAndRemoveJsonConfig(
   projectPath: string,
   viteConfigPath: string,
@@ -677,11 +709,17 @@ function mergeAndRemoveJsonConfig(
         .join('\n');
     }
     if (modulePlan && (modulePlan.imports.length || modulePlan.completionMarker)) {
-      const offset = content.startsWith('#!') ? content.indexOf('\n') + 1 : 0;
+      const offset = configImportOffset(fullViteConfigPath, content);
       const prefix = [modulePlan.completionMarker, ...modulePlan.imports]
         .filter(Boolean)
         .join('\n');
-      content = content.slice(0, offset) + prefix + '\n' + content.slice(offset);
+      const header = content.slice(0, offset);
+      content =
+        header +
+        (offset && !header.endsWith('\n') ? '\n' : '') +
+        prefix +
+        '\n' +
+        content.slice(offset);
     }
     fs.writeFileSync(fullViteConfigPath, content);
     if (!deferRemoval) {
