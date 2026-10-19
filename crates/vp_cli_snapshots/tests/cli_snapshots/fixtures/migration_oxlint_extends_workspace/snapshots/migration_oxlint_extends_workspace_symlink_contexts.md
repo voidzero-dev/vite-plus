@@ -82,7 +82,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ```
 // vp migrate: merged packages%2Fa%2F.oxlintrc.json (5aa76017b601250136404623f0a0a3dd).
-import oxlintConfig1 from "./base.ts";
+import oxlintConfig1 from "./base.js";
 export default {
   lint: {
     extends: [oxlintConfig1],
@@ -102,7 +102,7 @@ export default {
 
 ```
 // vp migrate: merged packages%2Fb%2F.oxlintrc.json (56118339eefbe7bfe3d4f1a40696a3e9).
-import oxlintConfig1 from "./base.ts";
+import oxlintConfig1 from "./base.js";
 export default {
   lint: {
     extends: [oxlintConfig1],

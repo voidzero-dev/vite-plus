@@ -109,6 +109,15 @@ export function prepareOxlintConfigs(projectPaths: string[]): PreparedOxlintConf
       .filter((file) => file.shared)
       .map((file) => fs.realpathSync(file.filename)),
   );
+  // An unreadable consumer can still refer to any workspace's own config.
+  // Keep those owners in modules so a later repair cannot create an inline copy.
+  if ([...configs.values()].some((migration) => migration instanceof Error)) {
+    for (const [filename, migration] of configs) {
+      if (!(migration instanceof Error)) {
+        sharedSources.add(fs.realpathSync(filename));
+      }
+    }
+  }
   for (const file of cache.files.values()) {
     if (sharedSources.has(fs.realpathSync(file.filename))) {
       file.shared = true;
@@ -255,7 +264,7 @@ function relativeImport(from: string, to: string): string {
   }
   // Vite and TypeScript resolve .js imports to .ts source files.
   // This also works with NodeNext without changing allowImportingTsExtensions.
-  const specifier = /\.m?ts$/.test(from) ? relative.replace(/\.ts$/, '.js') : relative;
+  const specifier = relative.replace(/\.ts$/, '.js');
   return specifier.startsWith('../') ? specifier : `./${specifier}`;
 }
 

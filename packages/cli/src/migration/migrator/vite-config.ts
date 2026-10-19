@@ -291,6 +291,10 @@ export function mergeViteConfigFiles(
   }
 }
 
+function pendingOxlintMigrationMarker(filename: string): string {
+  return `// vp migrate: pending ${encodeURIComponent(path.basename(filename))}.`;
+}
+
 /** Resume partial migrations without applying lint setup to other existing Vite+ projects. */
 export function retryPreservedOxlintConfigs(
   workspaceRoot: string,
@@ -302,34 +306,26 @@ export function retryPreservedOxlintConfigs(
     workspaceRoot,
     ...(packages ?? []).map((pkg) => path.join(workspaceRoot, pkg.path)),
   ]);
-  const pending: Array<{
-    filename: string;
-    migration: OxlintConfigMigration;
-    configs: ConfigFiles;
-  }> = [];
-  let hasCompletedMerge = false;
+  let updated = false;
   for (const [filename, migration] of prepared) {
-    if (migration instanceof Error) {
-      continue;
-    }
     const projectPath = path.dirname(filename);
     const configs = detectConfigs(projectPath);
     const existingViteConfig = configs.viteConfig && path.join(projectPath, configs.viteConfig);
+    const source = existingViteConfig ? fs.readFileSync(existingViteConfig, 'utf8') : '';
+    const lines = source.split(/\r?\n/);
     if (existingViteConfig && hasConfigKey(existingViteConfig, 'lint')) {
-      const source = fs.readFileSync(existingViteConfig, 'utf8');
-      const marker = oxlintMigrationMarker(filename, migration.file, workspaceRoot);
-      migration.migrated = source.split(/\r?\n/).includes(marker);
-      hasCompletedMerge ||= migration.migrated;
+      if (!(migration instanceof Error)) {
+        const marker = oxlintMigrationMarker(filename, migration.file, workspaceRoot);
+        migration.migrated = lines.includes(marker);
+      }
       continue;
     }
-    pending.push({ filename, migration, configs });
-  }
-  let updated = false;
-  for (const { filename, migration, configs } of pending) {
-    if (!hasCompletedMerge && !hasGeneratedOxlintConfig(migration.file)) {
+    if (
+      !lines.includes(pendingOxlintMigrationMarker(filename)) &&
+      (migration instanceof Error || !hasGeneratedOxlintConfig(migration.file))
+    ) {
       continue;
     }
-    const projectPath = path.dirname(filename);
     const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
     mergeOxlintConfigFile(
       projectPath,
@@ -341,7 +337,7 @@ export function retryPreservedOxlintConfigs(
       workspaceRoot,
       prepared,
     );
-    updated ||= migration.migrated === true;
+    updated ||= !(migration instanceof Error) && migration.migrated === true;
   }
   return removeMigratedOxlintConfigs(prepared) || updated;
 }
@@ -357,9 +353,25 @@ function mergeOxlintConfigFile(
   preparedOxlintConfigs?: PreparedOxlintConfigs,
 ): void {
   const fullOxlintPath = path.join(projectPath, oxlintConfig);
+  function recordPendingMigration(): void {
+    const filename = path.join(projectPath, viteConfig);
+    const marker = pendingOxlintMigrationMarker(oxlintConfig);
+    try {
+      const source = fs.readFileSync(filename, 'utf8');
+      if (!source.split(/\r?\n/).includes(marker)) {
+        fs.appendFileSync(filename, `${source.endsWith('\n') ? '' : '\n'}${marker}\n`);
+      }
+    } catch (error) {
+      warnMigration(
+        `Could not record pending migration in ${displayRelative(filename)}: ${String(error)}`,
+        report,
+      );
+    }
+  }
   function warnPreservedConfig(error: unknown): void {
+    recordPendingMigration();
     warnMigration(
-      `Could not migrate ${displayRelative(fullOxlintPath)}: ${String(error)}. The original config was preserved; use vp lint -c ${oxlintConfig} until it is migrated manually.`,
+      `Could not migrate ${displayRelative(fullOxlintPath)}: ${String(error)}. The original config was preserved; use vp lint -c ${displayRelative(fullOxlintPath)} until it is migrated manually.`,
       report,
     );
   }
@@ -476,6 +488,9 @@ function mergeOxlintConfigFile(
       plan,
       preparedOxlintConfigs !== undefined,
     );
+    if (!migration.migrated) {
+      recordPendingMigration();
+    }
   } catch (error) {
     warnPreservedConfig(error);
   }
@@ -654,6 +669,13 @@ function mergeAndRemoveJsonConfig(
       }
     }
     let content = result.content;
+    if (configKey === 'lint') {
+      const pendingMarker = pendingOxlintMigrationMarker(jsonConfigPath);
+      content = content
+        .split(/\r?\n/)
+        .filter((line) => line !== pendingMarker)
+        .join('\n');
+    }
     if (modulePlan && (modulePlan.imports.length || modulePlan.completionMarker)) {
       const offset = content.startsWith('#!') ? content.indexOf('\n') + 1 : 0;
       const prefix = [modulePlan.completionMarker, ...modulePlan.imports]

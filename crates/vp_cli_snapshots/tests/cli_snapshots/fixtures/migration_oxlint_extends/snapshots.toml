@@ -161,3 +161,54 @@ steps = [
   { argv = ["vpt", "print-file", "configs/nested/base.ts"] },
   { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated graph selects the same lexical parent config", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_check_js"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.js", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.allowJs", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.checkJs", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "include", '["vite.config.js"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original inherited diagnostics", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.js"] },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "JavaScript config imports type-check without allowImportingTsExtensions" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The generated imports preserve the diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_check_mjs"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.mjs", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.allowJs", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.checkJs", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "include", '["vite.config.mjs"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original inherited diagnostics", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.mjs"] },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "JavaScript config imports type-check without allowImportingTsExtensions" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The generated imports preserve the diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_isolated_retry"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", '{"extends":["./missing.json"]}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "The failed migration records a pending marker without a lint block" },
+  { argv = ["vpt", "write-file", "missing.json", '{"rules":{"no-debugger":"error"},"options":{"typeAware":false,"typeCheck":false}}'], comment = "Repair the only unreadable config" },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The repaired JSON loads before retrying", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "missing"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "The successful retry replaces the pending marker with the lint config" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated config retains the same diagnostic and exit code", continue-on-failure = true },
+]

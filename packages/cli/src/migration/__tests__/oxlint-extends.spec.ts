@@ -164,7 +164,7 @@ describe('Oxlint JSON extends migration', () => {
     expect(fs.readFileSync(path.join(project, filename), 'utf8')).toBe(original);
     expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
     expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
-      'export default {};',
+      'export default {};\n// vp migrate: pending .oxlintrc.json.\n',
     );
     expect(report.warnings[0]).toContain('already exists');
   });
@@ -248,7 +248,7 @@ describe('Oxlint JSON extends migration', () => {
       expect(fs.existsSync(path.join(project, 'first.ts'))).toBe(false);
       expect(fs.existsSync(path.join(project, `shared${character}/base.ts`))).toBe(false);
       expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
-        'export default {};',
+        'export default {};\n// vp migrate: pending .oxlintrc.json.\n',
       );
     },
   );
@@ -284,7 +284,7 @@ describe('Oxlint JSON extends migration', () => {
     expect(fs.existsSync(path.join(project, 'base.ts'))).toBe(false);
     expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
     expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
-      'export default {};',
+      'export default {};\n// vp migrate: pending .oxlintrc.json.\n',
     );
   });
 
@@ -435,7 +435,9 @@ describe('Oxlint JSON extends migration', () => {
       'error',
     );
     expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.json'))).toBe(false);
-    expect(fs.readFileSync(viteConfig, 'utf8')).toBe(original);
+    expect(fs.readFileSync(viteConfig, 'utf8')).toBe(
+      `${original}\n// vp migrate: pending .oxlintrc.json.\n`,
+    );
     const preserved = path.join(project, 'packages/b/.oxlintrc.json');
     expect(fs.lstatSync(preserved).isSymbolicLink()).toBe(true);
     expect(resolveOxlintConfigExtends(preserved).config.extends![0].rules!['no-console']).toBe(
@@ -711,13 +713,13 @@ describe('Oxlint JSON extends migration', () => {
     );
   });
 
-  it('resumes inline merges after an unreadable workspace graph is repaired', async () => {
+  it('resumes completed workspace merges after an unreadable graph is repaired', async () => {
     createWorkspace();
     write('packages/a/.oxlintrc.json', { rules: { 'no-debugger': 'error' } });
     write('packages/b/.oxlintrc.json', { extends: ['./missing.json'] });
     expect(migrateWorkspace().warnings).toHaveLength(1);
     expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.json'))).toBe(true);
-    expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.ts'))).toBe(true);
     write('packages/b/missing.json', { rules: { 'no-console': 'warn' } });
 
     const report = createMigrationReport();
@@ -734,12 +736,66 @@ describe('Oxlint JSON extends migration', () => {
     for (const name of ['a', 'b']) {
       expect(fs.existsSync(path.join(project, `packages/${name}/.oxlintrc.json`))).toBe(false);
     }
-    expect((await loadConfig(path.join(project, 'packages/a'))).lint!.rules!['no-debugger']).toBe(
-      'error',
-    );
+    expect(
+      (await loadConfig(path.join(project, 'packages/a'))).lint!.extends![0].rules!['no-debugger'],
+    ).toBe('error');
     expect(
       (await loadConfig(path.join(project, 'packages/b'))).lint!.extends![0].rules!['no-console'],
     ).toBe('warn');
+  });
+
+  it.each(['missing source', 'output conflict'])(
+    'retries an isolated config after repairing a %s',
+    async (failure) => {
+      write('.oxlintrc.json', { extends: ['./base.json'] });
+      if (failure === 'output conflict') {
+        write('base.json', { rules: { 'no-debugger': 'error' } });
+        write('base.ts', 'export default {};');
+      }
+      const firstReport = createMigrationReport();
+      mergeViteConfigFiles(project, true, firstReport);
+      expect(firstReport.warnings).toHaveLength(1);
+      if (failure === 'missing source') {
+        const pendingReport = createMigrationReport();
+        expect(retryPreservedOxlintConfigs(project, true, pendingReport)).toBe(false);
+        expect(pendingReport.warnings).toHaveLength(1);
+        write('base.json', { rules: { 'no-debugger': 'error' } });
+      } else {
+        fs.unlinkSync(path.join(project, 'base.ts'));
+      }
+
+      const report = createMigrationReport();
+      expect(retryPreservedOxlintConfigs(project, true, report)).toBe(true);
+
+      expect(report.warnings).toEqual([]);
+      expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(false);
+      expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).not.toContain(
+        'vp migrate: pending',
+      );
+      expect((await loadConfig()).lint!.extends![0].rules!['no-debugger']).toBe('error');
+    },
+  );
+
+  it('keeps newly discovered shared owners live after repairing an unreadable graph', async () => {
+    createWorkspace(['a']);
+    write('.oxlintrc.json', { rules: { 'no-debugger': 'warn' } });
+    write('packages/a/.oxlintrc.json', { extends: ['./missing.json'] });
+    expect(migrateWorkspace(['a']).warnings).toHaveLength(1);
+    write('packages/a/missing.json', { extends: ['../../.oxlintrc.json'] });
+
+    const report = createMigrationReport();
+    expect(
+      retryPreservedOxlintConfigs(project, true, report, [{ name: 'a', path: 'packages/a' }]),
+    ).toBe(true);
+    expect(report.warnings).toEqual([]);
+    const modulePath = path.join(project, '.oxlintrc.ts');
+    fs.writeFileSync(modulePath, fs.readFileSync(modulePath, 'utf8').replace('"warn"', '"error"'));
+    expect((await loadConfig()).lint!.extends![0].rules!['no-debugger']).toBe('error');
+    expect(
+      (await loadConfig(path.join(project, 'packages/a'))).lint!.extends![0].extends![0].rules![
+        'no-debugger'
+      ],
+    ).toBe('error');
   });
 
   it('does not reuse a generated module for a different JSON source', () => {
@@ -915,10 +971,12 @@ describe('Oxlint JSON extends migration', () => {
 
     expect(fs.readFileSync(source, 'utf8')).toBe(original);
     expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
-      'export default {};',
+      'export default {};\n// vp migrate: pending .oxlintrc.json.\n',
     );
     expect(report.warnings).toHaveLength(1);
-    expect(report.warnings[0]).toContain('vp lint -c .oxlintrc.json');
+    expect(report.warnings[0]).toContain(
+      `vp lint -c ${path.relative(process.cwd(), source).replaceAll('\\', '/')}`,
+    );
     expect(report.mergedConfigCount).toBe(0);
   });
 

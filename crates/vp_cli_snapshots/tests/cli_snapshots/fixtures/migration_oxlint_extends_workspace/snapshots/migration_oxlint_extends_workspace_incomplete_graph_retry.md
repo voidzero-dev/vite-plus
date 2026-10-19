@@ -1,4 +1,4 @@
-# migration_oxlint_extends_workspace_inline_retry
+# migration_oxlint_extends_workspace_incomplete_graph_retry
 
 ## `vpt rm .oxlintrc.json`
 
@@ -11,7 +11,7 @@
 
 ## `cd packages/a && vp lint --threads=1 -c .oxlintrc.json index.js`
 
-Original inline rules
+Original rules without inheritance
 
 **Exit code:** 1
 
@@ -41,21 +41,21 @@ VITE+ - The Unified Toolchain for the Web
 ✓ Dependencies installed in <duration>
 • 1 config update applied
 ! Warnings:
-  - Could not migrate packages/b/.oxlintrc.json: Error: ENOENT: no such file or directory, lstat '<workspace>/packages/b/missing.json'. The original config was preserved; use vp lint -c .oxlintrc.json until it is migrated manually.
+  - Could not migrate packages/b/.oxlintrc.json: Error: ENOENT: no such file or directory, lstat '<workspace>/packages/b/missing.json'. The original config was preserved; use vp lint -c packages/b/.oxlintrc.json until it is migrated manually.
 ```
 
 ## `vpt stat-file packages/a/.oxlintrc.json --assert file`
 
-An unreadable graph keeps the completed inline config on disk
+An unreadable graph keeps completed JSON configs on disk
 
 ```
 packages/a/.oxlintrc.json: file
 ```
 
-## `vpt stat-file packages/a/.oxlintrc.ts --assert missing`
+## `vpt stat-file packages/a/.oxlintrc.ts --assert file`
 
 ```
-packages/a/.oxlintrc.ts: missing
+packages/a/.oxlintrc.ts: file
 ```
 
 ## `vpt write-file packages/b/missing.json '{"rules":{"no-debugger":"error"},"options":{"typeAware":false,"typeCheck":false}}'`
@@ -113,7 +113,7 @@ packages/b/.oxlintrc.json: missing
 
 ## `cd packages/a && vp lint --threads=1 index.js`
 
-The completed inline consumer retains its diagnostic
+The completed consumer retains its diagnostic
 
 **Exit code:** 1
 

@@ -16,7 +16,7 @@ VITE+ - The Unified Toolchain for the Web
 ✓ Dependencies installed in <duration>
 • 1 config update applied
 ! Warnings:
-  - Could not migrate packages/b/.oxlintrc.json: Error: Cannot create shared Oxlint config because <workspace>/packages/b/extra.ts or <workspace>/packages/b/extra.js already exists. The original config was preserved; use vp lint -c .oxlintrc.json until it is migrated manually.
+  - Could not migrate packages/b/.oxlintrc.json: Error: Cannot create shared Oxlint config because <workspace>/packages/b/extra.ts or <workspace>/packages/b/extra.js already exists. The original config was preserved; use vp lint -c packages/b/.oxlintrc.json until it is migrated manually.
 ```
 
 ## `vpt replace-file-content .oxlintrc.ts '"no-debugger": "warn"' '"no-debugger": "error"'`
@@ -54,8 +54,8 @@ VITE+ - The Unified Toolchain for the Web
 
 ```
 // vp migrate: merged packages%2Fb%2F.oxlintrc.json (e5c417b92177153603bad60d94de6188).
-import oxlintConfig1 from "../a/.oxlintrc.ts";
-import oxlintConfig2 from "./extra.ts";
+import oxlintConfig1 from "../a/.oxlintrc.js";
+import oxlintConfig2 from "./extra.js";
 export default {
   lint: {
     extends: [oxlintConfig1, oxlintConfig2],

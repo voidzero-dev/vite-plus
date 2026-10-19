@@ -146,7 +146,7 @@ The owner references its fields at the top level
 
 ```
 // vp migrate: merged .oxlintrc.json (776c7037d8d471e35fd2209aa88a3a33).
-import oxlintConfig1 from "./.oxlintrc.ts";
+import oxlintConfig1 from "./.oxlintrc.js";
 export default {
   fmt: {},
   lint: {

@@ -45,7 +45,7 @@ Finished in <duration> on 1 file with <n> rules using <n> threads.
 ## `vpt print-file packages/app/vite.config.mjs`
 
 ```
-import oxlintConfig1 from "../../shared/lint.ts";
+import oxlintConfig1 from "../../shared/lint.js";
 export default {
   lint: {
     extends: [oxlintConfig1],

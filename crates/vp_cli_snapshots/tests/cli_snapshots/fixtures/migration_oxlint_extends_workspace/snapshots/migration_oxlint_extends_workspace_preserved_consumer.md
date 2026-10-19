@@ -38,7 +38,7 @@ VITE+ - The Unified Toolchain for the Web
 ✓ Dependencies installed in <duration>
 • 1 config update applied
 ! Warnings:
-  - Could not migrate packages/b/.oxlintrc.json: Error: Cannot create shared Oxlint config because <workspace>/packages/b/extra.ts or <workspace>/packages/b/extra.js already exists. The original config was preserved; use vp lint -c .oxlintrc.json until it is migrated manually.
+  - Could not migrate packages/b/.oxlintrc.json: Error: Cannot create shared Oxlint config because <workspace>/packages/b/extra.ts or <workspace>/packages/b/extra.js already exists. The original config was preserved; use vp lint -c packages/b/.oxlintrc.json until it is migrated manually.
 ```
 
 ## `vpt stat-file .oxlintrc.json --assert file`
@@ -65,7 +65,7 @@ Retaining JSON does not undo the owner's successful migration
 
 ```
 // vp migrate: merged .oxlintrc.json (bf57dd1b2fb51cd1cb30e45e36742e3b).
-import oxlintConfig1 from "./.oxlintrc.ts";
+import oxlintConfig1 from "./.oxlintrc.js";
 export default {
   fmt: {},
   lint: {
@@ -83,7 +83,7 @@ export default {
 
 ```
 // vp migrate: merged packages%2Fa%2F.oxlintrc.json (c59f567503f7d6b118c01736f9206ec4).
-import oxlintConfig1 from "./.oxlintrc.ts";
+import oxlintConfig1 from "./.oxlintrc.js";
 export default {
   lint: {
     extends: [oxlintConfig1],
@@ -102,6 +102,7 @@ The preserved consumer's Vite config has no partial lint config
 
 ```
 export default {};
+// vp migrate: pending .oxlintrc.json.
 ```
 
 ## `vpt print-file packages/b/extra.ts`
@@ -122,6 +123,25 @@ The JSON fallback still reports the same diagnostic and exit code
 
   × eslint(no-debugger): `debugger` statement is not allowed
    ╭─[index.js:1:1]
+ 1 │ debugger;
+   · ─────────
+   ╰────
+  help: Remove the debugger statement
+
+Found 0 warnings and 1 error.
+Finished in <duration> on 1 file with <n> rules using <n> threads.
+```
+
+## `vp lint --threads=1 -c packages/b/.oxlintrc.json packages/b/index.js`
+
+The fallback command shown at the workspace root selects the preserved package config
+
+**Exit code:** 1
+
+```
+
+  × eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[packages/b/index.js:1:1]
  1 │ debugger;
    · ─────────
    ╰────

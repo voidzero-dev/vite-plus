@@ -75,7 +75,7 @@ The owner imports its own shared config
 
 ```
 // vp migrate: merged .oxlintrc.json (cca48660331feaa20cf74e4f147c8e10).
-import oxlintConfig1 from "./.oxlintrc.ts";
+import oxlintConfig1 from "./.oxlintrc.js";
 export default {
   fmt: {},
   lint: {
@@ -95,7 +95,7 @@ The intermediate owner also imports its own shared config
 
 ```
 // vp migrate: merged packages%2Fa%2F.oxlintrc.json (e93b0fadd405db856ff1b8847eb5f2c3).
-import oxlintConfig1 from "./.oxlintrc.ts";
+import oxlintConfig1 from "./.oxlintrc.js";
 export default {
   lint: {
     extends: [oxlintConfig1],
@@ -112,8 +112,8 @@ export default {
 
 ```
 // vp migrate: merged packages%2Fb%2F.oxlintrc.json (e5c417b92177153603bad60d94de6188).
-import oxlintConfig1 from "../a/.oxlintrc.ts";
-import oxlintConfig2 from "./extra.ts";
+import oxlintConfig1 from "../a/.oxlintrc.js";
+import oxlintConfig2 from "./extra.js";
 export default {
   lint: {
     extends: [oxlintConfig1, oxlintConfig2],

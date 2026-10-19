@@ -74,7 +74,7 @@ The owner's top-level ignore patterns reference its shared module
 
 ```
 // vp migrate: merged .oxlintrc.json (4d2ecd8da8b74c19aab2ebbba9d98fe6).
-import oxlintConfig1 from "./.oxlintrc.ts";
+import oxlintConfig1 from "./.oxlintrc.js";
 export default {
   fmt: {},
   lint: {
@@ -95,7 +95,7 @@ The dependent does not receive top-level ignore patterns
 
 ```
 // vp migrate: merged packages%2Fa%2F.oxlintrc.json (b829c0806f4ea2e6444bd91df0061b20).
-import oxlintConfig1 from "./.oxlintrc.ts";
+import oxlintConfig1 from "./.oxlintrc.js";
 export default {
   lint: {
     extends: [oxlintConfig1],

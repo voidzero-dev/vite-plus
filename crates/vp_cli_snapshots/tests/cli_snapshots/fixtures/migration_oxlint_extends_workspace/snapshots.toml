@@ -43,6 +43,7 @@ steps = [
   { argv = ["vpt", "print-file", "packages/b/vite.config.mjs"], comment = "The preserved consumer's Vite config has no partial lint config" },
   { argv = ["vpt", "print-file", "packages/b/extra.ts"], comment = "The conflicting file is unchanged" },
   { argv = ["vp", "lint", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/b", comment = "The JSON fallback still reports the same diagnostic and exit code", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", "packages/b/.oxlintrc.json", "packages/b/index.js"], comment = "The fallback command shown at the workspace root selects the preserved package config", continue-on-failure = true },
   { argv = ["vp", "lint", "index.js"], comment = "The migrated owner uses its shared module", continue-on-failure = true },
   { argv = ["vp", "lint", "index.js"], cwd = "packages/a", comment = "The migrated intermediate owner uses its shared module", continue-on-failure = true },
 ]
@@ -232,7 +233,7 @@ steps = [
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "The migrated second consumer retains its warning" },
 ]
 [[case]]
-name = "migration_oxlint_extends_workspace_inline_retry"
+name = "migration_oxlint_extends_workspace_incomplete_graph_retry"
 vp = "local"
 local-registry = true
 unset-env = ["VP_SKIP_INSTALL"]
@@ -240,16 +241,16 @@ steps = [
   { argv = ["vpt", "rm", ".oxlintrc.json"], snapshot = false },
   { argv = ["vpt", "write-file", "packages/a/.oxlintrc.json", '{"rules":{"no-debugger":"error"},"options":{"typeAware":false,"typeCheck":false}}'], snapshot = false },
   { argv = ["vpt", "write-file", "packages/b/.oxlintrc.json", '{"extends":["./missing.json"]}'], snapshot = false },
-  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "Original inline rules", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "Original rules without inheritance", continue-on-failure = true },
   { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
-  { argv = ["vpt", "stat-file", "packages/a/.oxlintrc.json", "--assert", "file"], comment = "An unreadable graph keeps the completed inline config on disk" },
-  { argv = ["vpt", "stat-file", "packages/a/.oxlintrc.ts", "--assert", "missing"] },
+  { argv = ["vpt", "stat-file", "packages/a/.oxlintrc.json", "--assert", "file"], comment = "An unreadable graph keeps completed JSON configs on disk" },
+  { argv = ["vpt", "stat-file", "packages/a/.oxlintrc.ts", "--assert", "file"] },
   { argv = ["vpt", "write-file", "packages/b/missing.json", '{"rules":{"no-debugger":"error"},"options":{"typeAware":false,"typeCheck":false}}'], comment = "Repair the unreadable inheritance graph" },
   { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/b", comment = "The repaired JSON loads before retrying", continue-on-failure = true },
   { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
   { argv = ["vpt", "stat-file", "packages/a/.oxlintrc.json", "--assert", "missing"] },
   { argv = ["vpt", "stat-file", "packages/b/.oxlintrc.json", "--assert", "missing"] },
-  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The completed inline consumer retains its diagnostic", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The completed consumer retains its diagnostic", continue-on-failure = true },
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "The repaired consumer retains its diagnostic after retrying", continue-on-failure = true },
 ]
 
@@ -269,4 +270,24 @@ steps = [
   { argv = ["vpt", "stat-file", "packages/a/.oxlintrc.json", "--assert", "missing"] },
   { argv = ["vp", "lint", "--threads=1", "-c", "alias.json", "index.js"], cwd = "packages/a", comment = "The inherited alias still loads with the same diagnostic" },
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The migrated consumer uses its shared module" },
+]
+
+[[case]]
+name = "migration_oxlint_extends_workspace_repaired_shared_owner"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "rm", "packages/b/.oxlintrc.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/a/.oxlintrc.json", '{"extends":["./missing.json"]}'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The original owner reports a warning" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "write-file", "packages/a/missing.json", '{"extends":["../../.oxlintrc.json"]}'], comment = "The repaired graph reveals that the root is a shared owner" },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "The repaired JSON inherits the original warning" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated owner retains its warning" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The repaired consumer retains the same warning" },
+  { argv = ["vpt", "replace-file-content", ".oxlintrc.ts", '"no-debugger": "warn"', '"no-debugger": "error"'] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The owner follows the shared module edit", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The repaired consumer follows the same edit", continue-on-failure = true },
 ]

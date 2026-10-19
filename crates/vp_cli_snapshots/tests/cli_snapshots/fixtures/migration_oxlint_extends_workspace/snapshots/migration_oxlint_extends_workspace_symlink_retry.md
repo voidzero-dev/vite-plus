@@ -76,7 +76,7 @@ VITE+ - The Unified Toolchain for the Web
 ✓ Dependencies installed in <duration>
 • 1 config update applied
 ! Warnings:
-  - Could not migrate packages/b/.oxlintrc.json: Error: Shared Oxlint configs require a Vite config with an ESM default export. The original config was preserved; use vp lint -c .oxlintrc.json until it is migrated manually.
+  - Could not migrate packages/b/.oxlintrc.json: Error: Shared Oxlint configs require a Vite config with an ESM default export. The original config was preserved; use vp lint -c packages/b/.oxlintrc.json until it is migrated manually.
 ```
 
 ## `vpt stat-file packages/a/.oxlintrc.json --assert missing`
