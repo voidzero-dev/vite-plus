@@ -500,10 +500,13 @@ fn dedup_missing_bins(
 /// When a bin is owned by a **different** npm package (not being uninstalled), npm may
 /// still delete its binary from `npm_bin_dir`, leaving our symlink dangling. In that
 /// case we repair the link by pointing directly at the surviving package's binary.
-fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefix: &AbsolutePath) {
+fn remove_npm_global_uninstall_links(
+    bin_entries: &[(String, String, AbsolutePathBuf)],
+    npm_prefix: &AbsolutePath,
+) {
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
-    for (bin_name, package_name) in bin_entries {
+    for (bin_name, package_name, package_dir) in bin_entries {
         // Skip protected shims: a stale Npm BinConfig must not let
         // `npm uninstall -g` delete a default shim that `vp env setup` owns.
         if is_protected_shim(bin_name, false) {
@@ -511,7 +514,6 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
         }
 
         // A successful npm command may be a dry-run configured through flags, env, or npmrc.
-        let package_dir = config::get_node_modules_dir(npm_prefix, package_name);
         if package_dir.as_path().try_exists().unwrap_or(true) {
             continue;
         }
@@ -610,23 +612,23 @@ fn read_npm_package_json(
     })
 }
 
-/// Collect (bin_name, package_name) pairs from packages by reading their installed package.json files.
+/// Collect bin names, package names, and their pre-uninstall installation paths.
 fn collect_bin_names_from_npm(
     packages: &[String],
     npm_prefix: &AbsolutePath,
-) -> Vec<(String, String)> {
+) -> Vec<(String, String, AbsolutePathBuf)> {
     let mut all_bins = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-        let package_json_path =
-            config::get_node_modules_dir(npm_prefix, &package_name).join("package.json");
+        let package_dir = config::get_node_modules_dir(npm_prefix, &package_name);
+        let package_json_path = package_dir.join("package.json");
         let Ok(content) = std::fs::read_to_string(package_json_path.as_path()) else { continue };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
         for bin_name in extract_bin_names(&package_json) {
-            all_bins.push((bin_name, package_name.clone()));
+            all_bins.push((bin_name, package_name.clone(), package_dir.clone()));
         }
     }
 
@@ -1907,6 +1909,11 @@ mod tests {
         std::fs::create_dir_all(&package_dir).unwrap();
         let source = package_dir.join("cli.js");
         std::fs::write(&source, "console.log('test');").unwrap();
+        std::fs::write(
+            package_dir.join("package.json"),
+            r#"{"name":"test-package","bin":{"test-cli":"cli.js"}}"#,
+        )
+        .unwrap();
 
         vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
             let bin_dir = config::get_bin_dir().unwrap();
@@ -1917,7 +1924,12 @@ mod tests {
             let metadata = std::fs::read(&metadata_path).unwrap();
             assert!(link.as_path().exists());
 
-            let bins = vec![("test-cli".to_string(), "test-package".to_string())];
+            let bins = collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix);
+            assert_eq!(bins.len(), 1);
+            #[cfg(unix)]
+            let local_dir = npm_prefix.join("node_modules").join("test-package");
+            #[cfg(unix)]
+            std::fs::create_dir_all(&local_dir).unwrap();
             remove_npm_global_uninstall_links(&bins, &npm_prefix);
 
             assert!(link.as_path().exists(), "dry-run must preserve the installed command");
@@ -1930,6 +1942,8 @@ mod tests {
 
             assert!(std::fs::symlink_metadata(&link).is_err());
             assert!(!metadata_path.as_path().exists());
+            #[cfg(unix)]
+            assert!(local_dir.as_path().exists());
             #[cfg(windows)]
             assert!(!bin_dir.join("test-cli.cmd").as_path().exists());
         });

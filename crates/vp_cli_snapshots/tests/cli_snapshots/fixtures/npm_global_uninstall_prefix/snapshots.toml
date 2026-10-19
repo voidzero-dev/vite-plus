@@ -45,6 +45,31 @@ steps = [
 ]
 
 [[case]]
+name = "npm_global_uninstall_preserves_local_copy"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  ["vpt", "mkdir", "-p", "custom-prefix"],
+  ["vpt", "write-file", "custom-prefix/package.json", "{\"private\":true}"],
+  { tty = false, argv = ["npm", "install", "--prefix", "./custom-prefix", "--ignore-scripts", "--no-save", "--no-package-lock", "--no-audit", "./npm-global-prefix-pkg"], comment = "Install a local copy under the same prefix" },
+  { tty = false, argv = ["npm", "install", "-g", "--prefix", "./custom-prefix", "./npm-global-prefix-pkg"], comment = "Install a separate global copy and create its Vite+ link" },
+  ["vpt", "stat-file", "custom-prefix/node_modules/npm-global-prefix-pkg/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "custom-prefix/lib/node_modules/npm-global-prefix-pkg/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  { tty = false, argv = ["npm", "uninstall", "-g", "--prefix", "./custom-prefix", "npm-global-prefix-pkg", "--dry-run"], comment = "Dry-run must preserve the global command even when a local copy also exists" },
+  ["npm-global-prefix-cli"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  { tty = false, argv = ["npm", "uninstall", "-g", "--prefix", "./custom-prefix", "npm-global-prefix-pkg"], comment = "Real uninstall must remove the global links without confusing the remaining local copy for the global installation" },
+  ["vpt", "stat-file", "custom-prefix/lib/node_modules/npm-global-prefix-pkg", "--assert", "missing"],
+  ["vpt", "stat-file", "custom-prefix/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "missing"],
+  ["vpt", "stat-file", "custom-prefix/node_modules/npm-global-prefix-pkg/package.json", "--assert", "file"],
+  ["node", "custom-prefix/node_modules/npm-global-prefix-pkg/cli.js"],
+]
+
+[[case]]
 name = "npm_global_uninstall_prefix_shorthand"
 vp = "global"
 skip-platforms = ["windows"]
