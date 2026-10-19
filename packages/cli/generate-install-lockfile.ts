@@ -29,11 +29,7 @@ export function installManifest(version: string) {
   };
 }
 
-export function validateInstallLockfile(
-  content: string,
-  version: string,
-  tarball?: Uint8Array,
-): void {
+export function validateInstallLockfile(content: string, version: string): void {
   const lock = parse(content) as {
     lockfileVersion?: string;
     importers?: Record<
@@ -67,11 +63,6 @@ export function validateInstallLockfile(
     })
   ) {
     throw new Error(`Invalid global installation lockfile for vite-plus@${version}`);
-  }
-  if (tarball && integrity !== `sha512-${createHash('sha512').update(tarball).digest('base64')}`) {
-    throw new Error(
-      'CLI archive does not match the lockfile; restore the original release artifact',
-    );
   }
 }
 
@@ -200,11 +191,8 @@ async function main(): Promise<void> {
   }
   content ??=
     (await publishedInstallLockfile(version, registry, platformPackages)) ??
-    (await generateInstallLockfile(version, process.env.NPM_CONFIG_REGISTRY ?? registry));
-  // Publish these exact bytes after the platform packages. Repacking would
-  // invalidate the integrity recorded through the local registry proxy.
-  const tarball = await readFile(join(directory, `vite-plus-${version}.tgz`));
-  validateInstallLockfile(content, version, tarball);
+    (await generateInstallLockfile(version, registry));
+  validateInstallLockfile(content, version);
   await writeFile(join(directory, INSTALL_LOCKFILE), content);
   await addInstallLockfileToArchives(directory);
   // eslint-disable-next-line no-console

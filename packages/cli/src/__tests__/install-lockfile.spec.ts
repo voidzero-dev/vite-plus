@@ -101,18 +101,6 @@ describe('release installation lockfile', () => {
     ).toThrow('Invalid global installation lockfile');
   });
 
-  it('requires the exact CLI archive used to resolve the lockfile on release retries', () => {
-    const tarball = Buffer.from('packed CLI');
-    const content = lockfile.replace(
-      'sha512-fixture',
-      `sha512-${createHash('sha512').update(tarball).digest('base64')}`,
-    );
-    expect(() => validateInstallLockfile(content, version, tarball)).not.toThrow();
-    expect(() => validateInstallLockfile(content, version, Buffer.from('repacked CLI'))).toThrow(
-      'restore the original release artifact',
-    );
-  });
-
   it('recovers the published lockfile after a partially completed release', async () => {
     const archive = Buffer.from(
       await createTarGzip([{ name: `package/${INSTALL_LOCKFILE}`, data: lockfile }]),

@@ -123,11 +123,13 @@ transitive dependencies, including optional packages for all supported platforms
 CLI binary packages remain outside this dependency graph, so adding the lockfile
 to them cannot change an integrity value recorded inside it.
 
-Release builds generate the lockfile from the exact CLI archive with the same
-pinned pnpm version as the installer. Preview builds first normalize their
-archives with the pinned registry bridge builder, then record the final integrity
-values and content-addressed URLs. Publishing retries reuse the prepared
-artifacts. See [Global installation lockfile](../packages/cli/BUNDLING.md#global-installation-lockfile)
+Release builds publish the local CLI under `staging`, then use the installer's
+pinned pnpm version to generate a standard lockfile from that published version.
+The workflow promotes the local CLI to `latest` after the global packages are
+available. Preview builds also publish the local CLI first, generate the lockfile
+from the registry, then publish the global packages and update the PR tag.
+Publishing retries reuse the prepared artifacts.
+See [Global installation lockfile](../packages/cli/BUNDLING.md#global-installation-lockfile)
 for the publication order and generator entry points.
 
 The platform manifest advertises the companion with `vpInstallLockfile: true`.

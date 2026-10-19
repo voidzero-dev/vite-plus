@@ -348,41 +348,56 @@ See `publish-native-addons.ts` for the publishing pipeline.
 
 ### Global installation lockfile
 
-The release workflow publishes native bindings and core first, then packs `vite-plus`.
-`generate-install-lockfile.ts` resolves the global `vp-global` wrapper with pnpm
-`10.33.0`, the same version used by the installer. The local registry proxy serves
-the packed CLI before publication and resolves its dependencies from npm. The
-resulting `vp-install-lock.yaml` includes package integrity and optional dependencies
-for all supported platforms, without local registry URLs.
+The release workflow publishes native bindings, prompts, and core first. It then
+publishes `vite-plus` with the `staging` tag and waits until that exact version is
+installable. `generate-install-lockfile.ts` runs pnpm `10.33.0`, the same version
+used by the installer, in an isolated `vp-global` wrapper directory. The wrapper
+pins `vite-plus` to the release version. `pnpm install --lockfile-only` generates
+a standard `pnpm-lock.yaml` from the published registry metadata. The script
+copies its contents unchanged to `vp-install-lock.yaml` for packaging. The
+lockfile includes package integrity and optional dependencies for all supported
+platforms.
 
-The workflow saves both the lockfile and the exact CLI archive in the
-`installation-lockfile` artifact before publishing any CLI binary package. Release
-retries restore these files; they must not resolve a new dependency graph or repack
-the CLI after a binary package is published. The generator can also recover the
-lockfile from a published platform package, but rejects a CLI archive whose
-integrity differs. In that case, restore the original release artifact.
+The workflow saves the lockfile in the `installation-lockfile` artifact before
+publishing any global CLI package. Release retries restore that lockfile. If the
+artifact is unavailable, the generator can recover the same lockfile from an
+already published global platform package. The local CLI is already published,
+so retries do not need to preserve or repack a local CLI archive.
 
-Each npm CLI binary package and standalone release archive carries the lockfile
-beside `vp`. After those packages propagate, the workflow publishes the exact CLI
-archive with the `latest` tag. Bootstrap scripts hand the binary and its companion
-to self-setup, which uses `--frozen-lockfile`. Upgrades use the same lockfile; a
-standalone binary or an older upgrade client can recover it from the verified
-platform package. Older packages without a companion retain their existing
-installation behavior. The release-age override remains `0` so a new release can
-be installed immediately.
+Each global CLI platform package and standalone release archive carries the
+lockfile beside `vp`. After the global packages propagate, the workflow runs
+`npm dist-tag add "vite-plus@${VERSION}" latest`. The installer continues to
+select the previous release until this step. The `staging` tag remains available
+for inspecting the most recently staged version.
 
-Preview builds use the same frozen installation. The build job checks out the
-registry bridge's pinned archive builder and runs it with the Actions Node 24
-runtime, as the upload action does. `generate-preview-install-lockfile.ts` resolves
-the lockfile from those normalized archives through the local registry proxy. It
-records the bridge's content-addressed tarball URLs and integrity values, then
-adds the companion to each CLI platform package. CLI platform packages must stay
-outside the wrapper's dependency graph to avoid a circular integrity dependency.
-The artifact contains the prepared archives and lockfile, so publishing retries
-do not resolve dependencies again. The trusted publishing job still validates and
-rebuilds every archive; it does not run package installation or preview code.
-Keep the bridge source checkout and both bridge action references on the same
-commit when updating the workflow.
+Tag promotion uses npm `11.21.0` with OIDC. The `vite-plus` trusted publisher for
+`release.yml` must enable **Allow npm dist-tag**, in addition to its existing
+publish permission. See [npm's trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/#managing-dist-tags-with-trusted-publishing).
+This is a distribution tag named `staging`, not the separate `npm stage publish`
+approval flow.
+
+Bootstrap scripts hand the binary and its companion to self-setup, which uses
+`--frozen-lockfile`. Upgrades use the same lockfile. A standalone binary or an
+older upgrade client can recover it from the verified platform package. Older
+packages without a companion retain their existing installation behavior. The
+release-age override remains `0` so a new release can be installed immediately.
+
+Preview builds pack the local packages and global CLI platform packages into
+separate artifacts. The trusted publishing workflow first publishes the local
+CLI and its dependencies under their exact commit version. It omits the PR URL
+from this phase, so the bridge exposes the commit version without moving the
+`pr-<number>` tag. A job without publishing credentials then runs the same pnpm
+lockfile generator against the registry bridge and bundles the result into the
+global CLI packages. The bridge supplies the published archive integrity and
+content-addressed URLs directly; the generator does not predict them.
+
+The workflow saves the prepared global packages before publishing them and
+reuses that artifact on retries. A final publishing job validates and rebuilds
+those global packages, then updates the PR tag. Both publishing jobs re-check PR
+authorization and do not run dependency installation or preview code. The fork
+approval gate precedes both jobs. Global CLI packages stay outside the locked
+local CLI dependency graph, so adding the companion cannot change a hash in the
+lockfile.
 
 ---
 
