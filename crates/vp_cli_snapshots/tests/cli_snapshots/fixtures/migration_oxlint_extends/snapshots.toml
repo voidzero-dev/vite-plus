@@ -110,6 +110,7 @@ steps = [
 [[case]]
 name = "migration_oxlint_extends_directory_alias"
 vp = "local"
+skip-platforms = ["windows"]
 local-registry = true
 unset-env = ["VP_SKIP_INSTALL"]
 steps = [
@@ -123,4 +124,23 @@ steps = [
   { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
   { argv = ["vpt", "print-file", "configs/nested/base.ts"] },
   { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated graph selects the same physical parent config", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_directory_junction"
+vp = "local"
+skip-platforms = ["linux", "macos"]
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", '{"extends":["./aliases/base.json"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/nested/base.json", '{"extends":["../common.json"],"options":{"typeAware":false,"typeCheck":false}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/common.json", '{"rules":{"no-debugger":"error"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "common.json", '{"rules":{"no-debugger":"off"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "index.js", "debugger;\n"], snapshot = false },
+  { argv = ["node", "create-directory-link.mjs"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Windows resolves the parent component before following the directory junction", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "configs/nested/base.ts"] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated graph selects the same lexical parent config", continue-on-failure = true },
 ]

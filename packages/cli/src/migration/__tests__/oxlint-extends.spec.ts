@@ -533,6 +533,27 @@ describe('Oxlint JSON extends migration', () => {
     expect(lint!.extends![0].jsPlugins).toEqual([path.join(project, 'plugin.mjs')]);
   });
 
+  it('resolves parent dependencies through directory links with native filesystem semantics', async () => {
+    write('configs/nested/base.json', { extends: ['../common.json'] });
+    write('configs/common.json', { rules: { 'no-console': 'error' } });
+    write('common.json', { rules: { 'no-console': 'off' } });
+    fs.symlinkSync(
+      path.join(project, 'configs/nested'),
+      path.join(project, 'aliases'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    write('.oxlintrc.json', { extends: ['./aliases/base.json'] });
+
+    const report = createMigrationReport();
+    mergeViteConfigFiles(project, true, report);
+
+    expect(report.warnings).toEqual([]);
+    const { lint } = await loadConfig();
+    expect(lint!.extends![0].extends![0].rules!['no-console']).toBe(
+      process.platform === 'win32' ? 'off' : 'error',
+    );
+  });
+
   it('does not reuse a shared module resolved from a different symlink context', async () => {
     createWorkspace();
     write('shared/lint.json', { extends: ['./base.json'] });

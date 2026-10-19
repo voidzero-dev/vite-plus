@@ -28,7 +28,10 @@ export function resolveOxlintConfigExtends(
   cache = createConfigCache(),
   stack: string[] = [],
 ): OxlintConfigFile {
-  const filename = configPathInRealDirectory(configPath);
+  // Windows collapses parent components before following directory junctions.
+  // POSIX follows the directory link first, so its physical parent is the context.
+  const filename =
+    process.platform === 'win32' ? path.resolve(configPath) : configPathInRealDirectory(configPath);
   const sourcePath = fs.realpathSync(filename);
   if (stack.includes(sourcePath)) {
     throw new Error(`Circular Oxlint extends: ${[...stack, sourcePath].join(' -> ')}`);
