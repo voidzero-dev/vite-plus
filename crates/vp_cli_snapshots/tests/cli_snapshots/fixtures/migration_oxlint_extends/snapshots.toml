@@ -68,6 +68,23 @@ steps = [
 ]
 
 [[case]]
+name = "migration_oxlint_extends_backslash_path"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "cp", "shared/base.json", 'shared/base\name.json'], snapshot = false },
+  { argv = ["vpt", "json-edit", "shared/nested/first.json", "extends", '["../base\\name.json"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original diagnostics with a literal backslash in the shared config filename", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Warn and preserve the JSON because TypeScript treats the backslash as a separator" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "shared/nested/first.ts", "--assert", "missing"] },
+  { argv = ["vpt", "stat-file", 'shared/base\name.ts', "--assert", "missing"] },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The retained JSON still produces the same diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
 name = "migration_oxlint_extends_query_path"
 vp = "local"
 local-registry = true
