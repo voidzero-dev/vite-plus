@@ -72,16 +72,14 @@ steps = [
 [[case]]
 name = "npm_global_uninstall_userconfig_fallback"
 vp = "global"
-comment = "This case downloads its own pinned Node runtime so global npm writes stay isolated from the shared seed."
 skip-platforms = ["windows"]
-seed-runtime = false
-env = { VP_NODE_VERSION = "22.18.0" }
+# Require the seeded runtime instead of downloading one for this case.
+env = { VP_NODE_DIST_MIRROR = "http://127.0.0.1:9" }
 unset-env = ["NPM_CONFIG_PREFIX"]
 steps = [
-  { argv = ["node", "--version"], snapshot = false },
-  ["vpt", "stat-file", "$VP_HOME/js_runtime", "--assert", "dir"],
-  { tty = false, argv = ["npm", "install", "-g", "./npm-global-prefix-pkg"], comment = "Install into the test-owned Node runtime" },
-  ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.18.0/lib/node_modules/npm-global-prefix-pkg/package.json", "--assert", "file"],
+  ["node", "private-runtime.mjs"],
+  { tty = false, argv = ["npm", "install", "-g", "./npm-global-prefix-pkg"], comment = "Install into a private copy of the selected Node runtime" },
+  ["vpt", "stat-file", "node-prefix/lib/node_modules/npm-global-prefix-pkg/package.json", "--assert", "file"],
   ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "symlink"],
   ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
   { tty = false, argv = ["npm", "config", "set", "prefix", "./other-prefix", "--location=user"], comment = "Make the normal user config point to another prefix" },
@@ -93,8 +91,8 @@ steps = [
   ["npm-global-prefix-cli"],
   ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
   { tty = false, argv = ["npm", "uninstall", "-g", "--userconfig", "empty.npmrc", "npm-global-prefix-pkg"], comment = "A real uninstall using the override must clean up the fallback package's links" },
-  ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.18.0/lib/node_modules/npm-global-prefix-pkg", "--assert", "missing"],
-  ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.18.0/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "node-prefix/lib/node_modules/npm-global-prefix-pkg", "--assert", "missing"],
+  ["vpt", "stat-file", "node-prefix/bin/npm-global-prefix-cli", "--assert", "missing"],
   ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "missing"],
   ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "missing"],
 ]
