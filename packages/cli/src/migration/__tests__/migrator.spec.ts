@@ -2061,6 +2061,53 @@ describe('standalone pnpm child project boundaries', () => {
     expect(readYaml(path.join(tmpDir, 'web/pnpm-lock.yaml'))).toBe(lockfile);
   });
 
+  it.each([
+    { packageManager: 'yarn@4.9.2' },
+    { packageManager: 'npm@10.9.4' },
+    { packageManager: 'bun@1.3.0' },
+    { devEngines: { packageManager: { name: 'yarn' } } },
+    { file: 'yarn.lock' },
+    { file: 'package-lock.json' },
+    { file: 'bun.lock' },
+  ])('does not split members of a nested non-pnpm workspace (%j)', (declaration) => {
+    fs.mkdirSync(path.join(tmpDir, 'vendor/packages/app'), { recursive: true });
+    const manifest = JSON.stringify({ name: 'vendor', workspaces: ['packages/*'], ...declaration });
+    fs.writeFileSync(path.join(tmpDir, 'vendor/package.json'), manifest);
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/packages/app/package.json'),
+      JSON.stringify({ name: 'app' }),
+    );
+    if (declaration.file !== undefined) {
+      fs.writeFileSync(path.join(tmpDir, 'vendor', declaration.file), '');
+    }
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'vendor/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'vendor/packages/app/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'vendor/package.json'), 'utf8')).toBe(manifest);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(true);
+  });
+
+  it('continues scanning below a non-pnpm standalone project', () => {
+    fs.mkdirSync(path.join(tmpDir, 'vendor/app'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/package.json'),
+      JSON.stringify({ name: 'vendor', packageManager: 'npm@10.9.4' }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/app/package.json'),
+      JSON.stringify({ name: 'app', packageManager: 'pnpm@11.25.0' }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'vendor/pnpm-workspace.yaml'))).toBe(false);
+    expect(readYamlObject(path.join(tmpDir, 'vendor/app/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+    });
+  });
+
   it('preserves an unpinned child before its first install', () => {
     fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
     const manifest = JSON.stringify({ name: 'web' });

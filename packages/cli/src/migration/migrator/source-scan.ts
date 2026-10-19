@@ -236,6 +236,8 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
                   ))))))
       ) {
         projects.push(directory);
+      } else if (Object.hasOwn(pkg, 'workspaces')) {
+        continue;
       }
     }
     let entries: fs.Dirent[];
