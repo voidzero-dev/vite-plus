@@ -211,7 +211,7 @@ export function removeMigratedOxlintConfigs(configs: PreparedOxlintConfigs): boo
       removableSources.add(fs.realpathSync(filename));
     }
   }
-  const removablePaths = new Set([...removalCandidates].map(configPathInRealDirectory));
+  const removablePaths = new Set(Array.from(removalCandidates, configPathInRealDirectory));
   const cache = createConfigCache();
   try {
     for (const file of files) {
