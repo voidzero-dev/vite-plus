@@ -18,6 +18,7 @@
 pub mod error;
 pub mod install;
 pub mod integrity;
+pub mod lockfile;
 pub mod platform;
 pub mod registry;
 

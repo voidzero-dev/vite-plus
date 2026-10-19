@@ -1,6 +1,8 @@
 [[case]]
 name = "command_self_setup"
 vp = "global"
+# The runner provides local dependencies; this case checks setup and dispatch.
+env = { VP_SKIP_DEPS_INSTALL = "1" }
 steps = [
   { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete"], snapshot = false },
   { argv = ["vp", "--help"], envs = [["VP_SELF_SETUP_SUPPORT_CHECK", "1"]], comment = "The capability probe does not perform setup" },
@@ -26,6 +28,7 @@ steps = [
 [[case]]
 name = "command_self_setup_retry"
 vp = "global"
+env = { VP_SKIP_DEPS_INSTALL = "1" }
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete", "$VP_HOME/env"], snapshot = false },

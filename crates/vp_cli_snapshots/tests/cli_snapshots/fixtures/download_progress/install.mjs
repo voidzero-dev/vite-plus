@@ -10,6 +10,7 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
@@ -29,6 +30,8 @@ for (const directory of [nodeBin, user, external]) mkdirSync(directory, { recurs
 // Use the runner's real Node for the mock pnpm program, without a network download.
 symlinkSync(process.execPath, join(nodeBin, 'node'));
 copyFileSync(join(process.env.VP_HOME, 'bin/vp'), join(external, 'vp'));
+const lockfile = "lockfileVersion: '9.0'\n";
+writeFileSync(join(external, 'vp-install-lock.yaml'), lockfile);
 
 const pnpmArchive = createArchive({
   'package/package.json': JSON.stringify({
@@ -38,6 +41,9 @@ const pnpmArchive = createArchive({
   }),
   'package/bin/pnpm.cjs': `
     const fs = require('node:fs');
+    const assert = require('node:assert/strict');
+    assert.ok(process.argv.includes('--frozen-lockfile'));
+    assert.equal(fs.readFileSync('pnpm-lock.yaml', 'utf8'), ${JSON.stringify(lockfile)});
     console.log('pnpm captured stdout');
     console.error('pnpm captured stderr');
     fetch(process.env.npm_config_registry + '/install').then(response => {
@@ -140,11 +146,16 @@ try {
     assert.equal(result.code, 0, result.stderr);
     assert.equal(readFileSync(resolutionFile, 'utf8'), '20.18.0');
     assert.equal(existsSync(marker), true);
-    console.log('Retry returns the requested Node version without installing dependencies again.');
+    console.log('Retry completes a frozen dependency install and returns the requested Node version.');
   }
   const { code, stdout, stderr } = result;
   assert.equal(code, failure ? 1 : 0, stderr);
-  assert.deepEqual(phases, ['download', 'prepare', 'dependencies']);
+  assert.deepEqual(
+    phases,
+    resolutionRetry
+      ? ['download', 'prepare', 'dependencies', 'dependencies']
+      : ['download', 'prepare', 'dependencies'],
+  );
   if (failure) {
     assert.equal(stdout, '');
     const log = readFileSync(join(home, 'upgrade.log'), 'utf8');

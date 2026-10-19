@@ -238,9 +238,18 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
             temporary.persist(binary.as_path()).map_err(|error| error.error)?;
         }
     }
-    let needs_deps = !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file();
-    // A standalone setup retry still needs to return its Node selection when dependencies exist.
-    // In-place upgrades and bundled packages keep their already prepared runtime.
+    // Old upgrade clients may have installed an unlocked tree. A failed setup
+    // may also leave package.json and the working lockfile behind. In either
+    // case, finish a frozen install before marking self-setup complete.
+    let has_install_lockfile = if !skip_deps && !bundled {
+        let source = AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?;
+        vp_setup::lockfile::prepare(&source, &version_dir, version, registry).await?
+    } else {
+        false
+    };
+    let needs_deps = has_install_lockfile
+        || !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file();
+    // Standalone retries also return the selected runtime when dependencies already exist.
     let node_version =
         if !skip_deps && (deploy || needs_deps) { runtime::resolve().await? } else { None };
     if needs_deps {

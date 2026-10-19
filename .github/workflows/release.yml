@@ -60,6 +60,7 @@ jobs:
     needs: [check, build-rust, request-approval]
     if: needs.check.outputs.version_changed == 'true'
     permissions:
+      actions: read # restore the lockfile on release job retries
       contents: write
       packages: write
       id-token: write # Required for OIDC
@@ -163,12 +164,8 @@ jobs:
           pattern: vp-release-archive-*
           merge-multiple: true
 
-      - name: Create release archive checksums
-        working-directory: binary-release
-        run: sha256sum vp-* > vp-checksums.txt
-
       - name: Prepare and publish native addons
-        run: node ./packages/cli/publish-native-addons.ts --mode npm
+        run: node ./packages/cli/publish-native-addons.ts --mode npm --phase native
 
       - name: Publish prompts
         run: >-
@@ -191,12 +188,56 @@ jobs:
           node ./.github/scripts/wait-for-npm-packages.ts
           "@voidzero-dev/vite-plus-core@${VERSION}"
 
+      # Resolve the global wrapper against the exact packed CLI before publishing
+      # it. Save both artifacts so retries cannot change the dependency graph or
+      # the CLI integrity after a platform package has been published.
+      - name: Restore installation lockfile from an earlier attempt
+        id: install-lockfile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name == "installation-lockfile" and .expired == false) | .id')
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$RUNNER_TEMP/installation-lockfile.zip"
+            unzip -o "$RUNNER_TEMP/installation-lockfile.zip" -d binary-release
+            echo "restored=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pack Vite+ for the installation lockfile
+        run: |
+          if [ ! -f "binary-release/vite-plus-${VERSION}.tgz" ]; then
+            pnpm --dir packages/cli pack --pack-destination ../../binary-release
+          fi
+
+      - name: Generate global installation lockfile
+        run: >-
+          node ./packages/tools/src/local-npm-registry.ts --live --packages-dir binary-release
+          -- node ./packages/cli/generate-install-lockfile.ts
+
+      # Save before publishing any platform package, including while npm still
+      # hides accepted versions during scanning. Retries must not resolve again.
+      - name: Save installation lockfile for release retries
+        if: steps.install-lockfile.outputs.restored != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installation-lockfile
+          path: |
+            binary-release/vp-install-lock.yaml
+            binary-release/vite-plus-*.tgz
+          if-no-files-found: error
+
+      - name: Publish CLI binaries with the installation lockfile
+        run: node ./packages/cli/publish-native-addons.ts --mode npm --phase cli
+
+      # Bootstrap resolves latest before fetching the platform package. Keep the
+      # previous release selected until the new binaries and lockfile are ready.
       - name: Publish Vite+
         run: >-
           node ./.github/scripts/publish-npm-package.ts
           "vite-plus@${VERSION}"
           --
-          pnpm publish --filter=./packages/cli --tag latest --access public --no-git-checks
+          npm publish "binary-release/vite-plus-${VERSION}.tgz" --tag latest --access public
 
       # Downstream jobs build Docker images by installing this release from npm.
       - name: Wait for published packages to propagate
@@ -204,6 +245,10 @@ jobs:
           node ./.github/scripts/wait-for-npm-packages.ts
           "vite-plus@${VERSION}"
           "@voidzero-dev/vite-plus-prompts@${VERSION}"
+
+      - name: Create release archive checksums
+        working-directory: binary-release
+        run: sha256sum vp-* > vp-checksums.txt
 
       # create-vite-plus pins vite-plus via workspace:* (rewritten to this exact
       # version), so it publishes only after vite-plus is installable.
@@ -263,6 +308,7 @@ jobs:
             binary-release/vp-*.tar.gz
             binary-release/vp-*.zip
             binary-release/vp-checksums.txt
+            binary-release/vp-install-lock.yaml
 
       - name: Publish GitHub Release
         env:

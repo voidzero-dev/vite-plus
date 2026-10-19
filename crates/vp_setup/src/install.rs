@@ -17,7 +17,7 @@ use vp_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
 use vp_pm_cli::{PackageManagerType, download_package_manager};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use crate::error::Error;
+use crate::{error::Error, lockfile};
 
 /// Validate that a path from a tarball entry is safe (no path traversal).
 ///
@@ -31,11 +31,12 @@ fn is_safe_tar_path(path: &Path) -> bool {
         && !path.components().any(|c| matches!(c, std::path::Component::ParentDir))
 }
 
-/// Extract the platform-specific package (binary only).
+/// Extract the platform-specific binary and its installation lockfile.
 ///
 /// From the platform tarball, extracts:
 /// - The `vp` binary → `{version_dir}/bin/vp`
 /// - The `vp-shim.exe` trampoline → `{version_dir}/bin/vp-shim.exe` (Windows only)
+/// - The release lockfile → `{version_dir}/bin/vp-install-lock.yaml`
 ///
 /// `.node` files are no longer extracted here — npm installs them
 /// via the platform package's optionalDependencies.
@@ -53,6 +54,8 @@ pub async fn extract_platform_package(
         let cursor = Cursor::new(data);
         let decoder = GzDecoder::new(cursor);
         let mut archive = Archive::new(decoder);
+        let mut requires_lockfile = false;
+        let mut has_lockfile = false;
 
         for entry_result in archive.entries()? {
             let mut entry = entry_result?;
@@ -68,6 +71,21 @@ pub async fn extract_platform_package(
 
             let file_name = relative.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
+            if relative == Path::new("package.json") && entry.header().entry_type().is_file() {
+                let manifest: serde_json::Value = serde_json::from_reader(&mut entry)?;
+                requires_lockfile = manifest
+                    .get("vpInstallLockfile")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+            } else if relative == Path::new(lockfile::INSTALL_LOCKFILE)
+                && entry.header().entry_type().is_file()
+            {
+                let mut content = Vec::new();
+                entry.read_to_end(&mut content)?;
+                std::fs::write(bin_dir_clone.join(lockfile::INSTALL_LOCKFILE), content)?;
+                has_lockfile = true;
+            }
+
             if file_name == "vp" || file_name == "vp.exe" || file_name == "vp-shim.exe" {
                 // Binary goes to bin/
                 let target = bin_dir_clone.join(file_name);
@@ -82,6 +100,12 @@ pub async fn extract_platform_package(
                     std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755))?;
                 }
             }
+        }
+
+        if requires_lockfile && !has_lockfile {
+            return Err(Error::Setup(
+                format!("Platform package is missing {}", lockfile::INSTALL_LOCKFILE).into(),
+            ));
         }
 
         Ok::<(), Error>(())
@@ -184,12 +208,7 @@ pub async fn install_production_deps(
     // Keep the bypass local to this Vite+ installation.
     write_release_age_overrides(version_dir).await?;
 
-    // An ancestor workspace must not capture the install or supply its lockfile.
-    let mut args = vec!["install", "--ignore-workspace"];
-    if let Some(registry_url) = registry {
-        args.push("--registry");
-        args.push(registry_url);
-    }
+    let args = dependency_install_args(version_dir, registry).await?;
 
     let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
         show_progress.then_some("Preparing Node.js and pnpm..."),
@@ -217,6 +236,22 @@ pub async fn install_production_deps(
         vp_shared::output::success("Dependencies installed.");
     }
     Ok(())
+}
+
+async fn dependency_install_args<'a>(
+    version_dir: &AbsolutePath,
+    registry: Option<&'a str>,
+) -> Result<Vec<&'a str>, Error> {
+    // An ancestor workspace must not capture the install or supply its lockfile.
+    let mut args = vec!["install", "--ignore-workspace"];
+    if tokio::fs::try_exists(version_dir.join("bin").join(lockfile::INSTALL_LOCKFILE)).await? {
+        lockfile::restore(version_dir).await?;
+        args.push("--frozen-lockfile");
+    }
+    if let Some(registry_url) = registry {
+        args.extend(["--registry", registry_url]);
+    }
+    Ok(args)
 }
 
 async fn prepare_install_runtime(
@@ -658,6 +693,45 @@ mod tests {
         assert!(!supports_pnpm_node(&serde_json::json!({}), "22.23.1"));
         assert!(!supports_pnpm_node(&serde_json::json!({"engines":{"node":"invalid"}}), "22.23.1"));
         assert!(!supports_pnpm_node(&serde_json::json!({"engines":{"node":">=18.12"}}), "invalid"));
+    }
+
+    #[tokio::test]
+    async fn release_archives_supply_the_frozen_dependency_tree() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let archive = lockfile::test_archive(true, Some(b"release dependency tree"));
+        extract_platform_package(&archive, &directory).await.unwrap();
+        let args =
+            dependency_install_args(&directory, Some("https://mirror.example")).await.unwrap();
+        assert_eq!(
+            args,
+            [
+                "install",
+                "--ignore-workspace",
+                "--frozen-lockfile",
+                "--registry",
+                "https://mirror.example"
+            ]
+        );
+        assert_eq!(
+            tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
+            b"release dependency tree"
+        );
+    }
+
+    #[tokio::test]
+    async fn incomplete_release_archives_fail_but_old_archives_remain_supported() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let error = extract_platform_package(&lockfile::test_archive(true, None), &directory)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("missing vp-install-lock.yaml"));
+        extract_platform_package(&lockfile::test_archive(false, None), &directory).await.unwrap();
+        assert_eq!(
+            dependency_install_args(&directory, None).await.unwrap(),
+            ["install", "--ignore-workspace"]
+        );
     }
 
     #[tokio::test]

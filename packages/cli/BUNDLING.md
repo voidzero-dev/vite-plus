@@ -346,6 +346,31 @@ These are automatically installed via `optionalDependencies` based on the user's
 
 See `publish-native-addons.ts` for the publishing pipeline.
 
+### Global installation lockfile
+
+The release workflow publishes native bindings and core first, then packs `vite-plus`.
+`generate-install-lockfile.ts` resolves the global `vp-global` wrapper with pnpm
+`10.33.0`, the same version used by the installer. The local registry proxy serves
+the packed CLI before publication and resolves its dependencies from npm. The
+resulting `vp-install-lock.yaml` includes package integrity and optional dependencies
+for all supported platforms, without local registry URLs.
+
+The workflow saves both the lockfile and the exact CLI archive in the
+`installation-lockfile` artifact before publishing any CLI binary package. Release
+retries restore these files; they must not resolve a new dependency graph or repack
+the CLI after a binary package is published. The generator can also recover the
+lockfile from a published platform package, but rejects a CLI archive whose
+integrity differs. In that case, restore the original release artifact.
+
+Each npm CLI binary package and standalone release archive carries the lockfile
+beside `vp`. After those packages propagate, the workflow publishes the exact CLI
+archive with the `latest` tag. Bootstrap scripts hand the binary and its companion
+to self-setup, which uses `--frozen-lockfile`. Upgrades use the same lockfile; a
+standalone binary or an older upgrade client can recover it from the verified
+platform package. Older releases and commit previews retain their existing
+installation behavior. The release-age override remains `0` so a new release can
+be installed immediately.
+
 ---
 
 ## Core Package Export Sync Details

@@ -1,4 +1,12 @@
-import { copyFileSync, existsSync, chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +18,7 @@ import {
   type NpmPackageVersion,
   waitForNpmPackagesFromEnv,
 } from '../../.github/scripts/wait-for-npm-packages.ts';
+import { INSTALL_LOCKFILE, validateInstallLockfile } from './generate-install-lockfile.ts';
 import pkg from './package.json' with { type: 'json' };
 import { editJsonFile, readJsonFile } from './src/utils/json.ts';
 
@@ -26,6 +35,12 @@ if (mode !== 'npm' && mode !== 'pkg-pr-new') {
   process.exit(1);
 }
 const skipNpmPublish = mode === 'pkg-pr-new';
+const phaseIdx = args.indexOf('--phase');
+const phase = phaseIdx >= 0 ? args[phaseIdx + 1] : 'all';
+if (phase !== 'native' && phase !== 'cli' && phase !== 'all') {
+  throw new Error('--phase must be native, cli, or all');
+}
+const lockfile = join(repoRoot, 'binary-release', INSTALL_LOCKFILE);
 
 const VERSION = process.env.VERSION;
 if (!VERSION) {
@@ -50,44 +65,46 @@ if (existsSync(rustCliArtifactsDir)) {
   }
 }
 
-// Create npm directories for NAPI bindings
-await cli.createNpmDirs({
-  cwd: currentDir,
-  packageJsonPath: './package.json',
-});
-
-// Copy NAPI artifacts
-await cli.artifacts({
-  cwd: currentDir,
-  packageJsonPath: './package.json',
-});
-
-// Pre-publish (Update package.json and copy addons into per platform packages)
-await cli.prePublish({
-  cwd: currentDir,
-  packageJsonPath: './package.json',
-  tagStyle: 'npm',
-  ghRelease: false,
-  skipOptionalPublish: true,
-});
-
 const npmDir = join(currentDir, 'npm');
-const platformDirs = await readdir(npmDir);
+if (phase !== 'cli') {
+  // Create npm directories for NAPI bindings
+  await cli.createNpmDirs({
+    cwd: currentDir,
+    packageJsonPath: './package.json',
+  });
 
-// The native binding's true ABI floor is Node 20, well below the product
-// support policy copied into `engines.node` (e.g. `^20.19.0 || ^22.18.0 ||
-// >=24.11.0`). Declaring that policy on the platform packages makes engine-strict
-// package managers (pnpm) skip the optional native dependency whenever a
-// consumer's declared Node floor lands in one of the policy's gaps (20.0-20.18,
-// 22.0-22.17, 24.0-24.10), surfacing as "Cannot find native binding". Rewrite each
-// platform package to its real ABI floor of `>=20.0.0` so the native dep is never
-// skipped. `packages/cli/package.json` and `packages/core/package.json` keep the
-// product policy unchanged.
-for (const dir of platformDirs) {
-  editJsonFile(join(npmDir, dir, 'package.json'), (pkgJson) => ({
-    ...pkgJson,
-    engines: { ...(pkgJson.engines as Record<string, unknown>), node: '>=20.0.0' },
-  }));
+  // Copy NAPI artifacts
+  await cli.artifacts({
+    cwd: currentDir,
+    packageJsonPath: './package.json',
+  });
+
+  // Pre-publish (Update package.json and copy addons into per platform packages)
+  await cli.prePublish({
+    cwd: currentDir,
+    packageJsonPath: './package.json',
+    tagStyle: 'npm',
+    ghRelease: false,
+    skipOptionalPublish: true,
+  });
+
+  const platformDirs = await readdir(npmDir);
+
+  // The native binding's true ABI floor is Node 20, well below the product
+  // support policy copied into `engines.node` (e.g. `^20.19.0 || ^22.18.0 ||
+  // >=24.11.0`). Declaring that policy on the platform packages makes engine-strict
+  // package managers (pnpm) skip the optional native dependency whenever a
+  // consumer's declared Node floor lands in one of the policy's gaps (20.0-20.18,
+  // 22.0-22.17, 24.0-24.10), surfacing as "Cannot find native binding". Rewrite each
+  // platform package to its real ABI floor of `>=20.0.0` so the native dep is never
+  // skipped. `packages/cli/package.json` and `packages/core/package.json` keep the
+  // product policy unchanged.
+  for (const dir of platformDirs) {
+    editJsonFile(join(npmDir, dir, 'package.json'), (pkgJson) => ({
+      ...pkgJson,
+      engines: { ...(pkgJson.engines as Record<string, unknown>), node: '>=20.0.0' },
+    }));
+  }
 }
 
 // Fresh read: napi-rs prePublish rewrote this package.json on disk, so the
@@ -126,25 +143,23 @@ editJsonFile(join(repoRoot, 'packages', 'core', 'package.json'), (corePkgJson) =
     ...nativePlatformPins,
   },
 }));
-const platformPackages = Object.keys(nativePlatformPins).map((name) => ({
-  name,
-  version: cliVersion,
-}));
+const platformPackages: NpmPackageVersion[] = [];
 
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';
 const publishArgs = ['publish', '--tag', npmTag, '--access', 'public'];
-if (!skipNpmPublish) {
-  for (const file of platformDirs) {
+if (!skipNpmPublish && phase !== 'cli') {
+  for (const file of await readdir(npmDir)) {
     const platformDir = join(npmDir, file);
     const platformPackage = readJsonFile(join(platformDir, 'package.json')) as NpmPackageVersion;
     await publishNpmPackageFromEnv(platformPackage, 'npm', publishArgs, platformDir);
+    platformPackages.push(platformPackage);
   }
 }
 
 // Create and publish separate @voidzero-dev/vite-plus-cli-{platform} packages
 const cliNpmDir = join(currentDir, 'cli-npm');
-for (const napiTarget of pkg.napi.targets) {
+for (const napiTarget of phase === 'native' ? [] : pkg.napi.targets) {
   const { platform, arch, abi, platformArchABI } = parseTriple(napiTarget);
   const isWindows = platform === 'win32';
   const binaryName = isWindows ? 'vp.exe' : 'vp';
@@ -173,6 +188,11 @@ for (const napiTarget of pkg.napi.targets) {
   // "Terminate batch job (Y/N)?" on Ctrl+C (see issue #835)
   const shimName = 'vp-shim.exe';
   const files = [binaryName];
+  if (!skipNpmPublish) {
+    validateInstallLockfile(readFileSync(lockfile, 'utf8'), cliVersion);
+    copyFileSync(lockfile, join(platformCliDir, INSTALL_LOCKFILE));
+    files.push(INSTALL_LOCKFILE);
+  }
   if (isWindows) {
     const shimSource = join(repoRoot, 'target', napiTarget, 'release', shimName);
     if (!existsSync(shimSource)) {
@@ -193,6 +213,7 @@ for (const napiTarget of pkg.napi.targets) {
     cpu: [arch],
     ...(abi ? { libc: [abi] } : {}),
     files,
+    ...(!skipNpmPublish ? { vpInstallLockfile: true } : {}),
     description: `Vite+ CLI binary for ${platformArchABI}`,
     repository: cliPackageJson.repository,
   };
