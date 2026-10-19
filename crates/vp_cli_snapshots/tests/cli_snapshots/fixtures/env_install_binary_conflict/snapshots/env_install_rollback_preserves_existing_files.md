@@ -39,7 +39,7 @@ A regular file prevents shim creation without authorizing rollback to delete exi
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-error: Failed to install env-binary-conflict-pkg-a: Command execution failed: File exists (os error 17)
+error: Failed to install env-binary-conflict-pkg-a: <home>/.vite-plus/bin/aaa-rollback-cli already exists and is not managed by Vite+
 ```
 
 ## `vpt stat-file $VP_HOME/bin/aaa-rollback-cli --assert file`

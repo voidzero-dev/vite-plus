@@ -415,6 +415,23 @@ pub async fn install(
                 continue;
             }
         };
+        // Reject foreign files at new shim paths before activating the installation.
+        if let Some(path) = bin_names.iter().find_map(|bin_name| foreign_bin(&bin_dir, bin_name)) {
+            let _ = cleanup_failed_install(&install_dir).await;
+            if first_error.is_none() {
+                first_error = Some(package_error(
+                    &package_name,
+                    Error::Other(
+                        format!(
+                            "{} already exists and is not managed by Vite+",
+                            path.as_path().display()
+                        )
+                        .into(),
+                    ),
+                ));
+            }
+            continue;
+        }
         let metadata_version = installed_version.as_deref().unwrap_or("unknown");
 
         let mut metadata = PackageMetadata::new(
@@ -608,6 +625,20 @@ async fn restore_package_metadata(package_name: &str, previous_metadata: Option<
     }
 }
 
+/// The regular file at `bin_name`'s shim path when Vite+ does not own it.
+fn foreign_bin(bin_dir: &AbsolutePath, bin_name: &str) -> Option<AbsolutePathBuf> {
+    if is_protected_shim(bin_name, true) {
+        return None;
+    }
+    let path = if cfg!(windows) {
+        bin_dir.join(format!("{bin_name}.exe"))
+    } else {
+        bin_dir.join(bin_name)
+    };
+    let metadata = std::fs::symlink_metadata(path.as_path()).ok()?;
+    (metadata.is_file() && !is_vp_shim_target(&path)).then_some(path)
+}
+
 /// Save only paths an installation is about to change, including their original owners.
 #[derive(Default)]
 struct BinRollback {
@@ -628,7 +659,7 @@ impl BinRollback {
     }
 
     async fn capture(&mut self, path: AbsolutePathBuf) -> Result<(), Error> {
-        if self.files.iter().any(|(saved, _)| *saved == path) {
+        if self.files.iter().any(|(captured, _)| *captured == path) {
             return Ok(());
         }
         let backup = match tokio::fs::symlink_metadata(&path).await {
@@ -668,19 +699,11 @@ impl BinRollback {
             let result = async {
                 if let Some(backup) = &backup {
                     let metadata = tokio::fs::symlink_metadata(backup).await?;
-                    if metadata.file_type().is_symlink() {
-                        if tokio::fs::read_link(&path).await.ok()
+                    if metadata.file_type().is_symlink()
+                        && tokio::fs::read_link(&path).await.ok()
                             == Some(tokio::fs::read_link(backup).await?)
-                        {
-                            return Ok::<(), std::io::Error>(());
-                        }
-                    } else if let Ok(current) = tokio::fs::symlink_metadata(&path).await {
-                        if current.is_file()
-                            && current.permissions() == metadata.permissions()
-                            && tokio::fs::read(&path).await? == tokio::fs::read(backup).await?
-                        {
-                            return Ok(());
-                        }
+                    {
+                        return Ok::<(), std::io::Error>(());
                     }
                 }
 
@@ -1729,6 +1752,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_rollback_restores_changed_regular_files() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let path = AbsolutePathBuf::new(temp.path().join("tool")).unwrap();
+        std::fs::write(&path, b"original contents").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let permissions = std::fs::metadata(&path).unwrap().permissions();
+        let mut rollback = BinRollback::default();
+        rollback.capture(path.clone()).await.unwrap();
+        std::fs::write(&path, b"replacement contents").unwrap();
+
+        rollback.restore().await;
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"original contents");
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions(), permissions);
+    }
+
+    #[tokio::test]
     async fn test_rollback_keeps_backup_when_restoration_fails() {
         let temp = tempfile::TempDir::new().unwrap();
         let parent = temp.path().join("parent");
@@ -1751,38 +1795,18 @@ mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test]
-    async fn test_rollback_preserves_existing_and_unattempted_binaries() {
-        use std::os::unix::fs::PermissionsExt;
-
+    #[test]
+    fn test_foreign_bin_detects_only_unowned_regular_files() {
         let temp = tempfile::TempDir::new().unwrap();
-        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp.path())], |_| async {
-            let bin_dir = get_bin_dir().unwrap();
-            std::fs::create_dir_all(&bin_dir).unwrap();
-            let bins = vec!["collision".to_string(), "untouched".to_string()];
-            for name in &bins {
-                std::fs::write(bin_dir.join(name), b"original executable").unwrap();
-                std::fs::set_permissions(
-                    bin_dir.join(name),
-                    std::fs::Permissions::from_mode(0o755),
-                )
-                .unwrap();
-            }
+        let bin_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        std::fs::write(bin_dir.join("foreign"), b"original executable").unwrap();
+        std::os::unix::fs::symlink(temp.path().join("cli.js"), bin_dir.join("npm-link")).unwrap();
+        std::fs::write(bin_dir.join("node"), b"protected shim").unwrap();
 
-            let mut rollback = BinRollback::default();
-            rollback.capture_bin(&bin_dir, &bins[0]).await.unwrap();
-            assert!(create_package_shim(&bin_dir, &bins[0], "new-package").await.is_err());
-            restore_previous_install_state("new-package", None, rollback).await;
-
-            for name in &bins {
-                assert_eq!(std::fs::read(bin_dir.join(name)).unwrap(), b"original executable");
-                assert_eq!(
-                    std::fs::metadata(bin_dir.join(name)).unwrap().permissions().mode() & 0o777,
-                    0o755
-                );
-            }
-        })
-        .await;
+        assert_eq!(foreign_bin(&bin_dir, "foreign"), Some(bin_dir.join("foreign")));
+        assert_eq!(foreign_bin(&bin_dir, "npm-link"), None);
+        assert_eq!(foreign_bin(&bin_dir, "missing"), None);
+        assert_eq!(foreign_bin(&bin_dir, "node"), None);
     }
 
     #[cfg(unix)]
@@ -1801,7 +1825,6 @@ mod tests {
                 .unwrap();
             let config_path = BinConfig::path("replaced").unwrap();
             let old_config = std::fs::read(&config_path).unwrap();
-            std::fs::write(bin_dir.join("collision"), b"original executable").unwrap();
 
             let mut rollback = BinRollback::default();
             rollback.capture_bin(&bin_dir, "replaced").await.unwrap();
@@ -1815,13 +1838,10 @@ mod tests {
             .save()
             .await
             .unwrap();
-            rollback.capture_bin(&bin_dir, "collision").await.unwrap();
-            assert!(create_package_shim(&bin_dir, "collision", "test-package").await.is_err());
             restore_previous_install_state("test-package", None, rollback).await;
 
             assert_eq!(std::fs::read_link(bin_dir.join("replaced")).unwrap(), old_target);
             assert_eq!(std::fs::read(config_path).unwrap(), old_config);
-            assert_eq!(std::fs::read(bin_dir.join("collision")).unwrap(), b"original executable");
         })
         .await;
     }

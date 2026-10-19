@@ -25,21 +25,14 @@ Linked 'env-binary-conflict-cli' to <home>/.vite-plus/bin/env-binary-conflict-cl
 ```
 ```
 
-## `vpt write-file $VP_HOME/bin/zzz-rollback-cli '#'\!'/bin/sh
-echo original-blocker
-'`
-
-```
-```
-
-## `vpt chmod +x $VP_HOME/bin/zzz-rollback-cli`
+## `vpt mkdir $VP_HOME/bin/zzz-rollback-cli`
 
 ```
 ```
 
 ## `vp install -g ./env-binary-conflict-pkg-a`
 
-A later collision must restore the original npm link and ownership
+A failure after replacing the npm link must restore the link and its ownership
 
 **Exit code:** 1
 
@@ -47,7 +40,7 @@ A later collision must restore the original npm link and ownership
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-error: Failed to install env-binary-conflict-pkg-a: Command execution failed: File exists (os error 17)
+error: Failed to install env-binary-conflict-pkg-a: Cannot replace non-file <home>/.vite-plus/bin/zzz-rollback-cli
 ```
 
 ## `vpt stat-file $VP_HOME/bin/env-binary-conflict-cli --assert symlink`
@@ -74,10 +67,10 @@ Hello from pkg-a!
 }
 ```
 
-## `zzz-rollback-cli`
+## `vpt stat-file $VP_HOME/bin/zzz-rollback-cli --assert dir`
 
 ```
-original-blocker
+<home>/.vite-plus/bin/zzz-rollback-cli: dir
 ```
 
 ## `vpt stat-file $VP_HOME/packages/env-binary-conflict-pkg-a.json --assert missing`
