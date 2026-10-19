@@ -211,16 +211,26 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
         Object.values(PackageManager).some((name) => name === entry.name),
       );
       const lastDevEngine = devEngineEntries.at(-1);
+      const declaredPackageManager =
+        packageManager === undefined
+          ? supportedDevEngine?.name
+          : typeof packageManager === 'string'
+            ? packageManager.split('@')[0]
+            : packageManager;
       if (
         directory !== projectPath &&
-        fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) &&
-        (packageManager === undefined ||
-          (typeof packageManager === 'string' && packageManager.startsWith('pnpm@'))) &&
-        (packageManager !== undefined ||
-          devEngineEntries.length === 0 ||
-          supportedDevEngine?.name === 'pnpm' ||
-          (supportedDevEngine === undefined &&
-            (lastDevEngine?.onFail === 'ignore' || lastDevEngine?.onFail === 'warn')))
+        (declaredPackageManager === 'pnpm' ||
+          (declaredPackageManager === undefined &&
+            (devEngineEntries.length === 0 ||
+              lastDevEngine?.onFail === 'ignore' ||
+              lastDevEngine?.onFail === 'warn') &&
+            (fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) ||
+              (!['yarn.lock', '.yarnrc.yml', 'package-lock.json', 'bun.lock', 'bun.lockb'].some(
+                (file) => fs.existsSync(path.join(directory, file)),
+              ) &&
+                ['.pnpmfile.cjs', 'pnpmfile.cjs'].some((file) =>
+                  fs.existsSync(path.join(directory, file)),
+                )))))
       ) {
         projects.push(directory);
       }
