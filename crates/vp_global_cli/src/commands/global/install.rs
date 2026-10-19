@@ -429,16 +429,7 @@ pub async fn install(
         metadata.install_id = install_id.clone();
         metadata.version_spec = update_version_spec(spec);
 
-        let mut rollback = match BinRollback::new() {
-            Ok(rollback) => rollback,
-            Err(error) => {
-                let _ = cleanup_failed_install(&install_dir).await;
-                if first_error.is_none() {
-                    first_error = Some(package_error(&package_name, error));
-                }
-                continue;
-            }
-        };
+        let mut rollback = BinRollback::default();
         let result = async {
             for bin_name in &stale_bin_names {
                 rollback.capture_bin(&bin_dir, bin_name).await?;
@@ -618,16 +609,13 @@ async fn restore_package_metadata(package_name: &str, previous_metadata: Option<
 }
 
 /// Save only paths an installation is about to change, including their original owners.
+#[derive(Default)]
 struct BinRollback {
-    directory: tempfile::TempDir,
+    directory: Option<tempfile::TempDir>,
     files: Vec<(AbsolutePathBuf, Option<AbsolutePathBuf>)>,
 }
 
 impl BinRollback {
-    fn new() -> Result<Self, Error> {
-        Ok(Self { directory: tempfile::tempdir()?, files: Vec::new() })
-    }
-
     async fn capture_bin(&mut self, bin_dir: &AbsolutePath, bin_name: &str) -> Result<(), Error> {
         #[cfg(unix)]
         let suffixes = [""];
@@ -645,8 +633,12 @@ impl BinRollback {
         }
         let backup = match tokio::fs::symlink_metadata(&path).await {
             Ok(metadata) => {
+                let directory = match &self.directory {
+                    Some(directory) => directory,
+                    None => self.directory.insert(tempfile::tempdir()?),
+                };
                 let backup =
-                    AbsolutePathBuf::new(self.directory.path().join(self.files.len().to_string()))
+                    AbsolutePathBuf::new(directory.path().join(self.files.len().to_string()))
                         .expect("temporary directory is absolute");
                 if metadata.file_type().is_symlink() {
                     let target = tokio::fs::read_link(&path).await?;
@@ -741,10 +733,10 @@ impl BinRollback {
                 }
             }
         }
-        if failed {
+        if failed && let Some(directory) = self.directory {
             output::warn(&format!(
                 "Could not fully restore global binaries. Backups kept at {}",
-                self.directory.keep().display()
+                directory.keep().display()
             ));
         }
     }
@@ -1660,7 +1652,7 @@ mod tests {
                     .await
                     .unwrap();
                 }
-                let mut rollback = BinRollback::new().unwrap();
+                let mut rollback = BinRollback::default();
                 rollback.capture_bin(&bin_dir, "drop").await.unwrap();
                 remove_package_shim(&bin_dir, "drop").await.unwrap();
                 BinConfig::delete("drop").await.unwrap();
@@ -1718,7 +1710,7 @@ mod tests {
     async fn test_rollback_restores_regular_wrappers_and_sidecars() {
         let temp = tempfile::TempDir::new().unwrap();
         let bin_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let mut rollback = BinRollback::new().unwrap();
+        let mut rollback = BinRollback::default();
         for suffix in [".exe", ".shim", ".cmd", ".ps1", ""] {
             let path = bin_dir.join(format!("tool{suffix}"));
             std::fs::write(&path, b"original contents").unwrap();
@@ -1743,10 +1735,10 @@ mod tests {
         std::fs::create_dir(&parent).unwrap();
         let path = AbsolutePathBuf::new(parent.join("tool")).unwrap();
         std::fs::write(&path, b"original contents").unwrap();
-        let mut rollback = BinRollback::new().unwrap();
+        let mut rollback = BinRollback::default();
         rollback.capture(path.clone()).await.unwrap();
         let backup = rollback.files[0].1.clone().unwrap();
-        let backup_dir = rollback.directory.path().to_path_buf();
+        let backup_dir = rollback.directory.as_ref().unwrap().path().to_path_buf();
         std::fs::remove_file(&path).unwrap();
         std::fs::remove_dir(&parent).unwrap();
         std::fs::write(&parent, b"blocks restoration").unwrap();
@@ -1777,7 +1769,7 @@ mod tests {
                 .unwrap();
             }
 
-            let mut rollback = BinRollback::new().unwrap();
+            let mut rollback = BinRollback::default();
             rollback.capture_bin(&bin_dir, &bins[0]).await.unwrap();
             assert!(create_package_shim(&bin_dir, &bins[0], "new-package").await.is_err());
             restore_previous_install_state("new-package", None, rollback).await;
@@ -1811,7 +1803,7 @@ mod tests {
             let old_config = std::fs::read(&config_path).unwrap();
             std::fs::write(bin_dir.join("collision"), b"original executable").unwrap();
 
-            let mut rollback = BinRollback::new().unwrap();
+            let mut rollback = BinRollback::default();
             rollback.capture_bin(&bin_dir, "replaced").await.unwrap();
             create_package_shim(&bin_dir, "replaced", "test-package").await.unwrap();
             BinConfig::new(
