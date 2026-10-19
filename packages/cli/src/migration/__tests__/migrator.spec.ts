@@ -2061,10 +2061,40 @@ describe('standalone pnpm child project boundaries', () => {
     expect(readYaml(path.join(tmpDir, 'web/pnpm-lock.yaml'))).toBe(lockfile);
   });
 
-  it('does not add a child boundary without a pnpm declaration or lockfile', () => {
+  it('preserves an unpinned child before its first install', () => {
+    fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+    const manifest = JSON.stringify({ name: 'web' });
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), manifest);
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '11.25.0'),
+      true,
+      true,
+    );
+
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-lock.yaml'))).toBe(false);
+  });
+
+  it.each([
+    'yarn.lock',
+    '.yarnrc.yml',
+    'package-lock.json',
+    'bun.lock',
+    'bun.lockb',
+    'bunfig.toml',
+    'yarn.config.cjs',
+  ])('does not add a boundary to an unpinned child identified by %s', (file) => {
     fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
     fs.writeFileSync(path.join(tmpDir, 'web/package.json'), JSON.stringify({ name: 'web' }));
+    fs.writeFileSync(path.join(tmpDir, 'web', file), '');
+
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
     expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
   });
 
@@ -2096,6 +2126,8 @@ describe('standalone pnpm child project boundaries', () => {
       fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
       fs.writeFileSync(path.join(tmpDir, 'web/package.json'), JSON.stringify({ name: 'web' }));
       fs.writeFileSync(path.join(tmpDir, 'web', file), 'module.exports = { hooks: {} };');
+      fs.writeFileSync(path.join(tmpDir, 'web/bunfig.toml'), '');
+      fs.writeFileSync(path.join(tmpDir, 'web/yarn.config.cjs'), 'module.exports = {};');
 
       rewriteStandaloneProject(
         tmpDir,

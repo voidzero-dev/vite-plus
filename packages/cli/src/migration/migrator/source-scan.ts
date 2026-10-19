@@ -228,9 +228,12 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
               (!['yarn.lock', '.yarnrc.yml', 'package-lock.json', 'bun.lock', 'bun.lockb'].some(
                 (file) => fs.existsSync(path.join(directory, file)),
               ) &&
-                ['.pnpmfile.cjs', 'pnpmfile.cjs'].some((file) =>
+                (['.pnpmfile.cjs', 'pnpmfile.cjs'].some((file) =>
                   fs.existsSync(path.join(directory, file)),
-                )))))
+                ) ||
+                  !['bunfig.toml', 'yarn.config.cjs'].some((file) =>
+                    fs.existsSync(path.join(directory, file)),
+                  ))))))
       ) {
         projects.push(directory);
       }
