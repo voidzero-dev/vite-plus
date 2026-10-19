@@ -1,13 +1,19 @@
 # npm_global_uninstall_userconfig_fallback
 
-## `node private-runtime.mjs`
+This case downloads its own pinned Node runtime so global npm writes stay isolated from the shared seed.
+
+## `node --version`
+
+
+## `vpt stat-file $VP_HOME/js_runtime --assert dir`
 
 ```
+<home>/.vite-plus/js_runtime: dir
 ```
 
 ## `npm install -g ./npm-global-prefix-pkg`
 
-Install into a private copy of the selected Node runtime
+Install into the test-owned Node runtime
 
 ```
 
@@ -15,10 +21,10 @@ added 1 package in <duration>
 Linked 'npm-global-prefix-cli' to <home>/.vite-plus/bin/npm-global-prefix-cli
 ```
 
-## `vpt stat-file node-prefix/lib/node_modules/npm-global-prefix-pkg/package.json --assert file`
+## `vpt stat-file $VP_HOME/js_runtime/node/22.18.0/lib/node_modules/npm-global-prefix-pkg/package.json --assert file`
 
 ```
-node-prefix/lib/node_modules/npm-global-prefix-pkg/package.json: file
+<home>/.vite-plus/js_runtime/node/<version>/lib/node_modules/npm-global-prefix-pkg/package.json: file
 ```
 
 ## `vpt stat-file $VP_HOME/bin/npm-global-prefix-cli --assert symlink`
@@ -98,16 +104,16 @@ removed 1 package in <duration>
 Removed link 'npm-global-prefix-cli' from <home>/.vite-plus/bin/npm-global-prefix-cli
 ```
 
-## `vpt stat-file node-prefix/lib/node_modules/npm-global-prefix-pkg --assert missing`
+## `vpt stat-file $VP_HOME/js_runtime/node/22.18.0/lib/node_modules/npm-global-prefix-pkg --assert missing`
 
 ```
-node-prefix/lib/node_modules/npm-global-prefix-pkg: missing
+<home>/.vite-plus/js_runtime/node/<version>/lib/node_modules/npm-global-prefix-pkg: missing
 ```
 
-## `vpt stat-file node-prefix/bin/npm-global-prefix-cli --assert missing`
+## `vpt stat-file $VP_HOME/js_runtime/node/22.18.0/bin/npm-global-prefix-cli --assert missing`
 
 ```
-node-prefix/bin/npm-global-prefix-cli: missing
+<home>/.vite-plus/js_runtime/node/<version>/bin/npm-global-prefix-cli: missing
 ```
 
 ## `vpt stat-file $VP_HOME/bin/npm-global-prefix-cli --assert missing`
