@@ -23,6 +23,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@e18e/eslint-plugin": "catalog:",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",

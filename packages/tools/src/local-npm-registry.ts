@@ -35,6 +35,12 @@
 //                         (no server); the snapshot runner packs once per run
 //   --serve               keep the server running and print the registry URL
 //                         and env exports instead of wrapping a command
+//   --snapshot-cache <dir> share successful upstream GETs for one snapshot run
+//   --snapshot-fixtures <dir> serve recorded manifest.json and tarballs/ data
+//   --snapshot-runner    wrap a test runner with a shared registry; the runner
+//                         still gives each case its own package-manager caches
+//   --request-log <file>  write registry request events as JSON lines
+//   --live                bypass shared fixtures and response storage for measurement
 //   --ps                  list running local registry processes
 //   --kill                kill them all and remove their leftover temp caches
 
@@ -56,6 +62,7 @@ import { gunzipSync } from 'node:zlib';
 
 import { exitCodeFromClose } from './exit-code.ts';
 import { packLocalVitePlusPackages } from './pack-local-vite-plus.ts';
+import { RegistryCache, rewriteTarballs, upstreamUrl } from './registry-cache.ts';
 
 interface PackageManifest {
   name: string;
@@ -72,6 +79,11 @@ let packagesDir = process.env.SNAP_LOCAL_VP_PACKAGES_DIR;
 let pack = false;
 let packTo: string | undefined;
 let serve = false;
+let snapshotRunner = false;
+let snapshotCacheDir: string | undefined;
+let snapshotFixtures: string | undefined;
+let requestLog: string | undefined;
+let live = false;
 let listProcesses = false;
 let killProcesses = false;
 for (let i = 0; i < flags.length; i++) {
@@ -81,8 +93,18 @@ for (let i = 0; i < flags.length; i++) {
     pack = true;
   } else if (flags[i] === '--pack-to' && flags[i + 1]) {
     packTo = flags[++i];
+  } else if (flags[i] === '--snapshot-cache' && flags[i + 1]) {
+    snapshotCacheDir = flags[++i];
+  } else if (flags[i] === '--snapshot-fixtures' && flags[i + 1]) {
+    snapshotFixtures = flags[++i];
+  } else if (flags[i] === '--request-log' && flags[i + 1]) {
+    requestLog = flags[++i];
+  } else if (flags[i] === '--live') {
+    live = true;
   } else if (flags[i] === '--serve') {
     serve = true;
+  } else if (flags[i] === '--snapshot-runner') {
+    snapshotRunner = true;
   } else if (flags[i] === '--ps') {
     listProcesses = true;
   } else if (flags[i] === '--kill') {
@@ -91,6 +113,19 @@ for (let i = 0; i < flags.length; i++) {
     console.error(`local-npm-registry: unknown option ${flags[i]}`);
     process.exit(2);
   }
+}
+
+if (snapshotRunner) {
+  if (serve || packTo || command.length === 0) {
+    console.error('local-npm-registry: --snapshot-runner requires a command after --');
+    process.exit(2);
+  }
+  if (['live', 'direct'].includes(process.env.VP_SNAP_REGISTRY_MODE ?? '')) {
+    live = true;
+  }
+}
+if (requestLog) {
+  mkdirSync(path.dirname(requestLog), { recursive: true });
 }
 
 // `--ps` / `--kill`: troubleshoot registry processes left behind by
@@ -185,9 +220,27 @@ if (pack && !packagesDir) {
   packagesDir = packedDir;
 }
 
-const manifest: Record<string, unknown> = existsSync('./mock-manifest.json')
+const fixtureManifest: Record<string, unknown> = existsSync('./mock-manifest.json')
   ? (JSON.parse(readFileSync('./mock-manifest.json', 'utf-8')) as Record<string, unknown>)
   : {};
+
+const sharedManifest: Record<string, unknown> = {};
+if (snapshotFixtures) {
+  // Authored packages have no public-registry counterpart. Keep them available
+  // in comparison modes; only published recordings are disabled by --live.
+  for (const filename of live
+    ? ['local/manifest.json']
+    : ['manifest.json', 'local/manifest.json']) {
+    Object.assign(
+      sharedManifest,
+      JSON.parse(readFileSync(path.join(snapshotFixtures, filename), 'utf8')),
+    );
+  }
+}
+const manifest = { ...sharedManifest, ...fixtureManifest };
+const snapshotCache = snapshotCacheDir
+  ? new RegistryCache(snapshotCacheDir, !live, requestLog)
+  : undefined;
 
 // Proxy through the configured registry (the project's `.npmrc` in cwd, then
 // the user's `~/.npmrc`, e.g. a local mirror) when there is one, so runs stay
@@ -267,7 +320,11 @@ const localPackuments = new Map<string, Packument>(); // package name -> local-o
 const LOCAL_PACKAGE_TIME = '2020-01-01T00:00:00.000Z';
 const VITE_PLUS_PLATFORM_PACKAGE_PREFIX = '@voidzero-dev/vite-plus-cli-';
 const SLSA_PROVENANCE_V1 = 'https://slsa.dev/provenance/v1';
-if (packagesDir) {
+let localPackagesLoaded = false;
+function loadLocalPackages(): void {
+  if (!packagesDir || localPackagesLoaded) {
+    return;
+  }
   for (const basename of readdirSync(packagesDir)) {
     if (!basename.endsWith('.tgz')) {
       continue;
@@ -307,12 +364,21 @@ if (packagesDir) {
       },
     });
   }
+  localPackagesLoaded = true;
+}
+// A snapshot wrapper starts before nextest workers prepare the archives. The
+// runner validates them under its package lock before making any requests.
+if (!snapshotRunner) {
+  loadLocalPackages();
 }
 
 // Serialize a manifest/packument with its `{REGISTRY}` placeholders (only our
 // local tarball URLs carry them) pointed at the live server address.
 function serializeForRegistry(value: unknown, registry: string): string {
-  return JSON.stringify(value).replaceAll('{REGISTRY}', registry);
+  const serialized = JSON.stringify(value).replaceAll('{REGISTRY}', registry);
+  return snapshotCache
+    ? JSON.stringify(rewriteTarballs(JSON.parse(serialized), registry))
+    : serialized;
 }
 
 function fetchUpstreamPackument(name: string): Promise<Packument | null> {
@@ -360,7 +426,14 @@ async function resolveLocalPackument(name: string): Promise<Packument> {
   if (cached) {
     return cached;
   }
-  const upstream = await fetchUpstreamPackument(name);
+  const upstream = snapshotCache
+    ? await snapshotCache
+        .get(`${UPSTREAM_REGISTRY}/${name.replace('/', '%2F')}`, 'application/json')
+        .then((response) =>
+          response.status === 200 ? (JSON.parse(response.body.toString()) as Packument) : null,
+        )
+        .catch(() => null)
+    : await fetchUpstreamPackument(name);
   const localVersion = local['dist-tags'].latest;
   const merged: Packument = upstream
     ? {
@@ -384,12 +457,12 @@ function resolveLocalVersion(key: string): unknown {
   }
   const name = key.slice(0, separator);
   const specifier = key.slice(separator + 1);
-  const packument = localPackuments.get(name);
+  const packument = localPackuments.get(name) ?? (manifest[name] as Packument | undefined);
   if (!packument) {
     return undefined;
   }
-  const version = packument['dist-tags'][specifier] ?? specifier;
-  return packument.versions[version];
+  const version = packument['dist-tags']?.[specifier] ?? specifier;
+  return packument.versions?.[version];
 }
 
 // Stream the upstream response byte-for-byte. Unlike `fetch`, `https` does not
@@ -425,6 +498,7 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
   // for body-less methods; a redirect on anything else is forwarded to the
   // client as-is (its `location` header survives below).
   const method = req.method ?? 'GET';
+  snapshotCache?.record('request', `${UPSTREAM_REGISTRY}${req.url ?? '/'}`);
   const bodyless = method === 'GET' || method === 'HEAD';
   const fetchUrl = (url: string, redirectsLeft: number) => {
     // Tarballs: `accept-encoding: identity` keeps mirrors/CDNs from wrapping
@@ -440,7 +514,8 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
         ? 'identity'
         : (req.headers['accept-encoding'] ?? 'identity'),
     };
-    copyHeaders(req.headers, headers, ['content-type', 'content-length']);
+    copyHeaders(req.headers, headers, ['content-type', 'content-length', 'content-encoding']);
+    snapshotCache?.record('upstream', url);
     const upstreamRequest = httpsRequest(
       url,
       { method, headers, agent: upstreamAgent },
@@ -490,46 +565,93 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
   fetchUrl(`${UPSTREAM_REGISTRY}${req.url ?? '/'}`, 5);
 }
 
+let requests = 0;
 const server = createServer(async (req, res) => {
-  const key = decodeURIComponent(req.url ?? '/').replace(/^\/+/, '');
-  if (localPackuments.has(key) || Object.hasOwn(manifest, key)) {
-    const address = server.address();
-    const registry =
-      address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '';
-    const packument = localPackuments.has(key) ? await resolveLocalPackument(key) : manifest[key];
+  // Tests of the CLI's own metadata cache must keep the registry URL fixed:
+  // changing the origin selects a different product cache entry.
+  if (req.url === '/-/vp-test/requests') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(serializeForRegistry(packument, registry));
+    res.end(JSON.stringify({ requests }));
     return;
   }
-  const localVersion = resolveLocalVersion(key);
-  if (localVersion) {
-    const address = server.address();
-    const registry =
-      address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '';
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(serializeForRegistry(localVersion, registry));
-    return;
-  }
-  const tarMatch = key.match(/\/-\/([^/]+\.tgz)$/);
-  if (tarMatch) {
-    try {
-      // Async read: local tarballs run tens of MB, and a synchronous read
-      // would stall the proxied requests of the same in-flight install.
-      const bytes = await readFile(
-        localTarballs.get(tarMatch[1]) ?? path.resolve('./tarballs', tarMatch[1]),
-      );
-      res.writeHead(200, { 'content-type': 'application/octet-stream' });
-      res.end(bytes);
+  requests++;
+  try {
+    loadLocalPackages();
+    const key = decodeURIComponent(req.url ?? '/').replace(/^\/+/, '');
+    if (localPackuments.has(key) || Object.hasOwn(manifest, key)) {
+      snapshotCache?.record('fixture', key);
+      const address = server.address();
+      const registry =
+        address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '';
+      const packument = localPackuments.has(key) ? await resolveLocalPackument(key) : manifest[key];
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(serializeForRegistry(packument, registry));
       return;
-    } catch {
-      // fall through to proxy
     }
+    const localVersion = resolveLocalVersion(key);
+    if (localVersion) {
+      snapshotCache?.record('fixture', key);
+      const address = server.address();
+      const registry =
+        address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '';
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(serializeForRegistry(localVersion, registry));
+      return;
+    }
+    const tarMatch = key.match(/\/-\/([^/]+\.tgz)$/);
+    if (tarMatch) {
+      try {
+        // Async read: local tarballs run tens of MB, and a synchronous read
+        // would stall the proxied requests of the same in-flight install.
+        const candidates = [
+          localTarballs.get(tarMatch[1]),
+          path.resolve('./tarballs', tarMatch[1]),
+        ];
+        if (snapshotFixtures) {
+          candidates.push(path.join(snapshotFixtures, 'local/tarballs', tarMatch[1]));
+          if (!live) {
+            candidates.push(path.join(snapshotFixtures, 'tarballs', tarMatch[1]));
+          }
+        }
+        const localPath = candidates.find((candidate) => candidate && existsSync(candidate));
+        if (localPath) {
+          const bytes = await readFile(localPath);
+          snapshotCache?.record('fixture', key);
+          res.writeHead(200, { 'content-type': 'application/octet-stream' });
+          res.end(bytes);
+          return;
+        }
+      } catch {
+        // fall through to proxy
+      }
+    }
+    // Proxy anything we don't mock (pnpm/latest, tarball downloads for real
+    // packages, etc.) to the upstream registry. Keeps the local packages in
+    // charge while letting everything else (package-manager download, real
+    // dependencies) resolve normally.
+    if (snapshotCache && (req.method === 'GET' || req.method === 'HEAD')) {
+      const response = await snapshotCache.get(
+        upstreamUrl(req.url ?? '/', UPSTREAM_REGISTRY),
+        req.headers.accept ?? 'application/json',
+      );
+      const address = server.address();
+      const registry =
+        address && typeof address !== 'string' ? `http://127.0.0.1:${address.port}` : '';
+      const body =
+        response.contentType.includes('json') && response.status === 200
+          ? serializeForRegistry(JSON.parse(response.body.toString()), registry)
+          : response.body;
+      res.writeHead(response.status, { 'content-type': response.contentType });
+      res.end(req.method === 'HEAD' ? undefined : body);
+      return;
+    }
+    proxyToUpstream(req, res);
+  } catch (error) {
+    if (!res.headersSent) {
+      res.writeHead(502);
+    }
+    res.end(`registry error: ${(error as Error).message}`);
   }
-  // Proxy anything we don't mock (pnpm/latest, tarball downloads for real
-  // packages, etc.) to the upstream registry. Keeps the local packages in
-  // charge while letting everything else (package-manager download, real
-  // dependencies) resolve normally.
-  proxyToUpstream(req, res);
 });
 
 // Registry env for every package manager, each of which reads its own
@@ -622,13 +744,27 @@ server.listen(0, '127.0.0.1', () => {
   }
 
   const [cmd, ...cmdArgs] = command as [string, ...string[]];
+  const childEnv = snapshotRunner
+    ? {
+        ...process.env,
+        [packagesDir ? 'VP_SNAP_PACKED_REGISTRY_ENV' : 'VP_SNAP_SHARED_REGISTRY_ENV']:
+          JSON.stringify(registryEnv),
+      }
+    : { ...process.env, ...registryEnv };
   const child = spawn(cmd, cmdArgs, {
-    env: { ...process.env, ...registryEnv },
+    env: childEnv,
     stdio: 'inherit',
   });
-  child.on('exit', (code, signal) => {
+  const finish = (exitCode: number) => {
     cleanupRegistryEnv(registryEnv);
-    const exitCode = exitCodeFromClose(code, signal);
+    server.closeAllConnections();
     server.close(() => process.exit(exitCode));
+  };
+  child.on('error', (error) => {
+    console.error(`local-npm-registry: ${error.message}`);
+    finish(1);
+  });
+  child.on('exit', (code, signal) => {
+    finish(exitCodeFromClose(code, signal));
   });
 });

@@ -424,6 +424,7 @@ Commands:
   publish           Publish package to registry
   stage             Stage a package for publishing (npm staged publishing workflow)
   owner             Manage package owners [alias: author]
+  team              Manage organization teams and memberships
   cache             Manage package cache
   config            Manage package manager configuration [alias: c]
   login             Log in to a registry [alias: adduser]

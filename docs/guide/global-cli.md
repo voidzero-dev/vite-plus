@@ -71,6 +71,8 @@ irm https://vite.plus/ps1 | iex
 
 On Windows, you can instead download and run [`vp-setup.exe`](https://setup.viteplus.dev).
 
+The installer uses the latest Node.js LTS to install its JavaScript dependencies. CI integrations can select another compatible version through [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
+
 After installation, open a new shell and run:
 
 ```bash
@@ -104,6 +106,22 @@ These variables control the installer scripts and the standalone Windows install
   # PowerShell
   $env:VP_VERSION = "1.2.3"; irm https://vite.plus/ps1 | iex
   ```
+
+#### `VP_SETUP_NODE_VERSION`
+
+- **Purpose**: Select the Node.js version used to install the global CLI's JavaScript dependencies. CI integrations such as [`setup-vp`](/guide/ci#node-js-during-installation) set this variable to reuse the project's runtime.
+- **Values**: An exact version, a version range, or an alias such as `22.23.1`, `22`, `^22.18.0`, `lts`, or `latest`. The installer resolves the value once to an exact version.
+- **Default**: Unset or empty (use the latest Node.js LTS). Project files, `VP_NODE_VERSION`, session overrides, and the user-level default do not change this default.
+- **Compatibility**: The resolved version must meet the Node.js requirements of both the global CLI and its pinned `pnpm`. Otherwise, the installer uses LTS. An invalid or unresolvable value causes an error.
+- **Scope**: Initial dependency installation only. This variable does not set a project pin, session override, or global default. `vp upgrade` and legacy installers continue to use LTS.
+
+#### `VP_SETUP_NODE_VERSION_FILE`
+
+- **Purpose**: Optional output file for integrations that need the exact version resolved from `VP_SETUP_NODE_VERSION`.
+- **Contents**: The resolved version, such as `22.23.1`, written after successful dependency installation. If compatibility requires LTS for installation, the file still contains the requested version's resolution.
+- **Default**: Unset (write no file). The installer also writes no file when `VP_SETUP_NODE_VERSION` is unset or empty, or when dependency installation is skipped.
+
+`setup-vp` manages this file automatically. Use its Node.js inputs to configure CI jobs.
 
 #### `VP_HOME`
 
@@ -227,6 +245,7 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 
 - **Purpose**: Override Node.js version
 - **Default**: None (auto-detected)
+- **Scope**: Runtime commands. For the installer's dependency installation, use [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
 - **Example**:
   ```bash
   # Run a command with a specific Node.js version

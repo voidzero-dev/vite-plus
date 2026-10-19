@@ -10,6 +10,8 @@ steps = [
 
 [[case]]
 name = "berry_user_config_preserves_project"
+# File configuration precedence is the subject of this case.
+unset-env = ["YARN_NPM_REGISTRY_SERVER"]
 vp = "global"
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.18.0"], snapshot = false },

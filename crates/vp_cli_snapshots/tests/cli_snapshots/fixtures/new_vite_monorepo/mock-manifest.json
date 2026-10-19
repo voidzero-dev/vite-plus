@@ -1,0 +1,23 @@
+{
+  "degit": {
+    "name": "degit",
+    "dist-tags": {
+      "latest": "0.0.0"
+    },
+    "versions": {
+      "0.0.0": {
+        "name": "degit",
+        "version": "0.0.0",
+        "private": true,
+        "type": "module",
+        "bin": {
+          "degit": "cli.mjs"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/degit/-/degit-0.0.0.tgz",
+          "integrity": "sha512-MPyTtnLw02R8cOuRuZqMHM3iDfsCgvqmCxfZqR1gb9x9cL1Dsl5XJggjsrNuJCQrE7ioJYjafuUG2DzJ8k5iCw=="
+        }
+      }
+    }
+  }
+}

@@ -4,7 +4,7 @@
 //! 1. Explicit version: `vp env exec --node <version> [--npm <version>] <command>`
 //! 2. Shim mode: `vp env exec <tool> [args...]` where tool is node/npm/npx or a global package binary
 //!
-//! Direct invocations resolve a fresh tool selection through shim dispatch.
+//! Direct invocations prefer system-first tools from PATH, then resolve a fresh selection through shim dispatch.
 //! Windows .cmd wrappers and Git Bash shell scripts inherit tools like Unix shims.
 
 use std::process::ExitStatus;
@@ -21,7 +21,7 @@ use super::{
 use crate::{
     cli::exit_status,
     error::Error,
-    shim::{dispatch as shim_dispatch, is_shim_tool},
+    shim::{dispatch as shim_dispatch, is_core_shim_tool, is_shim_tool},
 };
 
 /// Execute the exec command.
@@ -67,7 +67,6 @@ pub async fn execute(
         // - Core tools: Version resolved from .node-version/package.json/default
         // - Package binaries: Uses Node.js version from package metadata
         // - Automatic Node.js download if needed
-        // - Shim mode checking (managed vs system-first)
         // Explicit env exec starts a new selection; wrappers inherit like shims.
         let env = if from_wrapper {
             ToolPathEnv::from_env()
@@ -77,6 +76,15 @@ pub async fn execute(
         let args: Vec<String> = command[1..].to_vec();
         // stdout belongs to the dispatched tool; route vp's own output to stderr.
         vp_shared::output::route_user_output_to_stderr();
+        // Dispatch assumes the shell's PATH lookup already preferred system-first tools, so repeat it here.
+        if !from_wrapper
+            && is_core_shim_tool(tool)
+            && config::load_config().await?.shim_mode_for_tool(tool)
+                == config::ShimMode::SystemFirst
+            && let Some(path) = crate::shim::dispatch::find_system_tool(tool)
+        {
+            return Ok(exit_status(crate::shim::exec::exec_tool(&path, &args, env)));
+        }
         let exit_code = shim_dispatch(tool, &args, env).await;
         return Ok(exit_status(exit_code));
     }

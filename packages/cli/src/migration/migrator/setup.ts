@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import { globSync } from 'glob';
+import { globSync } from 'tinyglobby';
 import { normalize, normalizeRange } from 'verkit';
 import { parse as parseYaml } from 'yaml';
 
@@ -149,8 +149,9 @@ function collectGithubActionFiles(projectPath: string): string[] {
   const globOptions = {
     cwd: path.join(projectPath, '.github'),
     absolute: true,
-    nocase: true,
-    nodir: true,
+    caseSensitiveMatch: false,
+    // Otherwise a directory named like `ci.yml` also matches as `ci.yml/**`.
+    expandDirectories: false,
   } as const;
   const workflows = globSync('workflows/*.{yml,yaml}', globOptions);
   const compositeActions = globSync('**/action.{yml,yaml}', {

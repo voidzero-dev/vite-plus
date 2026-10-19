@@ -71,25 +71,32 @@ the execution gate. Scheduling happens after partitioning and does not change
 shard membership or test listing order.
 The existing gate still protects `serial = true` and Ctrl-C cases, including
 against other runner processes.
+Npm command cases use local registry fixtures and shared downloads, so they no
+longer need serialization to limit concurrent connections to npm. Signal-sensitive
+and explicitly isolated cases retain the execution gate.
 
 Environment overrides, mainly for CI:
 
-| Variable                    | Effect                                                                        |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| `VP_SNAP_GLOBAL_VP`         | Path to a prebuilt global `vp` binary (skips the target-dir lookup)           |
-| `VP_SNAP_LOCAL_CLI_BIN_DIR` | Local CLI bin dir (default `<repo>/packages/cli/bin`)                         |
-| `VP_SNAP_JS_RUNTIME_DIR`    | Provisioned managed runtime to seed case homes with                           |
-| `VP_SNAP_SH_BIN`            | POSIX `sh` binary for cases that execute the generated `env` file             |
-| `VP_SNAP_BASH_BIN`          | Bash binary for cases that execute the generated `env` file                   |
-| `VP_SNAP_ZSH_BIN`           | Zsh binary for cases that execute the generated `env` file                    |
-| `VP_SNAP_CMD_BIN`           | System cmd.exe for cases that execute generated batch files                   |
-| `VP_SNAP_FISH_BIN`          | Fish binary for cases that execute generated `env.fish` files                 |
-| `VP_SNAP_NU_BIN`            | Nushell binary for cases that execute generated `env.nu` files                |
-| `VP_SNAP_PWSH_BIN`          | PowerShell binary for cases that execute generated `env.ps1` files            |
-| `VP_SNAP_SKIP_FLAVORS`      | Comma-separated flavors to skip registering (e.g. `local`)                    |
-| `VP_SNAP_PACKAGES_DIR`      | Run-scoped directory for sharing packed packages across test processes        |
-| `VP_SNAP_ARTIFACTS_DIR`     | Directory for phase timings and failure diagnostics; unset disables artifacts |
-| `VP_SNAP_NEXTEST_CONFIG`    | With `--list`, write nextest overrides for the discovered isolated cases      |
+| Variable                      | Effect                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `VP_SNAP_GLOBAL_VP`           | Path to a prebuilt global `vp` binary (skips the target-dir lookup)                                     |
+| `VP_SNAP_LOCAL_CLI_BIN_DIR`   | Local CLI bin dir (default `<repo>/packages/cli/bin`)                                                   |
+| `VP_SNAP_JS_RUNTIME_DIR`      | Provisioned managed runtime to seed case homes with                                                     |
+| `VP_SNAP_SH_BIN`              | POSIX `sh` binary for cases that execute the generated `env` file                                       |
+| `VP_SNAP_BASH_BIN`            | Bash binary for cases that execute the generated `env` file                                             |
+| `VP_SNAP_ZSH_BIN`             | Zsh binary for cases that execute the generated `env` file                                              |
+| `VP_SNAP_CMD_BIN`             | System cmd.exe for cases that execute generated batch files                                             |
+| `VP_SNAP_FISH_BIN`            | Fish binary for cases that execute generated `env.fish` files                                           |
+| `VP_SNAP_NU_BIN`              | Nushell binary for cases that execute generated `env.nu` files                                          |
+| `VP_SNAP_PWSH_BIN`            | PowerShell binary for cases that execute generated `env.ps1` files                                      |
+| `VP_SNAP_SKIP_FLAVORS`        | Comma-separated flavors to skip registering (e.g. `local`)                                              |
+| `VP_SNAP_REGISTRY_CACHE_DIR`  | Fresh run-scoped response directory shared across nextest processes                                     |
+| `VP_SNAP_REGISTRY_MODE`       | `live`: count upstream requests without caching or shared fixtures; `direct`: original registry routing |
+| `VP_SNAP_SHARED_REGISTRY_ENV` | Registry environment JSON from the `--snapshot-runner` wrapper, shared across runner processes          |
+| `VP_SNAP_PACKED_REGISTRY_ENV` | Registry environment JSON for the wrapper that serves packed checkout packages                          |
+| `VP_SNAP_PACKAGES_DIR`        | Run-scoped directory for sharing packed packages across test processes                                  |
+| `VP_SNAP_ARTIFACTS_DIR`       | Directory for phase timings and failure diagnostics; unset disables artifacts                           |
+| `VP_SNAP_NEXTEST_CONFIG`      | With `--list`, write nextest overrides for the discovered isolated cases                                |
 
 Windows CI generates its nextest configuration from the same case definitions.
 Exact nextest runs read only the selected fixture; listing and native shard
@@ -110,8 +117,64 @@ directory for each test run and keep the build unchanged while tests run. The
 runner checks the checkout path and input/tarball file sizes and modification
 times; a changed build fails instead of silently testing stale packages. This
 is a per-run preparation directory, not a persistent content-addressed cache.
-Each case still has its own registry server, overlays, and mutable caches.
 Windows CI uses this to avoid repacking in every nextest process.
+Cases without fixture overlays share two servers per runner: one for published
+packages and one that also serves the packed checkout. Cases with a
+`mock-manifest.json`, `tarballs/`, or `.npmrc` retain a dedicated server.
+Use `isolated-registry = true` when a test needs private registry state, such as
+the request counter used to verify metadata caching. All package-manager caches
+remain isolated per case.
+
+Windows CI wraps nextest with `local-npm-registry.ts --snapshot-runner` so the
+two servers also survive across test processes. The wrapper passes registry
+environments to the Rust runner without changing its package-manager settings.
+The packed server loads archives on its first request, after the runner prepares
+and validates them under the existing package lock. Both servers exit when the
+wrapped command finishes, and the wrapper preserves its exit code.
+
+All cases use a local registry by default. The small test packages in
+[`registry/`](registry/README.md) are served from checked-in metadata and tarballs.
+Other successful registry GET responses are cached for the duration of the run,
+including package-manager downloads. Concurrent requests share one download,
+including across nextest processes when `VP_SNAP_REGISTRY_CACHE_DIR` is set.
+Use a fresh directory per run; this is not a persistent dependency cache.
+Package-manager caches and installed packages remain isolated per case.
+
+`local-registry = true` additionally serves the packed checkout packages.
+Published versions remain available for cases that deliberately install an older
+release. Their upstream metadata is fetched once per run and merged with the
+local version. The standalone registry tool and ecosystem tests retain the same
+upstream version merging without the snapshot response cache. Fixture
+`mock-manifest.json` entries override shared metadata, and fixture tarballs
+override shared tarballs. Explicit case and step registry settings still take
+precedence over runner defaults.
+
+With artifacts enabled, the shared server writes `registry.jsonl` in the run
+artifact directory. Windows wrappers write separate `shared-registry/registry.jsonl`
+and `packed-registry/registry.jsonl` files in the artifact root.
+Per-case servers write the same file in their case artifact
+directory. Combine both locations when counting requests: `fixture` events
+identify locally served data, `request` events count proxy requests, `hit` events
+identify reused responses, and `upstream` events count actual upstream HTTP
+requests (including redirects). Non-GET requests are forwarded without caching.
+`upstream-stalled` identifies requests with no response progress for 15 seconds,
+including connection setup. These requests release their cache locks so clients
+can retry. Each upstream request also has a 60-second total deadline.
+These counts cover the registry; requests to other services, such as Node.js
+release downloads or Git hosts, are outside this log.
+
+For a network comparison, run the same cases with eight workers first with
+`VP_SNAP_REGISTRY_MODE=live`, then with the variable unset. Both runs route
+registry traffic through the logger; `live` disables published recordings and
+response cache. `VP_SNAP_REGISTRY_MODE=direct` restores the original routing for
+an independent wall-time baseline, but cannot log traffic that bypasses the
+local registry. Keep builds unchanged and use fresh response directories.
+Local tarball URLs can cause snapshot differences in comparison modes.
+Fixture overlays remain active in both comparison modes. Cases with a
+`mock-manifest.json` or `tarballs/` start a private registry even in `direct`
+mode, so fixed templates remain the same test inputs. Cases that use shared
+locally authored packages must set `local-registry = true` so `direct` mode
+also starts their registry; these packages have no published version.
 
 With `VP_SNAP_ARTIFACTS_DIR` set, each runner process creates a unique `run-*`
 directory. `runner/timing.json` records discovery, test execution, and final
@@ -299,8 +362,8 @@ a milestone, or a redaction rule; never rerun until green. Set
 For registry fallback tests, use `local-registry = true` and a fixture
 `mock-manifest.json` entry such as `"npm/latest"` to control the resolved version.
 Keep the CLI input unpinned so the fallback is still tested, and keep exact
-version assertions. Unmocked registry requests go upstream, so
-`local-registry = true` alone does not freeze dist-tags.
+version assertions. Unmocked registry responses are fetched upstream once per run, so
+`local-registry = true` alone does not freeze dist-tags across runs.
 
 Fixture trees are excluded from repo-wide fmt, lint, typecheck, and vitest
 (`vite.config.ts`, `tsconfig.json`); recorded snapshots and
