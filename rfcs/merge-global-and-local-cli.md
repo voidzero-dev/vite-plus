@@ -70,8 +70,10 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 ├── current -> <version>/             # Symlink to active version
 ├── <version>/
 │   ├── bin/
-│   │   └── vp                        # Rust binary (from CLI platform package)
+│   │   ├── vp                        # Rust binary (from CLI platform package)
+│   │   └── vp-install-lock.yaml      # Published installation lockfile
 │   ├── package.json                  # Wrapper: { "dependencies": { "vite-plus": "<version>" } }
+│   ├── pnpm-lock.yaml                # Working copy restored from bin/vp-install-lock.yaml
 │   └── node_modules/
 │       ├── vite-plus/                # Installed as npm dependency
 │       │   ├── dist/bin.js           # JS entry point (found by Rust binary)
@@ -90,12 +92,17 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 **Install flows:**
 
 - **Production** (`curl -fsSL https://vite.plus | bash`):
-  Downloads CLI platform tarball from `@voidzero-dev/vite-plus-cli-{platform}` (extracts only `vp` binary),
-  generates wrapper `package.json`, runs `vp install --silent` which installs `vite-plus` + all transitive deps via npm.
+  Downloads the CLI platform archive from `@voidzero-dev/vite-plus-cli-{platform}`
+  and extracts the binary and its bundled `vp-install-lock.yaml`. The script
+  delegates to the binary's self-setup, which generates the wrapper `package.json`,
+  restores `pnpm-lock.yaml`, and installs dependencies with managed pnpm and
+  `--frozen-lockfile`. `install.ps1` uses the same flow on Windows.
 
 - **Upgrade** (`vp upgrade`):
-  Downloads CLI platform tarball from `@voidzero-dev/vite-plus-cli-{platform}` (binary only),
-  generates wrapper `package.json`, runs `vp install --silent`. No main tarball download needed.
+  Downloads the CLI platform archive with the binary and lockfile, generates the
+  wrapper `package.json`, and restores the bundled lockfile before the frozen
+  dependency install. pnpm downloads `vite-plus` and its dependencies using the
+  versions and integrity values recorded in that lockfile.
 
 - **Local dev** (`pnpm bootstrap-cli`):
   Copies `vp` binary, generates wrapper `package.json`, symlinks
@@ -105,6 +112,36 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 - **CI** (`pnpm bootstrap-cli:ci --tgz <path>`):
   Copies `vp` binary, generates wrapper `package.json` with `file:` protocol
   refs to tgz files, runs `npm install`.
+
+### Global Installation Lockfile
+
+Each `@voidzero-dev/vite-plus-cli-{platform}` package contains
+`vp-install-lock.yaml` beside `vp` or `vp.exe`. Release and commit preview builds
+both use this layout. Standalone release archives also include the companion.
+The lockfile describes the global wrapper's `vite-plus` dependency and its
+transitive dependencies, including optional packages for all supported platforms.
+CLI binary packages remain outside this dependency graph, so adding the lockfile
+to them cannot change an integrity value recorded inside it.
+
+Release builds generate the lockfile from the exact CLI archive with the same
+pinned pnpm version as the installer. Preview builds first normalize their
+archives with the pinned registry bridge builder, then record the final integrity
+values and content-addressed URLs. Publishing retries reuse the prepared
+artifacts. See [Global installation lockfile](../packages/cli/BUNDLING.md#global-installation-lockfile)
+for the publication order and generator entry points.
+
+The platform manifest advertises the companion with `vpInstallLockfile: true`.
+Extraction fails if an advertised companion is missing. A standalone executable
+or an older upgrade client can lose the companion; self-setup recovers it from
+the exact platform package and verifies that archive's integrity. A frozen
+installation must succeed before setup records completion, including retries
+with an existing `node_modules` directory. Older packages without a companion
+retain their existing installation behavior. Local development and already
+bundled external installations keep their existing setup paths.
+
+The installation's `.npmrc` keeps `minimum-release-age=0` so a newly published
+version can be installed immediately. This does not change the versions recorded
+in the installation lockfile.
 
 ### Command Routing
 
@@ -223,7 +260,7 @@ if (command === 'create') {
    - `.node` NAPI binaries installed via npm optionalDependencies (not manually copied)
    - Removed `extract_main_package()`, `strip_dev_dependencies()`, `MAIN_PACKAGE_ENTRIES`
    - Added `generate_wrapper_package_json()` for upgrade command
-   - Simplified install scripts: only extract `vp` binary + generate wrapper
+   - Install scripts extract `vp` and its companion lockfile, then delegate permanent installation to self-setup
    - Simplified `install-global-cli.ts`: symlink-based local dev, wrapper-based CI
 
 5. **Updated build system**:
@@ -249,7 +286,7 @@ if (command === 'create') {
 
 10. **Separated `vp` binary into dedicated CLI platform packages**:
     - `@voidzero-dev/vite-plus-{platform}` packages now contain only the `.node` NAPI binding (~20MB)
-    - `@voidzero-dev/vite-plus-cli-{platform}` packages contain only the `vp` Rust binary (~5MB)
+    - `@voidzero-dev/vite-plus-cli-{platform}` packages contain the `vp` Rust binary and its installation lockfile; Windows packages also include `vp-shim.exe`
     - `publish-native-addons.ts` creates and publishes both NAPI and CLI packages separately
     - Install scripts (`install.sh`, `install.ps1`) construct CLI package suffix directly instead of querying optionalDependencies
     - Upgrade registry (`registry.rs`) queries CLI packages directly instead of looking up optionalDependencies

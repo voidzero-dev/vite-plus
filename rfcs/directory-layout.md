@@ -361,6 +361,17 @@ Integrations that need Vite+-managed paths must get them from the binary through
 platform rules. An external package manager can keep its own installation
 prefix and leave the Vite+ directory variables unset.
 
+#### Installation lockfile
+
+Managed installations retain the published companion at
+`<DATA>/<version>/bin/vp-install-lock.yaml`, beside the binary. Before a frozen
+dependency install, setup restores it as `<DATA>/<version>/pnpm-lock.yaml`.
+These paths apply to both split and monolithic layouts. A failed installation
+must complete the frozen install before setup writes its completion marker,
+even if the failed attempt left `node_modules` or a working lockfile behind.
+See [Global installation lockfile](./merge-global-and-local-cli.md#global-installation-lockfile)
+for package contents, recovery, and compatibility behavior.
+
 #### First-run setup for external binaries
 
 Managed installations record completed setup in
