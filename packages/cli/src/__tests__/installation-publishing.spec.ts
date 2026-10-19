@@ -31,15 +31,6 @@ function bridge(job: Job): Step {
 }
 
 describe('installation publishing order', () => {
-  it('uses the same release version check before and after latest moves', async () => {
-    const { steps } = (await workflow('release')).jobs.check;
-    const check = steps.find((step) => step.id === 'version')!;
-    // The push's before/after revisions survive both failed-job and full reruns.
-    expect(check.with?.['file-url']).toBe('::before');
-    expect(check.with?.['static-checking']).toBe('localIsNew');
-    expect(check.with?.['file-name']).toBe('packages/cli/package.json');
-  });
-
   it('allows build artifact uploads to repeat but preserves publication artifacts', async () => {
     for (const name of ['reusable-release-build', 'publish-preview']) {
       const { jobs } = await workflow(name);

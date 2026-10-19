@@ -30,10 +30,7 @@ jobs:
         id: version
         with:
           static-checking: localIsNew
-          # Compare the immutable push endpoints. Checking npm latest would
-          # skip the remaining release work on a full rerun after tag promotion.
-          file-url: '::before'
-          token: ${{ github.token }}
+          file-url: https://unpkg.com/vite-plus@latest/package.json
           file-name: packages/cli/package.json
 
   build-rust:

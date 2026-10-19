@@ -364,9 +364,8 @@ artifact is unavailable, the generator can recover the same lockfile from an
 already published global platform package. The local CLI is already published,
 so retries do not need to preserve or repack a local CLI archive.
 
-The version check compares the push's before and after commits. A full workflow
-rerun therefore continues after `latest` moves. Build artifact uploads replace
-earlier build artifacts, but retries preserve the saved installation lockfile.
+Build artifact uploads replace earlier build artifacts when a failed job runs
+again, but retries preserve the saved installation lockfile.
 Package publication skips versions that npm already accepted, including during
 its scanning window. A retry resumes uploads to a draft GitHub release and
 leaves an already published GitHub release and its assets unchanged.
@@ -409,8 +408,8 @@ local CLI dependency graph, so adding the companion cannot change a hash in the
 lockfile.
 
 Use **Re-run failed jobs** to resume a failed release or preview publication.
-**Re-run all jobs** is also supported while the required artifacts remain
-available. Preview retries still require the same PR head, an open PR, and the
+The release reuses the successful version check against `vite-plus@latest`.
+Preview retries still require the same PR head, an open PR, and the
 `preview-build` label. If the build artifacts expire, start a new preview build.
 
 ---
