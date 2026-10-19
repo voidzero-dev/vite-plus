@@ -16,6 +16,7 @@ import pkg from './package.json' with { type: 'json' };
 export const INSTALL_LOCKFILE = 'vp-install-lock.yaml';
 // Keep in sync with the global installer in crates/vp_setup/src/install.rs.
 export const INSTALL_PNPM_VERSION = '10.33.0';
+export const PREVIEW_REGISTRY = 'https://registry-bridge.viteplus.dev';
 const exec = promisify(execFile);
 
 export function installManifest(version: string) {
@@ -48,8 +49,22 @@ export function validateInstallLockfile(
     cli?.specifier !== version ||
     (cli.version !== version && !cli.version?.startsWith(`${version}(`)) ||
     !integrity ||
-    // Registry packages must remain portable across mirrors and platforms.
-    Object.values(lock?.packages ?? {}).some((entry) => entry.resolution?.tarball)
+    // Releases remain portable across mirrors. Previews need the bridge's
+    // content-addressed URLs so republishing a commit cannot change their bytes.
+    Object.entries(lock?.packages ?? {}).some(([key, entry]) => {
+      const tarball = entry.resolution?.tarball;
+      if (!tarball) {
+        return false;
+      }
+      const name = key.slice(0, key.lastIndexOf('@'));
+      const prefix = `${PREVIEW_REGISTRY}/tarballs/${name}/${version}/`;
+      return (
+        !/^0\.0\.0-commit\.[a-f0-9]{40}$/.test(version) ||
+        key !== `${name}@${version}` ||
+        !tarball.startsWith(prefix) ||
+        !/^[a-f0-9]{40}\.tgz$/.test(tarball.slice(prefix.length))
+      );
+    })
   ) {
     throw new Error(`Invalid global installation lockfile for vite-plus@${version}`);
   }

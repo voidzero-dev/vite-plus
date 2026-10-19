@@ -205,6 +205,32 @@ jobs:
           # validates the same batch from main.
           workspace-packages: vite-plus,create-vite-plus,@voidzero-dev/vite-plus-*
 
+      # Use the upload action's exact archive builder before resolving the
+      # lockfile. Keep this ref aligned with both bridge action invocations.
+      - name: Check out the registry bridge archive builder
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: voidzero-dev/pkg-pr-registry-bridge
+          ref: 4ca2c31c250c7137ae191bf01a8bb106d30aa106
+          path: node_modules/.preview-bridge
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /src/
+            /pnpm-lock.yaml
+          persist-credentials: false
+
+      - name: Generate the preview installation lockfile
+        # Run with the same Actions Node 24 runtime as the bridge's pack/upload
+        # actions, including its gzip implementation. This job has no OIDC token.
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            require('node:child_process').execFileSync(process.execPath, [
+              'packages/cli/generate-preview-install-lockfile.ts',
+              'node_modules/.preview-bridge/src/tarball/buildPreviewTarball.ts',
+              'bridge-packages',
+            ], { stdio: 'inherit' });
+
       - name: Upload packed packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

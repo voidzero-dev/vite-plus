@@ -367,9 +367,22 @@ beside `vp`. After those packages propagate, the workflow publishes the exact CL
 archive with the `latest` tag. Bootstrap scripts hand the binary and its companion
 to self-setup, which uses `--frozen-lockfile`. Upgrades use the same lockfile; a
 standalone binary or an older upgrade client can recover it from the verified
-platform package. Older releases and commit previews retain their existing
+platform package. Older packages without a companion retain their existing
 installation behavior. The release-age override remains `0` so a new release can
 be installed immediately.
+
+Preview builds use the same frozen installation. The build job checks out the
+registry bridge's pinned archive builder and runs it with the Actions Node 24
+runtime, as the upload action does. `generate-preview-install-lockfile.ts` resolves
+the lockfile from those normalized archives through the local registry proxy. It
+records the bridge's content-addressed tarball URLs and integrity values, then
+adds the companion to each CLI platform package. CLI platform packages must stay
+outside the wrapper's dependency graph to avoid a circular integrity dependency.
+The artifact contains the prepared archives and lockfile, so publishing retries
+do not resolve dependencies again. The trusted publishing job still validates and
+rebuilds every archive; it does not run package installation or preview code.
+Keep the bridge source checkout and both bridge action references on the same
+commit when updating the workflow.
 
 ---
 

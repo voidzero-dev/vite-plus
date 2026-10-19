@@ -6,7 +6,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 use vt_path::AbsolutePath;
 
-use crate::{error::Error, integrity, is_commit_preview_version, platform, registry};
+use crate::{error::Error, integrity, platform, registry};
 
 pub const INSTALL_LOCKFILE: &str = "vp-install-lock.yaml";
 
@@ -26,16 +26,13 @@ pub async fn restore(version_dir: &AbsolutePath) -> Result<bool, Error> {
 
 /// Copy the bootstrap companion, or recover it for a standalone executable.
 /// Returns whether this release requires a frozen dependency installation.
-/// Older releases and commit previews retain their existing installation behavior.
+/// Older releases without a companion retain their existing installation behavior.
 pub async fn prepare(
     source: &AbsolutePath,
     version_dir: &AbsolutePath,
     version: &str,
     registry_override: Option<&str>,
 ) -> Result<bool, Error> {
-    if is_commit_preview_version(version) {
-        return Ok(false);
-    }
     let target = version_dir.join("bin").join(INSTALL_LOCKFILE);
     let sibling = source
         .parent()
@@ -166,38 +163,40 @@ mod tests {
 
     #[tokio::test]
     async fn standalone_and_old_upgrade_clients_recover_the_verified_lockfile() {
-        let server = MockServer::start();
-        let data = test_archive(true, Some(b"published lock"));
-        let suffix = platform::detect_platform_suffix().unwrap();
-        let metadata = server.mock(|when, then| {
-            when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/1.4.0"));
-            then.status(200).json_body(serde_json::json!({
-                "version": "1.4.0", "vpInstallLockfile": true,
-                "dist": {
-                    "tarball": format!("{}/platform.tgz", server.base_url()),
-                    "integrity": format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(&data))),
-                    "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
-                }
-            }));
-        });
-        let tarball = server.mock(|when, then| {
-            when.method(GET).path("/platform.tgz");
-            then.status(200).body(data);
-        });
-        let temp = tempfile::tempdir().unwrap();
-        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        tokio::fs::create_dir(directory.join("bin")).await.unwrap();
-        assert!(
-            prepare(&directory.join("vp"), &directory, "1.4.0", Some(&server.base_url()))
-                .await
-                .unwrap()
-        );
-        assert_eq!(
-            tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
-            b"published lock"
-        );
-        metadata.assert();
-        tarball.assert();
+        for version in ["1.4.0", "0.0.0-commit.0123456789abcdef0123456789abcdef01234567"] {
+            let server = MockServer::start();
+            let data = test_archive(true, Some(b"published lock"));
+            let suffix = platform::detect_platform_suffix().unwrap();
+            let metadata = server.mock(|when, then| {
+                when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/{version}"));
+                then.status(200).json_body(serde_json::json!({
+                    "version": version, "vpInstallLockfile": true,
+                    "dist": {
+                        "tarball": format!("{}/platform.tgz", server.base_url()),
+                        "integrity": format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(&data))),
+                        "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
+                    }
+                }));
+            });
+            let tarball = server.mock(|when, then| {
+                when.method(GET).path("/platform.tgz");
+                then.status(200).body(data);
+            });
+            let temp = tempfile::tempdir().unwrap();
+            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            tokio::fs::create_dir(directory.join("bin")).await.unwrap();
+            assert!(
+                prepare(&directory.join("vp"), &directory, version, Some(&server.base_url()))
+                    .await
+                    .unwrap()
+            );
+            assert_eq!(
+                tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
+                b"published lock"
+            );
+            metadata.assert();
+            tarball.assert();
+        }
     }
 
     #[tokio::test]
@@ -238,33 +237,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn older_releases_and_previews_do_not_require_a_lockfile() {
-        let server = MockServer::start();
-        let suffix = platform::detect_platform_suffix().unwrap();
-        let metadata = server.mock(|when, then| {
-            when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/1.3.0"));
-            then.status(200).json_body(serde_json::json!({
-                "version": "1.3.0",
-                "dist": {
-                    "tarball": format!("{}/unused.tgz", server.base_url()), "integrity": "sha512-old",
-                    "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
-                }
-            }));
-        });
-        let tarball = server.mock(|when, then| {
-            when.method(GET).path("/unused.tgz");
-            then.status(500);
-        });
-        let temp = tempfile::tempdir().unwrap();
-        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+    async fn legacy_releases_and_previews_without_companions_keep_existing_behavior() {
         for version in ["1.3.0", "0.0.0-commit.0123456789abcdef0123456789abcdef01234567"] {
+            let server = MockServer::start();
+            let suffix = platform::detect_platform_suffix().unwrap();
+            let metadata = server.mock(|when, then| {
+                when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/{version}"));
+                then.status(200).json_body(serde_json::json!({
+                    "version": version,
+                    "dist": {
+                        "tarball": format!("{}/unused.tgz", server.base_url()), "integrity": "sha512-old",
+                        "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
+                    }
+                }));
+            });
+            let tarball = server.mock(|when, then| {
+                when.method(GET).path("/unused.tgz");
+                then.status(500);
+            });
+            let temp = tempfile::tempdir().unwrap();
+            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
             assert!(
                 !prepare(&directory.join("vp"), &directory, version, Some(&server.base_url()))
                     .await
                     .unwrap()
             );
+            metadata.assert();
+            tarball.assert_calls(0);
         }
-        metadata.assert();
-        tarball.assert_calls(0);
     }
 }
