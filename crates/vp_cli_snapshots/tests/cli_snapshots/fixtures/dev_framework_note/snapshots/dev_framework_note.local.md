@@ -2,6 +2,9 @@
 
 Framework dependencies without a dev script or task get a hint. Vite still starts.
 
+## `vpt cp -r app 'app with spaces'`
+
+
 ## `vp dev`
 
 **→ expect-milestone:** `dev-server:ready`
@@ -80,9 +83,6 @@ note: This package depends on Nuxt and has no dev script or task. `vp dev` start
   ➜  press h + enter to show help
 q
 ```
-
-## `vpt cp -r app 'app with spaces'`
-
 
 ## `vp -C 'app with spaces' dev`
 

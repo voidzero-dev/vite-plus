@@ -3,6 +3,8 @@ name = "dev_framework_note"
 vp = ["local", "global"]
 comment = "Framework dependencies without a dev script or task get a hint. Vite still starts."
 steps = [
+  # Copy before Vite creates a dependency cache tied to the original directory.
+  { argv = ["vpt", "cp", "-r", "app", "app with spaces"], snapshot = false },
   { argv = ["vp", "dev"], interactions = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
@@ -15,7 +17,6 @@ steps = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },
-  { argv = ["vpt", "cp", "-r", "app", "app with spaces"], snapshot = false },
   { argv = ["vp", "-C", "app with spaces", "dev"], comment = "The directory instruction identifies paths with spaces without requiring shell-specific quoting.", interactions = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
