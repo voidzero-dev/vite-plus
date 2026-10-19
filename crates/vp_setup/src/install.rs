@@ -118,7 +118,7 @@ pub async fn extract_platform_package(
 
 /// The pnpm version pinned in the wrapper package.json for global installs.
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
-const PINNED_PNPM_VERSION: &str = "10.33.0";
+const PINNED_PNPM_VERSION: &str = "10.34.7";
 
 /// A reused target version must run its own setup again before accepting commands.
 pub async fn clear_self_setup_marker(version_dir: &AbsolutePath) -> Result<(), Error> {

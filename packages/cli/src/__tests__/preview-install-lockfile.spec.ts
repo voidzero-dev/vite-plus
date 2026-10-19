@@ -19,6 +19,7 @@ const names = [
   '@voidzero-dev/vite-plus-cli-win32-arm64-msvc',
 ];
 const decoder = new TextDecoder();
+const noPublishedLockfile = async () => undefined;
 const shasum = 'a'.repeat(40);
 const lockfile = stringify({
   lockfileVersion: '9.0',
@@ -55,7 +56,9 @@ describe('preview installation lockfile', () => {
   it('resolves the published commit version and bundles the unchanged pnpm lockfile', async () => {
     await withBatch(async (directory) => {
       const resolveLockfile = vi.fn(async () => lockfile);
-      expect(await preparePreviewPackages(directory, version, resolveLockfile)).toBe(lockfile);
+      expect(
+        await preparePreviewPackages(directory, version, resolveLockfile, noPublishedLockfile),
+      ).toBe(lockfile);
       expect(resolveLockfile).toHaveBeenCalledExactlyOnceWith(version, PREVIEW_REGISTRY);
       expect(await readdir(directory)).toEqual(['pkg-0.tgz', 'pkg-1.tgz']);
       for (const index of [0, 1]) {
@@ -83,9 +86,14 @@ describe('preview installation lockfile', () => {
     await withBatch(async (directory) => {
       const before = await readFile(join(directory, 'pkg-0.tgz'));
       await expect(
-        preparePreviewPackages(directory, version, async () => {
-          throw new Error('local CLI is not published');
-        }),
+        preparePreviewPackages(
+          directory,
+          version,
+          async () => {
+            throw new Error('local CLI is not published');
+          },
+          noPublishedLockfile,
+        ),
       ).rejects.toThrow('local CLI is not published');
       expect(await readFile(join(directory, 'pkg-0.tgz'))).toEqual(before);
     });
@@ -98,9 +106,9 @@ describe('preview installation lockfile', () => {
       ]);
       await writeFile(join(directory, 'pkg-2.tgz'), archive);
       const resolveLockfile = vi.fn(async () => lockfile);
-      await expect(preparePreviewPackages(directory, version, resolveLockfile)).rejects.toThrow(
-        'Expected unique global CLI platform packages',
-      );
+      await expect(
+        preparePreviewPackages(directory, version, resolveLockfile, noPublishedLockfile),
+      ).rejects.toThrow('Expected unique global CLI platform packages');
       expect(resolveLockfile).not.toHaveBeenCalled();
       expect(new Uint8Array(await readFile(join(directory, 'pkg-2.tgz')))).toEqual(archive);
     });
@@ -110,15 +118,15 @@ describe('preview installation lockfile', () => {
     await withBatch(async (directory) => {
       const circular = lockfile + `  "${names[0]}@${version}": {}\n`;
       await expect(
-        preparePreviewPackages(directory, version, async () => circular),
+        preparePreviewPackages(directory, version, async () => circular, noPublishedLockfile),
       ).rejects.toThrow('must not depend on @voidzero-dev/vite-plus-cli-');
     });
   });
 
   it('replaces an existing companion without duplicate archive or manifest entries', async () => {
     await withBatch(async (directory) => {
-      await preparePreviewPackages(directory, version, async () => lockfile);
-      await preparePreviewPackages(directory, version, async () => lockfile);
+      await preparePreviewPackages(directory, version, async () => lockfile, noPublishedLockfile);
+      await preparePreviewPackages(directory, version, async () => lockfile, noPublishedLockfile);
       const entries = await parseTarGzip(
         new Uint8Array(await readFile(join(directory, 'pkg-0.tgz'))),
       );
@@ -129,6 +137,40 @@ describe('preview installation lockfile', () => {
         decoder.decode(entries.find((entry) => entry.name === 'package/package.json')!.data),
       );
       expect(manifest.files).toEqual(['vp', INSTALL_LOCKFILE]);
+    });
+  });
+
+  it('reuses the published lockfile after a partial publication without a saved artifact', async () => {
+    await withBatch(async (directory) => {
+      const resolveLockfile = vi.fn(async () => lockfile.replace('published-cli', 'new-cli'));
+      const recoverLockfile = vi.fn(async () => lockfile);
+      expect(
+        await preparePreviewPackages(directory, version, resolveLockfile, recoverLockfile),
+      ).toBe(lockfile);
+      expect(recoverLockfile).toHaveBeenCalledExactlyOnceWith(version, PREVIEW_REGISTRY, names);
+      expect(resolveLockfile).not.toHaveBeenCalled();
+      for (const file of await readdir(directory)) {
+        const entries = await parseTarGzip(new Uint8Array(await readFile(join(directory, file))));
+        expect(
+          decoder.decode(
+            entries.find((entry) => entry.name === `package/${INSTALL_LOCKFILE}`)!.data,
+          ),
+        ).toBe(lockfile);
+      }
+    });
+  });
+
+  it('does not resolve again when recovery of an existing publication fails', async () => {
+    await withBatch(async (directory) => {
+      const before = await readFile(join(directory, 'pkg-0.tgz'));
+      const resolveLockfile = vi.fn(async () => lockfile);
+      await expect(
+        preparePreviewPackages(directory, version, resolveLockfile, async () => {
+          throw new Error('registry unavailable');
+        }),
+      ).rejects.toThrow('registry unavailable');
+      expect(resolveLockfile).not.toHaveBeenCalled();
+      expect(await readFile(join(directory, 'pkg-0.tgz'))).toEqual(before);
     });
   });
 

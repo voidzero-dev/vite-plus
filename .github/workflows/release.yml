@@ -30,7 +30,10 @@ jobs:
         id: version
         with:
           static-checking: localIsNew
-          file-url: https://unpkg.com/vite-plus@latest/package.json
+          # Compare the immutable push endpoints. Checking npm latest would
+          # skip the remaining release work on a full rerun after tag promotion.
+          file-url: '::before'
+          token: ${{ github.token }}
           file-name: packages/cli/package.json
 
   build-rust:
@@ -257,7 +260,26 @@ jobs:
           --
           pnpm publish --filter=./packages/create-vite-plus --tag latest --access public --no-git-checks
 
+      # Publishing can succeed even if the runner loses the response. Do not
+      # replace assets on a published release, including an immutable release.
+      - name: Check whether the GitHub release is already published
+        id: github-release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.getReleaseByTag({
+                ...context.repo,
+                tag: `v${process.env.VERSION}`,
+              });
+              core.setOutput('published', String(!data.draft));
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('published', 'false');
+            }
+
       - name: Create release body
+        if: steps.github-release.outputs.published != 'true'
         env:
           REPOSITORY: ${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
@@ -291,6 +313,7 @@ jobs:
           EOF
 
       - name: Create GitHub Release
+        if: steps.github-release.outputs.published != 'true'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         id: release
         with:
@@ -301,6 +324,8 @@ jobs:
           name: vite-plus v${{ env.VERSION }}
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
+          overwrite_files: true
+          fail_on_unmatched_files: true
           files: |
             installer-release/vp-setup-*.exe
             binary-release/vp-*.tar.gz
@@ -309,6 +334,7 @@ jobs:
             binary-release/vp-install-lock.yaml
 
       - name: Publish GitHub Release
+        if: steps.github-release.outputs.published != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"

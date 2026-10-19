@@ -15,7 +15,7 @@ import pkg from './package.json' with { type: 'json' };
 
 export const INSTALL_LOCKFILE = 'vp-install-lock.yaml';
 // Keep in sync with the global installer in crates/vp_setup/src/install.rs.
-export const INSTALL_PNPM_VERSION = '10.33.0';
+export const INSTALL_PNPM_VERSION = '10.34.7';
 export const PREVIEW_REGISTRY = 'https://registry-bridge.viteplus.dev';
 const exec = promisify(execFile);
 

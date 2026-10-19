@@ -218,6 +218,7 @@ jobs:
         with:
           name: bridge-cli-packages
           path: bridge-cli-packages
+          overwrite: true
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
@@ -227,6 +228,7 @@ jobs:
         with:
           name: bridge-packages
           path: bridge-packages
+          overwrite: true
           # A silently empty artifact would make the publishing workflow fail with a
           # confusing "no packed tarballs" instead of failing here.
           if-no-files-found: error

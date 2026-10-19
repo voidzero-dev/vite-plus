@@ -273,7 +273,7 @@ result; binaries without self-setup support use the installer's legacy path.
 │  │                          + vp-install-lock.yaml          │
 │  │                                                          │
 │  ├─ generate package.json ─ wrapper with vite-plus dep      │
-│  │                          pins pnpm@10.33.0               │
+│  │                          pins pnpm@10.34.7               │
 │  │                                                          │
 │  ├─ restore lockfile ────── {version}\pnpm-lock.yaml        │
 │  │                                                          │

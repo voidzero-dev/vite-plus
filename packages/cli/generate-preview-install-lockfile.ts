@@ -9,6 +9,7 @@ import {
   generateInstallLockfile,
   INSTALL_LOCKFILE,
   PREVIEW_REGISTRY,
+  publishedInstallLockfile,
   validateInstallLockfile,
 } from './generate-install-lockfile.ts';
 
@@ -20,6 +21,7 @@ export async function preparePreviewPackages(
   directory: string,
   version: string,
   resolveLockfile = generateInstallLockfile,
+  recoverLockfile = publishedInstallLockfile,
 ): Promise<string> {
   if (!/^0\.0\.0-commit\.[a-f0-9]{40}$/.test(version)) {
     throw new Error('Expected a full commit preview version');
@@ -44,7 +46,11 @@ export async function preparePreviewPackages(
     throw new Error('Preview batch is missing CLI platform packages');
   }
 
-  const content = await resolveLockfile(version, PREVIEW_REGISTRY);
+  // A new registration run can follow a partial publication of this commit.
+  // Reuse its lockfile even when this run has no prepared-package artifact.
+  const content =
+    (await recoverLockfile(version, PREVIEW_REGISTRY, [...names])) ??
+    (await resolveLockfile(version, PREVIEW_REGISTRY));
   validateInstallLockfile(content, version);
   const lock = parse(content) as { packages: Record<string, unknown> };
   if (Object.keys(lock.packages).some((name) => name.startsWith(platformPrefix))) {

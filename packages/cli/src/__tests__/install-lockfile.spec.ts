@@ -66,6 +66,10 @@ describe('release installation lockfile', () => {
     expect(rust).toContain(
       `const PINNED_PNPM_VERSION: &str = "${installManifest(version).packageManager.slice(5)}";`,
     );
+    for (const name of ['install-legacy.sh', 'install-legacy.ps1']) {
+      const script = await readFile(new URL(`../../${name}`, import.meta.url), 'utf8');
+      expect(script).toContain(`"${installManifest(version).packageManager}"`);
+    }
   });
 
   it('cleans up and stops when resolution fails', async () => {

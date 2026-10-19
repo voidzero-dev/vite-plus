@@ -36,7 +36,7 @@ writeFileSync(join(external, 'vp-install-lock.yaml'), lockfile);
 const pnpmArchive = createArchive({
   'package/package.json': JSON.stringify({
     name: 'pnpm',
-    version: '10.33.0',
+    version: '10.34.7',
     bin: { pnpm: 'bin/pnpm.cjs' },
   }),
   'package/bin/pnpm.cjs': `

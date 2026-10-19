@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parse } from 'yaml';
 
 interface Step {
@@ -9,7 +10,7 @@ interface Step {
   uses?: string;
   run?: string;
   if?: string;
-  with?: Record<string, string>;
+  with?: Record<string, string | boolean>;
 }
 
 interface Job {
@@ -30,6 +31,83 @@ function bridge(job: Job): Step {
 }
 
 describe('installation publishing order', () => {
+  it('uses the same release version check before and after latest moves', async () => {
+    const { steps } = (await workflow('release')).jobs.check;
+    const check = steps.find((step) => step.id === 'version')!;
+    // The push's before/after revisions survive both failed-job and full reruns.
+    expect(check.with?.['file-url']).toBe('::before');
+    expect(check.with?.['static-checking']).toBe('localIsNew');
+    expect(check.with?.['file-name']).toBe('packages/cli/package.json');
+  });
+
+  it('allows build artifact uploads to repeat but preserves publication artifacts', async () => {
+    for (const name of ['reusable-release-build', 'publish-preview']) {
+      const { jobs } = await workflow(name);
+      const uploads = Object.values(jobs).flatMap((job) =>
+        (job.steps ?? []).filter((step) => step.uses?.startsWith('actions/upload-artifact@')),
+      );
+      expect(uploads.length).toBeGreaterThan(0);
+      for (const upload of uploads) {
+        expect(upload.with?.overwrite).toBe(true);
+      }
+    }
+    const release = (await workflow('release')).jobs.Release;
+    const lockfile = release.steps.find((step) => step.with?.name === 'installation-lockfile')!;
+    expect(lockfile.with?.overwrite).not.toBe(true);
+    expect(lockfile.if).toBe("steps.install-lockfile.outputs.restored != 'true'");
+    const preview = (await workflow('publish-preview-register')).jobs['prepare-global'];
+    const prepared = preview.steps.find((step) => step.with?.name === 'prepared-preview-cli')!;
+    expect(prepared.with?.overwrite).not.toBe(true);
+    expect(prepared.if).toBe("steps.prepared.outputs.exists != 'true'");
+  });
+
+  it.each(['missing', 'draft', 'published', 'unavailable'])(
+    'handles a %s GitHub release when retrying asset publication',
+    async (state) => {
+      const { steps } = (await workflow('release')).jobs.Release;
+      const check = steps.find((step) => step.id === 'github-release')!;
+      const getReleaseByTag = vi.fn(async () => {
+        if (state === 'missing' || state === 'unavailable') {
+          throw Object.assign(new Error(state), { status: state === 'missing' ? 404 : 503 });
+        }
+        return { data: { draft: state === 'draft' } };
+      });
+      const setOutput = vi.fn();
+      const result = runInNewContext(`(async () => { ${check.with!.script} })()`, {
+        github: { rest: { repos: { getReleaseByTag } } },
+        context: { repo: { owner: 'voidzero-dev', repo: 'vite-plus' } },
+        core: { setOutput },
+        process: { env: { VERSION: '1.4.0' } },
+      }) as Promise<void>;
+      if (state === 'unavailable') {
+        await expect(result).rejects.toThrow('unavailable');
+        expect(setOutput).not.toHaveBeenCalled();
+      } else {
+        await result;
+        expect(setOutput).toHaveBeenCalledExactlyOnceWith(
+          'published',
+          String(state === 'published'),
+        );
+      }
+      expect(getReleaseByTag).toHaveBeenCalledExactlyOnceWith({
+        owner: 'voidzero-dev',
+        repo: 'vite-plus',
+        tag: 'v1.4.0',
+      });
+      for (const name of [
+        'Create release body',
+        'Create GitHub Release',
+        'Publish GitHub Release',
+      ]) {
+        const step = steps.find((step) => step.name === name)!;
+        expect(step.if).toBe("steps.github-release.outputs.published != 'true'");
+      }
+      const upload = steps.find((step) => step.name === 'Create GitHub Release')!;
+      expect(upload.with?.overwrite_files).toBe(true);
+      expect(upload.with?.fail_on_unmatched_files).toBe(true);
+    },
+  );
+
   it('resolves the staged local CLI before publishing global binaries and moving latest', async () => {
     const { steps } = (await workflow('release')).jobs.Release;
     const publishLocal = steps.findIndex((step) => step.run?.includes('--tag staging'));
