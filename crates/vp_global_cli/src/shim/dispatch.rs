@@ -510,6 +510,12 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
             continue;
         }
 
+        // A successful npm command may be a dry-run configured through flags, env, or npmrc.
+        let package_dir = config::get_node_modules_dir(npm_prefix, package_name);
+        if package_dir.as_path().try_exists().unwrap_or(true) {
+            continue;
+        }
+
         let config = match BinConfig::load_sync(bin_name) {
             Ok(Some(c)) if c.source == BinSource::Npm => c,
             _ => continue,
@@ -608,15 +614,14 @@ fn read_npm_package_json(
 fn collect_bin_names_from_npm(
     packages: &[String],
     npm_prefix: &AbsolutePath,
-    node_dir: &AbsolutePath,
 ) -> Vec<(String, String)> {
     let mut all_bins = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-        let Some(content) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
-            continue;
-        };
+        let package_json_path =
+            config::get_node_modules_dir(npm_prefix, &package_name).join("package.json");
+        let Ok(content) = std::fs::read_to_string(package_json_path.as_path()) else { continue };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
@@ -911,7 +916,7 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
             // Collect bin names before uninstall (package.json will be gone after)
             let node_dir = node_prefix_from_binary(&node_path);
             let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir, &child_env);
-            let bin_names = collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir);
+            let bin_names = collect_bin_names_from_npm(&parsed.packages, &npm_prefix);
             let exit_code = exec::spawn_tool(&tool_path, args, child_env);
             if exit_code == 0 {
                 remove_npm_global_uninstall_links(&bin_names, &npm_prefix);
@@ -1892,6 +1897,61 @@ mod tests {
         let result =
             parse_npm_global_install(&s(&["install", "-g", "https://example.com/pkg.tgz"]));
         assert!(result.is_none(), "URLs should be filtered");
+    }
+
+    #[test]
+    fn test_npm_uninstall_preserves_links_until_package_is_removed() {
+        let temp = TempDir::new().unwrap();
+        let npm_prefix = AbsolutePathBuf::new(temp.path().join("npm-prefix")).unwrap();
+        let package_dir = config::get_node_modules_dir(&npm_prefix, "test-package");
+        std::fs::create_dir_all(&package_dir).unwrap();
+        let source = package_dir.join("cli.js");
+        std::fs::write(&source, "console.log('test');").unwrap();
+
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let bin_dir = config::get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            create_bin_link(&bin_dir, "test-cli", &source, "test-package", "22.18.0");
+            let link = bin_dir.join("test-cli");
+            let metadata_path = BinConfig::path("test-cli").unwrap();
+            let metadata = std::fs::read(&metadata_path).unwrap();
+            assert!(link.as_path().exists());
+
+            let bins = vec![("test-cli".to_string(), "test-package".to_string())];
+            remove_npm_global_uninstall_links(&bins, &npm_prefix);
+
+            assert!(link.as_path().exists(), "dry-run must preserve the installed command");
+            assert_eq!(std::fs::read(&metadata_path).unwrap(), metadata);
+            #[cfg(windows)]
+            assert!(bin_dir.join("test-cli.cmd").as_path().exists());
+
+            std::fs::remove_dir_all(&package_dir).unwrap();
+            remove_npm_global_uninstall_links(&bins, &npm_prefix);
+
+            assert!(std::fs::symlink_metadata(&link).is_err());
+            assert!(!metadata_path.as_path().exists());
+            #[cfg(windows)]
+            assert!(!bin_dir.join("test-cli.cmd").as_path().exists());
+        });
+    }
+
+    #[test]
+    fn test_npm_uninstall_does_not_collect_bins_from_another_prefix() {
+        let temp = TempDir::new().unwrap();
+        let npm_prefix = AbsolutePathBuf::new(temp.path().join("npm-prefix")).unwrap();
+        let node_dir = AbsolutePathBuf::new(temp.path().join("node")).unwrap();
+        let package_dir = config::get_node_modules_dir(&node_dir, "test-package");
+        std::fs::create_dir_all(&package_dir).unwrap();
+        std::fs::write(
+            package_dir.join("package.json"),
+            r#"{"name":"test-package","bin":{"test-cli":"cli.js"}}"#,
+        )
+        .unwrap();
+
+        assert!(
+            collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix).is_empty(),
+            "uninstall must only collect binaries installed in the selected npm prefix"
+        );
     }
 
     // --- parse_npm_global_uninstall tests ---

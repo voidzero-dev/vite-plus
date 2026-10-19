@@ -11,3 +11,35 @@ steps = [
   { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli"], comment = "Should be gone", continue-on-failure = true },
   { argv = ["vpt", "rm", "-rf", "custom-prefix"], comment = "Cleanup", continue-on-failure = true },
 ]
+
+[[case]]
+name = "npm_global_uninstall_dry_run"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { tty = false, argv = ["npm", "install", "-g", "--prefix", "./custom-prefix", "./npm-global-prefix-pkg"], comment = "Install a local package and create its Vite+ link" },
+  { tty = false, argv = ["npm", "uninstall", "-g", "--prefix", "./custom-prefix", "npm-global-prefix-pkg", "--dry-run"], comment = "CLI dry-run must preserve the package, npm binary, link, and BinConfig" },
+  ["vpt", "stat-file", "custom-prefix/lib/node_modules/npm-global-prefix-pkg/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "custom-prefix/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  ["npm-global-prefix-cli"],
+  { tty = false, argv = ["npm", "uninstall", "-g", "--prefix", "./custom-prefix", "npm-global-prefix-pkg"], envs = [["npm_config_dry_run", "true"]], comment = "Environment-configured dry-run must also preserve installed state" },
+  ["vpt", "stat-file", "custom-prefix/lib/node_modules/npm-global-prefix-pkg/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "custom-prefix/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  ["npm-global-prefix-cli"],
+  ["vpt", "write-file", "dry-run.npmrc", "dry-run=true\n"],
+  { tty = false, argv = ["npm", "uninstall", "-g", "--prefix", "./custom-prefix", "npm-global-prefix-pkg"], envs = [["npm_config_userconfig", "${workspace}/dry-run.npmrc"]], comment = "User npmrc dry-run must also preserve installed state" },
+  ["vpt", "stat-file", "custom-prefix/lib/node_modules/npm-global-prefix-pkg/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "custom-prefix/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  ["npm-global-prefix-cli"],
+  { tty = false, argv = ["npm", "uninstall", "-g", "--prefix", "./custom-prefix", "npm-global-prefix-pkg"], comment = "A real uninstall must still clean up the package, npm binary, link, and BinConfig" },
+  ["vpt", "stat-file", "custom-prefix/lib/node_modules/npm-global-prefix-pkg", "--assert", "missing"],
+  ["vpt", "stat-file", "custom-prefix/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "missing"],
+]
