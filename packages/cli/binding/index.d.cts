@@ -3879,6 +3879,12 @@ export declare function removeConfigKey(
   configKey: string,
 ): MergeJsonConfigResult;
 
+/** Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`. */
+export declare function resolveNpmAuthorization(cwd: string, url: string): string | null;
+
+/** Resolve the npm registry for packages in `scope` (without `@`) from the npm config at `cwd`. */
+export declare function resolveNpmRegistry(cwd: string, scope?: string | undefined | null): string;
+
 /**
  * Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.
  *
