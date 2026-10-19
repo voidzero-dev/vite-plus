@@ -2,7 +2,7 @@
 
 ## `vp migrate --no-interactive`
 
-.nvmrc should take priority over volta.node
+an existing .nvmrc is kept and volta.node is not converted
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -10,25 +10,22 @@ VITE+ - The Unified Toolchain for the Web
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied
-• Node version manager file migrated to .node-version
-→ Manual follow-up:
-  - Remove the "volta" field from package.json
 ```
 
-## `vpt print-file .node-version`
+## `vpt stat-file .node-version --assert-not file`
 
-check .node-version comes from .nvmrc (v24.11.0), not volta.node (18.0.0)
-
-```
-24.11.0
-```
-
-## `vpt stat-file .nvmrc --assert-not file`
-
-check .nvmrc is removed
+no .node-version is written to shadow .nvmrc
 
 ```
-.nvmrc: missing
+.node-version: missing
+```
+
+## `vpt print-file .nvmrc`
+
+.nvmrc is left untouched
+
+```
+<version>
 ```
 
 ## `vpt print-file package.json`
