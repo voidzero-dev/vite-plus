@@ -205,3 +205,27 @@ steps = [
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The first consumer keeps the original plugin diagnostic", continue-on-failure = true },
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "The second consumer keeps the original plugin diagnostic", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_workspace_symlink_contexts"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "rm", "packages/a/.oxlintrc.json"], snapshot = false },
+  { argv = ["vpt", "rm", "packages/b/.oxlintrc.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "shared/lint.json", '{"extends":["./base.json"],"options":{"typeAware":false,"typeCheck":false}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "shared/base.json", '{"rules":{"no-console":"off"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/a/base.json", '{"rules":{"no-console":"error"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/b/base.json", '{"rules":{"no-console":"warn"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/a/index.js", 'console.log("hello");'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/b/index.js", 'console.log("hello");'], snapshot = false },
+  { argv = ["node", "create-config-links.mjs"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "The first alias resolves its local base to an error", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/b", comment = "The second alias resolves the same extends string to a warning" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "packages/a/vite.config.mjs"] },
+  { argv = ["vpt", "print-file", "packages/b/vite.config.mjs"] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The migrated first consumer retains its error", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "The migrated second consumer retains its warning" },
+]

@@ -375,7 +375,7 @@ describe('Oxlint JSON extends migration', () => {
       createWorkspace();
       const root = write('.oxlintrc.json', { rules: { 'no-console': 'off' } });
       const shared = write('shared/lint.json', {
-        ...(extendsRoot ? { extends: ['../.oxlintrc.json'] } : {}),
+        ...(extendsRoot ? { extends: [root] } : {}),
         rules: { 'no-console': 'error' },
         options: { typeAware: false, typeCheck: false },
       });
@@ -413,9 +413,9 @@ describe('Oxlint JSON extends migration', () => {
 
   it('preserves a failed symlinked consumer after its sibling completes migration', async () => {
     createWorkspace();
-    write('.oxlintrc.json', { rules: { 'no-console': 'off' } });
+    const root = write('.oxlintrc.json', { rules: { 'no-console': 'off' } });
     write('shared/lint.json', {
-      extends: ['../.oxlintrc.json'],
+      extends: [root],
       rules: { 'no-console': 'error' },
     });
     for (const name of ['a', 'b']) {
@@ -491,6 +491,105 @@ describe('Oxlint JSON extends migration', () => {
     const { lint } = await loadConfig(path.join(project, 'packages/a'));
     expect(lint!.jsPlugins).toContain('./plugin.mjs');
   });
+
+  it('resolves each symlinked root inheritance graph from its own directory', async () => {
+    createWorkspace();
+    write('shared/lint.json', { extends: ['./base.json'] });
+    write('shared/base.json', { rules: { 'no-console': 'off' } });
+    for (const [name, severity] of [
+      ['a', 'error'],
+      ['b', 'warn'],
+    ]) {
+      write(`packages/${name}/base.json`, { rules: { 'no-console': severity } });
+      fs.symlinkSync(
+        '../../shared/lint.json',
+        path.join(project, `packages/${name}/.oxlintrc.json`),
+      );
+    }
+
+    expect(migrateWorkspace().warnings).toEqual([]);
+
+    expect(
+      (await loadConfig(path.join(project, 'packages/a'))).lint!.extends![0].rules!['no-console'],
+    ).toBe('error');
+    expect(
+      (await loadConfig(path.join(project, 'packages/b'))).lint!.extends![0].rules!['no-console'],
+    ).toBe('warn');
+  });
+
+  it('resolves nested symlink dependencies and plugins from their declared directory', async () => {
+    write('shared/lint.json', { extends: ['./base.json'], jsPlugins: ['./plugin.mjs'] });
+    write('shared/base.json', { rules: { 'no-console': 'off' } });
+    write('base.json', { rules: { 'no-console': 'error' } });
+    fs.symlinkSync('./shared/lint.json', path.join(project, 'alias.json'));
+    write('.oxlintrc.json', { extends: ['./alias.json'] });
+
+    const report = createMigrationReport();
+    mergeViteConfigFiles(project, true, report);
+
+    expect(report.warnings).toEqual([]);
+    const { lint } = await loadConfig();
+    expect(lint!.extends![0].extends![0].rules!['no-console']).toBe('error');
+    expect(lint!.extends![0].jsPlugins).toEqual([path.join(project, 'plugin.mjs')]);
+  });
+
+  it('does not reuse a shared module resolved from a different symlink context', async () => {
+    createWorkspace();
+    write('shared/lint.json', { extends: ['./base.json'] });
+    write('shared/base.json', { rules: { 'no-console': 'off' } });
+    for (const [name, severity] of [
+      ['a', 'error'],
+      ['b', 'warn'],
+    ]) {
+      write(`packages/${name}/base.json`, { rules: { 'no-console': severity } });
+      fs.symlinkSync('../../shared/lint.json', path.join(project, `packages/${name}/alias.json`));
+      write(`packages/${name}/.oxlintrc.json`, { extends: ['./alias.json'] });
+    }
+
+    const report = migrateWorkspace();
+
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('already exists');
+    expect(
+      (await loadConfig(path.join(project, 'packages/a'))).lint!.extends![0].extends![0].rules![
+        'no-console'
+      ],
+    ).toBe('error');
+    expect(
+      resolveOxlintConfigExtends(path.join(project, 'packages/b/.oxlintrc.json')).config.extends![0]
+        .extends![0].rules!['no-console'],
+    ).toBe('warn');
+  });
+
+  it('shares module edits with an owner reached through a symlink alias', async () => {
+    createWorkspace(['a']);
+    write('.oxlintrc.json', { rules: { 'no-console': 'warn' } });
+    fs.symlinkSync('../../.oxlintrc.json', path.join(project, 'packages/a/alias.json'));
+    write('packages/a/.oxlintrc.json', { extends: ['./alias.json'] });
+
+    expect(migrateWorkspace(['a']).warnings).toEqual([]);
+
+    const modulePath = path.join(project, '.oxlintrc.ts');
+    fs.writeFileSync(modulePath, fs.readFileSync(modulePath, 'utf8').replace('"warn"', '"error"'));
+    expect((await loadConfig()).lint!.extends![0].rules!['no-console']).toBe('error');
+    expect(
+      (await loadConfig(path.join(project, 'packages/a'))).lint!.extends![0].rules!['no-console'],
+    ).toBe('error');
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves literal backslashes in plugin filenames',
+    async () => {
+      write('base.json', { jsPlugins: ['./plugin\\name.mjs'] });
+      write('.oxlintrc.json', { extends: ['./base.json'] });
+
+      mergeViteConfigFiles(project, true);
+
+      expect((await loadConfig()).lint!.extends![0].jsPlugins).toEqual([
+        path.join(project, 'plugin\\name.mjs'),
+      ]);
+    },
+  );
 
   it('retains transitive JSON dependencies of a workspace whose module output conflicts', async () => {
     createWorkspace(['a', 'b', 'c']);

@@ -15,27 +15,41 @@ import {
   type OxlintModulePlan,
 } from './shared.ts';
 
+function createConfigCache() {
+  return {
+    sources: new Map<string, Record<string, unknown>>(),
+    files: new Map<string, OxlintConfigFile>(),
+  };
+}
+
 /** Read the inheritance graph before migration removes any workspace configs. */
 export function resolveOxlintConfigExtends(
   configPath: string,
-  cache = new Map<string, OxlintConfigFile>(),
+  cache = createConfigCache(),
   stack: string[] = [],
 ): OxlintConfigFile {
-  const filename = fs.realpathSync(configPath);
-  if (stack.includes(filename)) {
-    throw new Error(`Circular Oxlint extends: ${[...stack, filename].join(' -> ')}`);
+  const filename = configPathInRealDirectory(configPath);
+  const sourcePath = fs.realpathSync(filename);
+  if (stack.includes(sourcePath)) {
+    throw new Error(`Circular Oxlint extends: ${[...stack, sourcePath].join(' -> ')}`);
   }
-  const cached = cache.get(filename);
+  const cached = cache.files.get(filename);
   if (cached) {
     return cached;
   }
-  const errors: ParseError[] = [];
-  const config = parseJsonc(fs.readFileSync(filename, 'utf8'), errors, {
-    allowTrailingComma: true,
-  }) as Record<string, unknown>;
-  if (errors.length > 0 || !config || typeof config !== 'object' || Array.isArray(config)) {
-    throw new Error(`Invalid Oxlint JSON config: ${filename}`);
+  let source = cache.sources.get(sourcePath);
+  if (!source) {
+    const errors: ParseError[] = [];
+    source = parseJsonc(fs.readFileSync(sourcePath, 'utf8'), errors, {
+      allowTrailingComma: true,
+    }) as Record<string, unknown>;
+    if (errors.length > 0 || !source || typeof source !== 'object' || Array.isArray(source)) {
+      throw new Error(`Invalid Oxlint JSON config: ${filename}`);
+    }
+    cache.sources.set(sourcePath, source);
   }
+  // Parsing is shared by source identity, but relative paths belong to each declaring config.
+  const config = structuredClone(source);
   delete config.$schema;
   const inherited = config.extends;
   if (
@@ -48,7 +62,7 @@ export function resolveOxlintConfigExtends(
     path.resolve(path.dirname(filename), entry),
   );
   const children = extendsPaths.map((childPath) => {
-    const child = resolveOxlintConfigExtends(childPath, cache, [...stack, filename]);
+    const child = resolveOxlintConfigExtends(childPath, cache, [...stack, sourcePath]);
     child.shared = true;
     return child;
   });
@@ -61,7 +75,7 @@ export function resolveOxlintConfigExtends(
     extends: children,
     extendsPaths,
   };
-  cache.set(filename, file);
+  cache.files.set(filename, file);
   return file;
 }
 
@@ -69,7 +83,7 @@ export function prepareOxlintConfigs(
   projectPaths: string[],
 ): Map<string, OxlintConfigMigration | Error> {
   const configs = new Map<string, OxlintConfigMigration | Error>();
-  const cache = new Map<string, OxlintConfigFile>();
+  const cache = createConfigCache();
   for (const projectPath of projectPaths) {
     const filename = detectConfigs(projectPath).oxlintConfig;
     if (!filename) {
@@ -80,6 +94,17 @@ export function prepareOxlintConfigs(
       configs.set(configPath, { file: resolveOxlintConfigExtends(configPath, cache) });
     } catch (error) {
       configs.set(configPath, error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+  // An owner must also import its source when another consumer reaches it through an alias.
+  const sharedSources = new Set(
+    [...cache.files.values()]
+      .filter((file) => file.shared)
+      .map((file) => fs.realpathSync(file.filename)),
+  );
+  for (const file of cache.files.values()) {
+    if (sharedSources.has(fs.realpathSync(file.filename))) {
+      file.shared = true;
     }
   }
   return configs;
@@ -120,7 +145,7 @@ export function removeMigratedOxlintConfigs(
   const files = new Set<OxlintConfigFile>();
   const retained = new Set<OxlintConfigFile>();
   const retainedPaths = new Set<string>();
-  const removableSources = new Set<OxlintConfigFile>();
+  const removableSources = new Set<string>();
   const removalCandidates = new Set<string>();
   for (const [filename, migration] of configs) {
     // An unreadable graph can contain references we could not discover.
@@ -138,13 +163,23 @@ export function removeMigratedOxlintConfigs(
     removalCandidates.add(filename);
     // Unlinking a workspace symlink leaves its shared JSON target on disk.
     if (!fs.lstatSync(filename).isSymbolicLink()) {
-      removableSources.add(file);
+      removableSources.add(fs.realpathSync(filename));
     }
   }
-  for (const file of files) {
-    if (!removableSources.has(file)) {
-      collectConfigFiles(file, retained);
+  const cache = createConfigCache();
+  try {
+    for (const file of files) {
+      const sourcePath = fs.realpathSync(file.filename);
+      if (!removableSources.has(sourcePath)) {
+        // A symlink target can resolve different dependencies from its aliases.
+        const source = resolveOxlintConfigExtends(sourcePath, cache);
+        collectConfigFiles(source, retained);
+        collectConfigFiles(source, files);
+      }
     }
+  } catch {
+    // Keep all JSON paths when a remaining source's dependencies cannot be determined.
+    return;
   }
   for (const file of retained) {
     retainConfigPath(file.filename, retainedPaths);
@@ -216,11 +251,19 @@ function isRelativePluginPath(specifier: string): boolean {
 }
 
 function moduleProvenance(file: OxlintConfigFile): string {
-  return `// Generated by vp migrate from ${encodeURIComponent(path.basename(file.filename))}.`;
+  const sourcePath = fs.realpathSync(file.filename);
+  const hasRelativePlugins = [file.config, ...(file.config.overrides ?? [])].some((layer) =>
+    layer.jsPlugins?.some((entry) =>
+      isRelativePluginPath(typeof entry === 'string' ? entry : entry.specifier),
+    ),
+  );
+  const contextPath = file.extends.length || hasRelativePlugins ? file.filename : sourcePath;
+  const relative = path.relative(path.dirname(sourcePath), contextPath).split(path.sep).join('/');
+  return `// Generated by vp migrate from ${encodeURIComponent(relative)}.`;
 }
 
 function reusableModulePath(file: OxlintConfigFile): string | undefined {
-  const filename = file.filename.replace(/\.jsonc?$/i, '') + '.ts';
+  const filename = fs.realpathSync(file.filename).replace(/\.jsonc?$/i, '') + '.ts';
   if (
     !fs.existsSync(filename.replace(/\.ts$/, '.js')) &&
     fs.existsSync(filename) &&
@@ -268,7 +311,7 @@ export function prepareOxlintConfigModules(
       return;
     }
     validated.add(file);
-    const relative = path.relative(boundary, file.filename);
+    const relative = path.relative(boundary, fs.realpathSync(file.filename));
     if (
       path.isAbsolute(relative) ||
       relative === '..' ||
@@ -306,9 +349,9 @@ export function prepareOxlintConfigModules(
   importedFiles.forEach(validate);
 
   function generate(file: OxlintConfigFile): string {
-    const filename = file.filename.replace(/\.jsonc?$/i, '') + '.ts';
+    const filename = fs.realpathSync(file.filename).replace(/\.jsonc?$/i, '') + '.ts';
     const existing = modules.get(filename);
-    if (existing && existing.file !== file) {
+    if (existing && moduleProvenance(existing.file) !== moduleProvenance(file)) {
       throw new Error(`Multiple Oxlint configs would create ${filename}`);
     }
     if (file.modulePath) {
@@ -343,7 +386,10 @@ export function prepareOxlintConfigModules(
     function pluginExpression(specifier: string): string {
       if (isRelativePluginPath(specifier)) {
         needsFileUrl = true;
-        const url = specifier.replaceAll('\\', '/').split('/').map(encodeURIComponent).join('/');
+        const pluginPath = path.resolve(path.dirname(file.filename), specifier);
+        const relative = path.relative(path.dirname(filename), pluginPath);
+        const encoded = relative.split(path.sep).map(encodeURIComponent).join('/');
+        const url = encoded.startsWith('../') ? encoded : `./${encoded}`;
         return `fileURLToPath(new URL(${JSON.stringify(url)}, import.meta.url))`;
       }
       return JSON.stringify(specifier);
