@@ -13,7 +13,7 @@
   "vibe-dashboard": {
     "repository": "https://github.com/voidzero-dev/vibe-dashboard.git",
     "branch": "main",
-    "hash": "738b92584adf4d5ca4f1ad992519c5dffa12e200",
+    "hash": "be10551d4b73b7bcb53491311b574fb214a38e1f",
     "forceFreshMigration": true,
     "playwright": true
   },
