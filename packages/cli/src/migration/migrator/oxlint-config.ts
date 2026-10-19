@@ -44,18 +44,23 @@ export function resolveOxlintConfigExtends(
   ) {
     throw new Error(`Expected an array of file paths in ${filename}: extends`);
   }
-  const children = ((inherited ?? []) as string[]).map((entry) => {
-    const child = resolveOxlintConfigExtends(path.resolve(path.dirname(filename), entry), cache, [
-      ...stack,
-      filename,
-    ]);
+  const extendsPaths = ((inherited ?? []) as string[]).map((entry) =>
+    path.resolve(path.dirname(filename), entry),
+  );
+  const children = extendsPaths.map((childPath) => {
+    const child = resolveOxlintConfigExtends(childPath, cache, [...stack, filename]);
     child.shared = true;
     return child;
   });
   if (inherited !== undefined) {
     config.extends = children.map((child) => child.config);
   }
-  const file: OxlintConfigFile = { filename, config, extends: children };
+  const file: OxlintConfigFile = {
+    filename,
+    config,
+    extends: children,
+    extendsPaths,
+  };
   cache.set(filename, file);
   return file;
 }
@@ -90,14 +95,33 @@ function collectConfigFiles(file: OxlintConfigFile, target: Set<OxlintConfigFile
   }
 }
 
+function configPathInRealDirectory(filename: string): string {
+  return path.join(fs.realpathSync(path.dirname(filename)), path.basename(filename));
+}
+
+/** Retain each link in a chain, without conflating independent aliases of its target. */
+function retainConfigPath(filename: string, retained: Set<string>): void {
+  filename = configPathInRealDirectory(filename);
+  while (!retained.has(filename)) {
+    retained.add(filename);
+    if (!fs.lstatSync(filename).isSymbolicLink()) {
+      return;
+    }
+    filename = configPathInRealDirectory(
+      path.resolve(path.dirname(filename), fs.readlinkSync(filename)),
+    );
+  }
+}
+
 /** Retained JSON consumers still need their full inheritance graph on disk. */
 export function removeMigratedOxlintConfigs(
   configs: Map<string, OxlintConfigMigration | Error>,
 ): void {
   const files = new Set<OxlintConfigFile>();
   const retained = new Set<OxlintConfigFile>();
+  const retainedPaths = new Set<string>();
   const removableSources = new Set<OxlintConfigFile>();
-  const removalCandidates = new Map<string, OxlintConfigFile>();
+  const removalCandidates = new Set<string>();
   for (const [filename, migration] of configs) {
     // An unreadable graph can contain references we could not discover.
     // Preserve all candidates rather than break that consumer's fallback.
@@ -107,10 +131,11 @@ export function removeMigratedOxlintConfigs(
     const { file, migrated } = migration;
     collectConfigFiles(file, files);
     if (!migrated) {
+      retainConfigPath(filename, retainedPaths);
       collectConfigFiles(file, retained);
       continue;
     }
-    removalCandidates.set(filename, file);
+    removalCandidates.add(filename);
     // Unlinking a workspace symlink leaves its shared JSON target on disk.
     if (!fs.lstatSync(filename).isSymbolicLink()) {
       removableSources.add(file);
@@ -118,13 +143,17 @@ export function removeMigratedOxlintConfigs(
   }
   for (const file of files) {
     if (!removableSources.has(file)) {
-      for (const child of file.extends) {
-        collectConfigFiles(child, retained);
-      }
+      collectConfigFiles(file, retained);
     }
   }
-  for (const [filename, file] of removalCandidates) {
-    if (!retained.has(file)) {
+  for (const file of retained) {
+    retainConfigPath(file.filename, retainedPaths);
+    for (const filename of file.extendsPaths) {
+      retainConfigPath(filename, retainedPaths);
+    }
+  }
+  for (const filename of removalCandidates) {
+    if (!retainedPaths.has(configPathInRealDirectory(filename))) {
       fs.unlinkSync(filename);
     }
   }

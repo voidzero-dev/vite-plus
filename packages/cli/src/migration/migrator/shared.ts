@@ -46,6 +46,8 @@ export interface OxlintConfigFile {
   filename: string;
   config: OxlintConfig;
   extends: OxlintConfigFile[];
+  // Keep declared paths as well as canonical sources for JSON fallback cleanup.
+  extendsPaths: string[];
   // A dependency must use the same generated module in its owning workspace.
   shared?: boolean;
   // A committed or previously generated module that workspace consumers can reuse.

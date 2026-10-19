@@ -155,3 +155,53 @@ steps = [
   { argv = ["vp", "lint", "--threads=1", "globals.js"], comment = "Shared-module edits update all three owner fields", continue-on-failure = true },
   { argv = ["vp", "lint", "--threads=1", "settings.js"], comment = "Shared-module edits update all three owner fields", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_workspace_symlink_retry"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "rm", "packages/a/.oxlintrc.json"], snapshot = false },
+  { argv = ["vpt", "rm", "packages/b/.oxlintrc.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "shared/lint.json", '{"extends":["./base.json"],"rules":{"no-console":"error"},"options":{"typeAware":false,"typeCheck":false}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "shared/base.json", '{}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/a/index.js", 'console.log("hello");'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/b/index.js", 'console.log("hello");'], snapshot = false },
+  { argv = ["node", "create-config-links.mjs", "--with-base"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/b/vite.config.mjs", "export { default } from './another-config.mjs';"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "The original symlinked consumer reports no-console", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/b", comment = "The second alias uses the same rules", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "stat-file", "packages/a/.oxlintrc.json", "--assert", "missing"], comment = "The successful alias is removed independently" },
+  { argv = ["vpt", "stat-file", "packages/b/.oxlintrc.json", "--assert", "symlink"], comment = "The failed consumer retains its own alias" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The migrated consumer keeps the same diagnostic", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/b", comment = "The preserved consumer keeps a working JSON fallback", continue-on-failure = true },
+  { argv = ["vpt", "write-file", "packages/b/vite.config.mjs", "export default {};"], comment = "Fix the unsupported export before retrying" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "stat-file", "packages/b/.oxlintrc.json", "--assert", "missing"], comment = "The repaired alias is removed after its own migration completes" },
+  { argv = ["vpt", "stat-file", "shared/lint.json", "--assert", "file"], comment = "Unlinking both consumers preserves the shared source" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "The recovered consumer keeps the original diagnostic", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_workspace_symlink_plugins"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "rm", "packages/a/.oxlintrc.json"], snapshot = false },
+  { argv = ["vpt", "rm", "packages/b/.oxlintrc.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "shared/lint.json", '{"jsPlugins":[{"name":"fixture","specifier":"./plugin.mjs"}],"rules":{"fixture/require-setting":"error"},"options":{"typeAware":false,"typeCheck":false}}'], snapshot = false },
+  { argv = ["vpt", "cp", "settings-plugin.mjs", "packages/a/plugin.mjs"], snapshot = false },
+  { argv = ["vpt", "cp", "settings-plugin.mjs", "packages/b/plugin.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/a/index.js", "export const value = 1;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/b/index.js", "export const value = 1;\n"], snapshot = false },
+  { argv = ["node", "create-config-links.mjs"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "Oxlint resolves the relative root plugin from the alias directory", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/b", comment = "Each workspace uses its own relative plugin", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "packages/a/vite.config.mjs"], comment = "The root plugin path stays relative to the workspace" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The first consumer keeps the original plugin diagnostic", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "The second consumer keeps the original plugin diagnostic", continue-on-failure = true },
+]

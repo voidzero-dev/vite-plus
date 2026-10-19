@@ -434,12 +434,62 @@ describe('Oxlint JSON extends migration', () => {
     expect((await loadConfig(path.join(project, 'packages/a'))).lint!.rules!['no-console']).toBe(
       'error',
     );
+    expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.json'))).toBe(false);
     expect(fs.readFileSync(viteConfig, 'utf8')).toBe(original);
     const preserved = path.join(project, 'packages/b/.oxlintrc.json');
     expect(fs.lstatSync(preserved).isSymbolicLink()).toBe(true);
     expect(resolveOxlintConfigExtends(preserved).config.extends![0].rules!['no-console']).toBe(
       'off',
     );
+
+    write('packages/b/vite.config.mjs', 'export default {};');
+    const retryReport = createMigrationReport();
+    expect(
+      retryPreservedOxlintConfigs(
+        project,
+        true,
+        retryReport,
+        ['a', 'b'].map((name) => ({ name, path: `packages/${name}` })),
+      ),
+    ).toBe(true);
+    expect(retryReport.warnings).toEqual([]);
+    expect(fs.existsSync(preserved)).toBe(false);
+    expect(fs.existsSync(path.join(project, 'shared/lint.json'))).toBe(true);
+  });
+
+  it.each(['extends', 'symlink'])(
+    'retains an alias referenced through a preserved %s',
+    (reference) => {
+      createWorkspace();
+      write('shared/lint.json', { rules: { 'no-console': 'error' } });
+      const alias = path.join(project, 'packages/a/.oxlintrc.json');
+      const consumer = path.join(project, 'packages/b/.oxlintrc.json');
+      fs.symlinkSync('../../shared/lint.json', alias);
+      if (reference === 'symlink') {
+        fs.symlinkSync('../a/.oxlintrc.json', consumer);
+      } else {
+        write('packages/b/.oxlintrc.json', { extends: ['../a/.oxlintrc.json'] });
+      }
+      write('packages/b/vite.config.mjs', "export { default } from './another-config.mjs';");
+
+      expect(migrateWorkspace().warnings).toHaveLength(1);
+
+      expect(fs.lstatSync(alias).isSymbolicLink()).toBe(true);
+      const fallback = resolveOxlintConfigExtends(consumer).config;
+      const lint = reference === 'symlink' ? fallback : fallback.extends![0];
+      expect(lint.rules!['no-console']).toBe('error');
+    },
+  );
+
+  it('keeps relative plugins in symlinked roots anchored to their workspace', async () => {
+    createWorkspace(['a']);
+    write('shared/lint.json', { jsPlugins: ['./plugin.mjs'] });
+    fs.symlinkSync('../../shared/lint.json', path.join(project, 'packages/a/.oxlintrc.json'));
+
+    expect(migrateWorkspace(['a']).warnings).toEqual([]);
+
+    const { lint } = await loadConfig(path.join(project, 'packages/a'));
+    expect(lint!.jsPlugins).toContain('./plugin.mjs');
   });
 
   it('retains transitive JSON dependencies of a workspace whose module output conflicts', async () => {

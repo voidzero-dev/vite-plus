@@ -31,6 +31,8 @@ Migration assumes ESM projects. Shared configs become sibling `.ts` files. Gener
 
 JS-plugin declarations stay in their original config or override. Relative plugin paths become absolute paths at runtime through `fileURLToPath(new URL(..., import.meta.url))`. Explicit inherited `typeAware` and `typeCheck` settings take precedence over migration defaults.
 
+Cleanup removes each completed symlink alias independently, but retains aliases and link chains that remaining JSON consumers reference.
+
 A shared config's owner keeps `env`, `globals`, `settings`, and `ignorePatterns` at the top level of its `lint` block through references to the shared module. Edits to these fields apply to the owner. Other consumers do not inherit them.
 
 Generated modules include a source marker. A later migration attempt reuses these modules without replacing user edits, so a preserved consumer can migrate after its conflict is resolved. Existing modules without a matching marker remain conflicts.
