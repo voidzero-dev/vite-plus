@@ -39,3 +39,13 @@ should preview publish without actually publishing (uses pnpm publish --dry-run)
 
 ```
 ```
+
+## `vp pm publish --dry-run --json`
+
+Reject pnpm 11.0.6, which silently omitted JSON output.
+
+**Exit code:** 1
+
+```
+pnpm >= 11.0.0 && < 11.0.7 does not support --json.
+```

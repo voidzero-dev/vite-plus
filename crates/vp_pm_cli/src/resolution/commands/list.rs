@@ -47,15 +47,15 @@ pub struct ListArgs {
     pub(crate) only_projects: bool,
 
     /// Use a finder function
-    #[arg(long, value_name = "FINDER_NAME", not_supported(npm, yarn, bun))]
+    #[arg(long, value_name = "FINDER_NAME", not_supported(npm, pnpm < "10.16.0", yarn, bun))]
     pub(crate) find_by: Option<String>,
 
     /// List across all workspaces
-    #[arg(short = 'r', long, not_supported(yarn, bun))]
+    #[arg(short = 'r', long, not_supported(npm < "7.14.0", yarn, bun))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(yarn, bun))]
+    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn, bun))]
     pub(crate) filter: Vec<String>,
 
     /// List global packages
@@ -550,7 +550,7 @@ mod tests {
     fn test_pnpm_list_find_by() {
         let command = expect_run(
             resolve(
-                &pnpm("10.0.0"),
+                &pnpm("10.16.0"),
                 ListArgs { find_by: Some("customFinder".to_string()), ..Default::default() },
             )
             .outcome,
