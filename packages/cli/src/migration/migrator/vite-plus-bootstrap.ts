@@ -753,6 +753,9 @@ export function detectVitePlusBootstrapPending(
     );
   }
   if (packageManager === PackageManager.pnpm) {
+    if (collectStandalonePnpmProjects(projectPath).length > 0) {
+      return true;
+    }
     if (!pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath)) {
       return true;
     }
@@ -971,7 +974,7 @@ export function ensureVitePlusBootstrap(
   }
 
   const standalonePnpmProjects =
-    workspaceInfo.packageManager === PackageManager.pnpm && !workspaceInfo.isMonorepo
+    workspaceInfo.packageManager === PackageManager.pnpm
       ? collectStandalonePnpmProjects(projectPath)
       : [];
 
@@ -1258,7 +1261,8 @@ export function ensureVitePlusBootstrap(
       result.packageManagerConfig = exoticChanged || pnpmWorkspaceCatalogBefore !== after;
     }
     for (const directory of standalonePnpmProjects) {
-      ensureStandalonePnpmWorkspace(directory);
+      const changed = ensureStandalonePnpmWorkspace(directory);
+      result.packageManagerConfig = result.packageManagerConfig || changed;
     }
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');

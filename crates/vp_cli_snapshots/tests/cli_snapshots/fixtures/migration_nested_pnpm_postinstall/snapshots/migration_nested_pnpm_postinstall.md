@@ -20,6 +20,11 @@ VITE+ - The Unified Toolchain for the Web
 install completes without postinstall recursion
 
 
+## `cd web && pnpm install --frozen-lockfile`
+
+the child's frozen install still succeeds
+
+
 ## `vpt print-file web/pnpm-workspace.yaml`
 
 the child keeps its install boundary

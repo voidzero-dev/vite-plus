@@ -6,6 +6,7 @@ unset-env = ["VP_SKIP_INSTALL"]
 steps = [
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "migrate a standalone project whose postinstall installs a nested pnpm project", timeout = 120000 },
   { argv = ["vp", "install"], comment = "install completes without postinstall recursion", snapshot = false, timeout = 120000 },
+  { argv = ["pnpm", "install", "--frozen-lockfile"], cwd = "web", comment = "the child's frozen install still succeeds", snapshot = false, timeout = 120000 },
   { argv = ["vpt", "print-file", "web/pnpm-workspace.yaml"], comment = "the child keeps its install boundary" },
   { argv = ["vpt", "stat-file", "web/node_modules/test-vite-plus-install", "--assert-not", "missing"], comment = "the child's dependency was installed" },
 ]

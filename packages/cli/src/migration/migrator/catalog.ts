@@ -17,6 +17,7 @@ import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { type NpmWorkspaces } from '../../utils/workspace.ts';
 import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../../utils/yaml.ts';
 import {
+  declaredPackageManager,
   dropRemovePackageOverrideKeys,
   ensurePnpmExoticSubdepsSetting,
   hasDirectVitePlusInstallEntry,
@@ -251,17 +252,22 @@ export function migratePnpmSettingsToWorkspaceYaml(
   });
 }
 
-export function ensureStandalonePnpmWorkspace(projectPath: string): void {
+export function ensureStandalonePnpmWorkspace(projectPath: string): boolean {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (fs.existsSync(pnpmWorkspaceYamlPath)) {
-    return;
+    return false;
   }
-  const pkg = readJsonFile(path.join(projectPath, 'package.json')) as {
-    pnpm?: PnpmPackageJsonSettings;
-  };
+  const pkg = readJsonFile(path.join(projectPath, 'package.json'));
+  // pnpm ignores package.json#workspaces. Copying its globs would expand the
+  // install and invalidate the child's existing frozen lockfile.
   fs.writeFileSync(pnpmWorkspaceYamlPath, 'packages:\n  - "."\n');
-  // Extract from the in-memory copy only: keep the child's manifest and lockfile.
-  migratePnpmSettingsToWorkspaceYaml(projectPath, takePnpmWorkspaceSettings(pkg));
+  const version = declaredPackageManager(pkg)?.version;
+  if (version === undefined || pnpmSupportsWorkspaceSettings(version)) {
+    // Extract from the in-memory copy only: keep the child's manifest and lockfile.
+    // Older pinned pnpm versions must keep reading their settings from package.json.
+    migratePnpmSettingsToWorkspaceYaml(projectPath, takePnpmWorkspaceSettings(pkg));
+  }
+  return true;
 }
 
 /**
