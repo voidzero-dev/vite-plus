@@ -129,6 +129,7 @@ jobs:
               # FIXME: Failed to load JS plugin: ./plugins/debugger.js
               # vp run ready
               vp fmt
+              node "$GITHUB_WORKSPACE/ecosystem-ci/verify-vibe-dashboard.ts"
               vp test --api.port="$ECOSYSTEM_VITEST_PORT"
               vp run build
           # FIXME: TypeError: Failed to fetch dynamically imported module

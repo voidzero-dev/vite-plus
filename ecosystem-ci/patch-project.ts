@@ -88,6 +88,25 @@ if (process.env.GITHUB_ENV) {
 
 await prepareWebdriverioProject(project, repoRoot, cli);
 
+if (project === 'vibe-dashboard') {
+  // Vitest 5.0.5's browser runner needs Vite's unbundled module middleware.
+  // With bundledDev, its runner scripts receive HTML and the session times out.
+  // Keep bundled dev enabled outside Vitest; verify-vibe-dashboard.ts loads the
+  // actual app in Chromium with that mode enabled.
+  // Remove this workaround when https://github.com/vitest-dev/vitest/issues/11052 is fixed.
+  const viteConfigPath = join(repoRoot, 'apps', 'dashboard', 'vite.config.ts');
+  const viteConfig = await readFile(viteConfigPath, 'utf-8');
+  const bundledDev = 'bundledDev: true';
+  if (viteConfig.split(bundledDev).length !== 2) {
+    throw new Error('vibe-dashboard patch: expected bundledDev to be enabled');
+  }
+  await writeFile(
+    viteConfigPath,
+    viteConfig.replace(bundledDev, 'bundledDev: process.env.VITEST !== "true"'),
+    'utf-8',
+  );
+}
+
 if (project === 'rollipop') {
   const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf-8');
   await writeFile(
