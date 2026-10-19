@@ -2,17 +2,28 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
-import { copyFileSync, mkdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { createArchive } from './archive.mjs';
 
 const interactive = process.argv.includes('interactive');
 const failure = process.argv.includes('failure');
+const resolutionRetry = process.argv.includes('resolution-retry');
 if (interactive) process.stdin.setRawMode(true);
 const home = resolve('home');
 const user = resolve('user');
 const external = resolve('external');
+const resolutionDir = resolve('resolution');
+const resolutionFile = join(resolutionDir, 'node-version');
 const nodeBin = join(home, 'js_runtime/node/99.0.0/bin');
 for (const directory of [nodeBin, user, external]) mkdirSync(directory, { recursive: true });
 // Use the runner's real Node for the mock pnpm program, without a network download.
@@ -75,10 +86,9 @@ server.listen(0, '127.0.0.1');
 await once(server, 'listening');
 const mirror = `http://127.0.0.1:${server.address().port}`;
 
-try {
-  console.log('Before installation: preserve this output.');
+async function runInstaller() {
   const child = spawn(join(external, 'vp'), [], {
-    stdio: ['ignore', 'pipe', 'inherit'],
+    stdio: ['ignore', 'pipe', resolutionRetry ? 'pipe' : 'inherit'],
     env: {
       ...process.env,
       HOME: user,
@@ -92,16 +102,49 @@ try {
       VP_NODE_MANAGER: 'no',
       VP_SHELL: 'zsh',
       VP_SKIP_DEPS_INSTALL: '',
+      VP_SETUP_NODE_VERSION: resolutionRetry ? '20.18.0' : '',
+      VP_SETUP_NODE_VERSION_FILE: resolutionRetry ? resolutionFile : '',
     },
   });
   let stdout = '';
+  let stderr = '';
   child.stdout.setEncoding('utf8').on('data', (chunk) => {
     stdout += chunk;
   });
+  child.stderr?.setEncoding('utf8').on('data', (chunk) => {
+    stderr += chunk;
+  });
   const [code, signal] = await once(child, 'exit');
   assert.equal(signal, null);
-  assert.equal(code, failure ? 1 : 0);
-  assert.deepEqual(phases, ['prepare', 'download', 'dependencies']);
+  return { code, stdout, stderr };
+}
+
+try {
+  console.log('Before installation: preserve this output.');
+  let result = await runInstaller();
+  if (resolutionRetry) {
+    assert.equal(result.code, 1, result.stderr);
+    assert.equal(result.stdout, '');
+    const installed = readdirSync(home)
+      .map((name) => join(home, name))
+      .filter((directory) => existsSync(join(directory, 'node_modules/vite-plus/package.json')));
+    assert.equal(installed.length, 1);
+    const marker = join(installed[0], 'bin/.vp-setup-complete');
+    assert.equal(existsSync(marker), false);
+    assert.equal(existsSync(resolutionFile), false);
+    assert.deepEqual(phases, ['download', 'prepare', 'dependencies']);
+    console.log('A failed resolution-file write leaves dependencies installed and setup incomplete.');
+
+    mkdirSync(resolutionDir);
+    result = await runInstaller();
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(readFileSync(resolutionFile, 'utf8'), '20.18.0');
+    assert.equal(existsSync(marker), true);
+    console.log('Retry returns the requested Node version without installing dependencies again.');
+  }
+  const { code, stdout, stderr } = result;
+  assert.equal(code, failure ? 1 : 0, stderr);
+  assert.deepEqual(phases, ['download', 'prepare', 'dependencies']);
   if (failure) {
     assert.equal(stdout, '');
     const log = readFileSync(join(home, 'upgrade.log'), 'utf8');
@@ -123,6 +166,6 @@ try {
   if (interactive) process.stdin.setRawMode(false);
   server.close();
   server.closeAllConnections();
-  for (const directory of [home, user, external])
+  for (const directory of [home, user, external, resolutionDir])
     rmSync(directory, { recursive: true, force: true });
 }

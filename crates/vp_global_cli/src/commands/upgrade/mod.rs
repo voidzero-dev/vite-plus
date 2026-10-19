@@ -231,7 +231,7 @@ async fn install_platform_and_main(
     install::generate_wrapper_package_json(version_dir, new_version).await?;
 
     // Install production dependencies (pnpm installs vite-plus + all transitive deps)
-    install::install_production_deps(version_dir, registry, !silent).await?;
+    install::install_production_deps(version_dir, registry, !silent, None).await?;
 
     // Save previous version for rollback
     let previous_version = install::save_previous_version(install_dir).await?;
