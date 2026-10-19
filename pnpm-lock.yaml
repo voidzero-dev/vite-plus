@@ -599,9 +599,6 @@ importers:
       pirates:
         specifier: 'catalog:'
         version: 4.0.7
-      rolldown:
-        specifier: workspace:rolldown@*
-        version: link:../../rolldown/packages/rolldown
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17

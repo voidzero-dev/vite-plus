@@ -384,7 +384,6 @@
     "nanotar": "catalog:",
     "picocolors": "catalog:",
     "pirates": "catalog:",
-    "rolldown": "workspace:*",
     "tinyglobby": "catalog:",
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",

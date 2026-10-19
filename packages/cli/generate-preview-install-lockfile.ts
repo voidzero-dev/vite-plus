@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 import { createTarGzip, parseTarGzip } from 'nanotar';
-import { build } from 'rolldown';
+import { build } from 'vite/rolldown';
 import { parse, parseAllDocuments } from 'yaml';
 
 import {
