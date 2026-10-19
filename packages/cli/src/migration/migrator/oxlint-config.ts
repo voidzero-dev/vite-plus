@@ -202,11 +202,18 @@ export function removeMigratedOxlintConfigs(configs: PreparedOxlintConfigs): boo
       removableSources.add(fs.realpathSync(filename));
     }
   }
+  const removablePaths = new Set([...removalCandidates].map(configPathInRealDirectory));
   const cache = createConfigCache();
   try {
     for (const file of files) {
       const sourcePath = fs.realpathSync(file.filename);
-      if (!removableSources.has(sourcePath)) {
+      const survivingAlias =
+        fs.lstatSync(file.filename).isSymbolicLink() &&
+        !removablePaths.has(configPathInRealDirectory(file.filename));
+      if (survivingAlias) {
+        collectConfigFiles(file, retained);
+      }
+      if (survivingAlias || !removableSources.has(sourcePath)) {
         // A symlink target can resolve different dependencies from its aliases.
         const source = resolveOxlintConfigExtends(sourcePath, cache);
         collectConfigFiles(source, retained);

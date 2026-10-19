@@ -82,6 +82,7 @@ VITE+ - The Unified Toolchain for the Web
 The root plugin path stays relative to the workspace
 
 ```
+// vp migrate: merged packages%2Fa%2F.oxlintrc.json (2e3968680d769859f24911af4896427f).
 export default {
   lint: {
     jsPlugins: [

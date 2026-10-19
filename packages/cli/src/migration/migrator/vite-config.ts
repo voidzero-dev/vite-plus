@@ -302,9 +302,14 @@ export function retryPreservedOxlintConfigs(
     workspaceRoot,
     ...(packages ?? []).map((pkg) => path.join(workspaceRoot, pkg.path)),
   ]);
-  let updated = false;
+  const pending: Array<{
+    filename: string;
+    migration: OxlintConfigMigration;
+    configs: ConfigFiles;
+  }> = [];
+  let hasCompletedMerge = false;
   for (const [filename, migration] of prepared) {
-    if (migration instanceof Error || !hasGeneratedOxlintConfig(migration.file)) {
+    if (migration instanceof Error) {
       continue;
     }
     const projectPath = path.dirname(filename);
@@ -314,8 +319,17 @@ export function retryPreservedOxlintConfigs(
       const source = fs.readFileSync(existingViteConfig, 'utf8');
       const marker = oxlintMigrationMarker(filename, migration.file, workspaceRoot);
       migration.migrated = source.split(/\r?\n/).includes(marker);
+      hasCompletedMerge ||= migration.migrated;
       continue;
     }
+    pending.push({ filename, migration, configs });
+  }
+  let updated = false;
+  for (const { filename, migration, configs } of pending) {
+    if (!hasCompletedMerge && !hasGeneratedOxlintConfig(migration.file)) {
+      continue;
+    }
+    const projectPath = path.dirname(filename);
     const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
     mergeOxlintConfigFile(
       projectPath,
@@ -431,7 +445,7 @@ function mergeOxlintConfigFile(
     delete normalizedOxlintConfig.rules![PREFER_VITE_PLUS_IMPORTS_RULE];
   }
   try {
-    const plan =
+    const plan: OxlintModulePlan =
       file.shared || file.extends.length > 0
         ? prepareOxlintConfigModules(
             file,
@@ -439,8 +453,12 @@ function mergeOxlintConfigFile(
             path.join(projectPath, viteConfig),
             workspaceRoot ?? projectPath,
           )
-        : undefined;
-    if (plan && preparedOxlintConfigs) {
+        : {
+            configContent: JSON.stringify(normalizedOxlintConfig, null, 2),
+            imports: [],
+            modules: new Map(),
+          };
+    if (preparedOxlintConfigs) {
       plan.completionMarker = oxlintMigrationMarker(
         fullOxlintPath,
         file,
@@ -454,7 +472,7 @@ function mergeOxlintConfigFile(
       'lint',
       silent,
       report,
-      plan?.configContent ?? JSON.stringify(normalizedOxlintConfig, null, 2),
+      plan.configContent,
       plan,
       preparedOxlintConfigs !== undefined,
     );
@@ -636,7 +654,7 @@ function mergeAndRemoveJsonConfig(
       }
     }
     let content = result.content;
-    if (modulePlan?.imports.length) {
+    if (modulePlan && (modulePlan.imports.length || modulePlan.completionMarker)) {
       const offset = content.startsWith('#!') ? content.indexOf('\n') + 1 : 0;
       const prefix = [modulePlan.completionMarker, ...modulePlan.imports]
         .filter(Boolean)

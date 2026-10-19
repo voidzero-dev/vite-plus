@@ -91,6 +91,7 @@ VITE+ - The Unified Toolchain for the Web
 Each consumer receives its own lint block
 
 ```
+// vp migrate: merged packages%2Fa%2F.oxlintrc.json (c8b042efd6403025ed6a8239c29b3114).
 export default {
   lint: {
     rules: {
@@ -114,6 +115,7 @@ export default {
 ## `vpt print-file packages/b/vite.config.mjs`
 
 ```
+// vp migrate: merged packages%2Fb%2F.oxlintrc.json (b9baaacbd5e6b450f2ea1acce04edac9).
 export default {
   lint: {
     rules: {

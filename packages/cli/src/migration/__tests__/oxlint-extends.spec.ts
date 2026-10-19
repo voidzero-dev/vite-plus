@@ -590,6 +590,10 @@ describe('Oxlint JSON extends migration', () => {
 
     expect(migrateWorkspace(['a']).warnings).toEqual([]);
 
+    expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
+    expect(fs.realpathSync(path.join(project, 'packages/a/alias.json'))).toBe(
+      path.join(project, '.oxlintrc.json'),
+    );
     const modulePath = path.join(project, '.oxlintrc.ts');
     fs.writeFileSync(modulePath, fs.readFileSync(modulePath, 'utf8').replace('"warn"', '"error"'));
     expect((await loadConfig()).lint!.extends![0].rules!['no-console']).toBe('error');
@@ -705,6 +709,37 @@ describe('Oxlint JSON extends migration', () => {
     expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
       'export default {};',
     );
+  });
+
+  it('resumes inline merges after an unreadable workspace graph is repaired', async () => {
+    createWorkspace();
+    write('packages/a/.oxlintrc.json', { rules: { 'no-debugger': 'error' } });
+    write('packages/b/.oxlintrc.json', { extends: ['./missing.json'] });
+    expect(migrateWorkspace().warnings).toHaveLength(1);
+    expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.json'))).toBe(true);
+    expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.ts'))).toBe(false);
+    write('packages/b/missing.json', { rules: { 'no-console': 'warn' } });
+
+    const report = createMigrationReport();
+    expect(
+      retryPreservedOxlintConfigs(
+        project,
+        true,
+        report,
+        ['b', 'a'].map((name) => ({ name, path: `packages/${name}` })),
+      ),
+    ).toBe(true);
+
+    expect(report.warnings).toEqual([]);
+    for (const name of ['a', 'b']) {
+      expect(fs.existsSync(path.join(project, `packages/${name}/.oxlintrc.json`))).toBe(false);
+    }
+    expect((await loadConfig(path.join(project, 'packages/a'))).lint!.rules!['no-debugger']).toBe(
+      'error',
+    );
+    expect(
+      (await loadConfig(path.join(project, 'packages/b'))).lint!.extends![0].rules!['no-console'],
+    ).toBe('warn');
   });
 
   it('does not reuse a generated module for a different JSON source', () => {
