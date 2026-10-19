@@ -214,6 +214,45 @@ describe('Oxlint JSON extends migration', () => {
     ]);
   });
 
+  it.each(['#', '%'])('loads shared config imports with %s in their paths', async (character) => {
+    write(`shared${character}/base${character}.json`, {
+      rules: { 'no-debugger': 'error' },
+    });
+    write(`shared${character}/nested/first${character}.json`, {
+      extends: [`../base${character}.json`],
+    });
+    write('.oxlintrc.json', {
+      extends: [`./shared${character}/nested/first${character}.json`],
+    });
+
+    const report = createMigrationReport();
+    mergeViteConfigFiles(project, true, report);
+
+    expect(report.warnings).toEqual([]);
+    const config = await loadConfig();
+    expect(config.lint!.extends![0].extends![0].rules!['no-debugger']).toBe('error');
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves JSON when Vite cannot resolve a shared config path containing a question mark',
+    () => {
+      write('shared?/base.json', { rules: { 'no-debugger': 'error' } });
+      write('first.json', { extends: ['./shared?/base.json'] });
+      write('.oxlintrc.json', { extends: ['./first.json'] });
+      const report = createMigrationReport();
+
+      mergeViteConfigFiles(project, true, report);
+
+      expect(report.warnings[0]).toContain('relative path contains "?"');
+      expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
+      expect(fs.existsSync(path.join(project, 'first.ts'))).toBe(false);
+      expect(fs.existsSync(path.join(project, 'shared?/base.ts'))).toBe(false);
+      expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
+        'export default {};',
+      );
+    },
+  );
+
   it('preserves external shared configs without writing outside the project', () => {
     write('external/base.json', { rules: { 'no-debugger': 'warn' } });
     write('app/vite.config.mjs', 'export default {};');

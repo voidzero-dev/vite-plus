@@ -135,6 +135,11 @@ function relativeImport(from: string, to: string): string {
   if (path.isAbsolute(relative)) {
     throw new Error(`Cannot import an Oxlint config across drives: ${to}`);
   }
+  // Vite resolves literal filesystem paths, but treats `?` as a query delimiter.
+  // Percent-encoding also breaks resolution of otherwise valid paths such as `#`.
+  if (relative.includes('?')) {
+    throw new Error(`Cannot import a shared Oxlint config whose relative path contains "?": ${to}`);
+  }
   // Vite and TypeScript resolve .js imports to .ts source files.
   // This also works with NodeNext without changing allowImportingTsExtensions.
   const specifier = /\.m?ts$/.test(from) ? relative.replace(/\.ts$/, '.js') : relative;

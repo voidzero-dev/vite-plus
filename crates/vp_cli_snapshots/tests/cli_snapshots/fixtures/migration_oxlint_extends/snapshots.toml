@@ -48,3 +48,38 @@ steps = [
   { argv = ["vp", "lint", "--threads=1", "type-error.ts"], comment = "Disabling the shared options removes the TypeScript diagnostic" },
   { argv = ["vp", "lint", "--threads=1", "type-aware.ts"], comment = "Disabling the shared options removes the type-aware diagnostic" },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_import_paths"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "cp", "shared/base.json", "shared/base#%.json"], snapshot = false },
+  { argv = ["vpt", "cp", "shared/nested/first.json", "shared/nested/first#%.json"], snapshot = false },
+  { argv = ["vpt", "json-edit", "shared/nested/first#%.json", "extends", '["../base#%.json"]'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "extends", '["./shared/nested/first#%.json","./shared/second.jsonc"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original diagnostics with special characters in shared config paths", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vpt", "print-file", "shared/nested/first#%.ts"] },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "TypeScript resolves the literal import paths" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated imports retain the same diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_query_path"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "cp", "shared/base.json", "shared/base?.json"], snapshot = false },
+  { argv = ["vpt", "json-edit", "shared/nested/first.json", "extends", '["../base?.json"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The original JSON resolves the question mark as part of the filename", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Warn and preserve the JSON instead of emitting an unresolvable import" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "shared/nested/first.ts", "--assert", "missing"] },
+  { argv = ["vpt", "stat-file", "shared/base?.ts", "--assert", "missing"] },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The retained JSON still produces the same diagnostics and exit code", continue-on-failure = true },
+]
