@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -38,6 +39,7 @@ import {
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
+  type OxlintConfigFile,
   type OxlintConfigMigration,
   type OxlintModulePlan,
   OXLINT_OWNER_CONFIG_KEYS,
@@ -289,6 +291,40 @@ export function mergeViteConfigFiles(
   }
 }
 
+function oxlintMigrationMarker(
+  filename: string,
+  file: OxlintConfigFile,
+  workspaceRoot: string,
+): string {
+  const relative = (filename: string) =>
+    path.relative(workspaceRoot, filename).split(path.sep).join('/');
+  const inputs: unknown[] = [relative(filename)];
+  const visited = new Set<OxlintConfigFile>();
+  function visit(file: OxlintConfigFile): void {
+    if (visited.has(file)) {
+      return;
+    }
+    visited.add(file);
+    const config = { ...file.config };
+    delete config.extends;
+    inputs.push([relative(file.filename), config, file.extendsPaths.map(relative)]);
+    file.extends.forEach(visit);
+  }
+  visit(file);
+  const serialized = JSON.stringify(inputs, (_key, value) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return Object.fromEntries(
+        Object.keys(value)
+          .toSorted()
+          .map((key) => [key, value[key]]),
+      );
+    }
+    return value;
+  });
+  const digest = createHash('sha256').update(serialized).digest('hex').slice(0, 32);
+  return `// vp migrate: merged ${encodeURIComponent(relative(filename))} (${digest}).`;
+}
+
 /** Resume partial migrations without applying lint setup to other existing Vite+ projects. */
 export function retryPreservedOxlintConfigs(
   workspaceRoot: string,
@@ -308,6 +344,9 @@ export function retryPreservedOxlintConfigs(
     const projectPath = path.dirname(filename);
     const configs = detectConfigs(projectPath);
     if (configs.viteConfig && hasConfigKey(path.join(projectPath, configs.viteConfig), 'lint')) {
+      const source = fs.readFileSync(path.join(projectPath, configs.viteConfig), 'utf8');
+      const marker = oxlintMigrationMarker(filename, migration.file, workspaceRoot);
+      migration.migrated = source.split(/\r?\n/).includes(marker);
       continue;
     }
     const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
@@ -323,8 +362,7 @@ export function retryPreservedOxlintConfigs(
     );
     updated ||= migration.migrated === true;
   }
-  removeMigratedOxlintConfigs(prepared);
-  return updated;
+  return removeMigratedOxlintConfigs(prepared) || updated;
 }
 
 function mergeOxlintConfigFile(
@@ -435,6 +473,13 @@ function mergeOxlintConfigFile(
             workspaceRoot ?? projectPath,
           )
         : undefined;
+    if (plan && preparedOxlintConfigs) {
+      plan.completionMarker = oxlintMigrationMarker(
+        fullOxlintPath,
+        file,
+        workspaceRoot ?? projectPath,
+      );
+    }
     migration.migrated = mergeAndRemoveJsonConfig(
       projectPath,
       viteConfig,
@@ -629,8 +674,10 @@ function mergeAndRemoveJsonConfig(
     let content = result.content;
     if (modulePlan?.imports.length) {
       const offset = content.startsWith('#!') ? content.indexOf('\n') + 1 : 0;
-      content =
-        content.slice(0, offset) + modulePlan.imports.join('\n') + '\n' + content.slice(offset);
+      const prefix = [modulePlan.completionMarker, ...modulePlan.imports]
+        .filter(Boolean)
+        .join('\n');
+      content = content.slice(0, offset) + prefix + '\n' + content.slice(offset);
     }
     fs.writeFileSync(fullViteConfigPath, content);
     if (!deferRemoval) {

@@ -64,6 +64,7 @@ packages/b/.oxlintrc.json: file
 Retaining JSON does not undo the owner's successful migration
 
 ```
+// vp migrate: merged .oxlintrc.json (bf57dd1b2fb51cd1cb30e45e36742e3b).
 import oxlintConfig1 from "./.oxlintrc.ts";
 export default {
   fmt: {},
@@ -81,6 +82,7 @@ export default {
 ## `vpt print-file packages/a/vite.config.mjs`
 
 ```
+// vp migrate: merged packages%2Fa%2F.oxlintrc.json (c59f567503f7d6b118c01736f9206ec4).
 import oxlintConfig1 from "./.oxlintrc.ts";
 export default {
   lint: {

@@ -53,6 +53,7 @@ VITE+ - The Unified Toolchain for the Web
 ## `vpt print-file packages/b/vite.config.mjs`
 
 ```
+// vp migrate: merged packages%2Fb%2F.oxlintrc.json (e5c417b92177153603bad60d94de6188).
 import oxlintConfig1 from "../a/.oxlintrc.ts";
 import oxlintConfig2 from "./extra.ts";
 export default {
@@ -71,6 +72,22 @@ export default {
 
 ```
 packages/b/.oxlintrc.json: missing
+```
+
+## `vpt stat-file .oxlintrc.json --assert missing`
+
+The previously migrated owner no longer needs its JSON
+
+```
+.oxlintrc.json: missing
+```
+
+## `vpt stat-file packages/a/.oxlintrc.json --assert missing`
+
+The previously migrated intermediate config is also cleaned up
+
+```
+packages/a/.oxlintrc.json: missing
 ```
 
 ## `vpt print-file .oxlintrc.ts`

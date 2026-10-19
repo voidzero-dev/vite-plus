@@ -74,6 +74,7 @@ VITE+ - The Unified Toolchain for the Web
 The owner imports its own shared config
 
 ```
+// vp migrate: merged .oxlintrc.json (cca48660331feaa20cf74e4f147c8e10).
 import oxlintConfig1 from "./.oxlintrc.ts";
 export default {
   fmt: {},
@@ -93,6 +94,7 @@ export default {
 The intermediate owner also imports its own shared config
 
 ```
+// vp migrate: merged packages%2Fa%2F.oxlintrc.json (e93b0fadd405db856ff1b8847eb5f2c3).
 import oxlintConfig1 from "./.oxlintrc.ts";
 export default {
   lint: {
@@ -109,6 +111,7 @@ export default {
 ## `vpt print-file packages/b/vite.config.mjs`
 
 ```
+// vp migrate: merged packages%2Fb%2F.oxlintrc.json (e5c417b92177153603bad60d94de6188).
 import oxlintConfig1 from "../a/.oxlintrc.ts";
 import oxlintConfig2 from "./extra.ts";
 export default {

@@ -141,7 +141,7 @@ function retainConfigPath(filename: string, retained: Set<string>): void {
 /** Retained JSON consumers still need their full inheritance graph on disk. */
 export function removeMigratedOxlintConfigs(
   configs: Map<string, OxlintConfigMigration | Error>,
-): void {
+): boolean {
   const files = new Set<OxlintConfigFile>();
   const retained = new Set<OxlintConfigFile>();
   const retainedPaths = new Set<string>();
@@ -151,7 +151,7 @@ export function removeMigratedOxlintConfigs(
     // An unreadable graph can contain references we could not discover.
     // Preserve all candidates rather than break that consumer's fallback.
     if (migration instanceof Error) {
-      return;
+      return false;
     }
     const { file, migrated } = migration;
     collectConfigFiles(file, files);
@@ -179,7 +179,7 @@ export function removeMigratedOxlintConfigs(
     }
   } catch {
     // Keep all JSON paths when a remaining source's dependencies cannot be determined.
-    return;
+    return false;
   }
   for (const file of retained) {
     retainConfigPath(file.filename, retainedPaths);
@@ -187,11 +187,14 @@ export function removeMigratedOxlintConfigs(
       retainConfigPath(filename, retainedPaths);
     }
   }
+  let removed = false;
   for (const filename of removalCandidates) {
     if (!retainedPaths.has(configPathInRealDirectory(filename))) {
       fs.unlinkSync(filename);
+      removed = true;
     }
   }
+  return removed;
 }
 
 function relativeImport(from: string, to: string): string {

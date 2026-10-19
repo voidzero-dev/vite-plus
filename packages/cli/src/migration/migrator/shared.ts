@@ -63,6 +63,7 @@ export interface OxlintConfigMigration {
 export interface OxlintModulePlan {
   configContent: string;
   imports: string[];
+  completionMarker?: string;
   modules: Map<string, { file: OxlintConfigFile; content: string }>;
 }
 

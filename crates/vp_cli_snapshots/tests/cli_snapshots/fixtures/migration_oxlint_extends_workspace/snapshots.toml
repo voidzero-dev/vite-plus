@@ -111,6 +111,8 @@ steps = [
   { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Retry reuses previously generated modules" },
   { argv = ["vpt", "print-file", "packages/b/vite.config.mjs"] },
   { argv = ["vpt", "stat-file", "packages/b/.oxlintrc.json", "--assert", "missing"] },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "missing"], comment = "The previously migrated owner no longer needs its JSON" },
+  { argv = ["vpt", "stat-file", "packages/a/.oxlintrc.json", "--assert", "missing"], comment = "The previously migrated intermediate config is also cleaned up" },
   { argv = ["vpt", "print-file", ".oxlintrc.ts"], comment = "The user's shared rule edit is preserved" },
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "The recovered consumer uses the edited shared rule without a config flag", continue-on-failure = true },
 ]

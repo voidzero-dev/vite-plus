@@ -83,3 +83,44 @@ steps = [
   { argv = ["vpt", "stat-file", "shared/base?.ts", "--assert", "missing"] },
   { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The retained JSON still produces the same diagnostics and exit code", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_override_paths"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", '{"extends":["./configs/base.json"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/base.json", '{"options":{"typeAware":false,"typeCheck":false},"rules":{"no-debugger":"error"},"overrides":[{"files":["src/**"],"excludeFiles":["src/skip.js"],"rules":{"no-debugger":"off"}}]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "src/allowed.js", "debugger;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/skip.js", "debugger;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/src/allowed.js", "debugger;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/src/skip.js", "debugger;\n"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "src/allowed.js"], comment = "Original inherited override matches the consumer-relative path", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "src/skip.js"], comment = "Original excludeFiles prevents the override", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "configs/src/allowed.js"], comment = "The declaring directory does not rebase the inherited glob", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "configs/src/skip.js"], continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vp", "lint", "--threads=1", "src/allowed.js"], comment = "The imported override matches the same path", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "src/skip.js"], comment = "The imported exclusion has the same effect", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "configs/src/allowed.js"], comment = "The declaring-directory path retains its original diagnostic", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "configs/src/skip.js"], continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_directory_alias"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", '{"extends":["./aliases/base.json"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/nested/base.json", '{"extends":["../common.json"],"options":{"typeAware":false,"typeCheck":false}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/common.json", '{"rules":{"no-debugger":"error"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "common.json", '{"rules":{"no-debugger":"off"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "index.js", "debugger;\n"], snapshot = false },
+  { argv = ["node", "create-directory-link.mjs"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Oxlint follows the directory link before resolving the parent component", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "configs/nested/base.ts"] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated graph selects the same physical parent config", continue-on-failure = true },
+]

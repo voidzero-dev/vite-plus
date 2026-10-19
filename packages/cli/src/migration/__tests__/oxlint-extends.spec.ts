@@ -644,10 +644,33 @@ describe('Oxlint JSON extends migration', () => {
 
     expect(report.warnings).toEqual([]);
     expect(fs.existsSync(path.join(project, 'packages/b/.oxlintrc.json'))).toBe(false);
+    expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(false);
+    expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.json'))).toBe(false);
     expect(fs.readFileSync(modulePath, 'utf8')).toBe(edited);
     const { lint } = await loadConfig(path.join(project, 'packages/b'));
     expect(lint!.extends![0].extends![0].rules!['no-debugger']).toBe('error');
   });
+
+  it.each(['lint block', 'JSON config'])(
+    'retains an owner whose %s changed after migration',
+    (changed) => {
+      createWorkspace(['a']);
+      write('.oxlintrc.json', { rules: { 'no-debugger': 'warn' } });
+      write('packages/a/.oxlintrc.json', { extends: ['../../.oxlintrc.json'] });
+      write('packages/a/vite.config.mjs', "export { default } from './another.mjs';");
+      expect(migrateWorkspace(['a']).warnings).toHaveLength(1);
+      fs.unlinkSync(path.join(project, 'packages/a/.oxlintrc.json'));
+      if (changed === 'lint block') {
+        write('vite.config.mjs', 'export default { lint: { rules: { "no-debugger": "off" } } };');
+      } else {
+        write('.oxlintrc.json', { rules: { 'no-debugger': 'error' } });
+      }
+
+      expect(retryPreservedOxlintConfigs(project, true)).toBe(false);
+
+      expect(fs.existsSync(path.join(project, '.oxlintrc.json'))).toBe(true);
+    },
+  );
 
   it('does not retry unrelated JSON configs in an existing Vite+ project', () => {
     write('base.json', { rules: { 'no-debugger': 'error' } });
