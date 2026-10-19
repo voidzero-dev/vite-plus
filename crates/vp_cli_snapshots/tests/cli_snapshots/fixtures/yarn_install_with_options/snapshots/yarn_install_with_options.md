@@ -86,5 +86,5 @@ Reject lockfile refresh before Yarn 4.
 **Exit code:** 1
 
 ```
-yarn < 4.0.0 does not support --fix-lockfile.
+yarn < 4 does not support --fix-lockfile.
 ```

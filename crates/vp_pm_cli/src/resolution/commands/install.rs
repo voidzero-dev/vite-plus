@@ -60,7 +60,7 @@ pub struct InstallArgs {
     pub(crate) no_lockfile: bool,
 
     /// Fix broken lockfile entries (pnpm and yarn@4+ only)
-    #[arg(long, not_supported(npm, bun, yarn < "4.0.0"))]
+    #[arg(long, not_supported(npm, bun, yarn < "4"))]
     pub(crate) fix_lockfile: bool,
 
     /// Create flat `node_modules` (pnpm only)
