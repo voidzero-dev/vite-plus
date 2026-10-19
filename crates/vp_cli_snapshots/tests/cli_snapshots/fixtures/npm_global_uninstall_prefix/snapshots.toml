@@ -70,6 +70,32 @@ steps = [
 ]
 
 [[case]]
+name = "npm_global_uninstall_userconfig_fallback"
+vp = "global"
+skip-platforms = ["windows"]
+unset-env = ["NPM_CONFIG_PREFIX"]
+steps = [
+  ["node", "private-runtime.mjs"],
+  { tty = false, argv = ["npm", "install", "-g", "./npm-global-prefix-pkg"], comment = "Install into a private copy of the selected Node runtime" },
+  ["vpt", "stat-file", "node-prefix/lib/node_modules/npm-global-prefix-pkg/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  { tty = false, argv = ["npm", "config", "set", "prefix", "./other-prefix", "--location=user"], comment = "Make the normal user config point to another prefix" },
+  ["vpt", "write-file", "empty.npmrc", ""],
+  { tty = false, argv = ["npm", "uninstall", "-g", "--userconfig=empty.npmrc", "npm-global-prefix-pkg", "--dry-run"], comment = "A config override dry-run must preserve the fallback installation" },
+  ["npm-global-prefix-cli"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-prefix-pkg"], comment = "Uninstalling from an empty prefix must not remove links to the surviving fallback package" },
+  ["npm-global-prefix-cli"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  { tty = false, argv = ["npm", "uninstall", "-g", "--userconfig", "empty.npmrc", "npm-global-prefix-pkg"], comment = "A real uninstall using the override must clean up the fallback package's links" },
+  ["vpt", "stat-file", "node-prefix/lib/node_modules/npm-global-prefix-pkg", "--assert", "missing"],
+  ["vpt", "stat-file", "node-prefix/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "missing"],
+]
+
+[[case]]
 name = "npm_global_uninstall_prefix_shorthand"
 vp = "global"
 skip-platforms = ["windows"]

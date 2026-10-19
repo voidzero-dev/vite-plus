@@ -240,7 +240,7 @@ fn check_npm_global_install_result(
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-        let Some(content) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
+        let Some((_, content)) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
             continue;
         };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
@@ -595,20 +595,18 @@ fn remove_npm_global_uninstall_links(
     }
 }
 
-/// Read the installed package.json from npm's node_modules directory.
+/// Read the installed package.json and return its installation directory with the contents.
 /// Tries the npm prefix first (handles custom prefix), then falls back to node_dir.
 fn read_npm_package_json(
     npm_prefix: &AbsolutePath,
     node_dir: &AbsolutePath,
     package_name: &str,
-) -> Option<String> {
-    std::fs::read_to_string(
-        config::get_node_modules_dir(npm_prefix, package_name).join("package.json").as_path(),
-    )
-    .ok()
-    .or_else(|| {
-        let dir = config::get_node_modules_dir(node_dir, package_name);
-        std::fs::read_to_string(dir.join("package.json").as_path()).ok()
+) -> Option<(AbsolutePathBuf, String)> {
+    [npm_prefix, node_dir].into_iter().find_map(|prefix| {
+        let dir = config::get_node_modules_dir(prefix, package_name);
+        std::fs::read_to_string(dir.join("package.json").as_path())
+            .ok()
+            .map(|content| (dir, content))
     })
 }
 
@@ -616,14 +614,17 @@ fn read_npm_package_json(
 fn collect_bin_names_from_npm(
     packages: &[String],
     npm_prefix: &AbsolutePath,
+    node_dir: &AbsolutePath,
 ) -> Vec<(String, String, AbsolutePathBuf)> {
     let mut all_bins = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-        let package_dir = config::get_node_modules_dir(npm_prefix, &package_name);
-        let package_json_path = package_dir.join("package.json");
-        let Ok(content) = std::fs::read_to_string(package_json_path.as_path()) else { continue };
+        let Some((package_dir, content)) =
+            read_npm_package_json(npm_prefix, node_dir, &package_name)
+        else {
+            continue;
+        };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
@@ -918,7 +919,7 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
             // Collect bin names before uninstall (package.json will be gone after)
             let node_dir = node_prefix_from_binary(&node_path);
             let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir, &child_env);
-            let bin_names = collect_bin_names_from_npm(&parsed.packages, &npm_prefix);
+            let bin_names = collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir);
             let exit_code = exec::spawn_tool(&tool_path, args, child_env);
             if exit_code == 0 {
                 remove_npm_global_uninstall_links(&bin_names, &npm_prefix);
@@ -1924,7 +1925,7 @@ mod tests {
             let metadata = std::fs::read(&metadata_path).unwrap();
             assert!(link.as_path().exists());
 
-            let bins = collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix);
+            let bins = collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix, &npm_prefix);
             assert_eq!(bins.len(), 1);
             #[cfg(unix)]
             let local_dir = npm_prefix.join("node_modules").join("test-package");
@@ -1950,7 +1951,31 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_uninstall_does_not_collect_bins_from_another_prefix() {
+    fn test_npm_uninstall_prefers_configured_prefix() {
+        let temp = TempDir::new().unwrap();
+        let npm_prefix = AbsolutePathBuf::new(temp.path().join("npm-prefix")).unwrap();
+        let node_dir = AbsolutePathBuf::new(temp.path().join("node")).unwrap();
+        for prefix in [&npm_prefix, &node_dir] {
+            let package_dir = config::get_node_modules_dir(prefix, "test-package");
+            std::fs::create_dir_all(&package_dir).unwrap();
+            std::fs::write(
+                package_dir.join("package.json"),
+                r#"{"name":"test-package","bin":{"test-cli":"cli.js"}}"#,
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix, &node_dir),
+            vec![(
+                "test-cli".to_string(),
+                "test-package".to_string(),
+                config::get_node_modules_dir(&npm_prefix, "test-package"),
+            )]
+        );
+    }
+
+    #[test]
+    fn test_npm_uninstall_preserves_fallback_links_until_package_is_removed() {
         let temp = TempDir::new().unwrap();
         let npm_prefix = AbsolutePathBuf::new(temp.path().join("npm-prefix")).unwrap();
         let node_dir = AbsolutePathBuf::new(temp.path().join("node")).unwrap();
@@ -1962,10 +1987,34 @@ mod tests {
         )
         .unwrap();
 
-        assert!(
-            collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix).is_empty(),
-            "uninstall must only collect binaries installed in the selected npm prefix"
+        let source = package_dir.join("cli.js");
+        std::fs::write(&source, "console.log('test');").unwrap();
+        let bins = collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix, &node_dir);
+        assert_eq!(
+            bins,
+            vec![("test-cli".to_string(), "test-package".to_string(), package_dir.clone())]
         );
+
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let bin_dir = config::get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            create_bin_link(&bin_dir, "test-cli", &source, "test-package", "22.18.0");
+            let link = bin_dir.join("test-cli");
+            let metadata_path = BinConfig::path("test-cli").unwrap();
+            let metadata = std::fs::read(&metadata_path).unwrap();
+
+            remove_npm_global_uninstall_links(&bins, &npm_prefix);
+            assert!(
+                link.as_path().exists(),
+                "a surviving fallback installation must keep its link"
+            );
+            assert_eq!(std::fs::read(&metadata_path).unwrap(), metadata);
+
+            std::fs::remove_dir_all(&package_dir).unwrap();
+            remove_npm_global_uninstall_links(&bins, &npm_prefix);
+            assert!(std::fs::symlink_metadata(&link).is_err());
+            assert!(!metadata_path.as_path().exists());
+        });
     }
 
     // --- parse_npm_global_uninstall tests ---
