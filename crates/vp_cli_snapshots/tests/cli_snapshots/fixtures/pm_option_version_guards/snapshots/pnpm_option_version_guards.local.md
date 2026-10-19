@@ -52,9 +52,7 @@ Error: ERR_PNPM_FINDER_NOT_FOUND
   x No finder with name finder is found
 ```
 
-## `vp why --find-by finder`
-
-A finder replaces package names, but still requires a supported pnpm version.
+## `vp why testnpm2 --find-by finder`
 
 **Exit code:** 1
 
@@ -62,4 +60,19 @@ A finder replaces package names, but still requires a supported pnpm version.
 Error: ERR_PNPM_FINDER_NOT_FOUND
 
   x No finder with name finder is found
+```
+
+## `vp why --find-by finder`
+
+Package names remain required even when a finder is supplied.
+
+**Exit code:** 2
+
+```
+error: the following required arguments were not provided:
+  <PACKAGES>...
+
+Usage: vp why --find-by <FINDER_NAME> <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+For more information, try '--help'.
 ```

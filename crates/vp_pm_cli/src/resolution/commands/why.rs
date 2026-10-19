@@ -8,7 +8,7 @@ use crate::resolution::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct WhyArgs {
     /// Package(s) to check
-    #[arg(required_unless_present = "find_by")]
+    #[arg(required = true)]
     pub(crate) packages: Vec<String>,
 
     /// Output in JSON format

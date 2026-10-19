@@ -21,7 +21,8 @@ steps = [
   { argv = ["vp", "install", "testnpm2", "--save-catalog"], comment = "The install alias must use the add support checks.", continue-on-failure = true },
   { argv = ["vp", "pm", "pack", "--recursive"], continue-on-failure = true },
   { argv = ["vp", "pm", "list", "--find-by", "finder"], continue-on-failure = true },
-  { argv = ["vp", "why", "--find-by", "finder"], comment = "A finder replaces package names, but still requires a supported pnpm version.", continue-on-failure = true },
+  { argv = ["vp", "why", "testnpm2", "--find-by", "finder"], continue-on-failure = true },
+  { argv = ["vp", "why", "--find-by", "finder"], comment = "Package names remain required even when a finder is supplied.", continue-on-failure = true },
 ]
 
 [[case]]

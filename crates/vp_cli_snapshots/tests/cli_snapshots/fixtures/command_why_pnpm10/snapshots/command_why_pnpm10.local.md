@@ -7,10 +7,10 @@ should show help
 ```
 Show why a package is installed
 
-Usage: vp why [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Arguments:
-  [PACKAGES]...           Package(s) to check
+  <PACKAGES>...           Package(s) to check
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
