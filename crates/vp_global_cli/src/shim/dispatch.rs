@@ -30,12 +30,12 @@ use crate::{
 struct NpmGlobalCommand {
     /// Package names/specs extracted from args (e.g., ["codex", "typescript@5"])
     packages: Vec<String>,
-    /// Explicit `--prefix <dir>` from the CLI args, if present.
+    /// Explicit `--prefix <dir>` or `-C <dir>` from the CLI args, if present.
     explicit_prefix: Option<String>,
 }
 
 /// Value-bearing npm flags whose next arg should be skipped during package extraction.
-/// Note: `--prefix` is handled separately to capture its value.
+/// Note: `--prefix` and `-C` are handled separately to capture their values.
 const NPM_VALUE_FLAGS: &[&str] = &["--registry", "--tag", "--cache", "--tmp"];
 
 /// Install subcommands recognized by npm.
@@ -59,7 +59,7 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
     let mut seen_positional = false;
 
     for arg in args {
-        // Capture the value after --prefix
+        // Capture the value after --prefix or -C
         if prefix_next {
             prefix_next = false;
             explicit_prefix = Some(arg.clone());
@@ -76,12 +76,12 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
             continue;
         }
 
-        // Capture --prefix specially (its value is needed for prefix resolution)
-        if arg == "--prefix" {
+        // Capture prefix options specially (their values are needed for prefix resolution)
+        if arg == "--prefix" || arg == "-C" {
             prefix_next = true;
             continue;
         }
-        if let Some(value) = arg.strip_prefix("--prefix=") {
+        if let Some(value) = arg.strip_prefix("--prefix=").or_else(|| arg.strip_prefix("-C=")) {
             explicit_prefix = Some(value.to_string());
             continue;
         }
@@ -2239,6 +2239,23 @@ mod tests {
         let parsed = result.unwrap();
         assert_eq!(parsed.packages, vec!["pkg"]);
         assert_eq!(parsed.explicit_prefix.as_deref(), Some("/custom/dir"));
+    }
+
+    #[test]
+    fn test_parse_npm_global_command_prefix_shorthand() {
+        for command in ["install", "uninstall"] {
+            for args in [
+                s(&[command, "-g", "-C", "/tmp/test", "pkg"]),
+                s(&["-C", "/tmp/test", command, "-g", "pkg"]),
+                s(&[command, "-g", "-C=/tmp/test", "pkg"]),
+                s(&[command, "-g", "--prefix", "/tmp/other", "-C", "/tmp/test", "pkg"]),
+                s(&[command, "-g", "-C", "/tmp/other", "--prefix", "/tmp/test", "pkg"]),
+            ] {
+                let parsed = parse_npm_global_command(&args, &[command]).unwrap();
+                assert_eq!(parsed.explicit_prefix.as_deref(), Some("/tmp/test"), "{args:?}");
+                assert_eq!(parsed.packages, vec!["pkg"], "{args:?}");
+            }
+        }
     }
 
     // --- resolve_npm_prefix tests ---

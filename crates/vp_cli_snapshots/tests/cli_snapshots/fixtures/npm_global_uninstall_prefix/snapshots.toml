@@ -43,3 +43,32 @@ steps = [
   ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "missing"],
   ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "missing"],
 ]
+
+[[case]]
+name = "npm_global_uninstall_prefix_shorthand"
+vp = "global"
+skip-platforms = ["windows"]
+unset-env = ["NPM_CONFIG_PREFIX"]
+steps = [
+  { tty = false, argv = ["npm", "install", "-g", "--prefix", "./custom-prefix", "./npm-global-prefix-pkg"] },
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  { tty = false, argv = ["npm", "uninstall", "-g", "-C", "./custom-prefix", "npm-global-prefix-pkg", "--dry-run"], envs = [["NPM_CONFIG_PREFIX", "${workspace}/other-prefix"]], comment = "A shorthand prefix override must still preserve links during dry-run" },
+  ["npm-global-prefix-cli"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  { tty = false, argv = ["npm", "uninstall", "-g", "-C", "./custom-prefix", "npm-global-prefix-pkg"], envs = [["NPM_CONFIG_PREFIX", "${workspace}/other-prefix"]], comment = "-C must override the environment prefix for uninstall link cleanup" },
+  ["vpt", "stat-file", "custom-prefix/lib/node_modules/npm-global-prefix-pkg", "--assert", "missing"],
+  ["vpt", "stat-file", "custom-prefix/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "missing"],
+  ["vpt", "write-file", "prefix.npmrc", "prefix=${HOME}/npm-prefix\n"],
+  { tty = false, argv = ["npm", "install", "-g", "-C=./custom-prefix", "./npm-global-prefix-pkg"], envs = [["npm_config_userconfig", "${workspace}/prefix.npmrc"]], comment = "-C= must override the user npmrc prefix when creating links" },
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "symlink"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "file"],
+  ["npm-global-prefix-cli"],
+  { tty = false, argv = ["npm", "-C", "./custom-prefix", "uninstall", "-g", "npm-global-prefix-pkg"], envs = [["npm_config_userconfig", "${workspace}/prefix.npmrc"]], comment = "-C before the subcommand must also override the user npmrc prefix for cleanup" },
+  ["vpt", "stat-file", "custom-prefix/lib/node_modules/npm-global-prefix-pkg", "--assert", "missing"],
+  ["vpt", "stat-file", "custom-prefix/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bin/npm-global-prefix-cli", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bins/npm-global-prefix-cli.json", "--assert", "missing"],
+]
