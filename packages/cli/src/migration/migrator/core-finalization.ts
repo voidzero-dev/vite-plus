@@ -5,11 +5,16 @@ import { rewriteScripts } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
+import { detectConfigs } from '../detector.ts';
 import {
   dropDeadOxlintPluginsDependency,
+  findReferencedOxcConfigs,
   hasTsconfigTypesToRewrite,
   mergeTsdownConfigFile,
+  mergeViteConfigFiles,
   migrateTaskCacheConfigInViteConfig,
+  prepareOxlintConfigs,
+  removeMigratedOxlintConfigs,
   rewriteAllImports,
   rewriteTsconfigTypes,
 } from '../migrator.ts';
@@ -84,6 +89,7 @@ export type CoreMigrationFinalizationResult = {
   scripts: boolean;
   tsconfigTypes: boolean;
   imports: boolean;
+  oxcConfigs: boolean;
   tsdownConfig: boolean;
   taskCacheConfig: boolean;
   // Kept out of the report so that review items alone do not make an
@@ -154,6 +160,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
     scripts: false,
     tsconfigTypes: false,
     imports: false,
+    oxcConfigs: false,
     tsdownConfig: false,
     taskCacheConfig: false,
     taskCacheWarnings: [],
@@ -190,6 +197,37 @@ export function finalizeCoreMigrationForExistingVitePlus(
       migrateTaskCacheConfigInViteConfig(projectPath, silent, report, result.taskCacheWarnings) ||
       result.taskCacheConfig;
   }
+
+  // A failed migration may have installed Vite+ before merging these files.
+  // Finish that core work without opting into unrelated first-time setup.
+  // Resolve every inheritance graph before any workspace removes a source.
+  const oxlintConfigs = prepareOxlintConfigs(projectPaths);
+  const referencedConfigs = findReferencedOxcConfigs(projectPaths);
+  for (const projectPath of projectPaths) {
+    const configs = detectConfigs(projectPath);
+    const standaloneConfigs = [configs.oxlintConfig, configs.oxfmtConfig].filter(
+      (config) => config !== undefined,
+    );
+    if (standaloneConfigs.length === 0) {
+      continue;
+    }
+    mergeViteConfigFiles(
+      projectPath,
+      silent,
+      report,
+      workspaceInfo.packages,
+      workspaceInfo.rootDir,
+      oxlintConfigs,
+      referencedConfigs,
+    );
+    if (standaloneConfigs.some((config) => !fs.existsSync(path.join(projectPath, config)))) {
+      result.oxcConfigs = true;
+    }
+  }
+  removeMigratedOxlintConfigs(oxlintConfigs);
+  result.oxcConfigs ||= [...oxlintConfigs.values()].some(
+    (migration) => !(migration instanceof Error) && migration.migrated,
+  );
 
   return result;
 }

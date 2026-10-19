@@ -1,0 +1,9 @@
+{
+  "name": "migration-existing-oxc-configs",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "devDependencies": {
+    "vite-plus": "latest"
+  }
+}

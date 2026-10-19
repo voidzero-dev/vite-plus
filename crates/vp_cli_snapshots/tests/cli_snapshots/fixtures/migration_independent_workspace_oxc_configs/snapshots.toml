@@ -1,0 +1,36 @@
+[[case]]
+name = "migration_independent_workspace_oxc_configs"
+vp = ["global", "local"]
+comment = "A reference to the root config must not prevent merging an independent package config with the same filename."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", "packages/app/package.json"],
+  ["vpt", "print-file", "packages/app/vite.config.mjs"],
+  ["vpt", "stat-file", "packages/app/.oxlintrc.json", "--assert", "missing"],
+  ["vp", "lint", "-c", ".oxlintrc.json", "root.js"],
+  { argv = ["vp", "lint", "index.js"], cwd = "packages/app", comment = "plain lint must report no-console as an error", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], continue-on-failure = true },
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", "packages/app/vite.config.mjs"],
+  { argv = ["vp", "lint", "index.js"], cwd = "packages/app", comment = "a second migration must preserve the error and nonzero exit status", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_referenced_oxc_config_converted_consumer"
+vp = ["global", "local"]
+comment = "Converting a package's inheritance must not remove JSON still used by the root script."
+steps = [
+  { argv = ["vpt", "write-file", "packages/app/.oxlintrc.json", '{"extends":["../../.oxlintrc.json"],"rules":{"no-console":"error"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/index.js", "debugger;\nconsole.log('test');\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", ".oxlintrc.ts"],
+  ["vpt", "print-file", "packages/app/vite.config.mjs"],
+  ["vpt", "stat-file", "packages/app/.oxlintrc.json", "--assert", "missing"],
+  ["vp", "lint", "-c", ".oxlintrc.json", "root.js"],
+  { argv = ["vp", "lint", "index.js"], cwd = "packages/app", comment = "plain lint enforces both the inherited and local rules", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], continue-on-failure = true },
+  ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"],
+  { argv = ["vp", "lint", "index.js"], cwd = "packages/app", comment = "the conversion and reference protection remain intact on retry", continue-on-failure = true },
+]

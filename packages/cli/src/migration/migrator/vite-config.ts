@@ -32,6 +32,7 @@ import {
   collectInstalledPackageNames,
   oxlintMigrationMarker,
   prepareOxlintConfigs,
+  findReferencedOxcConfigs,
   readRulesYaml,
   removeMigratedOxlintConfigs,
   resolveOxlintConfigExtends,
@@ -269,8 +270,50 @@ export function mergeViteConfigFiles(
   // projectPath IS the workspace root).
   workspaceRoot?: string,
   preparedOxlintConfigs?: PreparedOxlintConfigs,
+  preparedReferences?: ReadonlySet<string>,
 ): void {
   const configs = detectConfigs(projectPath);
+  if (!configs.oxfmtConfig && !configs.oxlintConfig) {
+    return;
+  }
+  const rootDir = workspaceRoot ?? projectPath;
+  const referencedConfigs =
+    preparedReferences ??
+    findReferencedOxcConfigs([
+      ...new Set([
+        rootDir,
+        projectPath,
+        ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path)),
+      ]),
+    ]);
+  // Check references before conversion, default injection, or source removal.
+  if (
+    configs.oxlintConfig &&
+    referencedConfigs.has(fs.realpathSync(path.join(projectPath, configs.oxlintConfig)))
+  ) {
+    const json = readJsonFile(path.join(projectPath, configs.oxlintConfig), true) as
+      | { extends?: unknown }
+      | null
+      | undefined;
+    if (
+      configs.viteConfig &&
+      hasConfigKey(path.join(projectPath, configs.viteConfig), 'lint') &&
+      Array.isArray(json?.extends) &&
+      json.extends.length > 0
+    ) {
+      warnMigration(
+        `Preserved ${displayRelative(path.join(projectPath, configs.oxlintConfig))} because ${configs.viteConfig} already has a lint config. Merge its inherited rules manually.`,
+        report,
+      );
+    }
+    configs.oxlintConfig = undefined;
+  }
+  if (
+    configs.oxfmtConfig &&
+    referencedConfigs.has(fs.realpathSync(path.join(projectPath, configs.oxfmtConfig)))
+  ) {
+    configs.oxfmtConfig = undefined;
+  }
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
     return;
   }
@@ -587,6 +630,12 @@ function injectConfigDefaults(
   report?: MigrationReport,
 ): void {
   const configs = detectConfigs(projectPath);
+  if (
+    (configKey === 'lint' && configs.oxlintConfig) ||
+    (configKey === 'fmt' && configs.oxfmtConfig)
+  ) {
+    return;
+  }
   if (configs.viteConfig && hasConfigKey(path.join(projectPath, configs.viteConfig), configKey)) {
     return;
   }

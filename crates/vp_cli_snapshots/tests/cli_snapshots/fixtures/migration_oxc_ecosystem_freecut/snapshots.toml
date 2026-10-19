@@ -1,0 +1,17 @@
+[[case]]
+name = "migration_oxc_ecosystem_freecut"
+vp = "global"
+comment = "Reproduces the config file reads and script inputs in https://github.com/vite-plus-ecosystem-ci/freecut/pull/9."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", ".oxfmtrc.json"],
+  ["vp", "run", "format"],
+  ["vpt", "print-file", "src/index.ts"],
+  ["vp", "run", "lint"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "repeat migration without deleting either file read by vite.config.ts" },
+  ["vp", "run", "format:check"],
+  ["vp", "run", "lint"],
+  { argv = ["vpt", "write-file", "src/index.ts", "console.log('hello')\n"], snapshot = false },
+  { argv = ["vp", "run", "lint"], comment = "the rules read from the retained JSON must still apply", continue-on-failure = true },
+]
