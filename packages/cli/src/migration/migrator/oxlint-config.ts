@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -11,14 +12,19 @@ import { ensureSvelteRuneGlobals } from '../migrator.ts';
 import {
   OXLINT_OWNER_CONFIG_KEYS,
   type OxlintConfigFile,
-  type OxlintConfigMigration,
   type OxlintModulePlan,
+  type PreparedOxlintConfigs,
 } from './shared.ts';
 
-function createConfigCache() {
+interface OxlintConfigCache {
+  sources: Map<string, Record<string, unknown>>;
+  files: Map<string, OxlintConfigFile>;
+}
+
+function createConfigCache(): OxlintConfigCache {
   return {
-    sources: new Map<string, Record<string, unknown>>(),
-    files: new Map<string, OxlintConfigFile>(),
+    sources: new Map(),
+    files: new Map(),
   };
 }
 
@@ -82,10 +88,8 @@ export function resolveOxlintConfigExtends(
   return file;
 }
 
-export function prepareOxlintConfigs(
-  projectPaths: string[],
-): Map<string, OxlintConfigMigration | Error> {
-  const configs = new Map<string, OxlintConfigMigration | Error>();
+export function prepareOxlintConfigs(projectPaths: string[]): PreparedOxlintConfigs {
+  const configs: PreparedOxlintConfigs = new Map();
   const cache = createConfigCache();
   for (const projectPath of projectPaths) {
     const filename = detectConfigs(projectPath).oxlintConfig;
@@ -123,6 +127,37 @@ function collectConfigFiles(file: OxlintConfigFile, target: Set<OxlintConfigFile
   }
 }
 
+/** Identify a completed merge by its original workspace path and JSON graph. */
+export function oxlintMigrationMarker(
+  filename: string,
+  root: OxlintConfigFile,
+  workspaceRoot: string,
+): string {
+  function relative(filename: string): string {
+    return path.relative(workspaceRoot, filename).split(path.sep).join('/');
+  }
+  const files = new Set<OxlintConfigFile>();
+  collectConfigFiles(root, files);
+  const inputs: unknown[] = [relative(filename)];
+  for (const file of files) {
+    const config = { ...file.config };
+    delete config.extends;
+    inputs.push([relative(file.filename), config, file.extendsPaths.map(relative)]);
+  }
+  const serialized = JSON.stringify(inputs, (_key, value) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return Object.fromEntries(
+        Object.keys(value)
+          .toSorted()
+          .map((key) => [key, value[key]]),
+      );
+    }
+    return value;
+  });
+  const digest = createHash('sha256').update(serialized).digest('hex').slice(0, 32);
+  return `// vp migrate: merged ${encodeURIComponent(relative(filename))} (${digest}).`;
+}
+
 function configPathInRealDirectory(filename: string): string {
   return path.join(fs.realpathSync(path.dirname(filename)), path.basename(filename));
 }
@@ -142,9 +177,7 @@ function retainConfigPath(filename: string, retained: Set<string>): void {
 }
 
 /** Retained JSON consumers still need their full inheritance graph on disk. */
-export function removeMigratedOxlintConfigs(
-  configs: Map<string, OxlintConfigMigration | Error>,
-): boolean {
+export function removeMigratedOxlintConfigs(configs: PreparedOxlintConfigs): boolean {
   const files = new Set<OxlintConfigFile>();
   const retained = new Set<OxlintConfigFile>();
   const retainedPaths = new Set<string>();
@@ -314,12 +347,12 @@ export function prepareOxlintConfigModules(
   const boundary = fs.realpathSync(workspaceRoot);
   let resolver: ResolverFactory | undefined;
 
-  const validated = new Set<OxlintConfigFile>();
-  function validate(file: OxlintConfigFile): void {
-    if (validated.has(file)) {
-      return;
-    }
-    validated.add(file);
+  const importedFiles = root.shared ? [root] : root.extends;
+  const files = new Set<OxlintConfigFile>();
+  for (const file of importedFiles) {
+    collectConfigFiles(file, files);
+  }
+  for (const file of files) {
     const relative = path.relative(boundary, fs.realpathSync(file.filename));
     if (
       path.isAbsolute(relative) ||
@@ -352,10 +385,7 @@ export function prepareOxlintConfigModules(
         }
       }
     }
-    file.extends.forEach(validate);
   }
-  const importedFiles = root.shared ? [root] : root.extends;
-  importedFiles.forEach(validate);
 
   function generate(file: OxlintConfigFile): string {
     const filename = fs.realpathSync(file.filename).replace(/\.jsonc?$/i, '') + '.ts';
@@ -393,15 +423,15 @@ export function prepareOxlintConfigModules(
     });
     let needsFileUrl = false;
     function pluginExpression(specifier: string): string {
-      if (isRelativePluginPath(specifier)) {
-        needsFileUrl = true;
-        const pluginPath = path.resolve(path.dirname(file.filename), specifier);
-        const relative = path.relative(path.dirname(filename), pluginPath);
-        const encoded = relative.split(path.sep).map(encodeURIComponent).join('/');
-        const url = encoded.startsWith('../') ? encoded : `./${encoded}`;
-        return `fileURLToPath(new URL(${JSON.stringify(url)}, import.meta.url))`;
+      if (!isRelativePluginPath(specifier)) {
+        return JSON.stringify(specifier);
       }
-      return JSON.stringify(specifier);
+      needsFileUrl = true;
+      const pluginPath = path.resolve(path.dirname(file.filename), specifier);
+      const relative = path.relative(path.dirname(filename), pluginPath);
+      const encoded = relative.split(path.sep).map(encodeURIComponent).join('/');
+      const url = encoded.startsWith('../') ? encoded : `./${encoded}`;
+      return `fileURLToPath(new URL(${JSON.stringify(url)}, import.meta.url))`;
     }
     const config = structuredClone(file.config);
     ensureSvelteRuneGlobals(config);

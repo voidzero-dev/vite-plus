@@ -65,6 +65,7 @@ import {
   pnpmMajor,
   type CatalogDependencyResolver,
   type PnpmPackageJsonSettings,
+  type PreparedOxlintConfigs,
 } from './shared.ts';
 
 export function rewriteStandaloneProject(
@@ -535,7 +536,7 @@ export function rewriteMonorepoProject(
   workspaceContext?: {
     rootDir: string;
     packages: WorkspacePackage[];
-    oxlintConfigs?: ReturnType<typeof prepareOxlintConfigs>;
+    oxlintConfigs?: PreparedOxlintConfigs;
   },
   deferLazyPluginWrapping = false,
   // Whether this workspace's edges use catalog references. Yarn catalogs require

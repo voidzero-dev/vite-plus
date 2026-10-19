@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -30,6 +29,7 @@ import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
   hasGeneratedOxlintConfig,
+  oxlintMigrationMarker,
   prepareOxlintConfigs,
   readRulesYaml,
   removeMigratedOxlintConfigs,
@@ -39,9 +39,9 @@ import {
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
-  type OxlintConfigFile,
   type OxlintConfigMigration,
   type OxlintModulePlan,
+  type PreparedOxlintConfigs,
   OXLINT_OWNER_CONFIG_KEYS,
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
@@ -266,7 +266,7 @@ export function mergeViteConfigFiles(
   // (correct for the top-level standalone/monorepo callers, where
   // projectPath IS the workspace root).
   workspaceRoot?: string,
-  preparedOxlintConfigs?: Map<string, OxlintConfigMigration | Error>,
+  preparedOxlintConfigs?: PreparedOxlintConfigs,
 ): void {
   const configs = detectConfigs(projectPath);
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
@@ -291,40 +291,6 @@ export function mergeViteConfigFiles(
   }
 }
 
-function oxlintMigrationMarker(
-  filename: string,
-  file: OxlintConfigFile,
-  workspaceRoot: string,
-): string {
-  const relative = (filename: string) =>
-    path.relative(workspaceRoot, filename).split(path.sep).join('/');
-  const inputs: unknown[] = [relative(filename)];
-  const visited = new Set<OxlintConfigFile>();
-  function visit(file: OxlintConfigFile): void {
-    if (visited.has(file)) {
-      return;
-    }
-    visited.add(file);
-    const config = { ...file.config };
-    delete config.extends;
-    inputs.push([relative(file.filename), config, file.extendsPaths.map(relative)]);
-    file.extends.forEach(visit);
-  }
-  visit(file);
-  const serialized = JSON.stringify(inputs, (_key, value) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      return Object.fromEntries(
-        Object.keys(value)
-          .toSorted()
-          .map((key) => [key, value[key]]),
-      );
-    }
-    return value;
-  });
-  const digest = createHash('sha256').update(serialized).digest('hex').slice(0, 32);
-  return `// vp migrate: merged ${encodeURIComponent(relative(filename))} (${digest}).`;
-}
-
 /** Resume partial migrations without applying lint setup to other existing Vite+ projects. */
 export function retryPreservedOxlintConfigs(
   workspaceRoot: string,
@@ -343,8 +309,9 @@ export function retryPreservedOxlintConfigs(
     }
     const projectPath = path.dirname(filename);
     const configs = detectConfigs(projectPath);
-    if (configs.viteConfig && hasConfigKey(path.join(projectPath, configs.viteConfig), 'lint')) {
-      const source = fs.readFileSync(path.join(projectPath, configs.viteConfig), 'utf8');
+    const existingViteConfig = configs.viteConfig && path.join(projectPath, configs.viteConfig);
+    if (existingViteConfig && hasConfigKey(existingViteConfig, 'lint')) {
+      const source = fs.readFileSync(existingViteConfig, 'utf8');
       const marker = oxlintMigrationMarker(filename, migration.file, workspaceRoot);
       migration.migrated = source.split(/\r?\n/).includes(marker);
       continue;
@@ -373,10 +340,15 @@ function mergeOxlintConfigFile(
   report?: MigrationReport,
   packages?: WorkspacePackage[],
   workspaceRoot?: string,
-  preparedOxlintConfigs?: Map<string, OxlintConfigMigration | Error>,
+  preparedOxlintConfigs?: PreparedOxlintConfigs,
 ): void {
-  // Inject options.typeAware and options.typeCheck defaults before merging
   const fullOxlintPath = path.join(projectPath, oxlintConfig);
+  function warnPreservedConfig(error: unknown): void {
+    warnMigration(
+      `Could not migrate ${displayRelative(fullOxlintPath)}: ${String(error)}. The original config was preserved; use vp lint -c ${oxlintConfig} until it is migrated manually.`,
+      report,
+    );
+  }
   let migration: OxlintConfigMigration;
   try {
     const prepared = preparedOxlintConfigs?.get(fullOxlintPath);
@@ -385,10 +357,7 @@ function mergeOxlintConfigFile(
     }
     migration = prepared ?? { file: resolveOxlintConfigExtends(fullOxlintPath) };
   } catch (error) {
-    warnMigration(
-      `Could not migrate ${displayRelative(fullOxlintPath)}: ${String(error)}. The original config was preserved; use vp lint -c ${oxlintConfig} until it is migrated manually.`,
-      report,
-    );
+    warnPreservedConfig(error);
     return;
   }
   if (migration.migrated) {
@@ -421,9 +390,7 @@ function mergeOxlintConfigFile(
   for (const layer of layers) {
     Object.assign(inheritedOptions, layer.options);
   }
-  if (!oxlintJson.options) {
-    oxlintJson.options = {};
-  }
+  oxlintJson.options ||= {};
   // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
   if (!hasBaseUrlInTsconfig(projectPath)) {
     if (inheritedOptions.typeAware === undefined) {
@@ -492,10 +459,7 @@ function mergeOxlintConfigFile(
       preparedOxlintConfigs !== undefined,
     );
   } catch (error) {
-    warnMigration(
-      `Could not migrate ${displayRelative(fullOxlintPath)}: ${String(error)}. The original config was preserved; use vp lint -c ${oxlintConfig} until it is migrated manually.`,
-      report,
-    );
+    warnPreservedConfig(error);
   }
 }
 

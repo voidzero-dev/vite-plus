@@ -60,6 +60,8 @@ export interface OxlintConfigMigration {
   migrated?: boolean;
 }
 
+export type PreparedOxlintConfigs = Map<string, OxlintConfigMigration | Error>;
+
 export interface OxlintModulePlan {
   configContent: string;
   imports: string[];
