@@ -205,6 +205,18 @@ async function buildVite() {
                 };
               }
             }
+            if (id.endsWith(join('vite', 'src', 'node', 'plugins', 'clientInjections.ts'))) {
+              const { magicString } = meta;
+              if (magicString) {
+                // Resolve the runtime bundled with core. Keep ROLLDOWN_DEV_RUNTIME_ENTRY
+                // unchanged: it also matches the import in bundledDevClient.mjs.
+                magicString.replace(
+                  'import.meta.resolve(ROLLDOWN_DEV_RUNTIME_ENTRY)',
+                  `import.meta.resolve('${pkgJson.name}/rolldown/experimental/runtime')`,
+                );
+                return { code: magicString };
+              }
+            }
             return undefined;
           },
         },
