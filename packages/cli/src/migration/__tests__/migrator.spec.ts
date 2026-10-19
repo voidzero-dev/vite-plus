@@ -2069,6 +2069,7 @@ describe('standalone pnpm child project boundaries', () => {
 
   it.each([
     { packageManager: 'pnpm@10.6.1', settingsInYaml: false },
+    { packageManager: 'pnpm@10.6.2', settingsInYaml: true },
     { packageManager: 'pnpm@10.6.2+sha512.example', settingsInYaml: true },
     { devEngines: { packageManager: { name: 'pnpm', version: '10.5.0' } }, settingsInYaml: false },
     {
@@ -2077,6 +2078,14 @@ describe('standalone pnpm child project boundaries', () => {
       },
       settingsInYaml: false,
     },
+    { devEngines: { packageManager: { name: 'pnpm', version: '*' } }, settingsInYaml: true },
+    { devEngines: { packageManager: { name: 'pnpm', version: '>=10' } }, settingsInYaml: true },
+    { devEngines: { packageManager: { name: 'pnpm', version: '^10' } }, settingsInYaml: true },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: 'not-a-version' } },
+      settingsInYaml: true,
+    },
+    { devEngines: { packageManager: { name: 'pnpm', version: 'latest' } }, settingsInYaml: true },
   ])('preserves child pnpm settings according to its own pin (%j)', (declaration) => {
     const manifest = JSON.stringify({
       name: 'web',
