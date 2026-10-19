@@ -6,4 +6,9 @@ steps = [
   { argv = ["vp", "pm", "publish", "--help"], comment = "should show help", continue-on-failure = true },
   { argv = ["vp", "pm", "publish", "--dry-run", "--", "--loglevel", "error"], comment = "should preview publish without actually publishing (uses npm publish --dry-run)", continue-on-failure = true },
   { argv = ["vp", "pm", "publish", "--dry-run", "--json", "--", "--ignore-scripts", "--loglevel", "error"], comment = "should preserve JSON output without publishing", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "private", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@5.8.0"], snapshot = false },
+  { argv = ["vp", "pm", "publish", "--dry-run"], comment = "Reject npm versions that publish despite dry-run. The package is private for safety.", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@9.4.2"], snapshot = false },
+  { argv = ["vp", "pm", "publish", "--dry-run", "--provenance"], comment = "Reject provenance before npm 9.5.0.", continue-on-failure = true },
 ]

@@ -16,4 +16,6 @@ steps = [
   { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
   { argv = ["vp", "pm", "pack", "--", "--loglevel=warn"], comment = "should support pass through arguments" },
   { argv = ["vpt", "rm", "-f", "command-pack-pnpm10-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@10.10.0"], snapshot = false },
+  { argv = ["vp", "pm", "pack", "--recursive"], comment = "Reject recursive pack before pnpm 10.11.0.", continue-on-failure = true },
 ]

@@ -64,11 +64,11 @@ pub struct OutdatedArgs {
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(yarn))]
+    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long, not_supported(yarn, bun))]
+    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Only production and optional dependencies
