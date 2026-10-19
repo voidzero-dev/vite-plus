@@ -429,57 +429,29 @@ pub async fn install(
         metadata.install_id = install_id.clone();
         metadata.version_spec = update_version_spec(spec);
 
-        let mut finalized = true;
-        for bin_name in &stale_bin_names {
-            let result = async {
-                remove_package_shim(&bin_dir, bin_name).await?;
-                BinConfig::delete(bin_name).await?;
-                Ok::<(), Error>(())
-            }
-            .await;
-
-            if let Err(error) = result.map_err(|error| package_error(&package_name, error)) {
-                restore_previous_install_state(
-                    &bin_dir,
-                    &package_name,
-                    previous_metadata.as_ref(),
-                    &bin_names,
-                )
-                .await;
+        let mut rollback = match BinRollback::new() {
+            Ok(rollback) => rollback,
+            Err(error) => {
                 let _ = cleanup_failed_install(&install_dir).await;
                 if first_error.is_none() {
-                    first_error = Some(error);
+                    first_error = Some(package_error(&package_name, error));
                 }
-                finalized = false;
-                break;
+                continue;
             }
-        }
-
-        if !finalized {
-            continue;
-        }
-
-        // 5.4 Activate the new installation through metadata.
-        if let Err(error) =
-            metadata.save().await.map_err(|error| package_error(&package_name, error))
-        {
-            restore_previous_install_state(
-                &bin_dir,
-                &package_name,
-                previous_metadata.as_ref(),
-                &bin_names,
-            )
-            .await;
-            let _ = cleanup_failed_install(&install_dir).await;
-            if first_error.is_none() {
-                first_error = Some(error);
+        };
+        let result = async {
+            for bin_name in &stale_bin_names {
+                rollback.capture_bin(&bin_dir, bin_name).await?;
+                remove_package_shim(&bin_dir, bin_name).await?;
+                BinConfig::delete(bin_name).await?;
             }
-            continue;
-        }
 
-        // 5.5 Expose each binary and record its ownership.
-        for bin_name in &bin_names {
-            let result = async {
+            // 5.4 Activate the new installation through metadata.
+            metadata.save().await?;
+
+            // 5.5 Expose each binary and record its ownership.
+            for bin_name in &bin_names {
+                rollback.capture_bin(&bin_dir, bin_name).await?;
                 create_package_shim(&bin_dir, bin_name, &package_name).await?;
                 BinConfig::new(
                     bin_name.clone(),
@@ -488,28 +460,19 @@ pub async fn install(
                     node_version.clone(),
                 )
                 .save()
-                .await
+                .await?;
             }
-            .await;
-
-            if let Err(error) = result.map_err(|error| package_error(&package_name, error)) {
-                restore_previous_install_state(
-                    &bin_dir,
-                    &package_name,
-                    previous_metadata.as_ref(),
-                    &bin_names,
-                )
-                .await;
-                let _ = cleanup_failed_install(&install_dir).await;
-                if first_error.is_none() {
-                    first_error = Some(error);
-                }
-                finalized = false;
-                break;
-            }
+            Ok::<(), Error>(())
         }
+        .await;
 
-        if !finalized {
+        if let Err(error) = result {
+            restore_previous_install_state(&package_name, previous_metadata.as_ref(), rollback)
+                .await;
+            let _ = cleanup_failed_install(&install_dir).await;
+            if first_error.is_none() {
+                first_error = Some(package_error(&package_name, error));
+            }
             continue;
         }
 
@@ -654,55 +617,146 @@ async fn restore_package_metadata(package_name: &str, previous_metadata: Option<
     }
 }
 
-async fn restore_previous_install_state(
-    bin_dir: &AbsolutePath,
-    package_name: &str,
-    previous_metadata: Option<&PackageMetadata>,
-    current_bin_names: &[String],
-) {
-    restore_package_metadata(package_name, previous_metadata).await;
+/// Save only paths an installation is about to change, including their original owners.
+struct BinRollback {
+    directory: tempfile::TempDir,
+    files: Vec<(AbsolutePathBuf, Option<AbsolutePathBuf>)>,
+}
 
-    let previous_bin_names = previous_metadata
-        .map(|metadata| metadata.bins.iter().cloned().collect::<HashSet<_>>())
-        .unwrap_or_default();
-    let bin_names =
-        current_bin_names.iter().chain(previous_bin_names.iter()).cloned().collect::<HashSet<_>>();
+impl BinRollback {
+    fn new() -> Result<Self, Error> {
+        Ok(Self { directory: tempfile::tempdir()?, files: Vec::new() })
+    }
 
-    for bin_name in bin_names {
-        let result = if previous_bin_names.contains(&bin_name) {
-            async {
-                create_package_shim(bin_dir, &bin_name, package_name).await?;
-                if let Some(metadata) = previous_metadata {
-                    BinConfig::new(
-                        bin_name.clone(),
-                        package_name.to_string(),
-                        metadata.version.clone(),
-                        metadata.platform.node.clone(),
-                    )
-                    .save()
-                    .await
+    async fn capture_bin(&mut self, bin_dir: &AbsolutePath, bin_name: &str) -> Result<(), Error> {
+        #[cfg(unix)]
+        let suffixes = [""];
+        #[cfg(windows)]
+        let suffixes = [".exe", ".shim", ".cmd", ".ps1", ""];
+        for suffix in suffixes {
+            self.capture(bin_dir.join(format!("{bin_name}{suffix}"))).await?;
+        }
+        self.capture(BinConfig::path(bin_name)?).await
+    }
+
+    async fn capture(&mut self, path: AbsolutePathBuf) -> Result<(), Error> {
+        if self.files.iter().any(|(saved, _)| *saved == path) {
+            return Ok(());
+        }
+        let backup = match tokio::fs::symlink_metadata(&path).await {
+            Ok(metadata) => {
+                let backup =
+                    AbsolutePathBuf::new(self.directory.path().join(self.files.len().to_string()))
+                        .expect("temporary directory is absolute");
+                if metadata.file_type().is_symlink() {
+                    let target = tokio::fs::read_link(&path).await?;
+                    #[cfg(unix)]
+                    tokio::fs::symlink(target, &backup).await?;
+                    #[cfg(windows)]
+                    tokio::fs::symlink_file(target, &backup).await?;
+                } else if metadata.is_file() {
+                    tokio::fs::copy(&path, &backup).await?;
                 } else {
-                    Ok(())
+                    return Err(Error::Other(
+                        format!("Cannot replace non-file {}", path.as_path().display()).into(),
+                    ));
+                }
+                Some(backup)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error.into()),
+        };
+        self.files.push((path, backup));
+        Ok(())
+    }
+
+    async fn restore(self) {
+        let mut failed = false;
+        for (path, backup) in self.files.into_iter().rev() {
+            let result = async {
+                if let Some(backup) = &backup {
+                    let metadata = tokio::fs::symlink_metadata(backup).await?;
+                    if metadata.file_type().is_symlink() {
+                        if tokio::fs::read_link(&path).await.ok()
+                            == Some(tokio::fs::read_link(backup).await?)
+                        {
+                            return Ok::<(), std::io::Error>(());
+                        }
+                    } else if let Ok(current) = tokio::fs::symlink_metadata(&path).await {
+                        if current.is_file()
+                            && current.permissions() == metadata.permissions()
+                            && tokio::fs::read(&path).await? == tokio::fs::read(backup).await?
+                        {
+                            return Ok(());
+                        }
+                    }
+                }
+
+                #[cfg(windows)]
+                {
+                    crate::commands::env::remove_or_rename_to_old(&path).await;
+                    match tokio::fs::symlink_metadata(&path).await {
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(error) => return Err(error),
+                        Ok(_) => {
+                            return Err(std::io::Error::other(
+                                "Could not remove replacement binary",
+                            ));
+                        }
+                    }
+                }
+                #[cfg(unix)]
+                match tokio::fs::remove_file(&path).await {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error),
+                }
+                if let Some(backup) = &backup {
+                    if tokio::fs::symlink_metadata(backup).await?.file_type().is_symlink() {
+                        let target = tokio::fs::read_link(backup).await?;
+                        #[cfg(unix)]
+                        tokio::fs::symlink(target, &path).await?;
+                        #[cfg(windows)]
+                        tokio::fs::symlink_file(target, &path).await?;
+                    } else {
+                        tokio::fs::copy(backup, &path).await?;
+                    }
+                }
+                Ok(())
+            }
+            .await;
+            if let Err(error) = result {
+                failed = true;
+                if let Some(backup) = backup {
+                    output::warn(&format!(
+                        "Failed to restore {} from {}: {error}",
+                        path.as_path().display(),
+                        backup.as_path().display()
+                    ));
+                } else {
+                    output::warn(&format!(
+                        "Failed to remove new binary {}: {error}",
+                        path.as_path().display()
+                    ));
                 }
             }
-            .await
-        } else {
-            async {
-                remove_package_shim(bin_dir, &bin_name).await?;
-                BinConfig::delete(&bin_name).await
-            }
-            .await
-        };
-
-        if let Err(error) = result {
-            tracing::warn!(
-                "Failed to restore '{}' binary state for global package '{}': {}",
-                bin_name,
-                package_name,
-                error
-            );
+        }
+        if failed {
+            output::warn(&format!(
+                "Could not fully restore global binaries. Backups kept at {}",
+                self.directory.keep().display()
+            ));
         }
     }
+}
+
+async fn restore_previous_install_state(
+    package_name: &str,
+    previous_metadata: Option<&PackageMetadata>,
+    rollback: BinRollback,
+) {
+    restore_package_metadata(package_name, previous_metadata).await;
+    rollback.restore().await;
 }
 
 async fn cleanup_failed_install(install_dir: &AbsolutePathBuf) -> Result<(), Error> {
@@ -1593,6 +1647,23 @@ mod tests {
                     "npm".to_string(),
                 );
                 previous_metadata.install_id = "#123e4567-e89b-42d3-a456-426614174000".to_string();
+                previous_metadata.save().await.unwrap();
+                for bin_name in &previous_metadata.bins {
+                    create_package_shim(&bin_dir, bin_name, "test-package").await.unwrap();
+                    BinConfig::new(
+                        bin_name.clone(),
+                        "test-package".into(),
+                        "1.0.0".into(),
+                        "20.0.0".into(),
+                    )
+                    .save()
+                    .await
+                    .unwrap();
+                }
+                let mut rollback = BinRollback::new().unwrap();
+                rollback.capture_bin(&bin_dir, "drop").await.unwrap();
+                remove_package_shim(&bin_dir, "drop").await.unwrap();
+                BinConfig::delete("drop").await.unwrap();
 
                 let mut new_metadata = PackageMetadata::new(
                     "test-package".to_string(),
@@ -1607,6 +1678,7 @@ mod tests {
                 new_metadata.save().await.unwrap();
 
                 for bin_name in ["keep", "new"] {
+                    rollback.capture_bin(&bin_dir, bin_name).await.unwrap();
                     create_package_shim(&bin_dir, bin_name, "test-package").await.unwrap();
                     BinConfig::new(
                         bin_name.to_string(),
@@ -1619,13 +1691,8 @@ mod tests {
                     .unwrap();
                 }
 
-                restore_previous_install_state(
-                    &bin_dir,
-                    "test-package",
-                    Some(&previous_metadata),
-                    &new_metadata.bins,
-                )
-                .await;
+                restore_previous_install_state("test-package", Some(&previous_metadata), rollback)
+                    .await;
 
                 let restored = PackageMetadata::load("test-package").await.unwrap().unwrap();
                 assert_eq!(restored.install_id, previous_metadata.install_id);
@@ -1644,6 +1711,126 @@ mod tests {
                 }
             },
         )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_rollback_restores_regular_wrappers_and_sidecars() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let bin_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let mut rollback = BinRollback::new().unwrap();
+        for suffix in [".exe", ".shim", ".cmd", ".ps1", ""] {
+            let path = bin_dir.join(format!("tool{suffix}"));
+            std::fs::write(&path, b"original contents").unwrap();
+            rollback.capture(path.clone()).await.unwrap();
+            std::fs::write(&path, b"replacement contents").unwrap();
+            rollback.capture(path.clone()).await.unwrap();
+            std::fs::remove_file(&path).unwrap();
+        }
+        rollback.restore().await;
+        for suffix in [".exe", ".shim", ".cmd", ".ps1", ""] {
+            assert_eq!(
+                std::fs::read(bin_dir.join(format!("tool{suffix}"))).unwrap(),
+                b"original contents"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rollback_keeps_backup_when_restoration_fails() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let parent = temp.path().join("parent");
+        std::fs::create_dir(&parent).unwrap();
+        let path = AbsolutePathBuf::new(parent.join("tool")).unwrap();
+        std::fs::write(&path, b"original contents").unwrap();
+        let mut rollback = BinRollback::new().unwrap();
+        rollback.capture(path.clone()).await.unwrap();
+        let backup = rollback.files[0].1.clone().unwrap();
+        let backup_dir = rollback.directory.path().to_path_buf();
+        std::fs::remove_file(&path).unwrap();
+        std::fs::remove_dir(&parent).unwrap();
+        std::fs::write(&parent, b"blocks restoration").unwrap();
+
+        rollback.restore().await;
+
+        assert_eq!(std::fs::read(&backup).unwrap(), b"original contents");
+        assert_eq!(std::fs::read(&parent).unwrap(), b"blocks restoration");
+        std::fs::remove_dir_all(backup_dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_rollback_preserves_existing_and_unattempted_binaries() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp.path())], |_| async {
+            let bin_dir = get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let bins = vec!["collision".to_string(), "untouched".to_string()];
+            for name in &bins {
+                std::fs::write(bin_dir.join(name), b"original executable").unwrap();
+                std::fs::set_permissions(
+                    bin_dir.join(name),
+                    std::fs::Permissions::from_mode(0o755),
+                )
+                .unwrap();
+            }
+
+            let mut rollback = BinRollback::new().unwrap();
+            rollback.capture_bin(&bin_dir, &bins[0]).await.unwrap();
+            assert!(create_package_shim(&bin_dir, &bins[0], "new-package").await.is_err());
+            restore_previous_install_state("new-package", None, rollback).await;
+
+            for name in &bins {
+                assert_eq!(std::fs::read(bin_dir.join(name)).unwrap(), b"original executable");
+                assert_eq!(
+                    std::fs::metadata(bin_dir.join(name)).unwrap().permissions().mode() & 0o777,
+                    0o755
+                );
+            }
+        })
+        .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_rollback_restores_replaced_npm_link_and_owner() {
+        let temp = tempfile::TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp.path())], |_| async {
+            let bin_dir = get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let old_target = temp.path().join("original-cli.js");
+            std::fs::write(&old_target, b"original npm binary").unwrap();
+            std::os::unix::fs::symlink(&old_target, bin_dir.join("replaced")).unwrap();
+            BinConfig::new_npm("replaced".into(), "test-package".into(), "22.18.0".into())
+                .save()
+                .await
+                .unwrap();
+            let config_path = BinConfig::path("replaced").unwrap();
+            let old_config = std::fs::read(&config_path).unwrap();
+            std::fs::write(bin_dir.join("collision"), b"original executable").unwrap();
+
+            let mut rollback = BinRollback::new().unwrap();
+            rollback.capture_bin(&bin_dir, "replaced").await.unwrap();
+            create_package_shim(&bin_dir, "replaced", "test-package").await.unwrap();
+            BinConfig::new(
+                "replaced".into(),
+                "test-package".into(),
+                "2.0.0".into(),
+                "22.18.0".into(),
+            )
+            .save()
+            .await
+            .unwrap();
+            rollback.capture_bin(&bin_dir, "collision").await.unwrap();
+            assert!(create_package_shim(&bin_dir, "collision", "test-package").await.is_err());
+            restore_previous_install_state("test-package", None, rollback).await;
+
+            assert_eq!(std::fs::read_link(bin_dir.join("replaced")).unwrap(), old_target);
+            assert_eq!(std::fs::read(config_path).unwrap(), old_config);
+            assert_eq!(std::fs::read(bin_dir.join("collision")).unwrap(), b"original executable");
+        })
         .await;
     }
 
