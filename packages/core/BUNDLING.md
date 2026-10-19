@@ -138,6 +138,8 @@ The snapshot allows CLI branding, embedded package metadata, and the browser run
 
 Native `@rolldown/binding-*` references have separate rewrite checks, described below.
 
+The `rolldown_webcontainer_fallback` CLI snapshot executes the packed binding loader in a simulated WebContainer. It checks fresh and cached WASM bindings without a standalone `rolldown` package. The fixture uses real Node metadata resolution and a fake installer, and asserts that both paths use the bundled Rolldown version.
+
 ### Release Build: Native Binding Rewriting
 
 During release builds (`RELEASE_BUILD=1`), `bundleRolldown()` rewrites Rolldown's native binding requires through `build-support/rewrite-rolldown-binding.ts`. For every platform in the CLI's `napi.targets` (mapped to napi platform suffixes with `parseTriple`), the loader's `@rolldown/binding-<suffix>` requires become `@voidzero-dev/vite-plus-<suffix>`, and that branch's version guard switches from the Rolldown version to core's version, which is what the Vite+ platform packages are published as.
