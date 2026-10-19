@@ -2147,6 +2147,40 @@ describe('standalone pnpm child project boundaries', () => {
   );
 
   it.each([
+    ['a pnpm-workspace.yaml glob', 'pnpm-workspace.yaml', 'packages:\n  - "**"\n'],
+    [
+      'package.json workspaces',
+      'package.json',
+      JSON.stringify({
+        name: 'root',
+        workspaces: ['**'],
+        devDependencies: { vite: '^8.0.1' },
+      }),
+    ],
+  ])('does not treat installed dependency manifests as members of %s', (_label, file, content) => {
+    fs.mkdirSync(path.join(tmpDir, 'node_modules/foo'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'node_modules/foo/package.json'),
+      JSON.stringify({ name: 'foo', packageManager: 'pnpm@10.33.0' }),
+    );
+    const stored = path.join(tmpDir, 'node_modules/.pnpm/y@1.0.0/node_modules/y');
+    fs.mkdirSync(stored, { recursive: true });
+    fs.writeFileSync(
+      path.join(stored, 'package.json'),
+      JSON.stringify({ name: 'y', packageManager: 'pnpm@10.33.0' }),
+    );
+    fs.symlinkSync(stored, path.join(tmpDir, 'node_modules/y'), 'dir');
+    fs.writeFileSync(path.join(tmpDir, file), content);
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    // `**` still owns the real child, and installed manifests get no boundary.
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'node_modules/foo/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(stored, 'pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it.each([
     { packageManager: 'yarn@4.9.2' },
     { packageManager: 'npm@10.9.4' },
     { packageManager: 'bun@1.3.0' },

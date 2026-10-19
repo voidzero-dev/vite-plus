@@ -244,4 +244,16 @@ describe('findPackageJsonFilesFromPatterns', () => {
   it('returns empty when given no patterns', () => {
     expect(findPackageJsonFilesFromPatterns([], tmpDir)).toEqual([]);
   });
+
+  it('skips package.json files inside node_modules, including the pnpm store layout', () => {
+    writeJson(path.join(tmpDir, 'packages/a/package.json'), { name: 'a' });
+    writeJson(path.join(tmpDir, 'node_modules/foo/package.json'), { name: 'foo' });
+    const stored = path.join(tmpDir, 'node_modules/.pnpm/bar@1.0.0/node_modules/bar');
+    writeJson(path.join(stored, 'package.json'), { name: 'bar' });
+    fs.symlinkSync(stored, path.join(tmpDir, 'node_modules/bar'), 'dir');
+
+    const result = findPackageJsonFilesFromPatterns(['**'], tmpDir);
+
+    expect(result).toEqual([`${tmpDir.replaceAll('\\', '/')}/packages/a/package.json`]);
+  });
 });
