@@ -29,11 +29,11 @@ pub struct UpdateArgs {
     pub(crate) ignore_node_mismatch: bool,
 
     /// Update recursively in all workspace packages
-    #[arg(short = 'r', long, not_supported(npm < "8.1.0", yarn < "2"))]
+    #[arg(short = 'r', long, not_supported(npm < "8.1.0", yarn < "2", bun < "1.4"))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn >= "2"))]
+    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn >= "2", bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
@@ -162,20 +162,6 @@ impl Yarn {
 
 impl Resolve<UpdateArgs> for Bun {
     fn resolve(&self, args: &UpdateArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        if !self.supports_v1_4_commands() && !args.interactive {
-            for (option, active) in
-                [("--recursive", args.recursive), ("--filter", !args.filter.is_empty())]
-            {
-                if active {
-                    return CommandResolution::InvalidArgument(
-                        vt_str::format!(
-                            "bun < 1.4 does not support {option} without --interactive."
-                        )
-                        .to_string(),
-                    );
-                }
-            }
-        }
         let mut cmd = CommandBuilder::new("bun");
         cmd.arg("update")
             .repeated("--filter", args.filter.iter())
@@ -803,6 +789,7 @@ mod tests {
         expect_unsupported(
             resolve(&bun("1.3.14"), args),
             &[
+                "bun < 1.4 does not support --filter.",
                 "bun does not support --workspace-root.",
                 "bun < 1.4 does not support --dev.",
                 "bun < 1.4 does not support --prod.",
@@ -861,12 +848,18 @@ mod tests {
     }
 
     #[test]
-    fn test_bun_update_rejects_filter_before_1_4() {
-        let options = UpdateArgs { filter: vec!["web".to_string()], ..Default::default() };
-        let resolution = resolve(&bun("1.3.11"), options);
-        expect_unsupported(
-            resolution,
-            &["bun < 1.4 does not support --filter without --interactive."],
-        );
+    fn test_bun_update_rejects_workspace_selection_before_1_4() {
+        for version in ["1.3.11", "1.3.14", "1.4.0-beta.1"] {
+            for interactive in [false, true] {
+                for (argv, message) in [
+                    (vec!["--recursive"], "bun < 1.4 does not support --recursive."),
+                    (vec!["--filter", "web"], "bun < 1.4 does not support --filter."),
+                ] {
+                    let mut args = parse_args::<UpdateArgs>(argv).unwrap();
+                    args.interactive = interactive;
+                    expect_unsupported(resolve(&bun(version), args), &[message]);
+                }
+            }
+        }
     }
 }

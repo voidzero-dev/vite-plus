@@ -123,20 +123,38 @@ bun < 1.4 does not support --no-optional.
 
 ## `vp update --recursive`
 
-Reject noninteractive recursive updates before Bun 1.4.
+Reject recursive updates before Bun 1.4.
 
 **Exit code:** 1
 
 ```
-bun < 1.4 does not support --recursive without --interactive.
+bun < 1.4 does not support --recursive.
 ```
 
 ## `vp update --filter app`
 
-Older Bun supports filters only in interactive update.
+Reject filtered updates before Bun 1.4.
 
 **Exit code:** 1
 
 ```
-bun < 1.4 does not support --filter without --interactive.
+bun < 1.4 does not support --filter.
+```
+
+## `vp update --interactive --recursive`
+
+Interactive updates use the same Bun version requirement.
+
+**Exit code:** 1
+
+```
+bun < 1.4 does not support --recursive.
+```
+
+## `vp update --interactive --filter app`
+
+**Exit code:** 1
+
+```
+bun < 1.4 does not support --filter.
 ```
