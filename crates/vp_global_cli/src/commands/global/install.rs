@@ -648,16 +648,25 @@ struct BinRollback {
 
 impl BinRollback {
     async fn capture_bin(&mut self, bin_dir: &AbsolutePath, bin_name: &str) -> Result<(), Error> {
-        #[cfg(unix)]
-        let suffixes = [""];
-        #[cfg(windows)]
-        let suffixes = [".exe", ".shim", ".cmd", ".ps1", ""];
-        if !is_protected_shim(bin_name, false) {
-            for suffix in suffixes {
-                self.capture(bin_dir.join(format!("{bin_name}{suffix}"))).await?;
+        let captured_len = self.files.len();
+        let result = async {
+            #[cfg(unix)]
+            let suffixes = [""];
+            #[cfg(windows)]
+            let suffixes = [".exe", ".shim", ".cmd", ".ps1", ""];
+            if !is_protected_shim(bin_name, false) {
+                for suffix in suffixes {
+                    self.capture(bin_dir.join(format!("{bin_name}{suffix}"))).await?;
+                }
             }
+            self.capture(BinConfig::path(bin_name)?).await
         }
-        self.capture(BinConfig::path(bin_name)?).await
+        .await;
+        if result.is_err() {
+            // The caller has not changed these paths when capture fails.
+            self.files.truncate(captured_len);
+        }
+        result
     }
 
     async fn capture(&mut self, path: AbsolutePathBuf) -> Result<(), Error> {
@@ -1785,6 +1794,42 @@ mod tests {
                     .unwrap()
                 );
             }
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_failed_capture_preserves_untouched_files_and_prior_backups() {
+        let temp = tempfile::TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp.path())], |_| async {
+            let bin_dir = get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let changed = bin_dir.join(format!("changed{}", std::env::consts::EXE_SUFFIX));
+            std::fs::write(&changed, b"original contents").unwrap();
+            BinConfig::new("changed".into(), "package".into(), "1.0.0".into(), "22.18.0".into())
+                .save()
+                .await
+                .unwrap();
+            let config_path = BinConfig::path("changed").unwrap();
+            let original_config = std::fs::read(&config_path).unwrap();
+            let mut rollback = BinRollback::default();
+            rollback.capture_bin(&bin_dir, "changed").await.unwrap();
+            std::fs::write(&changed, b"replacement contents").unwrap();
+            BinConfig::delete("changed").await.unwrap();
+
+            let untouched = bin_dir.join(format!("untouched{}", std::env::consts::EXE_SUFFIX));
+            std::fs::write(&untouched, b"untouched contents").unwrap();
+            let original = temp.path().join("original-untouched");
+            std::fs::hard_link(&untouched, &original).unwrap();
+            std::fs::create_dir(BinConfig::path("untouched").unwrap()).unwrap();
+            assert!(rollback.capture_bin(&bin_dir, "untouched").await.is_err());
+
+            rollback.restore().await;
+
+            assert_eq!(std::fs::read(&changed).unwrap(), b"original contents");
+            assert_eq!(std::fs::read(&config_path).unwrap(), original_config);
+            assert_eq!(std::fs::read(&untouched).unwrap(), b"untouched contents");
+            assert!(same_file::is_same_file(&untouched, &original).unwrap());
         })
         .await;
     }
