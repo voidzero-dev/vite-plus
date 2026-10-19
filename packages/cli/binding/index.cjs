@@ -1046,6 +1046,7 @@ module.exports.detectWorkspace = nativeBinding.detectWorkspace;
 module.exports.documentationUrl = nativeBinding.documentationUrl;
 module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
 module.exports.ensureBlockingStdio = nativeBinding.ensureBlockingStdio;
+module.exports.findMonorepoRoot = nativeBinding.findMonorepoRoot;
 module.exports.getVpDirs = nativeBinding.getVpDirs;
 module.exports.hasConfigKey = nativeBinding.hasConfigKey;
 module.exports.isDirectoryGitignored = nativeBinding.isDirectoryGitignored;

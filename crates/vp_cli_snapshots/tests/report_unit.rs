@@ -11,6 +11,10 @@ fn successful_cases_only_write_timings() {
     {
         let _phase = report.phase("command");
     }
+    assert_eq!(
+        report.artifact_path("registry.jsonl").unwrap(),
+        Some(tmp.path().join("registry.jsonl"))
+    );
     report.capture("vpt print", "not a failure");
     report.actual("# snapshot\n");
     report.finish(None, None).unwrap();

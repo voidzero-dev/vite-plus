@@ -89,6 +89,18 @@ impl Config {
         self.configured_package_manager_shim_mode_for(package_manager).unwrap_or_default()
     }
 
+    /// Node.js and each package-manager family have their own mode; package binaries are always managed.
+    #[must_use]
+    pub fn shim_mode_for_tool(&self, tool: &str) -> ShimMode {
+        if tool == "node" {
+            self.node_shim_mode
+        } else if let Some(kind) = PackageManagerType::from_tool(tool) {
+            self.package_manager_shim_mode_for(kind)
+        } else {
+            ShimMode::Managed
+        }
+    }
+
     pub fn set_shim_modes(&mut self, node: bool, package_manager: bool, mode: ShimMode) {
         if node {
             self.node_shim_mode = mode;

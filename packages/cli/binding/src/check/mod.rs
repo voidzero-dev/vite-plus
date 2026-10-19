@@ -22,6 +22,7 @@ pub(crate) async fn execute_check(
     resolver: &SubcommandResolver,
     fix: bool,
     quiet: bool,
+    deny_warnings: bool,
     no_fmt_flag: bool,
     no_lint_flag: bool,
     no_error_on_unmatched_pattern: bool,
@@ -174,6 +175,9 @@ pub(crate) async fn execute_check(
         }
         if quiet {
             args.push("--quiet".to_string());
+        }
+        if deny_warnings {
+            args.push("--deny-warnings".to_string());
         }
         // `vp check` parses oxlint's human-readable summary output to print
         // unified pass/fail lines. When `GITHUB_ACTIONS=true`, oxlint auto-switches

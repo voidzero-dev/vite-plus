@@ -13,6 +13,7 @@ steps = [
   { argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "Only Node moves to fallback." },
   { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "The shell selects system Node before fallback." },
   { argv = ["node", "assert-node-resolution.cjs"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Internal Node resolution agrees with PATH." },
+  { argv = ["vp", "node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "vp node (env exec node) selects system Node like the shell." },
 
   # Move the pnpm family together; refresh must preserve both preferences.
   ["vp", "env", "off", "pnpm"],
@@ -23,6 +24,7 @@ steps = [
   # Reverse PATH: reaching the Vite+ shim first must select managed Node.
   { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "A fallback shim before system Node selects managed Node." },
   { argv = ["node", "assert-node-resolution.cjs"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Internal resolution must also stop at the first Vite+ shim." },
+  { argv = ["vp", "node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "vp node also stops at the first Vite+ shim." },
 
   # Restore each family independently; fallback should end up empty.
   ["vp", "env", "on", "node"],

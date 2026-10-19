@@ -63,6 +63,15 @@ describe('findViteConfigUp', () => {
     expect(result).toBeUndefined();
   });
 
+  it('should not search above stopDir when starting from its parent', () => {
+    fs.writeFileSync(path.join(tempDir, 'vite.config.ts'), '');
+    const stopDir = path.join(tempDir, 'monorepo');
+    fs.mkdirSync(stopDir);
+
+    const result = findViteConfigUp(tempDir, stopDir);
+    expect(result).toBeUndefined();
+  });
+
   it('should prefer the closest config file', () => {
     const subDir = path.join(tempDir, 'packages', 'my-lib');
     fs.mkdirSync(subDir, { recursive: true });

@@ -178,6 +178,24 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
     }
 }
 
+/// Find the monorepo root containing `cwd` with the same rules as `vp run` and `vp install`.
+///
+/// Returns `null` when `cwd` is not inside a pnpm or `package.json` workspace.
+#[napi]
+pub fn find_monorepo_root(cwd: String) -> Result<Option<String>> {
+    let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+    match find_workspace_root(&cwd) {
+        Ok((workspace_root, _)) => match workspace_root.workspace_file {
+            WorkspaceFile::PnpmWorkspaceYaml(_) | WorkspaceFile::NpmWorkspaceJson(_) => {
+                Ok(Some(workspace_root.path.as_path().to_string_lossy().to_string()))
+            }
+            WorkspaceFile::NonWorkspacePackage(_) => Ok(None),
+        },
+        Err(PackageJsonNotFound(_)) => Ok(None),
+        Err(e) => Err(anyhow::Error::from(e).into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
