@@ -1,0 +1,31 @@
+[[case]]
+name = "lint_explicit_config"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "lint", "index.js"], comment = "use inline lint rules when no config flag is supplied", continue-on-failure = true },
+  { argv = ["vp", "lint", "--config", "custom-lint.json", "index.js"], comment = "an explicit config overrides the inline lint rules", continue-on-failure = true },
+  ["vp", "lint", "-c", "custom-lint.json", "index.js"],
+  ["vp", "lint", "--config=custom-lint.json", "index.js"],
+  ["vp", "lint", "-c=custom-lint.json", "index.js"],
+  ["vp", "lint", "-ccustom-lint.json", "index.js"],
+  ["vp", "run", "lint:custom"],
+  { argv = ["vpt", "write-file", "vite.config.ts", "throw new Error('Vite config must not be loaded');\n"], snapshot = false },
+  { argv = ["vp", "lint", "--config", "custom-lint.json", "index.js"], comment = "explicit lint configs do not require a working Vite config" },
+]
+
+[[case]]
+name = "fmt_explicit_config"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "fmt", "--config", "custom-fmt.json", "index.js"], comment = "an explicit config overrides the inline format options" },
+  ["vpt", "print-file", "index.js"],
+  ["vp", "fmt", "--check", "-c", "custom-fmt.json", "index.js"],
+  ["vp", "fmt", "--check", "--config=custom-fmt.json", "index.js"],
+  ["vp", "fmt", "--check", "-c=custom-fmt.json", "index.js"],
+  ["vp", "fmt", "--check", "-ccustom-fmt.json", "index.js"],
+  { argv = ["vp", "fmt", "index.js"], comment = "use inline format options when no config flag is supplied" },
+  ["vpt", "print-file", "index.js"],
+  { argv = ["vpt", "write-file", "vite.config.ts", "throw new Error('Vite config must not be loaded');\n"], snapshot = false },
+  { argv = ["vp", "fmt", "--config", "custom-fmt.json", "index.js"], comment = "explicit format configs do not require a working Vite config" },
+  ["vpt", "print-file", "index.js"],
+]

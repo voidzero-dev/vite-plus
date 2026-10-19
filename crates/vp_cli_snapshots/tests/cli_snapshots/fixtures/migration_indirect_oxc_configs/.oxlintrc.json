@@ -1,0 +1,9 @@
+{
+  "rules": {
+    "no-console": "error"
+  },
+  "options": {
+    "typeAware": false,
+    "typeCheck": false
+  }
+}

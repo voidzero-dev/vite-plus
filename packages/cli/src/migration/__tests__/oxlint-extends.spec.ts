@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
 import {
+  finalizeCoreMigrationForExistingVitePlus,
   injectLintTypeCheckDefaults,
   mergeViteConfigFiles,
   prepareOxlintConfigs,
@@ -88,6 +89,64 @@ describe('Oxlint JSON extends migration', () => {
     // and retries Windows EPERM errors that rmSync can throw without retrying.
     await rm(project, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
+
+  it.each([
+    ['fresh', 'script'],
+    ['fresh', 'module'],
+    ['fresh', 'custom config'],
+    ['recovery', 'script'],
+    ['recovery', 'module'],
+    ['recovery', 'custom config'],
+  ])(
+    'keeps referenced JSON after a sibling converts its inheritance (%s, %s)',
+    async (mode, reference) => {
+      createWorkspace(['a']);
+      const source = write('.oxlintrc.json', {
+        rules: { 'no-debugger': 'error' },
+        options: { typeAware: false, typeCheck: false },
+      });
+      const original = fs.readFileSync(source, 'utf8');
+      if (reference === 'module') {
+        write(
+          'vite.config.mjs',
+          'import rules from "./.oxlintrc.json" with { type: "json" }; export default { define: { rules: JSON.stringify(rules) } };',
+        );
+      } else {
+        const pkg = JSON.parse(fs.readFileSync(path.join(project, 'package.json'), 'utf8'));
+        pkg.scripts = {
+          lint: `oxlint -c ${reference === 'script' ? '.oxlintrc.json' : 'custom.json'} index.js`,
+        };
+        write('package.json', pkg);
+        if (reference === 'custom config') {
+          write('custom.json', { extends: ['./.oxlintrc.json'] });
+        }
+      }
+      write('packages/a/.oxlintrc.json', {
+        extends: ['../../.oxlintrc.json'],
+        rules: { 'no-console': 'error' },
+      });
+      const workspace = { rootDir: project, packages: [{ name: 'a', path: 'packages/a' }] };
+      const report = createMigrationReport();
+      if (mode === 'fresh') {
+        expect(migrateWorkspace(['a']).warnings).toEqual([]);
+      } else {
+        expect(finalizeCoreMigrationForExistingVitePlus(workspace, true, report).oxcConfigs).toBe(
+          true,
+        );
+        expect(report.warnings).toEqual([]);
+      }
+      expect(fs.readFileSync(source, 'utf8')).toBe(original);
+      expect((await loadConfig()).lint).toBeUndefined();
+      expect((await loadConfig(path.join(project, 'packages/a'))).lint).toMatchObject({
+        extends: [{ rules: { 'no-debugger': 'error' } }],
+        rules: { 'no-console': 'error' },
+      });
+      expect(fs.existsSync(path.join(project, 'packages/a/.oxlintrc.json'))).toBe(false);
+      expect(fs.existsSync(path.join(project, '.oxlintrc.ts'))).toBe(true);
+      expect(finalizeCoreMigrationForExistingVitePlus(workspace, true).oxcConfigs).toBe(false);
+      expect(fs.readFileSync(source, 'utf8')).toBe(original);
+    },
+  );
 
   it('resolves nested JSONC paths relative to each declaring file and retains inheritance order', async () => {
     const base = write(
