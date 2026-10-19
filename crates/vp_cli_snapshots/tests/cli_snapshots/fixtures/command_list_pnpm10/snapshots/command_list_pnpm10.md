@@ -279,3 +279,16 @@ testnpm2 1.0.1
 devDependencies:
 test-vite-plus-package 1.0.0
 ```
+
+## `vpt json-edit package.json packageManager pnpm@10.15.1`
+
+
+## `vp pm list --find-by customFinder`
+
+Reject finders before pnpm 10.16.0.
+
+**Exit code:** 1
+
+```
+pnpm < 10.16.0 does not support --find-by.
+```

@@ -81,3 +81,29 @@ Task Details:
       → Cache disabled in task configuration
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+## `vpt json-edit package.json packageManager npm@7.13.0`
+
+
+## `vp install --filter app`
+
+Reject workspace selection before npm 7.14.0.
+
+**Exit code:** 1
+
+```
+npm < 7.14.0 does not support --filter.
+```
+
+## `vpt json-edit package.json packageManager npm@8.0.0`
+
+
+## `vp install --workspace-root`
+
+Reject workspace root inclusion before npm 8.1.0.
+
+**Exit code:** 1
+
+```
+npm < 8.1.0 does not support --workspace-root.
+```

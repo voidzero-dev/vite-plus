@@ -215,3 +215,15 @@ should error because save-catalog is not supported at pnpm@9
 ```
 pnpm < 10.12.0 does not support --save-catalog.
 ```
+
+## `vp install testnpm2 --save-catalog`
+
+The install alias must apply the add catalog version guard.
+
+**Exit code:** 1
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+pnpm < 10.12.0 does not support --save-catalog.
+```

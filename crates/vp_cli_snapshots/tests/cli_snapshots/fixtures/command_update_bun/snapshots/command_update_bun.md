@@ -97,3 +97,46 @@ installed testnpm2@1.0.1
   "packageManager": "bun@1.3.11"
 }
 ```
+
+## `vpt json-edit package.json packageManager bun@1.3.14`
+
+
+## `vp update --prod`
+
+Reject production dependency selection before Bun 1.4.
+
+**Exit code:** 1
+
+```
+bun < 1.4 does not support --prod.
+```
+
+## `vp update --no-optional`
+
+Reject optional dependency exclusion before Bun 1.4.
+
+**Exit code:** 1
+
+```
+bun < 1.4 does not support --no-optional.
+```
+
+## `vp update --recursive`
+
+Reject noninteractive recursive updates before Bun 1.4.
+
+**Exit code:** 1
+
+```
+bun < 1.4 does not support --recursive without --interactive.
+```
+
+## `vp update --filter app`
+
+Older Bun supports filters only in interactive update.
+
+**Exit code:** 1
+
+```
+bun < 1.4 does not support --filter without --interactive.
+```

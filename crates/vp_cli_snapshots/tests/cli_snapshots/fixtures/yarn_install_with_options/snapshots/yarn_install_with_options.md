@@ -75,3 +75,16 @@ success Already up-to-date.
 
 Done in <duration>.
 ```
+
+## `vpt json-edit package.json packageManager yarn@2.4.2`
+
+
+## `vp install --fix-lockfile`
+
+Reject lockfile refresh before Yarn 4.
+
+**Exit code:** 1
+
+```
+yarn < 4.0.0 does not support --fix-lockfile.
+```
