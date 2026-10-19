@@ -652,8 +652,10 @@ impl BinRollback {
         let suffixes = [""];
         #[cfg(windows)]
         let suffixes = [".exe", ".shim", ".cmd", ".ps1", ""];
-        for suffix in suffixes {
-            self.capture(bin_dir.join(format!("{bin_name}{suffix}"))).await?;
+        if !is_protected_shim(bin_name, false) {
+            for suffix in suffixes {
+                self.capture(bin_dir.join(format!("{bin_name}{suffix}"))).await?;
+            }
         }
         self.capture(BinConfig::path(bin_name)?).await
     }
@@ -1726,6 +1728,64 @@ mod tests {
                 }
             },
         )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_rollback_preserves_protected_shims_and_restores_bin_config() {
+        let temp = tempfile::TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp.path())], |_| async {
+            let bin_dir = get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            #[cfg(unix)]
+            let suffixes = [""];
+            #[cfg(windows)]
+            let suffixes = [".exe", ".shim", ".cmd", ".ps1", ""];
+            for suffix in suffixes {
+                let path = bin_dir.join(format!("node{suffix}"));
+                std::fs::write(&path, b"protected shim").unwrap();
+                std::fs::hard_link(&path, temp.path().join(format!("original-node{suffix}")))
+                    .unwrap();
+            }
+            BinConfig::new(
+                "node".into(),
+                "legacy-package".into(),
+                "1.0.0".into(),
+                "22.18.0".into(),
+            )
+            .save()
+            .await
+            .unwrap();
+            let config_path = BinConfig::path("node").unwrap();
+            let original_config = std::fs::read(&config_path).unwrap();
+            let stale_bins =
+                stale_bin_names_for_package(None, "legacy-package", &[]).await.unwrap();
+            assert_eq!(stale_bins, ["node"]);
+
+            let mut rollback = BinRollback::default();
+            for bin_name in stale_bins {
+                rollback.capture_bin(&bin_dir, &bin_name).await.unwrap();
+                remove_package_shim(&bin_dir, &bin_name).await.unwrap();
+                BinConfig::delete(&bin_name).await.unwrap();
+            }
+            std::fs::create_dir(bin_dir.join(format!("blocked{}", std::env::consts::EXE_SUFFIX)))
+                .unwrap();
+            assert!(rollback.capture_bin(&bin_dir, "blocked").await.is_err());
+            rollback.restore().await;
+
+            assert_eq!(std::fs::read(&config_path).unwrap(), original_config);
+            for suffix in suffixes {
+                let path = bin_dir.join(format!("node{suffix}"));
+                assert_eq!(std::fs::read(&path).unwrap(), b"protected shim");
+                assert!(
+                    same_file::is_same_file(
+                        &path,
+                        temp.path().join(format!("original-node{suffix}"))
+                    )
+                    .unwrap()
+                );
+            }
+        })
         .await;
     }
 
