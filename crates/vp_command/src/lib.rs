@@ -19,8 +19,10 @@ use tokio_util::sync::CancellationToken;
 use vp_error::Error;
 use vt_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
+mod external_tool;
 mod ps1_shim;
 
+pub use external_tool::{ExternalToolQuery, find_external_tool, is_managed_install};
 pub use ps1_shim::rewrite_cmd_to_powershell;
 
 /// Result of running a command with fspy tracking.
