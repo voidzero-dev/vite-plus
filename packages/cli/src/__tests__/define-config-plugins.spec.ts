@@ -174,6 +174,16 @@ describe('defineConfig project plugin injection', () => {
     ]);
   });
 
+  // https://github.com/voidzero-dev/vite-plus/issues/3152
+  it('keeps async plugins as-is so their own properties survive', () => {
+    // Mirrors `vike()`, which tags its plugin promise for config discovery.
+    const vikePlugin = Object.assign(Promise.resolve([{ name: 'vike' }]), {
+      _vikeVitePluginOptions: {},
+    });
+    const config = defineConfig({ plugins: [vikePlugin] });
+    expect(config.plugins![4]).toBe(vikePlugin);
+  });
+
   it('injects nested independent projects in referenced defineProject configs', () => {
     const config = defineProject({
       test: {
