@@ -48,6 +48,7 @@ import {
   checkVitestVersion,
   checkViteVersion,
   collectToolchainVersionChanges,
+  collectStandalonePnpmProjects,
   confirmPrettierMigration,
   detectEslintProject,
   detectFramework,
@@ -77,6 +78,7 @@ import {
   rewriteStandaloneProject,
   planVitestV5Migration,
   refreshVitestV5Migration,
+  updateStandalonePnpmLockfiles,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   vitestV5NeedsMigration,
@@ -896,6 +898,10 @@ async function executeMigrationPlan(
 
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');
+  const standalonePnpmProjects =
+    plan.packageManager === PackageManager.pnpm
+      ? collectStandalonePnpmProjects(workspaceInfo.rootDir)
+      : [];
   if (workspaceInfo.isMonorepo) {
     rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report);
   } else {
@@ -967,6 +973,10 @@ async function executeMigrationPlan(
       ? prepareNpmViteAliasReinstall(workspaceInfo.rootDir, getWorkspaceProjectPaths(workspaceInfo))
       : undefined;
   updateMigrationProgress('Installing dependencies');
+  const childLockfilesOk = await updateStandalonePnpmLockfiles(standalonePnpmProjects, report);
+  if (!childLockfilesOk) {
+    process.exitCode = 1;
+  }
   const finalInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
     interactive,
@@ -1009,7 +1019,7 @@ async function executeMigrationPlan(
   }
   return {
     installDurationMs: initialInstallDurationMs + finalInstallDurationMs,
-    finalInstallOk: finalInstallSummary.status === 'installed',
+    finalInstallOk: childLockfilesOk && finalInstallSummary.status === 'installed',
     packageManagerVersion: downloadResult.version,
     report,
   };
@@ -1125,6 +1135,10 @@ async function main() {
       ? (workspaceInfoOptional.packageManager ??
         (await selectPackageManager(options.interactive, true)))
       : workspaceInfoOptional.packageManager;
+    const standalonePnpmProjects =
+      packageManager === PackageManager.pnpm
+        ? collectStandalonePnpmProjects(workspaceInfoOptional.rootDir)
+        : [];
     let downloadedPackageManager: Awaited<ReturnType<typeof downloadPackageManager>> | undefined;
     let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
     const downloadExistingPackageManager = async () => {
@@ -1502,6 +1516,10 @@ async function main() {
               getWorkspaceProjectPaths(workspaceInfoOptional),
             )
           : undefined;
+      const childLockfilesOk = await updateStandalonePnpmLockfiles(standalonePnpmProjects, report);
+      if (!childLockfilesOk) {
+        process.exitCode = 1;
+      }
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,
@@ -1530,8 +1548,8 @@ async function main() {
       } else {
         npmReinstallPreparation?.commit();
       }
-      finalInstallOk = installSummary.status !== 'failed';
-      canFormatMigratedProject = finalInstallOk && canFormatMigratedProject;
+      finalInstallOk = childLockfilesOk && installSummary.status !== 'failed';
+      canFormatMigratedProject = installSummary.status !== 'failed' && canFormatMigratedProject;
       installDurationMs += handleInstallResult(
         installSummary,
         workspaceInfoOptional.rootDir,
@@ -1577,7 +1595,6 @@ async function main() {
 
     if (
       didMigrate &&
-      finalInstallOk &&
       canFormatMigratedProject &&
       canFormatWithOxfmt(prettierProject.hasDependency, prettierMigrated)
     ) {

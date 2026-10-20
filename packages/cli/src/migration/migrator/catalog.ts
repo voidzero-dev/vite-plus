@@ -5,6 +5,7 @@ import { coerce, isGreaterThanOrEqual, isValid } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
+import { runCommandSilently } from '../../utils/command.ts';
 import {
   VITEST_AGE_GATE_EXEMPT_PACKAGES,
   VITEST_VERSION,
@@ -32,6 +33,7 @@ import {
   shouldDropProviderOverrideKey,
   workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
+import type { MigrationReport } from '../report.ts';
 import {
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
   PROVIDER_OVERRIDE_DROP_NAMES,
@@ -39,6 +41,7 @@ import {
   VITEST_IS_MANAGED_OVERRIDE,
   isPlainRecord,
   pnpmOverrideKey,
+  warnMigration,
   type CatalogDependencyResolver,
   type PackageJsonDependencyField,
   type PnpmPackageJsonSettings,
@@ -273,6 +276,47 @@ export function ensureStandalonePnpmWorkspace(projectPath: string): boolean {
     migratePnpmSettingsToWorkspaceYaml(projectPath, takePnpmWorkspaceSettings(pkg));
   }
   return true;
+}
+
+// Capture projectPaths before creating child workspace files. Copying settings
+// can activate ignored package.json#pnpm settings on pnpm >= 11,
+// invalidating the child's lockfile even though its manifest did not change.
+export async function updateStandalonePnpmLockfiles(
+  projectPaths: string[],
+  report?: MigrationReport,
+): Promise<boolean> {
+  if (process.env.VP_SKIP_INSTALL) {
+    return true;
+  }
+  let success = true;
+  for (const projectPath of projectPaths) {
+    const workspacePath = path.join(projectPath, 'pnpm-workspace.yaml');
+    if (!fs.existsSync(workspacePath) || !fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) {
+      continue;
+    }
+    try {
+      const settings = readYamlFile(workspacePath);
+      if (!PNPM_WORKSPACE_SETTING_KEYS.some((key) => Object.hasOwn(settings, key))) {
+        continue;
+      }
+      const { exitCode, stdout, stderr } = await runCommandSilently({
+        command: process.env.VP_CLI_BIN ?? 'vp',
+        args: ['install', '--lockfile-only', '--ignore-scripts', '--no-frozen-lockfile'],
+        cwd: projectPath,
+        envs: process.env,
+      });
+      if (exitCode !== 0) {
+        throw new Error(`${stdout.toString()}\n${stderr.toString()}`.trim());
+      }
+    } catch (error) {
+      success = false;
+      warnMigration(
+        `Could not update dependencies for the nested project at ${projectPath}.\n${error instanceof Error ? error.message : String(error)}\nRun \`vp install --lockfile-only --ignore-scripts --no-frozen-lockfile\` in that directory.`,
+        report,
+      );
+    }
+  }
+  return success;
 }
 
 /**

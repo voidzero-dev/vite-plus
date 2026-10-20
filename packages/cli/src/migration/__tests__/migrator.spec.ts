@@ -8,6 +8,7 @@ import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
 import { rewriteScripts } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.js';
+import * as command from '../../utils/command.ts';
 import {
   SETUP_VP_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -67,6 +68,8 @@ const {
   pnpmSupportsWorkspaceSettings,
   pnpmOverrideKey,
   setPackageManager,
+  collectStandalonePnpmProjects,
+  updateStandalonePnpmLockfiles,
 } = await import('../migrator.js');
 
 // pnpm's managed override keys are range-qualified so they never rewrite an
@@ -1971,6 +1974,111 @@ describe('standalone pnpm child project boundaries', () => {
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('updates child lockfiles after copying settings without running lifecycle scripts', async () => {
+    const install = vi.spyOn(command, 'runCommandSilently').mockResolvedValue({
+      exitCode: 0,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
+    });
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    await expect(updateStandalonePnpmLockfiles(projects)).resolves.toBe(true);
+
+    expect(install).toHaveBeenCalledExactlyOnceWith({
+      command: process.env.VP_CLI_BIN ?? 'vp',
+      args: ['install', '--lockfile-only', '--ignore-scripts', '--no-frozen-lockfile'],
+      cwd: path.join(tmpDir, 'web'),
+      envs: process.env,
+    });
+  });
+
+  it.each([
+    [
+      'the child has no pnpm settings',
+      () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'web/package.json'),
+          JSON.stringify({ name: 'web', packageManager: 'pnpm@11.25.0' }),
+        );
+      },
+    ],
+    [
+      'the child pins pnpm older than 10.6.2',
+      () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'web/package.json'),
+          JSON.stringify({
+            name: 'web',
+            packageManager: 'pnpm@10.5.0',
+            pnpm: { overrides: { example: '1.0.0' } },
+          }),
+        );
+      },
+    ],
+    ['the child has no lockfile', () => fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'))],
+    [
+      'the child already has a workspace file',
+      () => fs.writeFileSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'), 'packages: ["."]\n'),
+    ],
+    ['installation is skipped', () => vi.stubEnv('VP_SKIP_INSTALL', '1')],
+  ])('does not update child lockfiles when %s', async (_, setup) => {
+    const install = vi.spyOn(command, 'runCommandSilently');
+    setup();
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    await updateStandalonePnpmLockfiles(projects);
+
+    expect(install).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed child lockfile update without throwing or removing its boundary', async () => {
+    vi.spyOn(command, 'runCommandSilently').mockResolvedValue({
+      exitCode: 1,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.from('Unable to resolve child dependency'),
+    });
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const report = createMigrationReport();
+
+    await expect(updateStandalonePnpmLockfiles(projects, report)).resolves.toBe(false);
+
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining(
+        `Could not update dependencies for the nested project at ${path.join(tmpDir, 'web')}.\nUnable to resolve child dependency`,
+      ),
+    );
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+      overrides: { example: '1.0.0' },
+    });
+    expect(collectStandalonePnpmProjects(tmpDir)).toEqual([]);
+  });
+
+  it('continues other children when a child install command throws', async () => {
+    fs.mkdirSync(path.join(tmpDir, 'web2'));
+    for (const file of ['package.json', 'pnpm-lock.yaml']) {
+      fs.copyFileSync(path.join(tmpDir, 'web', file), path.join(tmpDir, 'web2', file));
+    }
+    const install = vi
+      .spyOn(command, 'runCommandSilently')
+      .mockRejectedValueOnce(new Error('Failed to start vp'))
+      .mockResolvedValue({ exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) });
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const report = createMigrationReport();
+
+    await expect(updateStandalonePnpmLockfiles(projects, report)).resolves.toBe(false);
+    expect(install).toHaveBeenCalledTimes(2);
+    expect(report.warnings).toContainEqual(expect.stringContaining('Failed to start vp'));
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'web2/pnpm-workspace.yaml'))).toBe(true);
   });
 
   it('preserves the child install boundary when migrating with pnpm', () => {
