@@ -14,6 +14,8 @@ Without the installer override, real pnpm rejects dedupe-peers.
 Frozen setup overrides dedupe-peers in user and environment configuration.
 Without the installer override, real pnpm rejects inject-workspace-packages.
 Frozen setup overrides inject-workspace-packages in user and environment configuration.
+Without the installer override, real pnpm rejects lockfile.
+Frozen setup overrides lockfile in user and environment configuration.
 All installs fetch the CLI and its peer using the user registry and authentication.
 The published lockfile and user configuration remain unchanged.
 ```

@@ -49,6 +49,7 @@ const conflicts = [
   { option: 'dedupe-peers', value: 'true', setting: 'dedupePeers' },
   { option: 'inject-workspace-packages', value: 'true', setting: 'injectWorkspacePackages' },
 ];
+const disabledLockfile = { option: 'lockfile', value: 'false' };
 
 const requests = [];
 const packages = new Map(
@@ -152,7 +153,7 @@ function configureUser(user, settings = []) {
     VP_SETUP_SKIP_INSTALL_LOCKFILE: undefined,
   };
   // Keep the test independent of the host's values for these settings.
-  for (const { option } of conflicts) {
+  for (const { option } of [...conflicts, disabledLockfile]) {
     const key = `npm_config_${option.replaceAll('-', '_')}`;
     delete env[key];
     delete env[key.toUpperCase()];
@@ -321,8 +322,8 @@ async function testBypass(lockfile) {
   console.log('A failed bypass clears any stale receipt and leaves setup incomplete.');
 }
 
-async function testPeerConfig(lockfile) {
-  for (const conflict of conflicts) {
+async function testInstallConfig(lockfile) {
+  for (const conflict of [...conflicts, disabledLockfile]) {
     const installation = createInstallation(conflict.option, [conflict]);
     const { directory, home, userconfig, configuration, env } = installation;
     const control = join(directory, 'control');
@@ -332,18 +333,29 @@ async function testPeerConfig(lockfile) {
     writeFileSync(join(control, 'pnpm-lock.yaml'), lockfile);
     await assert.rejects(
       runPnpm(control, ['install', '--ignore-workspace', '--frozen-lockfile'], env),
-      (error) =>
-        error.code === 1 &&
-        /ERR_PNPM_LOCKFILE_CONFIG_MISMATCH/.test(error.stdout + error.stderr) &&
-        (error.stdout + error.stderr).includes(`settings.${conflict.setting}`),
+      (error) => {
+        if (error.code !== 1) return false;
+        const output = error.stdout + error.stderr;
+        if (conflict.option === 'lockfile') {
+          return /ERR_PNPM_NO_LOCKFILE/.test(output);
+        }
+        return (
+          /ERR_PNPM_LOCKFILE_CONFIG_MISMATCH/.test(output) &&
+          output.includes(`settings.${conflict.setting}`)
+        );
+      },
     );
+    assert.equal(readFileSync(join(control, 'pnpm-lock.yaml'), 'utf8'), lockfile);
     console.log(`Without the installer override, real pnpm rejects ${conflict.option}.`);
 
     const before = requests.length;
     await runSetup(installation, conflictEnvironment([conflict]));
     const current = join(home, 'current');
     assert.equal(readFileSync(join(current, 'pnpm-lock.yaml'), 'utf8'), lockfile);
-    assert.equal(existsSync(join(current, 'node_modules/.vp-install-complete')), true);
+    assert.deepEqual(
+      readFileSync(join(current, 'node_modules/.vp-install-complete')),
+      createHash('sha256').update(lockfile).digest(),
+    );
     assert.equal(existsSync(join(current, 'node_modules/vite-plus/package.json')), true);
     assertDependencyDownloads(before);
     assert.equal(readFileSync(userconfig, 'utf8'), configuration);
@@ -393,7 +405,7 @@ try {
   if (bypass) {
     await testBypass(lockfile);
   } else {
-    await testPeerConfig(lockfile);
+    await testInstallConfig(lockfile);
   }
   assert.ok(requests.every(({ authorization }) => authorization === 'Bearer fixture-token'));
 } finally {

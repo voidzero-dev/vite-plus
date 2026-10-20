@@ -266,6 +266,7 @@ async fn dependency_install_args<'a>(
         // packages/cli/generate-install-lockfile.ts.
         args.extend([
             "--frozen-lockfile",
+            "--lockfile=true",
             "--config.auto-install-peers=true",
             "--config.exclude-links-from-lockfile=false",
             "--config.dedupe-peers=false",
@@ -740,6 +741,7 @@ mod tests {
                 "install",
                 "--ignore-workspace",
                 "--frozen-lockfile",
+                "--lockfile=true",
                 "--config.auto-install-peers=true",
                 "--config.exclude-links-from-lockfile=false",
                 "--config.dedupe-peers=false",

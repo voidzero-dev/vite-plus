@@ -155,6 +155,8 @@ settings that pnpm checks in `lockfile.settings`:
 numeric peer suffix limit uses subprocess environment overrides because pnpm
 parses `--config` numbers as strings. Both override user files and inherited
 environment values. Registry, authentication, and proxy settings remain inherited.
+Frozen installation also sets `--lockfile=true` so user configuration cannot
+disable the published lockfile.
 
 `VP_SETUP_SKIP_INSTALL_LOCKFILE=1` is an explicit emergency override for setup and
 upgrades. It skips companion extraction, recovery, and restoration, then runs
