@@ -156,6 +156,18 @@ numeric peer suffix limit uses subprocess environment overrides because pnpm
 parses `--config` numbers as strings. Both override user files and inherited
 environment values. Registry, authentication, and proxy settings remain inherited.
 
+`VP_SKIP_INSTALL_LOCKFILE=1` is an explicit emergency override for setup and
+upgrades. It skips companion extraction, recovery, and restoration, then runs
+pnpm with `--no-frozen-lockfile --lockfile=false`. The installer warns that it is
+resolving dependencies again. The wrapper still pins the requested CLI version.
+There is no automatic fallback after a frozen install fails.
+
+A successful bypass writes `unlocked` to `node_modules/.vp-install-complete`,
+instead of a lockfile digest. This lets upgrade handoff finish without repeating
+dependency installation while the override is set. A later setup without the
+override cannot reuse this receipt as a frozen install. Failed attempts clear
+the receipt before running pnpm, as they do for frozen installs.
+
 ### Command Routing
 
 The Rust `vp` binary (`crates/vp_global_cli/`) parses every command with clap (`crates/vp_global_cli/src/cli.rs`) and routes it down one of the paths below:

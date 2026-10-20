@@ -238,15 +238,15 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
             temporary.persist(binary.as_path()).map_err(|error| error.error)?;
         }
     }
-    // Old upgrade clients and interrupted installs may leave an unlocked or
-    // incomplete tree. Reuse dependencies only after a successful frozen install.
-    let needs_frozen_install = if !skip_deps && !bundled {
+    // Old upgrade clients and interrupted installs may leave an incomplete tree.
+    // Only an explicit lockfile bypass can reuse a completed unlocked install.
+    let needs_dependency_install = if !skip_deps && !bundled {
         let source = AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?;
         vp_setup::lockfile::prepare(&source, &version_dir, version, registry).await?
     } else {
         false
     };
-    let needs_deps = needs_frozen_install
+    let needs_deps = needs_dependency_install
         || !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file();
     // Standalone retries also return the selected runtime when dependencies already exist.
     let node_version =

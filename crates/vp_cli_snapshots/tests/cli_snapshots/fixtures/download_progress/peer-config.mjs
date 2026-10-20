@@ -8,6 +8,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -20,6 +21,7 @@ import { promisify } from 'node:util';
 import { createArchive } from './archive.mjs';
 
 const exec = promisify(execFile);
+const bypass = process.argv.includes('bypass');
 const runnerHome = process.env.VP_HOME;
 const cli = join(runnerHome, 'current/node_modules/vite-plus');
 const { generateInstallLockfile, installManifest, INSTALL_PNPM_VERSION } = await import(
@@ -59,7 +61,39 @@ const packages = new Map(
   }),
 );
 let registry;
+let upgradeArchive;
+let upgradeIntegrity;
 const server = createServer((request, response) => {
+  // Native upgrade metadata is separate from the authenticated pnpm fixture registry.
+  if (upgradeArchive) {
+    if (request.url === '/platform.tgz') {
+      response.end(upgradeArchive);
+      return;
+    }
+    if (request.url === '/index.json') {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify([{ version: process.version, lts: 'Fixture' }]));
+      return;
+    }
+    if (
+      request.url === `/vite-plus/${version}` ||
+      request.url.startsWith('/@voidzero-dev/vite-plus-cli-')
+    ) {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(
+        JSON.stringify({
+          version,
+          vpInstallLockfile: true,
+          dist: {
+            tarball: `${registry}/platform.tgz`,
+            integrity: upgradeIntegrity,
+            attestations: { provenance: { predicateType: 'https://slsa.dev/provenance/v1' } },
+          },
+        }),
+      );
+      return;
+    }
+  }
   requests.push({ url: request.url, authorization: request.headers.authorization });
   if (request.headers.authorization !== 'Bearer fixture-token') {
     response.writeHead(401).end();
@@ -115,6 +149,7 @@ function configureUser(user, settings = []) {
     NPM_CONFIG_REGISTRY: undefined,
     npm_config_userconfig: userconfig,
     NPM_CONFIG_USERCONFIG: userconfig,
+    VP_SKIP_INSTALL_LOCKFILE: undefined,
   };
   // Keep the test independent of the host's values for these settings.
   for (const { option } of conflicts) {
@@ -138,6 +173,143 @@ function conflictEnvironment(settings) {
 }
 
 const runPnpm = (cwd, args, env) => exec(process.execPath, [pnpm, ...args], { cwd, env });
+
+function createInstallation(name, settings = []) {
+  const directory = join(root, name);
+  const home = join(directory, 'home');
+  const user = configureUser(join(directory, 'user'), settings);
+  const nodeBin = join(home, 'js_runtime/node', process.versions.node, 'bin');
+  mkdirSync(nodeBin, { recursive: true });
+  symlinkSync(process.execPath, join(nodeBin, 'node'));
+  cpSync(pnpmRoot, join(home, 'package_manager/pnpm', INSTALL_PNPM_VERSION), { recursive: true });
+  return { directory, home, ...user };
+}
+
+async function runSetup(installation, overrides = {}, binary = join(external, 'vp'), args = []) {
+  const { directory, home, env } = installation;
+  return exec(binary, args, {
+    cwd: directory,
+    env: {
+      ...env,
+      VP_HOME: home,
+      VP_NODE_DIST_MIRROR: registry,
+      VP_SELF_SETUP_SHELL: args.length === 0 ? 'sh' : undefined,
+      VP_SELF_SETUP_NO_MODIFY_PATH: '1',
+      VP_SKIP_DEPS_INSTALL: '',
+      VP_NODE_MANAGER: 'no',
+      VP_PM_MANAGER: 'no',
+      VP_SETUP_NODE_VERSION: process.versions.node,
+      ...overrides,
+    },
+  }).catch((error) => {
+    const log = join(home, 'upgrade.log');
+    if (existsSync(log)) error.message += `\n${readFileSync(log, 'utf8')}`;
+    throw error;
+  });
+}
+
+async function testBypass(lockfile) {
+  const installation = createInstallation('bypass');
+  const brokenLockfile = 'lockfileVersion: [\n';
+  const companion = join(external, 'vp-install-lock.yaml');
+  writeFileSync(companion, brokenLockfile);
+  // Only the exact value "1" enables the escape hatch.
+  for (const value of [undefined, '', '0', 'true']) {
+    await assert.rejects(
+      runSetup(installation, { VP_SKIP_INSTALL_LOCKFILE: value }),
+      (error) => error.code === 1 && /ERR_PNPM_BROKEN_LOCKFILE/.test(error.message),
+    );
+  }
+  console.log('A broken lockfile still fails unless VP_SKIP_INSTALL_LOCKFILE is exactly 1.');
+
+  const target = join(installation.home, version);
+  // Keep the broken working copy, but remove both companions. Recovery would hit a 404.
+  rmSync(companion);
+  rmSync(join(target, 'bin/vp-install-lock.yaml'));
+  const override = {
+    VP_SKIP_INSTALL_LOCKFILE: '1',
+    npm_config_frozen_lockfile: 'true',
+    NPM_CONFIG_FROZEN_LOCKFILE: 'true',
+    npm_config_lockfile: 'true',
+    NPM_CONFIG_LOCKFILE: 'true',
+  };
+  const before = requests.length;
+  const result = await runSetup(installation, override);
+  assert.match(result.stderr, /VP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile/);
+  const current = join(installation.home, 'current');
+  const receipt = join(current, 'node_modules/.vp-install-complete');
+  const marker = join(current, 'bin/.vp-setup-complete');
+  assert.equal(readFileSync(join(current, 'pnpm-lock.yaml'), 'utf8'), brokenLockfile);
+  assert.equal(existsSync(join(current, 'bin/vp-install-lock.yaml')), false);
+  assert.equal(
+    JSON.parse(readFileSync(join(current, 'node_modules/vite-plus/package.json'), 'utf8')).version,
+    version,
+  );
+  assert.equal(readFileSync(receipt, 'utf8'), 'unlocked');
+  assert.ok(requests.slice(before).some(({ url }) => url.endsWith(`vite-plus-${version}.tgz`)));
+  assert.ok(requests.slice(before).some(({ url }) => url.endsWith('fixture-peer-1.0.0.tgz')));
+  assert.equal(readFileSync(installation.userconfig, 'utf8'), installation.configuration);
+  console.log(
+    'The bypass warns, ignores broken or missing lockfiles, and installs the exact CLI version.',
+  );
+  console.log(
+    'User registry and authentication still work; the completion receipt is explicitly unlocked.',
+  );
+
+  // Exercise the real upgrade path with an archive that advertises a missing companion.
+  upgradeArchive = createArchive({
+    'package/package.json': JSON.stringify({ version, vpInstallLockfile: true }),
+    'package/vp': readFileSync(join(runnerHome, 'bin/vp')),
+  });
+  upgradeIntegrity = `sha512-${createHash('sha512').update(upgradeArchive).digest('base64')}`;
+  const upgradeArgs = ['upgrade', version, '--force', '--registry', registry];
+  const previousTarget = readlinkSync(current);
+  await assert.rejects(
+    runSetup(installation, {}, join(current, 'bin/vp'), upgradeArgs),
+    (error) =>
+      error.code === 1 && /Platform package is missing vp-install-lock.yaml/.test(error.message),
+  );
+  assert.equal(readlinkSync(current), previousTarget);
+  const upgradeResult = await runSetup(
+    installation,
+    override,
+    join(current, 'bin/vp'),
+    upgradeArgs,
+  );
+  assert.match(
+    upgradeResult.stderr,
+    /VP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile/,
+  );
+  assert.notEqual(readlinkSync(current), previousTarget);
+  assert.equal(existsSync(join(current, 'bin/vp-install-lock.yaml')), false);
+  assert.equal(existsSync(marker), true);
+  assert.equal(readFileSync(receipt, 'utf8'), 'unlocked');
+  await runSetup(installation, {}, join(current, 'bin/vp'), ['--version']);
+  console.log('Upgrade rejects a missing companion by default and succeeds with the bypass.');
+  console.log('Upgrade handoff completes setup; later commands work without the override.');
+
+  // A subsequent normal setup must not accept an unlocked receipt as frozen.
+  writeFileSync(join(current, 'bin/vp-install-lock.yaml'), lockfile);
+  rmSync(marker);
+  await runSetup(installation, {}, join(current, 'bin/vp'));
+  assert.equal(readFileSync(join(current, 'pnpm-lock.yaml'), 'utf8'), lockfile);
+  assert.deepEqual(readFileSync(receipt), createHash('sha256').update(lockfile).digest());
+  console.log('Normal setup restores the published lockfile and records a fresh frozen install.');
+
+  const failed = createInstallation('failed-bypass');
+  const failedTarget = join(failed.home, version);
+  const failedReceipt = join(failedTarget, 'node_modules/.vp-install-complete');
+  mkdirSync(join(failedTarget, 'node_modules'), { recursive: true });
+  writeFileSync(failedReceipt, createHash('sha256').update(lockfile).digest());
+  // A fresh offline store makes resolution fail without any external requests or retries.
+  await assert.rejects(
+    runSetup(failed, { ...override, npm_config_offline: 'true', NPM_CONFIG_OFFLINE: 'true' }),
+    (error) => error.code === 1 && /ERR_PNPM_NO_OFFLINE_META/.test(error.message),
+  );
+  assert.equal(existsSync(failedReceipt), false);
+  assert.equal(existsSync(join(failedTarget, 'bin/.vp-setup-complete')), false);
+  console.log('A failed bypass clears any stale receipt and leaves setup incomplete.');
+}
 
 try {
   const generationUser = join(root, 'generation-user');
@@ -174,61 +346,45 @@ try {
 
   copyFileSync(join(runnerHome, 'bin/vp'), join(external, 'vp'));
   writeFileSync(join(external, 'vp-install-lock.yaml'), lockfile);
-  for (const conflict of conflicts) {
-    const directory = join(root, conflict.option);
-    const home = join(directory, 'home');
-    const { userconfig, configuration, env } = configureUser(join(directory, 'user'), [conflict]);
-    const control = join(directory, 'control');
-    mkdirSync(control);
-    writeFileSync(join(control, 'package.json'), JSON.stringify(installManifest(version)));
-    writeFileSync(join(control, '.npmrc'), 'minimum-release-age=0\n');
-    writeFileSync(join(control, 'pnpm-lock.yaml'), lockfile);
-    await assert.rejects(
-      runPnpm(control, ['install', '--ignore-workspace', '--frozen-lockfile'], env),
-      (error) =>
-        error.code === 1 &&
-        /ERR_PNPM_LOCKFILE_CONFIG_MISMATCH/.test(error.stdout + error.stderr) &&
-        (error.stdout + error.stderr).includes(`settings.${conflict.setting}`),
-    );
-    console.log(`Without the installer override, real pnpm rejects ${conflict.option}.`);
+  if (bypass) {
+    await testBypass(lockfile);
+  } else {
+    for (const conflict of conflicts) {
+      const installation = createInstallation(conflict.option, [conflict]);
+      const { directory, home, userconfig, configuration, env } = installation;
+      const control = join(directory, 'control');
+      mkdirSync(control);
+      writeFileSync(join(control, 'package.json'), JSON.stringify(installManifest(version)));
+      writeFileSync(join(control, '.npmrc'), 'minimum-release-age=0\n');
+      writeFileSync(join(control, 'pnpm-lock.yaml'), lockfile);
+      await assert.rejects(
+        runPnpm(control, ['install', '--ignore-workspace', '--frozen-lockfile'], env),
+        (error) =>
+          error.code === 1 &&
+          /ERR_PNPM_LOCKFILE_CONFIG_MISMATCH/.test(error.stdout + error.stderr) &&
+          (error.stdout + error.stderr).includes(`settings.${conflict.setting}`),
+      );
+      console.log(`Without the installer override, real pnpm rejects ${conflict.option}.`);
 
-    const nodeBin = join(home, 'js_runtime/node', process.versions.node, 'bin');
-    mkdirSync(nodeBin, { recursive: true });
-    symlinkSync(process.execPath, join(nodeBin, 'node'));
-    cpSync(pnpmRoot, join(home, 'package_manager/pnpm', INSTALL_PNPM_VERSION), { recursive: true });
-    const before = requests.length;
-    await exec(join(external, 'vp'), [], {
-      cwd: directory,
-      env: {
-        ...env,
-        ...conflictEnvironment([conflict]),
-        VP_HOME: home,
-        VP_SELF_SETUP_SHELL: 'sh',
-        VP_SELF_SETUP_NO_MODIFY_PATH: '1',
-        VP_SKIP_DEPS_INSTALL: '',
-        VP_NODE_MANAGER: 'no',
-        VP_PM_MANAGER: 'no',
-        VP_SETUP_NODE_VERSION: process.versions.node,
-      },
-    }).catch((error) => {
-      const log = join(home, 'upgrade.log');
-      if (existsSync(log)) error.message += `\n${readFileSync(log, 'utf8')}`;
-      throw error;
-    });
-    const current = join(home, 'current');
-    assert.equal(readFileSync(join(current, 'pnpm-lock.yaml'), 'utf8'), lockfile);
-    assert.equal(existsSync(join(current, 'node_modules/.vp-install-complete')), true);
-    assert.equal(existsSync(join(current, 'node_modules/vite-plus/package.json')), true);
-    assert.ok(requests.slice(before).some(({ url }) => url.endsWith(`vite-plus-${version}.tgz`)));
-    assert.ok(requests.slice(before).some(({ url }) => url.endsWith('fixture-peer-1.0.0.tgz')));
-    assert.equal(readFileSync(userconfig, 'utf8'), configuration);
-    console.log(`Frozen setup overrides ${conflict.option} in user and environment configuration.`);
+      const before = requests.length;
+      await runSetup(installation, conflictEnvironment([conflict]));
+      const current = join(home, 'current');
+      assert.equal(readFileSync(join(current, 'pnpm-lock.yaml'), 'utf8'), lockfile);
+      assert.equal(existsSync(join(current, 'node_modules/.vp-install-complete')), true);
+      assert.equal(existsSync(join(current, 'node_modules/vite-plus/package.json')), true);
+      assert.ok(requests.slice(before).some(({ url }) => url.endsWith(`vite-plus-${version}.tgz`)));
+      assert.ok(requests.slice(before).some(({ url }) => url.endsWith('fixture-peer-1.0.0.tgz')));
+      assert.equal(readFileSync(userconfig, 'utf8'), configuration);
+      console.log(
+        `Frozen setup overrides ${conflict.option} in user and environment configuration.`,
+      );
+    }
+    console.log(
+      'All installs fetch the CLI and its peer using the user registry and authentication.',
+    );
+    console.log('The published lockfile and user configuration remain unchanged.');
   }
   assert.ok(requests.every(({ authorization }) => authorization === 'Bearer fixture-token'));
-  console.log(
-    'All installs fetch the CLI and its peer using the user registry and authentication.',
-  );
-  console.log('The published lockfile and user configuration remain unchanged.');
 } finally {
   server.close();
   server.closeAllConnections();

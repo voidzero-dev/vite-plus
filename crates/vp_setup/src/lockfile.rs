@@ -5,12 +5,15 @@ use std::io::{Cursor, Read as _};
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use tar::Archive;
+use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{error::Error, integrity, platform, registry};
 
 pub const INSTALL_LOCKFILE: &str = "vp-install-lock.yaml";
 const INSTALL_RECEIPT: &str = "node_modules/.vp-install-complete";
+// This can never match a frozen install's 32-byte SHA-256 digest.
+const UNLOCKED_INSTALL_RECEIPT: &[u8] = b"unlocked";
 
 /// Publish only complete files, including when an archive read or disk write fails.
 pub(crate) fn write_atomic(
@@ -43,8 +46,11 @@ pub(crate) async fn invalidate_install(version_dir: &AbsolutePath) -> Result<(),
     }
 }
 
-/// Record which release lockfile pnpm successfully installed, independently of self-setup.
+/// Record a successful frozen or explicitly unlocked install, independently of self-setup.
 pub(crate) async fn record_install(version_dir: &AbsolutePath) -> Result<(), Error> {
+    if EnvConfig::get().skip_install_lockfile {
+        return write(version_dir.join(INSTALL_RECEIPT), UNLOCKED_INSTALL_RECEIPT.to_vec()).await;
+    }
     let content = match tokio::fs::read(version_dir.join("bin").join(INSTALL_LOCKFILE)).await {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -70,7 +76,7 @@ pub async fn restore(version_dir: &AbsolutePath) -> Result<bool, Error> {
 }
 
 /// Copy the bootstrap companion, or recover it for a standalone executable.
-/// Returns whether this release still needs a frozen dependency installation.
+/// Returns whether this release still needs a dependency installation.
 /// Older releases without a companion retain their existing installation behavior.
 pub async fn prepare(
     source: &AbsolutePath,
@@ -78,6 +84,15 @@ pub async fn prepare(
     version: &str,
     registry_override: Option<&str>,
 ) -> Result<bool, Error> {
+    if EnvConfig::get().skip_install_lockfile {
+        // Only reuse a completed bypass install while the bypass is explicitly enabled.
+        // Do not read, restore, or recover the companion, even when it is missing or broken.
+        return match tokio::fs::read(version_dir.join(INSTALL_RECEIPT)).await {
+            Ok(receipt) => Ok(receipt != UNLOCKED_INSTALL_RECEIPT),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
+            Err(error) => Err(error.into()),
+        };
+    }
     let target = version_dir.join("bin").join(INSTALL_LOCKFILE);
     let sibling = source
         .parent()

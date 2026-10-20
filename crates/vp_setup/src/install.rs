@@ -15,6 +15,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 use vp_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
 use vp_pm_cli::{PackageManagerType, download_package_manager};
+use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{error::Error, lockfile};
@@ -49,6 +50,7 @@ pub async fn extract_platform_package(
 
     let data = tgz_data.to_vec();
     let bin_dir_clone = bin_dir.clone();
+    let skip_lockfile = EnvConfig::get().skip_install_lockfile;
 
     tokio::task::spawn_blocking(move || {
         let cursor = Cursor::new(data);
@@ -77,7 +79,8 @@ pub async fn extract_platform_package(
                     .get("vpInstallLockfile")
                     .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
-            } else if relative == Path::new(lockfile::INSTALL_LOCKFILE)
+            } else if !skip_lockfile
+                && relative == Path::new(lockfile::INSTALL_LOCKFILE)
                 && entry.header().entry_type().is_file()
             {
                 lockfile::write_atomic(
@@ -103,7 +106,7 @@ pub async fn extract_platform_package(
             }
         }
 
-        if requires_lockfile && !has_lockfile {
+        if requires_lockfile && !has_lockfile && !skip_lockfile {
             return Err(Error::Setup(
                 format!("Platform package is missing {}", lockfile::INSTALL_LOCKFILE).into(),
             ));
@@ -206,6 +209,11 @@ pub async fn install_production_deps(
 ) -> Result<(), Error> {
     tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
     lockfile::invalidate_install(version_dir).await?;
+    if EnvConfig::get().skip_install_lockfile {
+        vp_shared::output::warn(
+            "VP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile; resolving dependencies again.",
+        );
+    }
 
     // Keep the bypass local to this Vite+ installation.
     write_release_age_overrides(version_dir).await?;
@@ -247,7 +255,12 @@ async fn dependency_install_args<'a>(
 ) -> Result<Vec<&'a str>, Error> {
     // An ancestor workspace must not capture the install or supply its lockfile.
     let mut args = vec!["install", "--ignore-workspace"];
-    if tokio::fs::try_exists(version_dir.join("bin").join(lockfile::INSTALL_LOCKFILE)).await? {
+    if EnvConfig::get().skip_install_lockfile {
+        // Disable both pnpm's CI default and reading any existing working lockfile.
+        args.extend(["--no-frozen-lockfile", "--lockfile=false"]);
+    } else if tokio::fs::try_exists(version_dir.join("bin").join(lockfile::INSTALL_LOCKFILE))
+        .await?
+    {
         lockfile::restore(version_dir).await?;
         // Keep these flags and the numeric setting in run_pnpm_install in sync with
         // packages/cli/generate-install-lockfile.ts.

@@ -162,6 +162,9 @@ pub struct EnvConfig {
     /// Optional file for returning the resolved project Node version.
     pub setup_node_version_file: Option<String>,
 
+    /// Emergency bypass of the global CLI installation lockfile, enabled only by `1`.
+    pub skip_install_lockfile: bool,
+
     /// Override package manager and version.
     ///
     /// Env: `VP_PACKAGE_MANAGER`
@@ -225,6 +228,8 @@ impl EnvConfig {
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
             setup_node_version: std::env::var(env_vars::VP_SETUP_NODE_VERSION).ok(),
             setup_node_version_file: std::env::var(env_vars::VP_SETUP_NODE_VERSION_FILE).ok(),
+            skip_install_lockfile: std::env::var(env_vars::VP_SKIP_INSTALL_LOCKFILE).as_deref()
+                == Ok("1"),
             package_manager: std::env::var(env_vars::VP_PACKAGE_MANAGER).ok(),
             npm_version: std::env::var(env_vars::VP_NPM_VERSION).ok(),
             pnpm_version: std::env::var(env_vars::VP_PNPM_VERSION).ok(),
@@ -411,6 +416,16 @@ impl EnvConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installation_lockfile_bypass_requires_explicit_opt_in() {
+        for value in [None, Some(""), Some("0"), Some("true"), Some("1")] {
+            EnvConfig::with_vars([(env_vars::VP_SKIP_INSTALL_LOCKFILE, value)], |config| {
+                assert_eq!(config.skip_install_lockfile, value == Some("1"));
+                assert!(!config.dir_envs.contains_key(env_vars::VP_SKIP_INSTALL_LOCKFILE));
+            });
+        }
+    }
 
     /// `VP_HOME` pins every category to the single-root mapping.
     #[test]
