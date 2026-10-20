@@ -55,6 +55,7 @@ const {
   rewriteEslintPackageJson,
   collectInstalledPackageNames,
   sanitizeMigratedOxlintConfig,
+  sanitizeInheritedJsPlugins,
   detectIncompatibleEslintIntegration,
   hasExistingViteHooksPolicy,
   installGitHooks,
@@ -1174,6 +1175,54 @@ describe('collectInstalledPackageNames', () => {
 });
 
 describe('sanitizeMigratedOxlintConfig', () => {
+  it('removes missing generated plugins without discarding inherited or local plugin rules', () => {
+    const inherited = { jsPlugins: ['./base-plugin.mjs'] };
+    const config: import('oxlint').OxlintConfig = {
+      extends: [inherited],
+      jsPlugins: ['eslint-plugin-missing', './local-plugin.mjs', 'eslint-plugin-installed/subpath'],
+      rules: {
+        'missing/custom': 'error',
+        'base/custom': 'warn',
+        'local/custom': 'error',
+        'installed/custom': 'error',
+        'no-debugger': 'error',
+      },
+      overrides: [
+        {
+          files: ['**/*.test.js'],
+          jsPlugins: ['eslint-plugin-override-missing'],
+          rules: {
+            'missing/custom': 'warn',
+            'override-missing/custom': 'error',
+            'base/custom': 'off',
+          },
+        },
+        {
+          files: ['**/*.local.js'],
+          jsPlugins: [{ name: 'missing', specifier: './replacement.mjs' }],
+          rules: { 'missing/custom': 'error' },
+        },
+      ],
+    };
+    const report = createMigrationReport();
+
+    sanitizeInheritedJsPlugins(config, new Set(['eslint-plugin-installed']), os.tmpdir(), report);
+
+    expect(config.extends).toEqual([inherited]);
+    expect(config.jsPlugins).toEqual(['./local-plugin.mjs', 'eslint-plugin-installed/subpath']);
+    expect(config.rules).toEqual({
+      'base/custom': 'warn',
+      'local/custom': 'error',
+      'installed/custom': 'error',
+      'no-debugger': 'error',
+    });
+    expect(config.overrides![0].jsPlugins).toEqual([]);
+    expect(config.overrides![0].rules).toEqual({ 'base/custom': 'off' });
+    expect(config.overrides![1].rules).toEqual({ 'missing/custom': 'error' });
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('eslint-plugin-missing, eslint-plugin-override-missing');
+  });
+
   it('removes unsupported rules', () => {
     const config: import('oxlint').OxlintConfig = {
       rules: {

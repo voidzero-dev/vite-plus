@@ -32,6 +32,7 @@ import {
   workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
 import {
+  type PreparedOxlintConfigs,
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
   PROVIDER_OVERRIDE_DROP_NAMES,
   REMOVE_PACKAGES,
@@ -1151,6 +1152,7 @@ export function rewriteRootWorkspacePackageJson(
   // catalogs require Yarn >= 4.10.0; pnpm/bun monorepos always manage a catalog.
   // When false, the root `vite-plus` edge and the direct `vite` edge are concrete.
   supportCatalog = true,
+  preparedOxlintConfigs?: PreparedOxlintConfigs,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1291,7 +1293,7 @@ export function rewriteRootWorkspacePackageJson(
     undefined,
     undefined,
     catalogDependencyResolver,
-    packages ? { rootDir: projectPath, packages } : undefined,
+    packages ? { rootDir: projectPath, packages, oxlintConfigs: preparedOxlintConfigs } : undefined,
     true,
     supportCatalog,
   );

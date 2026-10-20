@@ -58,6 +58,7 @@ import {
 import { accent, formatDuration, muted, log, printHeader, success } from '../utils/terminal.ts';
 import {
   detectWorkspace,
+  discoverWorkspacePackages,
   updatePackageJsonWithDeps,
   updateWorkspaceConfig,
 } from '../utils/workspace.ts';
@@ -1266,6 +1267,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       workspaceInfo.packageManager === PackageManager.pnpm
         ? createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager)
         : undefined,
+      {
+        rootDir: workspaceInfo.rootDir,
+        packages: discoverWorkspacePackages(
+          [...workspaceInfo.workspacePatterns, projectDir],
+          workspaceInfo.rootDir,
+        ),
+      },
     );
     if (workspaceInfo.packageManager === PackageManager.pnpm) {
       ensurePnpmCreateCatalogEntries(workspaceInfo.rootDir, fullPath);

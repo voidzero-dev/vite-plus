@@ -15,9 +15,10 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 use vp_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
 use vp_pm_cli::{PackageManagerType, download_package_manager};
+use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use crate::error::Error;
+use crate::{error::Error, lockfile};
 
 /// Validate that a path from a tarball entry is safe (no path traversal).
 ///
@@ -31,11 +32,12 @@ fn is_safe_tar_path(path: &Path) -> bool {
         && !path.components().any(|c| matches!(c, std::path::Component::ParentDir))
 }
 
-/// Extract the platform-specific package (binary only).
+/// Extract the platform-specific binary and its installation lockfile.
 ///
 /// From the platform tarball, extracts:
 /// - The `vp` binary → `{version_dir}/bin/vp`
 /// - The `vp-shim.exe` trampoline → `{version_dir}/bin/vp-shim.exe` (Windows only)
+/// - The release lockfile → `{version_dir}/bin/vp-install-lock.yaml`
 ///
 /// `.node` files are no longer extracted here — npm installs them
 /// via the platform package's optionalDependencies.
@@ -48,11 +50,14 @@ pub async fn extract_platform_package(
 
     let data = tgz_data.to_vec();
     let bin_dir_clone = bin_dir.clone();
+    let skip_lockfile = EnvConfig::get().setup_skip_install_lockfile;
 
     tokio::task::spawn_blocking(move || {
         let cursor = Cursor::new(data);
         let decoder = GzDecoder::new(cursor);
         let mut archive = Archive::new(decoder);
+        let mut requires_lockfile = false;
+        let mut has_lockfile = false;
 
         for entry_result in archive.entries()? {
             let mut entry = entry_result?;
@@ -67,6 +72,23 @@ pub async fn extract_platform_package(
             }
 
             let file_name = relative.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            if relative == Path::new("package.json") && entry.header().entry_type().is_file() {
+                let manifest: serde_json::Value = serde_json::from_reader(&mut entry)?;
+                requires_lockfile = manifest
+                    .get("vpInstallLockfile")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+            } else if !skip_lockfile
+                && relative == Path::new(lockfile::INSTALL_LOCKFILE)
+                && entry.header().entry_type().is_file()
+            {
+                lockfile::write_atomic(
+                    &bin_dir_clone.join(lockfile::INSTALL_LOCKFILE),
+                    &mut entry,
+                )?;
+                has_lockfile = true;
+            }
 
             if file_name == "vp" || file_name == "vp.exe" || file_name == "vp-shim.exe" {
                 // Binary goes to bin/
@@ -84,6 +106,12 @@ pub async fn extract_platform_package(
             }
         }
 
+        if requires_lockfile && !has_lockfile && !skip_lockfile {
+            return Err(Error::Setup(
+                format!("Platform package is missing {}", lockfile::INSTALL_LOCKFILE).into(),
+            ));
+        }
+
         Ok::<(), Error>(())
     })
     .await
@@ -94,7 +122,7 @@ pub async fn extract_platform_package(
 
 /// The pnpm version pinned in the wrapper package.json for global installs.
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
-const PINNED_PNPM_VERSION: &str = "10.33.0";
+const PINNED_PNPM_VERSION: &str = "10.34.7";
 
 /// A reused target version must run its own setup again before accepting commands.
 pub async fn clear_self_setup_marker(version_dir: &AbsolutePath) -> Result<(), Error> {
@@ -180,16 +208,17 @@ pub async fn install_production_deps(
     preferred_node_version: Option<&str>,
 ) -> Result<(), Error> {
     tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
+    lockfile::invalidate_install(version_dir).await?;
+    if EnvConfig::get().setup_skip_install_lockfile {
+        vp_shared::output::warn(
+            "VP_SETUP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile; resolving dependencies again.",
+        );
+    }
 
     // Keep the bypass local to this Vite+ installation.
     write_release_age_overrides(version_dir).await?;
 
-    // An ancestor workspace must not capture the install or supply its lockfile.
-    let mut args = vec!["install", "--ignore-workspace"];
-    if let Some(registry_url) = registry {
-        args.push("--registry");
-        args.push(registry_url);
-    }
+    let args = dependency_install_args(version_dir, registry).await?;
 
     let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
         show_progress.then_some("Preparing Node.js and pnpm..."),
@@ -213,10 +242,41 @@ pub async fn install_production_deps(
         ));
     }
 
+    lockfile::record_install(version_dir).await?;
     if show_progress {
         vp_shared::output::success("Dependencies installed.");
     }
     Ok(())
+}
+
+async fn dependency_install_args<'a>(
+    version_dir: &AbsolutePath,
+    registry: Option<&'a str>,
+) -> Result<Vec<&'a str>, Error> {
+    // An ancestor workspace must not capture the install or supply its lockfile.
+    let mut args = vec!["install", "--ignore-workspace"];
+    if EnvConfig::get().setup_skip_install_lockfile {
+        // Disable both pnpm's CI default and reading any existing working lockfile.
+        args.extend(["--no-frozen-lockfile", "--lockfile=false"]);
+    } else if tokio::fs::try_exists(version_dir.join("bin").join(lockfile::INSTALL_LOCKFILE))
+        .await?
+    {
+        lockfile::restore(version_dir).await?;
+        // Keep these flags and the numeric setting in run_pnpm_install in sync with
+        // packages/cli/generate-install-lockfile.ts.
+        args.extend([
+            "--frozen-lockfile",
+            "--lockfile=true",
+            "--config.auto-install-peers=true",
+            "--config.exclude-links-from-lockfile=false",
+            "--config.dedupe-peers=false",
+            "--config.inject-workspace-packages=false",
+        ]);
+    }
+    if let Some(registry_url) = registry {
+        args.extend(["--registry", registry_url]);
+    }
+    Ok(args)
 }
 
 async fn prepare_install_runtime(
@@ -295,6 +355,13 @@ async fn run_pnpm_install(
         .current_dir(version_dir)
         .env("CI", "true")
         .env("PATH", path);
+
+    if args.contains(&"--frozen-lockfile") {
+        // --config leaves numbers as strings. Environment values get pnpm's numeric parsing.
+        // Override both spellings so neither an inherited value nor the user npmrc can win.
+        cmd.env("npm_config_peers_suffix_max_length", "1000")
+            .env("NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH", "1000");
+    }
 
     if let Some(registry_url) = registry {
         cmd.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
@@ -674,6 +741,50 @@ mod tests {
         assert!(!supports_pnpm_node(&serde_json::json!({}), "22.23.1"));
         assert!(!supports_pnpm_node(&serde_json::json!({"engines":{"node":"invalid"}}), "22.23.1"));
         assert!(!supports_pnpm_node(&serde_json::json!({"engines":{"node":">=18.12"}}), "invalid"));
+    }
+
+    #[tokio::test]
+    async fn release_archives_supply_the_frozen_dependency_tree() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let archive = lockfile::test_archive(true, Some(b"release dependency tree"));
+        extract_platform_package(&archive, &directory).await.unwrap();
+        let args =
+            dependency_install_args(&directory, Some("https://mirror.example")).await.unwrap();
+        assert_eq!(
+            args,
+            [
+                "install",
+                "--ignore-workspace",
+                "--frozen-lockfile",
+                "--lockfile=true",
+                "--config.auto-install-peers=true",
+                "--config.exclude-links-from-lockfile=false",
+                "--config.dedupe-peers=false",
+                "--config.inject-workspace-packages=false",
+                "--registry",
+                "https://mirror.example"
+            ]
+        );
+        assert_eq!(
+            tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
+            b"release dependency tree"
+        );
+    }
+
+    #[tokio::test]
+    async fn incomplete_release_archives_fail_but_old_archives_remain_supported() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let error = extract_platform_package(&lockfile::test_archive(true, None), &directory)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("missing vp-install-lock.yaml"));
+        extract_platform_package(&lockfile::test_archive(false, None), &directory).await.unwrap();
+        assert_eq!(
+            dependency_install_args(&directory, None).await.unwrap(),
+            ["install", "--ignore-workspace"]
+        );
     }
 
     #[tokio::test]

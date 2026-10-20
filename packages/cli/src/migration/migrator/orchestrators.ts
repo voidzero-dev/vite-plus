@@ -32,11 +32,13 @@ import {
   migratePnpmSettingsToWorkspaceYaml,
   migrateTaskCacheConfigInViteConfig,
   pnpmSupportsWorkspaceSettings,
+  prepareOxlintConfigs,
   supportsCatalog,
   projectListsRequiredVitestPeer,
   projectUsesVitestDirectly,
   pruneLegacyWrapperAliases,
   removeLintStagedFromPackageJson,
+  removeMigratedOxlintConfigs,
   removeManagedVitestEntry,
   removeVitestPeerDependencyRule,
   rewriteAllImports,
@@ -63,6 +65,7 @@ import {
   pnpmMajor,
   type CatalogDependencyResolver,
   type PnpmPackageJsonSettings,
+  type PreparedOxlintConfigs,
 } from './shared.ts';
 
 export function rewriteStandaloneProject(
@@ -399,6 +402,14 @@ export function rewriteMonorepo(
     workspaceInfo.downloadPackageManager.version,
     true,
   );
+  const workspaceContext = {
+    rootDir: workspaceInfo.rootDir,
+    packages: workspaceInfo.packages,
+    oxlintConfigs: prepareOxlintConfigs([
+      workspaceInfo.rootDir,
+      ...workspaceInfo.packages.map((pkg) => path.join(workspaceInfo.rootDir, pkg.path)),
+    ]),
+  };
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(
@@ -427,6 +438,7 @@ export function rewriteMonorepo(
     workspaceShouldAllowBrowserBuilds,
     workspaceUsesVitest,
     supportCatalog,
+    workspaceContext.oxlintConfigs,
   );
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
@@ -452,10 +464,6 @@ export function rewriteMonorepo(
   // rewrite packages — pass workspace context so the per-package
   // sanitizer can see hoisted deps that live elsewhere in the
   // workspace, not just this sub-package's own `package.json`.
-  const workspaceContext = {
-    rootDir: workspaceInfo.rootDir,
-    packages: workspaceInfo.packages,
-  };
   // Yarn `node-modules` + an isolating `nmHoistingLimits` would give each
   // vite-plus-receiving workspace its own physical `vitest` copy, splitting the
   // runner across two `@vitest/runner` instances. `rewriteMonorepoProject` detects
@@ -481,7 +489,15 @@ export function rewriteMonorepo(
   }
   cleanupDeprecatedTsconfigOptions(workspaceInfo.rootDir, silent, report);
   rewriteTsconfigTypes(workspaceInfo.rootDir, silent, report);
-  mergeViteConfigFiles(workspaceInfo.rootDir, silent, report, workspaceInfo.packages);
+  mergeViteConfigFiles(
+    workspaceInfo.rootDir,
+    silent,
+    report,
+    workspaceInfo.packages,
+    workspaceInfo.rootDir,
+    workspaceContext.oxlintConfigs,
+  );
+  removeMigratedOxlintConfigs(workspaceContext.oxlintConfigs);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
@@ -517,7 +533,11 @@ export function rewriteMonorepoProject(
   silent = false,
   report?: MigrationReport,
   catalogDependencyResolver?: CatalogDependencyResolver,
-  workspaceContext?: { rootDir: string; packages: WorkspacePackage[] },
+  workspaceContext?: {
+    rootDir: string;
+    packages: WorkspacePackage[];
+    oxlintConfigs?: PreparedOxlintConfigs;
+  },
   deferLazyPluginWrapping = false,
   // Whether this workspace's edges use catalog references. Yarn catalogs require
   // Yarn >= 4.10.0; pnpm/bun monorepos always manage a catalog. Defaults to true
@@ -536,6 +556,7 @@ export function rewriteMonorepoProject(
     report,
     workspaceContext?.packages,
     workspaceContext?.rootDir,
+    workspaceContext?.oxlintConfigs,
   );
   mergeTsdownConfigFile(projectPath, silent, report);
 

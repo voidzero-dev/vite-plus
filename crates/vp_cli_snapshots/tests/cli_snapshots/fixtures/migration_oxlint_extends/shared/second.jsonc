@@ -1,0 +1,5 @@
+{
+  // Later entries take priority.
+  "rules": { "no-console": "warn" },
+  "jsPlugins": ["./plugin.mjs"]
+}
