@@ -37,6 +37,14 @@ async fn write(target: AbsolutePathBuf, content: Vec<u8>) -> Result<(), Error> {
     Ok(())
 }
 
+async fn read_optional(path: &AbsolutePath) -> Result<Option<Vec<u8>>, Error> {
+    match tokio::fs::read(path).await {
+        Ok(content) => Ok(Some(content)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
 /// An interrupted install must not reuse a receipt from an earlier attempt.
 pub(crate) async fn invalidate_install(version_dir: &AbsolutePath) -> Result<(), Error> {
     match tokio::fs::remove_file(version_dir.join(INSTALL_RECEIPT)).await {
@@ -51,10 +59,9 @@ pub(crate) async fn record_install(version_dir: &AbsolutePath) -> Result<(), Err
     if EnvConfig::get().setup_skip_install_lockfile {
         return write(version_dir.join(INSTALL_RECEIPT), UNLOCKED_INSTALL_RECEIPT.to_vec()).await;
     }
-    let content = match tokio::fs::read(version_dir.join("bin").join(INSTALL_LOCKFILE)).await {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(error.into()),
+    let Some(content) = read_optional(&version_dir.join("bin").join(INSTALL_LOCKFILE)).await?
+    else {
+        return Ok(());
     };
     write(version_dir.join(INSTALL_RECEIPT), Sha256::digest(content).to_vec()).await
 }
@@ -63,11 +70,8 @@ pub(crate) async fn record_install(version_dir: &AbsolutePath) -> Result<(), Err
 pub async fn restore(version_dir: &AbsolutePath) -> Result<bool, Error> {
     let content = tokio::fs::read(version_dir.join("bin").join(INSTALL_LOCKFILE)).await?;
     let target = version_dir.join("pnpm-lock.yaml");
-    match tokio::fs::read(&target).await {
-        Ok(previous) if previous == content => return Ok(false),
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error.into()),
+    if read_optional(&target).await?.as_deref() == Some(content.as_slice()) {
+        return Ok(false);
     }
     // Invalidate before restoring: a failure after this write must still retry the install.
     invalidate_install(version_dir).await?;
@@ -87,11 +91,8 @@ pub async fn prepare(
     if EnvConfig::get().setup_skip_install_lockfile {
         // Only reuse a completed bypass install while the bypass is explicitly enabled.
         // Do not read, restore, or recover the companion, even when it is missing or broken.
-        return match tokio::fs::read(version_dir.join(INSTALL_RECEIPT)).await {
-            Ok(receipt) => Ok(receipt != UNLOCKED_INSTALL_RECEIPT),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
-            Err(error) => Err(error.into()),
-        };
+        let receipt = read_optional(&version_dir.join(INSTALL_RECEIPT)).await?;
+        return Ok(receipt.as_deref() != Some(UNLOCKED_INSTALL_RECEIPT));
     }
     let target = version_dir.join("bin").join(INSTALL_LOCKFILE);
     let sibling = source
@@ -130,10 +131,8 @@ pub async fn prepare(
         write(target.clone(), content).await?;
     }
     restore(version_dir).await?;
-    let receipt = match tokio::fs::read(version_dir.join(INSTALL_RECEIPT)).await {
-        Ok(receipt) => receipt,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
-        Err(error) => return Err(error.into()),
+    let Some(receipt) = read_optional(&version_dir.join(INSTALL_RECEIPT)).await? else {
+        return Ok(true);
     };
     let content = tokio::fs::read(target).await?;
     Ok(receipt != Sha256::digest(content).as_slice())

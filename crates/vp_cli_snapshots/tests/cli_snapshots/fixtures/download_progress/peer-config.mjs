@@ -172,7 +172,15 @@ function conflictEnvironment(settings) {
   );
 }
 
-const runPnpm = (cwd, args, env) => exec(process.execPath, [pnpm, ...args], { cwd, env });
+function runPnpm(cwd, args, env) {
+  return exec(process.execPath, [pnpm, ...args], { cwd, env });
+}
+
+function assertDependencyDownloads(since) {
+  const downloads = requests.slice(since);
+  assert.ok(downloads.some(({ url }) => url.endsWith(`vite-plus-${version}.tgz`)));
+  assert.ok(downloads.some(({ url }) => url.endsWith('fixture-peer-1.0.0.tgz')));
+}
 
 function createInstallation(name, settings = []) {
   const directory = join(root, name);
@@ -249,8 +257,7 @@ async function testBypass(lockfile) {
     version,
   );
   assert.equal(readFileSync(receipt, 'utf8'), 'unlocked');
-  assert.ok(requests.slice(before).some(({ url }) => url.endsWith(`vite-plus-${version}.tgz`)));
-  assert.ok(requests.slice(before).some(({ url }) => url.endsWith('fixture-peer-1.0.0.tgz')));
+  assertDependencyDownloads(before);
   assert.equal(readFileSync(installation.userconfig, 'utf8'), installation.configuration);
   console.log(
     'The bypass warns, ignores broken or missing lockfiles, and installs the exact CLI version.',
@@ -314,6 +321,40 @@ async function testBypass(lockfile) {
   console.log('A failed bypass clears any stale receipt and leaves setup incomplete.');
 }
 
+async function testPeerConfig(lockfile) {
+  for (const conflict of conflicts) {
+    const installation = createInstallation(conflict.option, [conflict]);
+    const { directory, home, userconfig, configuration, env } = installation;
+    const control = join(directory, 'control');
+    mkdirSync(control);
+    writeFileSync(join(control, 'package.json'), JSON.stringify(installManifest(version)));
+    writeFileSync(join(control, '.npmrc'), 'minimum-release-age=0\n');
+    writeFileSync(join(control, 'pnpm-lock.yaml'), lockfile);
+    await assert.rejects(
+      runPnpm(control, ['install', '--ignore-workspace', '--frozen-lockfile'], env),
+      (error) =>
+        error.code === 1 &&
+        /ERR_PNPM_LOCKFILE_CONFIG_MISMATCH/.test(error.stdout + error.stderr) &&
+        (error.stdout + error.stderr).includes(`settings.${conflict.setting}`),
+    );
+    console.log(`Without the installer override, real pnpm rejects ${conflict.option}.`);
+
+    const before = requests.length;
+    await runSetup(installation, conflictEnvironment([conflict]));
+    const current = join(home, 'current');
+    assert.equal(readFileSync(join(current, 'pnpm-lock.yaml'), 'utf8'), lockfile);
+    assert.equal(existsSync(join(current, 'node_modules/.vp-install-complete')), true);
+    assert.equal(existsSync(join(current, 'node_modules/vite-plus/package.json')), true);
+    assertDependencyDownloads(before);
+    assert.equal(readFileSync(userconfig, 'utf8'), configuration);
+    console.log(`Frozen setup overrides ${conflict.option} in user and environment configuration.`);
+  }
+  console.log(
+    'All installs fetch the CLI and its peer using the user registry and authentication.',
+  );
+  console.log('The published lockfile and user configuration remain unchanged.');
+}
+
 try {
   const generationUser = join(root, 'generation-user');
   const defaults = configureUser(generationUser);
@@ -352,40 +393,7 @@ try {
   if (bypass) {
     await testBypass(lockfile);
   } else {
-    for (const conflict of conflicts) {
-      const installation = createInstallation(conflict.option, [conflict]);
-      const { directory, home, userconfig, configuration, env } = installation;
-      const control = join(directory, 'control');
-      mkdirSync(control);
-      writeFileSync(join(control, 'package.json'), JSON.stringify(installManifest(version)));
-      writeFileSync(join(control, '.npmrc'), 'minimum-release-age=0\n');
-      writeFileSync(join(control, 'pnpm-lock.yaml'), lockfile);
-      await assert.rejects(
-        runPnpm(control, ['install', '--ignore-workspace', '--frozen-lockfile'], env),
-        (error) =>
-          error.code === 1 &&
-          /ERR_PNPM_LOCKFILE_CONFIG_MISMATCH/.test(error.stdout + error.stderr) &&
-          (error.stdout + error.stderr).includes(`settings.${conflict.setting}`),
-      );
-      console.log(`Without the installer override, real pnpm rejects ${conflict.option}.`);
-
-      const before = requests.length;
-      await runSetup(installation, conflictEnvironment([conflict]));
-      const current = join(home, 'current');
-      assert.equal(readFileSync(join(current, 'pnpm-lock.yaml'), 'utf8'), lockfile);
-      assert.equal(existsSync(join(current, 'node_modules/.vp-install-complete')), true);
-      assert.equal(existsSync(join(current, 'node_modules/vite-plus/package.json')), true);
-      assert.ok(requests.slice(before).some(({ url }) => url.endsWith(`vite-plus-${version}.tgz`)));
-      assert.ok(requests.slice(before).some(({ url }) => url.endsWith('fixture-peer-1.0.0.tgz')));
-      assert.equal(readFileSync(userconfig, 'utf8'), configuration);
-      console.log(
-        `Frozen setup overrides ${conflict.option} in user and environment configuration.`,
-      );
-    }
-    console.log(
-      'All installs fetch the CLI and its peer using the user registry and authentication.',
-    );
-    console.log('The published lockfile and user configuration remain unchanged.');
+    await testPeerConfig(lockfile);
   }
   assert.ok(requests.every(({ authorization }) => authorization === 'Bearer fixture-token'));
 } finally {
