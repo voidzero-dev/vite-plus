@@ -766,6 +766,8 @@ jobs:
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
           platforms: arm64
+          # Pull the small image directly instead of storing one copy per PR.
+          cache-image: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run install.sh in ARM64 container
         run: |
@@ -885,6 +887,7 @@ jobs:
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
           platforms: arm64
+          cache-image: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run install.sh in ARM64 Alpine container
         run: |
