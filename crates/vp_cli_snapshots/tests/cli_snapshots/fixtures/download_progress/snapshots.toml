@@ -56,6 +56,30 @@ skip-platforms = ["windows"]
 steps = [{ argv = ["node", "install.mjs", "resolution-retry"], tty = false }]
 
 [[case]]
+name = "installation_dependency_retry"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "dependency-retry"], tty = false }]
+
+[[case]]
+name = "installation_upgrade_handoff"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "upgrade-handoff"], tty = false }]
+
+[[case]]
+name = "installation_peer_config"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "peer-config.mjs"], tty = false }]
+
+[[case]]
+name = "installation_lockfile_bypass"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "peer-config.mjs", "bypass"], tty = false }]
+
+[[case]]
 name = "installation_progress_non_tty"
 vp = "global"
 skip-platforms = ["windows"]

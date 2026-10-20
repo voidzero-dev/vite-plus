@@ -1,0 +1,22 @@
+{
+  "extends": [
+    "../base.json"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "**/*.test.js"
+      ],
+      "rules": {
+        "no-debugger": "warn",
+        "override/no-bar": "error"
+      },
+      "jsPlugins": [
+        {
+          "name": "override",
+          "specifier": "../override-plugin.mjs"
+        }
+      ]
+    }
+  ]
+}

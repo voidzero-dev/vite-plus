@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import type { OxlintConfig } from 'oxlint';
 import { coerce, satisfies } from 'verkit';
 
 import { VITEST_VERSION, VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
@@ -36,6 +37,36 @@ export function getCommandStartIndex(argv: readonly string[]): number {
     start++;
   }
   return start;
+}
+
+// Oxlint does not inherit these fields through `extends`.
+export const OXLINT_OWNER_CONFIG_KEYS = new Set(['env', 'globals', 'settings', 'ignorePatterns']);
+
+export interface OxlintConfigFile {
+  filename: string;
+  config: OxlintConfig;
+  extends: OxlintConfigFile[];
+  // Keep declared paths as well as canonical sources for JSON fallback cleanup.
+  extendsPaths: string[];
+  // A dependency must use the same generated module in its owning workspace.
+  shared?: boolean;
+  // A committed or previously generated module that workspace consumers can reuse.
+  modulePath?: string;
+}
+
+export interface OxlintConfigMigration {
+  file: OxlintConfigFile;
+  // Completion belongs to each workspace path, even when symlinks share a source.
+  migrated?: boolean;
+}
+
+export type PreparedOxlintConfigs = Map<string, OxlintConfigMigration | Error>;
+
+export interface OxlintModulePlan {
+  configContent: string;
+  imports: string[];
+  completionMarker?: string;
+  modules: Map<string, { file: OxlintConfigFile; content: string }>;
 }
 
 // All known lint-staged config file names.

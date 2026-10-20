@@ -13,6 +13,8 @@ use crate::{error::Error, is_commit_preview_version};
 pub struct PackageVersionMetadata {
     pub version: String,
     pub dist: DistInfo,
+    #[serde(default, rename = "vpInstallLockfile")]
+    pub has_install_lockfile: bool,
 }
 
 /// Distribution info from npm registry.
@@ -42,6 +44,7 @@ pub struct ResolvedVersion {
     pub version: String,
     pub platform_tarball_url: String,
     pub platform_integrity: String,
+    pub has_install_lockfile: bool,
 }
 
 const MAIN_PACKAGE_NAME: &str = "vite-plus";
@@ -137,6 +140,7 @@ pub async fn resolve_platform_package(
         version: version.to_owned(),
         platform_tarball_url: cli_meta.dist.tarball,
         platform_integrity: cli_meta.dist.integrity,
+        has_install_lockfile: cli_meta.has_install_lockfile,
     })
 }
 

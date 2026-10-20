@@ -90,6 +90,9 @@ pub const VP_SETUP_NODE_VERSION: &str = "VP_SETUP_NODE_VERSION";
 /// File used to return the exact project Node.js version to a CI installer.
 pub const VP_SETUP_NODE_VERSION_FILE: &str = "VP_SETUP_NODE_VERSION_FILE";
 
+/// Resolve global CLI dependencies without the installation lockfile when set to `1`.
+pub const VP_SETUP_SKIP_INSTALL_LOCKFILE: &str = "VP_SETUP_SKIP_INSTALL_LOCKFILE";
+
 /// Override package manager and version for vp commands (for example, `pnpm@10.18.0`).
 /// Direct package-manager shims use their own version overrides instead.
 pub const VP_PACKAGE_MANAGER: &str = "VP_PACKAGE_MANAGER";

@@ -27,6 +27,7 @@ LEGACY
 cat > "$test_root/package/vp" <<'BINARY'
 #!/bin/bash
 if [ "$#" -eq 0 ]; then
+  test -f "$(dirname "$0")/vp-install-lock.yaml" || exit 96
   test -z "${VP_SELF_SETUP_SUPPORT_CHECK+x}" || exit 99
   touch "$test_root/binary-invoked"
   if [ "$scenario" = failure ]; then exit 42; fi
@@ -49,6 +50,7 @@ case "$scenario" in
 esac
 BINARY
 chmod +x "$test_root/package/vp"
+printf 'release dependency tree\n' > "$test_root/package/vp-install-lock.yaml"
 # Ensure the fixture digest contains + and / for the JSON escape cases.
 for attempt in {1..100}; do
   printf '\n# Integrity fixture %s\n' "$attempt" >> "$test_root/package/vp"

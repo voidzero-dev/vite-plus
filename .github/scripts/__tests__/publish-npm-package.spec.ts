@@ -113,6 +113,70 @@ describe('publishNpmPackage', () => {
     expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  const releasePackages = [
+    '@scope/native-linux',
+    '@scope/native-win32',
+    '@scope/prompts',
+    '@scope/core',
+    'vite-plus',
+    '@scope/global-linux',
+    '@scope/global-win32',
+    'create-vite-plus',
+  ];
+  test.each(
+    releasePackages.flatMap((name) => [
+      { name, accepted: false },
+      { name, accepted: true },
+    ]),
+  )('resumes publication after $name fails (accepted=$accepted)', async ({ name, accepted }) => {
+    const published = new Set<string>();
+    const uploads: string[] = [];
+    let interrupted = false;
+    async function publishRelease() {
+      for (const packageName of releasePackages) {
+        const fetchImpl: FetchLike = async () =>
+          response(200, {
+            // An accepted upload can remain hidden during npm's scanning window.
+            versions:
+              published.has(packageName) && !(accepted && packageName === name)
+                ? { [pkg.version]: {} }
+                : {},
+          });
+        const runCommand: PublishCommandRunner = async () => {
+          uploads.push(packageName);
+          if (packageName === name && !interrupted) {
+            interrupted = true;
+            if (accepted) {
+              published.add(packageName);
+            }
+            return { exitCode: 1, output: 'connection lost' };
+          }
+          if (published.has(packageName)) {
+            return {
+              exitCode: 1,
+              output: 'You cannot publish over the previously published versions',
+            };
+          }
+          published.add(packageName);
+          return { exitCode: 0, output: 'published' };
+        };
+        await publishNpmPackage({
+          ...options(fetchImpl, runCommand),
+          pkg: { name: packageName, version: pkg.version },
+        });
+      }
+    }
+    await expect(publishRelease()).rejects.toThrow(`Failed to publish ${name}@${pkg.version}`);
+    expect(published.size).toBe(releasePackages.indexOf(name) + Number(accepted));
+    await publishRelease();
+    expect(published).toEqual(new Set(releasePackages));
+    for (const packageName of releasePackages) {
+      expect(uploads.filter((upload) => upload === packageName)).toHaveLength(
+        packageName === name ? 2 : 1,
+      );
+    }
+  });
 });
 
 test('recognizes npm immutable-version errors only', () => {

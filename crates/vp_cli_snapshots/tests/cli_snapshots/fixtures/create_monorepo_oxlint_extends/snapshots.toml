@@ -1,0 +1,17 @@
+[[case]]
+name = "create_monorepo_oxlint_extends"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["node", "packages/starter-template/bin/index.mjs", "--directory", "packages/before"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/before", comment = "Original template rules inherit from the workspace", continue-on-failure = true },
+  { argv = ["vpt", "rm", "-r", "packages/before"], snapshot = false },
+  { argv = ["vp", "create", "starter", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks", "--", "--directory", "app"] },
+  { argv = ["vpt", "print-file", "packages/app/vite.config.mjs"] },
+  { argv = ["vpt", "print-file", "shared/lint.ts"] },
+  { argv = ["vpt", "stat-file", "packages/app/.oxlintrc.json", "--assert", "missing"] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/app", comment = "The created package keeps the original diagnostic without a config flag", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", "shared/lint.ts", '"error"', '"warn"'] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/app", comment = "The created package follows shared module edits" },
+]

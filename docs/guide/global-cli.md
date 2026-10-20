@@ -123,6 +123,31 @@ These variables control the installer scripts and the standalone Windows install
 
 `setup-vp` manages this file automatically. Use its Node.js inputs to configure CI jobs.
 
+#### `VP_SETUP_SKIP_INSTALL_LOCKFILE`
+
+Set this variable to `1` to recover from a lockfile-related error during global CLI installation or `vp upgrade`. All other values, including unset or empty, keep the published installation lockfile enabled.
+
+The installer prints a warning and resolves dependencies without reading or recovering the installation lockfile. The requested CLI version stays pinned, but its dependency versions can differ from the release lockfile. Registry, authentication, and proxy settings remain in effect. This option does not affect project installations such as `vp install`.
+
+```bash
+# Retry installation without the bundled lockfile.
+curl -fsSL https://vite.plus | VP_SETUP_SKIP_INSTALL_LOCKFILE=1 bash
+
+# Or retry an upgrade, including the currently installed version.
+VP_SETUP_SKIP_INSTALL_LOCKFILE=1 vp upgrade --force
+```
+
+```powershell
+$env:VP_SETUP_SKIP_INSTALL_LOCKFILE = "1"
+try {
+  irm https://vite.plus/ps1 | iex
+} finally {
+  Remove-Item Env:VP_SETUP_SKIP_INSTALL_LOCKFILE
+}
+```
+
+Keep this override temporary. Later installations and upgrades use the published lockfile again when the variable is unset. To reinstall an affected version with its lockfile, unset the variable and run `vp upgrade <version> --force`.
+
 #### `VP_HOME`
 
 - **Purpose**: Optional pin for the single-root layout. Set it to an absolute path. Vite+ then puts bin, data, cache, config, and state under that directory. The installed CLI reads the same variable. See [Environment](/guide/env).

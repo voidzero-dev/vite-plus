@@ -1352,7 +1352,7 @@ jobs:
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
             node:22-alpine3.21 sh -ec "
-              apk add --no-cache bash curl ca-certificates git
+              apk add --no-cache bash curl ca-certificates git zip unzip
 
               # Install pnpm and re-resolve optional dependencies for musl.
               # The host node_modules has glibc bindings; pnpm store holds both
