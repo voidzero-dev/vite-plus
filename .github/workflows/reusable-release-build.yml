@@ -102,7 +102,7 @@ jobs:
             build_dir=$(mktemp -d)
             cargo build --locked --release --target x86_64-unknown-freebsd \
               --target-dir "$build_dir" -p vp_global_cli -p vite-plus-cli \
-              --features vite-plus-cli/rolldown
+              --features vite-plus-cli/rolldown,vite-plus-cli/oxc-node
             cargo test --locked --release --target x86_64-unknown-freebsd \
               --target-dir "$build_dir" -p vp_js_runtime -p vp_setup platform
 
@@ -117,6 +117,7 @@ jobs:
             const binding = require('./packages/cli/binding/vite-plus.freebsd-x64.node');
             assert.equal(typeof binding.run, 'function');
             assert.equal(typeof binding.BindingBundler, 'function');
+            assert.equal(typeof binding.oxcNode.OxcTransformer, 'function');
             binding.runCommand({
               binName: process.execPath,
               args: ['-e', 'process.exit(7)'],
