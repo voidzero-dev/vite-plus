@@ -7,7 +7,7 @@ use crate::error::Error;
 
 /// Detect the current platform suffix for npm package naming.
 ///
-/// Returns strings like `darwin-arm64`, `linux-x64-gnu`, `linux-arm64-musl`, `win32-x64-msvc`.
+/// Returns strings like `darwin-arm64`, `linux-x64-gnu`, `freebsd-x64`, `win32-x64-msvc`.
 pub fn detect_platform_suffix() -> Result<String, Error> {
     let os_name = if cfg!(target_os = "macos") {
         "darwin"
@@ -15,6 +15,8 @@ pub fn detect_platform_suffix() -> Result<String, Error> {
         "linux"
     } else if cfg!(target_os = "windows") {
         "win32"
+    } else if cfg!(target_os = "freebsd") {
+        "freebsd"
     } else {
         return Err(Error::Setup(
             format!("Unsupported operating system: {}", std::env::consts::OS).into(),
@@ -71,5 +73,8 @@ mod tests {
 
         #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
         assert_eq!(suffix, "win32-x64-msvc");
+
+        #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))]
+        assert_eq!(suffix, "freebsd-x64");
     }
 }

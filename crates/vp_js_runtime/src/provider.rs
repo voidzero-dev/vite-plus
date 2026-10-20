@@ -102,4 +102,16 @@ pub trait JsRuntimeProvider: Send + Sync {
     ///
     /// Returns an error if the filename is not found in the SHASUMS content.
     fn parse_shasums(&self, shasums_content: &str, filename: &str) -> Result<Str, Error>;
+
+    /// Whether this provider has official builds available for the given platform.
+    ///
+    /// Platforms without official builds (e.g. FreeBSD for Node.js) should
+    /// return `false` so callers can fall back to a system-installed binary
+    /// instead of attempting a download that would 404 or pull in an
+    /// incompatible binary.
+    ///
+    /// The default implementation returns `true`.
+    fn is_download_supported(&self, _platform: Platform) -> bool {
+        true
+    }
 }

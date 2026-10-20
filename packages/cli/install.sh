@@ -190,6 +190,7 @@ detect_platform() {
   case "$os" in
     Darwin) os="darwin" ;;
     Linux) os="linux" ;;
+    FreeBSD) os="freebsd" ;;
     MINGW*|MSYS*|CYGWIN*) os="win32" ;;
     *) error "Unsupported operating system: $os" ;;
   esac

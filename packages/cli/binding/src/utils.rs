@@ -1,8 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use fspy::AccessMode;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use vp_command::run_command_with_fspy;
 use vt_path::AbsolutePathBuf;
 
@@ -63,6 +65,7 @@ pub struct RunCommandResult {
 /// This function wraps `vp_command::run_command_with_fspy` to provide
 /// a JavaScript-friendly interface for executing commands and tracking
 /// their file system accesses.
+/// On platforms without file tracking, it runs the command and returns no path accesses.
 ///
 /// ## Parameters
 ///
@@ -101,25 +104,39 @@ pub async fn run_command(options: RunCommandOptions) -> Result<RunCommandResult>
     // Convert args from Vec<String> to Vec<&str>
     let args: Vec<&str> = options.args.iter().map(|s| s.as_str()).collect();
 
-    // Call the core run_command_with_fspy function
-    let result = run_command_with_fspy(&options.bin_name, &args, &options.envs, &cwd)
-        .await
-        .map_err(anyhow::Error::from)?;
-
-    // Convert path accesses to JavaScript-friendly format
-    let mut path_accesses = HashMap::new();
-    for (path, mode) in result.path_accesses {
-        path_accesses.insert(
-            path.as_str().to_string(),
-            PathAccess {
-                read: mode.contains(AccessMode::READ),
-                write: mode.contains(AccessMode::WRITE),
-                read_dir: mode.contains(AccessMode::READ_DIR),
-            },
-        );
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        let status = vp_command::run_command(&options.bin_name, &args, &options.envs, &cwd)
+            .await
+            .map_err(anyhow::Error::from)?;
+        Ok(RunCommandResult {
+            exit_code: vp_shared::exit_code_from_status(status),
+            path_accesses: HashMap::new(),
+        })
     }
 
-    let exit_code = vp_shared::exit_code_from_status(result.status);
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    {
+        // Call the core run_command_with_fspy function
+        let result = run_command_with_fspy(&options.bin_name, &args, &options.envs, &cwd)
+            .await
+            .map_err(anyhow::Error::from)?;
 
-    Ok(RunCommandResult { exit_code, path_accesses })
+        // Convert path accesses to JavaScript-friendly format
+        let mut path_accesses = HashMap::new();
+        for (path, mode) in result.path_accesses {
+            path_accesses.insert(
+                path.as_str().to_string(),
+                PathAccess {
+                    read: mode.contains(AccessMode::READ),
+                    write: mode.contains(AccessMode::WRITE),
+                    read_dir: mode.contains(AccessMode::READ_DIR),
+                },
+            );
+        }
+
+        let exit_code = vp_shared::exit_code_from_status(result.status);
+
+        Ok(RunCommandResult { exit_code, path_accesses })
+    }
 }

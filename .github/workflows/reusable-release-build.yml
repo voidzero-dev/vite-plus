@@ -47,6 +47,8 @@ jobs:
             os: ubuntu-latest
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
+          - target: x86_64-unknown-freebsd
+            os: ubuntu-latest
           - target: x86_64-pc-windows-msvc
             os: namespace-profile-windows-4c-8g
           - target: aarch64-pc-windows-msvc
@@ -55,16 +57,12 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
       - uses: ./.github/actions/setup-rust
+        if: matrix.settings.target != 'x86_64-unknown-freebsd'
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: ${{ inputs.cache-key }}
 
-      - name: Rustup Adds Target
-        run: rustup target add ${{ matrix.settings.target }}
-
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
-
-      - name: Set build version
+      - name: Set native build version
         shell: bash
         run: |
           set -euo pipefail
@@ -76,9 +74,91 @@ jobs:
             # shellcheck disable=SC2016 # JavaScript expands process.env.VERSION.
             node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"
           done
-          # Keep the workspace package entries in Cargo.lock consistent with
-          # the stamped versions before later commands use --locked.
+
+      # Build before installing host dependencies so the VM only syncs source
+      # files. The shared build step later builds JavaScript on the Linux host.
+      - name: Build and test FreeBSD binaries
+        if: matrix.settings.target == 'x86_64-unknown-freebsd'
+        env:
+          RUSTUP_IO_THREADS: '1'
+        uses: cross-platform-actions/action@e0b9770014ba65d5e0815f15b74031c3a635f641 # v1.6.0
+        with:
+          operating_system: freebsd
+          version: '15.0'
+          memory: 8G
+          cpu_count: 3
+          environment_variables: 'VERSION VITE_PLUS_DOCS_ORIGIN RUSTUP_IO_THREADS'
+          shell: bash
+          run: |
+            set -euo pipefail
+            sudo pkg install -y curl git node24 cmake pkgconf jq
+            curl -fsSL https://sh.rustup.rs -o /tmp/vp-rustup.sh
+            sh /tmp/vp-rustup.sh -y --profile minimal --default-toolchain none
+            source "$HOME/.cargo/env"
+            rustup toolchain install --profile minimal
+            cargo update --workspace
+
+            # Keep intermediate files outside the workspace that the VM syncs.
+            build_dir=$(mktemp -d)
+            cargo build --locked --release --target x86_64-unknown-freebsd \
+              --target-dir "$build_dir" -p vp_global_cli -p vite-plus-cli \
+              --features vite-plus-cli/rolldown,vite-plus-cli/oxc-node
+            cargo test --locked --release --target x86_64-unknown-freebsd \
+              --target-dir "$build_dir" -p vp_js_runtime -p vp_setup platform
+
+            mkdir -p target/x86_64-unknown-freebsd/release
+            cp "$build_dir/x86_64-unknown-freebsd/release/vp" target/x86_64-unknown-freebsd/release/vp
+            cp "$build_dir/x86_64-unknown-freebsd/release/libvite_plus_cli.so" packages/cli/binding/vite-plus.freebsd-x64.node
+            cargo metadata --locked --format-version 1 \
+              | jq '{packages: [.packages[] | {name, version, source}]}' \
+              > packages/cli/binding/vite-plus.cargo-metadata.json
+            node <<'JS'
+            const assert = require('node:assert/strict');
+            const binding = require('./packages/cli/binding/vite-plus.freebsd-x64.node');
+            assert.equal(typeof binding.run, 'function');
+            assert.equal(typeof binding.BindingBundler, 'function');
+            assert.equal(typeof binding.oxcNode.OxcTransformer, 'function');
+            binding.runCommand({
+              binName: process.execPath,
+              args: ['-e', 'process.exit(7)'],
+              envs: {},
+              cwd: process.cwd(),
+            }).then((result) => {
+              assert.equal(result.exitCode, 7);
+              assert.deepEqual(result.pathAccesses, {});
+            }).catch((error) => {
+              console.error(error);
+              process.exitCode = 1;
+            });
+            JS
+
+            # Exercise the installer and system Node.js fallback without
+            # downloading this release's not-yet-published npm packages.
+            VP_HOME=$(mktemp -d)
+            export VP_HOME
+            local_tgz=$(mktemp)
+            VP_LOCAL_BINARY="$PWD/target/x86_64-unknown-freebsd/release/vp" \
+              VP_LOCAL_TGZ="$local_tgz" VP_SELF_SETUP_NO_MODIFY_PATH=1 \
+              VP_VERSION="$VERSION" VP_SKIP_DEPS_INSTALL=1 \
+              VP_NODE_MANAGER=yes VP_PM_MANAGER=no bash packages/cli/install.sh
+            "$VP_HOME/bin/vp" --version
+            PATH="$VP_HOME/bin:$PATH" VP_NODE_VERSION=24.11.0 \
+              "$VP_HOME/bin/node" -e 'if (process.platform !== "freebsd") process.exit(1)'
+
+      - name: Prepare Rust build
+        if: matrix.settings.target != 'x86_64-unknown-freebsd'
+        shell: bash
+        run: |
+          rustup target add ${{ matrix.settings.target }}
+          # Keep Cargo.lock consistent with the stamped package versions.
           cargo update --workspace
+
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+
+      - name: Set JavaScript build version
+        shell: bash
+        run: |
+          set -euo pipefail
           # Stamp the package.json files too:
           # - packages/cli: the bundled JS dist inlines ${VERSION} as
           #   cliPkg.version (VITE_PLUS_VERSION). Without this a preview
@@ -117,6 +197,7 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.settings.target }}
+          skip-native: ${{ matrix.settings.target == 'x86_64-unknown-freebsd' }}
 
       - name: Upload Vite+ native artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

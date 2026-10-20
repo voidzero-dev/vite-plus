@@ -1235,10 +1235,11 @@ pub(crate) async fn ensure_installed(version: &str) -> Result<AbsolutePathBuf, S
         return Ok(binary_path);
     }
 
-    // Download the runtime
-    vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, version)
+    // The runtime can use a system binary when managed downloads are unavailable.
+    let runtime = vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, version)
         .await
         .map_err(|e| format!("{e}"))?;
+    let binary_path = runtime.get_binary_path();
 
     if !binary_path.as_path().exists() {
         return Err(format!("Node not found at {}", binary_path.as_path().display()));

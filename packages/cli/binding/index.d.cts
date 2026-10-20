@@ -4045,6 +4045,7 @@ export declare function run(options: CliOptions): Promise<number>;
  * This function wraps `vp_command::run_command_with_fspy` to provide
  * a JavaScript-friendly interface for executing commands and tracking
  * their file system accesses.
+ * On platforms without file tracking, it runs the command and returns no path accesses.
  *
  * ## Parameters
  *
