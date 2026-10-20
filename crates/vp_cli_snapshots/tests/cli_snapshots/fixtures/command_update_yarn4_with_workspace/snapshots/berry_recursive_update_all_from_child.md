@@ -23,8 +23,8 @@ omitting package names still updates all workspace dependencies
 ```
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
-➤ YN0085: │ + is-number@npm:7.0.0::__archiveUrl=https%3A%2F%2Fregistry.npmjs.org%2Fis-number%2F-%2Fis-number-7.0.0.tgz
-➤ YN0085: │ - is-number@npm:6.0.0::__archiveUrl=https%3A%2F%2Fregistry.npmjs.org%2Fis-number%2F-%2Fis-number-6.0.0.tgz
+➤ YN0085: │ + is-number@npm:7.0.0
+➤ YN0085: │ - is-number@npm:6.0.0
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Fetch step
 ➤ YN0013: │ A package was added to the project (+ <size> KiB).

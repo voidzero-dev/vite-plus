@@ -28,7 +28,7 @@ Develop:
 Execute:
   run    Run tasks (also available as standalone `vpr`)
   exec   Execute a command from local node_modules/.bin
-  node   Run a Node.js script (shorthand for `env exec node`)
+  node   Run plain Node.js (`env exec node`); `vpx <file>` runs TypeScript
   dlx    Execute a package binary without installing it as a dependency
   cache  Manage the task cache
 
@@ -117,7 +117,7 @@ Options:
   -f, --force                  Force reinstall all dependencies
   --ignore-scripts             Do not run lifecycle scripts
   --no-lockfile                Don't read or generate lockfile
-  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@2+ only)
+  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@4+ only)
   --shamefully-hoist           Create flat `node_modules` (pnpm only)
   --resolution-only            Re-run resolution for peer dependency analysis (pnpm only)
   --silent                     Suppress output (silent mode)
@@ -424,6 +424,7 @@ Commands:
   publish           Publish package to registry
   stage             Stage a package for publishing (npm staged publishing workflow)
   owner             Manage package owners [alias: author]
+  team              Manage organization teams and memberships
   cache             Manage package cache
   config            Manage package manager configuration [alias: c]
   login             Log in to a registry [alias: adduser]

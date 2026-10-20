@@ -32,7 +32,9 @@ jobs:
       - name: Output rolldown hash
         id: upstream-versions
         shell: bash
-        run: node -e "console.log('ROLLDOWN_HASH=' + require('./packages/tools/.upstream-versions.json').rolldown.hash)" >> $GITHUB_OUTPUT
+        run: |
+          node -e "console.log('ROLLDOWN_HASH=' + require('./packages/tools/.upstream-versions.json').rolldown.hash)" >> $GITHUB_OUTPUT
+          node -e "console.log('OXC_NODE_HASH=' + require('./packages/tools/.upstream-versions.json')['oxc-node'].hash)" >> $GITHUB_OUTPUT
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,6 +42,25 @@ jobs:
           path: rolldown
           ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
           persist-credentials: false
+
+      # The binding's `oxc-node` path dependency must resolve against the
+      # patched manifest recorded in Cargo.lock.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: oxc-project/oxc-node
+          path: oxc-node
+          ref: ${{ steps.upstream-versions.outputs.OXC_NODE_HASH }}
+          persist-credentials: false
+
+      # Run the patch script with native TypeScript support instead of unpinned `npx tsx`.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Patch vendored oxc-node
+        shell: bash
+        run: node packages/tools/src/patch-oxc-node.ts
 
       - name: Clear git origin for nested checkout
         shell: bash

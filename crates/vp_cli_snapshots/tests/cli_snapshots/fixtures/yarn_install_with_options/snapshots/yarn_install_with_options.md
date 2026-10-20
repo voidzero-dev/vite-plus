@@ -25,7 +25,7 @@ Options:
   -f, --force                      Force reinstall all dependencies
       --ignore-scripts             Do not run lifecycle scripts
       --no-lockfile                Don't read or generate lockfile
-      --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@2+ only)
+      --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@4+ only)
       --shamefully-hoist           Create flat `node_modules` (pnpm only)
       --resolution-only            Re-run resolution for peer dependency analysis (pnpm only)
       --silent                     Suppress output (silent mode)
@@ -74,4 +74,17 @@ yarn install <version>
 success Already up-to-date.
 
 Done in <duration>.
+```
+
+## `vpt json-edit package.json packageManager yarn@2.4.2`
+
+
+## `vp install --fix-lockfile`
+
+Reject lockfile refresh before Yarn 4.
+
+**Exit code:** 1
+
+```
+yarn < 4 does not support --fix-lockfile.
 ```

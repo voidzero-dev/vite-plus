@@ -77,6 +77,9 @@ import {
   rewriteStandaloneProject,
   planVitestV5Migration,
   refreshVitestV5Migration,
+  retryPreservedOxlintConfigs,
+  prepareOxlintConfigs,
+  removeMigratedOxlintConfigs,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   vitestV5NeedsMigration,
@@ -99,7 +102,6 @@ async function confirmNodeVersionFileMigration(
 ): Promise<boolean> {
   const confirmMessageByFile = {
     'package.json': 'Migrate Volta node version (package.json) to .node-version?',
-    '.nvmrc': 'Migrate .nvmrc to .node-version?',
   } as const satisfies Record<NodeVersionManagerDetection['file'], string>;
 
   const message = confirmMessageByFile[detection.file];
@@ -1203,6 +1205,17 @@ async function main() {
       didMigrate = true;
     }
 
+    if (
+      retryPreservedOxlintConfigs(
+        workspaceInfoOptional.rootDir,
+        true,
+        report,
+        workspaceInfoOptional.packages,
+      )
+    ) {
+      didMigrate = true;
+    }
+
     // finalizeCore has finished; stop the spinner before the interactive setup
     // prompts below (collectMigrationSetupPlan / framework shims, in --full mode)
     // so they don't render on top of the still-running progress line.
@@ -1453,12 +1466,25 @@ async function main() {
     // Merge configs and reinstall once if any tool or bootstrap migration happened
     if (eslintMigrated || prettierMigrated || tsupMigrated) {
       updateMigrationProgress('Rewriting configs');
+      const rootDir = workspaceInfoOptional.rootDir;
+      // Full setup only merges the root here; untouched packages still need their JSON dependencies.
+      const oxlintConfigs = workspaceInfoOptional.isMonorepo
+        ? prepareOxlintConfigs([
+            rootDir,
+            ...workspaceInfoOptional.packages.map((pkg) => path.join(rootDir, pkg.path)),
+          ])
+        : undefined;
       mergeViteConfigFiles(
-        workspaceInfoOptional.rootDir,
+        rootDir,
         true,
         report,
         workspaceInfoOptional.packages,
+        rootDir,
+        oxlintConfigs,
       );
+      if (oxlintConfigs) {
+        removeMigratedOxlintConfigs(oxlintConfigs);
+      }
       if (tsupMigrated) {
         mergeTsdownConfigFile(workspaceInfoOptional.rootDir, true, report);
         for (const pkg of workspaceInfoOptional.packages ?? []) {

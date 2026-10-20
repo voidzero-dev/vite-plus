@@ -1,0 +1,4 @@
+#!/usr/bin/env vpx
+import { basename } from 'node:path';
+
+console.log(`hello from ${basename(import.meta.filename)}, an extensionless ES module`);

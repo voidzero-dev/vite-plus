@@ -157,6 +157,14 @@ pub struct EnvConfig {
     /// Env: `VP_NODE_VERSION`
     pub node_version: Option<String>,
 
+    /// Bootstrap-only Node selector supplied by a CI integration.
+    pub setup_node_version: Option<String>,
+    /// Optional file for returning the resolved project Node version.
+    pub setup_node_version_file: Option<String>,
+
+    /// Emergency bypass of the global CLI installation lockfile, enabled only by `1`.
+    pub setup_skip_install_lockfile: bool,
+
     /// Override package manager and version.
     ///
     /// Env: `VP_PACKAGE_MANAGER`
@@ -180,6 +188,11 @@ pub struct EnvConfig {
     ///
     /// Env: `VP_SHELL`
     pub vp_shell: Option<String>,
+
+    /// Nushell version for `vp env setup`, used instead of running `nu`.
+    ///
+    /// Env: `VP_NU_VERSION`
+    pub nu_version: Option<String>,
 }
 
 impl EnvConfig {
@@ -213,6 +226,11 @@ impl EnvConfig {
             is_ci: std::env::var("CI").is_ok(),
             env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
+            setup_node_version: std::env::var(env_vars::VP_SETUP_NODE_VERSION).ok(),
+            setup_node_version_file: std::env::var(env_vars::VP_SETUP_NODE_VERSION_FILE).ok(),
+            setup_skip_install_lockfile: std::env::var(env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE)
+                .as_deref()
+                == Ok("1"),
             package_manager: std::env::var(env_vars::VP_PACKAGE_MANAGER).ok(),
             npm_version: std::env::var(env_vars::VP_NPM_VERSION).ok(),
             pnpm_version: std::env::var(env_vars::VP_PNPM_VERSION).ok(),
@@ -220,6 +238,7 @@ impl EnvConfig {
             bun_version: std::env::var(env_vars::VP_BUN_VERSION).ok(),
             user_home,
             vp_shell: std::env::var(env_vars::VP_SHELL).ok(),
+            nu_version: std::env::var(env_vars::VP_NU_VERSION).ok(),
         })
     }
 
@@ -398,6 +417,16 @@ impl EnvConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installation_lockfile_bypass_requires_explicit_opt_in() {
+        for value in [None, Some(""), Some("0"), Some("true"), Some("1")] {
+            EnvConfig::with_vars([(env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE, value)], |config| {
+                assert_eq!(config.setup_skip_install_lockfile, value == Some("1"));
+                assert!(!config.dir_envs.contains_key(env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE));
+            });
+        }
+    }
 
     /// `VP_HOME` pins every category to the single-root mapping.
     #[test]

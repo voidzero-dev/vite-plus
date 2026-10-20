@@ -71,6 +71,8 @@ irm https://vite.plus/ps1 | iex
 
 On Windows, you can instead download and run [`vp-setup.exe`](https://setup.viteplus.dev).
 
+The installer uses the latest Node.js LTS to install its JavaScript dependencies. CI integrations can select another compatible version through [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
+
 After installation, open a new shell and run:
 
 ```bash
@@ -104,6 +106,47 @@ These variables control the installer scripts and the standalone Windows install
   # PowerShell
   $env:VP_VERSION = "1.2.3"; irm https://vite.plus/ps1 | iex
   ```
+
+#### `VP_SETUP_NODE_VERSION`
+
+- **Purpose**: Select the Node.js version used to install the global CLI's JavaScript dependencies. CI integrations such as [`setup-vp`](/guide/ci#node-js-during-installation) set this variable to reuse the project's runtime.
+- **Values**: An exact version, a version range, or an alias such as `22.23.1`, `22`, `^22.18.0`, `lts`, or `latest`. The installer resolves the value once to an exact version.
+- **Default**: Unset or empty (use the latest Node.js LTS). Project files, `VP_NODE_VERSION`, session overrides, and the user-level default do not change this default.
+- **Compatibility**: The resolved version must meet the Node.js requirements of both the global CLI and its pinned `pnpm`. Otherwise, the installer uses LTS. An invalid or unresolvable value causes an error.
+- **Scope**: Initial dependency installation only. This variable does not set a project pin, session override, or global default. `vp upgrade` and legacy installers continue to use LTS.
+
+#### `VP_SETUP_NODE_VERSION_FILE`
+
+- **Purpose**: Optional output file for integrations that need the exact version resolved from `VP_SETUP_NODE_VERSION`.
+- **Contents**: The resolved version, such as `22.23.1`, written after successful dependency installation. If compatibility requires LTS for installation, the file still contains the requested version's resolution.
+- **Default**: Unset (write no file). The installer also writes no file when `VP_SETUP_NODE_VERSION` is unset or empty, or when dependency installation is skipped.
+
+`setup-vp` manages this file automatically. Use its Node.js inputs to configure CI jobs.
+
+#### `VP_SETUP_SKIP_INSTALL_LOCKFILE`
+
+Set this variable to `1` to recover from a lockfile-related error during global CLI installation or `vp upgrade`. All other values, including unset or empty, keep the published installation lockfile enabled.
+
+The installer prints a warning and resolves dependencies without reading or recovering the installation lockfile. The requested CLI version stays pinned, but its dependency versions can differ from the release lockfile. Registry, authentication, and proxy settings remain in effect. This option does not affect project installations such as `vp install`.
+
+```bash
+# Retry installation without the bundled lockfile.
+curl -fsSL https://vite.plus | VP_SETUP_SKIP_INSTALL_LOCKFILE=1 bash
+
+# Or retry an upgrade, including the currently installed version.
+VP_SETUP_SKIP_INSTALL_LOCKFILE=1 vp upgrade --force
+```
+
+```powershell
+$env:VP_SETUP_SKIP_INSTALL_LOCKFILE = "1"
+try {
+  irm https://vite.plus/ps1 | iex
+} finally {
+  Remove-Item Env:VP_SETUP_SKIP_INSTALL_LOCKFILE
+}
+```
+
+Keep this override temporary. Later installations and upgrades use the published lockfile again when the variable is unset. To reinstall an affected version with its lockfile, unset the variable and run `vp upgrade <version> --force`.
 
 #### `VP_HOME`
 
@@ -227,6 +270,7 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 
 - **Purpose**: Override Node.js version
 - **Default**: None (auto-detected)
+- **Scope**: Runtime commands. For the installer's dependency installation, use [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
 - **Example**:
   ```bash
   # Run a command with a specific Node.js version
@@ -346,6 +390,14 @@ source ~/.config/vite-plus/env.nu
 ```
 
 For a custom `XDG_CONFIG_HOME`, use the absolute path to `<XDG_CONFIG_HOME>/vite-plus/env.nu` as resolved during installation. For an installation under `VP_HOME` or an existing `~/.vite-plus` installation, use `<VP_HOME>/env.nu` or `~/.vite-plus/env.nu` instead. Replace placeholders with actual paths and quote paths containing spaces. Open a new Nushell session and run `vp help` to verify the configuration.
+
+#### Nushell version
+
+Use Nushell 0.112.1 or later. In Nushell, a custom command or alias can have the same name as a built-in command, for example `def update []`. Nushell reads the Vite+ `env.nu` after your configuration. Thus, `env.nu` must call the built-in commands with the [`%` sigil](https://www.nushell.sh/lang-guide/chapters/custom_commands.html#calling-custom-commands), which Nushell 0.112.1 added.
+
+`vp env setup` checks the `nu` on `PATH`. With an earlier Nushell, it writes `env.nu` without the sigil. That `env.nu` still works, but a custom command with the name of a built-in command can stop Nushell at startup with `nu::parser::extra_positional` or a similar parse error. After you upgrade Nushell, run `vp env setup` again.
+
+If you have more than one Nushell installation, make sure that the `nu` on `PATH` during `vp env setup` is the Nushell that you start. A Nushell earlier than 0.112.1 cannot parse an `env.nu` that `vp env setup` wrote for a later version.
 
 #### `CI`
 

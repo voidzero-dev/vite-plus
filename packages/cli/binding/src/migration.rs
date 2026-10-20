@@ -3,6 +3,49 @@ use std::path::Path;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 
+/// A literal argument with its original JavaScript UTF-16 source range.
+#[napi(object)]
+pub struct LiteralCommandToken {
+    pub value: String,
+    pub start: u32,
+    pub end: u32,
+}
+
+/// Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
+/// Returns null for unsupported syntax. Assignments and wrappers stay in argv;
+/// callers must decide whether a command is safe to rewrite.
+#[napi]
+pub fn parse_literal_commands(
+    source: String,
+    allow_lists: bool,
+) -> Option<Vec<Vec<LiteralCommandToken>>> {
+    let commands = vp_migration::parse_literal_commands(&source, allow_lists)?;
+    let mut byte_offset = 0;
+    let mut utf16_offset = 0;
+    // Ranges arrive in source order. Convert incrementally so non-ASCII scripts
+    // take linear time, including characters represented by surrogate pairs.
+    let mut to_utf16 = |offset| {
+        utf16_offset += source[byte_offset..offset].encode_utf16().count();
+        byte_offset = offset;
+        u32::try_from(utf16_offset).ok()
+    };
+    commands
+        .into_iter()
+        .map(|command| {
+            command
+                .into_iter()
+                .map(|token| {
+                    Some(LiteralCommandToken {
+                        value: token.value,
+                        start: to_utf16(token.range.start)?,
+                        end: to_utf16(token.range.end)?,
+                    })
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// Parse source and resolve lexical bindings for the TypeScript migration rules.
 #[napi]
 pub fn analyze_migration_source(filename: String, source: String) -> Result<String> {

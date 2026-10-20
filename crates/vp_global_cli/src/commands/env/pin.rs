@@ -9,7 +9,7 @@
 
 use std::{io::Write, process::ExitStatus};
 
-use vp_js_runtime::{NodeProvider, VersionSource, resolve_node_version};
+use vp_js_runtime::{NodeProvider, VersionSource, nvmrc_version_spans, resolve_node_version};
 use vp_pm_cli::{
     PackageManagerType, download_package_manager_for_cwd,
     resolve_package_manager_from_package_json, resolve_package_manager_version_for_cwd,
@@ -446,24 +446,13 @@ async fn pin_node_version_file(
     Ok(true)
 }
 
-/// Locate the version token using the same line rules as read_nvmrc_file.
+/// Locate the version token so pinning replaces only it.
 /// Keep comments, reserved key/value lines, whitespace, and line endings intact.
 fn nvmrc_version_span(content: &str) -> Result<Option<std::ops::Range<usize>>, Error> {
-    let mut span = None;
-    let mut offset = 0;
-    for line in content.split_inclusive('\n') {
-        let value = line.split_once('#').map_or(line, |(value, _)| value);
-        let trimmed = value.trim();
-        if !trimmed.is_empty() && !trimmed.contains('=') {
-            if span.is_some() {
-                return Err(Error::Other(
-                    "cannot pin .nvmrc with multiple version declarations".into(),
-                ));
-            }
-            let start = offset + value.len() - value.trim_start().len();
-            span = Some(start..start + trimmed.len());
-        }
-        offset += line.len();
+    let mut spans = nvmrc_version_spans(content);
+    let span = spans.next();
+    if spans.next().is_some() {
+        return Err(Error::Other("cannot pin .nvmrc with multiple version declarations".into()));
     }
     Ok(span)
 }

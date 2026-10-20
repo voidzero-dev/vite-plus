@@ -136,12 +136,14 @@ Projects that require a deterministic declaration can pin it explicitly with `vp
 
 A `packageManager` field can carry an integrity hash: `yarn@4.17.1+sha512.ccbf…`. `corepack use` writes that suffix. Vite+ hashes the same artifact as Corepack, so one pin works under both tools.
 
-| Package manager              | What the declared hash covers                       | What Vite+ also verifies                                   |
-| ---------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| Yarn 2 and later             | the extracted CLI, `bin/yarn.js`                    | —                                                          |
-| npm, pnpm ≤ 11, Yarn Classic | the npm package tarball                             | —                                                          |
-| pnpm ≥ 12                    | the main `pnpm` tarball                             | the platform package against the registry `dist.integrity` |
-| bun                          | the main `bun` tarball, which Vite+ never downloads | the platform package against the registry `dist.integrity` |
+| Package manager              | What the declared hash covers    | What Vite+ also verifies                                   |
+| ---------------------------- | -------------------------------- | ---------------------------------------------------------- |
+| Yarn 2 and later             | the extracted CLI, `bin/yarn.js` | —                                                          |
+| npm, pnpm ≤ 11, Yarn Classic | the npm package tarball          | —                                                          |
+| pnpm ≥ 12                    | the main `pnpm` tarball          | the platform package against the registry `dist.integrity` |
+| bun                          | the main `bun` tarball           | the platform package against the registry `dist.integrity` |
+
+For a fresh Bun install, Vite+ downloads the main `bun` tarball only when a declared hash needs verification. It still installs the platform-specific binary and verifies that package against the registry's `dist.integrity` when present. Cached Bun installs do not yet recheck declared pins.
 
 Yarn 2 and later is the exception because Corepack installs Berry from a single file, `repo.yarnpkg.com/<version>/packages/yarnpkg-cli/bin/yarn.js`, and hashes that file. Vite+ downloads the `@yarnpkg/cli-dist` tarball instead, so it extracts `bin/yarn.js` and hashes that entry. The bytes are the same; only the basis differs. Vite+ hashed the tarball before, which made a pin written by `corepack use` fail (issue #2209).
 

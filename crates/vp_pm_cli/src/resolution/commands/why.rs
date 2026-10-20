@@ -24,11 +24,11 @@ pub struct WhyArgs {
     pub(crate) parseable: bool,
 
     /// Check recursively across all workspaces
-    #[arg(short = 'r', long, not_supported(yarn < "2", bun))]
+    #[arg(short = 'r', long, not_supported(npm < "7.14.0", yarn < "2", bun))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(yarn, bun))]
+    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn, bun))]
     pub(crate) filter: Vec<String>,
 
     /// Check in workspace root
@@ -56,7 +56,7 @@ pub struct WhyArgs {
     pub(crate) exclude_peers: bool,
 
     /// Use a finder function defined in .pnpmfile.cjs
-    #[arg(long, value_name = "FINDER_NAME", not_supported(npm, yarn, bun))]
+    #[arg(long, value_name = "FINDER_NAME", not_supported(npm, pnpm < "10.16.0", yarn, bun))]
     pub(crate) find_by: Option<String>,
 
     /// Additional arguments to pass through to the package manager
@@ -275,7 +275,7 @@ mod tests {
     fn test_pnpm_why_with_find_by() {
         let mut options = why_args(&["react"]);
         options.find_by = Some("customFinder".to_string());
-        let command = expect_run(resolve(&pnpm("10.0.0"), options).outcome);
+        let command = expect_run(resolve(&pnpm("10.16.0"), options).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["why", "--find-by", "customFinder", "react"]);

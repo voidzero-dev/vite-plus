@@ -1,0 +1,9 @@
+{
+  "options": {
+    "typeAware": false,
+    "typeCheck": false
+  },
+  "rules": {
+    "no-debugger": "warn"
+  }
+}

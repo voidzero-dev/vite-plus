@@ -3,5 +3,11 @@ name = "command_publish_yarn4"
 vp = "global"
 steps = [
   { argv = ["vp", "pm", "publish", "--help"], comment = "should show help", continue-on-failure = true },
-  { argv = ["vp", "pm", "publish", "--dry-run", "--", "--loglevel", "error"], comment = "should preview publish without actually publishing (uses npm publish --dry-run)", continue-on-failure = true },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "pm", "publish", "--dry-run"], comment = "should preview using native yarn npm publish without publishing", continue-on-failure = true },
+  { argv = ["vp", "pm", "publish", "--dry-run", "--json"], comment = "should preserve supported native JSON output without publishing", continue-on-failure = true },
+  { argv = ["vp", "pm", "publish", "--force", "--", "--help"], comment = "should reject force rather than translate it to tolerate-republish", continue-on-failure = true },
+  { argv = ["vp", "pm", "publish", "pkg.tgz"], comment = "should reject an explicit target rather than use npm", continue-on-failure = true },
+  { argv = ["vp", "pm", "publish", "--recursive"], comment = "should reject workspace publishing rather than use npm", continue-on-failure = true },
+  { argv = ["vp", "pm", "publish", "--filter", "app"], comment = "should reject workspace selection rather than use npm", continue-on-failure = true },
 ]

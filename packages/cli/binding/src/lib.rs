@@ -16,6 +16,12 @@
 #[cfg(feature = "rolldown")]
 pub extern crate rolldown_binding;
 
+// Script loader hooks for `vpx <script>`, exported under the `oxcNode` namespace. Like the
+// modules below, only JavaScript calls them, so the test target sees them as dead code.
+#[cfg(feature = "oxc-node")]
+#[allow(dead_code)]
+mod oxc_node;
+
 mod check;
 mod cli;
 mod exec;

@@ -19,32 +19,18 @@ Options:
   -h, --help            Print help
 ```
 
-## `vp dlx -s cowsay hello`
+## `vp dlx -s vp-test-echo hello`
 
-should run cowsay with pnpm dlx
+should run vp-test-echo with pnpm dlx
 
 ```
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+hello
 ```
 
-## `vp dlx -s cowsay@1.6.0 hello`
+## `vp dlx -s vp-test-echo@1.0.0 hello`
 
 should run specific version
 
 ```
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+hello
 ```

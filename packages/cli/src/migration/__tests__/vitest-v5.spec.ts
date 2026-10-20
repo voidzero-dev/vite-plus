@@ -2232,9 +2232,9 @@ export default defineConfig(CONFIG);`,
       'checks.ts': 'export default { test: {} };',
     });
     const plan = planProject(root);
-    expect([...plan.projects[0].configFiles].map((file) => path.basename(file)).toSorted()).toEqual(
-      ['checks.ts', 'test-base.ts', 'vite.config.ts'],
-    );
+    expect(
+      Array.from(plan.projects[0].configFiles, (file) => path.basename(file)).toSorted(),
+    ).toEqual(['checks.ts', 'test-base.ts', 'vite.config.ts']);
     expect(plan.findings.some(({ code }) => code === 'source-parse')).toBe(false);
     expect(plan.changes.some(({ file }) => /plugin-(?:options|base)\.ts$/.test(file))).toBe(false);
   });

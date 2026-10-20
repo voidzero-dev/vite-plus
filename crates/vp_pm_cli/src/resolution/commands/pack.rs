@@ -8,11 +8,11 @@ use crate::resolution::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct PackArgs {
     /// Pack all workspace packages
-    #[arg(short = 'r', long, not_supported(yarn < "2", bun))]
+    #[arg(short = 'r', long, not_supported(npm < "7.9.0", pnpm < "10.11.0", yarn < "2", bun))]
     pub(crate) recursive: bool,
 
     /// Filter packages to pack
-    #[arg(long, value_name = "PATTERN", not_supported(yarn < "2", bun))]
+    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.9.0", pnpm < "10.11.0", yarn < "2", bun))]
     pub(crate) filter: Vec<String>,
 
     /// Output path for the tarball
@@ -20,7 +20,7 @@ pub struct PackArgs {
     pub(crate) out: Option<String>,
 
     /// Directory where the tarball will be saved
-    #[arg(long, not_supported(yarn))]
+    #[arg(long, not_supported(npm < "7.18.0", yarn))]
     pub(crate) pack_destination: Option<String>,
 
     /// Gzip compression level (0-9)
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn test_pnpm_pack_recursive() {
         let command = expect_run(
-            resolve(&pnpm("10.0.0"), PackArgs { recursive: true, ..Default::default() }).outcome,
+            resolve(&pnpm("10.11.0"), PackArgs { recursive: true, ..Default::default() }).outcome,
         );
 
         assert_eq!(command.args, vec!["pack", "--recursive"]);
@@ -194,7 +194,7 @@ mod tests {
     fn test_pnpm_pack_with_filter() {
         let command = expect_run(
             resolve(
-                &pnpm("10.0.0"),
+                &pnpm("10.11.0"),
                 PackArgs { filter: vec!["app".to_string()], ..Default::default() },
             )
             .outcome,
@@ -207,7 +207,7 @@ mod tests {
     fn test_pnpm_pack_with_multiple_filters() {
         let command = expect_run(
             resolve(
-                &pnpm("10.0.0"),
+                &pnpm("10.11.0"),
                 PackArgs {
                     filter: vec!["app".to_string(), "web".to_string()],
                     ..Default::default()

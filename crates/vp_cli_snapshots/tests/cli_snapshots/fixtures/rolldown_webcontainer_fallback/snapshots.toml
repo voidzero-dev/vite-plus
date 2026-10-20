@@ -1,0 +1,12 @@
+# Execute the complete packed binding loader in a simulated WebContainer.
+# Native bindings are unavailable; the WASM installer and cache are local fakes.
+# A linked checkout would hide the missing rolldown/package.json dependency.
+[[case]]
+name = "rolldown_webcontainer_fallback"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["npm", "install", "--ignore-scripts", "--legacy-peer-deps", "--no-audit", "--no-fund"], snapshot = false },
+  { argv = ["node", "--experimental-vm-modules", "--disable-warning=ExperimentalWarning", "verify.mjs", "missing"], comment = "Without a standalone rolldown package, download the WASM binding at the bundled Rolldown version." },
+  { argv = ["node", "--experimental-vm-modules", "--disable-warning=ExperimentalWarning", "verify.mjs", "cached"], comment = "Load an existing WASM binding without a package lookup or another download." },
+]

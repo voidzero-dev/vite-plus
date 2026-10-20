@@ -1,0 +1,13 @@
+[[case]]
+name = "migration_existing_vite_hooks"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["pnpm", "--version"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-agent", "--no-editor"], comment = "Complete the existing hook setup without prompting, replacing project hooks, or changing echo arguments." },
+  { argv = ["vpt", "print-file", "package.json", ".vite-hooks/pre-commit", ".vite-hooks/commit-msg"] },
+  { argv = ["git", "config", "--local", "core.hooksPath"] },
+  { argv = ["vpt", "stat-file", ".vite-hooks/_/h", "--assert", "file"] },
+  { argv = ["vp", "migrate", "--full", "--no-agent", "--no-editor"], comment = "A complete hook setup is detected and skipped without prompting on the next migration." },
+  { argv = ["vpt", "print-file", "package.json", ".vite-hooks/pre-commit", ".vite-hooks/commit-msg"] },
+]

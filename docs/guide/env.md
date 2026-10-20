@@ -41,6 +41,8 @@ To select the project's Node.js version, Vite+ checks the current directory firs
 
 If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the latest LTS.
 
+These rules select Node.js for project commands. The installer uses the latest LTS by default. Only [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version) changes its dependency-installation runtime; [`setup-vp`](/guide/ci#node-js-during-installation) supplies this override from the CI inputs or project declarations.
+
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
 ::: tip Using pnpm with Vite+ runtime management
@@ -181,7 +183,7 @@ In CI, `vp env use` can run without shell initialization. It writes a temporary 
 The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShell. Run `vp env setup` and follow its printed shell setup instructions to enable it. Press Tab to complete commands, or project task names after `vp run` and `vpr`.
 
 - **Zsh**: Run `autoload -Uz compinit; compinit` before loading the setup script if your shell has not initialized completion.
-- **Nushell**: Completion requires `fish` on `PATH`.
+- **Nushell**: Completion requires `fish` on `PATH`. Use Nushell 0.112.1 or later; see [Nushell version](/guide/global-cli#nushell-version).
 
 ### Manage
 
@@ -199,7 +201,7 @@ The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShe
 - `vp env uninstall` removes the Node.js version resolved from an explicit version or selector, such as `22` or `lts`. Package managers require a qualified exact version, such as `pnpm@10.18.0`.
 - `vp env clean` removes unused installs. Use `clean node`, `clean pm`, or a concrete manager. Current and configured-default versions are preserved.
 - `vp env exec` runs a command in the resolved environment. Use `--node` and `--package-manager`; `--npm` is an alias for `--package-manager npm@…`.
-- `vp node` uses the resolved Node.js runtime and exposes the selected package-manager path to child processes.
+- `vp node` uses the resolved Node.js runtime and exposes the selected package-manager path to child processes. It runs Node.js as is, so TypeScript files get Node.js type stripping only; [`vpx <file>`](/guide/vpx#running-scripts) runs them on the same runtime with full TypeScript support.
 
 ### Inspect
 

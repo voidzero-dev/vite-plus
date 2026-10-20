@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { globSync } from 'tinyglobby';
-import { normalize, normalizeRange } from 'verkit';
+import { normalize } from 'verkit';
 import { parse as parseYaml } from 'yaml';
 
 import { type DownloadPackageManagerResult } from '../../../binding/index.js';
@@ -47,15 +47,11 @@ export function setPackageManager(
   });
 }
 
-export type NodeVersionManagerDetection =
-  | { file: '.nvmrc'; voltaPresent?: true }
-  | { file: 'package.json'; voltaNodeVersion: string };
+export type NodeVersionManagerDetection = { file: 'package.json'; voltaNodeVersion: string };
 
 /**
- * Detect a .nvmrc file in the project directory.
- * If not found, check for a Volta node version in package.json.
- * If either is found, return the relevant info for migration.
- * Returns undefined if not found or .node-version already exists.
+ * Detect a Volta node version in package.json for migration.
+ * Returns undefined if not found or the project already has a pin file Vite+ reads.
  */
 export function detectNodeVersionManagerFile(
   projectPath: string,
@@ -67,11 +63,9 @@ export function detectNodeVersionManagerFile(
 
   const configs = detectConfigs(projectPath);
 
-  // .nvmrc takes priority over volta.node when both are present.
-  // voltaPresent is carried through so the migration step can remind the user
-  // to remove the now-redundant volta field from package.json.
+  // Vite+ reads .nvmrc directly, and a new .node-version would take priority over it.
   if (configs.nvmrcFile) {
-    return configs.voltaNode ? { file: '.nvmrc', voltaPresent: true } : { file: '.nvmrc' };
+    return undefined;
   }
 
   if (configs.voltaNode) {
@@ -80,56 +74,6 @@ export function detectNodeVersionManagerFile(
 
   return undefined;
 }
-
-/**
- * Parse a version alias from a .nvmrc file into a .node-version compatible string.
- * Accepts the first line of .nvmrc (pre-trimmed).
- * Returns null for unsupported aliases like "system", "default", "iojs".
- */
-export function parseNvmrcVersion(alias: string): string | null {
-  const version = alias.trim();
-
-  if (!version) {
-    return null;
-  }
-
-  // "node" and "stable" mean "latest stable release" which maps closely to lts/*.
-  // Starting from Node 27, all releases will be LTS, so the gap is shrinking.
-  // We map these to lts/* and log the conversion so users are aware.
-  if (version === 'node' || version === 'stable') {
-    return 'lts/*';
-  }
-
-  // "iojs", "system", and "default" have no meaningful equivalent and cannot be auto-migrated.
-  if (version === 'iojs' || version === 'system' || version === 'default') {
-    return null;
-  }
-
-  // LTS aliases (lts/*, lts/iron, etc.) pass through as-is
-  if (version.startsWith('lts/')) {
-    return version;
-  }
-
-  // Strip optional 'v' prefix, then validate as a semver version or range
-  const normalized = version.startsWith('v') ? version.slice(1) : version;
-  if (!normalized || !normalizeRange(normalized)) {
-    return null;
-  }
-  return normalized;
-}
-
-/**
- * Match an `actions/setup-node` `node-version-file:` value that points at the
- * now-removed `.nvmrc`, capturing the surrounding style so it can be preserved:
- *   1. the key + whitespace (`node-version-file:` ...)
- *   2. the optional opening quote (`'`, `"`, or none), reused as the closing quote
- *   3. the optional `./` prefix
- * The closing quote backreference (`\2`) plus the `(?=\s|$)` boundary keep this
- * pinned to the exact value `.nvmrc` / `./.nvmrc` (quoted or bare) and prevent
- * matching similar values such as `.nvmrc-backup`. Only `node-version-file:` lines
- * are touched, so shell `cat .nvmrc` and comments are left alone.
- */
-const NODE_VERSION_FILE_NVMRC_RE = /(node-version-file:[ \t]*)(['"]?)(\.\/)?\.nvmrc\2(?=\s|$)/gm;
 
 function isCompositeActionFile(filePath: string): boolean {
   try {
@@ -208,40 +152,8 @@ export function migrateSetupVpVersion(projectPath: string, report?: MigrationRep
 }
 
 /**
- * After `.nvmrc` is converted to `.node-version`, rewrite any GitHub Actions
- * workflow or composite action that still references the removed file via
- * `node-version-file:`, otherwise `actions/setup-node` fails in CI with "The
- * specified node version file at: .../.nvmrc does not exist".
- *
- * Best-effort and narrowly scoped: scans the files from `collectGithubActionFiles`,
- * only rewrites `node-version-file:` values (preserving the original
- * quoting/indentation), and never fails the migration if a file cannot be
- * read/written. Returns the relative paths of the files that were updated.
- */
-function rewriteNodeVersionFileReferences(projectPath: string): string[] {
-  const updated: string[] = [];
-  for (const filePath of collectGithubActionFiles(projectPath)) {
-    try {
-      const original = fs.readFileSync(filePath, 'utf8');
-      // `$1` key+space, `$2` opening quote (reused as the closing quote),
-      // `$3` optional `./` prefix; only `.nvmrc` becomes `.node-version`.
-      const rewritten = original.replace(NODE_VERSION_FILE_NVMRC_RE, '$1$2$3.node-version$2');
-      if (rewritten !== original) {
-        fs.writeFileSync(filePath, rewritten);
-        updated.push(path.relative(projectPath, filePath));
-      }
-    } catch {
-      // Best-effort: skip files that cannot be read or written.
-    }
-  }
-
-  return updated;
-}
-
-/**
- * Migrate .nvmrc or Volta node version from package.json to .node-version.
- * - For .nvmrc: the source file is removed after migration.
- * - For package.json (Volta): the volta field is left as-is; removal is left to the user's discretion.
+ * Migrate the Volta node version from package.json to .node-version.
+ * The volta field is left as-is; removal is left to the user's discretion.
  * Returns true on success, false if migration was skipped or failed.
  */
 export function migrateNodeVersionManagerFile(
@@ -251,75 +163,25 @@ export function migrateNodeVersionManagerFile(
 ): boolean {
   const nodeVersionPath = path.join(projectPath, '.node-version');
 
-  // Volta: node version was already extracted during detection — no package.json re-read needed
-  if (detection.file === 'package.json') {
-    const { voltaNodeVersion } = detection;
+  // Node version was already extracted during detection — no package.json re-read needed
+  const { voltaNodeVersion } = detection;
 
-    // Normalize Volta's "lts" alias to the .node-version compatible form
-    const resolvedVersion = voltaNodeVersion === 'lts' ? 'lts/*' : voltaNodeVersion;
+  // Normalize Volta's "lts" alias to the .node-version compatible form
+  const resolvedVersion = voltaNodeVersion === 'lts' ? 'lts/*' : voltaNodeVersion;
 
-    if (!normalize(resolvedVersion) && resolvedVersion !== 'lts/*') {
-      warnMigration(
-        `package.json volta.node "${voltaNodeVersion}" is not an exact version. Pin an exact version (e.g. ${voltaNodeVersion}.0 or run \`volta pin node@${voltaNodeVersion}\`) then re-run migration.`,
-        report,
-      );
-      return false;
-    }
-
-    fs.writeFileSync(nodeVersionPath, `${resolvedVersion}\n`);
-    if (report) {
-      report.manualSteps.push('Remove the "volta" field from package.json');
-      report.nodeVersionFileMigrated = true;
-    } else {
-      prompts.log.info('You can now remove the "volta" field from package.json manually.');
-    }
-    return true;
-  }
-
-  // .nvmrc: parse version alias and write to .node-version
-  const sourcePath = path.join(projectPath, '.nvmrc');
-  const content = fs.readFileSync(sourcePath, 'utf8');
-  const originalAlias = content.split('\n')[0]?.trim() ?? '';
-  const version = parseNvmrcVersion(originalAlias);
-
-  if (!version) {
+  if (!normalize(resolvedVersion) && resolvedVersion !== 'lts/*') {
     warnMigration(
-      '.nvmrc contains an unsupported version alias. Create .node-version manually with your desired Node.js version.',
+      `package.json volta.node "${voltaNodeVersion}" is not an exact version. Pin an exact version (e.g. ${voltaNodeVersion}.0 or run \`volta pin node@${voltaNodeVersion}\`) then re-run migration.`,
       report,
     );
     return false;
   }
 
-  // TODO: remove this log once Node 27+ makes all releases LTS, at which point
-  // "node"/"stable" and "lts/*" will be effectively equivalent.
-  if (version === 'lts/*' && (originalAlias === 'node' || originalAlias === 'stable')) {
-    prompts.log.info(
-      `"${originalAlias}" in .nvmrc is not a specific version; automatically mapping to "lts/*"`,
-    );
-  }
-
-  fs.writeFileSync(nodeVersionPath, `${version}\n`);
-  fs.unlinkSync(sourcePath);
-
-  // The .nvmrc is gone, so repoint any GitHub Actions workflow or composite
-  // action that fed it to `actions/setup-node` via `node-version-file:` at the
-  // new `.node-version`, so CI does not break with "node version file ... does
-  // not exist".
-  const updatedFiles = rewriteNodeVersionFileReferences(projectPath);
-  if (updatedFiles.length > 0) {
-    warnMigration(
-      `Updated node-version-file from .nvmrc to .node-version in GitHub Actions file(s): ${updatedFiles.join(', ')}`,
-      report,
-    );
-  }
-
+  fs.writeFileSync(nodeVersionPath, `${resolvedVersion}\n`);
   if (report) {
+    report.manualSteps.push('Remove the "volta" field from package.json');
     report.nodeVersionFileMigrated = true;
-    // Both .nvmrc and volta were present; .nvmrc was migrated but volta still lingers.
-    if (detection.voltaPresent) {
-      report.manualSteps.push('Remove the "volta" field from package.json');
-    }
-  } else if (detection.voltaPresent) {
+  } else {
     prompts.log.info('You can now remove the "volta" field from package.json manually.');
   }
   return true;
