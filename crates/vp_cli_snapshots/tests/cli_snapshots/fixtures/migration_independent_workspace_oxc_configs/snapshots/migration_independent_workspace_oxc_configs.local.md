@@ -41,6 +41,7 @@ VITE+ - The Unified Toolchain for the Web
 ## `vpt print-file packages/app/vite.config.mjs`
 
 ```
+// vp migrate: merged packages%2Fapp%2F.oxlintrc.json (c22a5fff1bbaa26c1877cded5b947cf8).
 export default {
   lint: {
     "rules": {
@@ -116,6 +117,7 @@ This project is already using Vite+! Happy coding!
 ## `vpt print-file packages/app/vite.config.mjs`
 
 ```
+// vp migrate: merged packages%2Fapp%2F.oxlintrc.json (c22a5fff1bbaa26c1877cded5b947cf8).
 export default {
   lint: {
     "rules": {

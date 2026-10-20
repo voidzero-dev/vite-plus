@@ -35,6 +35,7 @@ VITE+ - The Unified Toolchain for the Web
 ## `vpt print-file vite.config.ts`
 
 ```
+// vp migrate: merged .oxlintrc.json (4f1106d1e5daf0701ef5d9536d92669d).
 export default {
   fmt: {
     "singleQuote": true,
@@ -95,6 +96,7 @@ This project is already using Vite+! Happy coding!
 ## `vpt print-file vite.config.ts`
 
 ```
+// vp migrate: merged .oxlintrc.json (4f1106d1e5daf0701ef5d9536d92669d).
 export default {
   fmt: {
     "singleQuote": true,
