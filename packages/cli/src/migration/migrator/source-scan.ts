@@ -212,8 +212,8 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
     const workspaceFile = path.join(directory, 'pnpm-workspace.yaml');
     const hasWorkspaceFile = fs.existsSync(workspaceFile);
     let pkg: Record<string, unknown> | undefined;
-    // Members may contain independent projects, but their manifests do not own workspaces.
-    if (!workspaceMembers.has(directory) && fs.existsSync(path.join(directory, 'package.json'))) {
+    // Matched members can themselves root a non-pnpm workspace.
+    if (fs.existsSync(path.join(directory, 'package.json'))) {
       try {
         const parsed = readJsonFile(path.join(directory, 'package.json'));
         if (isPlainRecord(parsed)) {
@@ -223,17 +223,27 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
         // A malformed manifest must not hide independent projects below it.
       }
     }
+    let patterns = pkg?.workspaces;
     if (pkg) {
       const declared = declaredPackageManager(pkg);
+      const usesNonPnpm = declared
+        ? declared.name !== PackageManager.pnpm
+        : !fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) &&
+          ['yarn.lock', '.yarnrc.yml', 'package-lock.json', 'bun.lock', 'bun.lockb'].some((file) =>
+            fs.existsSync(path.join(directory, file)),
+          );
+      // pnpm members' npm-style workspaces do not own their descendants.
+      if (workspaceMembers.has(directory) && !usesNonPnpm) {
+        patterns = undefined;
+      }
       if (
         directory !== directories[0] &&
+        !workspaceMembers.has(directory) &&
         !hasWorkspaceFile &&
         (declared
           ? declared.name === PackageManager.pnpm
           : fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) ||
-            (!['yarn.lock', '.yarnrc.yml', 'package-lock.json', 'bun.lock', 'bun.lockb'].some(
-              (file) => fs.existsSync(path.join(directory, file)),
-            ) &&
+            (!usesNonPnpm &&
               ['.pnpmfile.cjs', 'pnpmfile.cjs'].some((file) =>
                 fs.existsSync(path.join(directory, file)),
               )))
@@ -244,7 +254,6 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
     // A newly created boundary stays single-package; package.json#workspaces
     // must not enable additional members that pnpm did not install before.
     if (projects.at(-1) !== directory) {
-      let patterns = pkg?.workspaces;
       if (hasWorkspaceFile) {
         try {
           patterns = (readYamlFile(workspaceFile) as { packages?: unknown })?.packages;

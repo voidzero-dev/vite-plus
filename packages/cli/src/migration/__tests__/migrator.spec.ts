@@ -2222,6 +2222,47 @@ describe('standalone pnpm child project boundaries', () => {
     expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(true);
   });
 
+  it.each([
+    { packageManager: 'yarn@4.9.2' },
+    { packageManager: 'npm@10.9.4' },
+    { packageManager: 'bun@1.3.0' },
+    { devEngines: { packageManager: { name: 'yarn' } } },
+    { file: 'yarn.lock' },
+    { file: 'package-lock.json' },
+    { file: 'bun.lock' },
+  ])('preserves a non-pnpm workspace rooted at a matched member (%j)', (declaration) => {
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: ["vendor/*"]\n');
+    for (const child of ['packages/pinned', 'packages/locked', 'examples/demo']) {
+      fs.mkdirSync(path.join(tmpDir, 'vendor/app', child), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'vendor/app', child, 'package.json'),
+        JSON.stringify({
+          name: child,
+          ...(child === 'packages/pinned' ? { packageManager: 'pnpm@10.33.0' } : {}),
+        }),
+      );
+      fs.writeFileSync(path.join(tmpDir, 'vendor/app', child, 'pnpm-lock.yaml'), '');
+    }
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/app/package.json'),
+      JSON.stringify({ name: 'app', workspaces: ['packages/*'], ...declaration }),
+    );
+    if (declaration.file !== undefined) {
+      fs.writeFileSync(path.join(tmpDir, 'vendor/app', declaration.file), '');
+    }
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    for (const child of ['', 'packages/pinned', 'packages/locked']) {
+      expect(fs.existsSync(path.join(tmpDir, 'vendor/app', child, 'pnpm-workspace.yaml'))).toBe(
+        false,
+      );
+    }
+    expect(fs.existsSync(path.join(tmpDir, 'vendor/app/examples/demo/pnpm-workspace.yaml'))).toBe(
+      true,
+    );
+  });
+
   it('continues scanning below a non-pnpm standalone project', () => {
     fs.mkdirSync(path.join(tmpDir, 'vendor/app'), { recursive: true });
     fs.writeFileSync(
