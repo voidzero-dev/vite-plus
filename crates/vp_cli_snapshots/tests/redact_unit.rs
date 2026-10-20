@@ -12,6 +12,25 @@ mod redact;
 use redact::{redact_output, redact_version_probe_output};
 
 #[test]
+fn omits_optional_vite_scan_progress_without_hiding_diagnostics() {
+    for timestamp in ["2:26:53 PM", "14:26:53", "2:26:53\u{202f}PM"] {
+        for prefix in ["vite", "vite+"] {
+            let progress =
+                format!("{timestamp} [{prefix}] (client) [optimizer] scanning dependencies...");
+            for input in [progress.clone(), format!("{progress}\n")] {
+                assert_eq!(redact_output(input, &[], true), "");
+            }
+            let diagnostics = format!(
+                "{timestamp} [{prefix}] (client) [optimizer] scanning dependencies... failed\n\
+                 {timestamp} [{prefix}] (client) (!) Failed to run dependency scan.\n"
+            );
+            let input = format!("SSR check passed\n{progress}\n{diagnostics}");
+            assert_eq!(redact_output(input, &[], true), format!("SSR check passed\n{diagnostics}"));
+        }
+    }
+}
+
+#[test]
 fn masks_yarn_compound_elapsed_times_as_one_duration() {
     for elapsed in ["999ms", "1s", "1s 0ms", "1m 2s", "1h 2m 3s 4ms"] {
         let input = format!(
