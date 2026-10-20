@@ -350,8 +350,9 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
     if let Some(env_version) = vp_shared::EnvConfig::get().node_version.as_deref() {
         let env_version = env_version.trim();
         if !env_version.is_empty() {
+            let version = resolve_version_alias(env_version, &NodeProvider::new()).await?;
             return Ok(VersionResolution {
-                version: env_version.to_string(),
+                version,
                 source: VERSION_ENV_VAR.into(),
                 source_path: None,
                 project_root: None,
@@ -1179,6 +1180,26 @@ mod tests {
                 assert_eq!(resolution.source, VERSION_ENV_VAR);
                 assert!(resolution.source_path.is_none());
                 assert!(!resolution.is_range);
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_env_var_partial_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("22")),
+            ],
+            |_| async {
+                let resolution = resolve_version(&temp_path).await.unwrap();
+
+                assert!(resolution.version.starts_with("22."));
+                assert!(NodeProvider::is_exact_version(&resolution.version));
+                assert_eq!(resolution.source, VERSION_ENV_VAR);
             },
         )
         .await;

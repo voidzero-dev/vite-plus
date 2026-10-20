@@ -115,6 +115,11 @@ pub const VP_ENV_USE_EVAL_ENABLE: &str = "VP_ENV_USE_EVAL_ENABLE";
 /// Explicitly specify the current shell.
 pub const VP_SHELL: &str = "VP_SHELL";
 
+/// Nushell version that `vp env setup` uses to select the `env.nu` syntax,
+/// instead of running `nu`. Tests set it to make the output independent of
+/// the installed Nushell.
+pub const VP_NU_VERSION: &str = "VP_NU_VERSION";
+
 /// Filter for update task types.
 pub const VP_UPDATE_TASK_TYPES: &str = "VP_UPDATE_TASK_TYPES";
 

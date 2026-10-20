@@ -366,6 +366,14 @@ source ~/.config/vite-plus/env.nu
 
 For a custom `XDG_CONFIG_HOME`, use the absolute path to `<XDG_CONFIG_HOME>/vite-plus/env.nu` as resolved during installation. For an installation under `VP_HOME` or an existing `~/.vite-plus` installation, use `<VP_HOME>/env.nu` or `~/.vite-plus/env.nu` instead. Replace placeholders with actual paths and quote paths containing spaces. Open a new Nushell session and run `vp help` to verify the configuration.
 
+#### Nushell version
+
+Use Nushell 0.112.1 or later. In Nushell, a custom command or alias can have the same name as a built-in command, for example `def update []`. Nushell reads the Vite+ `env.nu` after your configuration. Thus, `env.nu` must call the built-in commands with the [`%` sigil](https://www.nushell.sh/lang-guide/chapters/custom_commands.html#calling-custom-commands), which Nushell 0.112.1 added.
+
+`vp env setup` checks the `nu` on `PATH`. With an earlier Nushell, it writes `env.nu` without the sigil. That `env.nu` still works, but a custom command with the name of a built-in command can stop Nushell at startup with `nu::parser::extra_positional` or a similar parse error. After you upgrade Nushell, run `vp env setup` again.
+
+If you have more than one Nushell installation, make sure that the `nu` on `PATH` during `vp env setup` is the Nushell that you start. A Nushell earlier than 0.112.1 cannot parse an `env.nu` that `vp env setup` wrote for a later version.
+
 #### `CI`
 
 - **Purpose**: Indicates running in CI environment
