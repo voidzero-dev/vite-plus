@@ -139,25 +139,13 @@ export function isCommonJsRequire(context: { importAttributes?: unknown } | unde
   return context?.importAttributes === undefined;
 }
 
-/** A file name in a directory URL, which oxc-node resolves from as from the directory. */
-const DIRECTORY_PARENT = 'vpx-directory-parent';
-
 /**
  * The resolve hook for both hook paths: `require()` stays on Node.js' resolution, where
  * `routeHelperRequires` maps runtime helpers (it resolves from the requiring file and
  * ignores a `parentURL`), runtime helper imports resolve from this package, and
  * everything else goes through oxc-node.
- *
- * Node.js resolves the entry point and `--import` preloads against the working
- * directory's URL, which ends in `/`. oxc-node reads a parent URL as a file and resolves
- * from the directory above it, or fails at `/` (oxc-project/oxc-node#862), so it gets a
- * file in that directory, while Node.js' own resolution keeps the original URL for its
- * messages.
  */
-export function resolveWithOxcNode<
-  Context extends { importAttributes?: unknown; parentURL?: string },
-  Result,
->(
+export function resolveWithOxcNode<Context extends { importAttributes?: unknown }, Result>(
   oxcNode: OxcNodeBinding,
   specifier: string,
   context: Context,
@@ -169,16 +157,6 @@ export function resolveWithOxcNode<
   const helper = runtimeHelperSpecifier(specifier);
   if (helper) {
     return nextResolve(helper, { ...context, parentURL: HELPERS_PARENT_URL });
-  }
-  const { parentURL } = context;
-  if (parentURL?.endsWith('/')) {
-    const next = (nextSpecifier: string, nextContext?: Context) =>
-      nextResolve(nextSpecifier, nextContext && { ...nextContext, parentURL });
-    return oxcNode.createResolve(
-      specifier,
-      { ...context, parentURL: parentURL + DIRECTORY_PARENT } as never,
-      next as never,
-    ) as Result;
   }
   return oxcNode.createResolve(specifier, context as never, nextResolve as never) as Result;
 }

@@ -358,8 +358,10 @@ oxc_sourcemap = "9.0.0"
 
 # vendored oxc-node, compiled into the native binding for `vpx <script>`; without its
 # `napi` feature it registers no exports and declares no global allocator, and
-# `packages/cli/binding/src/oxc_node.rs` forwards what the loader uses
-oxc-node = { path = "./oxc-node", default-features = false }
+# `packages/cli/binding/src/oxc_node.rs` forwards what the loader uses. `yarn_pnp`
+# matches the `oxc_resolver` feature the workspace enables, which changes oxc-node's
+# file system signature.
+oxc-node = { path = "./oxc-node", default-features = false, features = ["yarn_pnp"] }
 
 # rolldown crates
 rolldown = { path = "./rolldown/crates/rolldown" }
