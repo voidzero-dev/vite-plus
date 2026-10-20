@@ -270,3 +270,27 @@ vp run --filter ./apps/web build
 ```
 
 See the [Run guide](/guide/run) for recursive, parallel, filtered, and cached workspace tasks.
+
+## Inspecting the Package Graph
+
+Run `vp graph` to see the workspace packages Vite+ discovered and the dependencies between them. This is the same graph `vp run -r` uses to order tasks, so it shows why a package is or is not picked up.
+
+```bash
+vp graph
+```
+
+```
+monorepo (.)
+@acme/web (apps/web)
+  @acme/ui
+  @acme/utils (dev)
+@acme/ui (packages/ui)
+  @acme/utils
+@acme/utils (packages/utils)
+```
+
+Only dependencies on other workspace packages are listed; `(dev)` and `(peer)` mark the dependency type. Add `--json` for machine-readable output:
+
+```bash
+vp graph --json
+```

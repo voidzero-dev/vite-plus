@@ -20,6 +20,7 @@ dialoguer = { workspace = true }
 dunce = { workspace = true }
 futures = { workspace = true }
 flate2 = { workspace = true }
+petgraph = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

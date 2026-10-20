@@ -224,6 +224,13 @@ pub enum Commands {
         global: bool,
     },
 
+    /// Show workspace packages and the dependencies between them
+    Graph {
+        /// Print the graph as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Manage Node.js and package-manager environments
     Env(EnvArgs),
 
@@ -279,7 +286,7 @@ impl Commands {
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::PackageManager(pm) => pm.is_quiet_or_machine_readable(),
-            Self::Toolchain { json, .. } => *json,
+            Self::Toolchain { json, .. } | Self::Graph { json } => *json,
             Self::SyncVersions { .. } => true,
             Self::Upgrade { silent, .. } => *silent,
             Self::Env(args) => {
@@ -1195,6 +1202,8 @@ pub async fn run_command_with_options(
         Commands::Toolchain { tools, json, global } => {
             commands::toolchain::execute(cwd, tools, json, global, raw_subcommand).await
         }
+
+        Commands::Graph { json } => commands::graph::execute(cwd, json),
 
         Commands::Env(args) => commands::env::execute(cwd, args).await,
 

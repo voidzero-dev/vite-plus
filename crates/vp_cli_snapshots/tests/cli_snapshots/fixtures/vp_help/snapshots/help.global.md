@@ -31,6 +31,7 @@ Execute:
   node   Run plain Node.js (`env exec node`); `vpx <file>` runs TypeScript
   dlx    Execute a package binary without installing it as a dependency
   cache  Manage the task cache
+  graph  Show workspace packages and their dependencies
 
 Build:
   build    Build for production

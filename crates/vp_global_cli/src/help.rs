@@ -30,6 +30,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<String> {
         ["env", ..] => "/guide/env",
         ["toolchain" | "upgrade"] => "/guide/upgrade",
         ["implode"] => "/guide/implode",
+        ["graph"] => "/guide/monorepo",
         _ => return None,
     };
     Some(vp_shared::documentation_url(path))
@@ -290,6 +291,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                     ),
                     row("dlx", "Execute a package binary without installing it as a dependency"),
                     row("cache", "Manage the task cache"),
+                    row("graph", "Show workspace packages and their dependencies"),
                 ],
             ),
             section_rows(

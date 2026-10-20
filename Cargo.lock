@@ -8445,6 +8445,7 @@ dependencies = [
  "indoc",
  "js-semver",
  "oxc_resolver",
+ "petgraph",
  "rustc-hash",
  "same-file",
  "serde",
