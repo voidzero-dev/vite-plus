@@ -487,7 +487,6 @@ function mergeOxlintConfigFile(
       'lint',
       silent,
       report,
-      plan.configContent,
       plan,
       preparedOxlintConfigs !== undefined,
     );
@@ -638,7 +637,6 @@ function mergeAndRemoveJsonConfig(
   configKey: string,
   silent = false,
   report?: MigrationReport,
-  configContent?: string,
   modulePlan?: OxlintModulePlan,
   deferRemoval = false,
 ): boolean {
@@ -664,13 +662,13 @@ function mergeAndRemoveJsonConfig(
   // Only delete the original JSON after a successful merge. Resolved lint
   // configs contain object extends, which JSON Oxlint configs do not accept.
   let result;
-  if (configContent === undefined) {
+  if (!modulePlan) {
     result = mergeJsonConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
   } else {
     const tempDir = fs.mkdtempSync(path.join(projectPath, '.vite-plus-lint-'));
     try {
       const tempConfig = path.join(tempDir, 'config.json');
-      fs.writeFileSync(tempConfig, configContent);
+      fs.writeFileSync(tempConfig, modulePlan.configContent);
       result = mergeJsonConfig(fullViteConfigPath, tempConfig, configKey);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
