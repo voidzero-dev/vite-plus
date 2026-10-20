@@ -44,14 +44,6 @@ static VITEST_TRANSFORM_CACHE_HINT_RE: LazyLock<regex::Regex> = LazyLock::new(||
     ))
     .unwrap()
 });
-// Vite prints this progress line only when dependency scanning takes over one second.
-// Match the complete message so scan failures and other optimizer diagnostics survive.
-static VITE_SCAN_PROGRESS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(
-        r"(?m)^\d{1,2}:\d{2}:\d{2}(?:[ \x{202f}](?:AM|PM))? \[vite\+?\] \([^\r\n()]+\) \[optimizer\] scanning dependencies\.\.\.(?:\n|$)",
-    )
-    .unwrap()
-});
 // Only v-prefixed versions are masked: tool and runtime banners all print
 // that form (`vite v7.3.2`, `vp v0.2.2`, `Node.js v24.18.0`) and churn on
 // every dep bump, while bare semver literals (`app-1.0.0.tgz`,
@@ -567,7 +559,6 @@ pub fn redact_output(
     output = DURATION_RE.replace_all(&output, "<duration>").into_owned();
     output = VITEST_TIMING_RE.replace_all(&output, "$1 (<timing>)").into_owned();
     output = VITEST_TRANSFORM_CACHE_HINT_RE.replace_all(&output, "").into_owned();
-    output = VITE_SCAN_PROGRESS_RE.replace_all(&output, "").into_owned();
 
     // Redact semver-shaped versions (bundled tool versions, Node versions).
     output = VERSION_RE.replace_all(&output, "<version>").into_owned();
