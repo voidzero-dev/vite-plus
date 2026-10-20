@@ -40,9 +40,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       docs-origin: ${{ steps.docs.outputs.origin }}
+      # TEMPORARY PR #3117 validation; remove after the published preview passes.
+      source-run: ${{ steps.previous.outputs.run }}
+      binaries: ${{ steps.previous.outputs.binaries }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -68,11 +72,50 @@ jobs:
         id: version
         run: echo "version=0.0.0-commit.${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
 
+      # TEMPORARY: a second label application reuses this exact commit's build.
+      # The existing main publisher has already registered its local CLI.
+      - name: Find this commit's original preview artifacts
+        id: previous
+        if: github.event.pull_request.number == 3117 && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const sha = context.payload.pull_request.head.sha;
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              ...context.repo,
+              workflow_id: 'publish-preview.yml',
+              head_sha: sha,
+              event: 'pull_request',
+              status: 'success',
+              per_page: 20,
+            });
+            for (const run of data.workflow_runs) {
+              if (run.id === context.runId || run.head_sha !== sha ||
+                  run.path !== '.github/workflows/publish-preview.yml' ||
+                  run.head_repository?.full_name !== process.env.GITHUB_REPOSITORY) continue;
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: run.id,
+              });
+              const names = artifacts.filter(a => !a.expired).map(a => a.name);
+              // The finalization run only uploads bridge-packages, so it cannot
+              // be selected as the source of another finalization attempt.
+              if (!['bridge-packages', 'bridge-cli-packages',
+                    'vp-setup-x86_64-pc-windows-msvc', 'vp-setup-aarch64-pc-windows-msvc']
+                    .every(name => names.includes(name))) continue;
+              const binaries = names.filter(name => /^(vp-global-cli|vite-plus-native|vp-setup)-/.test(name));
+              if (binaries.length !== 18) throw new Error(`Expected 18 binary artifacts, got ${binaries.length}`);
+              core.setOutput('run', String(run.id));
+              core.setOutput('binaries', JSON.stringify(binaries));
+              core.info(`Reuse original build ${run.id} for ${sha}`);
+              break;
+            }
+
   build-rust:
     name: Build bindings and binaries
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
-      github.event.label.name == 'preview-build'
+      github.event.label.name == 'preview-build' &&
+      needs.prepare.outputs.source-run == ''
     needs: prepare
     permissions:
       contents: read
@@ -240,4 +283,76 @@ jobs:
           retention-days: 7
           # The payload is already-gzipped .tgz files, so re-deflating them costs
           # time for no size gain.
+          compression-level: 0
+
+  # TEMPORARY PR #3117 validation. Main's existing uploader accepts global-only
+  # batches too. Prepare them without publishing credentials, then let that
+  # unchanged uploader publish them after this workflow succeeds.
+  finalize-preview:
+    name: Prepare locked global packages for the existing publisher
+    needs: prepare
+    if: needs.prepare.outputs.source-run != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/clone
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Install lockfile generator dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Download the original global CLI packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bridge-cli-packages
+          path: bridge-packages
+          run-id: ${{ needs.prepare.outputs.source-run }}
+          github-token: ${{ github.token }}
+      - name: Wait for the published local CLI
+        run: node .github/scripts/wait-for-npm-packages.ts "vite-plus@${VERSION}"
+        env:
+          PUBLISH_REGISTRY: https://registry-bridge.viteplus.dev
+      - name: Generate and bundle the installation lockfile
+        run: node packages/cli/generate-preview-install-lockfile.ts bridge-packages
+      - name: Upload locked global packages for the existing publisher
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bridge-packages
+          path: bridge-packages
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  preserve-preview-binaries:
+    name: Preserve ${{ matrix.artifact }}
+    needs: prepare
+    if: needs.prepare.outputs.source-run != ''
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        artifact: ${{ fromJSON(needs.prepare.outputs.binaries) }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ matrix.artifact }}
+          path: payload
+          run-id: ${{ needs.prepare.outputs.source-run }}
+          github-token: ${{ github.token }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.artifact }}
+          path: payload
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 7
           compression-level: 0
