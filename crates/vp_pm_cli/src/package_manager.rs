@@ -5052,6 +5052,8 @@ mod tests {
             format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(b"other")));
         let platform_package = get_bun_platform_package_name().unwrap();
         let platform_basename = platform_package.strip_prefix("@oven/").unwrap();
+        // Keep other tests from borrowing this server while its connections use this runtime.
+        let server = MockServer::start();
 
         for (pin, integrity) in [
             (None, &platform_integrity),
@@ -5060,7 +5062,7 @@ mod tests {
             (Some(main_hash.as_str()), &wrong_integrity),
         ] {
             let vp_home = create_temp_dir();
-            let server = MockServer::start();
+            server.reset();
             let main_tarball = server.mock(|when, then| {
                 when.method(GET).path("/bun/-/bun-1.2.0.tgz");
                 then.status(200).body(main_tgz.clone());
