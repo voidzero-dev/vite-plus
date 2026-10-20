@@ -20,3 +20,14 @@ steps = [
   { argv = ["vpt", "cp", "assert_dirs.nu", "config-$USER-\"quote\"-'single'-`tick`-\\slash/vite-plus/assert_dirs.nu"], snapshot = false },
   { argv = ["nu", "config-$USER-\"quote\"-'single'-`tick`-\\slash/vite-plus/assert_dirs.nu"], comment = "Nushell loads env.nu, preserves a PATH with shell metacharacters, and omits internal directory variables", envs = [["HOME", "${workspace}/shell-home"], ["USERPROFILE", "${workspace}/shell-home"], ["VP_HOME", ""], ["EXPECTED_VP_BIN_DIR", "${workspace}/bin-$USER-\"quote\"-'single'-`tick`-\\slash"], ["PATH", "${workspace}/bin-$USER-\"quote\"-'single'-`tick`-\\slash:${workspace}/bin-$USER-\"quote\"-'single'-`tick`-\\slash:${PATH}"]] },
 ]
+
+[[case]]
+name = "command_env_nushell_shadowed_builtins"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["nu"]
+steps = [
+  { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", "${workspace}/home"]], snapshot = false },
+  { argv = ["vpt", "cp", "assert_shadowed.nu", "home/assert_shadowed.nu"], snapshot = false },
+  { argv = ["nu", "assert_shadowed.nu"], cwd = "home", comment = "env.nu loads and runs `vp env use` when user commands shadow the built-ins it calls (#3092)", envs = [["VP_HOME", "${workspace}/home"]] },
+]

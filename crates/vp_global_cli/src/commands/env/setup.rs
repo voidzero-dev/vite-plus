@@ -45,6 +45,70 @@ enum EnvShell {
 
 const UTF8_BOM: char = '\u{feff}';
 
+/// First Nushell release with the `%` sigil, which calls a built-in even when a
+/// user command or alias has the same name. See "No more shadows, call internals
+/// with %" in <https://www.nushell.sh/blog/2026-04-11-nushell_v0_112_1.html>.
+const NU_BUILTIN_SIGIL_VERSION: &str = "0.112.1";
+
+/// Maximum time to wait for `nu` to print its version.
+const NU_VERSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Nushell syntax that the generated `env.nu` uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NuSyntax {
+    /// Prefix built-ins with `%`, so user commands cannot shadow them.
+    BuiltinSigil,
+    /// Use plain built-in names. Nushell before 0.112.1 reads `%update` as an
+    /// external command, and the rest of the line then fails to parse.
+    Legacy,
+}
+
+impl NuSyntax {
+    /// Choose the syntax for a `nu` version string. Unknown versions get
+    /// `Legacy`, because every Nushell version can parse it.
+    fn for_version(version: &str) -> Self {
+        let minimum = js_semver::Version::parse(NU_BUILTIN_SIGIL_VERSION);
+        match (js_semver::Version::parse(version.trim()), minimum) {
+            (Ok(version), Ok(minimum)) if version >= minimum => Self::BuiltinSigil,
+            _ => Self::Legacy,
+        }
+    }
+
+    /// Detect the syntax from `VP_NU_VERSION`, or else from the `nu` on `PATH`.
+    /// When `nu` is not installed, fails, or does not answer in time, use `Legacy`.
+    async fn detect(config: &vp_shared::EnvConfig) -> Self {
+        if let Some(version) = &config.nu_version {
+            return Self::for_version(version);
+        }
+        let Ok(cwd) = vt_path::current_dir() else { return Self::Legacy };
+        let Ok(nu) = vp_command::resolve_bin("nu", None, &cwd) else { return Self::Legacy };
+        let mut command = vp_command::build_command(&nu, &cwd);
+        // `--version` exits before the engine starts, so the user's config,
+        // autoload files, and plugins cannot affect the result.
+        command
+            .arg("--version")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .kill_on_drop(true);
+        // A `nu` that does not answer must not stop `vp env setup`.
+        match tokio::time::timeout(NU_VERSION_TIMEOUT, command.output()).await {
+            Ok(Ok(result)) if result.status.success() => {
+                Self::for_version(&String::from_utf8_lossy(&result.stdout))
+            }
+            _ => Self::Legacy,
+        }
+    }
+
+    /// The prefix for a built-in command name.
+    const fn builtin_prefix(self) -> &'static str {
+        match self {
+            Self::BuiltinSigil => "%",
+            Self::Legacy => "",
+        }
+    }
+}
+
 impl EnvShell {
     /// File name written under `<CONFIG>/` for this shell's setup script.
     const fn env_file_name(self) -> &'static str {
@@ -902,39 +966,42 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 // Nushell env file with vp wrapper function.
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
+// Every shadowable built-in carries the `%` sigil: Nushell resolves names at parse time, and
+// env.nu is parsed after the user's config, so a user `def update []` would otherwise replace
+// the built-in and stop Nushell at startup. `NuSyntax::Legacy` strips the sigils.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" and $in != "__VP_FALLBACK_BIN__" } | prepend "__VP_BIN__" | append "__VP_FALLBACK_BIN__")
+__ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" and $in != "__VP_FALLBACK_BIN__" } | %prepend "__VP_BIN__" | %append "__VP_FALLBACK_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 def --env --wrapped vp [...args: string@"nu-complete vp"] {
-    let command_args = if ($args | length) >= 2 and $args.0 == "-C" {
-        $args | skip 2
-    } else if ($args | length) >= 1 and ($args.0 | str starts-with "-C") and $args.0 != "-C" {
-        $args | skip 1
+    let command_args = if ($args | %length) >= 2 and $args.0 == "-C" {
+        $args | %skip 2
+    } else if ($args | %length) >= 1 and ($args.0 | %str starts-with "-C") and $args.0 != "-C" {
+        $args | %skip 1
     } else {
         $args
     }
-    if ($command_args | length) >= 2 and $command_args.0 == "env" and $command_args.1 == "use" {
+    if ($command_args | %length) >= 2 and $command_args.0 == "env" and $command_args.1 == "use" {
         if ("-h" in $args) or ("--help" in $args) {
             ^vp ...$args
             return
         }
-        let out = (with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL: "nu" } {
+        let out = (%with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL: "nu" } {
             ^vp ...$args
         })
-        let lines = ($out | lines)
-        let exports = ($lines | where { $in =~ '^\$env\.' } | parse '$env.{key} = "{value}"')
-        let export_keys = ($exports | get key? | default [])
+        let lines = ($out | %lines)
+        let exports = ($lines | where { $in =~ '^\$env\.' } | %parse '$env.{key} = "{value}"')
+        let export_keys = ($exports | %get key? | %default [])
         # Exclude keys that also appear in exports: when vp emits `hide-env X` then
         # `$env.X = "v"` (e.g. `vp env use` with no args resolving from .node-version),
         # the set should win.
-        let unsets = ($lines | where { $in =~ '^hide-env ' } | parse 'hide-env {key}' | get key? | default [] | where { $in not-in $export_keys })
-        if ($exports | is-not-empty) {
-            load-env ($exports | reduce -f {} {|it, acc| $acc | insert $it.key $it.value})
+        let unsets = ($lines | where { $in =~ '^hide-env ' } | %parse 'hide-env {key}' | %get key? | %default [] | where { $in not-in $export_keys })
+        if ($exports | %is-not-empty) {
+            %load-env ($exports | %reduce -f {} {|it, acc| $acc | %insert $it.key $it.value})
         }
         for key in $unsets {
-            if ($key in $env) { hide-env $key }
+            if ($key in $env) { %hide-env $key }
         }
     } else {
         ^vp ...$args
@@ -944,33 +1011,33 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
 # Shell completion for nushell (delegates to fish completions dynamically)
 def "nu-complete vp" [context: string] {
     let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+    ^fish --command $fish_cmd | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | %any {$in in $value}
+        if ($need_quote and ($value | %path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | %path expand --no-symlink} else {$value}
+            $'"($expanded_path | %str replace --all "\"" "\\\"")"'
         } else {$value}
     }
 }
 # Completion logic for vpr (translates context to 'vp run ...')
 def "nu-complete vpr" [context: string] {
     let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+        $context | %str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
     } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+        $context | %str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
     } else if ($context =~ '^vpr\s+-C') {
-        $context | str replace -r '^vpr' 'vp'
+        $context | %str replace -r '^vpr' 'vp'
     } else {
-        $context | str replace -r '^vpr' 'vp run'
+        $context | %str replace -r '^vpr' 'vp run'
     }
     let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+    ^fish --command $fish_cmd | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | %any {$in in $value}
+        if ($need_quote and ($value | %path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | %path expand --no-symlink} else {$value}
+            $'"($expanded_path | %str replace --all "\"" "\\\"")"'
         } else {$value}
     }
 }
@@ -1170,7 +1237,7 @@ pub(crate) fn escape_powershell_single_quoted_string(value: &str) -> String {
 /// Render export lines for the persisted layout values in
 /// [`EnvConfig::dir_envs`]. The map contains only an explicit absolute
 /// `VP_HOME`. Sort the lines to keep the output stable.
-fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
+fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig, nu_syntax: NuSyntax) -> String {
     let home_dir = config.user_home.as_path();
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
     exports.sort_unstable_by_key(|(name, _)| *name);
@@ -1199,8 +1266,9 @@ fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
                     home_dir,
                 ));
                 format!(
-                    "$env.{name} = (\"{}\" | path expand --no-symlink)\n",
-                    escape_nu_double_quoted_string(&path_ref)
+                    "$env.{name} = (\"{}\" | {}path expand --no-symlink)\n",
+                    escape_nu_double_quoted_string(&path_ref),
+                    nu_syntax.builtin_prefix()
                 )
             }
             // PowerShell uses the actual absolute path (not $HOME-relative)
@@ -1216,12 +1284,16 @@ fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
 ///
 /// Put the resolved bin directory on `PATH`. Persist an explicit `VP_HOME`, but
 /// do not export the internal split-directory group.
-fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
+fn render_env_content(
+    shell: EnvShell,
+    config: &vp_shared::EnvConfig,
+    nu_syntax: NuSyntax,
+) -> String {
     let dirs = &config.dirs;
     let home_dir = config.user_home.as_path();
     let bin_path_ref = render_home_relative_path(dirs.bin.as_path(), home_dir);
     let fallback_path_ref = render_home_relative_path(dirs.fallback_bin().as_path(), home_dir);
-    let dir_envs = render_dir_envs(shell, config);
+    let dir_envs = render_dir_envs(shell, config, nu_syntax);
 
     match shell {
         EnvShell::Posix => {
@@ -1257,7 +1329,9 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
             let bin_path_ref_nu =
                 escape_nu_double_quoted_string(&render_nu_path_ref(&bin_path_ref));
+            // Strip the sigils before substitution: paths can contain `%`.
             ENV_TEMPLATE_NU
+                .replace('%', nu_syntax.builtin_prefix())
                 .replace(
                     "__VP_FALLBACK_BIN__",
                     &escape_nu_double_quoted_string(&render_nu_path_ref(&fallback_path_ref)),
@@ -1296,8 +1370,9 @@ async fn create_env_files() -> Result<(), Error> {
     );
     // Like env.ps1, the wrapper needs a BOM for non-ASCII paths on PowerShell 5.1.
     tokio::fs::write(config.dirs.config.join("vp.ps1"), format!("{UTF8_BOM}{ps1_wrapper}")).await?;
+    let nu_syntax = NuSyntax::detect(&config).await;
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
-        let mut content = render_env_content(shell, &config);
+        let mut content = render_env_content(shell, &config, nu_syntax);
         if matches!(shell, EnvShell::Powershell) {
             // Windows PowerShell 5.1 uses the active ANSI code page for a
             // UTF-8 script without a BOM. The BOM preserves non-ASCII paths.
@@ -1509,11 +1584,13 @@ mod tests {
     fn test_env_vars<'a>(
         root: &'a std::path::Path,
         user_home: &'a std::path::Path,
-    ) -> [(&'static str, &'a std::ffi::OsStr); 3] {
+    ) -> [(&'static str, &'a std::ffi::OsStr); 4] {
         [
             (vp_shared::env_vars::VP_HOME, root.as_os_str()),
             ("HOME", user_home.as_os_str()),
             ("USERPROFILE", user_home.as_os_str()),
+            // Keep env.nu independent of the developer's installed Nushell.
+            (vp_shared::env_vars::VP_NU_VERSION, std::ffi::OsStr::new(NU_BUILTIN_SIGIL_VERSION)),
         ]
     }
 
@@ -1615,7 +1692,7 @@ mod tests {
             ],
             |_| {
                 let config = vp_shared::EnvConfig::get();
-                let content = render_env_content(EnvShell::Posix, &config);
+                let content = render_env_content(EnvShell::Posix, &config, NuSyntax::BuiltinSigil);
                 assert!(!content.contains("VP_BIN_DIR"));
                 assert!(!content.contains("VP_DATA_DIR"));
                 assert!(!content.contains("VP_CACHE_DIR"));
@@ -1639,7 +1716,7 @@ mod tests {
             |_| {
                 let config = vp_shared::EnvConfig::get();
                 for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
-                    let content = render_env_content(shell, &config);
+                    let content = render_env_content(shell, &config, NuSyntax::BuiltinSigil);
                     assert!(
                         !content.contains("VP_HOME="),
                         "{shell:?} env file should not pin VP_HOME when unset, got: {content}"
@@ -1771,10 +1848,13 @@ mod tests {
                 let ps_bin_ref = escape_powershell_single_quoted_string(
                     &custom_bin.as_path().display().to_string(),
                 );
-                let posix_content = render_env_content(EnvShell::Posix, &config);
-                let fish_content = render_env_content(EnvShell::Fish, &config);
-                let nu_content = render_env_content(EnvShell::Nu, &config);
-                let ps_content = render_env_content(EnvShell::Powershell, &config);
+                let posix_content =
+                    render_env_content(EnvShell::Posix, &config, NuSyntax::BuiltinSigil);
+                let fish_content =
+                    render_env_content(EnvShell::Fish, &config, NuSyntax::BuiltinSigil);
+                let nu_content = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+                let ps_content =
+                    render_env_content(EnvShell::Powershell, &config, NuSyntax::BuiltinSigil);
                 assert!(posix_content.contains(&format!("__vp_bin=\"{posix_bin_ref}\"")));
                 assert!(fish_content.contains(&format!("contains -i -- \"{fish_bin_ref}\"")));
                 assert!(nu_content.contains(&format!("prepend \"{nu_bin_ref}\"")));
@@ -1827,12 +1907,55 @@ mod tests {
             ],
             |_| {
                 let config = vp_shared::EnvConfig::get();
-                let content = render_env_content(EnvShell::Nu, &config);
+                let content = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
 
                 assert!(
                     content.contains(r#"prepend "/tmp/vp \"home\\with spaces\"/bin""#),
                     "env.nu should escape the bin path for a Nushell string literal, got: {content}"
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn test_nu_syntax_for_version() {
+        assert_eq!(NuSyntax::for_version("0.112.1"), NuSyntax::BuiltinSigil);
+        assert_eq!(NuSyntax::for_version("0.116.1\n"), NuSyntax::BuiltinSigil);
+        assert_eq!(NuSyntax::for_version("1.0.0"), NuSyntax::BuiltinSigil);
+        // 0.112.0 was never released; its pre-release builds may lack `%`.
+        assert_eq!(NuSyntax::for_version("0.112.0"), NuSyntax::Legacy);
+        assert_eq!(NuSyntax::for_version("0.111.0"), NuSyntax::Legacy);
+        assert_eq!(NuSyntax::for_version(""), NuSyntax::Legacy);
+        assert_eq!(NuSyntax::for_version("not a version"), NuSyntax::Legacy);
+    }
+
+    // A user `def update []` must not stop Nushell at startup (#3092).
+    #[cfg(unix)]
+    #[test]
+    fn test_render_env_content_nu_syntax() {
+        let home = std::path::PathBuf::from("/tmp/vp%home");
+        vp_shared::EnvConfig::with_vars(
+            [
+                (vp_shared::env_vars::VP_HOME, home.as_os_str()),
+                ("HOME", std::ffi::OsStr::new("/nonexistent-home-dir")),
+                ("USERPROFILE", std::ffi::OsStr::new("/nonexistent-home-dir")),
+            ],
+            |_| {
+                let config = vp_shared::EnvConfig::get();
+                let sigil = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+                assert!(sigil.contains("| %update value {|row|"), "got: {sigil}");
+                assert!(sigil.contains(r#"("/tmp/vp%home" | %path expand"#), "got: {sigil}");
+                assert!(sigil.contains("^fish --command"), "got: {sigil}");
+
+                let legacy = render_env_content(EnvShell::Nu, &config, NuSyntax::Legacy);
+                assert!(legacy.contains("| update value {|row|"), "got: {legacy}");
+                assert!(legacy.contains("^fish --command"), "got: {legacy}");
+                assert_eq!(
+                    legacy.replace("/tmp/vp%home", "").matches('%').count(),
+                    0,
+                    "Nushell before 0.112.1 cannot parse the `%` sigil, got: {legacy}"
+                );
+                assert!(legacy.contains(r#"$env.VP_HOME = ("/tmp/vp%home" | path expand"#));
             },
         );
     }
@@ -2650,9 +2773,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
             let config = vp_shared::EnvConfig::get();
-            let posix_content = render_env_content(EnvShell::Posix, &config);
-            let nu_content = render_env_content(EnvShell::Nu, &config);
-            let ps1_content = render_env_content(EnvShell::Powershell, &config);
+            let posix_content =
+                render_env_content(EnvShell::Posix, &config, NuSyntax::BuiltinSigil);
+            let nu_content = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+            let ps1_content =
+                render_env_content(EnvShell::Powershell, &config, NuSyntax::BuiltinSigil);
 
             assert!(posix_content.contains("if (( CURRENT >= 4 )); then"));
             assert!(posix_content.contains("if (( CURRENT >= 3 )); then"));
@@ -2745,7 +2870,11 @@ vp
             let env_file = home.join("env");
             std::fs::write(
                 &env_file,
-                render_env_content(EnvShell::Posix, &vp_shared::EnvConfig::get()),
+                render_env_content(
+                    EnvShell::Posix,
+                    &vp_shared::EnvConfig::get(),
+                    NuSyntax::BuiltinSigil,
+                ),
             )
             .unwrap();
 
@@ -2814,7 +2943,11 @@ echo ok
             let env_file = home.join("env");
             std::fs::write(
                 &env_file,
-                render_env_content(EnvShell::Posix, &vp_shared::EnvConfig::get()),
+                render_env_content(
+                    EnvShell::Posix,
+                    &vp_shared::EnvConfig::get(),
+                    NuSyntax::BuiltinSigil,
+                ),
             )
             .unwrap();
 
