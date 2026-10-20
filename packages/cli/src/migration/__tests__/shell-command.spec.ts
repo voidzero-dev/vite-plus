@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseLiteralCommands } from '../../../binding/index.js';
-import { getCommandStartIndex, literalArgv, literalCommands } from '../shell-command.ts';
+import { getCommandStartIndex } from '../migrator/shared.ts';
 
 describe('native literal command analysis', () => {
   it('returns UTF-16 ranges into the original source, including quoted words', () => {
@@ -28,7 +28,7 @@ describe('native literal command analysis', () => {
   it.each(['pnpm exec', 'npm exec --', 'yarn', 'bun x', 'npx', 'bunx'])(
     'keeps the %s wrapper policy in the caller',
     (wrapper) => {
-      const tokens = literalArgv(`${wrapper} vp config`)!;
+      const tokens = parseLiteralCommands(`${wrapper} vp config`, false)![0];
       const values = tokens.map(({ value }) => value);
       expect(values.slice(getCommandStartIndex(values))).toEqual(['vp', 'config']);
     },
@@ -36,8 +36,8 @@ describe('native literal command analysis', () => {
 
   it('keeps environment assignments and stateful commands for caller policies', () => {
     expect(
-      literalCommands(`MODE='unit && extra' vitest; cd child && vp test`)?.map((tokens) =>
-        tokens.map(({ value }) => value),
+      parseLiteralCommands(`MODE='unit && extra' vitest; cd child && vp test`, true)?.map(
+        (tokens) => tokens.map(({ value }) => value),
       ),
     ).toEqual([
       ['MODE=unit && extra', 'vitest'],
@@ -47,18 +47,14 @@ describe('native literal command analysis', () => {
   });
 
   it('does not interpret command names inside arguments', () => {
-    expect(literalArgv('echo vp config --no-hooks')?.map(({ value }) => value)).toEqual([
-      'echo',
-      'vp',
-      'config',
-      '--no-hooks',
-    ]);
-    expect(literalArgv(`vp config "" '$FLAGS; && # literal'`)?.map(({ value }) => value)).toEqual([
-      'vp',
-      'config',
-      '',
-      '$FLAGS; && # literal',
-    ]);
+    expect(
+      parseLiteralCommands('echo vp config --no-hooks', false)?.[0].map(({ value }) => value),
+    ).toEqual(['echo', 'vp', 'config', '--no-hooks']);
+    expect(
+      parseLiteralCommands(`vp config "" '$FLAGS; && # literal'`, false)?.[0].map(
+        ({ value }) => value,
+      ),
+    ).toEqual(['vp', 'config', '', '$FLAGS; && # literal']);
   });
 
   it.each([
@@ -75,14 +71,13 @@ describe('native literal command analysis', () => {
     'vp config "unterminated',
   ])('rejects unsupported syntax in %s', (source) => {
     expect(parseLiteralCommands(source, true)).toBeNull();
-    expect(literalCommands(source)).toBeUndefined();
-    expect(literalArgv(source)).toBeUndefined();
+    expect(parseLiteralCommands(source, false)).toBeNull();
   });
 
   it('keeps single-command and command-list contracts distinct', () => {
-    expect(literalArgv(' \t')).toEqual([]);
-    expect(literalCommands(' \t')).toBeUndefined();
-    expect(literalArgv('vp config && echo done')).toBeUndefined();
-    expect(literalCommands('vp config && echo done')).toHaveLength(2);
+    expect(parseLiteralCommands(' \t', false)).toEqual([[]]);
+    expect(parseLiteralCommands(' \t', true)).toBeNull();
+    expect(parseLiteralCommands('vp config && echo done', false)).toBeNull();
+    expect(parseLiteralCommands('vp config && echo done', true)).toHaveLength(2);
   });
 });

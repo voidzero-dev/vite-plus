@@ -10,6 +10,34 @@ import { detectPackageMetadata } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { addManualStep, addMigrationWarning, type MigrationReport } from '../report.ts';
 
+// Commands whose effects prevent literal analysis of later invocations.
+export const SHELL_STATE_COMMANDS: readonly string[] = [
+  'cd',
+  'pushd',
+  'popd',
+  '.',
+  'source',
+  'eval',
+  'export',
+  'set',
+  'unset',
+];
+
+/** Locate the executable after a supported package-manager wrapper. */
+export function getCommandStartIndex(argv: readonly string[]): number {
+  if (!['pnpm', 'npm', 'yarn', 'bun', 'npx', 'bunx'].includes(argv[0])) {
+    return 0;
+  }
+  let start = 1;
+  if (argv[start] === 'exec' || argv[start] === 'x') {
+    start++;
+  }
+  if (argv[start] === '--') {
+    start++;
+  }
+  return start;
+}
+
 // All known lint-staged config file names.
 // JSON-parseable ones come first so rewriteLintStagedConfigFile can rewrite them.
 export const LINT_STAGED_JSON_CONFIG_FILES = ['.lintstagedrc.json', '.lintstagedrc'] as const;

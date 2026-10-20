@@ -1,9 +1,10 @@
-import { getCommandStartIndex, literalArgv, literalCommands } from '../../utils/shell-command.ts';
+import { parseLiteralCommands } from '../../../binding/index.js';
+import { getCommandStartIndex, SHELL_STATE_COMMANDS } from '../migrator/shared.ts';
 import type { RewriteResult, VitestV5Finding } from './ast.ts';
 
 /** Read test commands without evaluating shell state or directory changes. */
 export function literalTestCommands(command: string): string[][] | undefined {
-  const commands = literalCommands(command);
+  const commands = parseLiteralCommands(command, true);
   if (!commands) {
     return undefined;
   }
@@ -13,10 +14,7 @@ export function literalTestCommands(command: string): string[][] | undefined {
     while (/^[A-Za-z_]\w*=/.test(values[0] ?? '')) {
       values.shift();
     }
-    if (
-      !values.length ||
-      ['cd', 'pushd', 'popd', '.', 'source', 'eval', 'export', 'set', 'unset'].includes(values[0])
-    ) {
+    if (!values.length || SHELL_STATE_COMMANDS.includes(values[0])) {
       return undefined;
     }
     result.push(values);
@@ -37,7 +35,7 @@ export function vitestCommandArgsStart(values: readonly string[]): number {
 }
 
 function migrateBenchmarkOutput(command: string): string {
-  const argv = literalArgv(command);
+  const argv = parseLiteralCommands(command, false)?.[0];
   if (!argv) {
     return command;
   }
@@ -139,7 +137,7 @@ export function migrateVitestV5Command(
   command = migrateBenchmarkOutput(command);
   // The bench subcommand still exists in v5. Only its removed flags block
   // migration; benchmark source changes are handled by the source pass.
-  const argv = literalArgv(command);
+  const argv = parseLiteralCommands(command, false)?.[0];
   const values = argv?.map(({ value }) => value);
   const runner = values ? vitestCommandArgsStart(values) : -1;
   let removedFlag = /(?:^|\s)(?:--compare|--outputJson)(?:\s|=|$)/.test(command);

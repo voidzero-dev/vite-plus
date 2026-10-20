@@ -4,7 +4,12 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
 
-import { parseConfigArgs, rewriteScripts } from '../../../binding/index.js';
+import {
+  type LiteralCommandToken,
+  parseConfigArgs,
+  parseLiteralCommands,
+  rewriteScripts,
+} from '../../../binding/index.js';
 import {
   findUnsafeHookInstallPath,
   HOOK_STUB_SCRIPT,
@@ -16,12 +21,6 @@ import { documentationUrl } from '../../utils/documentation.ts';
 import { findGitRoot } from '../../utils/git.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
-  type CommandToken,
-  getCommandStartIndex,
-  literalArgv,
-  literalCommands,
-} from '../../utils/shell-command.ts';
-import {
   hasStagedConfigInViteConfig,
   mergeStagedConfigToViteConfig,
   readRulesYaml,
@@ -29,8 +28,10 @@ import {
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
+  getCommandStartIndex,
   LINT_STAGED_ALL_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
+  SHELL_STATE_COMMANDS,
   warnMigration,
 } from './shared.ts';
 
@@ -158,7 +159,7 @@ function hasVpConfigLifecycleScript(scripts: Record<string, string> | undefined)
 }
 
 interface VpConfigHookCommand {
-  args: CommandToken[];
+  args: LiteralCommandToken[];
   hooksEnabled: boolean;
 }
 
@@ -168,13 +169,13 @@ function vpConfigHookCommands(script: string | undefined): VpConfigHookCommand[]
   if (!script) {
     return [];
   }
-  let commands = literalCommands(script);
+  let commands = parseLiteralCommands(script, true);
   // Preserve a leading refresh even when later commands need shell evaluation.
   // setupGitHooks prepends this form when it cannot rewrite an existing script.
   const separator = script.indexOf('&&');
   if (!commands && separator !== -1) {
-    const first = literalArgv(script.slice(0, separator));
-    commands = first?.length ? [first] : undefined;
+    const first = parseLiteralCommands(script.slice(0, separator), false)?.[0];
+    commands = first?.length ? [first] : null;
   }
   if (!commands) {
     return [];
@@ -186,9 +187,7 @@ function vpConfigHookCommands(script: string | undefined): VpConfigHookCommand[]
       // Environment overrides can disable hooks or redirect Git operations.
       return result;
     }
-    if (
-      ['cd', 'pushd', 'popd', '.', 'source', 'eval', 'export', 'set', 'unset'].includes(values[0])
-    ) {
+    if (SHELL_STATE_COMMANDS.includes(values[0])) {
       return result;
     }
     const start = getCommandStartIndex(values);
