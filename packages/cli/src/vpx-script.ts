@@ -163,11 +163,9 @@ export function parseVpxArgs(args: string[]): { flags: VpxFlags; positional: str
       flags.help = true;
     } else if (arg === '-v' || arg === '--version') {
       flags.version = true;
-    } else if (arg === '--tsconfig') {
-      index++;
-      if (index < args.length) {
-        flags.tsconfig = args[index];
-      }
+    } else if (arg === '--tsconfig' && index + 1 < args.length) {
+      // Without a value it stays positional, where `detectScript` reports the missing path.
+      flags.tsconfig = args[++index];
     } else if (arg.startsWith('--tsconfig=')) {
       flags.tsconfig = arg.slice('--tsconfig='.length);
     } else {

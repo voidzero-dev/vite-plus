@@ -32,6 +32,16 @@ Missing tsconfig
 error: vpx: tsconfig not found: missing.json
 ```
 
+## `vpx --tsconfig`
+
+--tsconfig without a path, as a vpx option
+
+**Exit code:** 1
+
+```
+error: vpx: --tsconfig requires a path
+```
+
 ## `vpx -p cowsay ./src/syntax.ts`
 
 --package selects package mode

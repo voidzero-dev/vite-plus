@@ -123,6 +123,8 @@ describe('parseVpxArgs', () => {
       shellMode: true,
     });
     expect(parseVpxArgs(['-v']).flags.version).toBe(true);
+    expect(parseVpxArgs(['--tsconfig'])).toMatchObject({ positional: ['--tsconfig'] });
+    expect(parseVpxArgs(['--tsconfig']).flags.tsconfig).toBeUndefined();
     expect(parseVpxArgs(['./a.ts', '--version'])).toMatchObject({
       flags: { version: false },
       positional: ['./a.ts', '--version'],

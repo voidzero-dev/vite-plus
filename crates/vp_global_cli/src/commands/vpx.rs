@@ -426,11 +426,15 @@ pub fn parse_vpx_args(args: &[String]) -> (VpxFlags, Vec<String>) {
             "-s" | "--silent" => {
                 flags.silent = true;
             }
+            // Without a value, `--tsconfig` stays positional, where script detection
+            // reports the missing path as it does after Node.js options.
+            "--tsconfig" if i + 1 == args.len() => {
+                positional.extend_from_slice(&args[i..]);
+                break;
+            }
             "--tsconfig" => {
                 i += 1;
-                if i < args.len() {
-                    flags.tsconfig = Some(args[i].clone());
-                }
+                flags.tsconfig = Some(args[i].clone());
             }
             "-h" | "--help" => {
                 flags.help = true;
@@ -644,6 +648,10 @@ mod tests {
         let (flags, positional) = parse_vpx_args(&args);
         assert_eq!(flags.tsconfig.as_deref(), Some("b.json"));
         assert_eq!(positional, vec!["./a.ts".to_string()]);
+
+        let (flags, positional) = parse_vpx_args(&["--tsconfig".to_string()]);
+        assert_eq!(flags.tsconfig, None);
+        assert_eq!(positional, vec!["--tsconfig".to_string()]);
     }
 
     #[test]
