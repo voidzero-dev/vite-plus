@@ -33,7 +33,7 @@ const sections: Record<string, string> = {
   'worker-id': 'worker-and-concurrency-ids-are-1-based',
 };
 
-const localSections: Record<string, string> = {
+export const localSections: Record<string, string> = {
   'browser-provider': 'community-webdriverio-provider',
   'dynamic-config': 'resolve-migration-findings',
   'dynamic-project': 'resolve-migration-findings',
