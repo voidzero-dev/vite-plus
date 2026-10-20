@@ -178,6 +178,38 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
     }
 }
 
+/// Find the monorepo root containing `cwd` with the same rules as `vp run` and `vp install`.
+///
+/// Returns `null` when `cwd` is not inside a pnpm or `package.json` workspace.
+#[napi]
+pub fn find_monorepo_root(cwd: String) -> Result<Option<String>> {
+    let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+    match find_workspace_root(&cwd) {
+        Ok((workspace_root, _)) => match workspace_root.workspace_file {
+            WorkspaceFile::PnpmWorkspaceYaml(_) | WorkspaceFile::NpmWorkspaceJson(_) => {
+                Ok(Some(workspace_root.path.as_path().to_string_lossy().to_string()))
+            }
+            WorkspaceFile::NonWorkspacePackage(_) => Ok(None),
+        },
+        Err(PackageJsonNotFound(_)) => Ok(None),
+        Err(e) => Err(anyhow::Error::from(e).into()),
+    }
+}
+
+/// Resolve the npm registry for packages in `scope` (without `@`) from the npm config at `cwd`.
+#[napi]
+pub fn resolve_npm_registry(cwd: String, scope: Option<String>) -> Result<String> {
+    let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+    Ok(vp_pm_cli::npm_registry_for_scope(&cwd, scope.as_deref()))
+}
+
+/// Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`.
+#[napi]
+pub fn resolve_npm_authorization(cwd: String, url: String) -> Result<Option<String>> {
+    let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+    Ok(vp_pm_cli::npm_authorization_for_url(&cwd, &url))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

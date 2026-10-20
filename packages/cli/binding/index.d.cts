@@ -3697,6 +3697,13 @@ export interface DownloadPackageManagerResult {
 export declare function ensureBlockingStdio(): void;
 
 /**
+ * Find the monorepo root containing `cwd` with the same rules as `vp run` and `vp install`.
+ *
+ * Returns `null` when `cwd` is not inside a pnpm or `package.json` workspace.
+ */
+export declare function findMonorepoRoot(cwd: string): string | null;
+
+/**
  * Resolved on-disk category roots from [`vp_shared::EnvConfig`].
  *
  * JavaScript must not read `VP_HOME` / `VP_*_DIR` / `XDG_*` itself;
@@ -3871,6 +3878,12 @@ export declare function removeConfigKey(
   viteConfigPath: string,
   configKey: string,
 ): MergeJsonConfigResult;
+
+/** Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`. */
+export declare function resolveNpmAuthorization(cwd: string, url: string): string | null;
+
+/** Resolve the npm registry for packages in `scope` (without `@`) from the npm config at `cwd`. */
+export declare function resolveNpmRegistry(cwd: string, scope?: string | undefined | null): string;
 
 /**
  * Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.

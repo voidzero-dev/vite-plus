@@ -1,6 +1,0 @@
-{
-  "name": "migration-nvmrc-node-alias",
-  "devDependencies": {
-    "vite": "^7.0.0"
-  }
-}

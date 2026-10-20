@@ -1,0 +1,9 @@
+{
+  "name": "vp-test-upper",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "bin": {
+    "vp-test-upper": "cli.cjs"
+  }
+}

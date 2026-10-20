@@ -689,7 +689,7 @@ export function resolveVitestV5TestModes(
     }
   }
   const modes = new Map<string, VitestV5TestMode>(
-    [...sources.keys()].map((file) => {
+    Array.from(sources.keys(), (file) => {
       const matching: Array<{ scope: TestScope; certain: boolean }> = [];
       let benchmarkFile = false;
       // Match Vitest's source-text check, including its exact spelling.

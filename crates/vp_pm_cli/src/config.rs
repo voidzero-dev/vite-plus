@@ -94,10 +94,14 @@ impl NpmConfig {
     }
 
     pub(crate) fn registry_for_package(&self, package: &str) -> String {
-        let scoped = package
-            .strip_prefix('@')
-            .and_then(|rest| rest.split_once('/'))
-            .and_then(|(scope, _)| self.values.get(vt_str::format!("@{scope}:registry").as_str()))
+        let scope =
+            package.strip_prefix('@').and_then(|rest| rest.split_once('/')).map(|(scope, _)| scope);
+        self.registry_for_scope(scope)
+    }
+
+    fn registry_for_scope(&self, scope: Option<&str>) -> String {
+        let scoped = scope
+            .and_then(|scope| self.values.get(vt_str::format!("@{scope}:registry").as_str()))
             .filter(|value| !value.is_empty());
         scoped
             .or_else(|| self.values.get("registry").filter(|value| !value.is_empty()))
@@ -133,6 +137,19 @@ impl NpmConfig {
             }
             None => request,
         }
+    }
+
+    // The JS CLI builds its own requests, so it needs the header value instead of a request.
+    fn authorization_header(&self, url: &str) -> Option<String> {
+        Some(match self.auth_for_url(url)? {
+            NpmAuth::Token(token) => vt_str::format!("Bearer {token}").to_string(),
+            NpmAuth::Encoded(auth) => vt_str::format!("Basic {auth}").to_string(),
+            NpmAuth::UsernamePassword { username, password } => {
+                let credentials = [username.as_bytes(), b":", &password].concat();
+                vt_str::format!("Basic {}", base64_simd::STANDARD.encode_to_string(credentials))
+                    .to_string()
+            }
+        })
     }
 
     /// A same-origin redirect may reach a more specific authenticated path.
@@ -349,6 +366,18 @@ fn parse_npmrc_value(value: &str) -> String {
         parsed.push('\\');
     }
     parsed.trim_end().to_string()
+}
+
+/// Resolve the registry for packages in `scope` (without `@`) from the npm config at `cwd`.
+#[must_use]
+pub fn npm_registry_for_scope(cwd: &AbsolutePath, scope: Option<&str>) -> String {
+    NpmConfig::load_for_cwd(cwd).registry_for_scope(scope)
+}
+
+/// Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`.
+#[must_use]
+pub fn npm_authorization_for_url(cwd: &AbsolutePath, url: &str) -> Option<String> {
+    NpmConfig::load_for_cwd(cwd).authorization_header(url)
 }
 
 /// Get the configured NPM registry URL.
@@ -927,6 +956,30 @@ mod tests {
                 .headers()
                 .contains_key(reqwest::header::AUTHORIZATION)
         );
+    }
+
+    // The JS CLI sends this header itself, so it must match what Rust requests send.
+    #[test]
+    fn authorization_header_matches_request_auth() {
+        for credentials in [
+            "//registry.example/:_authToken=TOKEN\n",
+            "//registry.example/:_auth=dXNlcjpzZWM=\n",
+            "//registry.example/:username=user\n//registry.example/:_password=c2Vj\n",
+        ] {
+            let project = project_with_npmrc(credentials);
+            let cwd = AbsolutePath::new(project.path()).unwrap();
+            with_isolated_npm_config(|| {
+                let url = "https://registry.example/pkg";
+                let request = NpmConfig::load_for_cwd(cwd)
+                    .apply_auth(http_client().get(url), url)
+                    .build()
+                    .unwrap();
+                assert_eq!(
+                    npm_authorization_for_url(cwd, url).as_deref(),
+                    Some(request.headers()[reqwest::header::AUTHORIZATION].to_str().unwrap())
+                );
+            });
+        }
     }
 
     #[test]

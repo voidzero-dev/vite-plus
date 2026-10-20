@@ -1,6 +1,6 @@
 {
   "name": "vite-plus",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -376,12 +376,12 @@
     "cross-spawn": "catalog:",
     "detect-indent": "catalog:",
     "detect-newline": "catalog:",
-    "glob": "catalog:",
     "jsonc-parser": "catalog:",
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
     "nanotar": "catalog:",
     "picocolors": "catalog:",
+    "tinyglobby": "catalog:",
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",
     "verkit": "catalog:",

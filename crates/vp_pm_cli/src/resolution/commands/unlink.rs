@@ -14,7 +14,7 @@ pub struct UnlinkArgs {
     /// Unlink in every workspace package
     // Berry added unlink, including --all, in Yarn 3. Classic has no recursive unlink.
     // https://github.com/yarnpkg/berry/blob/01586a88806a2bebd7edb28d1bee3581b1fd3762/CHANGELOG.md#300
-    #[arg(short = 'r', long, not_supported(yarn < "3", bun))]
+    #[arg(short = 'r', long, not_supported(npm < "8.1.0", yarn < "3", bun))]
     pub(crate) recursive: bool,
 
     /// Arguments to pass to package manager

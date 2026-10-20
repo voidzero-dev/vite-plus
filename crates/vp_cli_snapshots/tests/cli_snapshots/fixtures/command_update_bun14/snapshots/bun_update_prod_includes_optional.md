@@ -66,9 +66,9 @@ bun update <version> (<hash>)
     },
   },
   "packages": {
-    "is-number": ["is-number@7.0.0", "", {}, "sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng=="],
+    "is-number": ["is-number@7.0.0", "http://127.0.0.1:<port>/is-number/-/is-number-7.0.0.tgz", {}, "sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng=="],
 
-    "isarray": ["isarray@2.0.0", "", {}, "sha512-+7GtYSNjbLkjIGQy5ucmTjyY9ANbbW77DOT6nbQN4ZDo3CnST3HtjnGowbi+NF2pCPCba1rLO9qLlrFBsvDeew=="],
+    "isarray": ["isarray@2.0.0", "http://127.0.0.1:<port>/isarray/-/isarray-2.0.0.tgz", {}, "sha512-+7GtYSNjbLkjIGQy5ucmTjyY9ANbbW77DOT6nbQN4ZDo3CnST3HtjnGowbi+NF2pCPCba1rLO9qLlrFBsvDeew=="],
 
     "yocto-queue": ["yocto-queue@0.1.0", "http://127.0.0.1:<port>/yocto-queue/-/yocto-queue-0.1.0.tgz", {}, "sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q=="],
   }

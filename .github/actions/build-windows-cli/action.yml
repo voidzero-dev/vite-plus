@@ -85,10 +85,20 @@ runs:
         # hatch is needed.
         CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 
-    - name: Build Rust CLI binaries
+    - name: Build Rust CLI binary
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: cargo xwin build --profile "$INPUTS_PROFILE" --target x86_64-pc-windows-msvc -p vp_global_cli -p vp_installer
+      run: cargo xwin build --profile "$INPUTS_PROFILE" --target x86_64-pc-windows-msvc -p vp_global_cli
+      env:
+        CARGO_PROFILE_RELEASE_OPT_LEVEL: z
+        INPUTS_PROFILE: ${{ inputs.profile }}
+        XWIN_ACCEPT_LICENSE: '1'
+        CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+
+    - name: Build installer binary
+      if: steps.binaries-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo xwin build --profile "$INPUTS_PROFILE" --target x86_64-pc-windows-msvc -p vp_installer
       env:
         INPUTS_PROFILE: ${{ inputs.profile }}
         XWIN_ACCEPT_LICENSE: '1'

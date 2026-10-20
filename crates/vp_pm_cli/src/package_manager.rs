@@ -24,7 +24,9 @@ use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
     config::NpmConfig,
-    request::{HttpClient, download_and_extract_tgz_with_hash_and_config, verify_file_hash},
+    request::{
+        HttpClient, download_and_extract_tgz_with_hash_and_config, is_not_found, verify_file_hash,
+    },
     shim,
 };
 
@@ -926,24 +928,74 @@ fn find_extracted_package_dir(target_dir: &Path) -> io::Result<PathBuf> {
     ))
 }
 
-const LATEST_VERSION_CACHE_TTL: Duration = Duration::from_secs(3600);
+const DIST_TAG_CACHE_TTL: Duration = Duration::from_secs(3600);
 
-fn latest_version_cache_path(
-    package_manager_type: PackageManagerType,
-    registry: &str,
-) -> io::Result<AbsolutePathBuf> {
-    let registry_key = hex::encode(Sha256::digest(registry.as_bytes()));
-    Ok(vp_shared::EnvConfig::get()
-        .dirs
-        .cache
-        // The legacy namespace contains files named after package managers.
-        // Keep it untouched: those versions have no registry provenance.
-        .join("package_manager_latest_v2")
-        .join(package_manager_type.to_string())
-        .join(registry_key))
+/// How a version spec is read, following npm's `name@spec` order: exact version, range, dist-tag.
+enum VersionSpec {
+    Default,
+    Exact,
+    Range(js_semver::Range),
+    DistTag,
 }
 
-fn read_latest_version_cache(path: &AbsolutePath) -> Option<(Str, bool)> {
+impl VersionSpec {
+    fn parse(version: &str) -> Option<Self> {
+        if version.is_empty() {
+            None
+        } else if version == "default" {
+            Some(Self::Default)
+        } else if Version::parse(version).is_ok() {
+            Some(Self::Exact)
+        } else if let Ok(range) = js_semver::Range::parse(version) {
+            Some(Self::Range(range))
+        } else if is_dist_tag(version) {
+            Some(Self::DistTag)
+        } else {
+            None
+        }
+    }
+}
+
+/// npm only accepts tags that `encodeURIComponent` leaves unchanged.
+fn is_dist_tag(tag: &str) -> bool {
+    // `.` and `..` would be resolved away as URL path segments.
+    !matches!(tag, "." | "..")
+        && tag.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&byte))
+}
+
+/// Whether `version` is resolved through the registry's dist-tags (e.g. `latest`, `latest-10`).
+#[must_use]
+pub fn is_package_manager_dist_tag(version: &str) -> bool {
+    matches!(VersionSpec::parse(version), Some(VersionSpec::DistTag))
+}
+
+/// Registry packages that publish a package manager's dist-tags, in lookup order.
+fn dist_tag_packages(package_manager_type: PackageManagerType) -> &'static [&'static str] {
+    match package_manager_type {
+        PackageManagerType::Pnpm => &["pnpm"],
+        // Yarn 2+ is published as `@yarnpkg/cli-dist`, while `yarn` keeps
+        // classic tags such as `berry` and `legacy`.
+        PackageManagerType::Yarn => &["@yarnpkg/cli-dist", "yarn"],
+        PackageManagerType::Npm => &["npm"],
+        PackageManagerType::Bun => &["bun"],
+    }
+}
+
+fn dist_tag_cache_path(package_manager_type: PackageManagerType, urls: &[Str]) -> AbsolutePathBuf {
+    // Every lookup URL scopes the entry, since a fallback package can use another
+    // registry. Hashing them keeps tag characters such as `*` out of file names.
+    let key = hex::encode(Sha256::digest(urls.join("\n").as_bytes()));
+    vp_shared::EnvConfig::get()
+        .dirs
+        .cache
+        // Older `package_manager_latest*` namespaces are left untouched:
+        // they only cached `latest` and have a different layout.
+        .join("package_manager_dist_tag")
+        .join(package_manager_type.to_string())
+        .join(key)
+}
+
+fn read_dist_tag_cache(path: &AbsolutePath) -> Option<(Str, bool)> {
     let version = fs::read_to_string(path).ok()?;
     let version = version.trim();
     Version::parse(version).ok()?;
@@ -951,66 +1003,77 @@ fn read_latest_version_cache(path: &AbsolutePath) -> Option<(Str, bool)> {
         .and_then(|metadata| metadata.modified())
         .ok()
         .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|age| age < LATEST_VERSION_CACHE_TTL);
+        .is_some_and(|age| age < DIST_TAG_CACHE_TTL);
     Some((version.into(), is_fresh))
 }
 
-fn write_latest_version_cache(path: &AbsolutePath, version: &str) -> io::Result<()> {
+fn write_dist_tag_cache(path: &AbsolutePath, version: &str) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
     fs::write(path, version)
 }
 
-async fn fetch_latest_version(url: &str, npm_config: &NpmConfig) -> Result<Str, Error> {
-    HttpClient::with_npm_config(3, 500, npm_config.clone())
-        .get_json::<PackageJson>(url)
-        .await
-        .map(|package_json| package_json.version)
-}
-
-async fn get_latest_version_with_config(
+async fn fetch_dist_tag_version(
     package_manager_type: PackageManagerType,
+    tag: &str,
+    urls: &[Str],
     npm_config: &NpmConfig,
 ) -> Result<Str, Error> {
-    let package_name = if matches!(package_manager_type, PackageManagerType::Yarn) {
-        // yarn latest version should use `@yarnpkg/cli-dist` as package name
-        "@yarnpkg/cli-dist".to_string()
-    } else {
-        package_manager_type.to_string()
-    };
-    let registry = npm_config.registry_for_package(&package_name);
-    let url = npm_config.package_version_url(&package_name, "latest");
+    let client = HttpClient::with_npm_config(3, 500, npm_config.clone());
+    for url in urls {
+        match client.get_json::<PackageJson>(url).await {
+            Ok(package_json) => return Ok(package_json.version),
+            Err(error) if is_not_found(&error) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Err(Error::PackageManagerVersionNotFound {
+        name: package_manager_type.to_string().into(),
+        version: tag.into(),
+        // SAFETY: every package manager has at least one dist-tag package.
+        url: urls.last().unwrap().clone(),
+    })
+}
+
+async fn resolve_dist_tag(
+    package_manager_type: PackageManagerType,
+    tag: &str,
+    npm_config: &NpmConfig,
+) -> Result<Str, Error> {
+    let urls = dist_tag_packages(package_manager_type)
+        .iter()
+        .map(|package_name| npm_config.package_version_url(package_name, tag))
+        .collect::<Vec<_>>();
 
     // A persisted response authenticated as one user must not be reused by
     // another user of the same registry URL. Avoid storing credential-derived
     // cache keys and query authenticated registries directly instead.
-    if npm_config.has_auth_for_origin(&url) {
-        return fetch_latest_version(&url, npm_config).await;
+    if urls.iter().any(|url| npm_config.has_auth_for_origin(url)) {
+        return fetch_dist_tag_version(package_manager_type, tag, &urls, npm_config).await;
     }
 
-    let cache_path = latest_version_cache_path(package_manager_type, &registry)?;
-    let cached = read_latest_version_cache(&cache_path);
+    let cache_path = dist_tag_cache_path(package_manager_type, &urls);
+    let cached = read_dist_tag_cache(&cache_path);
     if let Some((version, true)) = &cached {
         return Ok(version.clone());
     }
-    match fetch_latest_version(&url, npm_config).await {
+    match fetch_dist_tag_version(package_manager_type, tag, &urls, npm_config).await {
         Ok(version) => {
-            let _ = write_latest_version_cache(&cache_path, &version);
+            let _ = write_dist_tag_cache(&cache_path, &version);
             Ok(version)
         }
         Err(error) => {
             let Some((version, _)) = cached else { return Err(error) };
             tracing::warn!(
-                "Failed to refresh latest {package_manager_type} version: {error}; using cached {}",
-                version
+                "Failed to refresh {package_manager_type}@{tag}: {error}; using cached {version}"
             );
             Ok(version)
         }
     }
 }
 
-/// Resolve an exact, range, `latest`, or manager-specific `default` version without downloading it.
+/// Resolve an exact version, range, dist-tag, or manager-specific `default` without downloading it.
 pub async fn resolve_package_manager_version(
     package_manager_type: PackageManagerType,
     version: &str,
@@ -1045,16 +1108,16 @@ async fn resolve_package_manager_version_with_config(
     version: &str,
     npm_config: &NpmConfig,
 ) -> Result<Str, Error> {
-    if version.is_empty() {
+    let Some(spec) = VersionSpec::parse(version) else {
         return Err(Error::InvalidArgument(
             format!(
-                "invalid {package_manager_type} version {version:?}: expected a version or range"
+                "invalid {package_manager_type} version {version:?}: expected a version, range, or dist-tag"
             )
             .into(),
         ));
-    }
-    match version {
-        "default" => match package_manager_type {
+    };
+    match spec {
+        VersionSpec::Default => match package_manager_type {
             PackageManagerType::Npm => {
                 let cwd = match cwd {
                     Some(cwd) => cwd.to_absolute_path_buf(),
@@ -1063,12 +1126,14 @@ async fn resolve_package_manager_version_with_config(
                 Ok(resolve_npm_from_path(&cwd).await?.version)
             }
             PackageManagerType::Pnpm | PackageManagerType::Yarn | PackageManagerType::Bun => {
-                get_latest_version_with_config(package_manager_type, npm_config).await
+                resolve_dist_tag(package_manager_type, "latest", npm_config).await
             }
         },
-        "latest" => get_latest_version_with_config(package_manager_type, npm_config).await,
-        _ if Version::parse(version).is_ok() => Ok(version.into()),
-        _ => resolve_package_manager_range(package_manager_type, version, npm_config).await,
+        VersionSpec::Exact => Ok(version.into()),
+        VersionSpec::Range(range) => {
+            resolve_package_manager_range(package_manager_type, version, &range, npm_config).await
+        }
+        VersionSpec::DistTag => resolve_dist_tag(package_manager_type, version, npm_config).await,
     }
 }
 
@@ -1230,29 +1295,20 @@ fn find_cached_package_manager_version(
 async fn resolve_package_manager_range(
     package_manager_type: PackageManagerType,
     version_req: &str,
+    range: &js_semver::Range,
     npm_config: &NpmConfig,
 ) -> Result<Str, Error> {
-    let range = js_semver::Range::parse(version_req).map_err(|_| {
-        Error::InvalidArgument(
-            format!(
-                "invalid {package_manager_type} version {version_req:?}: expected semver \
-                 'major.minor.patch' or a semver range"
-            )
-            .into(),
-        )
-    })?;
-
-    if let Some(cached) = find_cached_package_manager_version(package_manager_type, &range)? {
+    if let Some(cached) = find_cached_package_manager_version(package_manager_type, range)? {
         tracing::debug!("Found cached {package_manager_type} {cached} satisfying {version_req}");
         return Ok(cached);
     }
 
     // `*` (any version) resolves to the registry's latest stable
     if version_req == "*" {
-        return get_latest_version_with_config(package_manager_type, npm_config).await;
+        return resolve_dist_tag(package_manager_type, "latest", npm_config).await;
     }
 
-    resolve_latest_satisfying_version(package_manager_type, &range, version_req, npm_config).await
+    resolve_latest_satisfying_version(package_manager_type, range, version_req, npm_config).await
 }
 
 /// Download the package manager and extract it to the vite-plus home directory.
@@ -1376,7 +1432,7 @@ async fn download_package_manager_inner(
     // This prevents path traversal via the version being interpolated into
     // `<DATA>/package_manager/{name}/{version}` below, since `AbsolutePath::join`
     // does not normalize `..` components. Also guards against registry-controlled
-    // "latest" lookups returning a malicious value.
+    // dist-tag lookups returning a malicious value.
     let parsed_version = Version::parse(&version).map_err(|_| {
         Error::InvalidArgument(
             format!(
@@ -1397,12 +1453,9 @@ async fn download_package_manager_inner(
     let data_dir = &config.dirs.data;
     let bin_name = package_manager_type.to_string();
 
-    // For bun, use platform-specific download flow.
-    // The hash from `packageManager` field belongs to the main `bun` npm package,
-    // not the platform-specific binary, so we don't pass it through; the
-    // platform tarball is verified against the registry's `dist.integrity`.
+    // Bun pins cover the main tarball, so verify its platform binary separately.
     if matches!(package_manager_type, PackageManagerType::Bun) {
-        return download_bun_package_manager(&version, data_dir, npm_config).await;
+        return download_bun_package_manager(&version, data_dir, expected_hash, npm_config).await;
     }
 
     // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
@@ -1648,6 +1701,7 @@ fn bun_requires_baseline() -> bool {
 async fn download_bun_package_manager(
     version: &Str,
     home_dir: &AbsolutePath,
+    expected_hash: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let package_name: Str = "bun".into();
@@ -1660,6 +1714,23 @@ async fn download_bun_package_manager(
     // and the tgz download path)
     if is_package_manager_install_complete(&install_dir, "bun")? {
         return Ok((install_dir, package_name, version.clone()));
+    }
+
+    // A declared pin covers the main bun tarball, not the platform binary.
+    if let Some(expected_hash) = expected_hash {
+        let main_tgz_url = npm_config.package_tgz_url("bun", version);
+        let verify_dir = tempfile::tempdir()?;
+        let verify_message = format!("Verifying bun v{version}...");
+        download_and_extract_tgz_with_hash_and_config(
+            &main_tgz_url,
+            verify_dir.path(),
+            None,
+            Some(expected_hash),
+            Some(&verify_message),
+            npm_config,
+        )
+        .await
+        .map_err(|error| name_hashed_artifact(error, PackageManagerType::Bun, version))?;
     }
 
     // Temporary by design: select a CPU-compatible package for new downloads without replacing existing installs.
@@ -2494,8 +2565,10 @@ mod tests {
                 );
                 first.assert_hits(1);
 
-                let cache_path =
-                    latest_version_cache_path(PackageManagerType::Bun, &registry).unwrap();
+                let cache_path = dist_tag_cache_path(
+                    PackageManagerType::Bun,
+                    &[vt_str::format!("{registry}/bun/latest")],
+                );
                 let expire_cache = || {
                     fs::File::options()
                         .write(true)
@@ -2552,17 +2625,17 @@ mod tests {
             fs::write(&legacy_path, "10.1.0").unwrap();
             for _ in 0..2 {
                 assert_eq!(
-                    get_latest_version_with_config(PackageManagerType::Pnpm, &config)
-                        .await
-                        .unwrap(),
+                    resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config).await.unwrap(),
                     "10.2.0"
                 );
             }
             request.assert_hits(1);
             assert_eq!(fs::read_to_string(&legacy_path).unwrap(), "10.1.0");
 
-            let cache_path =
-                latest_version_cache_path(PackageManagerType::Pnpm, &server.base_url()).unwrap();
+            let cache_path = dist_tag_cache_path(
+                PackageManagerType::Pnpm,
+                &[vt_str::format!("{}/pnpm/latest", server.base_url())],
+            );
             fs::File::options()
                 .write(true)
                 .open(&cache_path)
@@ -2571,7 +2644,7 @@ mod tests {
                 .unwrap();
             request.delete();
             assert_eq!(
-                get_latest_version_with_config(PackageManagerType::Pnpm, &config).await.unwrap(),
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config).await.unwrap(),
                 "10.2.0"
             );
         })
@@ -2602,26 +2675,187 @@ mod tests {
         let vp_home = create_temp_dir();
         EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.path().as_os_str())], |_| async {
             assert_eq!(
-                get_latest_version_with_config(PackageManagerType::Pnpm, &first_config)
-                    .await
-                    .unwrap(),
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &first_config).await.unwrap(),
                 "10.1.0"
             );
             assert_eq!(
-                get_latest_version_with_config(PackageManagerType::Pnpm, &second_config)
-                    .await
-                    .unwrap(),
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &second_config).await.unwrap(),
                 "10.2.0"
             );
             assert_eq!(
-                get_latest_version_with_config(PackageManagerType::Pnpm, &first_config)
-                    .await
-                    .unwrap(),
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &first_config).await.unwrap(),
                 "10.1.0"
             );
             first_request.assert_hits(1);
             second_request.assert_hits(1);
         })
+        .await;
+    }
+
+    #[test]
+    fn dist_tags_are_specs_that_are_neither_versions_nor_ranges() {
+        for tag in ["latest", "latest-10", "next-10", "v6.14-next", "canary"] {
+            assert!(is_package_manager_dist_tag(tag), "{tag} should be a dist-tag");
+        }
+        // `default` is a manager-specific alias, and `..` would escape the URL path.
+        for spec in ["10.0.0", "10", "^10.0.0", "default", "", "..", "foo bar", "a/b"] {
+            assert!(!is_package_manager_dist_tag(spec), "{spec} should not be a dist-tag");
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn dist_tags_resolve_through_the_registry_and_cache_per_tag() {
+        use httpmock::prelude::*;
+
+        let server = MockServer::start();
+        let stable = server.mock(|when, then| {
+            when.method(GET).path("/pnpm/latest-10");
+            then.status(200).json_body(serde_json::json!({ "version": "10.34.6" }));
+        });
+        let next = server.mock(|when, then| {
+            when.method(GET).path("/pnpm/next-10");
+            then.status(200).json_body(serde_json::json!({ "version": "10.34.7" }));
+        });
+        let registry = server.base_url();
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry)),
+            ],
+            |_| async {
+                for _ in 0..2 {
+                    assert_eq!(
+                        resolve_package_manager_version(PackageManagerType::Pnpm, "latest-10")
+                            .await
+                            .unwrap(),
+                        "10.34.6"
+                    );
+                    assert_eq!(
+                        resolve_package_manager_version(PackageManagerType::Pnpm, "next-10")
+                            .await
+                            .unwrap(),
+                        "10.34.7"
+                    );
+                }
+                stable.assert_hits(1);
+                next.assert_hits(1);
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn yarn_dist_tags_fall_back_to_the_classic_package() {
+        use httpmock::prelude::*;
+
+        let server = MockServer::start();
+        let modern = server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/berry");
+            then.status(404);
+        });
+        let classic = server.mock(|when, then| {
+            when.method(GET).path("/yarn/berry");
+            then.status(200).json_body(serde_json::json!({ "version": "2.4.3" }));
+        });
+        let registry = server.base_url();
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry)),
+            ],
+            |_| async {
+                assert_eq!(
+                    resolve_package_manager_version(PackageManagerType::Yarn, "berry")
+                        .await
+                        .unwrap(),
+                    "2.4.3"
+                );
+                // A missing tag is not retried before falling back.
+                modern.assert_hits(1);
+                classic.assert_hits(1);
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn yarn_dist_tag_cache_is_isolated_by_the_fallback_registry() {
+        use httpmock::prelude::*;
+
+        // Both workspaces share `@yarnpkg:registry`, so only the classic
+        // fallback registry tells their cache entries apart.
+        let scoped_registry = MockServer::start();
+        let first_registry = MockServer::start();
+        let second_registry = MockServer::start();
+        scoped_registry.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/berry");
+            then.status(404);
+        });
+        let first_request = first_registry.mock(|when, then| {
+            when.method(GET).path("/yarn/berry");
+            then.status(200).json_body(serde_json::json!({ "version": "2.4.2" }));
+        });
+        let second_request = second_registry.mock(|when, then| {
+            when.method(GET).path("/yarn/berry");
+            then.status(200).json_body(serde_json::json!({ "version": "2.4.3" }));
+        });
+        let config_for = |registry: &MockServer| NpmConfig {
+            values: HashMap::from([
+                ("@yarnpkg:registry".to_string(), scoped_registry.base_url()),
+                ("registry".to_string(), registry.base_url()),
+            ]),
+        };
+        let first_config = config_for(&first_registry);
+        let second_config = config_for(&second_registry);
+
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.path().as_os_str())], |_| async {
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Yarn, "berry", &first_config).await.unwrap(),
+                "2.4.2"
+            );
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Yarn, "berry", &second_config).await.unwrap(),
+                "2.4.3"
+            );
+            first_request.assert_hits(1);
+            second_request.assert_hits(1);
+        })
+        .await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn missing_dist_tags_report_the_version_as_not_found() {
+        use httpmock::prelude::*;
+
+        let server = MockServer::start();
+        let missing = server.mock(|when, then| {
+            when.method(GET).path("/npm/latest-10");
+            then.status(404);
+        });
+        let registry = server.base_url();
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry)),
+            ],
+            |_| async {
+                let error = resolve_package_manager_version(PackageManagerType::Npm, "latest-10")
+                    .await
+                    .unwrap_err();
+                assert!(
+                    matches!(
+                        &error,
+                        Error::PackageManagerVersionNotFound { version, .. } if version == "latest-10"
+                    ),
+                    "unexpected error: {error}"
+                );
+                missing.assert_hits(1);
+            },
+        )
         .await;
     }
 
@@ -2650,19 +2884,19 @@ mod tests {
         let vp_home = create_temp_dir();
         EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.path().as_os_str())], |_| async {
             assert_eq!(
-                get_latest_version_with_config(PackageManagerType::Pnpm, &config("FIRST"))
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config("FIRST"))
                     .await
                     .unwrap(),
                 "10.1.0"
             );
             assert_eq!(
-                get_latest_version_with_config(PackageManagerType::Pnpm, &config("SECOND"))
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config("SECOND"))
                     .await
                     .unwrap(),
                 "10.2.0"
             );
             assert_eq!(
-                get_latest_version_with_config(PackageManagerType::Pnpm, &config("FIRST"))
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config("FIRST"))
                     .await
                     .unwrap(),
                 "10.1.0"
@@ -2702,13 +2936,13 @@ mod tests {
         let vp_home = create_temp_dir();
         EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.path().as_os_str())], |_| async {
             assert_eq!(
-                get_latest_version_with_config(PackageManagerType::Pnpm, &config("FIRST"))
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config("FIRST"))
                     .await
                     .unwrap(),
                 "10.1.0"
             );
             assert_eq!(
-                get_latest_version_with_config(PackageManagerType::Pnpm, &config("SECOND"))
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config("SECOND"))
                     .await
                     .unwrap(),
                 "10.2.0"
@@ -4448,8 +4682,7 @@ mod tests {
             [(env_vars::VP_HOME, vp_home.as_os_str())],
             |_| async move {
                 let result =
-                    get_latest_version_with_config(PackageManagerType::Yarn, &NpmConfig::load())
-                        .await;
+                    resolve_dist_tag(PackageManagerType::Yarn, "latest", &NpmConfig::load()).await;
                 assert!(result.is_ok());
                 let version = result.unwrap();
                 // println!("version: {:?}", version);
@@ -4792,6 +5025,113 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_download_bun_package_manager_verifies_hashes() {
+        use httpmock::prelude::*;
+        use sha2::Sha512;
+
+        let create_tgz = |path: &str, content: &[u8]| {
+            let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            let mut archive = tar::Builder::new(encoder);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_mode(0o755);
+            archive.append_data(&mut header, path, content).unwrap();
+            archive.into_inner().unwrap().finish().unwrap()
+        };
+        let main_tgz = create_tgz("package/package.json", br#"{"name":"bun","version":"1.2.0"}"#);
+        let binary = b"mock bun executable";
+        let binary_path = if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" };
+        let platform_tgz = create_tgz(binary_path, binary);
+        let main_hash = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
+        let wrong_hash = format!("sha512.{}", hex::encode(Sha512::digest(b"other")));
+        let platform_integrity = format!(
+            "sha512-{}",
+            base64_simd::STANDARD.encode_to_string(Sha512::digest(&platform_tgz))
+        );
+        let wrong_integrity =
+            format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(b"other")));
+        let platform_package = get_bun_platform_package_name().unwrap();
+        let platform_basename = platform_package.strip_prefix("@oven/").unwrap();
+        // Keep other tests from borrowing this server while its connections use this runtime.
+        let server = MockServer::start();
+
+        for (pin, integrity) in [
+            (None, &platform_integrity),
+            (Some(wrong_hash.as_str()), &platform_integrity),
+            (Some(main_hash.as_str()), &platform_integrity),
+            (Some(main_hash.as_str()), &wrong_integrity),
+        ] {
+            let vp_home = create_temp_dir();
+            server.reset();
+            let main_tarball = server.mock(|when, then| {
+                when.method(GET).path("/bun/-/bun-1.2.0.tgz");
+                then.status(200).body(main_tgz.clone());
+            });
+            let metadata = server.mock(|when, then| {
+                when.method(GET).path(format!("/{platform_package}/1.2.0"));
+                then.status(200).json_body(serde_json::json!({"dist": {"integrity": integrity}}));
+            });
+            let platform_tarball = server.mock(|when, then| {
+                when.method(GET)
+                    .path(format!("/{platform_package}/-/{platform_basename}-1.2.0.tgz"));
+                then.status(200).body(platform_tgz.clone());
+            });
+
+            EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                    (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+                ],
+                |_| async {
+                    let result =
+                        download_package_manager(PackageManagerType::Bun, "1.2.0", pin).await;
+                    if pin == Some(wrong_hash.as_str()) {
+                        let Err(Error::PackageManagerHashMismatch(mismatch)) = result else {
+                            panic!("a mismatched Bun pin must fail: {result:?}");
+                        };
+                        assert_eq!(mismatch.name, "bun");
+                        assert_eq!(mismatch.version, "1.2.0");
+                        assert_eq!(mismatch.expected, wrong_hash.as_str());
+                        assert_eq!(mismatch.actual, main_hash.as_str());
+                        assert_eq!(mismatch.basis, "the npm package tarball");
+                        assert!(main_tarball.hits() > 0);
+                        metadata.assert_hits(0);
+                        platform_tarball.assert_hits(0);
+                    } else if integrity == &wrong_integrity {
+                        assert!(
+                            matches!(result, Err(Error::HashMismatch { .. })),
+                            "the main pin must not replace platform verification: {result:?}"
+                        );
+                        main_tarball.assert_hits(1);
+                        metadata.assert_hits(1);
+                        assert!(platform_tarball.hits() > 0);
+                    } else {
+                        let (install_dir, package, version) = result.unwrap();
+                        assert_eq!(package, "bun");
+                        assert_eq!(version, "1.2.0");
+                        let native_bin =
+                            if cfg!(windows) { "bin/bun.native.exe" } else { "bin/bun.native" };
+                        assert_eq!(fs::read(install_dir.join(native_bin)).unwrap(), binary);
+                        assert!(is_package_manager_install_complete(&install_dir, "bun").unwrap());
+                        assert!(!install_dir.join("package.json").as_path().exists());
+                        main_tarball.assert_hits(usize::from(pin.is_some()));
+                        metadata.assert_hits(1);
+                        platform_tarball.assert_hits(1);
+                        return;
+                    }
+                    let install_dir =
+                        package_manager_install_dir(PackageManagerType::Bun, "1.2.0").unwrap();
+                    assert!(
+                        !install_dir.as_path().exists(),
+                        "a failed verification must not install Bun"
+                    );
+                },
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
     async fn test_download_bun_package_manager_preserves_existing_install() {
         let vp_home = shared_vp_home();
         vp_shared::EnvConfig::with_vars_async(
@@ -4808,7 +5148,9 @@ mod tests {
                     .join("bun/bin/bun.native");
                 fs::write(&native_bin, "existing bun").unwrap();
 
-                download_bun_package_manager(&version, &vp_home, &NpmConfig::load()).await.unwrap();
+                download_bun_package_manager(&version, &vp_home, None, &NpmConfig::load())
+                    .await
+                    .unwrap();
 
                 assert_eq!(fs::read_to_string(native_bin).unwrap(), "existing bun");
             },

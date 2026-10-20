@@ -61,7 +61,7 @@ jobs:
     # them (code changes get `vp check` in cli-e2e-test). The required `done`
     # job waits for this check and propagates failures.
     if: needs.detect-changes.outputs.code-changed == 'false'
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
@@ -113,7 +113,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -144,7 +144,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows tests
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     env:
       XWIN_ACCEPT_LICENSE: '1'
       # The MSVC STL from xwin's VS17 manifest static-asserts a minimum Clang
@@ -269,7 +269,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Test (Linux x64 musl)
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     container:
       image: node:25-alpine3.21
     env:
@@ -321,7 +321,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -373,7 +373,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows CLI binaries
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -392,7 +392,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             test-node: 22.18.0
           - os: namespace-profile-mac-default
@@ -485,7 +485,7 @@ jobs:
           RUST_MIN_STACK: 8388608
 
       - name: Test global package install (powershell)
-        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
+        if: ${{ runner.os != 'Linux' }}
         shell: pwsh
         run: |
           $vpHome = Join-Path $HOME ".vite-plus"
@@ -667,7 +667,7 @@ jobs:
           fi
 
       - name: Test upgrade (powershell)
-        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
+        if: ${{ runner.os != 'Linux' }}
         shell: pwsh
         run: |
           $vpHome = Join-Path $HOME ".vite-plus"
@@ -883,7 +883,7 @@ jobs:
           vp --version
 
       - name: Test implode (powershell)
-        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
+        if: ${{ runner.os != 'Linux' }}
         shell: pwsh
         run: |
           $vpHome = Join-Path $HOME ".vite-plus"
@@ -943,7 +943,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1028,10 +1028,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
+        os: [ubuntu-latest, namespace-profile-mac-default]
         shard: [1, 2, 3]
         include:
-          - os: namespace-profile-linux-x64-default
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1261,24 +1261,37 @@ jobs:
             --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml"
             --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast
           )
+          snapshot_registry=(
+            node packages/tools/src/local-npm-registry.ts --snapshot-runner
+            --snapshot-fixtures "$GITHUB_WORKSPACE/crates/vp_cli_snapshots/tests/cli_snapshots/registry"
+            --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR"
+          )
+          run_snapshots() {
+            # Keep both registries alive across nextest's one-process-per-case
+            # workers. Only local-registry cases receive checkout packages.
+            "${snapshot_registry[@]}" --request-log "$VP_SNAP_ARTIFACTS_DIR/shared-registry/registry.jsonl" -- \
+              "${snapshot_registry[@]}" --packages-dir "$VP_SNAP_PACKAGES_DIR/packages" \
+                --request-log "$VP_SNAP_ARTIFACTS_DIR/packed-registry/registry.jsonl" -- \
+                cargo-nextest nextest run "${nextest_run_args[@]}" "$@"
+          }
           # --no-fail-fast: on a snapshot suite every diff is diagnostic
           # signal; cancelling on the first failure hides the rest.
           test_exit=0
           # This fixture requires case-sensitive directory support, which the
           # default temp directory on these runners does not provide.
-          cargo-nextest nextest run "${nextest_run_args[@]}" --partition hash:${{ matrix.shard }}/3 \
+          run_snapshots --partition hash:${{ matrix.shard }}/3 \
             -E 'not test(windows_case_sensitive_shims)' || test_exit=$?
 
           if [[ '${{ matrix.shard }}' == '1' ]]; then
             # Run both flavors on NTFS once. Rust's GetTempPath2 ignores
             # TEMP/TMP under the SYSTEM account, so override SystemTemp.
             SystemTemp='${{ steps.snapshot-temp.outputs.directory }}' \
-              cargo-nextest nextest run "${nextest_run_args[@]}" \
+              run_snapshots \
                 -E 'test(windows_case_sensitive_shims)' || test_exit=$?
 
             # Exercise the same environment wrapper under Windows PowerShell 5.1.
             VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v powershell.exe)")" \
-              cargo-nextest nextest run "${nextest_run_args[@]}" \
+              run_snapshots \
                 -E 'test(command_env_powershell)' || test_exit=$?
           fi
           exit "$test_exit"
@@ -1286,6 +1299,7 @@ jobs:
           RUST_BACKTRACE: '1'
           # Share immutable tarballs across nextest processes in this job.
           VP_SNAP_PACKAGES_DIR: ${{ runner.temp }}/snapshot-packages
+          VP_SNAP_REGISTRY_CACHE_DIR: ${{ runner.temp }}/snapshot-registry-cache
           VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
           # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
@@ -1303,7 +1317,7 @@ jobs:
     name: CLI E2E test (Linux x64 musl)
     needs:
       - download-previous-rolldown-binaries
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1386,7 +1400,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Cert-less image E2E test
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -1442,7 +1456,7 @@ jobs:
     name: Local CLI `vp install` E2E test
     needs:
       - build-cli-test-binaries
-    runs-on: namespace-profile-linux-x64-default
+    runs-on: ubuntu-latest
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
       github.event_name != 'pull_request' ||

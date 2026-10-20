@@ -17,6 +17,7 @@ import {
   dropDeadOxlintPluginsDependency,
   dropRemovePackageOverrideKeys,
   ensurePnpmWorkspaceExoticSubdepsSetting,
+  ensurePnpmWorkspacePackages,
   findYarnWorkspaceHoisting,
   hasDirectVitePlusInstallEntry,
   hasOwnWebdriverioDependency,
@@ -222,7 +223,7 @@ export function rewriteStandaloneProject(
       for (const key in pkg.pnpm?.overrides) {
         if (key.includes('>')) {
           const splits = key.split('>');
-          if (splits[splits.length - 1].trim() === 'vite') {
+          if (splits.at(-1)!.trim() === 'vite') {
             delete pkg.pnpm.overrides[key];
           }
         }
@@ -438,6 +439,7 @@ export function rewriteMonorepo(
       providerCatalogAdditions,
       usesWebdriverio,
     );
+    ensurePnpmWorkspacePackages(workspaceInfo.rootDir, workspaceInfo.workspacePatterns);
     if (usePnpmWorkspaceSettings && isForceOverrideMode()) {
       migratePnpmOverridesToWorkspaceYaml(workspaceInfo.rootDir, {
         [VITE_PLUS_NAME]: VITE_PLUS_VERSION,

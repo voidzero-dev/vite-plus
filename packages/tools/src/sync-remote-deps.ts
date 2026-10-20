@@ -499,7 +499,7 @@ function globToRegExp(pattern: string): RegExp {
 function mergeMinimumReleaseAgeExclude(entries: string[]): string[] {
   // Dedupe exact-string duplicates (Set preserves insertion order) and parse
   // each entry once.
-  const parsed = [...new Set(entries)].map((entry) => {
+  const parsed = Array.from(new Set(entries), (entry) => {
     const { name, version } = parseExcludeEntry(entry);
     return { entry, name, version };
   });

@@ -1,0 +1,7 @@
+{
+  "name": "rolldown",
+  "type": "module",
+  "exports": {
+    "./experimental/runtime": "./experimental-runtime.mjs"
+  }
+}

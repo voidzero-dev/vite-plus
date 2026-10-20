@@ -1,0 +1,10 @@
+{
+  "name": "migration-existing-vite-hooks",
+  "packageManager": "pnpm@12.11.2",
+  "scripts": {
+    "prepare": "echo vp config --no-hooks"
+  },
+  "devDependencies": {
+    "vite-plus": "latest"
+  }
+}

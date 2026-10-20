@@ -131,6 +131,7 @@ jobs:
               vp fmt
               vp test --api.port="$ECOSYSTEM_VITEST_PORT"
               vp run build
+              vp run test:dev
           # FIXME: TypeError: Failed to fetch dynamically imported module
           # - name: skeleton
           #   node-version: 24
