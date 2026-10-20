@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -596,31 +596,54 @@ function getCoverageGuard(): { configureVitest: (ctx: unknown) => void } {
   return plugin;
 }
 
-describe('defineConfig coverage version guard plugin registration', () => {
-  it('registers the coverage guard plugin with a configureVitest hook', () => {
-    const result = defineConfig({}) as { plugins: unknown[] };
-    const plugin = result.plugins.find(
-      (p): p is Record<string, unknown> =>
-        !!p &&
-        typeof p === 'object' &&
-        (p as { name?: unknown }).name === COVERAGE_GUARD_PLUGIN_NAME,
-    );
-    expect(plugin).toBeDefined();
-    expect(typeof plugin?.configureVitest).toBe('function');
+/** Creates a project root whose installed `@vitest/coverage-v8` is skewed from the bundled runner. */
+function makeSkewedCoverageRoot(): string {
+  const root = mkdtempSync(join(tmpdir(), 'vp-coverage-skew-'));
+  const providerDir = join(root, 'node_modules/@vitest/coverage-v8');
+  mkdirSync(providerDir, { recursive: true });
+  writeFileSync(join(root, 'package.json'), '{"name":"probe","private":true}\n');
+  writeFileSync(
+    join(providerDir, 'package.json'),
+    '{"name":"@vitest/coverage-v8","version":"4.1.8"}\n',
+  );
+  return root;
+}
+
+describe('defineConfig coverage version guard plugin', () => {
+  it('configureVitest is a no-op when the runner coverage is off (startup path)', () => {
+    const root = makeSkewedCoverageRoot();
+    try {
+      const guard = getCoverageGuard();
+      // The installed provider is skewed, so only the disabled-coverage check keeps this from throwing.
+      expect(() =>
+        guard.configureVitest({
+          vitest: {
+            config: { root, coverage: { enabled: false } },
+            enableCoverage: async () => {},
+          },
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
-  it('configureVitest is a no-op when the runner coverage is off (startup path)', () => {
-    const guard = getCoverageGuard();
-    // The hook short-circuits before any resolution when coverage is disabled,
-    // so a non-existent root is fine.
-    expect(() =>
-      guard.configureVitest({
-        vitest: {
-          config: { root: '/project', coverage: { enabled: false } },
-          enableCoverage: async () => {},
-        },
-      }),
-    ).not.toThrow();
+  it('rejects a skewed provider on the late enableCoverage path without delegating', async () => {
+    const root = makeSkewedCoverageRoot();
+    try {
+      const guard = getCoverageGuard();
+      const original = vi.fn(async () => {});
+      const vitest = {
+        config: { root, coverage: { enabled: false, provider: 'v8' } },
+        enableCoverage: original,
+      };
+      // Coverage is off at startup, so only the wrapped `enableCoverage` can catch the skew.
+      guard.configureVitest({ vitest });
+      await expect(vitest.enableCoverage()).rejects.toThrow(/@vitest\/coverage-v8@4\.1\.8/);
+      expect(original).not.toHaveBeenCalled();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('wraps the shared vitest.enableCoverage so the late path runs the check, and still delegates', async () => {
