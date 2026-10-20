@@ -268,9 +268,9 @@ result; binaries without self-setup support use the installer's legacy path.
 ┌─────────────────────────────────────────────────────────────┐
 │                      INSTALL                                │
 │                                                             │
-│  ┌─ extract binary ──────── <DATA>\{version}\bin\           │
-│  │                          vp.exe + vp-shim.exe            │
-│  │                          + vp-install-lock.yaml          │
+│  ┌─ extract package ────── <DATA>\{version}\bin\            │
+│  │                        vp.exe + vp-shim.exe              │
+│  │                        + vp-install-lock.yaml            │
 │  │                                                          │
 │  ├─ generate package.json ─ wrapper with vite-plus dep      │
 │  │                          pins pnpm@10.34.7               │
@@ -279,9 +279,8 @@ result; binaries without self-setup support use the installer's legacy path.
 │  │                                                          │
 │  ├─ write .npmrc ────────── minimum-release-age=0           │
 │  │                                                          │
-│                                                             │
-└─ install deps ────────── managed pnpm                     │
-│                             install --frozen-lockfile       │
+│  └─ install deps ────────── managed pnpm                    │
+│                            install --frozen-lockfile        │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼

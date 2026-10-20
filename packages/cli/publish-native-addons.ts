@@ -159,7 +159,22 @@ if (!skipNpmPublish && phase !== 'cli') {
 
 // Create and publish separate @voidzero-dev/vite-plus-cli-{platform} packages
 const cliNpmDir = join(currentDir, 'cli-npm');
-for (const napiTarget of phase === 'native' ? [] : pkg.napi.targets) {
+if (phase !== 'native') {
+  for (const napiTarget of pkg.napi.targets) {
+    await prepareAndPublishCliPackage(napiTarget);
+  }
+}
+
+// npm can accept uploads before scanning makes them installable. Wait for the
+// platform packages before publishing core and the CLI, which pin their versions.
+if (!skipNpmPublish) {
+  await waitForNpmPackagesFromEnv(platformPackages);
+
+  // Preview releases still need the prepared directories.
+  rmSync(cliNpmDir, { recursive: true, force: true });
+}
+
+async function prepareAndPublishCliPackage(napiTarget: string): Promise<void> {
   const { platform, arch, abi, platformArchABI } = parseTriple(napiTarget);
   const isWindows = platform === 'win32';
   const binaryName = isWindows ? 'vp.exe' : 'vp';
@@ -170,23 +185,17 @@ for (const napiTarget of phase === 'native' ? [] : pkg.napi.targets) {
     console.warn(
       `Warning: Rust binary not found at ${rustBinarySource}, skipping CLI package for ${platformArchABI}`,
     );
-    continue;
+    return;
   }
 
-  // Create temp directory for CLI package
   const platformCliDir = join(cliNpmDir, platformArchABI);
   mkdirSync(platformCliDir, { recursive: true });
 
-  // Copy binary
   copyFileSync(rustBinarySource, join(platformCliDir, binaryName));
   if (!isWindows) {
     chmodSync(join(platformCliDir, binaryName), 0o755);
   }
 
-  // Copy trampoline shim binary for Windows (required)
-  // The trampoline is a small exe that replaces .cmd wrappers to avoid
-  // "Terminate batch job (Y/N)?" on Ctrl+C (see issue #835)
-  const shimName = 'vp-shim.exe';
   const files = [binaryName];
   if (!skipNpmPublish) {
     validateInstallLockfile(readFileSync(lockfile, 'utf8'), cliVersion);
@@ -194,6 +203,9 @@ for (const napiTarget of phase === 'native' ? [] : pkg.napi.targets) {
     files.push(INSTALL_LOCKFILE);
   }
   if (isWindows) {
+    // The trampoline replaces .cmd wrappers to avoid "Terminate batch job (Y/N)?"
+    // on Ctrl+C (see issue #835).
+    const shimName = 'vp-shim.exe';
     const shimSource = join(repoRoot, 'target', napiTarget, 'release', shimName);
     if (!existsSync(shimSource)) {
       console.error(
@@ -225,23 +237,13 @@ for (const napiTarget of phase === 'native' ? [] : pkg.napi.targets) {
     console.log(
       `Prepared CLI package: @voidzero-dev/vite-plus-cli-${platformArchABI}@${cliVersion}`,
     );
-    continue;
+    return;
   }
 
-  // Publish CLI package
   const result = await publishNpmPackageFromEnv(cliPackage, 'npm', publishArgs, platformCliDir);
 
   if (result === 'published') {
     // eslint-disable-next-line no-console
     console.log(`Published CLI package: @voidzero-dev/vite-plus-cli-${platform}@${cliVersion}`);
   }
-}
-
-// npm can accept uploads before scanning makes them installable. Wait for the
-// platform packages before publishing core and the CLI, which pin their versions.
-if (!skipNpmPublish) {
-  await waitForNpmPackagesFromEnv(platformPackages);
-
-  // Preview releases still need the prepared directories.
-  rmSync(cliNpmDir, { recursive: true, force: true });
 }

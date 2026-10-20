@@ -19,7 +19,20 @@ export const INSTALL_PNPM_VERSION = '10.34.7';
 export const PREVIEW_REGISTRY = 'https://registry-bridge.viteplus.dev';
 const exec = promisify(execFile);
 
-export function installManifest(version: string) {
+interface InstallManifest {
+  name: string;
+  version: string;
+  private: boolean;
+  packageManager: string;
+  dependencies: { 'vite-plus': string };
+}
+
+interface PackageResolution {
+  integrity?: string;
+  tarball?: string;
+}
+
+export function installManifest(version: string): InstallManifest {
   return {
     name: 'vp-global',
     version,
@@ -29,6 +42,32 @@ export function installManifest(version: string) {
   };
 }
 
+export function isCommitPreviewVersion(version: string): boolean {
+  return /^0\.0\.0-commit\.[a-f0-9]{40}$/.test(version);
+}
+
+function hasValidTarball(
+  packageKey: string,
+  resolution: PackageResolution | undefined,
+  version: string,
+): boolean {
+  const tarball = resolution?.tarball;
+  if (!tarball) {
+    return true;
+  }
+  // Releases must remain portable across registry mirrors.
+  if (!isCommitPreviewVersion(version)) {
+    return false;
+  }
+  const name = packageKey.slice(0, packageKey.lastIndexOf('@'));
+  if (packageKey !== `${name}@${version}`) {
+    // Dependencies proxied from npm retain their original tarball URLs.
+    return !!resolution.integrity && tarball.startsWith('https://registry.npmjs.org/');
+  }
+  const prefix = `${PREVIEW_REGISTRY}/tarballs/${name}/${version}/`;
+  return tarball.startsWith(prefix) && /^[a-f0-9]{40}\.tgz$/.test(tarball.slice(prefix.length));
+}
+
 export function validateInstallLockfile(content: string, version: string): void {
   const lock = parse(content) as {
     lockfileVersion?: string;
@@ -36,7 +75,7 @@ export function validateInstallLockfile(content: string, version: string): void 
       string,
       { dependencies?: Record<string, { specifier: string; version: string }> }
     >;
-    packages?: Record<string, { resolution?: { integrity?: string; tarball?: string } }>;
+    packages?: Record<string, { resolution?: PackageResolution }>;
   } | null;
   const cli = lock?.importers?.['.']?.dependencies?.['vite-plus'];
   const integrity = lock?.packages?.[`vite-plus@${version}`]?.resolution?.integrity;
@@ -45,25 +84,9 @@ export function validateInstallLockfile(content: string, version: string): void 
     cli?.specifier !== version ||
     (cli.version !== version && !cli.version?.startsWith(`${version}(`)) ||
     !integrity ||
-    // Releases remain portable across mirrors. Preview packages use the bridge's
-    // content-addressed URLs; dependencies proxied from npm retain npm URLs.
-    Object.entries(lock?.packages ?? {}).some(([key, entry]) => {
-      const tarball = entry.resolution?.tarball;
-      if (!tarball) {
-        return false;
-      }
-      if (!/^0\.0\.0-commit\.[a-f0-9]{40}$/.test(version)) {
-        return true;
-      }
-      const name = key.slice(0, key.lastIndexOf('@'));
-      if (key !== `${name}@${version}`) {
-        return !entry.resolution?.integrity || !tarball.startsWith('https://registry.npmjs.org/');
-      }
-      const prefix = `${PREVIEW_REGISTRY}/tarballs/${name}/${version}/`;
-      return (
-        !tarball.startsWith(prefix) || !/^[a-f0-9]{40}\.tgz$/.test(tarball.slice(prefix.length))
-      );
-    })
+    !Object.entries(lock?.packages ?? {}).every(([key, entry]) =>
+      hasValidTarball(key, entry.resolution, version),
+    )
   ) {
     throw new Error(`Invalid global installation lockfile for vite-plus@${version}`);
   }
@@ -115,26 +138,28 @@ export async function publishedInstallLockfile(
   return undefined;
 }
 
+async function runPnpm(directory: string, args: string[]): Promise<void> {
+  await exec(
+    'npm',
+    ['exec', '--yes', `--package=pnpm@${INSTALL_PNPM_VERSION}`, '--', 'pnpm', ...args],
+    {
+      cwd: directory,
+      env: { ...process.env, CI: 'true' },
+      maxBuffer: 10 * 1024 * 1024,
+    },
+  );
+}
+
 export async function generateInstallLockfile(
   version: string,
   registry: string,
-  runPnpm = async (directory: string, args: string[]) => {
-    await exec(
-      'npm',
-      ['exec', '--yes', `--package=pnpm@${INSTALL_PNPM_VERSION}`, '--', 'pnpm', ...args],
-      {
-        cwd: directory,
-        env: { ...process.env, CI: 'true' },
-        maxBuffer: 10 * 1024 * 1024,
-      },
-    );
-  },
+  runPnpmCommand = runPnpm,
 ): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'vp-install-lock-'));
   try {
     await writeFile(join(directory, 'package.json'), JSON.stringify(installManifest(version)));
     await writeFile(join(directory, '.npmrc'), 'minimum-release-age=0\n');
-    await runPnpm(directory, [
+    await runPnpmCommand(directory, [
       'install',
       '--ignore-workspace',
       '--lockfile-only',

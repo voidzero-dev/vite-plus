@@ -8,6 +8,7 @@ import { parse } from 'yaml';
 import {
   generateInstallLockfile,
   INSTALL_LOCKFILE,
+  isCommitPreviewVersion,
   PREVIEW_REGISTRY,
   publishedInstallLockfile,
   validateInstallLockfile,
@@ -23,7 +24,7 @@ export async function preparePreviewPackages(
   resolveLockfile = generateInstallLockfile,
   recoverLockfile = publishedInstallLockfile,
 ): Promise<string> {
-  if (!/^0\.0\.0-commit\.[a-f0-9]{40}$/.test(version)) {
+  if (!isCommitPreviewVersion(version)) {
     throw new Error('Expected a full commit preview version');
   }
   const archives = [];

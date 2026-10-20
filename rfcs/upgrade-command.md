@@ -22,7 +22,7 @@ A native `vp upgrade` command would allow users to update the CLI in-place with 
 ├── current → 0.1.0/                 # Symlink to active version
 ├── 0.1.0/                           # Version directory
 │   ├── bin/vp                       # Actual binary
-│   ├── bin/vp-install-lock.yaml     # Published installation lockfile
+│   ├── bin/vp-install-lock.yaml      # Published installation lockfile
 │   ├── package.json                 # Wrapper with an exact vite-plus dependency
 │   ├── pnpm-lock.yaml               # Restored from the published companion
 │   └── node_modules/

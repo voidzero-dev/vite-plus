@@ -271,7 +271,8 @@ jobs:
       # consent), or advanced to a new head commit, in which case publishing
       # this artifact would move the pr-<n> dist-tag BACKWARDS onto an older
       # commit than the PR now points at.
-      - name: Re-check authorization before publish
+      - &check-preview-authorization
+        name: Re-check authorization before publish
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           PR_NUMBER: ${{ needs.authorize.outputs.pr }}
@@ -408,35 +409,7 @@ jobs:
     outputs:
       version: ${{ steps.bridge.outputs.version }}
     steps:
-      - name: Re-check authorization before publish
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          PR_NUMBER: ${{ needs.authorize.outputs.pr }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const { data: pr } = await github.rest.pulls.get({
-              owner,
-              repo,
-              pull_number: Number(process.env.PR_NUMBER),
-            });
-            const reasons = [];
-            if (pr.state !== 'open') reasons.push(`PR is ${pr.state}`);
-            if (!pr.labels.some((l) => l.name === 'preview-build')) {
-              reasons.push('preview-build label was removed');
-            }
-            if (pr.head.sha !== process.env.HEAD_SHA) {
-              reasons.push(
-                `PR head moved to ${pr.head.sha.slice(0, 7)}, this build is ${process.env.HEAD_SHA.slice(0, 7)}`,
-              );
-            }
-            if (reasons.length) {
-              core.setFailed(
-                `PR #${pr.number} changed between authorization and publish (${reasons.join('; ')}); ` +
-                  'refusing to publish. Re-apply the label to build the current head.',
-              );
-            }
+      - *check-preview-authorization
 
       - name: Download prepared global CLI packages
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
