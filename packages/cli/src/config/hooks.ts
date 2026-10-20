@@ -83,6 +83,9 @@ c=$?
 exit $c`;
 }
 
+/** The per-hook stub written to `<dir>/_/<hook>`; it sources the `h` dispatcher. */
+export const HOOK_STUB_SCRIPT = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"';
+
 export interface InstallResult {
   message: string;
   isError: boolean;
@@ -569,7 +572,7 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
   writeFileSync(internal('h'), hookScript(location.dir), { mode: 0o755 });
   chmodSync(internal('h'), 0o755);
   for (const hook of SUPPORTED_GIT_HOOK_NAMES) {
-    writeFileSync(internal(hook), `#!/usr/bin/env sh\n. "$(dirname "$0")/h"`, { mode: 0o755 });
+    writeFileSync(internal(hook), HOOK_STUB_SCRIPT, { mode: 0o755 });
     chmodSync(internal(hook), 0o755);
   }
   if (!gitConfigLocalHas('core.hooksPath', location.target)) {
