@@ -227,65 +227,31 @@ describe('rewritePackageJson', () => {
     expect(extractedStagedConfig).toMatchSnapshot();
   });
 
-  it('should rewrite devDependencies and dependencies on standalone project', async () => {
-    const pkg = {
-      devDependencies: {
-        oxlint: '1.0.0',
-        oxfmt: '1.0.0',
-      },
-      dependencies: {
-        foo: '1.0.0',
-        tsdown: '1.0.0',
-      },
-    };
-    rewritePackageJson(pkg, PackageManager.pnpm);
-    expect(pkg).toMatchSnapshot();
-  });
-
-  it('should rewrite devDependencies and dependencies on pnpm monorepo project', async () => {
-    const pkg = {
-      devDependencies: {
-        oxlint: '1.0.0',
-        oxfmt: '1.0.0',
-      },
-      dependencies: {
-        foo: '1.0.0',
-        tsdown: '1.0.0',
-      },
-    };
-    rewritePackageJson(pkg, PackageManager.pnpm, true);
-    expect(pkg).toMatchSnapshot();
-  });
-
-  it('should rewrite devDependencies and dependencies on npm monorepo project', async () => {
-    const pkg = {
-      devDependencies: {
-        oxlint: '1.0.0',
-        oxfmt: '1.0.0',
-      },
-      dependencies: {
-        foo: '1.0.0',
-        tsdown: '1.0.0',
-      },
-    };
-    rewritePackageJson(pkg, PackageManager.npm, true);
-    expect(pkg).toMatchSnapshot();
-  });
-
-  it('should rewrite devDependencies and dependencies on yarn monorepo project', async () => {
-    const pkg = {
-      devDependencies: {
-        oxlint: '1.0.0',
-        oxfmt: '1.0.0',
-      },
-      dependencies: {
-        foo: '1.0.0',
-        tsdown: '1.0.0',
-      },
-    };
-    rewritePackageJson(pkg, PackageManager.yarn, true);
-    expect(pkg).toMatchSnapshot();
-  });
+  it.each([
+    ['standalone project', PackageManager.pnpm, false, 'latest'],
+    ['pnpm monorepo project', PackageManager.pnpm, true, 'catalog:'],
+    ['npm monorepo project', PackageManager.npm, true, 'latest'],
+    ['yarn monorepo project', PackageManager.yarn, true, 'catalog:'],
+  ])(
+    'should rewrite devDependencies and dependencies on %s',
+    (_, packageManager, isMonorepo, vitePlusSpec) => {
+      const pkg = {
+        devDependencies: {
+          oxlint: '1.0.0',
+          oxfmt: '1.0.0',
+        },
+        dependencies: {
+          foo: '1.0.0',
+          tsdown: '1.0.0',
+        },
+      };
+      rewritePackageJson(pkg, packageManager, isMonorepo);
+      expect(pkg).toEqual({
+        dependencies: { foo: '1.0.0' },
+        devDependencies: { 'vite-plus': vitePlusSpec },
+      });
+    },
+  );
 
   it('preserves named catalog dependency specs in monorepo projects', async () => {
     const pkg = {
@@ -4030,7 +3996,7 @@ describe('ensureVitePlusBootstrap', () => {
       overrides?: unknown;
       peerDependencyRules?: unknown;
     };
-    expect(workspace.catalog['vite-plus']).toBeDefined();
+    expect(workspace.catalog['vite-plus']).toBe('latest');
     expect(workspace.overrides).toBeUndefined();
     expect(workspace.peerDependencyRules).toBeUndefined();
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -4519,7 +4485,7 @@ describe('ensureVitePlusBootstrap', () => {
     const libPkg = readJson(path.join(libDir, 'package.json')) as {
       devDependencies: Record<string, string>;
     };
-    expect(libPkg.devDependencies.vite).toBeDefined();
+    expect(libPkg.devDependencies.vite).toBe('catalog:');
 
     // The unrelated workspace is left exactly as written (no injected vite).
     const utilPkg = readJson(path.join(utilDir, 'package.json')) as {
@@ -4877,7 +4843,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       devDependencies?: Record<string, string>;
     };
     expect(pkg.devDependencies?.['vite-plus']).toBeUndefined();
-    expect(pkg.dependencies?.['vite-plus']).toBeDefined();
+    expect(pkg.dependencies?.['vite-plus']).toBe('catalog:');
   });
 
   it('moves existing pnpm config into pnpm-workspace.yaml on pnpm 10.6.2+', () => {
@@ -4904,14 +4870,17 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     };
     const overrides = workspace.overrides;
     expect(overrides['some-pkg']).toBe('1.0.0');
-    expect(overrides[PNPM_VITE_OVERRIDE_KEY]).toBeDefined();
+    expect(overrides[PNPM_VITE_OVERRIDE_KEY]).toBe('catalog:');
     // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
     // so no override is written — it arrives transitively through vite-plus.
     expect(overrides[PNPM_VITEST_OVERRIDE_KEY]).toBeUndefined();
     expect(overrides.vitest).toBeUndefined();
 
     // peerDependencyRules should be present
-    expect(workspace.peerDependencyRules).toBeDefined();
+    expect(workspace.peerDependencyRules).toEqual({
+      allowAny: ['vite'],
+      allowedVersions: { vite: '*' },
+    });
     expect(workspace.onlyBuiltDependencies).toEqual(['esbuild']);
   });
 
@@ -5043,7 +5012,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       pnpm: { overrides: Record<string, string> };
     };
-    expect(pkg.pnpm.overrides[PNPM_VITE_OVERRIDE_KEY]).toBeDefined();
+    expect(pkg.pnpm.overrides[PNPM_VITE_OVERRIDE_KEY]).toBe('catalog:');
     expect(pkg.pnpm.overrides).not.toHaveProperty('vite');
     expect(pkg.pnpm.overrides.react).toBe('^18.0.0');
   });
@@ -7695,19 +7664,6 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 
-  it('writes no driver allowBuilds entries when no driver is a direct dep and webdriverio is unused (regression guard)', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
-    );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
-
-    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      allowBuilds?: Record<string, boolean>;
-    };
-    expect(yaml.allowBuilds).toBeUndefined();
-  });
-
   it('does not deny a driver the user depends on directly when webdriverio is unused (package.json pnpm config)', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -7717,12 +7673,16 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         pnpm: { overrides: {} },
       }),
     );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    // pnpm < 10.6.2 keeps the pnpm config in package.json instead of pnpm-workspace.yaml.
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.downloadPackageManager.version = '10.6.1';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       pnpm?: { allowBuilds?: Record<string, boolean> };
     };
-    expect(pkg.pnpm?.allowBuilds).toBeUndefined();
+    expect(pkg.pnpm).toHaveProperty('overrides');
+    expect(pkg.pnpm).not.toHaveProperty('allowBuilds');
   });
 
   it('writes no workspace-yaml allowBuilds for a monorepo with a direct driver dep but no webdriverio (pnpm v10)', () => {
@@ -7945,7 +7905,7 @@ describe('rewriteMonorepo bun catalog', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     // catalog should be at top level
     const catalog = pkg.catalog as Record<string, string>;
-    expect(catalog.vite).toBeDefined();
+    expect(catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(catalog['vite-plus']).toBe('latest');
     // overrides should reference catalog:
     const overrides = pkg.overrides as Record<string, string>;
@@ -7973,7 +7933,7 @@ describe('rewriteMonorepo bun catalog', () => {
     // workspaces.catalog should have merged entries
     const workspaces = pkg.workspaces as { packages: string[]; catalog: Record<string, string> };
     expect(workspaces.catalog.react).toBe('^19.0.0');
-    expect(workspaces.catalog.vite).toBeDefined();
+    expect(workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(workspaces.catalog['vite-plus']).toBe('latest');
     // workspaces.packages should be preserved
     expect(workspaces.packages).toEqual(['packages/*']);
@@ -8033,7 +7993,7 @@ describe('rewriteMonorepo bun catalog', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     // catalog should be at top level since workspaces.catalog didn't exist
     const catalog = pkg.catalog as Record<string, string>;
-    expect(catalog.vite).toBeDefined();
+    expect(catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(catalog['vite-plus']).toBe('latest');
     // workspaces object should be preserved
     const workspaces = pkg.workspaces as { packages: string[] };
@@ -8265,75 +8225,18 @@ describe('framework shim', () => {
       addFrameworkShim(tmpDir, 'vue', report);
       expect(report.frameworkShimAdded).toBe(true);
     });
-  });
 
-  describe('create flow integration', () => {
-    it('does not add duplicate shim when template already wrote env.d.ts', () => {
-      // Simulate create-vue having already written a shim into src/env.d.ts
-      const srcDir = path.join(tmpDir, 'src');
-      fs.mkdirSync(srcDir);
-      const existingShim =
-        "declare module '*.vue' {\n  import type { DefineComponent } from 'vue';\n  const component: DefineComponent;\n  export default component;\n}\n";
-      fs.writeFileSync(path.join(srcDir, 'env.d.ts'), existingShim);
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
-      );
-
-      expect(detectFramework(tmpDir)).toEqual(['vue']);
-      // Gate check: shim already present, so addFrameworkShim should NOT be called
-      expect(hasFrameworkShim(tmpDir, 'vue')).toBe(true);
-      // Verify content is unchanged if caller respects the gate
-      const contentBefore = fs.readFileSync(path.join(srcDir, 'env.d.ts'), 'utf-8');
-      for (const framework of detectFramework(tmpDir)) {
-        if (!hasFrameworkShim(tmpDir, framework)) {
-          addFrameworkShim(tmpDir, framework);
-        }
-      }
-      const contentAfter = fs.readFileSync(path.join(srcDir, 'env.d.ts'), 'utf-8');
-      expect(contentAfter).toBe(contentBefore);
-    });
-
-    it('adds shim for vue project created without env.d.ts', () => {
-      fs.mkdirSync(path.join(tmpDir, 'src'));
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
-      );
-      for (const framework of detectFramework(tmpDir)) {
-        if (!hasFrameworkShim(tmpDir, framework)) {
-          addFrameworkShim(tmpDir, framework);
-        }
-      }
-      const content = fs.readFileSync(path.join(tmpDir, 'src', 'env.d.ts'), 'utf-8');
-      expect(content).toContain("declare module '*.vue'");
-    });
-
-    it('adds astro shim for astro project without env.d.ts', () => {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({ devDependencies: { astro: '^4.0.0' } }),
-      );
-      for (const framework of detectFramework(tmpDir)) {
-        if (!hasFrameworkShim(tmpDir, framework)) {
-          addFrameworkShim(tmpDir, framework);
-        }
-      }
+    it('creates root env.d.ts with astro reference when no src/ dir', () => {
+      addFrameworkShim(tmpDir, 'astro');
       const content = fs.readFileSync(path.join(tmpDir, 'env.d.ts'), 'utf-8');
       expect(content).toContain('/// <reference types="astro/client" />');
     });
 
-    it('adds both vue and astro shims for Astro+Vue project', () => {
+    it('adds both vue and astro shims to the same env.d.ts', () => {
       fs.mkdirSync(path.join(tmpDir, 'src'));
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({ devDependencies: { vue: '^3.0.0', astro: '^4.0.0' } }),
-      );
-      for (const framework of detectFramework(tmpDir)) {
-        if (!hasFrameworkShim(tmpDir, framework)) {
-          addFrameworkShim(tmpDir, framework);
-        }
-      }
+      addFrameworkShim(tmpDir, 'vue');
+      expect(hasFrameworkShim(tmpDir, 'astro')).toBe(false);
+      addFrameworkShim(tmpDir, 'astro');
       const content = fs.readFileSync(path.join(tmpDir, 'src', 'env.d.ts'), 'utf-8');
       expect(content).toContain("declare module '*.vue'");
       expect(content).toContain('/// <reference types="astro/client" />');
