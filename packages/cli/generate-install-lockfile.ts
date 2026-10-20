@@ -162,6 +162,8 @@ export async function generateInstallLockfile(
     await runPnpmCommand(directory, [
       'install',
       '--ignore-workspace',
+      // The frozen installer uses the same setting, above user npmrc and environment values.
+      '--config.auto-install-peers=true',
       '--lockfile-only',
       '--ignore-scripts',
       '--no-frozen-lockfile',

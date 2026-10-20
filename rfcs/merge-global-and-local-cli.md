@@ -147,7 +147,9 @@ bundled external installations keep their existing setup paths.
 
 The installation's `.npmrc` keeps `minimum-release-age=0` so a newly published
 version can be installed immediately. This does not change the versions recorded
-in the installation lockfile.
+in the installation lockfile. Generation and frozen installation both pass
+`--config.auto-install-peers=true` to match the lockfile's settings regardless of
+user configuration. Registry, authentication, and proxy settings remain inherited.
 
 ### Command Routing
 

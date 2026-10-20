@@ -68,6 +68,12 @@ skip-platforms = ["windows"]
 steps = [{ argv = ["node", "install.mjs", "upgrade-handoff"], tty = false }]
 
 [[case]]
+name = "installation_peer_config"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "peer-config.mjs"], tty = false }]
+
+[[case]]
 name = "installation_progress_non_tty"
 vp = "global"
 skip-platforms = ["windows"]

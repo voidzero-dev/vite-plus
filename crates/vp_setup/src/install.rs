@@ -249,7 +249,8 @@ async fn dependency_install_args<'a>(
     let mut args = vec!["install", "--ignore-workspace"];
     if tokio::fs::try_exists(version_dir.join("bin").join(lockfile::INSTALL_LOCKFILE)).await? {
         lockfile::restore(version_dir).await?;
-        args.push("--frozen-lockfile");
+        // Match the generator even when user configuration disables peer installation.
+        args.extend(["--frozen-lockfile", "--config.auto-install-peers=true"]);
     }
     if let Some(registry_url) = registry {
         args.extend(["--registry", registry_url]);
@@ -712,6 +713,7 @@ mod tests {
                 "install",
                 "--ignore-workspace",
                 "--frozen-lockfile",
+                "--config.auto-install-peers=true",
                 "--registry",
                 "https://mirror.example"
             ]

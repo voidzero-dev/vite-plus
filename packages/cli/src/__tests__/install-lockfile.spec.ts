@@ -46,6 +46,7 @@ describe('release installation lockfile', () => {
         expect(args).toEqual([
           'install',
           '--ignore-workspace',
+          '--config.auto-install-peers=true',
           '--lockfile-only',
           '--ignore-scripts',
           '--no-frozen-lockfile',
