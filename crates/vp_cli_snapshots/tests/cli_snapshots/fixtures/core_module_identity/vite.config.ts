@@ -4,6 +4,8 @@ import { isRunnableDevEnvironment } from 'vite';
 import { defineConfig, isRunnableDevEnvironment as fromVitePlus } from 'vite-plus';
 
 export default defineConfig({
+  // This fixture serves SSR middleware only; dependency scanning adds timing-dependent logs.
+  optimizeDeps: { noDiscovery: true },
   server: { host: '127.0.0.1', port: 0 },
   plugins: [
     {
