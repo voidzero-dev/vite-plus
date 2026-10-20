@@ -185,6 +185,11 @@ pub struct EnvConfig {
     ///
     /// Env: `VP_SHELL`
     pub vp_shell: Option<String>,
+
+    /// Nushell version for `vp env setup`, used instead of running `nu`.
+    ///
+    /// Env: `VP_NU_VERSION`
+    pub nu_version: Option<String>,
 }
 
 impl EnvConfig {
@@ -227,6 +232,7 @@ impl EnvConfig {
             bun_version: std::env::var(env_vars::VP_BUN_VERSION).ok(),
             user_home,
             vp_shell: std::env::var(env_vars::VP_SHELL).ok(),
+            nu_version: std::env::var(env_vars::VP_NU_VERSION).ok(),
         })
     }
 
