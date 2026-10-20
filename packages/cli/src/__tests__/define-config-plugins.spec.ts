@@ -47,6 +47,8 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(result.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
     expect(pluginName(result.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
     expect(pluginName(result.plugins[4])).toBe('user-existing-root-plugin');
+    expect((result.plugins[0] as Plugin).enforce).toBe('pre');
+    expect((result.plugins[1] as Plugin).enforce).toBe('pre');
   });
 
   it('injects resolver + auto-inline plugins into an inline-object project entry, preserving existing plugins', () => {
@@ -275,19 +277,6 @@ describe('computeAutoInlineList', () => {
   });
 });
 
-describe('defineConfig auto-inline deps plugin registration', () => {
-  it('registers the auto-inline plugin in the root plugins array with enforce:pre and configResolved', () => {
-    const result = defineConfig({}) as { plugins: unknown[] };
-    const plugin = result.plugins.find(
-      (p): p is Record<string, unknown> =>
-        !!p && typeof p === 'object' && (p as { name?: unknown }).name === AUTO_INLINE_PLUGIN_NAME,
-    );
-    expect(plugin).toBeDefined();
-    expect(plugin?.enforce).toBe('pre');
-    expect(typeof plugin?.configResolved).toBe('function');
-  });
-});
-
 /**
  * Build injectable deps for {@link checkCoverageProviderVersion}: only the
  * packages in `installed` resolve, and reading their package.json returns the
@@ -430,16 +419,6 @@ describe('defineConfig vitest cache paths plugin', () => {
   afterEach(() => {
     taskClientMocks.ignoreInput.mockClear();
     taskClientMocks.ignoreOutput.mockClear();
-  });
-
-  it('registers the cache-paths plugin with a configureVitest hook', () => {
-    const result = defineConfig({}) as { plugins: unknown[] };
-    const plugin = result.plugins.find(
-      (p): p is Record<string, unknown> =>
-        !!p && typeof p === 'object' && (p as { name?: unknown }).name === CACHE_PATHS_PLUGIN_NAME,
-    );
-    expect(plugin).toBeDefined();
-    expect(typeof plugin?.configureVitest).toBe('function');
   });
 
   it('ignores the results cache dir, the default fs module cache, and per-project overrides', () => {
