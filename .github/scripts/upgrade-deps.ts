@@ -63,6 +63,7 @@ type PnpmWorkspaceVersions = {
   oxfmt: string;
   oxlint: string;
   oxlintTsgolint: string;
+  oxcProjectRuntime: string;
   oxcProjectTypes: string;
   oxcMinify: string;
   oxcParser: string;
@@ -358,6 +359,12 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.oxlintTsgolint,
     },
     {
+      name: '@oxc-project/runtime',
+      pattern: /'@oxc-project\/runtime': =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@oxc-project/runtime': =${versions.oxcProjectRuntime}`,
+      newVersion: versions.oxcProjectRuntime,
+    },
+    {
       name: '@oxc-project/types',
       pattern: /'@oxc-project\/types': =([\d.]+(?:-[\w.]+)?)/,
       replacement: `'@oxc-project/types': =${versions.oxcProjectTypes}`,
@@ -543,6 +550,7 @@ async function upgradeDependencies(): Promise<void> {
     oxfmtVersion,
     oxlintVersion,
     oxlintTsgolintVersion,
+    oxcProjectRuntimeVersion,
     oxcProjectTypesVersion,
     oxcMinifyVersion,
     oxcParserVersion,
@@ -558,6 +566,7 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNpmVersion('oxfmt'),
     getLatestNpmVersion('oxlint'),
     getLatestNpmVersion('oxlint-tsgolint'),
+    getLatestNpmVersion('@oxc-project/runtime'),
     getLatestNpmVersion('@oxc-project/types'),
     getLatestNpmVersion('oxc-minify'),
     getLatestNpmVersion('oxc-parser'),
@@ -574,6 +583,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxlint: ${oxlintVersion}`);
   console.log(`@oxlint/plugins (from oxlint): ${oxlintVersion}`);
   console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
+  console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
   console.log(`oxc-minify: ${oxcMinifyVersion}`);
   console.log(`oxc-parser: ${oxcParserVersion}`);
@@ -590,6 +600,7 @@ async function upgradeDependencies(): Promise<void> {
     oxfmt: oxfmtVersion,
     oxlint: oxlintVersion,
     oxlintTsgolint: oxlintTsgolintVersion,
+    oxcProjectRuntime: oxcProjectRuntimeVersion,
     oxcProjectTypes: oxcProjectTypesVersion,
     oxcMinify: oxcMinifyVersion,
     oxcParser: oxcParserVersion,
