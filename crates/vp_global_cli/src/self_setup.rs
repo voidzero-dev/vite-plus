@@ -9,7 +9,7 @@ use std::{path::Path, process::ExitCode};
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use vp_pm_cli::PackageManagerType;
 use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install, is_commit_preview_version};
-use vp_shared::{EnvConfig, env_vars, output};
+use vp_shared::{EnvConfig, ManagerPreference, env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{
@@ -175,7 +175,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         ));
     }
     let previous_install = if deploy { previous_install()? } else { None };
-    let node_override = manager_mode("VP_NODE_MANAGER");
+    let node_override = shim_mode(env.node_manager);
     // A package upgrade can change the executable path or expire its receipt.
     // Preferences belong to the user, not to that particular binary.
     let configured = bundled && config::get_config_path()?.as_path().is_file();
@@ -302,14 +302,14 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         if let Some(mode) = node_override.or(default_mode) {
             settings.node_shim_mode = mode;
         }
-        let pm_mode = manager_mode("VP_PM_MANAGER").or(default_mode);
-        for (family, variable) in [
-            (PackageManagerType::Npm, "VP_NPM_MANAGER"),
-            (PackageManagerType::Pnpm, "VP_PNPM_MANAGER"),
-            (PackageManagerType::Yarn, "VP_YARN_MANAGER"),
-            (PackageManagerType::Bun, "VP_BUN_MANAGER"),
+        let pm_mode = shim_mode(env.pm_manager).or(default_mode);
+        for (family, preference) in [
+            (PackageManagerType::Npm, env.npm_manager),
+            (PackageManagerType::Pnpm, env.pnpm_manager),
+            (PackageManagerType::Yarn, env.yarn_manager),
+            (PackageManagerType::Bun, env.bun_manager),
         ] {
-            if let Some(mode) = manager_mode(variable).or(pm_mode) {
+            if let Some(mode) = shim_mode(preference).or(pm_mode) {
                 settings.set_package_manager_shim_mode(family, mode);
             }
         }
@@ -381,11 +381,10 @@ fn confirm(prompt: &str, default: bool) -> Result<bool, Error> {
         .map_err(|error| Error::Other(error.to_string().into()))
 }
 
-fn manager_mode(variable: &str) -> Option<config::ShimMode> {
-    match std::env::var(variable).as_deref() {
-        Ok("yes") => Some(config::ShimMode::Managed),
-        Ok("no") => Some(config::ShimMode::SystemFirst),
-        _ => None,
+fn shim_mode(preference: Option<ManagerPreference>) -> Option<config::ShimMode> {
+    match preference? {
+        ManagerPreference::Yes => Some(config::ShimMode::Managed),
+        ManagerPreference::No => Some(config::ShimMode::SystemFirst),
     }
 }
 

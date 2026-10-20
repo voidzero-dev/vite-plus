@@ -106,6 +106,25 @@ pub const VP_YARN_VERSION: &str = "VP_YARN_VERSION";
 /// Override the bun and bunx shim version.
 pub const VP_BUN_VERSION: &str = "VP_BUN_VERSION";
 
+/// Node.js management preference (`yes` or `no`).
+pub const VP_NODE_MANAGER: &str = "VP_NODE_MANAGER";
+
+/// Package-manager management preference shared by every family.
+/// Family-specific variables take precedence over it.
+pub const VP_PM_MANAGER: &str = "VP_PM_MANAGER";
+
+/// npm management preference; takes precedence over `VP_PM_MANAGER`.
+pub const VP_NPM_MANAGER: &str = "VP_NPM_MANAGER";
+
+/// pnpm management preference; takes precedence over `VP_PM_MANAGER`.
+pub const VP_PNPM_MANAGER: &str = "VP_PNPM_MANAGER";
+
+/// Yarn management preference; takes precedence over `VP_PM_MANAGER`.
+pub const VP_YARN_MANAGER: &str = "VP_YARN_MANAGER";
+
+/// Bun management preference; takes precedence over `VP_PM_MANAGER`.
+pub const VP_BUN_MANAGER: &str = "VP_BUN_MANAGER";
+
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
 
