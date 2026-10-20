@@ -5,7 +5,7 @@
 ```
 Before installation: preserve this output.
 A failed resolution-file write leaves dependencies installed and setup incomplete.
-Retry returns the requested Node version without installing dependencies again.
+Retry reuses the completed frozen install and returns the requested Node version.
 Bootstrap stdout contains only shell assignments.
 After installation.
 ```

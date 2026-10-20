@@ -12,6 +12,8 @@ pinning a shadowed same-family devEngines version explains which declaration rem
 VITE+ - The Unified Toolchain for the Web
 
 ✓ Pinned package manager to pnpm@11.0.0
+  File: package.json
+  Field: devEngines.packageManager
 warn: Top-level packageManager pnpm@10.18.0 remains effective; remove or update it to use devEngines.packageManager pnpm@11.0.0.
 note: Package manager will be downloaded on first use.
 ```
