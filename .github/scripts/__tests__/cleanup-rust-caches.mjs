@@ -19,11 +19,11 @@ function cache(id, overrides = {}) {
   };
 }
 
-test('keeps the newest generation and expires unused older generations', () => {
+await test('keeps the newest generation and expires unused older generations', () => {
   assert.deepEqual(supersededRustCaches([cache(2), cache(1), cache(3)], now), [cache(2), cache(1)]);
 });
 
-test('preserves recently used or created entries, including the 48-hour boundary', () => {
+await test('preserves recently used or created entries, including the 48-hour boundary', () => {
   for (const field of ['last_accessed_at', 'created_at']) {
     for (const age of [0, 1, 2]) {
       const recent = cache(1, { [field]: new Date(now - age * day).toISOString() });
@@ -32,7 +32,7 @@ test('preserves recently used or created entries, including the 48-hour boundary
   }
 });
 
-test('never treats different environments, jobs, architectures, or archive formats as replacements', () => {
+await test('never treats different environments, jobs, architectures, or archive formats as replacements', () => {
   const first = cache(1);
   for (const overrides of [
     { key: cache(2).key.replace('12345678', '87654321') },
@@ -44,7 +44,7 @@ test('never treats different environments, jobs, architectures, or archive forma
   }
 });
 
-test('ignores PR caches, other prefixes, invalid dates, and equal creation times', () => {
+await test('ignores PR caches, other prefixes, invalid dates, and equal creation times', () => {
   for (const overrides of [
     { ref: 'refs/pull/12/merge' },
     { key: 'v1-rust-unrecognized-key' },
@@ -85,7 +85,7 @@ function fixture(snapshots, status) {
   };
 }
 
-test('defaults to a dry run with no writes and reports eligible bytes', async () => {
+await test('defaults to a dry run with no writes and reports eligible bytes', async () => {
   const f = fixture([[cache(1), cache(3)]]);
   const result = await cleanupRustCaches(f);
   assert.deepEqual(result, { count: 1, bytes: cache(1).size_in_bytes });
@@ -94,7 +94,7 @@ test('defaults to a dry run with no writes and reports eligible bytes', async ()
   assert.equal(f.calls[0].params.per_page, 100);
 });
 
-test('rechecks candidates and deletes by ID', async () => {
+await test('rechecks candidates and deletes by ID', async () => {
   const f = fixture([[cache(1), cache(3)]]);
   await cleanupRustCaches(f, { dryRun: false });
   assert.deepEqual(
@@ -105,7 +105,7 @@ test('rechecks candidates and deletes by ID', async () => {
   assert.equal(f.calls[2].params.cache_id, 1);
 });
 
-test('skips entries used since the snapshot or whose replacement disappeared', async () => {
+await test('skips entries used since the snapshot or whose replacement disappeared', async () => {
   for (const second of [
     [cache(1, { last_accessed_at: new Date().toISOString() }), cache(3)],
     [cache(1)],
@@ -117,7 +117,7 @@ test('skips entries used since the snapshot or whose replacement disappeared', a
   }
 });
 
-test('tolerates concurrent eviction but reports other API failures', async () => {
+await test('tolerates concurrent eviction but reports other API failures', async () => {
   assert.deepEqual(
     await cleanupRustCaches(fixture([[cache(1), cache(3)]], 404), { dryRun: false }),
     { count: 0, bytes: 0 },
@@ -128,7 +128,7 @@ test('tolerates concurrent eviction but reports other API failures', async () =>
   );
 });
 
-test('refuses a non-main run before making API requests', async () => {
+await test('refuses a non-main run before making API requests', async () => {
   const f = fixture([]);
   f.context.ref = 'refs/heads/feature';
   await assert.rejects(cleanupRustCaches(f, { dryRun: false }), /must run on main/);

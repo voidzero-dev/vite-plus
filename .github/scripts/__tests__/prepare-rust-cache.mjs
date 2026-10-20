@@ -24,7 +24,7 @@ function fixture(installed, env = {}) {
   return { commands, paths };
 }
 
-test('keeps the pinned compiler and removes unused runner toolchains', () => {
+await test('keeps the pinned compiler and removes unused runner toolchains', () => {
   const extra = ['stable-x86_64-unknown-linux-gnu', '1.99.0-x86_64-unknown-linux-gnu'];
   const { commands } = fixture([...extra, active]);
   assert.deepEqual(commands.slice(2), [
@@ -33,12 +33,12 @@ test('keeps the pinned compiler and removes unused runner toolchains', () => {
   ]);
 });
 
-test('does not uninstall a toolchain when only the active one is installed', () => {
+await test('does not uninstall a toolchain when only the active one is installed', () => {
   const { commands } = fixture([active]);
   assert.deepEqual(commands.slice(2), [['default', active]]);
 });
 
-test('unset and explicit default paths produce the same cache environment', () => {
+await test('unset and explicit default paths produce the same cache environment', () => {
   const implicit = fixture([active]);
   const explicit = fixture([active], {
     CARGO_HOME: '/home/runner/.cargo',
@@ -47,7 +47,7 @@ test('unset and explicit default paths produce the same cache environment', () =
   assert.deepEqual(implicit.paths, explicit.paths);
 });
 
-test('preserves custom Cargo and Rustup paths', () => {
+await test('preserves custom Cargo and Rustup paths', () => {
   const paths = {
     CARGO_HOME: 'D:\\Dev Drive\\.cargo',
     RUSTUP_HOME: 'D:\\Dev Drive\\.rustup',
@@ -55,7 +55,7 @@ test('preserves custom Cargo and Rustup paths', () => {
   assert.deepEqual(fixture([active], paths).paths, paths);
 });
 
-test('fails before changing toolchains when the active compiler is missing', () => {
+await test('fails before changing toolchains when the active compiler is missing', () => {
   const commands = [];
   assert.throws(
     () =>
