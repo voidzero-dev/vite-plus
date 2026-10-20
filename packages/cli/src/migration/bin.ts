@@ -78,6 +78,8 @@ import {
   planVitestV5Migration,
   refreshVitestV5Migration,
   retryPreservedOxlintConfigs,
+  prepareOxlintConfigs,
+  removeMigratedOxlintConfigs,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   vitestV5NeedsMigration,
@@ -1464,12 +1466,25 @@ async function main() {
     // Merge configs and reinstall once if any tool or bootstrap migration happened
     if (eslintMigrated || prettierMigrated || tsupMigrated) {
       updateMigrationProgress('Rewriting configs');
+      const rootDir = workspaceInfoOptional.rootDir;
+      // Full setup only merges the root here; untouched packages still need their JSON dependencies.
+      const oxlintConfigs = workspaceInfoOptional.isMonorepo
+        ? prepareOxlintConfigs([
+            rootDir,
+            ...workspaceInfoOptional.packages.map((pkg) => path.join(rootDir, pkg.path)),
+          ])
+        : undefined;
       mergeViteConfigFiles(
-        workspaceInfoOptional.rootDir,
+        rootDir,
         true,
         report,
         workspaceInfoOptional.packages,
+        rootDir,
+        oxlintConfigs,
       );
+      if (oxlintConfigs) {
+        removeMigratedOxlintConfigs(oxlintConfigs);
+      }
       if (tsupMigrated) {
         mergeTsdownConfigFile(workspaceInfoOptional.rootDir, true, report);
         for (const pkg of workspaceInfoOptional.packages ?? []) {

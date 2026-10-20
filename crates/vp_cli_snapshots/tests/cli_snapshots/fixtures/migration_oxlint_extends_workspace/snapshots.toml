@@ -313,3 +313,21 @@ steps = [
   { argv = ["vpt", "print-file", "packages/c/.oxlintrc.json"], comment = "Its newly authored JSON config remains intact" },
   { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/c", comment = "The JSON config retains the same lint output", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_workspace_full_setup"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "add", "-D", "vite-plus", "prettier@3.6.2"], snapshot = false },
+  { argv = ["vpt", "write-file", ".prettierrc.json", '{"singleQuote":true}'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "The existing workspace consumer inherits the root JSON rule" },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Prettier migration merges the root configs without migrating package configs" },
+  { argv = ["vpt", "print-file", "vite.config.mjs"], comment = "The root uses its shared module" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"], comment = "The root JSON remains available to untouched consumers" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.ts", "--assert", "file"] },
+  { argv = ["vpt", "print-file", "packages/a/vite.config.mjs"], comment = "The package Vite config remains unchanged" },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "The preserved package JSON still reports the same diagnostic" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated root enforces the same rule" },
+]
