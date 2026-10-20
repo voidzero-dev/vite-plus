@@ -123,7 +123,7 @@ These variables control the installer scripts and the standalone Windows install
 
 `setup-vp` manages this file automatically. Use its Node.js inputs to configure CI jobs.
 
-#### `VP_SKIP_INSTALL_LOCKFILE`
+#### `VP_SETUP_SKIP_INSTALL_LOCKFILE`
 
 Set this variable to `1` to recover from a lockfile-related error during global CLI installation or `vp upgrade`. All other values, including unset or empty, keep the published installation lockfile enabled.
 
@@ -131,18 +131,18 @@ The installer prints a warning and resolves dependencies without reading or reco
 
 ```bash
 # Retry installation without the bundled lockfile.
-curl -fsSL https://vite.plus | VP_SKIP_INSTALL_LOCKFILE=1 bash
+curl -fsSL https://vite.plus | VP_SETUP_SKIP_INSTALL_LOCKFILE=1 bash
 
 # Or retry an upgrade, including the currently installed version.
-VP_SKIP_INSTALL_LOCKFILE=1 vp upgrade --force
+VP_SETUP_SKIP_INSTALL_LOCKFILE=1 vp upgrade --force
 ```
 
 ```powershell
-$env:VP_SKIP_INSTALL_LOCKFILE = "1"
+$env:VP_SETUP_SKIP_INSTALL_LOCKFILE = "1"
 try {
   irm https://vite.plus/ps1 | iex
 } finally {
-  Remove-Item Env:VP_SKIP_INSTALL_LOCKFILE
+  Remove-Item Env:VP_SETUP_SKIP_INSTALL_LOCKFILE
 }
 ```
 

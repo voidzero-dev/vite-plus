@@ -48,7 +48,7 @@ pub(crate) async fn invalidate_install(version_dir: &AbsolutePath) -> Result<(),
 
 /// Record a successful frozen or explicitly unlocked install, independently of self-setup.
 pub(crate) async fn record_install(version_dir: &AbsolutePath) -> Result<(), Error> {
-    if EnvConfig::get().skip_install_lockfile {
+    if EnvConfig::get().setup_skip_install_lockfile {
         return write(version_dir.join(INSTALL_RECEIPT), UNLOCKED_INSTALL_RECEIPT.to_vec()).await;
     }
     let content = match tokio::fs::read(version_dir.join("bin").join(INSTALL_LOCKFILE)).await {
@@ -84,7 +84,7 @@ pub async fn prepare(
     version: &str,
     registry_override: Option<&str>,
 ) -> Result<bool, Error> {
-    if EnvConfig::get().skip_install_lockfile {
+    if EnvConfig::get().setup_skip_install_lockfile {
         // Only reuse a completed bypass install while the bypass is explicitly enabled.
         // Do not read, restore, or recover the companion, even when it is missing or broken.
         return match tokio::fs::read(version_dir.join(INSTALL_RECEIPT)).await {

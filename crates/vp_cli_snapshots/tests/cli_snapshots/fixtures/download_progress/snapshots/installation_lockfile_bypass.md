@@ -4,7 +4,7 @@
 
 ```
 The generator pins all frozen-lockfile settings despite user and environment values.
-A broken lockfile still fails unless VP_SKIP_INSTALL_LOCKFILE is exactly 1.
+A broken lockfile still fails unless VP_SETUP_SKIP_INSTALL_LOCKFILE is exactly 1.
 The bypass warns, ignores broken or missing lockfiles, and installs the exact CLI version.
 User registry and authentication still work; the completion receipt is explicitly unlocked.
 Upgrade rejects a missing companion by default and succeeds with the bypass.

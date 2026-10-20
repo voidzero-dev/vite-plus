@@ -91,7 +91,7 @@ pub const VP_SETUP_NODE_VERSION: &str = "VP_SETUP_NODE_VERSION";
 pub const VP_SETUP_NODE_VERSION_FILE: &str = "VP_SETUP_NODE_VERSION_FILE";
 
 /// Resolve global CLI dependencies without the installation lockfile when set to `1`.
-pub const VP_SKIP_INSTALL_LOCKFILE: &str = "VP_SKIP_INSTALL_LOCKFILE";
+pub const VP_SETUP_SKIP_INSTALL_LOCKFILE: &str = "VP_SETUP_SKIP_INSTALL_LOCKFILE";
 
 /// Override package manager and version for vp commands (for example, `pnpm@10.18.0`).
 /// Direct package-manager shims use their own version overrides instead.

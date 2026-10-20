@@ -50,7 +50,7 @@ pub async fn extract_platform_package(
 
     let data = tgz_data.to_vec();
     let bin_dir_clone = bin_dir.clone();
-    let skip_lockfile = EnvConfig::get().skip_install_lockfile;
+    let skip_lockfile = EnvConfig::get().setup_skip_install_lockfile;
 
     tokio::task::spawn_blocking(move || {
         let cursor = Cursor::new(data);
@@ -209,9 +209,9 @@ pub async fn install_production_deps(
 ) -> Result<(), Error> {
     tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
     lockfile::invalidate_install(version_dir).await?;
-    if EnvConfig::get().skip_install_lockfile {
+    if EnvConfig::get().setup_skip_install_lockfile {
         vp_shared::output::warn(
-            "VP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile; resolving dependencies again.",
+            "VP_SETUP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile; resolving dependencies again.",
         );
     }
 
@@ -255,7 +255,7 @@ async fn dependency_install_args<'a>(
 ) -> Result<Vec<&'a str>, Error> {
     // An ancestor workspace must not capture the install or supply its lockfile.
     let mut args = vec!["install", "--ignore-workspace"];
-    if EnvConfig::get().skip_install_lockfile {
+    if EnvConfig::get().setup_skip_install_lockfile {
         // Disable both pnpm's CI default and reading any existing working lockfile.
         args.extend(["--no-frozen-lockfile", "--lockfile=false"]);
     } else if tokio::fs::try_exists(version_dir.join("bin").join(lockfile::INSTALL_LOCKFILE))

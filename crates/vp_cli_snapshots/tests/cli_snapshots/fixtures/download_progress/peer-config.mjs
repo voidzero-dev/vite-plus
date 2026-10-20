@@ -149,7 +149,7 @@ function configureUser(user, settings = []) {
     NPM_CONFIG_REGISTRY: undefined,
     npm_config_userconfig: userconfig,
     NPM_CONFIG_USERCONFIG: userconfig,
-    VP_SKIP_INSTALL_LOCKFILE: undefined,
+    VP_SETUP_SKIP_INSTALL_LOCKFILE: undefined,
   };
   // Keep the test independent of the host's values for these settings.
   for (const { option } of conflicts) {
@@ -216,18 +216,18 @@ async function testBypass(lockfile) {
   // Only the exact value "1" enables the escape hatch.
   for (const value of [undefined, '', '0', 'true']) {
     await assert.rejects(
-      runSetup(installation, { VP_SKIP_INSTALL_LOCKFILE: value }),
+      runSetup(installation, { VP_SETUP_SKIP_INSTALL_LOCKFILE: value }),
       (error) => error.code === 1 && /ERR_PNPM_BROKEN_LOCKFILE/.test(error.message),
     );
   }
-  console.log('A broken lockfile still fails unless VP_SKIP_INSTALL_LOCKFILE is exactly 1.');
+  console.log('A broken lockfile still fails unless VP_SETUP_SKIP_INSTALL_LOCKFILE is exactly 1.');
 
   const target = join(installation.home, version);
   // Keep the broken working copy, but remove both companions. Recovery would hit a 404.
   rmSync(companion);
   rmSync(join(target, 'bin/vp-install-lock.yaml'));
   const override = {
-    VP_SKIP_INSTALL_LOCKFILE: '1',
+    VP_SETUP_SKIP_INSTALL_LOCKFILE: '1',
     npm_config_frozen_lockfile: 'true',
     NPM_CONFIG_FROZEN_LOCKFILE: 'true',
     npm_config_lockfile: 'true',
@@ -235,7 +235,10 @@ async function testBypass(lockfile) {
   };
   const before = requests.length;
   const result = await runSetup(installation, override);
-  assert.match(result.stderr, /VP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile/);
+  assert.match(
+    result.stderr,
+    /VP_SETUP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile/,
+  );
   const current = join(installation.home, 'current');
   const receipt = join(current, 'node_modules/.vp-install-complete');
   const marker = join(current, 'bin/.vp-setup-complete');
@@ -278,7 +281,7 @@ async function testBypass(lockfile) {
   );
   assert.match(
     upgradeResult.stderr,
-    /VP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile/,
+    /VP_SETUP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile/,
   );
   assert.notEqual(readlinkSync(current), previousTarget);
   assert.equal(existsSync(join(current, 'bin/vp-install-lock.yaml')), false);
