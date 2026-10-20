@@ -47,3 +47,22 @@ steps = [
   { argv = ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"], cwd = "web", comment = "the child's frozen install succeeds after manual recovery", snapshot = false, timeout = 120000 },
   { argv = ["vpt", "stat-file", "web/postinstall-ran", "--assert", "missing"], comment = "neither update attempt ran the child's lifecycle scripts" },
 ]
+
+[[case]]
+name = "migration_nested_pnpm_workspace_member"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "mkdir", "vendor/packages/app/examples"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "web", "vendor/packages/app/examples/demo"], snapshot = false },
+  { argv = ["vpt", "rm", "-r", "web"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.postinstall", "cd vendor/packages/app/examples/demo && pnpm install"], snapshot = false },
+  { argv = ["pnpm", "install", "--frozen-lockfile"], cwd = "vendor/packages/app/examples/demo", comment = "install the independent demo before migration", snapshot = false, timeout = 120000 },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "preserve the independent demo below a workspace member", timeout = 120000 },
+  { argv = ["vp", "install"], comment = "install completes without postinstall recursion", snapshot = false, timeout = 120000 },
+  { argv = ["pnpm", "install", "--frozen-lockfile"], cwd = "vendor/packages/app/examples/demo", comment = "the demo's frozen install still succeeds", snapshot = false, timeout = 120000 },
+  { argv = ["vpt", "print-file", "vendor/packages/app/examples/demo/pnpm-workspace.yaml"], comment = "the demo keeps its install boundary" },
+  { argv = ["vpt", "stat-file", "vendor/packages/app/pnpm-workspace.yaml", "--assert", "missing"], comment = "the workspace member gets no boundary" },
+  { argv = ["vpt", "stat-file", "vendor/packages/app/examples/demo/node_modules/test-vite-plus-install", "--assert-not", "missing"], comment = "the demo's dependency was installed" },
+]

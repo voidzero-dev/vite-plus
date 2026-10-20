@@ -209,13 +209,11 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
   const directories = [path.resolve(projectPath)];
   const workspaceMembers = new Set<string>();
   for (const directory of directories) {
-    if (workspaceMembers.has(directory)) {
-      continue;
-    }
     const workspaceFile = path.join(directory, 'pnpm-workspace.yaml');
     const hasWorkspaceFile = fs.existsSync(workspaceFile);
     let pkg: Record<string, unknown> | undefined;
-    if (fs.existsSync(path.join(directory, 'package.json'))) {
+    // Members may contain independent projects, but their manifests do not own workspaces.
+    if (!workspaceMembers.has(directory) && fs.existsSync(path.join(directory, 'package.json'))) {
       try {
         const parsed = readJsonFile(path.join(directory, 'package.json'));
         if (isPlainRecord(parsed)) {

@@ -2238,6 +2238,53 @@ describe('standalone pnpm child project boundaries', () => {
     },
   );
 
+  it.each([
+    ['outside workspace globs', 'packages: ["packages/*"]\n', undefined, true],
+    [
+      'matched by ancestor globs',
+      'packages: ["packages/*", "packages/*/examples/*"]\n',
+      undefined,
+      false,
+    ],
+    [
+      'outside the member workspace globs',
+      'packages: ["packages/*"]\n',
+      'packages: ["services/*"]\n',
+      true,
+    ],
+  ])('collects independent descendants %s', (_label, ancestorYaml, memberYaml, collected) => {
+    fs.mkdirSync(path.join(tmpDir, 'vendor/packages/app/examples/demo'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'vendor/packages/app/services/api'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'vendor/pnpm-workspace.yaml'), ancestorYaml);
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/packages/app/package.json'),
+      JSON.stringify({
+        name: 'app',
+        packageManager: 'pnpm@10.33.0',
+        workspaces: ['examples/*'],
+      }),
+    );
+    for (const child of ['examples/demo', 'services/api']) {
+      fs.writeFileSync(
+        path.join(tmpDir, 'vendor/packages/app', child, 'package.json'),
+        JSON.stringify({ name: child, packageManager: 'pnpm@10.33.0' }),
+      );
+    }
+    if (memberYaml) {
+      fs.writeFileSync(path.join(tmpDir, 'vendor/packages/app/pnpm-workspace.yaml'), memberYaml);
+    }
+
+    const projects = collectStandalonePnpmProjects(tmpDir);
+
+    expect(projects).not.toContain(path.join(tmpDir, 'vendor/packages/app'));
+    expect(projects.includes(path.join(tmpDir, 'vendor/packages/app/examples/demo'))).toBe(
+      collected,
+    );
+    expect(projects.includes(path.join(tmpDir, 'vendor/packages/app/services/api'))).toBe(
+      !memberYaml,
+    );
+  });
+
   it.each([false, true])(
     'repairs independent children outside existing workspace globs (monorepo: %s)',
     (monorepo) => {
