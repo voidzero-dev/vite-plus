@@ -103,6 +103,15 @@ describe('release installation lockfile', () => {
         version,
       ),
     ).toThrow('Invalid global installation lockfile');
+    expect(() =>
+      validateInstallLockfile(
+        lockfile.replace(
+          'integrity: sha512-fixture',
+          'integrity: sha512-fixture, tarball: https://registry.npmjs.org/vite-plus/-/vite-plus-1.4.0.tgz',
+        ),
+        version,
+      ),
+    ).toThrow('Invalid global installation lockfile');
   });
 
   it('recovers the published lockfile after a partially completed release', async () => {

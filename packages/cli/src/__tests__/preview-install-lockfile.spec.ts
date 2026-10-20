@@ -31,6 +31,19 @@ const lockfile = stringify({
         tarball: `${PREVIEW_REGISTRY}/tarballs/vite-plus/${version}/${shasum}.tgz`,
       },
     },
+    // Pnpm keeps these URLs because the bridge proxies npm package metadata.
+    'sirv@3.0.2': {
+      resolution: {
+        integrity: 'sha512-published-sirv',
+        tarball: 'https://registry.npmjs.org/sirv/-/sirv-3.0.2.tgz',
+      },
+    },
+    '@babel/code-frame@7.29.7': {
+      resolution: {
+        integrity: 'sha512-published-code-frame',
+        tarball: 'https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.29.7.tgz',
+      },
+    },
   },
 });
 
@@ -174,12 +187,16 @@ describe('preview installation lockfile', () => {
     });
   });
 
-  it('accepts only content-addressed bridge URLs for the exact preview version', () => {
+  it('accepts npm dependencies while keeping preview packages on content-addressed bridge URLs', () => {
     expect(() => validateInstallLockfile(lockfile, version)).not.toThrow();
     for (const changed of [
       lockfile.replace(PREVIEW_REGISTRY, 'http://localhost:1234'),
       lockfile.replace(`/tarballs/vite-plus/${version}/`, '/tarballs/vite-plus/0.0.0-commit.old/'),
       lockfile.replace(`/${shasum}.tgz`, '.tgz'),
+      lockfile.replace(PREVIEW_REGISTRY, 'https://registry.npmjs.org'),
+      lockfile.replace('https://registry.npmjs.org/', 'http://localhost:1234/'),
+      lockfile.replace('https://registry.npmjs.org/', 'https://registry.npmjs.org.example/'),
+      lockfile.replace('integrity: sha512-published-sirv', 'integrity: ""'),
     ]) {
       expect(() => validateInstallLockfile(changed, version)).toThrow(
         'Invalid global installation lockfile',

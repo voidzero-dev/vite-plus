@@ -45,20 +45,23 @@ export function validateInstallLockfile(content: string, version: string): void 
     cli?.specifier !== version ||
     (cli.version !== version && !cli.version?.startsWith(`${version}(`)) ||
     !integrity ||
-    // Releases remain portable across mirrors. Previews need the bridge's
-    // content-addressed URLs so republishing a commit cannot change their bytes.
+    // Releases remain portable across mirrors. Preview packages use the bridge's
+    // content-addressed URLs; dependencies proxied from npm retain npm URLs.
     Object.entries(lock?.packages ?? {}).some(([key, entry]) => {
       const tarball = entry.resolution?.tarball;
       if (!tarball) {
         return false;
       }
+      if (!/^0\.0\.0-commit\.[a-f0-9]{40}$/.test(version)) {
+        return true;
+      }
       const name = key.slice(0, key.lastIndexOf('@'));
+      if (key !== `${name}@${version}`) {
+        return !entry.resolution?.integrity || !tarball.startsWith('https://registry.npmjs.org/');
+      }
       const prefix = `${PREVIEW_REGISTRY}/tarballs/${name}/${version}/`;
       return (
-        !/^0\.0\.0-commit\.[a-f0-9]{40}$/.test(version) ||
-        key !== `${name}@${version}` ||
-        !tarball.startsWith(prefix) ||
-        !/^[a-f0-9]{40}\.tgz$/.test(tarball.slice(prefix.length))
+        !tarball.startsWith(prefix) || !/^[a-f0-9]{40}\.tgz$/.test(tarball.slice(prefix.length))
       );
     })
   ) {
