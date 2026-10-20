@@ -1056,6 +1056,7 @@ module.exports.migrateTaskCacheConfig = nativeBinding.migrateTaskCacheConfig;
 module.exports.parseConfigArgs = nativeBinding.parseConfigArgs;
 module.exports.parseCreateArgs = nativeBinding.parseCreateArgs;
 module.exports.parseHooksArgs = nativeBinding.parseHooksArgs;
+module.exports.parseLiteralCommands = nativeBinding.parseLiteralCommands;
 module.exports.parseMigrateArgs = nativeBinding.parseMigrateArgs;
 module.exports.parseStagedArgs = nativeBinding.parseStagedArgs;
 module.exports.removeConfigKey = nativeBinding.removeConfigKey;

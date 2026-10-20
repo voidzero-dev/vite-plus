@@ -3741,6 +3741,13 @@ export interface JsCommandResolvedResult {
   envs: Record<string, string>;
 }
 
+/** A literal argument with its original JavaScript UTF-16 source range. */
+export interface LiteralCommandToken {
+  value: string;
+  start: number;
+  end: number;
+}
+
 /**
  * Merge JSON configuration file into vite config file
  *
@@ -3848,6 +3855,16 @@ export type ParseHooksArgsOutcome =
   | { status: 'ok'; value: HooksArgs }
   | { status: 'exit'; code: number }
   | { status: 'error'; error: CliParseError };
+
+/**
+ * Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
+ * Returns null for unsupported syntax. Assignments and wrappers stay in argv;
+ * callers must decide whether a command is safe to rewrite.
+ */
+export declare function parseLiteralCommands(
+  source: string,
+  allowLists: boolean,
+): Array<Array<LiteralCommandToken>> | null;
 
 export declare function parseMigrateArgs(argv: Array<string>): ParseMigrateArgsOutcome;
 
