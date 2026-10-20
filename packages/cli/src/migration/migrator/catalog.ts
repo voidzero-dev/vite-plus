@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { coerce, isGreaterThanOrEqual, isValid } from 'verkit';
+import { coerce, isGreaterThanOrEqual, isValid, isValidRange, rangesIntersect } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
@@ -265,14 +265,13 @@ export function ensureStandalonePnpmWorkspace(projectPath: string): boolean {
   // install and invalidate the child's existing frozen lockfile.
   fs.writeFileSync(pnpmWorkspaceYamlPath, 'packages:\n  - "."\n');
   const version = declaredPackageManager(pkg)?.version;
-  // Copying is additive: settings come from an in-memory copy and the child's
-  // package.json is never rewritten. Only an exact pin below 10.6.2 skips the
-  // copy. pnpm 10.5–10.6.1 reads yaml settings, but overrides and
-  // peerDependencyRules were still broken (see pnpmSupportsWorkspaceSettings).
-  // A range, `*`, dist-tag, or invalid string is not that pin. `latest` and
-  // `next` copy either way: they are not exact, and the support check treats
-  // them as current releases.
-  if (version === undefined || !isValid(version) || pnpmSupportsWorkspaceSettings(version)) {
+  // Copy if support is possible; judge prerelease pins by their release version.
+  if (
+    version === undefined ||
+    !isValidRange(version) ||
+    (isValid(version) && pnpmSupportsWorkspaceSettings(version)) ||
+    rangesIntersect(version, '>=' + PNPM_WORKSPACE_SETTINGS_MIN_VERSION)
+  ) {
     migratePnpmSettingsToWorkspaceYaml(projectPath, takePnpmWorkspaceSettings(pkg));
   }
   return true;

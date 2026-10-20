@@ -2179,7 +2179,28 @@ describe('standalone pnpm child project boundaries', () => {
     { packageManager: 'pnpm@10.6.1', settingsInYaml: false },
     { packageManager: 'pnpm@10.6.2', settingsInYaml: true },
     { packageManager: 'pnpm@10.6.2+sha512.example', settingsInYaml: true },
+    { packageManager: 'pnpm@11.0.0-beta.1', settingsInYaml: true },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: '10.14.0-0' } },
+      settingsInYaml: true,
+    },
     { devEngines: { packageManager: { name: 'pnpm', version: '10.5.0' } }, settingsInYaml: false },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: '>=10.6.0 <10.6.2' } },
+      settingsInYaml: false,
+    },
+    { devEngines: { packageManager: { name: 'pnpm', version: '~10.5.0' } }, settingsInYaml: false },
+    { devEngines: { packageManager: { name: 'pnpm', version: '<10.6.2' } }, settingsInYaml: false },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: '<10.6.2 >=10.6.0' } },
+      settingsInYaml: false,
+    },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: '<10.6.2 || 9.x' } },
+      settingsInYaml: false,
+    },
+    { devEngines: { packageManager: { name: 'pnpm', version: '^10.0.0' } }, settingsInYaml: true },
+    { devEngines: { packageManager: { name: 'pnpm', version: '10.6.x' } }, settingsInYaml: true },
     {
       devEngines: {
         packageManager: [{ name: 'unsupported' }, { name: 'pnpm', version: '10.6.1' }],
