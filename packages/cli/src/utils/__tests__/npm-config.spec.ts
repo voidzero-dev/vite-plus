@@ -21,14 +21,14 @@ describe('getNpmRegistry / getNpmAuthHeader', () => {
         delete process.env[key];
       }
     }
-    originalEnv.HOME = process.env.HOME;
-    process.env.HOME = homeDir;
-    vi.spyOn(os, 'homedir').mockReturnValue(homeDir);
+    // The native config loader caches the home directory, so select the user file explicitly.
+    vi.stubEnv('npm_config_userconfig', path.join(homeDir, '.npmrc'));
     vi.spyOn(process, 'cwd').mockReturnValue(projectDir);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     fs.rmSync(homeDir, { recursive: true, force: true });
     fs.rmSync(projectDir, { recursive: true, force: true });
     for (const [k, v] of Object.entries(originalEnv)) {
@@ -58,6 +58,15 @@ describe('getNpmRegistry / getNpmAuthHeader', () => {
   it('uses the user `.npmrc` when the project has none', () => {
     fs.writeFileSync(path.join(homeDir, '.npmrc'), 'registry=https://user.example.com/\n');
     expect(getNpmRegistry()).toBe('https://user.example.com');
+  });
+
+  it('ignores `.npmrc` files above the project root', () => {
+    fs.writeFileSync(path.join(projectDir, '.npmrc'), 'registry=https://parent.example.com/\n');
+    const packageDir = path.join(projectDir, 'app');
+    fs.mkdirSync(packageDir);
+    fs.writeFileSync(path.join(packageDir, 'package.json'), '{}');
+    vi.spyOn(process, 'cwd').mockReturnValue(packageDir);
+    expect(getNpmRegistry()).toBe('https://registry.npmjs.org');
   });
 
   it('resolves `@scope:registry=` overrides ahead of the default', () => {

@@ -106,8 +106,7 @@ should error because allow-build is not supported at pnpm@9
 **Exit code:** 1
 
 ```
- ERROR  Unknown option: 'allow-build'
-For help, run: pnpm help add
+pnpm < 10.4.0 does not support --allow-build.
 ```
 
 ## `vp install test-vite-plus-package@1.0.0 --save-peer`

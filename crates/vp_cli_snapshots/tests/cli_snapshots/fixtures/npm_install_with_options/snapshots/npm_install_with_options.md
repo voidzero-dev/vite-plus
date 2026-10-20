@@ -25,7 +25,7 @@ Options:
   -f, --force                      Force reinstall all dependencies
       --ignore-scripts             Do not run lifecycle scripts
       --no-lockfile                Don't read or generate lockfile
-      --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@2+ only)
+      --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@4+ only)
       --shamefully-hoist           Create flat `node_modules` (pnpm only)
       --resolution-only            Re-run resolution for peer dependency analysis (pnpm only)
       --silent                     Suppress output (silent mode)
@@ -80,4 +80,30 @@ Task Details:
   [1] npm-install-with-options#install: $ vp install --prod --silent ✓
       → Cache disabled in task configuration
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+## `vpt json-edit package.json packageManager npm@7.13.0`
+
+
+## `vp install --filter app`
+
+Reject workspace selection before npm 7.14.0.
+
+**Exit code:** 1
+
+```
+npm < 7.14.0 does not support --filter.
+```
+
+## `vpt json-edit package.json packageManager npm@8.0.0`
+
+
+## `vp install --workspace-root`
+
+Reject workspace root inclusion before npm 8.1.0.
+
+**Exit code:** 1
+
+```
+npm < 8.1.0 does not support --workspace-root.
 ```

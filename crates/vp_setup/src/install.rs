@@ -169,7 +169,7 @@ pub async fn write_upgrade_log(
     }
 }
 
-/// Install production dependencies with managed Node.js LTS and pinned pnpm.
+/// Install production dependencies with a compatible managed Node.js and pinned pnpm.
 ///
 /// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace [--registry <url>]`
 /// with `CI=true`. On failure, writes stdout+stderr to the parent directory's `upgrade.log`.
@@ -177,6 +177,7 @@ pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
     show_progress: bool,
+    preferred_node_version: Option<&str>,
 ) -> Result<(), Error> {
     tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
 
@@ -192,7 +193,7 @@ pub async fn install_production_deps(
 
     let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
         show_progress.then_some("Preparing Node.js and pnpm..."),
-        prepare_install_runtime(),
+        prepare_install_runtime(preferred_node_version),
     )
     .await?;
     let output = vp_shared::progress::with_spinner(
@@ -218,14 +219,9 @@ pub async fn install_production_deps(
     Ok(())
 }
 
-async fn prepare_install_runtime() -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
-    let node_version = NodeProvider::new().resolve_latest_version().await.map_err(|error| {
-        Error::Setup(format!("Failed to resolve the latest Node.js LTS version: {error}").into())
-    })?;
-    let node_runtime =
-        download_runtime(JsRuntimeType::Node, &node_version).await.map_err(|error| {
-            Error::Setup(format!("Failed to install Node.js {node_version}: {error}").into())
-        })?;
+async fn prepare_install_runtime(
+    preferred_node_version: Option<&str>,
+) -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
     let (pnpm_dir, _, _) =
         download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
             .await
@@ -240,7 +236,40 @@ async fn prepare_install_runtime() -> Result<(vp_js_runtime::JsRuntime, Absolute
             format!("pnpm entry not found at {}", pnpm_entry.as_path().display()).into(),
         ));
     }
+    let package: serde_json::Value = serde_json::from_slice(
+        &tokio::fs::read(pnpm_dir.join("package.json")).await?,
+    )
+    .map_err(|error| {
+        Error::Setup(format!("Failed to read pnpm's Node.js requirement: {error}").into())
+    })?;
+    let node_version =
+        match preferred_node_version.filter(|version| supports_pnpm_node(&package, version)) {
+            Some(version) => version.to_string(),
+            None => NodeProvider::new()
+                .resolve_latest_version()
+                .await
+                .map_err(|error| {
+                    Error::Setup(
+                        format!("Failed to resolve the latest Node.js LTS version: {error}").into(),
+                    )
+                })?
+                .to_string(),
+        };
+    let node_runtime =
+        download_runtime(JsRuntimeType::Node, &node_version).await.map_err(|error| {
+            Error::Setup(format!("Failed to install Node.js {node_version}: {error}").into())
+        })?;
     Ok((node_runtime, pnpm_entry))
+}
+
+fn supports_pnpm_node(package: &serde_json::Value, version: &str) -> bool {
+    let Some(range) = package["engines"]["node"].as_str() else { return false };
+    let (Ok(range), Ok(version)) =
+        (js_semver::Range::parse(range), js_semver::Version::parse(version))
+    else {
+        return false;
+    };
+    range.satisfies(&version)
 }
 
 async fn run_pnpm_install(
@@ -566,6 +595,70 @@ pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn bootstrap_reuses_project_node_and_only_resolves_lts_for_incompatible_pnpm() {
+        use vp_js_runtime::{JsRuntimeProvider, Platform};
+        use vp_shared::{EnvConfig, env_vars};
+
+        let server = httpmock::MockServer::start_async().await;
+        let index = server.mock(|when, then| {
+            when.path("/index.json");
+            then.status(200).json_body(serde_json::json!([
+                {"version":"v24.11.0", "lts":"Krypton"},
+                {"version":"v22.23.1", "lts":"Jod"}
+            ]));
+        });
+        let root = tempfile::tempdir().unwrap();
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, root.path().to_str().unwrap()),
+                (env_vars::VP_NODE_DIST_MIRROR, server.base_url().as_str()),
+            ],
+            |env| async move {
+                let pnpm = env
+                    .dirs
+                    .data
+                    .join("package_manager/pnpm")
+                    .join(PINNED_PNPM_VERSION)
+                    .join("pnpm");
+                tokio::fs::create_dir_all(pnpm.join("bin")).await.unwrap();
+                for name in ["pnpm", "pnpm.cmd", "pnpm.ps1", "pnpm.cjs"] {
+                    tokio::fs::write(pnpm.join("bin").join(name), "").await.unwrap();
+                }
+                let manifest = pnpm.join("package.json");
+                tokio::fs::write(&manifest, r#"{"engines":{"node":">=18.12"}}"#).await.unwrap();
+                for version in ["22.23.1", "24.11.0"] {
+                    let binary = env
+                        .dirs
+                        .data
+                        .join("js_runtime/node")
+                        .join(version)
+                        .join(NodeProvider::new().binary_relative_path(Platform::current()));
+                    tokio::fs::create_dir_all(binary.parent().unwrap()).await.unwrap();
+                    tokio::fs::write(binary, "").await.unwrap();
+                }
+
+                let (runtime, entry) = prepare_install_runtime(Some("22.23.1")).await.unwrap();
+                assert_eq!(runtime.version(), "22.23.1");
+                assert_eq!(entry, pnpm.join("bin/pnpm.cjs"));
+                index.assert_calls(0);
+
+                tokio::fs::write(manifest, r#"{"engines":{"node":">=24"}}"#).await.unwrap();
+                let (runtime, _) = prepare_install_runtime(Some("22.23.1")).await.unwrap();
+                assert_eq!(runtime.version(), "24.11.0");
+                index.assert_calls(1);
+            },
+        )
+        .await;
+    }
+
+    #[test]
+    fn pnpm_node_compatibility_fails_closed() {
+        assert!(!supports_pnpm_node(&serde_json::json!({}), "22.23.1"));
+        assert!(!supports_pnpm_node(&serde_json::json!({"engines":{"node":"invalid"}}), "22.23.1"));
+        assert!(!supports_pnpm_node(&serde_json::json!({"engines":{"node":">=18.12"}}), "invalid"));
+    }
 
     #[tokio::test]
     async fn invalidate_only_the_target_versions_setup() {

@@ -41,6 +41,8 @@ To select the project's Node.js version, Vite+ checks the current directory firs
 
 If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the latest LTS.
 
+These rules select Node.js for project commands. The installer uses the latest LTS by default. Only [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version) changes its dependency-installation runtime; [`setup-vp`](/guide/ci#node-js-during-installation) supplies this override from the CI inputs or project declarations.
+
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
 ::: tip Using pnpm with Vite+ runtime management
@@ -181,7 +183,7 @@ In CI, `vp env use` can run without shell initialization. It writes a temporary 
 The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShell. Run `vp env setup` and follow its printed shell setup instructions to enable it. Press Tab to complete commands, or project task names after `vp run` and `vpr`.
 
 - **Zsh**: Run `autoload -Uz compinit; compinit` before loading the setup script if your shell has not initialized completion.
-- **Nushell**: Completion requires `fish` on `PATH`.
+- **Nushell**: Completion requires `fish` on `PATH`. Use Nushell 0.112.1 or later; see [Nushell version](/guide/global-cli#nushell-version).
 
 ### Manage
 

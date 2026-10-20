@@ -157,6 +157,11 @@ pub struct EnvConfig {
     /// Env: `VP_NODE_VERSION`
     pub node_version: Option<String>,
 
+    /// Bootstrap-only Node selector supplied by a CI integration.
+    pub setup_node_version: Option<String>,
+    /// Optional file for returning the resolved project Node version.
+    pub setup_node_version_file: Option<String>,
+
     /// Override package manager and version.
     ///
     /// Env: `VP_PACKAGE_MANAGER`
@@ -180,6 +185,11 @@ pub struct EnvConfig {
     ///
     /// Env: `VP_SHELL`
     pub vp_shell: Option<String>,
+
+    /// Nushell version for `vp env setup`, used instead of running `nu`.
+    ///
+    /// Env: `VP_NU_VERSION`
+    pub nu_version: Option<String>,
 }
 
 impl EnvConfig {
@@ -213,6 +223,8 @@ impl EnvConfig {
             is_ci: std::env::var("CI").is_ok(),
             env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
+            setup_node_version: std::env::var(env_vars::VP_SETUP_NODE_VERSION).ok(),
+            setup_node_version_file: std::env::var(env_vars::VP_SETUP_NODE_VERSION_FILE).ok(),
             package_manager: std::env::var(env_vars::VP_PACKAGE_MANAGER).ok(),
             npm_version: std::env::var(env_vars::VP_NPM_VERSION).ok(),
             pnpm_version: std::env::var(env_vars::VP_PNPM_VERSION).ok(),
@@ -220,6 +232,7 @@ impl EnvConfig {
             bun_version: std::env::var(env_vars::VP_BUN_VERSION).ok(),
             user_home,
             vp_shell: std::env::var(env_vars::VP_SHELL).ok(),
+            nu_version: std::env::var(env_vars::VP_NU_VERSION).ok(),
         })
     }
 

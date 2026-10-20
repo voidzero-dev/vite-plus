@@ -117,7 +117,7 @@
     "yuku-parser": "0.19.0"
   },
   "devDependencies": {
-    "@ast-grep/napi": "^0.45.0",
+    "@ast-grep/napi": "^0.51.0",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",

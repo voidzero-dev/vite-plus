@@ -539,7 +539,7 @@ export class SourceEditor {
       }
       const propertyIndent =
         multilinePrefix && object.properties.length ? indent : `${objectIndent}  `;
-      const entries = [...additions.values()].map((property) =>
+      const entries = Array.from(additions.values(), (property) =>
         printAddedProperty(property, propertyIndent, newline),
       );
       // A generated line comment must end before the original inline properties

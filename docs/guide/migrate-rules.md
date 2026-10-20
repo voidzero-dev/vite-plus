@@ -18,7 +18,7 @@ Migration is idempotent: running it again after a successful migration should no
 
 On a project that already depends on `vite-plus`, `vp migrate` performs an upgrade only: it updates dependencies and package-manager configuration and finalizes imports. It does not touch project setup.
 
-- `--full` also runs the setup actions: git hooks, editor config, agent files, ESLint, Prettier, and tsup migration, framework shims, the tsconfig `baseUrl` fix, and the `.nvmrc`/Volta to `.node-version` conversion.
+- `--full` also runs the setup actions: git hooks, editor config, agent files, ESLint, Prettier, and tsup migration, framework shims, the tsconfig `baseUrl` fix, and the Volta to `.node-version` conversion.
 - `--hooks`, `--agent`, and `--editor` opt into a single setup action without `--full`.
 
 When a default upgrade skips setup actions that would apply, it prints a hint to run `vp migrate --full`. Fresh (non Vite+) projects always run the full migration.
@@ -257,10 +257,9 @@ Migration replaces exact `voidzero-dev/setup-vp@v1` references in GitHub Actions
 
 ## Node.js Version Rules
 
-Migration converts legacy Node.js version-manager files to `.node-version`, the format Vite+ reads. On an existing Vite+ project this conversion is part of the full setup bucket, so it runs with `vp migrate --full`; fresh migrations run it unconditionally.
+Migration converts the Volta `volta.node` pin to `.node-version`, because Vite+ does not read Volta. On an existing Vite+ project this conversion is part of the full setup bucket, so it runs with `vp migrate --full`; fresh migrations run it unconditionally.
 
-- `.nvmrc` and Volta `volta.node` pins are converted to `.node-version`. An existing `.node-version` is kept.
-- When `.nvmrc` is removed, any `actions/setup-node` `node-version-file: .nvmrc` reference in `.github/workflows/*.{yml,yaml}` and composite actions under `.github` (`.github/**/action.{yml,yaml}`) is repointed to `.node-version` so CI does not fail with "node version file ... does not exist".
+- When `.node-version` or `.nvmrc` exists, migration keeps it and skips the Volta conversion. Vite+ reads both files directly (see [Node.js Selection](/guide/env#node-js-selection)).
 
 ## Package-Manager Rules
 

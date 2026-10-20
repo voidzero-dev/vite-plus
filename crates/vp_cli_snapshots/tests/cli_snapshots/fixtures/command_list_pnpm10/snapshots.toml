@@ -19,4 +19,6 @@ steps = [
   { argv = ["vp", "pm", "list", "--find-by", "customFinder"], comment = "should use custom finder (pnpm-specific)", continue-on-failure = true },
   { argv = ["vp", "pm", "list", "--recursive"], comment = "should list packages recursively in workspace", continue-on-failure = true },
   { argv = ["vp", "pm", "list", "--", "--loglevel=warn"], comment = "should support pass through arguments", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@10.15.1"], snapshot = false },
+  { argv = ["vp", "pm", "list", "--find-by", "customFinder"], comment = "Reject finders before pnpm 10.16.0.", continue-on-failure = true },
 ]

@@ -1,6 +1,7 @@
 //! First-start installation followed by command execution through the deployed binary.
 
 mod external;
+mod runtime;
 mod shell;
 
 use std::{path::Path, process::ExitCode};
@@ -237,12 +238,27 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
             temporary.persist(binary.as_path()).map_err(|error| error.error)?;
         }
     }
-    if !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file() {
+    let needs_deps = !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file();
+    // A standalone setup retry still needs to return its Node selection when dependencies exist.
+    // In-place upgrades and bundled packages keep their already prepared runtime.
+    let node_version =
+        if !skip_deps && (deploy || needs_deps) { runtime::resolve().await? } else { None };
+    if needs_deps {
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
         if !skip_deps {
-            install::install_production_deps(&version_dir, registry, true).await?;
+            let preferred =
+                node_version.as_deref().filter(|version| runtime::supports_cli(version));
+            if let Some(version) = node_version.as_deref().filter(|_| preferred.is_none()) {
+                output::info(&format!(
+                    "Requested Node.js {version} does not support this Vite+ release; using a separate installation runtime."
+                ));
+            }
+            install::install_production_deps(&version_dir, registry, true, preferred).await?;
         }
+    }
+    if let Some(version) = node_version {
+        runtime::write_resolution(&version).await?;
     }
     #[cfg(windows)]
     if !bundled && !version_dir.join("bin/vp-shim.exe").as_path().is_file() {

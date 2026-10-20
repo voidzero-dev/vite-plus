@@ -1,7 +1,8 @@
 use vp_pm_cli_macros::pm_args;
 
 use crate::resolution::{
-    Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, Pnpm, Resolve, Yarn,
+    Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, PackageManagerDialect, Pnpm, Resolve,
+    Yarn,
 };
 
 #[pm_args]
@@ -12,7 +13,8 @@ pub struct PublishArgs {
     pub(crate) target: Option<String>,
 
     /// Preview without publishing
-    #[arg(long, not_supported(yarn < "4.9.3"))]
+    // npm 5.8 ignores this flag and publishes; stable 5.10 supports previews.
+    #[arg(long, not_supported(npm < "5.10.0", yarn < "4.9.3"))]
     pub(crate) dry_run: bool,
 
     /// Publish tag
@@ -40,7 +42,7 @@ pub struct PublishArgs {
     pub(crate) report_summary: bool,
 
     /// Publish with provenance
-    #[arg(long, not_supported(yarn < "4.9.0", bun))]
+    #[arg(long, not_supported(npm < "9.5.0", yarn < "4.9.0", bun))]
     pub(crate) provenance: bool,
 
     /// Force publish
@@ -48,15 +50,17 @@ pub struct PublishArgs {
     pub(crate) force: bool,
 
     /// Output in JSON format
-    #[arg(long, not_supported(yarn >= "2" && < "4.9.3", bun))]
+    // pnpm 11's native publish dropped JSON output until 11.0.7 restored it.
+    // https://github.com/pnpm/pnpm/releases/tag/v11.0.7
+    #[arg(long, not_supported(pnpm >= "11.0.0" && < "11.0.7", yarn >= "2" && < "4.9.3", bun))]
     pub(crate) json: bool,
 
     /// Publish all workspace packages
-    #[arg(short = 'r', long, not_supported(yarn, bun))]
+    #[arg(short = 'r', long, not_supported(npm < "7.13.0", yarn, bun))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(yarn, bun))]
+    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.13.0", yarn, bun))]
     pub(crate) filter: Option<Vec<String>>,
 
     /// Additional arguments
@@ -102,6 +106,11 @@ impl Npm {
 
 impl Resolve<PublishArgs> for Npm {
     fn resolve(&self, args: &PublishArgs, _diag: &mut Diagnostics) -> CommandResolution {
+        if self.version().is_none() && (args.dry_run || args.provenance) {
+            return CommandResolution::InvalidArgument(
+                "A known npm version is required for --dry-run and --provenance.".into(),
+            );
+        }
         Self::resolve_publish(args)
     }
 }

@@ -14,4 +14,6 @@ steps = [
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "add", "test-vite-plus-package-optional", "--", "--tilde"], comment = "support pass through arguments" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@2.4.2"], snapshot = false },
+  { argv = ["vp", "add", "testnpm2", "--ignore-scripts"], comment = "Yarn 2 supports skip-builds for install, but not for add.", continue-on-failure = true },
 ]

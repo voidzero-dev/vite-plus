@@ -85,6 +85,11 @@ pub const VP_NODE_SKIP_SIGNATURE_VERIFY: &str = "VP_NODE_SKIP_SIGNATURE_VERIFY";
 /// Override Node.js version (takes highest priority in version resolution).
 pub const VP_NODE_VERSION: &str = "VP_NODE_VERSION";
 
+/// Opt-in Node.js selector for first-start installation; defaults to LTS when unset.
+pub const VP_SETUP_NODE_VERSION: &str = "VP_SETUP_NODE_VERSION";
+/// File used to return the exact project Node.js version to a CI installer.
+pub const VP_SETUP_NODE_VERSION_FILE: &str = "VP_SETUP_NODE_VERSION_FILE";
+
 /// Override package manager and version for vp commands (for example, `pnpm@10.18.0`).
 /// Direct package-manager shims use their own version overrides instead.
 pub const VP_PACKAGE_MANAGER: &str = "VP_PACKAGE_MANAGER";
@@ -109,6 +114,11 @@ pub const VP_ENV_USE_EVAL_ENABLE: &str = "VP_ENV_USE_EVAL_ENABLE";
 
 /// Explicitly specify the current shell.
 pub const VP_SHELL: &str = "VP_SHELL";
+
+/// Nushell version that `vp env setup` uses to select the `env.nu` syntax,
+/// instead of running `nu`. Tests set it to make the output independent of
+/// the installed Nushell.
+pub const VP_NU_VERSION: &str = "VP_NU_VERSION";
 
 /// Filter for update task types.
 pub const VP_UPDATE_TASK_TYPES: &str = "VP_UPDATE_TASK_TYPES";

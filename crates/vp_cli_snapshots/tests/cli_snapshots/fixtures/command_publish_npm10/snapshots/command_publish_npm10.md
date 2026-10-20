@@ -66,3 +66,32 @@ should preserve JSON output without publishing
   "bundled": []
 }
 ```
+
+## `vpt json-edit package.json private true`
+
+
+## `vpt json-edit package.json packageManager npm@5.8.0`
+
+
+## `vp pm publish --dry-run`
+
+Reject npm versions that publish despite dry-run. The package is private for safety.
+
+**Exit code:** 1
+
+```
+npm < 5.10.0 does not support --dry-run.
+```
+
+## `vpt json-edit package.json packageManager npm@9.4.2`
+
+
+## `vp pm publish --dry-run --provenance`
+
+Reject provenance before npm 9.5.0.
+
+**Exit code:** 1
+
+```
+npm < 9.5.0 does not support --provenance.
+```

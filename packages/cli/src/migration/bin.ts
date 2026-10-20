@@ -101,7 +101,6 @@ async function confirmNodeVersionFileMigration(
 ): Promise<boolean> {
   const confirmMessageByFile = {
     'package.json': 'Migrate Volta node version (package.json) to .node-version?',
-    '.nvmrc': 'Migrate .nvmrc to .node-version?',
   } as const satisfies Record<NodeVersionManagerDetection['file'], string>;
 
   const message = confirmMessageByFile[detection.file];

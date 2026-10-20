@@ -36,17 +36,9 @@ pre-commit hook runs vp staged
 vp staged
 ```
 
-## `vpt stat-file .nvmrc --assert file`
-
-node version file is not migrated without --full
-
-```
-.nvmrc: file
-```
-
 ## `vpt stat-file .node-version --assert-not file`
 
-only the hooks action ran
+volta.node is not migrated without --full
 
 ```
 .node-version: missing

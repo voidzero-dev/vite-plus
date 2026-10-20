@@ -1261,24 +1261,37 @@ jobs:
             --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml"
             --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast
           )
+          snapshot_registry=(
+            node packages/tools/src/local-npm-registry.ts --snapshot-runner
+            --snapshot-fixtures "$GITHUB_WORKSPACE/crates/vp_cli_snapshots/tests/cli_snapshots/registry"
+            --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR"
+          )
+          run_snapshots() {
+            # Keep both registries alive across nextest's one-process-per-case
+            # workers. Only local-registry cases receive checkout packages.
+            "${snapshot_registry[@]}" --request-log "$VP_SNAP_ARTIFACTS_DIR/shared-registry/registry.jsonl" -- \
+              "${snapshot_registry[@]}" --packages-dir "$VP_SNAP_PACKAGES_DIR/packages" \
+                --request-log "$VP_SNAP_ARTIFACTS_DIR/packed-registry/registry.jsonl" -- \
+                cargo-nextest nextest run "${nextest_run_args[@]}" "$@"
+          }
           # --no-fail-fast: on a snapshot suite every diff is diagnostic
           # signal; cancelling on the first failure hides the rest.
           test_exit=0
           # This fixture requires case-sensitive directory support, which the
           # default temp directory on these runners does not provide.
-          cargo-nextest nextest run "${nextest_run_args[@]}" --partition hash:${{ matrix.shard }}/3 \
+          run_snapshots --partition hash:${{ matrix.shard }}/3 \
             -E 'not test(windows_case_sensitive_shims)' || test_exit=$?
 
           if [[ '${{ matrix.shard }}' == '1' ]]; then
             # Run both flavors on NTFS once. Rust's GetTempPath2 ignores
             # TEMP/TMP under the SYSTEM account, so override SystemTemp.
             SystemTemp='${{ steps.snapshot-temp.outputs.directory }}' \
-              cargo-nextest nextest run "${nextest_run_args[@]}" \
+              run_snapshots \
                 -E 'test(windows_case_sensitive_shims)' || test_exit=$?
 
             # Exercise the same environment wrapper under Windows PowerShell 5.1.
             VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v powershell.exe)")" \
-              cargo-nextest nextest run "${nextest_run_args[@]}" \
+              run_snapshots \
                 -E 'test(command_env_powershell)' || test_exit=$?
           fi
           exit "$test_exit"
@@ -1286,6 +1299,7 @@ jobs:
           RUST_BACKTRACE: '1'
           # Share immutable tarballs across nextest processes in this job.
           VP_SNAP_PACKAGES_DIR: ${{ runner.temp }}/snapshot-packages
+          VP_SNAP_REGISTRY_CACHE_DIR: ${{ runner.temp }}/snapshot-registry-cache
           VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
           # Keep Windows env parity with the `test` recipe in justfile.
           __COMPAT_LAYER: RunAsInvoker
