@@ -141,6 +141,18 @@
         "type": "cargo",
         "package": "oxc_resolver"
       }
+    },
+    {
+      "id": "oxc-node",
+      "name": "oxc-node",
+      "kind": "engine",
+      "delivery": ["compiled"],
+      "aliases": [],
+      "versionSource": {
+        "type": "vendored",
+        "upstream": "oxc-node",
+        "packageJson": "oxc-node/packages/core/package.json"
+      }
     }
   ],
   "edges": [
@@ -202,6 +214,21 @@
     {
       "from": "vite-plus",
       "to": "vite-task",
+      "relationship": "compiles"
+    },
+    {
+      "from": "vite-plus",
+      "to": "oxc-node",
+      "relationship": "compiles"
+    },
+    {
+      "from": "oxc-node",
+      "to": "oxc",
+      "relationship": "compiles"
+    },
+    {
+      "from": "oxc-node",
+      "to": "oxc-resolver",
       "relationship": "compiles"
     }
   ]

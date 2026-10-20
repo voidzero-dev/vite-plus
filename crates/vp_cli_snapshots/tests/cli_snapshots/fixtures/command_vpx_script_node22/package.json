@@ -1,0 +1,9 @@
+{
+  "name": "command-vpx-script-node22",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.23.2"
+  }
+}

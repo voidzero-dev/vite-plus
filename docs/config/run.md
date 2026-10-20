@@ -56,6 +56,10 @@ export default defineConfig({
 
 `cache: true` enables both task and script caching, `cache: false` disables both.
 
+::: warning
+This option can only be set in the workspace root's `vite.config.ts`. Setting it in a package's config will result in an error.
+:::
+
 ## `run.tasks`
 
 - **Type:** `Record<string, Task | string | string[]>`

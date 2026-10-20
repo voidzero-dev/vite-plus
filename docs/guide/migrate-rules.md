@@ -185,6 +185,8 @@ Object-valued nested npm and Bun overrides are preserved: they are user-defined 
 
 Plugin packages (an unscoped name starting with `vite-plugin-` or `unplugin-`, or `vite` in `peerDependencies`/`dependencies`) skip the rewrite even in config files. Only the `vite` specifier is in scope for this rule.
 
+`vite/rolldown` and `vite/rolldown/*` are never rewritten, because `vite-plus` does not export those subpaths; they keep resolving through the core alias.
+
 `declare module 'vite'` augmentations follow the same rule and are preserved outside config files. Through the core alias they reach the same `@voidzero-dev/vite-plus-core` module whose `UserConfig` types `defineConfig` from `vite-plus`, so they keep working after migration; `vite-plus` itself exports no `UserConfig` symbol, so a rewritten `declare module 'vite-plus'` augmentation would merge with nothing. Extensions aimed at `vite-plus`'s own surface are written against `vite-plus` by hand.
 
 ### `vitest` and Browser Imports
