@@ -3,12 +3,55 @@
 use std::io::{Cursor, Read as _};
 
 use flate2::read::GzDecoder;
+use sha2::{Digest, Sha256};
 use tar::Archive;
-use vt_path::AbsolutePath;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{error::Error, integrity, platform, registry};
 
 pub const INSTALL_LOCKFILE: &str = "vp-install-lock.yaml";
+const INSTALL_RECEIPT: &str = "node_modules/.vp-install-complete";
+
+/// Publish only complete files, including when an archive read or disk write fails.
+pub(crate) fn write_atomic(
+    target: &AbsolutePath,
+    mut content: impl std::io::Read,
+) -> std::io::Result<()> {
+    let parent = target.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "File has no parent")
+    })?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    std::io::copy(&mut content, &mut temporary)?;
+    temporary.as_file().sync_all()?;
+    temporary.persist(target).map_err(|error| error.error)?;
+    Ok(())
+}
+
+async fn write(target: AbsolutePathBuf, content: Vec<u8>) -> Result<(), Error> {
+    tokio::task::spawn_blocking(move || write_atomic(&target, content.as_slice())).await.map_err(
+        |error| Error::Setup(format!("Failed to write installation lockfile: {error}").into()),
+    )??;
+    Ok(())
+}
+
+/// An interrupted install must not reuse a receipt from an earlier attempt.
+pub(crate) async fn invalidate_install(version_dir: &AbsolutePath) -> Result<(), Error> {
+    match tokio::fs::remove_file(version_dir.join(INSTALL_RECEIPT)).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Record which release lockfile pnpm successfully installed, independently of self-setup.
+pub(crate) async fn record_install(version_dir: &AbsolutePath) -> Result<(), Error> {
+    let content = match tokio::fs::read(version_dir.join("bin").join(INSTALL_LOCKFILE)).await {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    write(version_dir.join(INSTALL_RECEIPT), Sha256::digest(content).to_vec()).await
+}
 
 /// Restore the release's lockfile before a frozen install. Returns whether it changed.
 pub async fn restore(version_dir: &AbsolutePath) -> Result<bool, Error> {
@@ -20,12 +63,14 @@ pub async fn restore(version_dir: &AbsolutePath) -> Result<bool, Error> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
-    tokio::fs::write(target, content).await?;
+    // Invalidate before restoring: a failure after this write must still retry the install.
+    invalidate_install(version_dir).await?;
+    write(target, content).await?;
     Ok(true)
 }
 
 /// Copy the bootstrap companion, or recover it for a standalone executable.
-/// Returns whether this release requires a frozen dependency installation.
+/// Returns whether this release still needs a frozen dependency installation.
 /// Older releases without a companion retain their existing installation behavior.
 pub async fn prepare(
     source: &AbsolutePath,
@@ -42,7 +87,7 @@ pub async fn prepare(
         // Read before writing: different paths may alias the same file through
         // a symlinked installation root. Copying it onto itself would truncate it.
         let content = tokio::fs::read(sibling).await?;
-        tokio::fs::write(&target, content).await?;
+        write(target.clone(), content).await?;
     }
     if !tokio::fs::try_exists(&target).await? {
         // A copied executable, including one extracted by an older vp upgrade,
@@ -67,10 +112,16 @@ pub async fn prepare(
         let content = content.ok_or_else(|| {
             Error::Setup(format!("Platform package is missing {INSTALL_LOCKFILE}").into())
         })?;
-        tokio::fs::write(&target, content).await?;
+        write(target.clone(), content).await?;
     }
     restore(version_dir).await?;
-    Ok(true)
+    let receipt = match tokio::fs::read(version_dir.join(INSTALL_RECEIPT)).await {
+        Ok(receipt) => receipt,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+        Err(error) => return Err(error.into()),
+    };
+    let content = tokio::fs::read(target).await?;
+    Ok(receipt != Sha256::digest(content).as_slice())
 }
 
 fn from_archive(data: &[u8]) -> Result<Option<Vec<u8>>, Error> {
@@ -115,6 +166,74 @@ mod tests {
     use vt_path::AbsolutePathBuf;
 
     use super::*;
+
+    #[test]
+    fn failed_writes_preserve_the_previous_file_and_allow_retry() {
+        struct FailedRead;
+        impl std::io::Read for FailedRead {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("interrupted archive"))
+            }
+        }
+
+        for previous in [None, Some(b"previous lock".as_slice())] {
+            let temp = tempfile::tempdir().unwrap();
+            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            let target = directory.join(INSTALL_LOCKFILE);
+            if let Some(content) = previous {
+                std::fs::write(&target, content).unwrap();
+            }
+            let partial = Cursor::new(b"partial lock").chain(FailedRead);
+            assert!(write_atomic(&target, partial).is_err());
+            assert_eq!(std::fs::read(&target).ok().as_deref(), previous);
+            // The incomplete temporary file is discarded, never published as the companion.
+            assert_eq!(
+                std::fs::read_dir(&directory).unwrap().count(),
+                usize::from(previous.is_some())
+            );
+            write_atomic(&target, b"complete lock".as_slice()).unwrap();
+            assert_eq!(std::fs::read(target).unwrap(), b"complete lock");
+        }
+    }
+
+    #[tokio::test]
+    async fn only_completed_installs_of_the_current_lockfile_are_reused() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let source = directory.join("bin/vp");
+        tokio::fs::create_dir(directory.join("bin")).await.unwrap();
+        tokio::fs::create_dir(directory.join("node_modules")).await.unwrap();
+        tokio::fs::write(directory.join("bin").join(INSTALL_LOCKFILE), "release lock")
+            .await
+            .unwrap();
+        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+
+        record_install(&directory).await.unwrap();
+        tokio::fs::write(directory.join("bin").join(crate::SELF_SETUP_MARKER), "").await.unwrap();
+        crate::install::clear_self_setup_marker(&directory).await.unwrap();
+        assert!(!prepare(&source, &directory, "1.4.0", None).await.unwrap());
+
+        // A new attempt that fails must not retain an earlier success receipt.
+        invalidate_install(&directory).await.unwrap();
+        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+
+        record_install(&directory).await.unwrap();
+        tokio::fs::write(directory.join("pnpm-lock.yaml"), "modified lock").await.unwrap();
+        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+        // Restoring the lockfile alone must not make a subsequent retry skip pnpm.
+        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+
+        record_install(&directory).await.unwrap();
+        for path in ["bin/vp-install-lock.yaml", "pnpm-lock.yaml"] {
+            tokio::fs::write(directory.join(path), "different release lock").await.unwrap();
+        }
+        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+        record_install(&directory).await.unwrap();
+        assert!(!prepare(&source, &directory, "1.4.0", None).await.unwrap());
+
+        tokio::fs::remove_dir_all(directory.join("node_modules")).await.unwrap();
+        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+    }
 
     #[tokio::test]
     async fn bootstrap_copies_the_release_lock_and_replaces_an_old_clients_resolution() {

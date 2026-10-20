@@ -135,9 +135,13 @@ for the publication order and generator entry points.
 The platform manifest advertises the companion with `vpInstallLockfile: true`.
 Extraction fails if an advertised companion is missing. A standalone executable
 or an older upgrade client can lose the companion; self-setup recovers it from
-the exact platform package and verifies that archive's integrity. A frozen
-installation must succeed before setup records completion, including retries
-with an existing `node_modules` directory. Older packages without a companion
+the exact platform package and verifies that archive's integrity. Companion
+writes use a temporary file and atomic rename, so interrupted writes can be retried.
+A successful frozen install records the companion's SHA-256 digest in
+`node_modules/.vp-install-complete`. Self-setup reuses that install after an
+upgrade or a later setup failure. Missing receipts or changed lockfiles require
+another frozen install, even when `node_modules` already exists. Each install
+attempt clears the receipt before it starts. Older packages without a companion
 retain their existing installation behavior. Local development and already
 bundled external installations keep their existing setup paths.
 

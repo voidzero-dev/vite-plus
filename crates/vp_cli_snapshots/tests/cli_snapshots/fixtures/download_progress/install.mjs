@@ -14,11 +14,15 @@ import {
 } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
+
 import { createArchive } from './archive.mjs';
 
 const interactive = process.argv.includes('interactive');
 const failure = process.argv.includes('failure');
 const resolutionRetry = process.argv.includes('resolution-retry');
+const dependencyRetry = process.argv.includes('dependency-retry');
+const upgradeHandoff = process.argv.includes('upgrade-handoff');
+const captureStderr = resolutionRetry || dependencyRetry || upgradeHandoff;
 if (interactive) process.stdin.setRawMode(true);
 const home = resolve('home');
 const user = resolve('user');
@@ -47,9 +51,9 @@ const pnpmArchive = createArchive({
     console.log('pnpm captured stdout');
     console.error('pnpm captured stderr');
     fetch(process.env.npm_config_registry + '/install').then(response => {
-      if (!response.ok) process.exit(17);
       fs.mkdirSync('node_modules/vite-plus', { recursive: true });
       fs.writeFileSync('node_modules/vite-plus/package.json', '{"name":"vite-plus"}');
+      if (!response.ok) process.exit(17);
     });
   `,
 });
@@ -81,7 +85,10 @@ async function handleRequest(request, response) {
     response.end(pnpmArchive);
   } else if (request.url === '/install') {
     await checkpoint('dependencies');
-    response.writeHead(failure ? 500 : 200).end();
+    const fail =
+      failure ||
+      (dependencyRetry && phases.filter((phase) => phase === 'dependencies').length === 1);
+    response.writeHead(fail ? 500 : 200).end();
   } else {
     response.writeHead(404).end();
   }
@@ -92,9 +99,9 @@ server.listen(0, '127.0.0.1');
 await once(server, 'listening');
 const mirror = `http://127.0.0.1:${server.address().port}`;
 
-async function runInstaller() {
-  const child = spawn(join(external, 'vp'), [], {
-    stdio: ['ignore', 'pipe', resolutionRetry ? 'pipe' : 'inherit'],
+async function runInstaller(binary = join(external, 'vp'), args = []) {
+  const child = spawn(binary, args, {
+    stdio: ['ignore', 'pipe', captureStderr ? 'pipe' : 'inherit'],
     env: {
       ...process.env,
       HOME: user,
@@ -103,7 +110,7 @@ async function runInstaller() {
       VP_NODE_DIST_MIRROR: mirror,
       npm_config_registry: mirror,
       NPM_CONFIG_REGISTRY: mirror,
-      VP_SELF_SETUP_SHELL: 'sh',
+      VP_SELF_SETUP_SHELL: args.length === 0 ? 'sh' : undefined,
       VP_SELF_SETUP_NO_MODIFY_PATH: '1',
       VP_NODE_MANAGER: 'no',
       VP_SHELL: 'zsh',
@@ -128,7 +135,7 @@ async function runInstaller() {
 try {
   console.log('Before installation: preserve this output.');
   let result = await runInstaller();
-  if (resolutionRetry) {
+  if (resolutionRetry || dependencyRetry) {
     assert.equal(result.code, 1, result.stderr);
     assert.equal(result.stdout, '');
     const installed = readdirSync(home)
@@ -136,23 +143,48 @@ try {
       .filter((directory) => existsSync(join(directory, 'node_modules/vite-plus/package.json')));
     assert.equal(installed.length, 1);
     const marker = join(installed[0], 'bin/.vp-setup-complete');
+    const receipt = join(installed[0], 'node_modules/.vp-install-complete');
     assert.equal(existsSync(marker), false);
+    assert.equal(existsSync(receipt), resolutionRetry);
     assert.equal(existsSync(resolutionFile), false);
     assert.deepEqual(phases, ['download', 'prepare', 'dependencies']);
-    console.log('A failed resolution-file write leaves dependencies installed and setup incomplete.');
+    console.log(
+      resolutionRetry
+        ? 'A failed resolution-file write leaves dependencies installed and setup incomplete.'
+        : 'A failed dependency install leaves package.json present, without a completion receipt.',
+    );
 
-    mkdirSync(resolutionDir);
+    if (resolutionRetry) mkdirSync(resolutionDir);
     result = await runInstaller();
     assert.equal(result.code, 0, result.stderr);
-    assert.equal(readFileSync(resolutionFile, 'utf8'), '20.18.0');
+    if (resolutionRetry) assert.equal(readFileSync(resolutionFile, 'utf8'), '20.18.0');
     assert.equal(existsSync(marker), true);
-    console.log('Retry completes a frozen dependency install and returns the requested Node version.');
+    assert.equal(existsSync(receipt), true);
+    console.log(
+      resolutionRetry
+        ? 'Retry reuses the completed frozen install and returns the requested Node version.'
+        : 'Retry completes the frozen dependency install before marking setup complete.',
+    );
+  }
+  if (upgradeHandoff) {
+    assert.equal(result.code, 0, result.stderr);
+    const current = join(home, 'current');
+    const marker = join(current, 'bin/.vp-setup-complete');
+    assert.equal(existsSync(join(current, 'node_modules/.vp-install-complete')), true);
+    // Upgrade completes the shared dependency installer, then clears only the setup marker.
+    rmSync(marker);
+    result = await runInstaller(join(current, 'bin/vp'), ['--help']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(existsSync(marker), true);
+    console.log(
+      'Upgrade handoff completes self-setup without another runtime lookup or dependency install.',
+    );
   }
   const { code, stdout, stderr } = result;
   assert.equal(code, failure ? 1 : 0, stderr);
   assert.deepEqual(
     phases,
-    resolutionRetry
+    dependencyRetry
       ? ['download', 'prepare', 'dependencies', 'dependencies']
       : ['download', 'prepare', 'dependencies'],
   );
@@ -162,6 +194,9 @@ try {
     assert.ok(log.includes('pnpm captured stdout'));
     assert.ok(log.includes('pnpm captured stderr'));
     console.log('Failure log preserves pnpm stdout and stderr.');
+  } else if (upgradeHandoff) {
+    assert.ok(stdout.includes('Usage:'));
+    console.log('The first command runs after self-setup completes.');
   } else {
     assert.deepEqual(
       stdout

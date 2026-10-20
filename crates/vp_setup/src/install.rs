@@ -80,9 +80,10 @@ pub async fn extract_platform_package(
             } else if relative == Path::new(lockfile::INSTALL_LOCKFILE)
                 && entry.header().entry_type().is_file()
             {
-                let mut content = Vec::new();
-                entry.read_to_end(&mut content)?;
-                std::fs::write(bin_dir_clone.join(lockfile::INSTALL_LOCKFILE), content)?;
+                lockfile::write_atomic(
+                    &bin_dir_clone.join(lockfile::INSTALL_LOCKFILE),
+                    &mut entry,
+                )?;
                 has_lockfile = true;
             }
 
@@ -204,6 +205,7 @@ pub async fn install_production_deps(
     preferred_node_version: Option<&str>,
 ) -> Result<(), Error> {
     tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
+    lockfile::invalidate_install(version_dir).await?;
 
     // Keep the bypass local to this Vite+ installation.
     write_release_age_overrides(version_dir).await?;
@@ -232,6 +234,7 @@ pub async fn install_production_deps(
         ));
     }
 
+    lockfile::record_install(version_dir).await?;
     if show_progress {
         vp_shared::output::success("Dependencies installed.");
     }
