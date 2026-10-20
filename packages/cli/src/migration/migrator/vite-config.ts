@@ -40,7 +40,7 @@ import {
   sanitizeMigratedOxlintConfig,
   sanitizeInheritedJsPlugins,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import { createMigrationReport, type MigrationReport } from '../report.ts';
 import {
   type OxlintConfigMigration,
   type OxlintModulePlan,
@@ -291,21 +291,6 @@ export function mergeViteConfigFiles(
     configs.oxlintConfig &&
     referencedConfigs.has(fs.realpathSync(path.join(projectPath, configs.oxlintConfig)))
   ) {
-    const json = readJsonFile(path.join(projectPath, configs.oxlintConfig), true) as
-      | { extends?: unknown }
-      | null
-      | undefined;
-    if (
-      configs.viteConfig &&
-      hasConfigKey(path.join(projectPath, configs.viteConfig), 'lint') &&
-      Array.isArray(json?.extends) &&
-      json.extends.length > 0
-    ) {
-      warnMigration(
-        `Preserved ${displayRelative(path.join(projectPath, configs.oxlintConfig))} because ${configs.viteConfig} already has a lint config. Merge its inherited rules manually.`,
-        report,
-      );
-    }
     configs.oxlintConfig = undefined;
   }
   if (
@@ -340,48 +325,33 @@ function pendingOxlintMigrationMarker(filename: string): string {
   return `// vp migrate: pending ${encodeURIComponent(path.basename(filename))}.`;
 }
 
-/** Resume partial migrations without applying lint setup to other existing Vite+ projects. */
-export function retryPreservedOxlintConfigs(
+/** Finish remaining Oxc merges and deferred cleanup in an existing Vite+ workspace. */
+export function finalizeOxcConfigMigration(
   workspaceRoot: string,
   silent = false,
-  report?: MigrationReport,
+  report: MigrationReport = createMigrationReport(),
   packages?: WorkspacePackage[],
 ): boolean {
-  const prepared = prepareOxlintConfigs([
+  const projectPaths = [
     workspaceRoot,
     ...(packages ?? []).map((pkg) => path.join(workspaceRoot, pkg.path)),
-  ]);
-  let updated = false;
-  for (const [filename, migration] of prepared) {
-    const projectPath = path.dirname(filename);
-    const configs = detectConfigs(projectPath);
-    const existingViteConfig = configs.viteConfig && path.join(projectPath, configs.viteConfig);
-    const source = existingViteConfig ? fs.readFileSync(existingViteConfig, 'utf8') : '';
-    const lines = source.split(/\r?\n/);
-    if (existingViteConfig && hasConfigKey(existingViteConfig, 'lint')) {
-      if (!(migration instanceof Error)) {
-        const marker = oxlintMigrationMarker(filename, migration.file, workspaceRoot);
-        migration.migrated = lines.includes(marker);
-      }
-      continue;
-    }
-    if (!lines.includes(pendingOxlintMigrationMarker(filename))) {
-      continue;
-    }
-    const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
-    mergeOxlintConfigFile(
+  ];
+  // Resolve every graph and reference before any workspace removes a source.
+  const prepared = prepareOxlintConfigs(projectPaths);
+  const referencedConfigs = findReferencedOxcConfigs(projectPaths);
+  const mergedConfigCount = report.mergedConfigCount;
+  for (const projectPath of projectPaths) {
+    mergeViteConfigFiles(
       projectPath,
-      viteConfig,
-      path.basename(filename),
       silent,
       report,
       packages,
       workspaceRoot,
       prepared,
+      referencedConfigs,
     );
-    updated ||= !(migration instanceof Error) && migration.migrated === true;
   }
-  return removeMigratedOxlintConfigs(prepared) || updated;
+  return removeMigratedOxlintConfigs(prepared) || report.mergedConfigCount > mergedConfigCount;
 }
 
 function mergeOxlintConfigFile(
@@ -432,6 +402,16 @@ function mergeOxlintConfigFile(
     return;
   }
   const { file } = migration;
+  const fullViteConfigPath = path.join(projectPath, viteConfig);
+  const hasLintConfig = hasConfigKey(fullViteConfigPath, 'lint');
+  if (hasLintConfig && preparedOxlintConfigs) {
+    const marker = oxlintMigrationMarker(fullOxlintPath, file, workspaceRoot ?? projectPath);
+    if (fs.readFileSync(fullViteConfigPath, 'utf8').split(/\r?\n/).includes(marker)) {
+      // A completed merge can retain its source until another workspace is repaired.
+      migration.migrated = true;
+      return;
+    }
+  }
   // Keep shared rules in one module, including for the workspace that owns it.
   // Fields that Oxlint does not inherit must also remain in the owner's local block.
   const sourceConfig: OxlintConfig = structuredClone(file.config);
@@ -447,12 +427,14 @@ function mergeOxlintConfigFile(
     };
   }
   // Never discard an inheritance tree when a lint block already exists.
-  if (oxlintJson.extends?.length && hasConfigKey(path.join(projectPath, viteConfig), 'lint')) {
-    recordPendingMigration();
-    warnMigration(
-      `Preserved ${displayRelative(fullOxlintPath)} because ${viteConfig} already has a lint config. Merge its inherited rules manually.`,
-      report,
-    );
+  if (hasLintConfig) {
+    if (oxlintJson.extends?.length) {
+      recordPendingMigration();
+      warnMigration(
+        `Preserved ${displayRelative(fullOxlintPath)} because ${viteConfig} already has a lint config. Merge its inherited rules manually.`,
+        report,
+      );
+    }
     return;
   }
   const layers = oxlintConfigLayers(oxlintJson);
@@ -703,15 +685,8 @@ function mergeAndRemoveJsonConfig(
   // AST-based check ignores comments, string-literal occurrences, and nested
   // keys (e.g. `plugins: [{ fmt: ... }]`).
   if (hasConfigKey(fullViteConfigPath, configKey)) {
-    if (!deferRemoval) {
-      fs.unlinkSync(fullJsonConfigPath);
-    }
-    if (!silent) {
-      prompts.log.info(
-        `${configKey} config already present in ${displayRelative(fullViteConfigPath)} — ${deferRemoval ? 'deferred removal of' : 'removed redundant'} ${displayRelative(fullJsonConfigPath)}`,
-      );
-    }
-    return true;
+    // An existing block does not prove that this file has already been merged.
+    return false;
   }
   // Only delete the original JSON after a successful merge. Resolved lint
   // configs contain object extends, which JSON Oxlint configs do not accept.
