@@ -8353,7 +8353,6 @@ dependencies = [
  "clap",
  "console",
  "cow-utils",
- "fspy",
  "napi",
  "napi-build",
  "napi-derive",
