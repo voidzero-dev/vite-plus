@@ -1,0 +1,101 @@
+{
+  "run": "https://github.com/voidzero-dev/vite-plus/actions/runs/39453647412",
+  "benchmark_commit": "31b8c67f1",
+  "source_commit": "0cbfb6d6bf24ceb8b99b8645c613f4d27fadf359",
+  "scope": "Restored main cache payloads: Cargo registry, Cargo git, and target. Excludes Cargo bin and its installation metadata. Each level compresses the same tar stream; SHA-256 of the decompressed bytes must match. One timing sample per level and job.",
+  "samples": [
+    {
+      "name": "linux-lint",
+      "source_bytes": 1776875520,
+      "source_sha256": "fbb377c81a91bef220e723ec4483e273e1850ae997d395443f3a077a705e48a8",
+      "paths": [
+        "/home/runner/.cargo/registry",
+        "/home/runner/.cargo/git",
+        "/home/runner/work/vite-plus/vite-plus/target"
+      ],
+      "zstd": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***",
+      "samples": [
+        {
+          "level": 3,
+          "bytes": 513505284,
+          "compress_seconds": 2.6415996039999996,
+          "decompress_and_hash_seconds": 1.804909391999999
+        },
+        {
+          "level": 6,
+          "bytes": 493021878,
+          "compress_seconds": 6.507066184999999,
+          "decompress_and_hash_seconds": 1.7851912130000045
+        },
+        {
+          "level": 9,
+          "bytes": 457478458,
+          "compress_seconds": 9.765904976000002,
+          "decompress_and_hash_seconds": 1.7819855579999881
+        }
+      ]
+    },
+    {
+      "name": "linux-test",
+      "source_bytes": 3391518720,
+      "source_sha256": "e8b067a35ef016642e388aaf3dfb4e30e94018ea6ebbd68a7a7f56f6d08f5b60",
+      "paths": [
+        "/home/runner/.cargo/registry",
+        "/home/runner/.cargo/git",
+        "/home/runner/work/vite-plus/vite-plus/target"
+      ],
+      "zstd": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***",
+      "samples": [
+        {
+          "level": 3,
+          "bytes": 845734789,
+          "compress_seconds": 6.381204795999992,
+          "decompress_and_hash_seconds": 4.233851232000006
+        },
+        {
+          "level": 6,
+          "bytes": 805789463,
+          "compress_seconds": 15.717300264999977,
+          "decompress_and_hash_seconds": 4.200105497999999
+        },
+        {
+          "level": 9,
+          "bytes": 705263026,
+          "compress_seconds": 22.005928431,
+          "decompress_and_hash_seconds": 4.200576061999982
+        }
+      ]
+    },
+    {
+      "name": "mac-test",
+      "source_bytes": 4381358080,
+      "source_sha256": "40ff23bc23b03fc05171ba01b9ce4896e4821429c6807b7bebc8bcdddaf23abd",
+      "paths": [
+        "/Users/runner/.cargo/registry",
+        "/Users/runner/.cargo/git",
+        "/Users/runner/work/vite-plus/vite-plus/target"
+      ],
+      "zstd": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***",
+      "samples": [
+        {
+          "level": 3,
+          "bytes": 1127662872,
+          "compress_seconds": 1.3496105419999935,
+          "decompress_and_hash_seconds": 3.172481375000004
+        },
+        {
+          "level": 6,
+          "bytes": 1076874052,
+          "compress_seconds": 3.5355037500000037,
+          "decompress_and_hash_seconds": 3.1357934999999912
+        },
+        {
+          "level": 9,
+          "bytes": 926059853,
+          "compress_seconds": 5.343295082999987,
+          "decompress_and_hash_seconds": 2.978743083000012
+        }
+      ]
+    }
+  ]
+}
