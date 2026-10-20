@@ -147,9 +147,14 @@ bundled external installations keep their existing setup paths.
 
 The installation's `.npmrc` keeps `minimum-release-age=0` so a newly published
 version can be installed immediately. This does not change the versions recorded
-in the installation lockfile. Generation and frozen installation both pass
-`--config.auto-install-peers=true` to match the lockfile's settings regardless of
-user configuration. Registry, authentication, and proxy settings remain inherited.
+in the installation lockfile. Generation and frozen installation pin all five
+settings that pnpm checks in `lockfile.settings`:
+`auto-install-peers=true`, `peers-suffix-max-length=1000`,
+`exclude-links-from-lockfile=false`, `dedupe-peers=false`, and
+`inject-workspace-packages=false`. Boolean values use command-line flags. The
+numeric peer suffix limit uses subprocess environment overrides because pnpm
+parses `--config` numbers as strings. Both override user files and inherited
+environment values. Registry, authentication, and proxy settings remain inherited.
 
 ### Command Routing
 

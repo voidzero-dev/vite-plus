@@ -138,13 +138,13 @@ export async function publishedInstallLockfile(
   return undefined;
 }
 
-async function runPnpm(directory: string, args: string[]): Promise<void> {
+async function runPnpm(directory: string, args: string[], env: NodeJS.ProcessEnv): Promise<void> {
   await exec(
     'npm',
     ['exec', '--yes', `--package=pnpm@${INSTALL_PNPM_VERSION}`, '--', 'pnpm', ...args],
     {
       cwd: directory,
-      env: { ...process.env, CI: 'true' },
+      env: { ...process.env, ...env, CI: 'true' },
       maxBuffer: 10 * 1024 * 1024,
     },
   );
@@ -159,17 +159,28 @@ export async function generateInstallLockfile(
   try {
     await writeFile(join(directory, 'package.json'), JSON.stringify(installManifest(version)));
     await writeFile(join(directory, '.npmrc'), 'minimum-release-age=0\n');
-    await runPnpmCommand(directory, [
-      'install',
-      '--ignore-workspace',
-      // The frozen installer uses the same setting, above user npmrc and environment values.
-      '--config.auto-install-peers=true',
-      '--lockfile-only',
-      '--ignore-scripts',
-      '--no-frozen-lockfile',
-      '--registry',
-      registry,
-    ]);
+    // Keep all five lockfile.settings values in sync with crates/vp_setup/src/install.rs.
+    await runPnpmCommand(
+      directory,
+      [
+        'install',
+        '--ignore-workspace',
+        '--config.auto-install-peers=true',
+        '--config.exclude-links-from-lockfile=false',
+        '--config.dedupe-peers=false',
+        '--config.inject-workspace-packages=false',
+        '--lockfile-only',
+        '--ignore-scripts',
+        '--no-frozen-lockfile',
+        '--registry',
+        registry,
+      ],
+      {
+        // --config leaves numbers as strings. Environment values get pnpm's numeric parsing.
+        npm_config_peers_suffix_max_length: '1000',
+        NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH: '1000',
+      },
+    );
     const content = await readFile(join(directory, 'pnpm-lock.yaml'), 'utf8');
     validateInstallLockfile(content, version);
     return content;

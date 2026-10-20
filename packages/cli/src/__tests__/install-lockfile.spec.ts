@@ -37,7 +37,7 @@ describe('release installation lockfile', () => {
     const result = await generateInstallLockfile(
       version,
       'https://registry.example',
-      async (directory, args) => {
+      async (directory, args, env) => {
         temporary = directory;
         expect(JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))).toEqual(
           installManifest(version),
@@ -47,12 +47,19 @@ describe('release installation lockfile', () => {
           'install',
           '--ignore-workspace',
           '--config.auto-install-peers=true',
+          '--config.exclude-links-from-lockfile=false',
+          '--config.dedupe-peers=false',
+          '--config.inject-workspace-packages=false',
           '--lockfile-only',
           '--ignore-scripts',
           '--no-frozen-lockfile',
           '--registry',
           'https://registry.example',
         ]);
+        expect(env).toEqual({
+          npm_config_peers_suffix_max_length: '1000',
+          NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH: '1000',
+        });
         // A repository workspace lockfile cannot be reused for this wrapper.
         await expect(access(join(directory, 'pnpm-lock.yaml'))).rejects.toThrow();
         await writeFile(join(directory, 'pnpm-lock.yaml'), lockfile);

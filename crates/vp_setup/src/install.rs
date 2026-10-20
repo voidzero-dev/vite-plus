@@ -249,8 +249,15 @@ async fn dependency_install_args<'a>(
     let mut args = vec!["install", "--ignore-workspace"];
     if tokio::fs::try_exists(version_dir.join("bin").join(lockfile::INSTALL_LOCKFILE)).await? {
         lockfile::restore(version_dir).await?;
-        // Match the generator even when user configuration disables peer installation.
-        args.extend(["--frozen-lockfile", "--config.auto-install-peers=true"]);
+        // Keep these flags and the numeric setting in run_pnpm_install in sync with
+        // packages/cli/generate-install-lockfile.ts.
+        args.extend([
+            "--frozen-lockfile",
+            "--config.auto-install-peers=true",
+            "--config.exclude-links-from-lockfile=false",
+            "--config.dedupe-peers=false",
+            "--config.inject-workspace-packages=false",
+        ]);
     }
     if let Some(registry_url) = registry {
         args.extend(["--registry", registry_url]);
@@ -334,6 +341,13 @@ async fn run_pnpm_install(
         .current_dir(version_dir)
         .env("CI", "true")
         .env("PATH", path);
+
+    if args.contains(&"--frozen-lockfile") {
+        // --config leaves numbers as strings. Environment values get pnpm's numeric parsing.
+        // Override both spellings so neither an inherited value nor the user npmrc can win.
+        cmd.env("npm_config_peers_suffix_max_length", "1000")
+            .env("NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH", "1000");
+    }
 
     if let Some(registry_url) = registry {
         cmd.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
@@ -714,6 +728,9 @@ mod tests {
                 "--ignore-workspace",
                 "--frozen-lockfile",
                 "--config.auto-install-peers=true",
+                "--config.exclude-links-from-lockfile=false",
+                "--config.dedupe-peers=false",
+                "--config.inject-workspace-packages=false",
                 "--registry",
                 "https://mirror.example"
             ]
