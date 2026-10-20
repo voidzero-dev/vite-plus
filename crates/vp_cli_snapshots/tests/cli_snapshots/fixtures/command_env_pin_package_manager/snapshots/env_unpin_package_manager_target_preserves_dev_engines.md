@@ -12,7 +12,7 @@ an explicit top-level target does not remove a devEngines-only package-manager p
 VITE+ - The Unified Toolchain for the Web
 
 No matching package-manager pin found. No changes made.
-  File: <workspace>/package.json
+  File: package.json
   Checked fields: packageManager
 ```
 

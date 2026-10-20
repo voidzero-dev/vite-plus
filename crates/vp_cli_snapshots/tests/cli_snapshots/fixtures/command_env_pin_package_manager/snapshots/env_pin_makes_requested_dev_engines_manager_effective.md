@@ -9,7 +9,7 @@ VITE+ - The Unified Toolchain for the Web
 
 warn: Current environment resolves to npm from devEngines.packageManager, but pnpm was requested.
 ✓ Pinned package manager to pnpm@10.18.0
-  File: <workspace>/package.json
+  File: package.json
   Field: devEngines.packageManager
 note: Package manager will be downloaded on first use.
 ```

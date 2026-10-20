@@ -10,7 +10,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 ✓ Removed package-manager pin
-  File: <workspace>/package.json
+  File: package.json
   Field: devEngines.packageManager
 ```
 
@@ -40,7 +40,7 @@ a miss reports both searched fields and the explicit scope
 VITE+ - The Unified Toolchain for the Web
 
 No matching package-manager pin found. No changes made.
-  File: <workspace>/package.json
+  File: package.json
   Checked fields: packageManager, devEngines.packageManager
   Scope: yarn
 ```
@@ -53,7 +53,7 @@ an explicit top-level target checks only that field
 VITE+ - The Unified Toolchain for the Web
 
 No matching package-manager pin found. No changes made.
-  File: <workspace>/package.json
+  File: package.json
   Checked fields: packageManager
   Scope: yarn
 ```

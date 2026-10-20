@@ -10,7 +10,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 No matching package-manager pin found. No changes made.
-  File: <workspace>/package.json
+  File: package.json
   Checked fields: devEngines.packageManager
 ```
 
@@ -20,7 +20,7 @@ No matching package-manager pin found. No changes made.
 VITE+ - The Unified Toolchain for the Web
 
 No matching package-manager pin found. No changes made.
-  File: <workspace>/package.json
+  File: package.json
   Checked fields: devEngines.packageManager
   Scope: yarn
 ```
@@ -31,7 +31,7 @@ No matching package-manager pin found. No changes made.
 VITE+ - The Unified Toolchain for the Web
 
 No matching package-manager pin found. No changes made.
-  File: <workspace>/package.json
+  File: package.json
   Checked fields: packageManager
 ```
 
@@ -47,5 +47,5 @@ a missing file is distinct from a readable manifest with no matching pin
 ```
 VITE+ - The Unified Toolchain for the Web
 
-No package.json found at <workspace>/package.json. No changes made.
+No package.json found at package.json. No changes made.
 ```

@@ -38,7 +38,7 @@ a qualified spec pins only the package manager
 VITE+ - The Unified Toolchain for the Web
 
 ✓ Pinned package manager to pnpm@10.18.0
-  File: <workspace>/package.json
+  File: package.json
   Field: devEngines.packageManager
 note: Package manager will be downloaded on first use.
 ```
@@ -147,7 +147,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ✓ Removed devEngines.runtime node entry from <workspace>/package.json
 ✓ Removed package-manager pin
-  File: <workspace>/package.json
+  File: package.json
   Field: devEngines.packageManager
 ```
 

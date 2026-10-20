@@ -16,7 +16,7 @@ VITE+ - The Unified Toolchain for the Web
 
 warn: Current environment resolves to pnpm from lockfile or config, but yarn was requested.
 ✓ Pinned package manager to yarn@4.12.0
-  File: <workspace>/package.json
+  File: package.json
   Field: devEngines.packageManager
 note: Package manager will be downloaded on first use.
 ```

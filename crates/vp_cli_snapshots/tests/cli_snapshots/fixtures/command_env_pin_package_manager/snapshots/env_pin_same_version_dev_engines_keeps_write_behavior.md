@@ -12,7 +12,7 @@ equal versions retain the existing write path rather than reporting a no-op
 VITE+ - The Unified Toolchain for the Web
 
 ✓ Pinned package manager to pnpm@10.18.0
-  File: <workspace>/package.json
+  File: package.json
   Field: devEngines.packageManager
 note: Package manager will be downloaded on first use.
 ```

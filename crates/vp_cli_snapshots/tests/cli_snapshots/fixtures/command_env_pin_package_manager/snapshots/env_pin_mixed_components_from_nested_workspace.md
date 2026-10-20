@@ -10,7 +10,7 @@ VITE+ - The Unified Toolchain for the Web
 note: Version will be downloaded on first use.
 warn: Current environment resolves to npm from devEngines.packageManager, but yarn was requested.
 ✓ Pinned package manager to yarn@4.12.0
-  File: <workspace>/package.json
+  File: ../../package.json
   Field: devEngines.packageManager
 note: Package manager will be downloaded on first use.
 ```
@@ -66,7 +66,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ✓ Removed devEngines.runtime node entry from <workspace>/packages/app/package.json
 ✓ Removed package-manager pin
-  File: <workspace>/package.json
+  File: ../../package.json
   Field: devEngines.packageManager
 ```
 

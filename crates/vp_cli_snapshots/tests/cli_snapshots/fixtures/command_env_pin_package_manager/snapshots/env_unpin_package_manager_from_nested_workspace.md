@@ -6,7 +6,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 ✓ Removed package-manager pin
-  File: <workspace>/package.json
+  File: ../../package.json
   Field: devEngines.packageManager
 ```
 

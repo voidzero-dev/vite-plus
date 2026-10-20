@@ -12,7 +12,7 @@ first write uses this project manifest without a confirmation
 VITE+ - The Unified Toolchain for the Web
 
 ✓ Pinned package manager to yarn@4.12.0
-  File: <workspace>/package.json
+  File: package.json
   Field: devEngines.packageManager
 note: Package manager will be downloaded on first use.
 ```
@@ -38,7 +38,7 @@ note: Package manager will be downloaded on first use.
 VITE+ - The Unified Toolchain for the Web
 
 ✓ Removed package-manager pin
-  File: <workspace>/package.json
+  File: package.json
   Field: devEngines.packageManager
 ```
 
