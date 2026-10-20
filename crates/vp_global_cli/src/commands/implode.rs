@@ -1198,7 +1198,8 @@ mod tests {
     #[cfg(windows)]
     fn locked_executable_child() {
         if std::env::var_os("VP_IMPLODE_LOCK_TEST").is_some() {
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            // Stay alive until the parent test closes stdin.
+            std::io::copy(&mut std::io::stdin(), &mut std::io::sink()).unwrap();
         }
     }
 
@@ -1211,7 +1212,8 @@ mod tests {
         let root = AbsolutePathBuf::new(root.into()).unwrap();
         let cleanup_source = prepare_deferred_delete_source(std::slice::from_ref(&root)).unwrap();
         remove_vite_plus_dir(&root, &cleanup_source).unwrap();
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        // Stay alive until the parent test closes stdin.
+        std::io::copy(&mut std::io::stdin(), &mut std::io::sink()).unwrap();
     }
 
     #[test]
@@ -1287,6 +1289,7 @@ mod tests {
         let mut child = std::process::Command::new(&locked_executable)
             .args(["deferred_root_cleanup_child", "--nocapture"])
             .env("VP_IMPLODE_ROOT_TEST", &original)
+            .stdin(std::process::Stdio::piped())
             .spawn()
             .unwrap();
         let trash_prefix = vt_str::format!("data.removing-{}-", child.id());
@@ -1312,6 +1315,7 @@ mod tests {
         let replacement = original.join("version/replacement.txt");
         std::fs::create_dir_all(replacement.parent().unwrap()).unwrap();
         std::fs::write(&replacement, b"keep").unwrap();
+        drop(child.stdin.take());
         assert!(child.wait().unwrap().success());
 
         for _ in 0..150 {
@@ -1348,9 +1352,9 @@ mod tests {
         let mut child = std::process::Command::new(&executable)
             .args(["locked_executable_child", "--nocapture"])
             .env("VP_IMPLODE_LOCK_TEST", "1")
+            .stdin(std::process::Stdio::piped())
             .spawn()
             .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(250));
         assert!(child.try_wait().unwrap().is_none(), "test executable must still be running");
         assert!(std::fs::remove_file(&executable).is_err(), "running executable must be locked");
 
@@ -1362,6 +1366,7 @@ mod tests {
         std::fs::copy(std::env::current_exe().unwrap(), &executable).unwrap();
         std::fs::write(&pointer, b"new-sidecar").unwrap();
 
+        drop(child.stdin.take());
         assert!(child.wait().unwrap().success());
         for _ in 0..100 {
             if !deferred.executable.exists() && !deferred.pointer.exists() {
