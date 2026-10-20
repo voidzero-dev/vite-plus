@@ -248,3 +248,18 @@ steps = [
   { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.checkJs", "true"] },
   { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "A leading ts-nocheck pragma can still disable project-level JavaScript checking" },
 ]
+
+[[case]]
+name = "migration_oxlint_extends_missing_plugin"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original inherited diagnostics before a missing generated plugin is added", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "jsPlugins", '["eslint-plugin-vp-missing"]'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "rules.vp-missing/no-foo", '"error"'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Sanitize missing generated package references without discarding inheritance" },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "The missing plugin and its rule are removed while inherited plugin rules remain" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "Lint loads successfully and reports the inherited diagnostics", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "example.test.js"], comment = "Inherited override plugins still run", continue-on-failure = true },
+]

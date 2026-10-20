@@ -30,7 +30,6 @@ import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
-  hasGeneratedOxlintConfig,
   oxlintMigrationMarker,
   prepareOxlintConfigs,
   readRulesYaml,
@@ -38,6 +37,7 @@ import {
   resolveOxlintConfigExtends,
   prepareOxlintConfigModules,
   sanitizeMigratedOxlintConfig,
+  sanitizeInheritedJsPlugins,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
@@ -322,10 +322,7 @@ export function retryPreservedOxlintConfigs(
       }
       continue;
     }
-    if (
-      !lines.includes(pendingOxlintMigrationMarker(filename)) &&
-      (migration instanceof Error || !hasGeneratedOxlintConfig(migration.file))
-    ) {
+    if (!lines.includes(pendingOxlintMigrationMarker(filename))) {
       continue;
     }
     const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
@@ -394,7 +391,8 @@ function mergeOxlintConfigFile(
   const { file } = migration;
   // Keep shared rules in one module, including for the workspace that owns it.
   // Fields that Oxlint does not inherit must also remain in the owner's local block.
-  let oxlintJson: OxlintConfig = structuredClone(file.config);
+  const sourceConfig: OxlintConfig = structuredClone(file.config);
+  let oxlintJson = sourceConfig;
   if (file.shared) {
     oxlintJson = {
       extends: [oxlintJson],
@@ -445,6 +443,13 @@ function mergeOxlintConfigFile(
     sanitizeMigratedOxlintConfig(
       oxlintJson,
       collectInstalledPackageNames(workspaceRoot ?? projectPath, packages),
+      report,
+    );
+  } else {
+    sanitizeInheritedJsPlugins(
+      sourceConfig,
+      collectInstalledPackageNames(workspaceRoot ?? projectPath, packages),
+      path.dirname(file.filename),
       report,
     );
   }

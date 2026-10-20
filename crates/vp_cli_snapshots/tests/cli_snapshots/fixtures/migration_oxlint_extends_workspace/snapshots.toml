@@ -180,7 +180,7 @@ steps = [
   { argv = ["vpt", "stat-file", "packages/b/.oxlintrc.json", "--assert", "symlink"], comment = "The failed consumer retains its own alias" },
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The migrated consumer keeps the same diagnostic", continue-on-failure = true },
   { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/b", comment = "The preserved consumer keeps a working JSON fallback", continue-on-failure = true },
-  { argv = ["vpt", "write-file", "packages/b/vite.config.mjs", "export default {};"], comment = "Fix the unsupported export before retrying" },
+  { argv = ["vpt", "replace-file-content", "packages/b/vite.config.mjs", 'export { default } from "./another-config.mjs";', "export default {};"], comment = "Fix the unsupported export while retaining the workspace's pending marker" },
   { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
   { argv = ["vpt", "stat-file", "packages/b/.oxlintrc.json", "--assert", "missing"], comment = "The repaired alias is removed after its own migration completes" },
   { argv = ["vpt", "stat-file", "shared/lint.json", "--assert", "file"], comment = "Unlinking both consumers preserves the shared source" },
@@ -290,4 +290,26 @@ steps = [
   { argv = ["vpt", "replace-file-content", ".oxlintrc.ts", '"no-debugger": "warn"', '"no-debugger": "error"'] },
   { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The owner follows the shared module edit", continue-on-failure = true },
   { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The repaired consumer follows the same edit", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_workspace_new_consumer"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "rm", "packages/b/extra.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "shared/base.json", '{"rules":{"no-console":"error"},"options":{"typeAware":false,"typeCheck":false}}'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "extends", '["./shared/base.json"]'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "stat-file", "shared/base.ts", "--assert", "file"] },
+  { argv = ["vpt", "write-file", "packages/c/package.json", '{"name":"new-consumer","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/c/vite.config.mjs", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/c/.oxlintrc.json", '{"extends":["../../shared/base.json"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/c/index.js", 'console.log("hello");'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/c", comment = "A new workspace uses the retained shared JSON", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "An upgrade does not treat shared modules as a pending migration for the new workspace" },
+  { argv = ["vpt", "print-file", "packages/c/vite.config.mjs"], comment = "The unmarked workspace keeps its original Vite config" },
+  { argv = ["vpt", "print-file", "packages/c/.oxlintrc.json"], comment = "Its newly authored JSON config remains intact" },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/c", comment = "The JSON config retains the same lint output", continue-on-failure = true },
 ]

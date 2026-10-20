@@ -7,7 +7,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { type OxlintConfig } from 'oxlint';
 import { compareReversed, isLessThanOrEqual, normalize } from 'verkit';
 
-import { rewriteEslint } from '../../../binding/index.js';
+import { ResolverFactory, rewriteEslint } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
@@ -764,6 +764,81 @@ function jsPluginsToNamespaces(entries: NonNullable<OxlintConfig['jsPlugins']>):
   return ns;
 }
 
+function warnMissingJsPlugins(plugins: Set<string>, report?: MigrationReport): void {
+  if (plugins.size > 0) {
+    warnMigration(
+      `Stripped JS plugin reference(s) from the generated lint config: ${[...plugins].join(', ')}. ` +
+        'No matching package is present in this workspace, so loading them at lint time would fail. ' +
+        'If you want their Oxlint coverage back, install each package (e.g. `vp install <name>`) and add its name back to `lint.jsPlugins` in vite.config.ts.',
+      report,
+    );
+  }
+}
+
+/** Only remove known missing references: inherited plugins can supply other namespaces at runtime. */
+export function sanitizeInheritedJsPlugins(
+  config: OxlintConfig,
+  availablePackages: Set<string>,
+  configDir: string,
+  report?: MigrationReport,
+): void {
+  const availableSpecifiers = new Set(availablePackages);
+  let resolver: ResolverFactory | undefined;
+  for (const layer of [config, ...(config.overrides ?? [])]) {
+    for (const entry of layer.jsPlugins ?? []) {
+      if (typeof entry !== 'string' || availableSpecifiers.has(entry)) {
+        continue;
+      }
+      const packageName = entry
+        .split('/')
+        .slice(0, entry.startsWith('@') ? 2 : 1)
+        .join('/');
+      if (
+        availablePackages.has(packageName) ||
+        /^\.{1,2}[/\\]/.test(entry) ||
+        path.win32.isAbsolute(entry)
+      ) {
+        availableSpecifiers.add(entry);
+        continue;
+      }
+      resolver ??= new ResolverFactory({ conditionNames: ['module-sync', 'node', 'import'] });
+      if (resolver.sync(configDir, entry).path) {
+        availableSpecifiers.add(entry);
+      }
+    }
+  }
+  const droppedPlugins = new Set<string>();
+  function sanitizeLayer(layer: OxlintConfig, inheritedDropped = new Set<string>()): Set<string> {
+    const { kept, dropped } = partitionJsPlugins(layer.jsPlugins ?? [], availableSpecifiers);
+    if (dropped.length > 0) {
+      layer.jsPlugins = kept;
+      for (const plugin of dropped) {
+        droppedPlugins.add(plugin);
+      }
+    }
+    const droppedNamespaces = new Set([...inheritedDropped, ...jsPluginsToNamespaces(dropped)]);
+    for (const namespace of jsPluginsToNamespaces(kept)) {
+      droppedNamespaces.delete(namespace);
+    }
+    if (layer.plugins) {
+      layer.plugins = layer.plugins.filter(
+        (plugin) => !droppedNamespaces.has(plugin) || OXLINT_NATIVE_PLUGINS.has(plugin),
+      );
+    }
+    for (const rule of Object.keys(layer.rules ?? {})) {
+      if (ruleKeyMatchesNamespace(rule, droppedNamespaces) && !isBuiltinOxlintRule(rule)) {
+        delete layer.rules![rule];
+      }
+    }
+    return droppedNamespaces;
+  }
+  const droppedNamespaces = sanitizeLayer(config);
+  for (const override of config.overrides ?? []) {
+    sanitizeLayer(override, droppedNamespaces);
+  }
+  warnMissingJsPlugins(droppedPlugins, report);
+}
+
 /**
  * Sanitize the `.oxlintrc.json` produced by `@oxlint/migrate` (in-place)
  * before it gets merged into `vite.config.ts`. Drop references that
@@ -908,14 +983,7 @@ export function sanitizeMigratedOxlintConfig(
   // phantom-reference case (e.g. `@unocss/eslint-config` translating
   // into `eslint-plugin-unocss` even though the user never had it).
   // A single accurate message covers both paths.
-  if (allDroppedJsPlugins.size > 0) {
-    warnMigration(
-      `Stripped JS plugin reference(s) from the generated lint config: ${[...allDroppedJsPlugins].join(', ')}. ` +
-        'No matching package is present in this workspace, so loading them at lint time would fail. ' +
-        'If you want their Oxlint coverage back, install each package (e.g. `vp install <name>`) and add its name back to `lint.jsPlugins` in vite.config.ts.',
-      report,
-    );
-  }
+  warnMissingJsPlugins(allDroppedJsPlugins, report);
   if (allDroppedPlugins.size > 0) {
     warnMigration(
       `Stripped unknown plugin reference(s) from the generated lint config: ${[...allDroppedPlugins].join(', ')}. ` +

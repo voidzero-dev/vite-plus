@@ -9,6 +9,7 @@ import { PackageManager } from '../../types/index.ts';
 import {
   injectLintTypeCheckDefaults,
   mergeViteConfigFiles,
+  prepareOxlintConfigs,
   resolveOxlintConfigExtends,
   retryPreservedOxlintConfigs,
   rewriteMonorepo,
@@ -153,6 +154,47 @@ describe('Oxlint JSON extends migration', () => {
       expect(branch.extends![0].rules!['no-debugger']).toBe('error');
     }
   });
+
+  it.each([false, true])(
+    'sanitizes missing root plugins with a shared owner: %s',
+    async (shared) => {
+      write('base.json', {
+        jsPlugins: ['./local-plugin.mjs'],
+        rules: { 'base/custom': 'error' },
+      });
+      write('.oxlintrc.json', {
+        extends: ['./base.json'],
+        jsPlugins: ['eslint-plugin-vp-missing'],
+        rules: { 'vp-missing/custom': 'error', 'base/custom': 'warn' },
+      });
+      const report = createMigrationReport();
+      if (shared) {
+        createWorkspace(['a']);
+        write('packages/a/.oxlintrc.json', { extends: ['../../.oxlintrc.json'] });
+        const packagePath = path.join(project, 'packages/a');
+        const packages = [{ name: 'a', path: 'packages/a' }];
+        const prepared = prepareOxlintConfigs([project, packagePath]);
+        mergeViteConfigFiles(project, true, report, packages, project, prepared);
+        mergeViteConfigFiles(packagePath, true, report, packages, project, prepared);
+      } else {
+        mergeViteConfigFiles(project, true, report);
+      }
+
+      expect(report.warnings).toHaveLength(1);
+      expect(report.warnings[0]).toContain('eslint-plugin-vp-missing');
+      const { lint } = await loadConfig();
+      const migrated = shared ? lint!.extends![0] : lint!;
+      expect(migrated.jsPlugins).not.toContain('eslint-plugin-vp-missing');
+      expect(migrated.rules).not.toHaveProperty('vp-missing/custom');
+      expect(migrated.rules).toHaveProperty('base/custom', 'warn');
+      expect(migrated.extends![0].rules).toHaveProperty('base/custom', 'error');
+      if (shared) {
+        expect((await loadConfig(path.join(project, 'packages/a'))).lint!.extends![0]).toEqual(
+          migrated,
+        );
+      }
+    },
+  );
 
   it.each(['base.ts', 'base.js'])('preserves configs when %s already exists', (filename) => {
     write('base.json', { rules: { 'no-debugger': 'warn' } });
@@ -444,7 +486,10 @@ describe('Oxlint JSON extends migration', () => {
       'off',
     );
 
-    write('packages/b/vite.config.mjs', 'export default {};');
+    fs.writeFileSync(
+      viteConfig,
+      fs.readFileSync(viteConfig, 'utf8').replace(original, 'export default {};'),
+    );
     const retryReport = createMigrationReport();
     expect(
       retryPreservedOxlintConfigs(
@@ -651,13 +696,17 @@ describe('Oxlint JSON extends migration', () => {
     write('.oxlintrc.json', { rules: { 'no-debugger': 'warn' } });
     write('packages/a/.oxlintrc.json', { extends: ['../../.oxlintrc.json'] });
     write('packages/b/.oxlintrc.json', { extends: ['../a/.oxlintrc.json'] });
-    write('packages/b/vite.config.mjs', "export { default } from './other.mjs';");
+    const original = "export { default } from './other.mjs';";
+    const viteConfig = write('packages/b/vite.config.mjs', original);
     expect(migrateWorkspace().warnings).toHaveLength(1);
 
     const modulePath = path.join(project, '.oxlintrc.ts');
     const edited = fs.readFileSync(modulePath, 'utf8').replace('"warn"', '"error"');
     fs.writeFileSync(modulePath, edited);
-    write('packages/b/vite.config.mjs', 'export default {};');
+    fs.writeFileSync(
+      viteConfig,
+      fs.readFileSync(viteConfig, 'utf8').replace(original, 'export default {};'),
+    );
 
     const report = createMigrationReport();
     expect(
@@ -711,6 +760,27 @@ describe('Oxlint JSON extends migration', () => {
     expect(fs.readFileSync(path.join(project, 'vite.config.mjs'), 'utf8')).toBe(
       'export default {};',
     );
+  });
+
+  it('does not retry a new workspace config that references a previously generated module', () => {
+    write('base.json', { rules: { 'no-debugger': 'error' } });
+    write('.oxlintrc.json', { extends: ['./base.json'] });
+    mergeViteConfigFiles(project, true);
+    createWorkspace(['a']);
+    const source = write('packages/a/.oxlintrc.json', { extends: ['../../base.json'] });
+    const original = fs.readFileSync(source, 'utf8');
+    const report = createMigrationReport();
+
+    expect(
+      retryPreservedOxlintConfigs(project, true, report, [{ name: 'a', path: 'packages/a' }]),
+    ).toBe(false);
+
+    expect(report.warnings).toEqual([]);
+    expect(fs.readFileSync(source, 'utf8')).toBe(original);
+    expect(fs.readFileSync(path.join(project, 'packages/a/vite.config.mjs'), 'utf8')).toBe(
+      'export default {};',
+    );
+    expect(fs.existsSync(path.join(project, 'base.ts'))).toBe(true);
   });
 
   it('resumes completed workspace merges after an unreadable graph is repaired', async () => {
@@ -908,6 +978,28 @@ describe('Oxlint JSON extends migration', () => {
     expect(fs.readFileSync(source, 'utf8')).toBe(original);
     expect(report.mergedConfigCount).toBe(0);
     expect(report.warnings[0]).toContain('resolves differently');
+  });
+
+  it('retains an inherited root plugin that resolves on disk without a direct dependency', async () => {
+    write('base.json', { rules: { 'no-debugger': 'error' } });
+    write('node_modules/eslint-plugin-test/package.json', {
+      name: 'eslint-plugin-test',
+      main: 'index.js',
+    });
+    write('node_modules/eslint-plugin-test/index.js', 'module.exports = {};');
+    write('.oxlintrc.json', {
+      extends: ['./base.json'],
+      jsPlugins: ['eslint-plugin-test'],
+      rules: { 'test/custom': 'error' },
+    });
+    const report = createMigrationReport();
+
+    mergeViteConfigFiles(project, true, report);
+
+    expect(report.warnings).toEqual([]);
+    const { lint } = await loadConfig();
+    expect(lint!.jsPlugins).toContain('eslint-plugin-test');
+    expect(lint!.rules).toHaveProperty('test/custom', 'error');
   });
 
   it('does not override an inherited opt-out of the default import rule', async () => {

@@ -133,9 +133,9 @@ Found 0 warnings and 1 error.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
-## `vpt write-file packages/b/vite.config.mjs 'export default {};'`
+## `vpt replace-file-content packages/b/vite.config.mjs 'export { default } from "./another-config.mjs";' 'export default {};'`
 
-Fix the unsupported export before retrying
+Fix the unsupported export while retaining the workspace's pending marker
 
 ```
 ```

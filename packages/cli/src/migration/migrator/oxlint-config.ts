@@ -332,12 +332,6 @@ function isReusableModule(file: OxlintConfigFile, filename: string): boolean {
   );
 }
 
-export function hasGeneratedOxlintConfig(file: OxlintConfigFile): boolean {
-  return (
-    isReusableModule(file, generatedModulePath(file)) || file.extends.some(hasGeneratedOxlintConfig)
-  );
-}
-
 /** Generate portable shared modules, leaving their plugins in their original layers. */
 export function prepareOxlintConfigModules(
   root: OxlintConfigFile,
@@ -405,7 +399,7 @@ export function prepareOxlintConfigModules(
     }
   }
 
-  function generate(file: OxlintConfigFile): string {
+  function generate(file: OxlintConfigFile, sourceConfig: OxlintConfig): string {
     const filename = generatedModulePath(file);
     const existing = modules.get(filename);
     if (existing && moduleProvenance(existing.file) !== moduleProvenance(file)) {
@@ -434,7 +428,7 @@ export function prepareOxlintConfigModules(
     const inherited = file.extends.map((child, index) => {
       const name = `oxlintConfig${index + 1}`;
       imports.push(
-        `import ${name} from ${JSON.stringify(relativeImport(filename, generate(child)))};`,
+        `import ${name} from ${JSON.stringify(relativeImport(filename, generate(child, sourceConfig.extends![index])))};`,
       );
       return name;
     });
@@ -450,7 +444,7 @@ export function prepareOxlintConfigModules(
       const url = encoded.startsWith('../') ? encoded : `./${encoded}`;
       return `fileURLToPath(new URL(${JSON.stringify(url)}, import.meta.url))`;
     }
-    const config = structuredClone(file.config);
+    const config = structuredClone(sourceConfig);
     ensureSvelteRuneGlobals(config);
     const body = printConfig(config, inherited, { pluginExpression });
     if (needsFileUrl) {
@@ -462,14 +456,14 @@ export function prepareOxlintConfigModules(
 
   const imports: string[] = [];
   let nextName = 1;
-  const inherited = importedFiles.map((file) => {
+  const inherited = importedFiles.map((file, index) => {
     let name: string;
     do {
       name = `oxlintConfig${nextName++}`;
     } while (names.has(name));
     names.add(name);
     imports.push(
-      `import ${name} from ${JSON.stringify(relativeImport(viteConfigPath, generate(file)))};`,
+      `import ${name} from ${JSON.stringify(relativeImport(viteConfigPath, generate(file, config.extends![index])))};`,
     );
     return name;
   });
