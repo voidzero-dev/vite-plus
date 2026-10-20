@@ -183,7 +183,7 @@ In CI, `vp env use` can run without shell initialization. It writes a temporary 
 The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShell. Run `vp env setup` and follow its printed shell setup instructions to enable it. Press Tab to complete commands, or project task names after `vp run` and `vpr`.
 
 - **Zsh**: Run `autoload -Uz compinit; compinit` before loading the setup script if your shell has not initialized completion.
-- **Nushell**: Completion requires `fish` on `PATH`.
+- **Nushell**: Completion requires `fish` on `PATH`. Use Nushell 0.112.1 or later; see [Nushell version](/guide/global-cli#nushell-version).
 
 ### Manage
 
