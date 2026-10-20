@@ -131,9 +131,12 @@ function runAndExit(
     }
     const { code, signal } = exited;
     if (signal && process.platform !== 'win32') {
+      // Die by the same signal. Removing every listener, and the one added and removed
+      // here, restores its default action, which also covers SIGPIPE and SIGXFSZ, which
+      // Node.js ignores. The exit below runs only if the signal still does not end us.
       process.removeAllListeners(signal);
+      process.on(signal, ignoreSignal).off(signal, ignoreSignal);
       process.kill(process.pid, signal);
-      return;
     }
     process.exit(exitCodeFromClose(code, signal));
   };
