@@ -115,6 +115,19 @@ runs:
       uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       with:
         version: 0.15.2
+        # The action otherwise saves a new compilation cache for every run.
+        # Keep its compiler download cache and manage compilation caching below.
+        use-cache: false
+
+    - name: Restore Zig compilation cache
+      id: zig-cache
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        # setup-zig sets both Zig cache directories to this path.
+        path: .zig-cache
+        # Reuse across source changes and reruns; refresh for toolchain changes.
+        key: zig-compile-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target }}-${{ inputs.profile }}-${{ hashFiles('rust-toolchain.toml', '.github/actions/build-upstream/action.yml') }}
 
     # This release includes the AArch64 Cortex-A53 linker fix and prebuilt binaries.
     - name: Install cargo-zigbuild (musl)
@@ -229,6 +242,14 @@ runs:
         INPUTS_PROFILE: ${{ inputs.profile }}
         INPUTS_TARGET: ${{ inputs.target }}
 
+    - name: Save Zig compilation cache
+      if: github.ref == 'refs/heads/main' && steps.native.outputs.build == 'true' && contains(inputs.target, 'musl') && steps.zig-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .zig-cache
+        key: ${{ steps.zig-cache.outputs.cache-primary-key }}
+
+    # PR workflows and reruns reuse these expensive native builds.
     - name: Save NAPI binding cache
       if: steps.native.outputs.build == 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

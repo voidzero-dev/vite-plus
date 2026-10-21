@@ -83,7 +83,8 @@ describe('Oxlint JSON extends migration', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(project, { recursive: true, force: true });
+    // Windows can keep the temp directory locked briefly after Vite loads the config.
+    fs.rmSync(project, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it('resolves nested JSONC paths relative to each declaring file and retains inheritance order', async () => {
