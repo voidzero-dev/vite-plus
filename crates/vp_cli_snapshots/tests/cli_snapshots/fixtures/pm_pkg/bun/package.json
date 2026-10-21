@@ -1,5 +1,5 @@
 {
   "name": "pm-pkg-bun",
   "version": "1.0.0",
-  "packageManager": "bun@1.2.19"
+  "packageManager": "bun@1.3.11"
 }

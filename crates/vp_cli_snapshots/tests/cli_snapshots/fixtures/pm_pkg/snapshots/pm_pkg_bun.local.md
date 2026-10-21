@@ -50,7 +50,7 @@
 ```
 {
   "name": "pm-pkg-bun",
-  "packageManager": "bun@1.2.19",
+  "packageManager": "bun@1.3.11",
   "private": true,
   "scripts": {},
   "version": "1.0.0"
