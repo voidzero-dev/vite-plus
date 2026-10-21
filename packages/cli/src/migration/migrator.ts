@@ -12,6 +12,7 @@ export * from './migrator/source-scan.ts';
 export * from './migrator/vite-plus-bootstrap.ts';
 export * from './migrator/package-json.ts';
 export * from './migrator/vite-config.ts';
+export * from './migrator/oxlint-config.ts';
 export * from './migrator/git-hooks.ts';
 export * from './migrator/setup.ts';
 export * from './migrator/core-finalization.ts';

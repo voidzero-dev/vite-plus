@@ -1669,6 +1669,46 @@ export interface TypeScriptOptions {
   rewriteImportExtensions?: 'rewrite' | 'remove' | boolean;
 }
 
+export interface LoadContext {
+  /** Export conditions of the relevant `package.json` */
+  conditions?: Array<string>;
+  /**
+   * The format optionally supplied by the `resolve` hook chain. Node.js passes it as
+   * `undefined`, not `null`, when the chain reported none — a `.node` or `.wasm` file
+   * resolved without its flag, any extension Node.js does not know — and a required
+   * field would reject the whole context with "Missing field `format`" instead of
+   * letting Node.js raise its own `ERR_UNKNOWN_FILE_EXTENSION`.
+   */
+  format?: string | null;
+  /** An object whose key-value pairs represent the assertions for the module to import */
+  importAttributes: Record<string, string>;
+}
+
+export interface LoadFnOutput {
+  format: string;
+  source?: string | Uint8Array | Buffer | null;
+  responseURL?: string;
+}
+
+export interface OxcResolveOptions {
+  getCurrentDirectory?: () => string;
+}
+
+export interface ResolveContext {
+  /** Export conditions of the relevant `package.json` */
+  conditions: Array<string>;
+  /** An object whose key-value pairs represent the assertions for the module to import */
+  importAttributes: Record<string, string>;
+  parentURL?: string;
+}
+
+export interface ResolveFnOutput {
+  format?: string | null;
+  shortCircuit?: boolean;
+  url: string;
+  importAttributes?: Record<string, string> | null;
+}
+
 export declare class BindingBundleEndEventData {
   output: string;
   duration: number;
@@ -3741,6 +3781,13 @@ export interface JsCommandResolvedResult {
   envs: Record<string, string>;
 }
 
+/** A literal argument with its original JavaScript UTF-16 source range. */
+export interface LiteralCommandToken {
+  value: string;
+  start: number;
+  end: number;
+}
+
 /**
  * Merge JSON configuration file into vite config file
  *
@@ -3848,6 +3895,16 @@ export type ParseHooksArgsOutcome =
   | { status: 'ok'; value: HooksArgs }
   | { status: 'exit'; code: number }
   | { status: 'error'; error: CliParseError };
+
+/**
+ * Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
+ * Returns null for unsupported syntax. Assignments and wrappers stay in argv;
+ * callers must decide whether a command is safe to rewrite.
+ */
+export declare function parseLiteralCommands(
+  source: string,
+  allowLists: boolean,
+): Array<Array<LiteralCommandToken>> | null;
 
 export declare function parseMigrateArgs(argv: Array<string>): ParseMigrateArgsOutcome;
 
@@ -4145,3 +4202,36 @@ export interface VpDirsJs {
  * `vite-plus` when needed.
  */
 export declare function wrapLazyPlugins(viteConfigPath: string): MergeJsonConfigResult;
+
+export declare namespace oxcNode {
+  export class OxcTransformer {
+    constructor(cwd?: string | undefined | null, helperModuleName?: string | undefined | null);
+    transform(path: string, source: string | Uint8Array): oxcNode.TransformOutput;
+  }
+  export function createResolve(
+    specifier: string,
+    context: ResolveContext,
+    nextResolve: (
+      arg0: string,
+      arg1?: ResolveContext | undefined | null,
+    ) => ResolveFnOutput | Promise<ResolveFnOutput>,
+  ): ResolveFnOutput | Promise<ResolveFnOutput>;
+  export function load(
+    url: string,
+    context: LoadContext,
+    nextLoad: (
+      arg0: string,
+      arg1?: LoadContext | undefined | null,
+    ) => LoadFnOutput | Promise<LoadFnOutput>,
+    helperModuleName?: string | undefined | null,
+  ): LoadFnOutput | Promise<LoadFnOutput>;
+  export function setTransformDeps(mode?: string | undefined | null): void;
+  export function setTsconfigPath(path?: string | undefined | null): void;
+  /** A file transformed for the CommonJS loader. */
+  export interface TransformOutput {
+    source: string;
+    /** The source map as a JSON string. */
+    sourceMap?: string;
+  }
+  export function transformsDep(path: string): boolean;
+}

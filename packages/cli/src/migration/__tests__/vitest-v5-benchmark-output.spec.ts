@@ -201,6 +201,15 @@ describe('Vitest v5 benchmark JSON command migration', () => {
     expect(result.findings).toEqual([]);
   });
 
+  it('preserves UTF-16 positions around non-ASCII benchmark arguments', () => {
+    const input = `vitest bench '性能🦀'  --outputJson "报告🦀.json" --run`;
+    const result = migrateVitestV5Command('package.json', input, true);
+    expect(result.content).toBe(
+      `vitest bench '性能🦀'  --reporter=default --reporter=json --outputFile="报告🦀.json" --run`,
+    );
+    expect(result.findings).toEqual([]);
+  });
+
   it.each([
     'vitest bench --outputJson=$OUTPUT',
     'vitest bench --outputJson *.json',

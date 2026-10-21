@@ -366,7 +366,7 @@ Examples:
         tool: String,
     },
 
-    /// Pin Node.js and package-manager versions in the current directory
+    /// Pin Node.js locally and package-manager versions at the workspace root
     #[command(after_long_help = "\
 Examples:
   vp env pin lts                  # Pin Node.js to latest LTS
@@ -376,15 +376,21 @@ Examples:
   vp env pin \"^20.0.0\" --force    # Overwrite existing pin
   vp env pin 24 --target node-version   # Force the .node-version file
 
-The write target follows the compatibility-first rule: an existing .node-version
-keeps being updated, as does an effective .nvmrc in the current directory.
+Node.js pins use the current directory. Package-manager pins use the workspace
+root package.json, or the current project package.json outside a workspace.
+Pinning both components can update two different files. --target selects a pin
+source, not a project directory.
+
+The Node.js write target follows the compatibility-first rule: an existing
+.node-version keeps being updated, as does an effective .nvmrc in the current
+directory.
 Otherwise the pin is written to package.json#devEngines.runtime, or .node-version
 when the directory has no package.json.")]
     Pin {
         /// Versions to pin. Bare versions select Node.js; package managers use name@version.
         specs: Vec<String>,
 
-        /// Remove the pin from the current directory
+        /// Remove Node.js pins locally and package-manager pins at the workspace root
         #[arg(long)]
         unpin: bool,
 
@@ -401,7 +407,12 @@ when the directory has no package.json.")]
         target: Option<PinTarget>,
     },
 
-    /// Remove environment pins from the current directory (alias for `pin --unpin`)
+    /// Remove Node.js pins locally and package-manager pins at the workspace root
+    #[command(after_long_help = "\
+Alias for pin --unpin. Node.js pins use the current directory. Package-manager
+pins use the workspace root package.json, or the current project package.json
+outside a workspace. Removing both components can update two different files.
+--target selects a pin source, not a project directory.")]
     Unpin {
         /// Limit removal to node, pm, or a package-manager family
         scope: Option<String>,
@@ -537,7 +548,7 @@ pub enum PinTarget {
     NodeVersion,
     /// Pin via the .nvmrc file
     Nvmrc,
-    /// Pin via package.json#devEngines.runtime
+    /// Pin via package.json#devEngines (runtime or packageManager)
     DevEngines,
     /// Pin via the top-level packageManager field
     PackageManager,

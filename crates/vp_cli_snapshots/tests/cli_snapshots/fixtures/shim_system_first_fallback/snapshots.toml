@@ -91,3 +91,18 @@ requires = ["bash"]
 steps = [
   { argv = ["bash", "placement.sh"], comment = "Reloading env is idempotent; mode changes invalidate Bash command paths." },
 ]
+
+[[case]]
+name = "vpx_script_follows_vp_node"
+vp = "global"
+cwd = "vpx-project"
+comment = "vpx script mode runs on the Node.js that vp node selects, including system-first mode."
+steps = [
+  { argv = ["node", "../setup-system-node.cjs"], snapshot = false },
+  { argv = ["vp", "env", "on"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "System-first: the system Node.js found on PATH, as vp node selects." },
+  { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "A Vite+ shim before system Node.js selects managed Node.js." },
+  ["vp", "env", "on", "node"],
+  { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode ignores system Node.js." },
+]

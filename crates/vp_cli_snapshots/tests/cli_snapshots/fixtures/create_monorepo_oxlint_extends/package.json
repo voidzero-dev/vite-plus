@@ -1,0 +1,6 @@
+{
+  "name": "create-oxlint-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.0.0"
+}

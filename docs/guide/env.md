@@ -189,14 +189,19 @@ The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShe
 
 - `vp env default` shows the global Node.js default and each configured package-manager version. Bare versions set Node.js; qualified specs such as `pnpm@10.18.0` set that package manager's shim default without replacing the defaults for Bun, Yarn, or npm. `--unset` clears all defaults unless scoped.
 - `vp env default <lts|latest>` and package-manager dist-tags such as `pnpm@latest` or `pnpm@latest-10` re-resolve on each use, so the default follows the tag, including new majors for `latest`. Other versions and ranges, such as `24` or `pnpm@10`, resolve to an exact version when set.
-- `vp env pin` shows or writes project pins. Existing `.node-version` and top-level `packageManager` fields keep being updated for compatibility. An existing `.nvmrc` is updated when it is the effective Node source in the current directory; its comments and other non-version content are preserved. Otherwise Vite+ writes the matching `devEngines` entry. Use `--target node-version`, `--target nvmrc`, `--target dev-engines`, or `--target package-manager` to choose explicitly. Pinning in a child directory does not modify an inherited `.nvmrc`.
-- `vp env unpin` removes both effective pins by default; append a selector to remove one. Lower-priority declarations are not deleted.
+- `vp env pin` shows or writes project pins. Node.js pins use the current directory. Package-manager pins use the workspace root `package.json`, or the current project `package.json` outside a workspace. Pinning both components can update two different files.
+
+  Existing `.node-version` and top-level `packageManager` fields keep being updated for compatibility. An existing `.nvmrc` is updated when it is the effective Node source in the current directory. Its comments and other non-version content are preserved. Otherwise Vite+ writes the matching `devEngines` entry.
+
+  Use `--target node-version`, `--target nvmrc`, `--target dev-engines`, or `--target package-manager` to choose the pin source explicitly. This does not change the project directory. Package-manager output shows the file path relative to the current working directory and the field that was updated, or the target before an existing overwrite prompt. Pinning in a child directory does not modify an inherited `.nvmrc`.
+
+- `vp env unpin` (alias for `vp env pin --unpin`) removes both effective pins by default. Append a selector to remove one. Node.js removal uses the current directory. Package-manager removal uses the workspace root manifest, or the current project manifest outside a workspace. `--target` selects the pin source within that scope. The output identifies the removed package-manager field, or the fields checked when no matching pin is found. Lower-priority declarations are not deleted.
 - `vp env use` activates the complete project environment. Explicit specs override selected components; `--unset` clears both unless scoped.
 - `vp env install` installs the complete resolved environment, a selected component, or explicit specs.
 - `vp env uninstall` removes the Node.js version resolved from an explicit version or selector, such as `22` or `lts`. Package managers require a qualified exact version, such as `pnpm@10.18.0`.
 - `vp env clean` removes unused installs. Use `clean node`, `clean pm`, or a concrete manager. Current and configured-default versions are preserved.
 - `vp env exec` runs a command in the resolved environment. Use `--node` and `--package-manager`; `--npm` is an alias for `--package-manager npm@…`.
-- `vp node` uses the resolved Node.js runtime and exposes the selected package-manager path to child processes.
+- `vp node` uses the resolved Node.js runtime and exposes the selected package-manager path to child processes. It runs Node.js as is, so TypeScript files get Node.js type stripping only; [`vpx <file>`](/guide/vpx#running-scripts) runs them on the same runtime with full TypeScript support.
 
 ### Inspect
 

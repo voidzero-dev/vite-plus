@@ -1,0 +1,9 @@
+{
+  "name": "mini-jsx",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./jsx-runtime": "./index.js",
+    "./jsx-dev-runtime": "./index.js"
+  }
+}

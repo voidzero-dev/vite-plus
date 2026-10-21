@@ -8,5 +8,10 @@
     "repo": "https://github.com/vitejs/vite.git",
     "branch": "main",
     "hash": "b6c20f6a8126d8561891e5fb9368e8fc9da37538"
+  },
+  "oxc-node": {
+    "repo": "https://github.com/oxc-project/oxc-node.git",
+    "branch": "main",
+    "hash": "ce22828c84d6fde2c5270141c135f1944e35c4e3"
   }
 }

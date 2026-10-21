@@ -326,6 +326,10 @@ describe('collectMigrationSetupPlan existing Vite+ hooks', () => {
       ['vp config --no-hooks', 'vp config'],
       ['tsc -b && vp config --no-hooks', 'tsc -b && vp config'],
       [
+        'echo "你好🦀" && pnpm exec vp config "--no-hooks" && echo "café"',
+        'echo "你好🦀" && pnpm exec vp config && echo "café"',
+      ],
+      [
         'echo "build && --no-hooks" && vp "config" "--no-hooks" && echo --no-hooks',
         'echo "build && --no-hooks" && vp "config" && echo --no-hooks',
       ],

@@ -356,6 +356,9 @@ catalogs:
     picomatch:
       specifier: ^4.0.2
       version: 4.0.7
+    pirates:
+      specifier: ^4.0.7
+      version: 4.0.7
     playwright:
       specifier: ^1.57.0
       version: 1.62.1
@@ -484,6 +487,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@oxc-project/runtime':
+        specifier: 'catalog:'
+        version: 0.155.0
       '@oxc-project/types':
         specifier: 'catalog:'
         version: 0.155.0
@@ -590,6 +596,9 @@ importers:
       picocolors:
         specifier: 'catalog:'
         version: 1.1.1
+      pirates:
+        specifier: 'catalog:'
+        version: 4.0.7
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
