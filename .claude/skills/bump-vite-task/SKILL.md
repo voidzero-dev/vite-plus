@@ -91,9 +91,9 @@ After creating the PR, automatically watch CI without asking the user first. Ens
 - **Test** (Linux, Mac, Windows): Rust unit tests
 - **CLI snapshot test** (Linux, Mac, Windows): the PTY snapshot suite - most likely to fail on a vite-task bump (runner compiles against vite-task crates AND asserts CLI output)
 - **Run task**: Task runner integration tests
-- **Cargo Deny**: License/advisory checks (may have pre-existing failures unrelated to bump)
+- **Security Analysis**: Fix any `cargo deny` advisories. It runs only when `Cargo.lock` changes, so a green `main` does not mean the lockfile is clean.
 
-The only **required** status check for merging is `done`, which aggregates the other checks (excluding Cargo Deny).
+The only **required** status check for merging is `done`, which aggregates the other checks (excluding Security Analysis).
 
 ## Notes
 

@@ -36,8 +36,19 @@ runs:
         restore-cache: false
         target-dir: ${{ inputs.target-dir }}
 
+    - name: Normalize Rust cache environment
+      if: inputs.restore-cache == 'true'
+      shell: bash
+      run: node "$SETUP_RUST_ACTION_PATH/prepare-cache.mjs"
+      env:
+        SETUP_RUST_ACTION_PATH: ${{ github.action_path }}
+
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       if: inputs.restore-cache == 'true'
+      env:
+        # Spend a few more seconds when saving to reduce every later download.
+        # This also applies to the action's post step, which creates the archive.
+        ZSTD_CLEVEL: '9'
       with:
         # Existing entries are immutable and can lack dependencies removed
         # by v2.9.1. Start a new namespace so the corrected action saves them.

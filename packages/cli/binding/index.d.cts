@@ -1690,6 +1690,24 @@ export interface LoadFnOutput {
   responseURL?: string;
 }
 
+/** The code `transformModuleRunner` hands to `@oxc-node/core/importer`. */
+export interface ModuleRunnerOutput {
+  code: string;
+  /** The source map as a JSON string */
+  map?: string;
+  /**
+   * The file is an ES module. Its imports, exports and `import.meta` are calls into
+   * the runner (`__vite_ssr_import__` and friends); a CommonJS file keeps `require`,
+   * `module` and `exports`, and only its `import()` calls into the runner.
+   */
+  esm: boolean;
+  /**
+   * The ES module awaits at its top level, so `require()` of it is
+   * `ERR_REQUIRE_ASYNC_MODULE`.
+   */
+  topLevelAwait: boolean;
+}
+
 export interface OxcResolveOptions {
   getCurrentDirectory?: () => string;
 }

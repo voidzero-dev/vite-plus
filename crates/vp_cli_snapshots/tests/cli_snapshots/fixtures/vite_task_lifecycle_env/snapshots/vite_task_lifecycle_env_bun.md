@@ -3,7 +3,7 @@
 Boundary coverage with Vite+'s real managed Bun distribution. The narrow #2317
 fix does not emulate Bun's lifecycle environment, so both values stay undefined.
 
-## `vpt json-edit package.json packageManager bun@1.3.14`
+## `vpt json-edit package.json packageManager bun@1.3.11`
 
 
 ## `bun --version`
@@ -11,7 +11,7 @@ fix does not emulate Bun's lifecycle environment, so both values stay undefined.
 Execute the pinned Bun binary
 
 ```
-1.3.14
+1.3.11
 ```
 
 ## `vp run check-env`
