@@ -3159,6 +3159,28 @@ mod tests {
     }
 
     #[test]
+    fn test_find_workspace_root_ignores_workspace_that_excludes_nested_package() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_pnpm_workspace_yaml(&temp_dir_path, "packages:\n  - 'packages/*'\n");
+        create_package_json(&temp_dir_path, r#"{"name": "root"}"#);
+
+        let helper = temp_dir_path.join("scripts").join("helper");
+        fs::create_dir_all(&helper).expect("Failed to create helper package");
+        create_package_json(&helper, r#"{"name": "helper"}"#);
+
+        let (result, _) = find_workspace_root(&helper).expect("Should find the nested package");
+        assert_eq!(&*result.path, &*helper);
+        assert!(matches!(result.workspace_file, WorkspaceFile::NonWorkspacePackage(_)));
+
+        let scripts = temp_dir_path.join("scripts");
+        let (result, _) = find_workspace_root(&scripts)
+            .expect("A directory with no package.json stays in the workspace");
+        assert_eq!(&*result.path, &*temp_dir_path);
+        assert!(matches!(result.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)));
+    }
+
+    #[test]
     fn test_detect_package_manager_prefers_pnpm_workspace_over_npm_workspaces() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
