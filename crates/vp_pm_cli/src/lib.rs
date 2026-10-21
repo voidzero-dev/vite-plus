@@ -18,7 +18,9 @@ pub(crate) mod resolution;
 mod shim;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
-pub use config::{npm_authorization_for_url, npm_registry, npm_registry_for_scope};
+pub use config::{
+    npm_authorization_for_url, npm_registry, npm_registry_for_scope, npm_user_config_path,
+};
 pub use dispatch::{
     DispatchResult, dispatch, dispatch_with_metadata, dispatch_with_package_manager,
     dispatch_with_resolved_package_manager,
