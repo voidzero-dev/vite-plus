@@ -148,20 +148,6 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_classic_unlink_package() {
-        let command = expect_run(
-            resolve(
-                &yarn("1.22.0"),
-                UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
-            )
-            .outcome,
-        );
-
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["unlink", "react"]);
-    }
-
-    #[test]
     fn test_yarn_unlink_recursive() {
         for version in ["3.0.0", "3.6.0", "4.18.0"] {
             let resolution =

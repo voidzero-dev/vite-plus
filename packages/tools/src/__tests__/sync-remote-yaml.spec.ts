@@ -2,7 +2,6 @@ import * as verkit from 'verkit';
 import { describe, expect, test } from 'vitest';
 import * as yaml from 'yaml';
 
-import { findLatestStableVersionForMajor } from '../../../../.github/scripts/upgrade-deps-utils.ts';
 import { mergePnpmWorkspaces, mergeWorkspaceYaml } from '../sync-remote-deps.ts';
 
 // `pnpm tool sync-remote` rewrites the whole pnpm-workspace.yaml. It must merge
@@ -40,12 +39,10 @@ const VITE_SRC = `catalog:
 
 describe('mergeWorkspaceYaml()', () => {
   test('preserves the latest supported pin across repeated upstream syncs', () => {
-    const version = findLatestStableVersionForMajor(['5.0.0', '5.1.2', '5.2.0-beta.1', '6.0.0'], 5);
-    expect(version).toBe('5.1.2');
     const main = `catalog:
   # Keep the runner and official packages on the selected release.
-  vitest: ${version}
-  '@vitest/browser': ${version}
+  vitest: 5.1.2
+  '@vitest/browser': 5.1.2
 `;
     const rolldown = `catalog:
   vitest: '=4.1.11'

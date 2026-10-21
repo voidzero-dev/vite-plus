@@ -360,6 +360,7 @@ export function syncViteDevtoolsDependencies(corePkg: PackageJson, vitePkg: Pack
 
 // Oxc-related packages that should use the higher version on conflict
 const OXC_PACKAGE_PREFIXES = [
+  '@oxc-node/',
   '@oxc-project/',
   '@oxlint/',
   '@oxc-minify/',

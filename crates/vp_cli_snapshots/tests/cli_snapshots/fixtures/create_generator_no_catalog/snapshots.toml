@@ -33,7 +33,7 @@ vp = "local"
 local-registry = true
 unset-env = ["VP_SKIP_INSTALL", "CI"]
 steps = [
-  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.4.3"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.4.0"], snapshot = false },
   { argv = ["vp", "create", "vite:generator", "--no-interactive", "--directory", "tools/my-generator", "--no-agent", "--no-editor"], snapshot = false, timeout = 120000 },
   { argv = ["vpt", "print-file", "tools/my-generator/package.json"] },
   { argv = ["vp", "install"], snapshot = false, timeout = 120000 },

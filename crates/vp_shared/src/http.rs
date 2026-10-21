@@ -230,6 +230,16 @@ fn build_with(
     if !follow_redirects {
         builder = builder.redirect(reqwest::redirect::Policy::none());
     }
+    // Each `#[tokio::test]` runs on its own runtime, but this client is shared by
+    // the whole test binary. An idle connection belongs to the runtime that opened
+    // it, and httpmock reuses server ports across tests, so another test can send
+    // on it just as that runtime shuts down. The request then fails with "runtime
+    // dropped the dispatch task" after the server has counted it, and the retry
+    // counts it again.
+    #[cfg(feature = "test-utils")]
+    {
+        builder = builder.pool_max_idle_per_host(0);
+    }
     builder.build()
 }
 
