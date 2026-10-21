@@ -597,10 +597,42 @@ pub async fn resolve_version_alias(
     })
 }
 
+/// Run `test` with `vars` and a local `VP_NODE_DIST_MIRROR`, so version resolution stays offline.
+#[cfg(test)]
+pub(super) async fn with_mock_node_index<Fut: Future<Output = ()>>(
+    vars: impl IntoIterator<Item = (&'static str, &std::ffi::OsStr)>,
+    test: impl FnOnce() -> Fut,
+) {
+    use httpmock::prelude::*;
+
+    // Fixed versions keep resolved aliases stable across new Node.js releases.
+    const NODE_INDEX: &str = r#"[
+        {"version": "v25.1.0", "lts": false},
+        {"version": "v24.11.0", "lts": "Krypton"},
+        {"version": "v24.10.0", "lts": false},
+        {"version": "v22.21.0", "lts": "Jod"},
+        {"version": "v22.20.0", "lts": "Jod"},
+        {"version": "v20.19.0", "lts": "Iron"},
+        {"version": "v20.18.0", "lts": "Iron"}
+    ]"#;
+
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(GET).path("/index.json");
+            then.status(200).body(NODE_INDEX);
+        })
+        .await;
+    let vars = vars
+        .into_iter()
+        .map(|(name, value)| (name, value.to_os_string()))
+        .chain([(vp_shared::env_vars::VP_NODE_DIST_MIRROR, server.base_url().into())]);
+    vp_shared::EnvConfig::with_vars_async(vars, |_| test()).await;
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
-    use vp_js_runtime::VersionSource;
     use vp_shared::env_vars;
     use vt_path::AbsolutePathBuf;
 
@@ -858,11 +890,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires running outside of any Node.js project (walk-up finds .node-version)
     async fn test_resolve_version_alias_default_no_source_path() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
             let config =
                 Config { default_node_version: Some("lts".to_string()), ..Default::default() };
             save_config(&config).await.unwrap();
@@ -872,14 +903,15 @@ mod tests {
             tokio::fs::create_dir_all(&test_dir).await.unwrap();
 
             let resolution = resolve_version(&test_dir).await.unwrap();
+            assert_eq!(resolution.version, "24.11.0");
             assert_eq!(resolution.source, "default");
             assert!(resolution.source_path.is_none(), "Alias defaults should not have source_path");
+            assert!(resolution.is_range);
         })
         .await;
     }
 
     #[tokio::test]
-    #[ignore] // Requires running outside of any Node.js project (walk-up finds .node-version)
     async fn test_resolve_version_exact_default_has_source_path() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -906,7 +938,7 @@ mod tests {
     async fn test_resolve_version_invalid_node_version_falls_through_to_lts() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
             // Create .node-version file with invalid version
             tokio::fs::write(temp_path.join(".node-version"), "invalid-version\n").await.unwrap();
 
@@ -915,6 +947,7 @@ mod tests {
 
             // Should fall through to LTS since the .node-version is invalid
             // and no user default is configured
+            assert_eq!(resolution.version, "24.11.0");
             assert_eq!(resolution.source, "lts");
             assert!(resolution.source_path.is_none());
             assert!(resolution.is_range, "LTS fallback should be marked as range");
@@ -949,7 +982,7 @@ mod tests {
     async fn test_resolve_version_invalid_node_version_falls_through_to_engines_node() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
             // Create .node-version file with invalid version (typo or unsupported alias)
             tokio::fs::write(temp_path.join(".node-version"), "laetst\n").await.unwrap();
 
@@ -962,12 +995,7 @@ mod tests {
 
             // Should fall through to engines.node since .node-version is invalid
             assert_eq!(resolution.source, "engines.node");
-            // Version should be resolved from ^20.18.0 (a 20.x version)
-            assert!(
-                resolution.version.starts_with("20."),
-                "Expected version to start with '20.', got: {}",
-                resolution.version
-            );
+            assert_eq!(resolution.version, "20.19.0");
         })
         .await;
     }
@@ -976,7 +1004,7 @@ mod tests {
     async fn test_resolve_version_invalid_node_version_falls_through_to_dev_engines() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
             // Create .node-version file with invalid version
             tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
 
@@ -989,12 +1017,7 @@ mod tests {
 
             // Should fall through to devEngines.runtime since .node-version is invalid
             assert_eq!(resolution.source, "devEngines.runtime");
-            // Version should be resolved from ^20.18.0 (a 20.x version)
-            assert!(
-                resolution.version.starts_with("20."),
-                "Expected version to start with '20.', got: {}",
-                resolution.version
-            );
+            assert_eq!(resolution.version, "20.19.0");
         })
         .await;
     }
@@ -1003,7 +1026,7 @@ mod tests {
     async fn test_resolve_version_invalid_engines_node_falls_through_to_dev_engines() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
         // Create package.json with invalid engines.node but valid devEngines.runtime
         // No .node-version file — resolve_node_version returns EnginesNode source
         let package_json = r#"{"engines":{"node":"invalid"},"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
@@ -1013,11 +1036,7 @@ mod tests {
         let resolution = resolve_version(&temp_path).await.unwrap();
 
         assert_eq!(resolution.source, "devEngines.runtime");
-        assert!(
-            resolution.version.starts_with("20."),
-            "Expected version to start with '20.', got: {}",
-            resolution.version
-        );
+        assert_eq!(resolution.version, "20.19.0");
     })
         .await;
     }
@@ -1140,7 +1159,7 @@ mod tests {
     async fn test_resolve_version_latest_alias_in_node_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
             // Create .node-version file with "latest" alias
             tokio::fs::write(temp_path.join(".node-version"), "latest\n").await.unwrap();
 
@@ -1150,12 +1169,8 @@ mod tests {
             assert_eq!(resolution.source, ".node-version");
             // "latest" is a range (should be re-resolved periodically)
             assert!(resolution.is_range, "'latest' should be marked as a range");
-            // Version should be at least v20.x
-            assert!(
-                resolution.version.starts_with("2") || resolution.version.starts_with("3"),
-                "Expected version to be at least v20.x, got: {}",
-                resolution.version
-            );
+            // "latest" includes non-LTS releases
+            assert_eq!(resolution.version, "25.1.0");
         })
         .await;
     }
@@ -1189,16 +1204,15 @@ mod tests {
     async fn test_resolve_version_env_var_partial_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async(
+        with_mock_node_index(
             [
                 (env_vars::VP_HOME, temp_dir.path().as_os_str()),
                 (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("22")),
             ],
-            |_| async {
+            || async {
                 let resolution = resolve_version(&temp_path).await.unwrap();
 
-                assert!(resolution.version.starts_with("22."));
-                assert!(NodeProvider::is_exact_version(&resolution.version));
+                assert_eq!(resolution.version, "22.21.0");
                 assert_eq!(resolution.source, VERSION_ENV_VAR);
             },
         )

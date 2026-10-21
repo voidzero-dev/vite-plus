@@ -8469,6 +8469,7 @@ dependencies = [
  "dunce",
  "flate2",
  "futures",
+ "httpmock",
  "indexmap",
  "indicatif",
  "indoc",
