@@ -4,10 +4,11 @@ Use `vpx`, `vp exec`, and `vp dlx` to run package binaries and scripts without s
 
 ## Overview
 
-`vpx` does one of two things, depending on its first argument:
+`vpx` does one of three things, depending on its first argument:
 
 - [`vpx <package>`](#running-package-binaries) runs a binary from a local or remote npm package, like `npx`.
 - [`vpx <file>`](#running-scripts) runs a TypeScript or JavaScript file, like `tsx`.
+- [`vpx watch <file>`](#watch-mode) runs a file again when a file it uses changes, like `tsx watch`.
 
 The other commands give stricter control over where a binary comes from:
 
@@ -102,6 +103,33 @@ Scripts can use `vpx` as their interpreter. Make the file executable and keep it
 
 The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "vpx ./scripts/seed.ts"` works in `package.json` scripts without the global CLI. It runs them on the Node.js that started it, which inside `vp run` and package manager scripts is the project's version.
 
+### Watch Mode
+
+```bash
+vpx watch [watch options] [node options] <file> [args...]
+```
+
+`vpx watch` runs a file and runs it again when a file it uses changes, like `tsx watch`. It is oxc-node's `oxnode watch` watcher, running the file with the `vpx` loader.
+
+```bash
+vpx watch ./src/server.ts --port 3000
+vpx watch --include "./config/*.json" --exclude "src/**/*.test.ts" ./src/server.ts
+vpx watch --inspect --clear-screen=false ./src/index.ts
+```
+
+It watches every file the script imports or requires (in worker threads too, on Node.js 24 and later), the tsconfig files `vpx` read and the ones they `extends`, the files a failed import looked for, so creating one reruns the script, and `--env-file` files. `node_modules` is not watched unless `--include` names it. Press Return to rerun at once. Ctrl+C stops the script and the watcher; press it again to force kill.
+
+- `--include <glob>` also watches matching files, and `--exclude <glob>` never watches them
+- `--clear-screen=false` (or `--no-clear-screen`) keeps the output of earlier runs; the screen is cleared only on a terminal
+- `--kill-signal <signal>` stops the script before a rerun (default `SIGTERM`), and `--kill-timeout <ms>` force kills it after that long (default 5000)
+- `--rerun-on-enter=false` (or `--no-rerun-on-enter`) leaves stdin to the script
+- `--poll[=<ms>]` polls files instead of using file system events, for Docker, WSL, and network drives
+- `--tsconfig <path>` applies one tsconfig to every file, as for `vpx <file>`
+
+tsx's `--ignore`, `--watch-preserve-output`, `--watch-kill-signal`, and `--no-cache` and its `CHOKIDAR_USEPOLLING` variable work too. Node.js options go before the file. `vpx watch` no longer runs the binary of the npm package named `watch`; `vp exec watch` and `vp dlx watch` still do.
+
+`vpx --watch <file>` is Node.js's own watch mode. It restarts on imported files and on the tsconfig files and failed-import paths `vpx` reports, but on Linux it notices a created file only from Node.js 26, and it has none of the options above.
+
 ### tsconfig
 
 `vpx` reads compiler options from a tsconfig but does not type-check with it. Each file uses the nearest `tsconfig.json` above it that includes it through `files`, `include`, `exclude`, or project `references`, as `tsc` does, and `extends` is followed. Files in `node_modules` use no tsconfig, and neither does a file that no tsconfig includes, so it gets the defaults below. Such a file still resolves `paths` aliases through the nearest `tsconfig.json` above it, as tsx does: with a root tsconfig whose `include` is `["src"]`, a script in `scripts/` can import the same aliases as `src/`. Because the config depends on the file's location, not on the working directory, `vpx` compiles a file the same way wherever it runs from.
@@ -165,7 +193,7 @@ Most scripts that run with tsx run with `vpx` unchanged. These differences can n
 - **`require()` resolution**: tsx maps `require('./a.js')` to `a.ts` and applies tsconfig `paths` to `require()`. `vpx` resolves `require()` as Node.js does, so write the `.ts` extension, and use `paths` aliases only with `import`.
 - **Signals**: tsx turns `SIGINT` and `SIGTERM` into exit codes 130 and 143 and runs `process.on('exit')` handlers first. Under `vpx` the signal ends the script, as it does under Node.js, so clean up in a `process.on('SIGINT')` or `process.on('SIGTERM')` handler.
 - **Node.js version**: `vpx` needs Node.js `^22.18.0 || ^24.11.0 || >=26.0.0`, while tsx also runs on older releases.
-- **Watch mode**: `tsx watch` becomes `vpx --watch`, which is Node.js `--watch`. It restarts when an imported file or a tsconfig that `vpx` read changes, and when a file that a failed import looked for is created (on Linux, from Node.js 26). It has no `--include`, `--exclude`, or `--clear-screen` options and no rerun on Enter; use `--watch-path` to watch more files. Node.js waits for a script that ignores `SIGTERM` to exit before it restarts, where tsx kills it after a few seconds; pass `--watch-kill-signal=SIGKILL` to restart at once.
+- **Watch mode**: `tsx watch` becomes `vpx watch`, which takes tsx watch's options (see [Watch Mode](#watch-mode)). It also reruns the script on tsconfig edits and when a file a failed import looked for is created, which tsx watch misses.
 - **Eval, REPL, and `--check`**: `vpx --eval`, the REPL, and `vpx --check` do not transform TypeScript.
 - **`node --import tsx`**: `vpx` has no equivalent for tools that must start `node` themselves.
 - **Other loaders**: remove `--import tsx` from `NODE_OPTIONS`. Two loaders registered together compete for the same files.

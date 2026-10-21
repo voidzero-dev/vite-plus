@@ -25,6 +25,16 @@ const SCENARIOS = {
     second: 'name b',
     done: 'restarted after a tsconfig paths edit',
   },
+  // The same with the tsconfig given by `--tsconfig tsconfig.b.json`.
+  pinned: {
+    cwd: 'paths',
+    first: 'name b',
+    file: 'tsconfig.b.json',
+    edit: '{ "compilerOptions": { "paths": { "@lib/*": ["./a/*"] } } }\n',
+    restore: '{ "compilerOptions": { "paths": { "@lib/*": ["./b/*"] } } }\n',
+    second: 'name a',
+    done: 'restarted after an edit to the tsconfig it was given',
+  },
   // The file that `import('./later.js')` looked for is created.
   created: {
     cwd: 'later',

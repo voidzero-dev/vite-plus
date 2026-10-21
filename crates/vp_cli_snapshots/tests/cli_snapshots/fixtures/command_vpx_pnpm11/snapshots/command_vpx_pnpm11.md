@@ -9,11 +9,15 @@ Execute a command from a local or remote npm package, or run a script file
 
 Usage: vpx [OPTIONS] <pkg[@version]> [args...]
        vpx [OPTIONS] [NODE_OPTIONS] <script> [args...]
+       vpx watch [WATCH_OPTIONS] [NODE_OPTIONS] <script> [args...]
 
 Arguments:
   <pkg[@version]>  Package binary to execute
   <script>         Script file to run (.ts, .mts, .cts, .tsx, .js, .mjs, .cjs, .jsx)
   [args...]        Arguments to pass to the command or script
+
+Commands:
+  watch  Run a script and rerun it when a file it uses changes (see `vpx watch --help`)
 
 Options:
   -p, --package <NAME>  Package(s) to install if not found locally
@@ -29,6 +33,7 @@ Examples:
   vpx oxlint@1.85.0 --version            # Run specific version
   vpx -p cowsay -c 'echo "hi" | cowsay'  # Shell mode with package
   vpx ./scripts/seed.ts --dry-run        # Run a TypeScript script
+  vpx watch ./server.ts                  # Rerun the script when a file it uses changes
   vpx --watch ./server.ts                # Pass Node.js options before the script
 ```
 

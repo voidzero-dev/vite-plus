@@ -1,10 +1,12 @@
 //! `vpx <script>`: run a script file on the project's Node.js with the oxc-node
-//! loader that is compiled into the Vite+ native binding.
+//! loader that is compiled into the Vite+ native binding. `vpx watch` runs oxc-node's
+//! watcher, which reruns the script with that loader.
 //!
 //! See `rfcs/vpx-script-execution.md`. The CLI/loader contract is
 //! `node --require <dist/script-preload.cjs> --import <file URL of dist/script-register.js>`
-//! plus the `VP_SCRIPT_TSCONFIG` environment variable; keep it stable, because the
-//! global `vp` may run a newer or older project-local `vite-plus` loader.
+//! plus the `VP_SCRIPT_TSCONFIG` environment variable, and `node <dist/script-watch.js>
+//! <watch args>` for `vpx watch`; keep it stable, because the global `vp` may run a newer
+//! or older project-local `vite-plus` loader.
 
 use std::io::Read as _;
 
@@ -16,6 +18,13 @@ use crate::js_executor::JsExecutor;
 /// `vite-plus/dist` entries: the CommonJS `--require` preload and the `--import`.
 const PRELOAD_ENTRY: &str = "script-preload.cjs";
 const IMPORT_ENTRY: &str = "script-register.js";
+/// The `vpx watch` watcher, which runs scripts with the loader next to it.
+const WATCH_ENTRY: &str = "script-watch.js";
+
+/// What `vpx <script>` needs from `vite-plus/dist`.
+const SCRIPT_ENTRIES: &[&str] = &[PRELOAD_ENTRY, IMPORT_ENTRY];
+/// What `vpx watch` needs from `vite-plus/dist`.
+const WATCH_ENTRIES: &[&str] = &[PRELOAD_ENTRY, IMPORT_ENTRY, WATCH_ENTRY];
 
 /// Extensions that make a token a script.
 const SCRIPT_EXTENSIONS: &[&str] = &[".ts", ".mts", ".cts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"];
@@ -343,13 +352,15 @@ fn has_vpx_shebang(path: &AbsolutePath) -> bool {
     })
 }
 
-/// Find the `vite-plus/dist` directory holding the loader entries: the project's
-/// `vite-plus` first, so teams run the loader version pinned in their lockfile, then
-/// the global install.
-fn resolve_loader_dir(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    choose_loader_dir(JsExecutor::resolve_local_vite_plus_package_dir(cwd), || {
-        JsExecutor::new(None).get_scripts_dir().ok()
-    })
+/// Find the `vite-plus/dist` directory holding `entries`: the project's `vite-plus`
+/// first, so teams run the loader version pinned in their lockfile, then the global
+/// install.
+fn resolve_loader_dir(cwd: &AbsolutePath, entries: &[&str]) -> Option<AbsolutePathBuf> {
+    choose_loader_dir(
+        JsExecutor::resolve_local_vite_plus_package_dir(cwd),
+        || JsExecutor::new(None).get_scripts_dir().ok(),
+        entries,
+    )
     .map(real_dir)
 }
 
@@ -360,16 +371,16 @@ fn real_dir(dir: AbsolutePathBuf) -> AbsolutePathBuf {
     dunce::canonicalize(dir.as_path()).ok().and_then(AbsolutePathBuf::new).unwrap_or(dir)
 }
 
-/// The project's `vite-plus/dist` when it ships both loader entries, else the global
-/// one. A project `vite-plus` too old for `vpx <script>` falls back to the global
-/// install; a change to the CLI/loader contract gets new entry names the same way.
+/// The project's `vite-plus/dist` when it ships every entry in `entries`, else the global
+/// one. A project `vite-plus` too old for `vpx <script>` or `vpx watch` falls back to the
+/// global install; a change to the CLI/loader contract gets new entry names the same way.
 fn choose_loader_dir(
     local_package_dir: Option<AbsolutePathBuf>,
     global_dist: impl FnOnce() -> Option<AbsolutePathBuf>,
+    entries: &[&str],
 ) -> Option<AbsolutePathBuf> {
-    let has_loader = |dir: &AbsolutePathBuf| {
-        dir.join(PRELOAD_ENTRY).as_path().is_file() && dir.join(IMPORT_ENTRY).as_path().is_file()
-    };
+    let has_loader =
+        |dir: &AbsolutePathBuf| entries.iter().all(|entry| dir.join(entry).as_path().is_file());
     local_package_dir
         .map(|dir| dir.join("dist"))
         .filter(has_loader)
@@ -383,7 +394,7 @@ pub async fn execute(
     tsconfig: Option<String>,
     cwd: &AbsolutePath,
 ) -> i32 {
-    let Some(loader_dir) = resolve_loader_dir(cwd) else {
+    let Some(loader_dir) = resolve_loader_dir(cwd, SCRIPT_ENTRIES) else {
         output::error(
             "vpx: The script loader was not found. Upgrade vite-plus to run script files with vpx.",
         );
@@ -414,14 +425,6 @@ pub async fn execute(
         }
     }
 
-    let env = match super::vpx::local_bin_env(cwd) {
-        Ok(env) => env,
-        Err(error) => {
-            output::error(&format!("vpx: {error}"));
-            return 1;
-        }
-    };
-
     let mut args = Vec::with_capacity(invocation.node_args.len() + 4);
     // The preload registers the hooks before any user `--require`; the `--import`
     // registers the off-thread hooks on older Node.js and routes the entry point
@@ -431,6 +434,37 @@ pub async fn execute(
     args.push("--import".to_owned());
     args.push(import_url.to_string());
     args.extend(invocation.node_args);
+    run_node(args, cwd).await
+}
+
+/// `vpx watch <args>`: run oxc-node's watcher from `vite-plus/dist`, which reruns the
+/// script with the loader next to it. `tsconfig` is a `vpx --tsconfig` given before
+/// `watch`, passed on as the watcher's own `--tsconfig`.
+pub async fn execute_watch(args: &[String], tsconfig: Option<String>, cwd: &AbsolutePath) -> i32 {
+    let Some(loader_dir) = resolve_loader_dir(cwd, WATCH_ENTRIES) else {
+        output::error("vpx: The watcher was not found. Upgrade vite-plus to use vpx watch.");
+        return 1;
+    };
+    let mut node_args = Vec::with_capacity(args.len() + 3);
+    node_args.push(loader_dir.join(WATCH_ENTRY).as_path().display().to_string());
+    if let Some(tsconfig) = tsconfig {
+        node_args.push("--tsconfig".to_owned());
+        node_args.push(tsconfig);
+    }
+    node_args.extend_from_slice(args);
+    run_node(node_args, cwd).await
+}
+
+/// Run Node.js with `args` through the core `node` shim, with every `node_modules/.bin`
+/// from `cwd` up first on `PATH`, so a script gets the same runtime selection as `vp node`.
+async fn run_node(args: Vec<String>, cwd: &AbsolutePath) -> i32 {
+    let env = match super::vpx::local_bin_env(cwd) {
+        Ok(env) => env,
+        Err(error) => {
+            output::error(&format!("vpx: {error}"));
+            return 1;
+        }
+    };
 
     // stdout belongs to the script; route vp's own output to stderr.
     output::route_user_output_to_stderr();
@@ -497,7 +531,7 @@ mod tests {
         let (_global, global) = dist(&[PRELOAD_ENTRY, IMPORT_ENTRY]);
         let global = global.join("dist");
         assert_eq!(
-            choose_loader_dir(Some(local.clone()), || Some(global)),
+            choose_loader_dir(Some(local.clone()), || Some(global), SCRIPT_ENTRIES),
             Some(local.join("dist"))
         );
     }
@@ -510,11 +544,30 @@ mod tests {
         for local_files in [&[][..], &[PRELOAD_ENTRY][..], &[IMPORT_ENTRY][..]] {
             let (_local, local) = dist(local_files);
             assert_eq!(
-                choose_loader_dir(Some(local), || Some(global.clone())),
+                choose_loader_dir(Some(local), || Some(global.clone()), SCRIPT_ENTRIES),
                 Some(global.clone())
             );
         }
-        assert_eq!(choose_loader_dir(None, || Some(global.clone())), Some(global.clone()));
+        assert_eq!(
+            choose_loader_dir(None, || Some(global.clone()), SCRIPT_ENTRIES),
+            Some(global.clone())
+        );
+    }
+
+    #[test]
+    fn watcher_falls_back_to_the_global_install_for_a_project_without_it() {
+        // A project vite-plus from before `vpx watch` still runs `vpx <script>` itself.
+        let (_local, local) = dist(&[PRELOAD_ENTRY, IMPORT_ENTRY]);
+        let (_global, global) = dist(WATCH_ENTRIES);
+        let global = global.join("dist");
+        assert_eq!(
+            choose_loader_dir(Some(local.clone()), || Some(global.clone()), WATCH_ENTRIES),
+            Some(global.clone())
+        );
+        assert_eq!(
+            choose_loader_dir(Some(local.clone()), || Some(global), SCRIPT_ENTRIES),
+            Some(local.join("dist"))
+        );
     }
 
     #[cfg(unix)]
@@ -532,8 +585,11 @@ mod tests {
     fn loader_is_missing_when_neither_install_ships_it() {
         let (_local, local) = dist(&[]);
         let (_global, global) = dist(&[PRELOAD_ENTRY]);
-        assert_eq!(choose_loader_dir(Some(local), || Some(global.join("dist"))), None);
-        assert_eq!(choose_loader_dir(None, || None), None);
+        assert_eq!(
+            choose_loader_dir(Some(local), || Some(global.join("dist")), SCRIPT_ENTRIES),
+            None
+        );
+        assert_eq!(choose_loader_dir(None, || None, SCRIPT_ENTRIES), None);
     }
 
     /// `explicitPrograms` in `vpx_script_cases.json`, which the project-local bin's

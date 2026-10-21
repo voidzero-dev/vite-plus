@@ -211,3 +211,36 @@ cwd = "watch"
 env = { VP_NODE_VERSION = "24.12.0" }
 comment = "On the in-thread module.registerHooks() path, the hooks report the tsconfig files they read too."
 steps = [["node", "verify-watch.mjs", "tsconfig", "--watch"]]
+
+[[case]]
+name = "vpx_watch"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "watch"
+comment = "vpx watch runs oxc-node's watcher with the script loader. It reruns the script when an imported file or a tsconfig changes, when the file a failed import looked for is created, and when the tsconfig given by --tsconfig changes."
+steps = [
+  ["node", "verify-watch.mjs", "dependency", "watch"],
+  ["node", "verify-watch.mjs", "tsconfig", "watch"],
+  ["node", "verify-watch.mjs", "created", "watch"],
+  { argv = ["node", "verify-watch.mjs", "pinned", "--tsconfig", "tsconfig.b.json", "watch"], comment = "A vpx --tsconfig before watch is the watcher's --tsconfig" },
+]
+
+[[case]]
+name = "vpx_watch_help"
+vp = ["local", "global"]
+comment = "vpx watch is a subcommand: its help and errors use the vpx watch name."
+steps = [
+  ["vpx", "watch", "--help"],
+  { argv = ["vpx", "watch"], comment = "No entry file", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_watch_signals"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "signals"
+# The script acks a SIGINT on a unix socket in TMPDIR, which the watcher skips when the
+# path would pass 100 bytes; the runner's macOS TMPDIR is that long.
+env = { TMPDIR = "/tmp" }
+comment = "A SIGINT sent to the vpx watch PID reaches the script once, and so does a SIGINT to its whole process group, as Ctrl+C sends it."
+steps = [["node", "watch.mjs"]]
