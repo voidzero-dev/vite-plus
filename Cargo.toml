@@ -319,7 +319,7 @@ vt_snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev 
 vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "8db455ef9c2b1c7b33cf70d8ba370c1f2c49d4c9" }
 vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "8db455ef9c2b1c7b33cf70d8ba370c1f2c49d4c9" }
 walkdir = "2.5.0"
-webpki-root-certs = "1.0.9"
+webpki-root-certs = "1.0.10"
 which = "8.0.6"
 winreg = "0.56.0"
 xxhash-rust = "0.8.15"
