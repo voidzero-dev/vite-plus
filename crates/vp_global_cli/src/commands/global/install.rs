@@ -600,8 +600,22 @@ async fn install_one(
     for info in &binary_infos {
         bin_names.push(info.name.clone());
         let binary_path = node_modules_dir.join(&info.path);
-        if is_javascript_binary(&binary_path) {
-            js_bins.insert(info.name.clone());
+        match is_javascript_binary(&binary_path) {
+            Ok(true) => {
+                js_bins.insert(info.name.clone());
+            }
+            Ok(false) => {}
+            Err(error) => {
+                cleanup_failed_install(&install_dir).await?;
+                return Err(Error::Other(
+                    format!(
+                        "Failed to inspect binary '{}' at {}: {error}",
+                        info.name,
+                        binary_path.as_path().display()
+                    )
+                    .into(),
+                ));
+            }
         }
     }
 
@@ -1194,36 +1208,32 @@ pub(crate) fn extract_binaries(
 /// - The file has a .js, .mjs, or .cjs extension
 /// - The file has a shebang containing "node"
 ///
-/// This function safely reads only the first 256 bytes to check the shebang,
-/// avoiding issues with binary files that may not have newlines.
-fn is_javascript_binary(path: &AbsolutePath) -> bool {
-    // Check extension first (fast path, no file I/O)
+/// Reads only the first 256 bytes and propagates errors other than NotFound.
+fn is_javascript_binary(path: &AbsolutePath) -> std::io::Result<bool> {
+    // Probe even known extensions so directories and unreadable files fail installation.
+    let mut buffer = [0u8; 256];
+    let n = match std::fs::File::open(path.as_path()).and_then(|mut file| file.read(&mut buffer)) {
+        Ok(n) => n,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(error) => return Err(error),
+    };
+
+    // Keep extension-based classification for targets not yet created by lifecycle scripts.
     if let Some(ext) = path.as_path().extension() {
         let ext = ext.to_string_lossy().to_lowercase();
         if ext == "js" || ext == "mjs" || ext == "cjs" {
-            return true;
+            return Ok(true);
         }
     }
 
-    // For extensionless files, read only first 256 bytes to check shebang
-    // This is safe even for binary files
-    if let Ok(mut file) = std::fs::File::open(path.as_path()) {
-        let mut buffer = [0u8; 256];
-        if let Ok(n) = file.read(&mut buffer) {
-            if n >= 2 && buffer[0] == b'#' && buffer[1] == b'!' {
-                // Found shebang, check for "node" in the first line
-                // Find newline or use entire buffer
-                let end = buffer[..n].iter().position(|&b| b == b'\n').unwrap_or(n);
-                if let Ok(shebang) = std::str::from_utf8(&buffer[..end]) {
-                    if shebang.contains("node") {
-                        return true;
-                    }
-                }
-            }
+    if buffer[..n].starts_with(b"#!") {
+        let end = buffer[..n].iter().position(|&b| b == b'\n').unwrap_or(n);
+        if let Ok(shebang) = std::str::from_utf8(&buffer[..end]) {
+            return Ok(shebang.contains("node"));
         }
     }
 
-    false
+    Ok(false)
 }
 
 /// Create a shim for a package binary.
@@ -2208,7 +2218,7 @@ mod tests {
         std::fs::write(&js_file, "console.log('hello')").unwrap();
 
         let path = AbsolutePathBuf::new(js_file).unwrap();
-        assert!(is_javascript_binary(&path));
+        assert!(is_javascript_binary(&path).unwrap());
     }
 
     #[test]
@@ -2221,7 +2231,7 @@ mod tests {
         std::fs::write(&mjs_file, "export default 'hello'").unwrap();
 
         let path = AbsolutePathBuf::new(mjs_file).unwrap();
-        assert!(is_javascript_binary(&path));
+        assert!(is_javascript_binary(&path).unwrap());
     }
 
     #[test]
@@ -2234,7 +2244,7 @@ mod tests {
         std::fs::write(&cjs_file, "module.exports = 'hello'").unwrap();
 
         let path = AbsolutePathBuf::new(cjs_file).unwrap();
-        assert!(is_javascript_binary(&path));
+        assert!(is_javascript_binary(&path).unwrap());
     }
 
     #[test]
@@ -2247,7 +2257,7 @@ mod tests {
         std::fs::write(&cli_file, "#!/usr/bin/env node\nconsole.log('hello')").unwrap();
 
         let path = AbsolutePathBuf::new(cli_file).unwrap();
-        assert!(is_javascript_binary(&path));
+        assert!(is_javascript_binary(&path).unwrap());
     }
 
     #[test]
@@ -2260,7 +2270,7 @@ mod tests {
         std::fs::write(&cli_file, "#!/usr/bin/node\nconsole.log('hello')").unwrap();
 
         let path = AbsolutePathBuf::new(cli_file).unwrap();
-        assert!(is_javascript_binary(&path));
+        assert!(is_javascript_binary(&path).unwrap());
     }
 
     #[test]
@@ -2274,7 +2284,7 @@ mod tests {
         std::fs::write(&native_file, b"\x7fELF").unwrap();
 
         let path = AbsolutePathBuf::new(native_file).unwrap();
-        assert!(!is_javascript_binary(&path));
+        assert!(!is_javascript_binary(&path).unwrap());
     }
 
     #[test]
@@ -2287,7 +2297,7 @@ mod tests {
         std::fs::write(&shell_file, "#!/bin/bash\necho hello").unwrap();
 
         let path = AbsolutePathBuf::new(shell_file).unwrap();
-        assert!(!is_javascript_binary(&path));
+        assert!(!is_javascript_binary(&path).unwrap());
     }
 
     #[test]
@@ -2300,7 +2310,7 @@ mod tests {
         std::fs::write(&python_file, "#!/usr/bin/env python3\nprint('hello')").unwrap();
 
         let path = AbsolutePathBuf::new(python_file).unwrap();
-        assert!(!is_javascript_binary(&path));
+        assert!(!is_javascript_binary(&path).unwrap());
     }
 
     #[test]
@@ -2313,6 +2323,27 @@ mod tests {
         std::fs::write(&empty_file, "").unwrap();
 
         let path = AbsolutePathBuf::new(empty_file).unwrap();
-        assert!(!is_javascript_binary(&path));
+        assert!(!is_javascript_binary(&path).unwrap());
+    }
+
+    #[test]
+    fn test_is_javascript_binary_rejects_directories() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        for name in ["directory", "directory.js", "directory.mjs", "directory.cjs"] {
+            let path = AbsolutePathBuf::new(temp_dir.path().join(name)).unwrap();
+            std::fs::create_dir(&path).unwrap();
+            assert!(is_javascript_binary(&path).is_err(), "{name}");
+        }
+    }
+
+    #[test]
+    fn test_is_javascript_binary_preserves_missing_target_classification() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        for (name, expected) in
+            [("missing", false), ("missing.js", true), ("missing.mjs", true), ("missing.cjs", true)]
+        {
+            let path = AbsolutePathBuf::new(temp_dir.path().join(name)).unwrap();
+            assert_eq!(is_javascript_binary(&path).unwrap(), expected, "{name}");
+        }
     }
 }
