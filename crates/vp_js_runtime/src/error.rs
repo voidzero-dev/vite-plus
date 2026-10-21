@@ -9,6 +9,12 @@ pub enum Error {
     #[error("Version {version} not found for {runtime}")]
     VersionNotFound { runtime: Str, version: Str },
 
+    /// `VP_NODE_MANAGER=system-only` forbids downloading or using a managed runtime
+    #[error(
+        "{variable}=system-only: Vite+ uses only the system Node.js and does not download or use a managed Node.js"
+    )]
+    DisabledBySystemOnly { variable: &'static str },
+
     /// Platform not supported for this runtime
     #[error("Platform {platform} is not supported for {runtime}")]
     UnsupportedPlatform { platform: Str, runtime: Str },

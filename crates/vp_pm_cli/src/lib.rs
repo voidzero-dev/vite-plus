@@ -16,6 +16,7 @@ mod package_manager;
 mod request;
 pub(crate) mod resolution;
 mod shim;
+mod system_only;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::{npm_authorization_for_url, npm_registry, npm_registry_for_scope};
@@ -42,4 +43,7 @@ pub use resolution::{
     LogoutArgs, OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PingArgs, PruneArgs,
     PublishArgs, RebuildArgs, RemoveArgs, SearchArgs, StageCommand, TeamCommand, TokenCommand,
     UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
+};
+pub use system_only::{
+    ensure_managed_package_manager_allowed, package_manager_preference, system_only_variable,
 };

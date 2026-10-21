@@ -96,6 +96,13 @@ pub enum Error {
     #[error("Invalid argument: {0}")]
     InvalidArgument(Str),
 
+    /// A `VP_*_MANAGER=system-only` variable forbids downloading or using a
+    /// managed release of `tool`, and resolving one through the registry.
+    #[error(
+        "{variable}=system-only: Vite+ uses only the system {tool} and does not download or use a managed {tool}"
+    )]
+    DisabledBySystemOnly { tool: Str, variable: &'static str },
+
     #[cfg(feature = "migration")]
     #[error(transparent)]
     AstGrepConfigError(#[from] ast_grep_config::RuleConfigError),
