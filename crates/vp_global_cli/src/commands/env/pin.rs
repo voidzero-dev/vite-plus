@@ -52,8 +52,8 @@ pub async fn execute(
     }
 
     if specs.is_empty() {
-        show_pinned(&cwd).await?;
-        vp_shared::output::print_stdout_line(format_args!(""));
+        let pinned = pinned_message(&cwd).await?;
+        vp_shared::output::print_stdout_line(format_args!("{pinned}\n"));
         return show_package_manager_pin(&cwd).await;
     }
 
@@ -115,87 +115,64 @@ async fn show_package_manager_pin(cwd: &AbsolutePathBuf) -> Result<ExitStatus, E
     Ok(ExitStatus::default())
 }
 
-/// Show the current pinned version.
-async fn show_pinned(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
+/// Describe the current pinned version.
+async fn pinned_message(cwd: &AbsolutePathBuf) -> Result<String, Error> {
     let node_version_path = cwd.join(NODE_VERSION_FILE);
 
     // Check if .node-version exists in current directory
     if tokio::fs::try_exists(&node_version_path).await.unwrap_or(false) {
         let content = tokio::fs::read_to_string(&node_version_path).await?;
         let version = content.trim();
-        vp_shared::output::print_stdout_line(format_args!("Pinned version: {version}"));
-        vp_shared::output::print_stdout_line(format_args!(
-            "  Source: {}",
+        return Ok(format!(
+            "Pinned version: {version}\n  Source: {}",
             node_version_path.as_path().display()
         ));
-        return Ok(ExitStatus::default());
     }
 
     // Check devEngines.runtime in the current directory's package.json
     if let Some(version) = read_dev_engines_node_version(cwd).await {
-        vp_shared::output::print_stdout_line(format_args!("Pinned version: {version}"));
-        vp_shared::output::print_stdout_line(format_args!(
-            "  Source: {} (devEngines.runtime)",
+        return Ok(format!(
+            "Pinned version: {version}\n  Source: {} (devEngines.runtime)",
             cwd.join(PACKAGE_JSON_FILE).as_path().display()
         ));
-        return Ok(ExitStatus::default());
     }
 
     if let Some(resolution) = resolve_node_version(cwd, true).await? {
         if resolution.source == VersionSource::NvmrcFile
             && resolution.project_root.as_ref() == Some(cwd)
         {
-            vp_shared::output::print_stdout_line(format_args!(
-                "Pinned version: {}",
-                resolution.version
-            ));
-            vp_shared::output::print_stdout_line(format_args!(
-                "  Source: {}",
+            return Ok(format!(
+                "Pinned version: {}\n  Source: {}",
+                resolution.version,
                 cwd.join(NVMRC_FILE).as_path().display()
             ));
-            return Ok(ExitStatus::default());
         }
         if resolution.source == VersionSource::EnginesNode {
             let path = resolution.source_path.unwrap_or_else(|| cwd.join(PACKAGE_JSON_FILE));
-            vp_shared::output::print_stdout_line(format_args!("No version pinned."));
-            vp_shared::output::print_stdout_line(format_args!(
-                "  Node.js constraint: {} from {} (engines.node)",
+            return Ok(format!(
+                "No version pinned.\n  Node.js constraint: {} from {} (engines.node)",
                 resolution.version,
                 path.as_path().display()
             ));
-            return Ok(ExitStatus::default());
         }
     }
 
     // Check for inherited version from parent directories
     if let Some((version, source)) = find_inherited_version(cwd).await? {
-        vp_shared::output::print_stdout_line(format_args!(
-            "No version pinned in current directory."
+        return Ok(format!(
+            "No version pinned in current directory.\n  Inherited: {version} from {source}"
         ));
-        vp_shared::output::print_stdout_line(format_args!("  Inherited: {version} from {source}"));
-        return Ok(ExitStatus::default());
     }
 
     // No .node-version anywhere - show default
     let config = load_config().await?;
-    match config.default_node_version {
-        Some(version) => {
-            let config_path = get_config_path()?;
-            vp_shared::output::print_stdout_line(format_args!("No version pinned."));
-            vp_shared::output::print_stdout_line(format_args!(
-                "  Using default: {version} (from {})",
-                config_path.as_path().display()
-            ));
-        }
-        None => {
-            vp_shared::output::print_stdout_line(format_args!("No version pinned."));
-            vp_shared::output::print_stdout_line(format_args!(
-                "  Run 'vp env pin <version>' to pin a version."
-            ));
-        }
-    }
-
-    Ok(ExitStatus::default())
+    Ok(match config.default_node_version {
+        Some(version) => format!(
+            "No version pinned.\n  Using default: {version} (from {})",
+            get_config_path()?.as_path().display()
+        ),
+        None => "No version pinned.\n  Run 'vp env pin <version>' to pin a version.".to_string(),
+    })
 }
 
 /// Find an inherited pin (`.node-version`, `devEngines.runtime`, or `.nvmrc`)
@@ -1336,25 +1313,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_show_pinned_no_file() {
+    async fn test_pinned_message_no_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // Should not error when no .node-version exists
-        let result = show_pinned(&temp_path).await;
-        assert!(result.is_ok());
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            assert_eq!(
+                pinned_message(&temp_path).await.unwrap(),
+                "No version pinned.\n  Run 'vp env pin <version>' to pin a version."
+            );
+        })
+        .await;
     }
 
     #[tokio::test]
-    async fn test_show_pinned_with_file() {
+    async fn test_pinned_message_with_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
         // Create .node-version
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+        let node_version_path = temp_path.join(".node-version");
+        tokio::fs::write(&node_version_path, "20.18.0\n").await.unwrap();
 
-        let result = show_pinned(&temp_path).await;
-        assert!(result.is_ok());
+        assert_eq!(
+            pinned_message(&temp_path).await.unwrap(),
+            format!("Pinned version: 20.18.0\n  Source: {}", node_version_path.as_path().display())
+        );
     }
 
     #[tokio::test]
