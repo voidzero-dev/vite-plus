@@ -21,7 +21,7 @@ use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use crate::{
     commands::{
         env::{
-            bin_config::BinConfig,
+            bin_config::{BinConfig, validate_bin_name},
             config::{get_bin_dir, get_node_modules_dir, resolve_version, resolve_version_alias},
             package_metadata::{PackageMetadata, is_legacy_install_id, is_nested_install_id},
         },
@@ -593,7 +593,7 @@ async fn install_one(
     };
 
     let installed_version = package_json["version"].as_str().map(ToString::to_string);
-    let binary_infos = extract_binaries(&package_json);
+    let binary_infos = extract_binaries(&package_json, &node_modules_dir);
 
     let mut bin_names = Vec::new();
     let mut js_bins = HashSet::new();
@@ -648,6 +648,7 @@ struct BinRollback {
 
 impl BinRollback {
     async fn capture_bin(&mut self, bin_dir: &AbsolutePath, bin_name: &str) -> Result<(), Error> {
+        let config_path = BinConfig::path(bin_name)?;
         let captured_len = self.files.len();
         let result = async {
             #[cfg(unix)]
@@ -659,7 +660,7 @@ impl BinRollback {
                     self.capture(bin_dir.join(format!("{bin_name}{suffix}"))).await?;
                 }
             }
-            self.capture(BinConfig::path(bin_name)?).await
+            self.capture(config_path).await
         }
         .await;
         if result.is_err() {
@@ -1040,6 +1041,9 @@ async fn stale_bin_names_for_package(
     }
 
     previous_bin_names.extend(BinConfig::find_by_package(package_name).await?);
+    for bin_name in &previous_bin_names {
+        validate_bin_name(bin_name)?;
+    }
     previous_bin_names.retain(|bin_name| !current_bin_names.contains(bin_name));
 
     Ok(previous_bin_names.into_iter().collect())
@@ -1076,6 +1080,10 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
         }
         orphan_bins
     };
+
+    for bin_name in &bins {
+        validate_bin_name(bin_name)?;
+    }
 
     if dry_run {
         let bin_dir = get_bin_dir()?;
@@ -1131,25 +1139,25 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
 }
 
 /// Binary info extracted from package.json.
-struct BinaryInfo {
+pub(crate) struct BinaryInfo {
     /// Binary name (the command users will run)
-    name: String,
-    /// Relative path to the binary file from package root
-    path: String,
+    pub name: String,
+    /// Path to the binary file from package root
+    pub path: String,
 }
 
-/// Extract binary names and paths from package.json.
-fn extract_binaries(package_json: &serde_json::Value) -> Vec<BinaryInfo> {
+/// Extract safe binary names and paths from package.json, skipping invalid entries.
+pub(crate) fn extract_binaries(
+    package_json: &serde_json::Value,
+    package_dir: &AbsolutePath,
+) -> Vec<BinaryInfo> {
     let mut bins = Vec::new();
 
     if let Some(bin) = package_json.get("bin") {
         match bin {
-            serde_json::Value::String(path) => {
-                // Single binary with package name
+            serde_json::Value::String(path) if !path.is_empty() => {
                 if let Some(name) = package_json["name"].as_str() {
-                    // Get just the package name without scope
-                    let bin_name = name.split('/').last().unwrap_or(name);
-                    bins.push(BinaryInfo { name: bin_name.to_string(), path: path.clone() });
+                    bins.push(BinaryInfo { name: name.to_string(), path: path.clone() });
                 }
             }
             serde_json::Value::Object(map) => {
@@ -1164,6 +1172,17 @@ fn extract_binaries(package_json: &serde_json::Value) -> Vec<BinaryInfo> {
         }
     }
 
+    let package_root = package_dir.clean();
+    bins.retain_mut(|bin| {
+        if bin.name.starts_with('@') {
+            if let Some((_, name)) = bin.name.split_once('/') {
+                bin.name = name.to_string();
+            }
+        }
+        // Like pnpm, check lexical containment without requiring the target to exist.
+        validate_bin_name(&bin.name).is_ok()
+            && package_dir.join(&bin.path).clean().as_path().starts_with(package_root.as_path())
+    });
     bins
 }
 
@@ -1214,6 +1233,7 @@ pub(crate) async fn create_package_shim(
     bin_name: &str,
     package_name: &str,
 ) -> Result<(), Error> {
+    validate_bin_name(bin_name)?;
     // Defense in depth: the finalize loop already filters protected bin
     // names; keep the guard here so no other caller can hand one to a package.
     if is_protected_shim(bin_name, true) {
@@ -1279,6 +1299,7 @@ pub(crate) async fn create_package_shim(
 
 /// Remove a shim for a package binary.
 async fn remove_package_shim(bin_dir: &vt_path::AbsolutePath, bin_name: &str) -> Result<(), Error> {
+    validate_bin_name(bin_name)?;
     // Don't remove protected shims.
     if is_protected_shim(bin_name, false) {
         return Ok(());
@@ -1330,6 +1351,117 @@ mod tests {
         for shim in crate::shim::DEFAULT_SHIM_TOOLS.iter().chain([&"vp"]) {
             assert!(is_protected_shim(shim, false), "{shim} should be protected");
         }
+    }
+
+    #[test]
+    fn test_extract_binaries_filters_unsafe_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        let package_dir = AbsolutePathBuf::new(temp.path().join("package")).unwrap();
+        for manifest in [
+            serde_json::json!({ "name": "my-tool", "bin": "./dist/cli.js" }),
+            serde_json::json!({ "name": "@scope/my-tool", "bin": "./dist/cli.js" }),
+            serde_json::json!({ "bin": { "my-tool": "./dist/cli.js" } }),
+            serde_json::json!({ "bin": { "@scope/my-tool": "./dist/cli.js" } }),
+        ] {
+            let bins = extract_binaries(&manifest, &package_dir);
+            assert_eq!(bins.len(), 1);
+            assert_eq!(bins[0].name, "my-tool");
+            assert_eq!(bins[0].path, "./dist/cli.js");
+        }
+        for manifest in [
+            serde_json::json!({ "bin": { "../../outside/victim": "./cli.js" } }),
+            serde_json::json!({ "bin": { "@scope/../../victim": "./cli.js" } }),
+            serde_json::json!({ "bin": { "my-tool": "../outside/cli.js" } }),
+            serde_json::json!({ "name": "my-tool", "bin": "../outside/cli.js" }),
+            serde_json::json!({ "name": "my-tool", "bin": "" }),
+            serde_json::json!({ "name": "..", "bin": "./cli.js" }),
+            serde_json::json!({ "name": r"..\outside", "bin": "./cli.js" }),
+            serde_json::json!({ "name": "../my-tool", "bin": "./cli.js" }),
+            serde_json::json!({ "bin": { "my-tool": temp.path().join("outside/cli.js") } }),
+            serde_json::json!({ "bin": { "my-tool": "dist/../../outside/cli.js" } }),
+            serde_json::json!({ "bin": { "my-tool": "../package-sibling/cli.js" } }),
+            serde_json::json!({ "name": "my-tool" }),
+            serde_json::json!({ "bin": 42 }),
+            serde_json::json!({ "bin": { "my-tool": 42 } }),
+        ] {
+            assert!(extract_binaries(&manifest, &package_dir).is_empty(), "{manifest}");
+        }
+        let manifest = serde_json::json!({ "bin": {
+            "my-tool": "./dist/cli.js",
+            "./node": "./dist/cli.js",
+            "outside": "../outside/cli.js",
+            "with space": "./dist/cli.js",
+        } });
+        let bins = extract_binaries(&manifest, &package_dir);
+        assert_eq!(bins.len(), 1);
+        assert_eq!(bins[0].name, "my-tool");
+        for path in [
+            "dist/../cli.js".to_string(),
+            "../package/cli.js".to_string(),
+            package_dir.join("cli.js").as_path().display().to_string(),
+        ] {
+            let manifest = serde_json::json!({"bin": {"my-tool": path}});
+            let bins = extract_binaries(&manifest, &package_dir);
+            assert_eq!(bins.len(), 1);
+            assert_eq!(bins[0].path, path);
+        }
+        #[cfg(windows)]
+        for path in [r"..\outside\cli.js", r"C:\outside\cli.js", r"\\server\share\cli.js"] {
+            let manifest = serde_json::json!({"bin": {"my-tool": path}});
+            assert!(extract_binaries(&manifest, &package_dir).is_empty(), "{manifest}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_invalid_binary_name_in_metadata_preserves_existing_install() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let metadata = PackageMetadata::new(
+                "test-package".to_string(),
+                "1.0.0".to_string(),
+                "22.18.0".to_string(),
+                None,
+                vec!["valid-command".to_string(), "../outside".to_string()],
+                HashSet::new(),
+                "npm".to_string(),
+            );
+            metadata.save().await.unwrap();
+            let bin_dir = get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            std::fs::write(bin_dir.join("valid-command"), b"keep command").unwrap();
+            let outside = temp_dir.path().join("outside");
+            std::fs::write(&outside, b"keep outside").unwrap();
+
+            assert!(
+                stale_bin_names_for_package(Some(&metadata), "test-package", &[]).await.is_err()
+            );
+            assert!(uninstall("test-package", false).await.is_err());
+            assert_eq!(std::fs::read(bin_dir.join("valid-command")).unwrap(), b"keep command");
+            assert_eq!(std::fs::read(&outside).unwrap(), b"keep outside");
+            assert!(PackageMetadata::load("test-package").await.unwrap().is_some());
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_invalid_binary_name_cannot_create_capture_or_remove_shim() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let bin_dir = get_bin_dir().unwrap();
+            tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+            let outside = temp_dir.path().join("outside");
+            std::fs::write(&outside, b"keep me").unwrap();
+            assert!(create_package_shim(&bin_dir, "../new-command", "test-package").await.is_err());
+            assert!(std::fs::symlink_metadata(temp_dir.path().join("new-command")).is_err());
+            assert!(std::fs::symlink_metadata(temp_dir.path().join("new-command.exe")).is_err());
+
+            let mut rollback = BinRollback::default();
+            assert!(rollback.capture_bin(&bin_dir, "../outside").await.is_err());
+            assert!(rollback.files.is_empty());
+            assert!(remove_package_shim(&bin_dir, "../outside").await.is_err());
+            assert_eq!(std::fs::read(&outside).unwrap(), b"keep me");
+        })
+        .await;
     }
 
     #[tokio::test]

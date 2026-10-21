@@ -1,0 +1,5 @@
+[[case]]
+name = "global_bin_name_validation"
+vp = "global"
+comment = "Skip unsafe bin names and targets even with --ignore-scripts, while installing valid commands and preserving files outside VP_HOME."
+steps = [{ argv = ["node", "verify.mjs"], tty = false }]
