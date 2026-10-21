@@ -37,6 +37,10 @@ pub fn spawn_tool(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32
     };
     cmd.args(args).envs(env.into_envs());
     sync_child_pwd(&mut cmd);
+    // Ctrl+C reaches the child too; wait for its cleanup instead of dying first, so the
+    // caller sees the child's exit.
+    #[cfg(windows)]
+    let _ctrl = vp_command::ConsoleCtrlGuard::install();
     match cmd.status() {
         Ok(status) => exit_code_from_status(status),
         Err(e) => {
