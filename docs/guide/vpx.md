@@ -126,7 +126,7 @@ It watches every file the script imports or requires (in worker threads too, on 
 - `--poll[=<ms>]` polls files instead of using file system events, for Docker, WSL, and network drives
 - `--tsconfig <path>` applies one tsconfig to every file, as for `vpx <file>`
 
-tsx's `--ignore`, `--watch-preserve-output`, `--watch-kill-signal`, and `--no-cache` and its `CHOKIDAR_USEPOLLING` variable work too. Node.js options go before the file. `vpx watch` no longer runs the binary of the npm package named `watch`; `vp exec watch` and `vp dlx watch` still do.
+`tsx watch`'s `--ignore` and `--no-cache` and its `CHOKIDAR_USEPOLLING` variable work too (`--no-cache` does nothing: `vpx` has no transform cache), and so do the Node.js watch mode options `--watch-preserve-output` and `--watch-kill-signal`, so scripts written for `tsx watch` or `tsx --watch` move over. Node.js's `--watch` and `--watch-path` are errors that point to `--include`. Other Node.js options go before the file. `vpx watch` no longer runs the binary of the npm package named `watch`; `vp exec watch` and `vp dlx watch` still do.
 
 `vpx --watch <file>` is Node.js's own watch mode. It restarts on imported files and on the tsconfig files and failed-import paths `vpx` reports, but on Linux it notices a created file only from Node.js 26, and it has none of the options above.
 

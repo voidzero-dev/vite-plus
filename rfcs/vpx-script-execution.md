@@ -59,7 +59,7 @@ When the first positional token starts with `-` and no script follows, `vpx` for
 vpx watch [WATCH_OPTIONS] [NODE_OPTIONS] <script> [args...]
 ```
 
-A first positional `watch`, without `-p/--package` or `-c/--shell-mode`, runs the watcher (see [`vpx watch`](#vpx-watch)), as `tsx watch` and `oxnode watch` do. Its options are oxc-node's (`--include`, `--exclude`, `--clear-screen`, `--kill-signal`, `--kill-timeout`, `--rerun-on-enter`, `--poll`, `--tsconfig`, and tsx's aliases), and `vpx watch --help` prints them. A `vpx --tsconfig <path>` before `watch` becomes the watcher's `--tsconfig`.
+A first positional `watch`, without `-p/--package` or `-c/--shell-mode`, runs the watcher (see [`vpx watch`](#vpx-watch)), as `tsx watch` and `oxnode watch` do. Its options are oxc-node's (`--include`, `--exclude`, `--clear-screen`, `--kill-signal`, `--kill-timeout`, `--rerun-on-enter`, `--poll`, `--tsconfig`), which also accept `tsx watch`'s `--ignore` and `--no-cache` and the Node.js watch mode options `--watch-preserve-output` and `--watch-kill-signal`, and `vpx watch --help` prints them. A `vpx --tsconfig <path>` before `watch` becomes the watcher's `--tsconfig`.
 
 ## Script Detection
 
