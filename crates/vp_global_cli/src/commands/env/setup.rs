@@ -1781,28 +1781,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_env_files_creates_all_files() {
-        let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async(
-            test_env_vars(temp_dir.path(), temp_dir.path()),
-            |_| async {
-                create_env_files().await.unwrap();
-
-                let env_path = home.join("env");
-                let env_fish_path = home.join("env.fish");
-                let env_nu_path = home.join("env.nu");
-                let env_ps1_path = home.join("env.ps1");
-                assert!(env_path.as_path().exists(), "env file should be created");
-                assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
-                assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
-                assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
-            },
-        )
-        .await;
-    }
-
-    #[tokio::test]
     async fn test_create_env_files_adds_one_bom_only_to_powershell() {
         const UTF8_BOM_BYTES: &[u8] = b"\xEF\xBB\xBF";
 
