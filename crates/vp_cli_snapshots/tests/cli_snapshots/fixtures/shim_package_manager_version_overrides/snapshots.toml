@@ -2,14 +2,14 @@
 name = "shim_versions_are_independent"
 vp = "global"
 skip-platforms = ["windows"]
-env = { VP_PACKAGE_MANAGER = "pnpm@10.19.0", VP_NPM_VERSION = "10.9.4", VP_PNPM_VERSION = "10.20.0", VP_YARN_VERSION = "1.22.22", VP_BUN_VERSION = "1.2.0", npm_config_manage_package_manager_versions = "false" }
+env = { VP_PACKAGE_MANAGER = "pnpm@10.19.0", VP_NPM_VERSION = "10.9.4", VP_PNPM_VERSION = "10.20.0", VP_YARN_VERSION = "1.22.22", VP_BUN_VERSION = "1.3.11", npm_config_manage_package_manager_versions = "false" }
 steps = [
   ["node", "check.cjs", "npm", "10.9.4"],
   ["node", "check.cjs", "npx", "10.9.4"],
   ["node", "check.cjs", "pnpm", "10.20.0"],
   ["node", "check.cjs", "yarn", "1.22.22"],
   ["node", "check.cjs", "yarnpkg", "1.22.22"],
-  ["node", "check.cjs", "bun", "1.2.0"],
+  ["node", "check.cjs", "bun", "1.3.11"],
   { argv = ["node", "check.cjs", "vp", "10.19.0"], comment = "Shim overrides do not override vp install's selected version" },
 ]
 

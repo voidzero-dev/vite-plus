@@ -147,6 +147,7 @@ runs:
         if-no-files-found: error
         retention-days: 7
 
+    # CI, E2E, and binary-size reruns can reuse the same PR binaries.
     - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       if: steps.binaries-cache.outputs.cache-hit != 'true'
       with:

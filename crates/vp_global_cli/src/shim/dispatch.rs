@@ -745,16 +745,7 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         PackageManagerType::from_tool(tool).map_or(tool, |kind| kind.bin_name_for_tool(tool));
     if env.contains(inherited_tool)
         && let Some(path) = find_system_tool(inherited_tool)
-        && let Ok(target) = path.as_path().canonicalize()
-        && ["js_runtime", "package_manager"].iter().any(|directory| {
-            vp_shared::EnvConfig::get()
-                .dirs
-                .data
-                .join(directory)
-                .as_path()
-                .canonicalize()
-                .is_ok_and(|root| target.starts_with(root))
-        })
+        && vp_command::is_managed_install(path.as_path())
     {
         return exec::exec_tool(&path, args, env);
     }
@@ -1331,68 +1322,40 @@ fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf
     }
 }
 
-/// Explicit bypass skips Vite+ installations and the directories listed by the caller.
-fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let bin_dir = config::get_bin_dir().ok();
-    let path_var = std::env::var_os("PATH")?;
-    tracing::debug!("path_var: {:?}", path_var);
+/// Process-dependent inputs for [`vp_command::find_external_tool`].
+struct ExternalToolInputs {
+    path: std::ffi::OsString,
+    bypass: Vec<std::path::PathBuf>,
+    self_exe: Option<std::path::PathBuf>,
+}
 
-    // Parse VP_BYPASS as a PATH-style list of additional directories to skip.
-    // This prevents infinite loops when multiple vite-plus installations exist in PATH.
-    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
-        .map(|v| std::env::split_paths(&v).collect())
-        .unwrap_or_default();
-    tracing::debug!("bypass_paths: {:?}", bypass_paths);
+impl ExternalToolInputs {
+    /// Read PATH, `VP_BYPASS`, and the canonical `current_exe()`.
+    /// Returns `None` when PATH is unset.
+    fn from_process_env() -> Option<Self> {
+        let path = std::env::var_os("PATH")?;
+        // Parse VP_BYPASS as a PATH-style list of additional directories to skip.
+        // This prevents infinite loops when multiple vite-plus installations exist in PATH.
+        let bypass = std::env::var_os(env_vars::VP_BYPASS)
+            .map(|v| std::env::split_paths(&v).collect())
+            .unwrap_or_default();
+        let self_exe = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
+        Some(Self { path, bypass, self_exe })
+    }
 
-    // Filter PATH to exclude our bin directory and any bypass directories.
-    // Relative entries are resolved against cwd because `which` reports
-    // matches from them as relative paths, which `AbsolutePathBuf` rejects;
-    // `~`-prefixed entries are left to `which`'s own tilde expansion.
-    let mut filtered_paths: Vec<_> = std::env::split_paths(&path_var)
-        .filter(|p| {
-            if let Some(ref bin) = bin_dir {
-                if p == bin.as_path() {
-                    return false;
-                }
-            }
-            !bypass_paths.iter().any(|bp| p == bp)
-        })
-        .map(|p| if p.is_absolute() || p.starts_with("~") { p } else { cwd.as_path().join(p) })
-        .collect();
-
-    // Exclude our executable and shims from other installations, which would
-    // otherwise dispatch back into vp.
-    let self_real = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
-    loop {
-        // Use vp_command::resolve_bin with filtered PATH - stops at first match
-        let search_path = std::env::join_paths(&filtered_paths).ok()?;
-        let resolved = vp_command::resolve_bin(tool, Some(&search_path), cwd).ok()?;
-        let canonical = resolved.as_path().canonicalize().ok();
-        // A sibling `vp` may itself be a shim sharing an external manager's executable.
-        let is_unix_shim = cfg!(unix)
-            && canonical
-                .as_ref()
-                .is_some_and(|target| target.file_name().is_some_and(|name| name == "vp"));
-        if !vp_shared::is_windows_trampoline(resolved.as_path())
-            && !is_unix_shim
-            && (self_real.is_none() || canonical != self_real)
-        {
-            return Some(resolved);
-        }
-        // Canonicalize both sides of the comparison so symlink-aliased PATH
-        // entries still match the resolved parent.
-        let self_dir = resolved.as_path().parent()?.to_path_buf();
-        let canonical_self_dir = self_dir.canonicalize().ok();
-        let len_before = filtered_paths.len();
-        filtered_paths.retain(|p| {
-            *p != self_dir
-                && (canonical_self_dir.is_none() || p.canonicalize().ok() != canonical_self_dir)
-        });
-        if filtered_paths.len() == len_before {
-            // Nothing left to drop; give up rather than loop forever.
-            return None;
+    fn query(&self) -> vp_command::ExternalToolQuery<'_> {
+        vp_command::ExternalToolQuery {
+            path: &self.path,
+            bypass: &self.bypass,
+            self_exe: self.self_exe.as_deref(),
         }
     }
+}
+
+/// Explicit bypass skips Vite+ installations and the directories listed by the caller.
+fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let inputs = ExternalToolInputs::from_process_env()?;
+    vp_command::find_external_tool(tool, &inputs.query(), cwd)
 }
 
 #[cfg(test)]

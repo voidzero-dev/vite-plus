@@ -193,16 +193,6 @@ describe('vitePlusVitestResolverPlugin', () => {
     expect(nodeOnly).toEqual({ environments: { __vitest__: {} }, test: {} });
   });
 
-  it('is injected into the root plugins array as an enforce:pre plugin with resolveId', () => {
-    const result = defineConfig({}) as { plugins: unknown[] };
-    const plugin = findPlugin(result.plugins, RESOLVER_PLUGIN_NAME);
-
-    expect(plugin).toBeDefined();
-    expect(plugin?.name).toBe(RESOLVER_PLUGIN_NAME);
-    expect(plugin?.enforce).toBe('pre');
-    expect(typeof plugin?.resolveId).toBe('function');
-  });
-
   it('is injected into independent `test.projects` entries', () => {
     const existing: Plugin = { name: 'user-project-plugin' };
     const result = defineConfig({

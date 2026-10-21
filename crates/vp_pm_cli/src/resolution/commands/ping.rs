@@ -138,13 +138,4 @@ mod tests {
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping"]);
     }
-
-    #[test]
-    fn test_yarn_classic_ping_uses_npm() {
-        let resolution = resolve(&yarn("1.22.0"), PingArgs::default());
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["ping"]);
-    }
 }

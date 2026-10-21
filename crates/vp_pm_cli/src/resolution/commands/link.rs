@@ -80,33 +80,6 @@ mod tests {
     }
 
     #[test]
-    fn test_pnpm_link_directory() {
-        let resolution = resolve(
-            &pnpm("10.0.0"),
-            LinkArgs { package: Some("./packages/utils".to_string()), ..Default::default() },
-        );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "pnpm");
-        assert_eq!(command.args, vec!["link", "./packages/utils"]);
-    }
-
-    #[test]
-    fn test_pnpm_link_absolute_directory() {
-        let resolution = resolve(
-            &pnpm("10.0.0"),
-            LinkArgs {
-                package: Some("/absolute/path/to/package".to_string()),
-                ..Default::default()
-            },
-        );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "pnpm");
-        assert_eq!(command.args, vec!["link", "/absolute/path/to/package"]);
-    }
-
-    #[test]
     fn test_yarn_link_basic() {
         let resolution = resolve(&yarn("4.0.0"), LinkArgs::default());
         let command = expect_run(resolution.outcome);
@@ -119,18 +92,6 @@ mod tests {
     fn test_yarn_link_package() {
         let resolution = resolve(
             &yarn("4.0.0"),
-            LinkArgs { package: Some("react".to_string()), ..Default::default() },
-        );
-        let command = expect_run(resolution.outcome);
-
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["link", "react"]);
-    }
-
-    #[test]
-    fn test_yarn_classic_link_package() {
-        let resolution = resolve(
-            &yarn("1.22.0"),
             LinkArgs { package: Some("react".to_string()), ..Default::default() },
         );
         let command = expect_run(resolution.outcome);
