@@ -13,15 +13,30 @@ use std::{
     process::{ExitStatus, Stdio},
 };
 
-use fspy::AccessMode;
+use bitflags::bitflags;
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 use vp_error::Error;
 use vt_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
+mod external_tool;
 mod ps1_shim;
 
+pub use external_tool::{ExternalToolQuery, find_external_tool, is_managed_install};
 pub use ps1_shim::rewrite_cmd_to_powershell;
+
+bitflags! {
+    /// File-system operations observed for one path.
+    ///
+    /// fspy reports each operation as its own access. This set combines the
+    /// operations that touched the same workspace-relative path.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct AccessMode: u8 {
+        const READ = 1;
+        const WRITE = 1 << 1;
+        const READ_DIR = 1 << 2;
+    }
+}
 
 /// Result of running a command with fspy tracking.
 #[derive(Debug)]
@@ -268,8 +283,13 @@ where
     let mut path_accesses = HashMap::<RelativePathBuf, AccessMode>::new();
     for access in tracked_accesses.iter() {
         tracing::debug!("Path access: {:?}", access);
-        let relative_path = access
-            .path
+        let (ipc_path, mode) = match access {
+            fspy::PathAccess::Read(path) => (path, AccessMode::READ),
+            fspy::PathAccess::Write(path) => (path, AccessMode::WRITE),
+            fspy::PathAccess::ReadWrite(path) => (path, AccessMode::READ | AccessMode::WRITE),
+            fspy::PathAccess::ReadDir(path) => (path, AccessMode::READ_DIR),
+        };
+        let relative_path = ipc_path
             .strip_path_prefix(cwd, |strip_result| {
                 let Ok(stripped_path) = strip_result else {
                     return None;
@@ -286,10 +306,7 @@ where
         let Some(relative_path) = relative_path else {
             continue;
         };
-        path_accesses
-            .entry(relative_path)
-            .and_modify(|mode| *mode |= access.mode)
-            .or_insert(access.mode);
+        path_accesses.entry(relative_path).and_modify(|existing| *existing |= mode).or_insert(mode);
     }
 
     Ok(FspyCommandResult { status: termination.status, path_accesses })

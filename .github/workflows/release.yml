@@ -60,6 +60,7 @@ jobs:
     needs: [check, build-rust, request-approval]
     if: needs.check.outputs.version_changed == 'true'
     permissions:
+      actions: read # restore the lockfile on release job retries
       contents: write
       packages: write
       id-token: write # Required for OIDC
@@ -81,6 +82,11 @@ jobs:
           node-version: '24.18.0'
           package-manager-cache: false
           registry-url: 'https://registry.npmjs.org'
+
+      # OIDC dist-tag operations require npm >=11.21.0 and the vite-plus
+      # trusted publisher's "Allow npm dist-tag" permission.
+      - name: Install npm with OIDC dist-tag support
+        run: npm install --global npm@11.21.0
 
       - name: Install dependencies
         run: pnpm install
@@ -163,12 +169,8 @@ jobs:
           pattern: vp-release-archive-*
           merge-multiple: true
 
-      - name: Create release archive checksums
-        working-directory: binary-release
-        run: sha256sum vp-* > vp-checksums.txt
-
       - name: Prepare and publish native addons
-        run: node ./packages/cli/publish-native-addons.ts --mode npm
+        run: node ./packages/cli/publish-native-addons.ts --mode npm --phase native
 
       - name: Publish prompts
         run: >-
@@ -191,19 +193,60 @@ jobs:
           node ./.github/scripts/wait-for-npm-packages.ts
           "@voidzero-dev/vite-plus-core@${VERSION}"
 
-      - name: Publish Vite+
+      # Make the exact local CLI version installable without moving latest.
+      # Bootstrap keeps selecting the previous release until its matching global
+      # packages and lockfile are available.
+      - name: Publish local CLI with the staging tag
         run: >-
           node ./.github/scripts/publish-npm-package.ts
           "vite-plus@${VERSION}"
           --
-          pnpm publish --filter=./packages/cli --tag latest --access public --no-git-checks
+          pnpm publish --filter=./packages/cli --tag staging --access public --no-git-checks
 
-      # Downstream jobs build Docker images by installing this release from npm.
-      - name: Wait for published packages to propagate
+      - name: Wait for the local CLI to propagate
         run: >-
           node ./.github/scripts/wait-for-npm-packages.ts
           "vite-plus@${VERSION}"
           "@voidzero-dev/vite-plus-prompts@${VERSION}"
+
+      # Keep the first pnpm resolution when retrying a partially published release.
+      - name: Restore installation lockfile from an earlier attempt
+        id: install-lockfile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name == "installation-lockfile" and .expired == false) | .id')
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$RUNNER_TEMP/installation-lockfile.zip"
+            unzip -o "$RUNNER_TEMP/installation-lockfile.zip" -d binary-release
+            echo "restored=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate global installation lockfile
+        run: node ./packages/cli/generate-install-lockfile.ts
+
+      # Save before publishing any platform package, including while npm still
+      # hides accepted versions during scanning. Retries must not resolve again.
+      - name: Save installation lockfile for release retries
+        if: steps.install-lockfile.outputs.restored != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installation-lockfile
+          path: binary-release/vp-install-lock.yaml
+          if-no-files-found: error
+
+      - name: Publish CLI binaries with the installation lockfile
+        run: node ./packages/cli/publish-native-addons.ts --mode npm --phase cli
+
+      # The preceding step waits for every global package to propagate.
+      # Promote the existing version; never repack or republish the local CLI.
+      - name: Promote the local CLI to latest
+        run: npm dist-tag add "vite-plus@${VERSION}" latest
+
+      - name: Create release archive checksums
+        working-directory: binary-release
+        run: sha256sum vp-* > vp-checksums.txt
 
       # create-vite-plus pins vite-plus via workspace:* (rewritten to this exact
       # version), so it publishes only after vite-plus is installable.
@@ -214,7 +257,26 @@ jobs:
           --
           pnpm publish --filter=./packages/create-vite-plus --tag latest --access public --no-git-checks
 
+      # Publishing can succeed even if the runner loses the response. Do not
+      # replace assets on a published release, including an immutable release.
+      - name: Check whether the GitHub release is already published
+        id: github-release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.getReleaseByTag({
+                ...context.repo,
+                tag: `v${process.env.VERSION}`,
+              });
+              core.setOutput('published', String(!data.draft));
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('published', 'false');
+            }
+
       - name: Create release body
+        if: steps.github-release.outputs.published != 'true'
         env:
           REPOSITORY: ${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
@@ -248,6 +310,7 @@ jobs:
           EOF
 
       - name: Create GitHub Release
+        if: steps.github-release.outputs.published != 'true'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         id: release
         with:
@@ -258,13 +321,17 @@ jobs:
           name: vite-plus v${{ env.VERSION }}
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
+          overwrite_files: true
+          fail_on_unmatched_files: true
           files: |
             installer-release/vp-setup-*.exe
             binary-release/vp-*.tar.gz
             binary-release/vp-*.zip
             binary-release/vp-checksums.txt
+            binary-release/vp-install-lock.yaml
 
       - name: Publish GitHub Release
+        if: steps.github-release.outputs.published != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"

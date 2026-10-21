@@ -20,15 +20,15 @@ pub struct RemoveArgs {
     pub(crate) save_prod: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(bun < "1.4"))]
+    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Remove from workspace root
-    #[arg(short = 'w', long, not_supported(yarn, bun))]
+    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Remove recursively from all workspace packages
-    #[arg(short = 'r', long, not_supported(yarn < "2", bun))]
+    #[arg(short = 'r', long, not_supported(npm < "8.1.0", yarn < "2", bun))]
     pub(crate) recursive: bool,
 
     /// Remove global packages
@@ -374,7 +374,7 @@ mod tests {
     fn test_npm_remove_with_workspace() {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string()];
-        let resolution = resolve(&npm("1.0.0"), options);
+        let resolution = resolve(&npm("7.14.0"), options);
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
@@ -385,7 +385,7 @@ mod tests {
     fn test_npm_remove_workspace_root() {
         let mut options = remove_args(&["typescript"]);
         options.workspace_root = true;
-        let resolution = resolve(&npm("1.0.0"), options);
+        let resolution = resolve(&npm("8.1.0"), options);
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
@@ -396,7 +396,7 @@ mod tests {
     fn test_npm_remove_recursive() {
         let mut options = remove_args(&["lodash"]);
         options.recursive = true;
-        let resolution = resolve(&npm("1.0.0"), options);
+        let resolution = resolve(&npm("8.1.0"), options);
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
@@ -410,7 +410,7 @@ mod tests {
     fn test_npm_remove_multiple_workspaces() {
         let mut options = remove_args(&["lodash"]);
         options.filter = vec!["app".to_string(), "web".to_string()];
-        let resolution = resolve(&npm("1.0.0"), options);
+        let resolution = resolve(&npm("7.14.0"), options);
         let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");

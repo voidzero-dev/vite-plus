@@ -1,13 +1,13 @@
 [[case]]
 name = "command_dlx_npm10"
 vp = "global"
-serial = true
 local-registry = true
 skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+env = { npm_config_audit = "false" }
 steps = [
   { argv = ["vp", "dlx", "--help"], comment = "should show help message", continue-on-failure = true },
-  { argv = ["vp", "dlx", "-s", "cowsay", "hello"], comment = "should run cowsay with npm exec", continue-on-failure = true },
-  { argv = ["vp", "dlx", "-s", "cowsay@1.6.0", "hello"], comment = "should run specific version", continue-on-failure = true },
-  { argv = ["vp", "dlx", "-s", "-p", "cowsay", "-p", "lolcatjs", "cowsay", "hello"], comment = "should run with multiple packages", continue-on-failure = true },
-  { argv = ["vp", "dlx", "-s", "-p", "cowsay", "-c", "echo hello-from-shell | cowsay"], comment = "should run shell mode command (vp's own shell handles the pipe)", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "vp-test-echo", "hello"], comment = "should run vp-test-echo with npm exec", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "vp-test-echo@1.0.0", "hello"], comment = "should run specific version", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "-p", "vp-test-echo", "-p", "vp-test-upper", "vp-test-echo", "hello"], comment = "should run with multiple packages", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "-p", "vp-test-echo", "-p", "vp-test-upper", "-c", "echo hello-from-shell | vp-test-echo | vp-test-upper"], comment = "should run shell mode command (vp's own shell handles the pipe)", continue-on-failure = true },
 ]

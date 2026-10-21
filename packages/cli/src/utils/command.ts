@@ -23,7 +23,7 @@ export interface RunCommandResult extends ExecutionResult {
   stderr: Buffer;
 }
 
-function exitCodeFromClose(code: number | null, signal: NodeJS.Signals | null) {
+export function exitCodeFromClose(code: number | null, signal: NodeJS.Signals | null) {
   if (code !== null) {
     return code;
   }

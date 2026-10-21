@@ -1,6 +1,6 @@
 # create_generator_bun_no_catalog
 
-## `vpt json-edit package.json packageManager bun@1.4.3`
+## `vpt json-edit package.json packageManager bun@1.4.0`
 
 
 ## `vp create vite:generator --no-interactive --directory tools/my-generator --no-agent --no-editor`

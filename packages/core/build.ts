@@ -205,6 +205,18 @@ async function buildVite() {
                 };
               }
             }
+            if (id.endsWith(join('vite', 'src', 'node', 'plugins', 'clientInjections.ts'))) {
+              const { magicString } = meta;
+              if (magicString) {
+                // Resolve the runtime bundled with core. Keep ROLLDOWN_DEV_RUNTIME_ENTRY
+                // unchanged: it also matches the import in bundledDevClient.mjs.
+                magicString.replace(
+                  'import.meta.resolve(ROLLDOWN_DEV_RUNTIME_ENTRY)',
+                  `import.meta.resolve('${pkgJson.name}/rolldown/experimental/runtime')`,
+                );
+                return { code: magicString };
+              }
+            }
             return undefined;
           },
         },
@@ -336,6 +348,12 @@ async function bundleRolldownPluginutils() {
 async function bundleRolldown() {
   await mkdir(join(projectDir, 'dist/rolldown'), { recursive: true });
 
+  const { version: rolldownVersion }: { version: string } = JSON.parse(
+    await readFile(join(rolldownSourceDir, 'package.json'), 'utf-8'),
+  );
+  const webContainerVersionLookup =
+    'JSON.parse(fs.readFileSync(__require.resolve("rolldown/package.json"), "utf-8")).version';
+  let webContainerVersionRewrites = 0;
   const rolldownFiles = new Set<string>();
 
   await cp(join(rolldownSourceDir, 'dist'), join(projectDir, 'dist/rolldown'), {
@@ -373,6 +391,12 @@ async function bundleRolldown() {
       file.endsWith('.d.ts')
     ) {
       let source = await readFile(file, 'utf-8');
+      // WebContainer downloads the upstream WASM binding. Inline Rolldown's
+      // version so it needs neither an undeclared package nor Vite+'s version.
+      source = source.replaceAll(webContainerVersionLookup, () => {
+        webContainerVersionRewrites++;
+        return JSON.stringify(rolldownVersion);
+      });
       const rules: ReplacementRule[] = [...createRolldownRewriteRules(pkgJson.name)];
       if (vitePlusPlatformSuffixes) {
         const result = rewriteRolldownBindingRequires(source, {
@@ -390,6 +414,13 @@ async function bundleRolldown() {
       const newSource = rewriteModuleSpecifiers(source, file, { rules });
       await writeFile(file, newSource);
     }
+  }
+
+  if (webContainerVersionRewrites !== 1) {
+    throw new Error(
+      `bundleRolldown: expected one WebContainer version lookup, found ${webContainerVersionRewrites}; ` +
+        'review the upstream fallback and update or remove its version rewrite',
+    );
   }
 
   // Every published platform suffix must find its loader branch, and each

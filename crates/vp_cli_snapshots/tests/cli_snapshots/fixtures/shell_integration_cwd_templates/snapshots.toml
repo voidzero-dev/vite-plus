@@ -3,7 +3,7 @@ name = "shell_integration_cwd_templates"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", "${workspace}/home"]], snapshot = false },
+  { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", "${workspace}/home"], ["VP_NU_VERSION", "0.112.1"]], comment = "VP_NU_VERSION keeps env.nu independent of the installed Nushell", snapshot = false },
   { argv = ["vpt", "print-file", "home/env"], comment = "POSIX wrapper and zsh vpr completion keep global -C before env use/run" },
   { argv = ["vpt", "print-file", "home/env.fish"], comment = "fish wrapper and vpr completion keep global -C before env use/run" },
   { argv = ["vpt", "print-file", "home/env.nu"], comment = "Nushell wrapper and vpr completion keep global -C before env use/run" },

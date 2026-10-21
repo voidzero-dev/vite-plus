@@ -692,7 +692,7 @@ export function planVitestV5Migration(
   ];
   const projects: ProjectPlan[] = [];
   const projectSources = new Map(
-    [...new Set(directories)].map((directory) => [
+    Array.from(new Set(directories), (directory) => [
       directory,
       new Map(filesInProject(directory).map((file) => [file, fs.readFileSync(file, 'utf8')])),
     ]),
@@ -931,7 +931,7 @@ function currentProjectConfigs(plan: VitestV5MigrationPlan): Map<string, string[
     entries.flatMap((entry) => (entry.file ? [entry.file] : [])),
   );
   return new Map(
-    [...filesByProject].map(([directory, files]) => [
+    Array.from(filesByProject, ([directory, files]) => [
       directory,
       files.filter((file) => configs.has(file)),
     ]),

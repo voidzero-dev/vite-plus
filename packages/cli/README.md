@@ -115,7 +115,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 - **run** - Run monorepo tasks
 - **exec** - Execute a command from local `node_modules/.bin`
-- **node** - Run a Node.js script with the resolved Vite+ environment
+- **node** - Run a Node.js script with the resolved Vite+ environment; use `vpx <file>` for TypeScript
 - **dlx** - Execute a package binary without installing it as a dependency
 - **cache** - Manage the task cache
 

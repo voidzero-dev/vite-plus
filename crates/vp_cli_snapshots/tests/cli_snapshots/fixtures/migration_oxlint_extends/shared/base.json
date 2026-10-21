@@ -1,0 +1,11 @@
+{
+  "options": {
+    "typeAware": false,
+    "typeCheck": false
+  },
+  "rules": {
+    "no-debugger": "error",
+    "no-console": "error",
+    "no-alert": "error"
+  }
+}

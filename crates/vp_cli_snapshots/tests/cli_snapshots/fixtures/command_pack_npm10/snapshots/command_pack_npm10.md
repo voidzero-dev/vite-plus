@@ -94,3 +94,29 @@ should support pass through arguments
 
 ## `vpt rm -f command-pack-npm10-1.0.0.tgz`
 
+
+## `vpt json-edit package.json packageManager npm@7.8.0`
+
+
+## `vp pm pack --filter app`
+
+Reject workspace selection before npm 7.9.0.
+
+**Exit code:** 1
+
+```
+npm < 7.9.0 does not support --filter.
+```
+
+## `vpt json-edit package.json packageManager npm@7.17.0`
+
+
+## `vp pm pack --pack-destination dist`
+
+Reject pack-destination before npm 7.18.0.
+
+**Exit code:** 1
+
+```
+npm < 7.18.0 does not support --pack-destination.
+```

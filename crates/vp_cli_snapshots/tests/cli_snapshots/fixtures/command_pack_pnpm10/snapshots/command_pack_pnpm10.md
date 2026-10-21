@@ -129,3 +129,16 @@ command-pack-pnpm10-1.0.0.tgz
 
 ## `vpt rm -f command-pack-pnpm10-1.0.0.tgz`
 
+
+## `vpt json-edit package.json packageManager pnpm@10.10.0`
+
+
+## `vp pm pack --recursive`
+
+Reject recursive pack before pnpm 10.11.0.
+
+**Exit code:** 1
+
+```
+pnpm < 10.11.0 does not support --recursive.
+```

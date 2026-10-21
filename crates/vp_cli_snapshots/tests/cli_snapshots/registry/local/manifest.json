@@ -1,0 +1,45 @@
+{
+  "vp-test-echo": {
+    "name": "vp-test-echo",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "vp-test-echo",
+        "version": "1.0.0",
+        "private": true,
+        "license": "MIT",
+        "bin": {
+          "vp-test-echo": "cli.cjs",
+          "vp-test-echo-alias": "cli.cjs"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/vp-test-echo/-/vp-test-echo-1.0.0.tgz",
+          "integrity": "sha512-LH7sCetZY9OeN7OZJOvwlvT/JES6RK2pBLJVsTr7MQzwr+6iPQBPj4fqcE50fWINAFa/++iY+N5SJ7d3oRFH8Q=="
+        }
+      }
+    }
+  },
+  "vp-test-upper": {
+    "name": "vp-test-upper",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "vp-test-upper",
+        "version": "1.0.0",
+        "private": true,
+        "license": "MIT",
+        "bin": {
+          "vp-test-upper": "cli.cjs"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/vp-test-upper/-/vp-test-upper-1.0.0.tgz",
+          "integrity": "sha512-tmrhV7C9AIWVqAI6eLTRv35Cm9ZfLQH+lKLhOgrBKs66r5wJ2PpZ3Gf9SUFqH3GgkP4LjHgQLJcduWSJtAyDLQ=="
+        }
+      }
+    }
+  }
+}

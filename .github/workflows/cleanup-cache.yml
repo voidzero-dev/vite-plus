@@ -1,11 +1,20 @@
-name: Cleanup github runner caches on closed pull requests
+name: Cleanup GitHub Actions caches
 on:
   pull_request:
     types:
       - closed
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Report unused main Rust caches without deleting them.
+        type: boolean
+        default: true
 
 jobs:
   cleanup:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -13,17 +22,38 @@ jobs:
       - name: Cleanup
         run: |
           echo "Fetching list of cache keys"
-          cacheKeysForPR=$(gh cache list --ref $BRANCH --limit 100 --json id --jq '.[].id')
+          cacheKeysForPR=$(gh cache list --ref "$BRANCH" --limit 100 --json id --jq '.[].id')
 
           ## Setting this to not fail the workflow while deleting cache keys.
           set +e
           echo "Deleting caches…"
           for cacheKey in $cacheKeysForPR
           do
-              gh cache delete $cacheKey
+              gh cache delete "$cacheKey"
           done
           echo "Done"
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           BRANCH: refs/pull/${{ github.event.pull_request.number }}/merge
+
+  cleanup-rust:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cleanup-main-rust-caches
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+        with:
+          script: |
+            const { cleanupRustCaches } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/cleanup-rust-caches.mjs`);
+            await cleanupRustCaches({ github, context, core }, { dryRun: process.env.DRY_RUN === 'true' });

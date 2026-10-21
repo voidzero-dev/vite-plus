@@ -1,0 +1,14 @@
+{
+  "extends": [
+    "./shared/nested/first.json",
+    "./shared/second.jsonc"
+  ],
+  "rules": {
+    "no-alert": "off",
+    "local/no-foo": "error"
+  },
+  "ignorePatterns": [
+    "shared/**",
+    "vite.config.ts"
+  ]
+}

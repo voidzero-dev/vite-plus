@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "experimentalDecorators": true,
+    "baseUrl": ".",
+    "paths": { "@lib/*": ["src/lib/*"] }
+  },
+  // outside-include/ is a separate project whose scripts no config claims.
+  "exclude": ["node_modules", "outside-include"]
+}

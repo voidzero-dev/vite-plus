@@ -201,3 +201,16 @@ support pass through arguments
   }
 }
 ```
+
+## `vpt json-edit package.json packageManager yarn@2.4.2`
+
+
+## `vp add testnpm2 --ignore-scripts`
+
+Yarn 2 supports skip-builds for install, but not for add.
+
+**Exit code:** 1
+
+```
+yarn >= 2 && < 3 does not support --ignore-scripts.
+```

@@ -174,8 +174,8 @@ jobs:
       - name: Prepare native addon and CLI binary packages
         run: node ./packages/cli/publish-native-addons.ts --mode pkg-pr-new
 
-      # Pack the locally built package directories (the two preview packages
-      # and every platform binary) into a workflow artifact. `mode: pack` runs
+      # Pack the local CLI and its dependencies separately from the global
+      # binary packages. `mode: pack` runs
       # `pnpm pack` and nothing else: no network, no credentials. The trusted
       # workflow validates every archive, rewrites and re-packs it under the commit
       # version, and uploads it.
@@ -196,7 +196,6 @@ jobs:
           # repo and does not move when the action does.
           packages: |
             packages/cli/npm/*
-            packages/cli/cli-npm/*
             packages/cli
             packages/core
             packages/prompts
@@ -205,11 +204,31 @@ jobs:
           # validates the same batch from main.
           workspace-packages: vite-plus,create-vite-plus,@voidzero-dev/vite-plus-*
 
+      - name: Pack global CLI packages for the registry bridge
+        uses: voidzero-dev/pkg-pr-registry-bridge@4ca2c31c250c7137ae191bf01a8bb106d30aa106 # main
+        with:
+          mode: pack
+          sha: ${{ github.event.pull_request.head.sha }}
+          output-dir: bridge-cli-packages
+          packages: packages/cli/cli-npm/*
+          workspace-packages: '@voidzero-dev/vite-plus-cli-*'
+
+      - name: Upload packed global CLI packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bridge-cli-packages
+          path: bridge-cli-packages
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
       - name: Upload packed packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bridge-packages
           path: bridge-packages
+          overwrite: true
           # A silently empty artifact would make the publishing workflow fail with a
           # confusing "no packed tarballs" instead of failing here.
           if-no-files-found: error

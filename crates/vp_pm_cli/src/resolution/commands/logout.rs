@@ -12,7 +12,7 @@ pub struct LogoutArgs {
     pub(crate) registry: Option<String>,
 
     /// Scope for the logout
-    #[arg(long, value_name = "SCOPE", not_supported(yarn < "2"))]
+    #[arg(long, value_name = "SCOPE", not_supported(pnpm >= "11", yarn < "2"))]
     pub(crate) scope: Option<String>,
 
     /// Additional arguments
@@ -22,7 +22,11 @@ pub struct LogoutArgs {
 
 impl Resolve<LogoutArgs> for Pnpm {
     fn resolve(&self, args: &LogoutArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_logout(args)
+        if self.supports_v11_commands() {
+            resolve_logout("pnpm", &["logout"], args)
+        } else {
+            Npm::resolve_logout(args)
+        }
     }
 }
 
@@ -74,6 +78,49 @@ mod tests {
         resolve,
         test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
+
+    #[test]
+    fn test_pnpm_native_version_boundary() {
+        let args = parse_args::<LogoutArgs>([
+            "--registry",
+            "https://registry.example.com",
+            "--",
+            "--help",
+        ])
+        .unwrap();
+        for (version, program) in
+            [("10.99.0", "npm"), ("11.0.0-rc.1", "npm"), ("11.0.0", "pnpm"), ("12.13.0", "pnpm")]
+        {
+            let resolution = resolve(&pnpm(version), args.clone());
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, program, "{version}");
+            assert_eq!(
+                command.args,
+                vec!["logout", "--registry", "https://registry.example.com", "--help"]
+            );
+        }
+    }
+
+    #[test]
+    fn test_pnpm_scope_support_boundary() {
+        let args = parse_args::<LogoutArgs>(["--scope", "@company"]).unwrap();
+        for version in ["10.99.0", "11.0.0-rc.1"] {
+            let command = expect_run(resolve(&pnpm(version), args.clone()).outcome);
+            assert_eq!(command.program, "npm");
+            assert_eq!(command.args, vec!["logout", "--scope", "@company"]);
+        }
+        for version in ["11.0.0", "12.13.0"] {
+            expect_unsupported(
+                resolve(&pnpm(version), args.clone()),
+                &["pnpm >= 11 does not support --scope."],
+            );
+            let raw = parse_args::<LogoutArgs>(["--", "--scope", "@company"]).unwrap();
+            let command = expect_run(resolve(&pnpm(version), raw).outcome);
+            assert_eq!(command.program, "pnpm");
+            assert_eq!(command.args, vec!["logout", "--scope", "@company"]);
+        }
+    }
 
     #[test]
     fn test_parser_accepts_registry_scope_and_pass_through_args() {

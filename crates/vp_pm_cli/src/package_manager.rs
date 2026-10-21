@@ -1453,12 +1453,9 @@ async fn download_package_manager_inner(
     let data_dir = &config.dirs.data;
     let bin_name = package_manager_type.to_string();
 
-    // For bun, use platform-specific download flow.
-    // The hash from `packageManager` field belongs to the main `bun` npm package,
-    // not the platform-specific binary, so we don't pass it through; the
-    // platform tarball is verified against the registry's `dist.integrity`.
+    // Bun pins cover the main tarball, so verify its platform binary separately.
     if matches!(package_manager_type, PackageManagerType::Bun) {
-        return download_bun_package_manager(&version, data_dir, npm_config).await;
+        return download_bun_package_manager(&version, data_dir, expected_hash, npm_config).await;
     }
 
     // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
@@ -1704,6 +1701,7 @@ fn bun_requires_baseline() -> bool {
 async fn download_bun_package_manager(
     version: &Str,
     home_dir: &AbsolutePath,
+    expected_hash: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let package_name: Str = "bun".into();
@@ -1716,6 +1714,23 @@ async fn download_bun_package_manager(
     // and the tgz download path)
     if is_package_manager_install_complete(&install_dir, "bun")? {
         return Ok((install_dir, package_name, version.clone()));
+    }
+
+    // A declared pin covers the main bun tarball, not the platform binary.
+    if let Some(expected_hash) = expected_hash {
+        let main_tgz_url = npm_config.package_tgz_url("bun", version);
+        let verify_dir = tempfile::tempdir()?;
+        let verify_message = format!("Verifying bun v{version}...");
+        download_and_extract_tgz_with_hash_and_config(
+            &main_tgz_url,
+            verify_dir.path(),
+            None,
+            Some(expected_hash),
+            Some(&verify_message),
+            npm_config,
+        )
+        .await
+        .map_err(|error| name_hashed_artifact(error, PackageManagerType::Bun, version))?;
     }
 
     // Temporary by design: select a CPU-compatible package for new downloads without replacing existing installs.
@@ -5010,6 +5025,113 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_download_bun_package_manager_verifies_hashes() {
+        use httpmock::prelude::*;
+        use sha2::Sha512;
+
+        let create_tgz = |path: &str, content: &[u8]| {
+            let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            let mut archive = tar::Builder::new(encoder);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_mode(0o755);
+            archive.append_data(&mut header, path, content).unwrap();
+            archive.into_inner().unwrap().finish().unwrap()
+        };
+        let main_tgz = create_tgz("package/package.json", br#"{"name":"bun","version":"1.2.0"}"#);
+        let binary = b"mock bun executable";
+        let binary_path = if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" };
+        let platform_tgz = create_tgz(binary_path, binary);
+        let main_hash = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
+        let wrong_hash = format!("sha512.{}", hex::encode(Sha512::digest(b"other")));
+        let platform_integrity = format!(
+            "sha512-{}",
+            base64_simd::STANDARD.encode_to_string(Sha512::digest(&platform_tgz))
+        );
+        let wrong_integrity =
+            format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(b"other")));
+        let platform_package = get_bun_platform_package_name().unwrap();
+        let platform_basename = platform_package.strip_prefix("@oven/").unwrap();
+        // Keep other tests from borrowing this server while its connections use this runtime.
+        let server = MockServer::start();
+
+        for (pin, integrity) in [
+            (None, &platform_integrity),
+            (Some(wrong_hash.as_str()), &platform_integrity),
+            (Some(main_hash.as_str()), &platform_integrity),
+            (Some(main_hash.as_str()), &wrong_integrity),
+        ] {
+            let vp_home = create_temp_dir();
+            server.reset();
+            let main_tarball = server.mock(|when, then| {
+                when.method(GET).path("/bun/-/bun-1.2.0.tgz");
+                then.status(200).body(main_tgz.clone());
+            });
+            let metadata = server.mock(|when, then| {
+                when.method(GET).path(format!("/{platform_package}/1.2.0"));
+                then.status(200).json_body(serde_json::json!({"dist": {"integrity": integrity}}));
+            });
+            let platform_tarball = server.mock(|when, then| {
+                when.method(GET)
+                    .path(format!("/{platform_package}/-/{platform_basename}-1.2.0.tgz"));
+                then.status(200).body(platform_tgz.clone());
+            });
+
+            EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                    (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+                ],
+                |_| async {
+                    let result =
+                        download_package_manager(PackageManagerType::Bun, "1.2.0", pin).await;
+                    if pin == Some(wrong_hash.as_str()) {
+                        let Err(Error::PackageManagerHashMismatch(mismatch)) = result else {
+                            panic!("a mismatched Bun pin must fail: {result:?}");
+                        };
+                        assert_eq!(mismatch.name, "bun");
+                        assert_eq!(mismatch.version, "1.2.0");
+                        assert_eq!(mismatch.expected, wrong_hash.as_str());
+                        assert_eq!(mismatch.actual, main_hash.as_str());
+                        assert_eq!(mismatch.basis, "the npm package tarball");
+                        assert!(main_tarball.hits() > 0);
+                        metadata.assert_hits(0);
+                        platform_tarball.assert_hits(0);
+                    } else if integrity == &wrong_integrity {
+                        assert!(
+                            matches!(result, Err(Error::HashMismatch { .. })),
+                            "the main pin must not replace platform verification: {result:?}"
+                        );
+                        main_tarball.assert_hits(1);
+                        metadata.assert_hits(1);
+                        assert!(platform_tarball.hits() > 0);
+                    } else {
+                        let (install_dir, package, version) = result.unwrap();
+                        assert_eq!(package, "bun");
+                        assert_eq!(version, "1.2.0");
+                        let native_bin =
+                            if cfg!(windows) { "bin/bun.native.exe" } else { "bin/bun.native" };
+                        assert_eq!(fs::read(install_dir.join(native_bin)).unwrap(), binary);
+                        assert!(is_package_manager_install_complete(&install_dir, "bun").unwrap());
+                        assert!(!install_dir.join("package.json").as_path().exists());
+                        main_tarball.assert_hits(usize::from(pin.is_some()));
+                        metadata.assert_hits(1);
+                        platform_tarball.assert_hits(1);
+                        return;
+                    }
+                    let install_dir =
+                        package_manager_install_dir(PackageManagerType::Bun, "1.2.0").unwrap();
+                    assert!(
+                        !install_dir.as_path().exists(),
+                        "a failed verification must not install Bun"
+                    );
+                },
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
     async fn test_download_bun_package_manager_preserves_existing_install() {
         let vp_home = shared_vp_home();
         vp_shared::EnvConfig::with_vars_async(
@@ -5026,7 +5148,9 @@ mod tests {
                     .join("bun/bin/bun.native");
                 fs::write(&native_bin, "existing bun").unwrap();
 
-                download_bun_package_manager(&version, &vp_home, &NpmConfig::load()).await.unwrap();
+                download_bun_package_manager(&version, &vp_home, None, &NpmConfig::load())
+                    .await
+                    .unwrap();
 
                 assert_eq!(fs::read_to_string(native_bin).unwrap(), "existing bun");
             },

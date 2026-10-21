@@ -45,10 +45,7 @@ pub(crate) fn rewrite_pack_flags(script: &str) -> String {
 }
 
 fn rewrite_direct_pack_flags(script: &str) -> String {
-    let mut parser =
-        brush_parser::Parser::new(script.as_bytes(), &brush_parser::ParserOptions::default());
-    let Ok(mut program) = parser.parse_program() else { return script.to_owned() };
-    let changed = visit_simple_commands(&mut program, &mut |cmd| {
+    rewrite_simple_commands(script, |cmd| {
         let words = collect_command_words(cmd);
         let start = match words.first().map(|word| word.value.as_str()) {
             Some("vp") => 0,
@@ -87,30 +84,32 @@ fn rewrite_direct_pack_flags(script: &str) -> String {
             }
         }
         changed
-    });
-    if changed {
-        collapse_newlines(&normalize_pipe_spacing(&program.to_string()))
-    } else {
-        script.to_owned()
-    }
+    })
 }
 
 fn rewrite_direct_script(script: &str, config: &ScriptRewriteConfig) -> String {
-    let mut parser =
-        brush_parser::Parser::new(script.as_bytes(), &brush_parser::ParserOptions::default());
-    let Ok(mut program) = parser.parse_program() else {
-        return script.to_owned();
-    };
-
-    if !rewrite_in_program(&mut program, config) {
-        return script.to_owned();
-    }
-    let output = normalize_pipe_spacing(&program.to_string());
-    collapse_newlines(&output)
+    rewrite_simple_commands(script, |cmd| rewrite_in_simple_command(cmd, config))
 }
 
-fn rewrite_in_program(program: &mut ast::Program, config: &ScriptRewriteConfig) -> bool {
-    visit_simple_commands(program, &mut |cmd| rewrite_in_simple_command(cmd, config))
+fn parse_program(script: &str) -> Option<ast::Program> {
+    brush_parser::Parser::new(script.as_bytes(), &brush_parser::ParserOptions::default())
+        .parse_program()
+        .ok()
+}
+
+/// Keep parse failures and unchanged scripts intact. Every rewrite uses the
+/// same command traversal and formatting repairs for brush-parser's output.
+fn rewrite_simple_commands(
+    script: &str,
+    mut visitor: impl FnMut(&mut ast::SimpleCommand) -> bool,
+) -> String {
+    let Some(mut program) = parse_program(script) else {
+        return script.to_owned();
+    };
+    if !visit_simple_commands(&mut program, &mut visitor) {
+        return script.to_owned();
+    }
+    collapse_newlines(&normalize_pipe_spacing(&program.to_string()))
 }
 
 fn visit_simple_commands(
@@ -369,9 +368,7 @@ fn find_bunx_invocations(cmd: &ast::SimpleCommand) -> Vec<BunxInvocation> {
 }
 
 fn parse_single_simple_command(script: &str) -> Option<ast::SimpleCommand> {
-    let mut parser =
-        brush_parser::Parser::new(script.as_bytes(), &brush_parser::ParserOptions::default());
-    let mut program = parser.parse_program().ok()?;
+    let mut program = parse_program(script)?;
     if program.complete_commands.len() != 1 {
         return None;
     }
@@ -440,18 +437,7 @@ pub(crate) fn rewrite_bunx_commands(
     script: &str,
     mut rewrite_inner: impl FnMut(&str) -> String,
 ) -> String {
-    let mut parser =
-        brush_parser::Parser::new(script.as_bytes(), &brush_parser::ParserOptions::default());
-    let Ok(mut program) = parser.parse_program() else {
-        return script.to_owned();
-    };
-    if !visit_simple_commands(&mut program, &mut |cmd| {
-        rewrite_bunx_in_simple_command(cmd, &mut rewrite_inner)
-    }) {
-        return script.to_owned();
-    }
-
-    collapse_newlines(&normalize_pipe_spacing(&program.to_string()))
+    rewrite_simple_commands(script, |cmd| rewrite_bunx_in_simple_command(cmd, &mut rewrite_inner))
 }
 
 fn make_suffix_word(value: &str) -> ast::CommandPrefixOrSuffixItem {

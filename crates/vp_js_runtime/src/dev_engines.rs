@@ -5,6 +5,8 @@
 //!
 //! For `PackageJson` types (devEngines, engines), see `vp_shared::package_json`.
 
+use std::ops::Range;
+
 // Re-export shared types for internal use
 pub use vp_shared::PackageJson;
 use vt_path::AbsolutePath;
@@ -64,12 +66,32 @@ pub async fn read_node_version_file(project_path: &AbsolutePath) -> Option<Str> 
 pub async fn read_nvmrc_file(project_path: &AbsolutePath) -> Option<Str> {
     let path = project_path.join(".nvmrc");
     let content = tokio::fs::read_to_string(&path).await.ok()?;
-    let mut versions = content.lines().filter_map(|line| {
-        let value = line.split_once('#').map_or(line, |(value, _)| value).trim();
-        (!value.is_empty() && !value.contains('=')).then_some(value)
-    });
-    let version = versions.next()?;
-    if versions.next().is_some() {
+    parse_nvmrc_content(&content)
+}
+
+/// Byte ranges of the version declarations in `.nvmrc` content.
+///
+/// Blank lines, `#` comments, and reserved key/value lines are skipped. More
+/// than one declaration is ambiguous, so callers reject it.
+pub fn nvmrc_version_spans(content: &str) -> impl Iterator<Item = Range<usize>> + '_ {
+    let mut offset = 0;
+    content.split_inclusive('\n').filter_map(move |line| {
+        let line_start = offset;
+        offset += line.len();
+        let value = line.split_once('#').map_or(line, |(value, _)| value);
+        let trimmed = value.trim();
+        if trimmed.is_empty() || trimmed.contains('=') {
+            return None;
+        }
+        let start = line_start + value.len() - value.trim_start().len();
+        Some(start..start + trimmed.len())
+    })
+}
+
+fn parse_nvmrc_content(content: &str) -> Option<Str> {
+    let mut spans = nvmrc_version_spans(content);
+    let version = &content[spans.next()?];
+    if spans.next().is_some() {
         return None;
     }
 
@@ -148,23 +170,28 @@ mod tests {
 
         tokio::fs::write(temp_path.join(".nvmrc"), "v22.13.1\n").await.unwrap();
         assert_eq!(read_nvmrc_file(&temp_path).await, Some("22.13.1".into()));
+    }
 
-        tokio::fs::write(temp_path.join(".nvmrc"), "node\n").await.unwrap();
-        assert_eq!(read_nvmrc_file(&temp_path).await, Some("latest".into()));
+    #[test]
+    fn test_parse_nvmrc_content() {
+        assert_eq!(parse_nvmrc_content("v22.13.1\n"), Some("22.13.1".into()));
+        assert_eq!(parse_nvmrc_content("node\n"), Some("latest".into()));
+        assert_eq!(
+            parse_nvmrc_content(
+                "# Use the project version\n\nv22.13.1 # pinned\nNVM_SYMLINK_CURRENT=true\n"
+            ),
+            Some("22.13.1".into())
+        );
+        assert!(parse_nvmrc_content("20\n22\n").is_none());
+        assert!(parse_nvmrc_content("system\n").is_none());
+        assert!(parse_nvmrc_content("# comment only\n").is_none());
+    }
 
-        tokio::fs::write(
-            temp_path.join(".nvmrc"),
-            "# Use the project version\n\nv22.13.1 # pinned\nNVM_SYMLINK_CURRENT=true\n",
-        )
-        .await
-        .unwrap();
-        assert_eq!(read_nvmrc_file(&temp_path).await, Some("22.13.1".into()));
-
-        tokio::fs::write(temp_path.join(".nvmrc"), "20\n22\n").await.unwrap();
-        assert!(read_nvmrc_file(&temp_path).await.is_none());
-
-        tokio::fs::write(temp_path.join(".nvmrc"), "system\n").await.unwrap();
-        assert!(read_nvmrc_file(&temp_path).await.is_none());
+    #[test]
+    fn test_nvmrc_version_spans() {
+        let content = "# Node\r\n  v20.18.0  # keep\r\nkey=value\r\n\r\n22";
+        let versions: Vec<_> = nvmrc_version_spans(content).map(|span| &content[span]).collect();
+        assert_eq!(versions, ["v20.18.0", "22"]);
     }
 
     // ========================================================================

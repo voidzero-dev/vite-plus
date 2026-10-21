@@ -254,29 +254,30 @@ pub extern crate rolldown_binding;
 
 ### Build-Time Feature Activation
 
-The rolldown feature is only enabled during release builds:
+`build.ts` enables the `rolldown` and `oxc-node` features for every binding build:
 
 ```typescript
 // In build.ts
+const bindingFeatures = ['rolldown', 'oxc-node'];
 await cli.build({
-  features: process.env.RELEASE_BUILD ? ['rolldown'] : void 0,
+  // napi-rs passes each entry as a separate cargo argument after one `--features`.
+  features: [bindingFeatures.join(',')],
   release: process.env.VP_CLI_DEBUG !== '1',
 });
 ```
 
-**When `RELEASE_BUILD=1`**:
+With the features enabled, the build:
 
-1. Enables the `rolldown` Cargo feature
-2. Compiles `rolldown_binding` into the `.node` file
-3. Extracts `napi.dtsHeader` from rolldown's package.json for type definitions
-4. Prepends custom type definitions to the generated `.d.ts` file
+1. Compiles `rolldown_binding` and the vendored `oxc-node` crate into the `.node` file
+2. Extracts `napi.dtsHeader` from rolldown's package.json for type definitions
+3. Prepends custom type definitions to the generated `.d.ts` file
 
 ### Why Conditional Compilation?
 
-| Build Type                  | rolldown Feature | Use Case                                |
-| --------------------------- | ---------------- | --------------------------------------- |
-| Development (`pnpm build`)  | Disabled         | Faster builds, smaller binaries         |
-| Release (`RELEASE_BUILD=1`) | Enabled          | Full distribution with bundled rolldown |
+| Build Type                                    | Features            | Use Case                                     |
+| --------------------------------------------- | ------------------- | -------------------------------------------- |
+| `cargo check` / `cargo test -p vite-plus-cli` | None                | Faster Rust iteration without Rolldown       |
+| `pnpm build` (debug or release)               | `rolldown,oxc-node` | Full binding with bundled Rolldown and hooks |
 
 ### Module Specifier Rewriting
 
@@ -298,12 +299,24 @@ This means:
 
 ### Native Binding Contents
 
-When compiled with `RELEASE_BUILD=1`, the `.node` file contains:
+A binding built by `pnpm build` contains:
 
-| Component          | Source                             | Purpose                        |
-| ------------------ | ---------------------------------- | ------------------------------ |
-| `vt`               | `packages/cli/binding/src/lib.rs`  | Task runner session management |
-| `rolldown_binding` | `rolldown/crates/rolldown_binding` | Rolldown bundler NAPI bindings |
+| Component          | Source                             | Purpose                                     |
+| ------------------ | ---------------------------------- | ------------------------------------------- |
+| `vt`               | `packages/cli/binding/src/lib.rs`  | Task runner session management              |
+| `rolldown_binding` | `rolldown/crates/rolldown_binding` | Rolldown bundler NAPI bindings              |
+| `oxc_node`         | `oxc-node/src/lib.rs`              | `vpx <script>` loader hooks, as `oxcNode.*` |
+
+### oxc-node Script Loader
+
+`vpx <script>` runs TypeScript through [oxc-node](https://github.com/oxc-project/oxc-node), vendored like Rolldown (see [the RFC](../../rfcs/vpx-script-execution.md)):
+
+- `sync-remote` clones it into `oxc-node/` at the hash in `packages/tools/.upstream-versions.json`; CI checks it out in `.github/actions/clone`.
+- The source stays unpatched. The root `Cargo.toml` links it with `default-features = false`, so it registers no NAPI exports and declares no global allocator, and excludes `oxc-node/` from the workspace, so upstream code is not held to workspace lints. `binding/src/oxc_node.rs` forwards the functions the loader uses under an `oxcNode` namespace, so nothing collides with Rolldown's `transform`. `packages/tools/src/patch-oxc-node.ts` only sets oxc-node's `oxc` dependency to the workspace version.
+- `src/script-preload.ts` (the `--require` entry), `src/script-register.ts` (the `--import` entry), and `src/script-esm-hooks.ts` are adapted from oxc-node's `register.mjs` and `esm.mjs`. They load the hooks from this binding, pass `vpx --tsconfig` through `setTsconfigPath()`, and resolve oxc-node's runtime helpers from `@oxc-project/runtime`, a `vite-plus` dependency.
+- oxc-node's `packages/core/watch-report.mjs` and `signal-ack.mjs` (`@oxc-node/core/watch-report` and `/signal-ack`) are imported from the vendored source and bundled into the loader, so watch mode gets the reports in the format the binding records them.
+- `src/script-watch.ts` (`dist/script-watch.js`, `vpx --watch`) bundles oxc-node's watcher, `packages/cli/src/watch` (`@oxc-node/cli/watch`), from the vendored source the same way, and runs it with the loader entries next to it. It imports upstream's `watch.d.ts` for types, and a `tsdown.config.ts` plugin swaps in the sources, so type checking never reaches code written against upstream's `@types/node`.
+- `pirates`, the CommonJS hook, is bundled into `dist`.
 
 ### Export Chain
 
@@ -334,6 +347,72 @@ Native bindings are published as separate platform packages for optimal install 
 These are automatically installed via `optionalDependencies` based on the user's platform. `publish-native-addons.ts` injects the exact-pinned entries into both `vite-plus` (via napi-rs prePublish) and `@voidzero-dev/vite-plus-core` during publish; the committed package.json files carry none of them.
 
 See `publish-native-addons.ts` for the publishing pipeline.
+
+### Global installation lockfile
+
+The release workflow publishes native bindings, prompts, and core first. It then
+publishes `vite-plus` with the `staging` tag and waits until that exact version is
+installable. `generate-install-lockfile.ts` runs pnpm `10.34.7`, the same version
+used by the installer, in an isolated `vp-global` wrapper directory. The wrapper
+pins `vite-plus` to the release version. `pnpm install --lockfile-only` generates
+a standard `pnpm-lock.yaml` from the published registry metadata. The script
+copies its contents unchanged to `vp-install-lock.yaml` for packaging. The
+lockfile includes package integrity and optional dependencies for all supported
+platforms.
+
+The workflow saves the lockfile in the `installation-lockfile` artifact before
+publishing any global CLI package. Release retries restore that lockfile. If the
+artifact is unavailable, the generator can recover the same lockfile from an
+already published global platform package. The local CLI is already published,
+so retries do not need to preserve or repack a local CLI archive.
+
+Build artifact uploads replace earlier build artifacts when a failed job runs
+again, but retries preserve the saved installation lockfile.
+Package publication skips versions that npm already accepted, including during
+its scanning window. A retry resumes uploads to a draft GitHub release and
+leaves an already published GitHub release and its assets unchanged.
+
+Each global CLI platform package and standalone release archive carries the
+lockfile beside `vp`. After the global packages propagate, the workflow runs
+`npm dist-tag add "vite-plus@${VERSION}" latest`. The installer continues to
+select the previous release until this step. The `staging` tag remains available
+for inspecting the most recently staged version.
+
+Tag promotion uses npm `11.21.0` with OIDC. The `vite-plus` trusted publisher for
+`release.yml` must enable **Allow npm dist-tag**, in addition to its existing
+publish permission. See [npm's trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/#managing-dist-tags-with-trusted-publishing).
+This is a distribution tag named `staging`, not the separate `npm stage publish`
+approval flow.
+
+Bootstrap scripts hand the binary and its companion to self-setup, which uses
+`--frozen-lockfile`. Upgrades use the same lockfile. A standalone binary or an
+older upgrade client can recover it from the verified platform package. Older
+packages without a companion retain their existing installation behavior. The
+release-age override remains `0` so a new release can be installed immediately.
+
+Preview builds pack the local packages and global CLI platform packages into
+separate artifacts. The trusted publishing workflow first publishes the local
+CLI and its dependencies under their exact commit version. It omits the PR URL
+from this phase, so the bridge exposes the commit version without moving the
+`pr-<number>` tag. A job without publishing credentials then runs the same pnpm
+lockfile generator against the registry bridge and bundles the result into the
+global CLI packages. The bridge supplies the published archive integrity and
+content-addressed URLs directly; the generator does not predict them.
+
+The workflow saves the prepared global packages before publishing them and
+reuses that artifact on retries. If a new run has no saved artifact, it recovers
+the lockfile from an already published global platform package before attempting
+a new pnpm resolution. A final publishing job validates and rebuilds
+those global packages, then updates the PR tag. Both publishing jobs re-check PR
+authorization and do not run dependency installation or preview code. The fork
+approval gate precedes both jobs. Global CLI packages stay outside the locked
+local CLI dependency graph, so adding the companion cannot change a hash in the
+lockfile.
+
+Use **Re-run failed jobs** to resume a failed release or preview publication.
+The release reuses the successful version check against `vite-plus@latest`.
+Preview retries still require the same PR head, an open PR, and the
+`preview-build` label. If the build artifacts expire, start a new preview build.
 
 ---
 

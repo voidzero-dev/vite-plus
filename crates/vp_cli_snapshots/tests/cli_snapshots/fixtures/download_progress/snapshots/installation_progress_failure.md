@@ -2,22 +2,22 @@
 
 ## `node install.mjs interactive failure`
 
-**→ expect-milestone:** `install:prepare:ready`
-
-```
-Before installation: preserve this output.
-info: installing vite-plus@<version>...
-⠿ Preparing Node.js and pnpm... <duration>
-```
-
-**← write-key:** `enter`
-
 **→ expect-milestone:** `install:download:ready`
 
 ```
 Before installation: preserve this output.
 info: installing vite-plus@<version>...
 ⠿ Downloading pnpm <version>... <size> B (<size> B/s)
+```
+
+**← write-key:** `enter`
+
+**→ expect-milestone:** `install:prepare:ready`
+
+```
+Before installation: preserve this output.
+info: installing vite-plus@<version>...
+⠿ Preparing Node.js and pnpm... <duration>
 ```
 
 **← write-key:** `enter`

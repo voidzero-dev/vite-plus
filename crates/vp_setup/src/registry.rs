@@ -13,6 +13,8 @@ use crate::{error::Error, is_commit_preview_version};
 pub struct PackageVersionMetadata {
     pub version: String,
     pub dist: DistInfo,
+    #[serde(default, rename = "vpInstallLockfile")]
+    pub has_install_lockfile: bool,
 }
 
 /// Distribution info from npm registry.
@@ -42,6 +44,7 @@ pub struct ResolvedVersion {
     pub version: String,
     pub platform_tarball_url: String,
     pub platform_integrity: String,
+    pub has_install_lockfile: bool,
 }
 
 const MAIN_PACKAGE_NAME: &str = "vite-plus";
@@ -137,6 +140,7 @@ pub async fn resolve_platform_package(
         version: version.to_owned(),
         platform_tarball_url: cli_meta.dist.tarball,
         platform_integrity: cli_meta.dist.integrity,
+        has_install_lockfile: cli_meta.has_install_lockfile,
     })
 }
 
@@ -182,13 +186,6 @@ mod tests {
                 }
             }
         })
-    }
-
-    #[test]
-    fn test_cli_package_name_construction() {
-        let suffix = "darwin-arm64";
-        let name = format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{suffix}");
-        assert_eq!(name, "@voidzero-dev/vite-plus-cli-darwin-arm64");
     }
 
     #[test]
@@ -369,48 +366,5 @@ mod tests {
         assert!(matches!(error, Error::UnsupportedPlatformPackageProvenance { .. }));
         assert!(error.to_string().contains(TEST_PACKAGE_NAME));
         assert!(error.to_string().contains(TEST_VERSION));
-    }
-
-    #[test]
-    fn test_all_platform_suffixes_match_published_cli_packages() {
-        // These are the actual published CLI package suffixes
-        // (from packages/cli/publish-native-addons.ts RUST_TARGETS keys)
-        let published_suffixes = [
-            "darwin-arm64",
-            "darwin-x64",
-            "linux-arm64-gnu",
-            "linux-arm64-musl",
-            "linux-x64-gnu",
-            "linux-x64-musl",
-            "win32-arm64-msvc",
-            "win32-x64-msvc",
-        ];
-
-        let published_packages: Vec<String> = published_suffixes
-            .iter()
-            .map(|s| format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{s}"))
-            .collect();
-
-        // All known platform suffixes that detect_platform_suffix() can return
-        let detection_suffixes = [
-            "darwin-arm64",
-            "darwin-x64",
-            "linux-arm64-gnu",
-            "linux-x64-gnu",
-            "linux-arm64-musl",
-            "linux-x64-musl",
-            "win32-arm64-msvc",
-            "win32-x64-msvc",
-        ];
-
-        for suffix in &detection_suffixes {
-            let package_name =
-                format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{suffix}");
-            assert!(
-                published_packages.contains(&package_name),
-                "Platform suffix '{suffix}' produces CLI package name '{package_name}' \
-                 which does not match any published CLI package"
-            );
-        }
     }
 }
