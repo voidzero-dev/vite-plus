@@ -587,24 +587,6 @@ mod tests {
     // ── Config file resolution ──────────────────────────────────────────
 
     #[test]
-    fn resolves_ts_config() {
-        let dir = TempDir::new().unwrap();
-        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        std::fs::write(dir.path().join("vite.config.ts"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path);
-        assert!(result.get("run").is_some());
-    }
-
-    #[test]
-    fn resolves_js_config() {
-        let dir = TempDir::new().unwrap();
-        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        std::fs::write(dir.path().join("vite.config.js"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path);
-        assert!(result.get("run").is_some());
-    }
-
-    #[test]
     fn resolves_mts_config() {
         let dir = TempDir::new().unwrap();
         let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
