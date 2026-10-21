@@ -98,9 +98,6 @@ installed testnpm2@1.0.1
 }
 ```
 
-## `vpt json-edit package.json packageManager bun@1.3.14`
-
-
 ## `vp update --prod`
 
 Reject production dependency selection before Bun 1.4.

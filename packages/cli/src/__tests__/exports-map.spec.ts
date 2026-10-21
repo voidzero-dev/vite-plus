@@ -299,16 +299,6 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
     expect(Object.keys(pkg.exports).filter((name) => name.includes('webdriverio'))).toEqual([]);
   });
 
-  it('./test/config has both `require` and `default`, with `require` first', () => {
-    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
-    const entry = (pkg.exports as Record<string, unknown>)['./test/config'];
-    expect(isConditionObject(entry)).toBe(true);
-    const keys = Object.keys(entry as ExportConditions);
-    expect(keys).toContain('require');
-    expect(keys).toContain('default');
-    expect(keys.indexOf('require')).toBeLessThan(keys.indexOf('default'));
-  });
-
   it('`require.resolve("vite-plus/test/config")` resolves to the .cjs shim', () => {
     const resolved = requireFromHere.resolve('vite-plus/test/config');
     expect(resolved.endsWith('.cjs'), `resolved to ${resolved}`).toBe(true);
@@ -322,10 +312,7 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
   });
 
   it('CJS shim at ./test/config delegates to vitest/config via require()', () => {
-    const cfg = requireFromHere('vite-plus/test/config') as Record<string, unknown>;
-    expect(cfg).toBeTypeOf('object');
-    // vitest/config re-exports defineConfig / configDefaults — sanity-check one.
-    expect(typeof cfg.defineConfig).toBe('function');
+    expect(requireFromHere('vite-plus/test/config')).toBe(requireFromHere('vitest/config'));
   });
 
   it('browser-playwright declaration uses NodeNext-compatible relative specifiers', () => {

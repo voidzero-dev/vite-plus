@@ -82,48 +82,12 @@ describe('findViteConfigUp', () => {
     expect(result).toBe(path.join(tempDir, 'packages', 'vite.config.ts'));
   });
 
-  it('should find .js config files', () => {
+  it.each(['js', 'mts', 'cjs', 'cts', 'mjs'])('should find .%s config files', (extension) => {
     const subDir = path.join(tempDir, 'packages', 'my-lib');
     fs.mkdirSync(subDir, { recursive: true });
-    fs.writeFileSync(path.join(tempDir, 'vite.config.js'), '');
+    fs.writeFileSync(path.join(tempDir, `vite.config.${extension}`), '');
 
     const result = findViteConfigUp(subDir, tempDir);
-    expect(result).toBe(path.join(tempDir, 'vite.config.js'));
-  });
-
-  it('should find .mts config files', () => {
-    const subDir = path.join(tempDir, 'packages', 'my-lib');
-    fs.mkdirSync(subDir, { recursive: true });
-    fs.writeFileSync(path.join(tempDir, 'vite.config.mts'), '');
-
-    const result = findViteConfigUp(subDir, tempDir);
-    expect(result).toBe(path.join(tempDir, 'vite.config.mts'));
-  });
-
-  it('should find .cjs config files', () => {
-    const subDir = path.join(tempDir, 'packages', 'my-lib');
-    fs.mkdirSync(subDir, { recursive: true });
-    fs.writeFileSync(path.join(tempDir, 'vite.config.cjs'), '');
-
-    const result = findViteConfigUp(subDir, tempDir);
-    expect(result).toBe(path.join(tempDir, 'vite.config.cjs'));
-  });
-
-  it('should find .cts config files', () => {
-    const subDir = path.join(tempDir, 'packages', 'my-lib');
-    fs.mkdirSync(subDir, { recursive: true });
-    fs.writeFileSync(path.join(tempDir, 'vite.config.cts'), '');
-
-    const result = findViteConfigUp(subDir, tempDir);
-    expect(result).toBe(path.join(tempDir, 'vite.config.cts'));
-  });
-
-  it('should find .mjs config files', () => {
-    const subDir = path.join(tempDir, 'packages', 'my-lib');
-    fs.mkdirSync(subDir, { recursive: true });
-    fs.writeFileSync(path.join(tempDir, 'vite.config.mjs'), '');
-
-    const result = findViteConfigUp(subDir, tempDir);
-    expect(result).toBe(path.join(tempDir, 'vite.config.mjs'));
+    expect(result).toBe(path.join(tempDir, `vite.config.${extension}`));
   });
 });

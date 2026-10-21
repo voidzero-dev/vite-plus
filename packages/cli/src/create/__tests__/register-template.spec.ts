@@ -89,16 +89,6 @@ describe('registerLocalTemplate', () => {
     expect(create.templates).toEqual([ENTRY_A]);
   });
 
-  it('appends templates while preserving an existing defaultTemplate', async () => {
-    writeViteConfig("{ create: { defaultTemplate: '@your-org' } }");
-
-    await registerLocalTemplate(workspaceRoot, ENTRY_A, true);
-
-    const create = await readCreate();
-    expect(create.defaultTemplate).toBe('@your-org');
-    expect(create.templates).toEqual([ENTRY_A]);
-  });
-
   it('is a no-op when an entry with the same name already exists', async () => {
     writeViteConfig(
       `{ create: { templates: [{ name: '${ENTRY_A.name}', description: 'pre-existing', template: './pre-existing' }] } }`,
@@ -114,14 +104,6 @@ describe('registerLocalTemplate', () => {
     expect(create.templates).toEqual([
       { name: ENTRY_A.name, description: 'pre-existing', template: './pre-existing' },
     ]);
-  });
-
-  it('appends a second, different entry after the first', async () => {
-    await registerLocalTemplate(workspaceRoot, ENTRY_A, true);
-    await registerLocalTemplate(workspaceRoot, ENTRY_B, true);
-
-    const create = await readCreate();
-    expect(create.templates).toEqual([ENTRY_A, ENTRY_B]);
   });
 
   it('preserves defaultTemplate and prior templates across appends', async () => {
