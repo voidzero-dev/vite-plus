@@ -5,3 +5,12 @@ steps = [
   { argv = ["vp", "pm", "owner", "--help"], comment = "should show help", continue-on-failure = true },
   { argv = ["vp", "pm", "owner", "list", "testnpm2"], comment = "should preserve native pnpm owner errors without retrying npm", continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_owner_pnpm11_fixed"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.28.7"], snapshot = false },
+  { argv = ["vp", "pm", "owner", "list", "testnpm2"], comment = "pnpm 11.28.7 should list owners instead of reporting an existing package as missing" },
+  { argv = ["vp", "pm", "owner", "ls", "testnpm2"], comment = "the ls alias should list the same owners" },
+]
