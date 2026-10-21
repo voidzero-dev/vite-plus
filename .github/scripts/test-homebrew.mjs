@@ -10,6 +10,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import {
+  generateInstallLockfile,
+  INSTALL_LOCKFILE,
+  INSTALL_PNPM_VERSION,
+} from '../../packages/cli/generate-install-lockfile.ts';
 import { targets, updateFormula } from './update-homebrew-formula.mjs';
 
 const { values } = parseArgs({
@@ -59,17 +64,30 @@ async function run(command, args, env = baseEnv, cwd = root, expected = 0) {
 }
 
 async function registry(packagesDir) {
-  const args = [path.join(repository, 'packages/tools/src/local-npm-registry.ts'), '--serve'];
-  if (packagesDir) {
-    args.push('--packages-dir', packagesDir);
+  const script = path.join(repository, 'packages/tools/src/local-npm-registry.ts');
+  if (!packagesDir) {
+    packagesDir = path.join(root, 'packed-checkout');
+    await run(process.execPath, [script, '--pack-to', packagesDir]);
   }
+  // Standard npm tarball paths keep the release lockfile portable across registries.
+  const normalized = await fs.mkdtemp(path.join(root, 'registry-packages-'));
+  for (const archive of await fs.readdir(packagesDir)) {
+    if (!archive.endsWith('.tgz')) {
+      continue;
+    }
+    const file = path.join(packagesDir, archive);
+    const manifest = JSON.parse(await run('tar', ['-xOf', file, 'package/package.json']));
+    const name = `${manifest.name.split('/').at(-1)}-${manifest.version}.tgz`;
+    await fs.copyFile(file, path.join(normalized, name));
+  }
+  const args = [script, '--serve', '--packages-dir', normalized];
   const child = spawn(process.execPath, args, {
     env: baseEnv,
     cwd: root,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   children.push(child);
-  return await new Promise((resolve, reject) => {
+  const upstream = await new Promise((resolve, reject) => {
     let output = '';
     const timer = setTimeout(
       () => reject(new Error(`Registry failed to start: ${output}`)),
@@ -92,25 +110,21 @@ async function registry(packagesDir) {
       }
     });
   });
+  return (await mirrorRegistry(upstream)).url;
 }
 
-// Emulate an enterprise registry. Credentials terminate here and are never sent upstream.
-async function authenticatedRegistry(upstream) {
+// Keep tarballs on the mirror so pnpm generates registry-independent lockfile entries.
+// The private mirror also checks credentials without forwarding them upstream.
+async function mirrorRegistry(upstream, authenticated = false) {
   const requests = new Set();
   const server = createServer(async (request, response) => {
-    if (request.headers.authorization !== `Bearer ${token}`) {
+    if (authenticated && request.headers.authorization !== `Bearer ${token}`) {
       response.writeHead(401).end('Unauthorized');
       return;
     }
     requests.add(request.url);
     try {
-      const remote = request.url.startsWith('/tarball/')
-        ? decodeURIComponent(request.url.slice('/tarball/'.length))
-        : upstream + request.url;
-      assert.ok(
-        [new URL(upstream).origin, 'https://registry.npmjs.org'].includes(new URL(remote).origin),
-      );
-      const result = await fetch(remote, {
+      const result = await fetch(upstream + request.url, {
         headers: { accept: request.headers.accept ?? '*/*' },
         signal: AbortSignal.timeout(120_000),
       });
@@ -118,11 +132,16 @@ async function authenticatedRegistry(upstream) {
       const contentType = result.headers.get('content-type') ?? '';
       response.setHeader('content-type', contentType);
       if (contentType.includes('json')) {
-        const text = JSON.stringify(await result.json(), (key, value) =>
-          key === 'tarball' && typeof value === 'string'
-            ? `${url}/tarball/${encodeURIComponent(value)}`
-            : value,
-        );
+        const text = JSON.stringify(await result.json(), (key, value) => {
+          if (key !== 'tarball' || typeof value !== 'string') {
+            return value;
+          }
+          const remote = new URL(value);
+          assert.ok(
+            [new URL(upstream).origin, 'https://registry.npmjs.org'].includes(remote.origin),
+          );
+          return url + remote.pathname;
+        });
         response.end(text);
       } else {
         response.end(Buffer.from(await result.arrayBuffer()));
@@ -178,8 +197,21 @@ async function formulaFor(binary, value, registryUrl, revision = false) {
   await fs.mkdir(payload);
   await fs.copyFile(path.resolve(binary), path.join(payload, 'vp'));
   await fs.chmod(path.join(payload, 'vp'), 0o755);
+  const lockfile = await generateInstallLockfile(
+    value,
+    registryUrl,
+    async (directory, args, env) => {
+      await run(
+        'npm',
+        ['exec', '--yes', `--package=pnpm@${INSTALL_PNPM_VERSION}`, '--', 'pnpm', ...args],
+        { ...baseEnv, ...env, HOME: root, CI: 'true' },
+        directory,
+      );
+    },
+  );
+  await fs.writeFile(path.join(payload, INSTALL_LOCKFILE), lockfile);
   const archive = `${payload}.tar.gz`;
-  await run('tar', ['-czf', archive, '-C', payload, 'vp']);
+  await run('tar', ['-czf', archive, '-C', payload, 'vp', INSTALL_LOCKFILE]);
   const sha256 = createHash('sha256')
     .update(await fs.readFile(archive))
     .digest('hex');
@@ -206,7 +238,7 @@ async function formulaFor(binary, value, registryUrl, revision = false) {
 
 try {
   const upstream = await registry(values['packages-dir'] && path.resolve(values['packages-dir']));
-  const privateRegistry = await authenticatedRegistry(upstream);
+  const privateRegistry = await mirrorRegistry(upstream, true);
   await run('git', ['clone', '--depth', '1', values['brew-source'], prefix]);
   const brewHome = path.join(root, 'brew-home');
   const brewTemp = path.join(root, 'brew-tmp');
@@ -294,6 +326,7 @@ try {
   await fs.writeFile(path.join(project, 'src.js'), "document.body.textContent = 'Homebrew';\n");
   await fs.chmod(oldKeg, 0o555);
   await fs.chmod(path.join(oldKeg, 'bin'), 0o555);
+  await fs.chmod(path.join(oldKeg, 'libexec'), 0o555);
   await Promise.all([
     run(publicVp, ['--help'], first, project),
     run(publicVp, ['--help'], first, project),
@@ -309,6 +342,17 @@ try {
   );
   assert.ok(!(await fs.readdir(path.join(oldKeg, 'bin'))).includes('.vp-setup-complete'));
   assert.ok(!(await fs.readdir(first.VP_HOME)).includes('current'));
+  const publishedLockfile = await fs.readFile(path.join(oldKeg, 'libexec', INSTALL_LOCKFILE));
+  for (const env of [first, second]) {
+    assert.deepEqual(
+      await fs.readFile(path.join(packageDir(env), 'bin', INSTALL_LOCKFILE)),
+      publishedLockfile,
+    );
+    assert.deepEqual(
+      await fs.readFile(path.join(packageDir(env), 'node_modules/.vp-install-complete')),
+      createHash('sha256').update(publishedLockfile).digest(),
+    );
+  }
   const settings = await fs.readFile(path.join(first.VP_HOME, 'config.json'), 'utf8');
   for (const env of [first, second]) {
     for (const variable of ['VP_NODE_MANAGER', 'VP_PM_MANAGER', 'VP_PNPM_MANAGER']) {
@@ -375,6 +419,7 @@ try {
   }
   await fs.chmod(oldKeg, 0o755);
   await fs.chmod(path.join(oldKeg, 'bin'), 0o755);
+  await fs.chmod(path.join(oldKeg, 'libexec'), 0o755);
   const tap = (await run(brew, ['--repository', 'viteplus/e2e'], brewEnv)).trim();
   await fs.writeFile(
     path.join(tap, 'HomebrewFormula/vp.rb'),

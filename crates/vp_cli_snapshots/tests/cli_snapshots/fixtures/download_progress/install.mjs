@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import {
   copyFileSync,
@@ -33,22 +33,6 @@ const nodeBin = join(home, 'js_runtime/node/99.0.0/bin');
 for (const directory of [nodeBin, user, external]) mkdirSync(directory, { recursive: true });
 // Use the runner's real Node for the mock pnpm program, without a network download.
 symlinkSync(process.execPath, join(nodeBin, 'node'));
-// Model Node's bundled npm while retaining deterministic download checkpoints.
-const npmBin = join(nodeBin, '../lib/node_modules/npm/bin');
-mkdirSync(npmBin, { recursive: true });
-writeFileSync(
-  join(npmBin, 'npm-cli.js'),
-  `
-  const fs = require('node:fs');
-  fetch(process.env.npm_config_registry + '/pnpm/-/pnpm-10.33.0.tgz')
-    .then(response => response.arrayBuffer())
-    .then(data => {
-      const filename = 'pnpm-10.33.0.tgz';
-      fs.writeFileSync(filename, Buffer.from(data));
-      console.log(JSON.stringify([{ name: 'pnpm', version: '10.33.0', filename }]));
-    });
-`,
-);
 copyFileSync(join(process.env.VP_HOME, 'bin/vp'), join(external, 'vp'));
 const lockfile = "lockfileVersion: '9.0'\n";
 writeFileSync(join(external, 'vp-install-lock.yaml'), lockfile);
@@ -95,6 +79,17 @@ async function handleRequest(request, response) {
   if (request.url === '/index.json') {
     await checkpoint('prepare');
     response.end(JSON.stringify([{ version: 'v99.0.0', lts: 'Fixture' }]));
+  } else if (request.url === '/pnpm/10.34.7') {
+    response.end(
+      JSON.stringify({
+        name: 'pnpm',
+        version: '10.34.7',
+        dist: {
+          tarball: `${mirror}/pnpm/-/pnpm-10.34.7.tgz`,
+          integrity: 'sha512-' + createHash('sha512').update(pnpmArchive).digest('base64'),
+        },
+      }),
+    );
   } else if (/^\/pnpm\/-\/pnpm-[\d.]+\.tgz$/.test(request.url)) {
     await checkpoint('download');
     response.setHeader('Content-Length', pnpmArchive.length);

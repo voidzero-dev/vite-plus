@@ -38,7 +38,7 @@ await test('release publication requires the compatible tag and each verified ar
   );
   await assert.rejects(
     verifyRelease(version, release, async (url) =>
-      url.includes('bootstrap.rs') ? new Response('', { status: 404 }) : download(url),
+      url.endsWith('HomebrewFormula/vp.rb') ? new Response('', { status: 404 }) : download(url),
     ),
     /Download failed/,
   );
@@ -74,7 +74,7 @@ await test('updates preserve recipe changes and reset only a previous version re
   assert.ok(!result.includes('disable!'));
   assert.ok(!result.includes('revision 2'));
   assert.ok(result.includes('conflicts_with "vite-plus"'));
-  assert.ok(result.includes('  def install\n    bin.install "vp"'));
+  assert.ok(result.includes('  def install\n    libexec.install "vp", "vp-install-lock.yaml"'));
   assert.ok(result.includes('ENV["HOMEBREW_VP_PR_VERSION"].presence'));
   assert.ok(result.includes('Preview.resolve(preview_ref, platform)'));
   const sameVersion = result.replace('  license', '  revision 1\n  license');

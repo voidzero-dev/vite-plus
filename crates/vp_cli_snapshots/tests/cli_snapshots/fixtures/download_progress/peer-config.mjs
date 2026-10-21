@@ -226,7 +226,16 @@ async function testBypass(lockfile) {
   for (const value of [undefined, '', '0', 'true']) {
     await assert.rejects(
       runSetup(installation, { VP_SETUP_SKIP_INSTALL_LOCKFILE: value }),
-      (error) => error.code === 1 && /ERR_PNPM_BROKEN_LOCKFILE/.test(error.message),
+      (error) =>
+        error.code === 1 && /Failed to install production dependencies/.test(error.message),
+    );
+    assert.equal(
+      readFileSync(join(installation.home, version, 'bin/vp-install-lock.yaml'), 'utf8'),
+      brokenLockfile,
+    );
+    assert.equal(
+      existsSync(join(installation.home, version, 'node_modules/.vp-install-complete')),
+      false,
     );
   }
   console.log('A broken lockfile still fails unless VP_SETUP_SKIP_INSTALL_LOCKFILE is exactly 1.');
@@ -315,7 +324,7 @@ async function testBypass(lockfile) {
   // A fresh offline store makes resolution fail without any external requests or retries.
   await assert.rejects(
     runSetup(failed, { ...override, npm_config_offline: 'true', NPM_CONFIG_OFFLINE: 'true' }),
-    (error) => error.code === 1 && /ERR_PNPM_NO_OFFLINE_META/.test(error.message),
+    (error) => error.code === 1 && /Failed to install production dependencies/.test(error.message),
   );
   assert.equal(existsSync(failedReceipt), false);
   assert.equal(existsSync(join(failedTarget, 'bin/.vp-setup-complete')), false);
