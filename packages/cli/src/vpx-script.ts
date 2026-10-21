@@ -17,11 +17,7 @@ import path from 'node:path';
 export const SCRIPT_EXTENSIONS = ['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
 const TS_EXTENSIONS = new Set(['.ts', '.mts', '.cts', '.tsx']);
 
-/**
- * Node.js options that take a required value, which may come as the next argument (best effort).
- * Not `--experimental-config-file`, which Node.js 24.19, 26.1, and later read bare as
- * `node.config.json`; see `NODE_OPTIONS_WITH_VALUE` in the global CLI.
- */
+/** Node.js options that take a required value, which may come as the next argument (best effort). */
 export const NODE_OPTIONS_WITH_VALUE = new Set([
   '-C',
   '-e',
@@ -44,6 +40,7 @@ export const NODE_OPTIONS_WITH_VALUE = new Set([
   '--env-file',
   '--env-file-if-exists',
   '--eval',
+  '--experimental-config-file',
   '--experimental-default-type',
   '--experimental-loader',
   '--experimental-package-map',
@@ -140,6 +137,20 @@ export const WATCH_OPTIONS_WITH_VALUE = new Set([
 function nodeOptionName(arg: string): string {
   const name = arg.split('=', 1)[0];
   return name.startsWith('--') ? `--${name.slice(2).replaceAll('_', '-')}` : name;
+}
+
+/**
+ * Whether the option `name`, given without `=value`, takes `next` as its value. Node.js
+ * 24.19, 26.1, and later read a bare `--experimental-config-file` as `node.config.json`,
+ * and older releases take the next argument as the config file, so that argument is its
+ * value only when it is a `.json` file, which cannot be the script either way. Mirrors
+ * `takes_next_arg` in the global CLI.
+ */
+function takesNextArg(name: string, next: string): boolean {
+  if (name === '--experimental-config-file') {
+    return next.endsWith('.json') && !next.startsWith('-');
+  }
+  return NODE_OPTIONS_WITH_VALUE.has(name) || WATCH_OPTIONS_WITH_VALUE.has(name);
 }
 
 export interface VpxFlags {
@@ -253,11 +264,8 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
     watch ||= name === '--watch-path';
     entry &&= !NODE_OPTIONS_WITHOUT_ENTRY.has(name);
     nodeArgs.push(arg);
-    if (
-      !arg.includes('=') &&
-      (NODE_OPTIONS_WITH_VALUE.has(name) || WATCH_OPTIONS_WITH_VALUE.has(name)) &&
-      positional[index + 1] !== undefined
-    ) {
+    const next = positional[index + 1];
+    if (!arg.includes('=') && next !== undefined && takesNextArg(name, next)) {
       nodeArgs.push(positional[++index]);
     }
   }

@@ -36,10 +36,6 @@ const TS_EXTENSIONS: &[&str] = &[".ts", ".mts", ".cts", ".tsx"];
 /// Node.js options that take a required value, which may come as the next argument:
 /// those `node --help` lists as `--option=...` on Node.js 22, 24, and 26. Best effort:
 /// a missing entry only moves the missing-file check for the script to Node.js.
-///
-/// Not `--experimental-config-file`: Node.js 24.19, 26.1, and later read it bare as
-/// `node.config.json`. Older releases take the next argument as the config file, which
-/// `--experimental-config-file=<path>` names on every release.
 const NODE_OPTIONS_WITH_VALUE: &[&str] = &[
     "-C",
     "-e",
@@ -62,6 +58,7 @@ const NODE_OPTIONS_WITH_VALUE: &[&str] = &[
     "--env-file",
     "--env-file-if-exists",
     "--eval",
+    "--experimental-config-file",
     "--experimental-default-type",
     "--experimental-loader",
     "--experimental-package-map",
@@ -144,6 +141,17 @@ fn lists_option(options: &[&str], name: &str) -> bool {
                 expected == actual || (index >= 2 && expected == b'-' && actual == b'_')
             })
     })
+}
+
+/// Whether the option `name`, given without `=value`, takes `next` as its value. Node.js
+/// 24.19, 26.1, and later read a bare `--experimental-config-file` as `node.config.json`,
+/// and older releases take the next argument as the config file, so that argument is its
+/// value only when it is a `.json` file, which cannot be the script either way.
+fn takes_next_arg(name: &str, next: &str) -> bool {
+    if lists_option(&["--experimental-config-file"], name) {
+        return next.ends_with(".json") && !next.starts_with('-');
+    }
+    lists_option(NODE_OPTIONS_WITH_VALUE, name) || lists_option(WATCH_OPTIONS_WITH_VALUE, name)
 }
 
 /// A `vpx` invocation that runs Node.js with the script loader.
@@ -233,9 +241,8 @@ pub fn detect(
         entry &= !lists_option(NODE_OPTIONS_WITHOUT_ENTRY, name);
         node_args.push(arg.clone());
         if name.len() == arg.len()
-            && (lists_option(NODE_OPTIONS_WITH_VALUE, name)
-                || lists_option(WATCH_OPTIONS_WITH_VALUE, name))
             && let Some(value) = positional.get(index + 1)
+            && takes_next_arg(name, value)
         {
             node_args.push(value.clone());
             index += 1;

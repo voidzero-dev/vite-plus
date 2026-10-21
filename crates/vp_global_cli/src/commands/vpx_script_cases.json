@@ -23,6 +23,7 @@
     "--env-file",
     "--env-file-if-exists",
     "--eval",
+    "--experimental-config-file",
     "--experimental-default-type",
     "--experimental-loader",
     "--experimental-package-map",
@@ -374,6 +375,50 @@
       "args": ["--experimental-config-file=custom.json", "--watch", "main.ts", "--watch"],
       "expect": {
         "script": ["--experimental-config-file=custom.json", "main.ts", "--watch"],
+        "watch": true
+      }
+    },
+    {
+      "name": "a separate .json path after --experimental-config-file is its value, as older Node.js reads it",
+      "files": {
+        "main.ts": ""
+      },
+      "args": [
+        "--watch",
+        "--experimental-config-file",
+        "custom.json",
+        "--tsconfig",
+        "cli.json",
+        "--env-file=.env",
+        "main.ts"
+      ],
+      "expect": {
+        "script": ["--experimental-config-file", "custom.json", "--env-file=.env", "main.ts"],
+        "tsconfig": "cli.json",
+        "watch": true
+      }
+    },
+    {
+      "name": "--watch and a watcher option after a separate .json config path keep their meaning",
+      "files": {
+        "main.ts": ""
+      },
+      "args": [
+        "--experimental-config-file",
+        "custom.json",
+        "--watch",
+        "--include",
+        "extra.json",
+        "main.ts"
+      ],
+      "expect": {
+        "script": [
+          "--experimental-config-file",
+          "custom.json",
+          "--include",
+          "extra.json",
+          "main.ts"
+        ],
         "watch": true
       }
     },

@@ -241,6 +241,21 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_script_config_file_path"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "config-file"
+# The fixture's Node.js, 22.18.0, takes the next argument as the config file. Node.js
+# warns that the flag is experimental, with a PID, in the launcher too.
+env = { NODE_NO_WARNINGS = "1" }
+comment = "Before Node.js 24.19 and 26.1, --experimental-config-file takes a separate .json path, so --tsconfig, --watch, and a watcher option after it keep their meaning."
+steps = [
+  { argv = ["vpx", "--experimental-config-file", "custom.json", "--tsconfig", "cli.json", "--env-file=.env", "./alias.ts"], comment = "--tsconfig after the path wins over the TS_NODE_PROJECT in .env" },
+  { argv = ["node", "watch-tsconfig.mjs"], comment = "The same under --watch, given before the flag" },
+  { argv = ["vpx", "--experimental-config-file", "custom.json", "--watch", "--include", "extra.json"], comment = "--watch after the path selects the watcher, which takes --include and reports the missing entry", continue-on-failure = true },
+]
+
+[[case]]
 name = "vpx_script_ctrl_c_cleanup"
 # The global vpx: on Windows it waits for the script through `vp.exe`, which Ctrl+C
 # used to end at once with STATUS_CONTROL_C_EXIT (0xC000013A).
