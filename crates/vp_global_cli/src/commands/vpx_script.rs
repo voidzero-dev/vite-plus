@@ -143,6 +143,17 @@ fn lists_option(options: &[&str], name: &str) -> bool {
     })
 }
 
+/// Whether the option `name`, given without `=value`, takes `next` as its value. Node.js
+/// 24.19, 26.1, and later read a bare `--experimental-config-file` as `node.config.json`,
+/// and older releases take the next argument as the config file, so that argument is its
+/// value only when it is a `.json` file, which cannot be the script either way.
+fn takes_next_arg(name: &str, next: &str) -> bool {
+    if lists_option(&["--experimental-config-file"], name) {
+        return next.ends_with(".json") && !next.starts_with('-');
+    }
+    lists_option(NODE_OPTIONS_WITH_VALUE, name) || lists_option(WATCH_OPTIONS_WITH_VALUE, name)
+}
+
 /// A `vpx` invocation that runs Node.js with the script loader.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ScriptInvocation {
@@ -230,9 +241,8 @@ pub fn detect(
         entry &= !lists_option(NODE_OPTIONS_WITHOUT_ENTRY, name);
         node_args.push(arg.clone());
         if name.len() == arg.len()
-            && (lists_option(NODE_OPTIONS_WITH_VALUE, name)
-                || lists_option(WATCH_OPTIONS_WITH_VALUE, name))
             && let Some(value) = positional.get(index + 1)
+            && takes_next_arg(name, value)
         {
             node_args.push(value.clone());
             index += 1;

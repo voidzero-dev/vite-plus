@@ -2,6 +2,7 @@
   "name": "npm-global-shared-pkg-b",
   "version": "1.0.0",
   "bin": {
-    "npm-global-shared-cli": "./cli.js"
+    "@z/npm-global-shared-cli": "./first.js",
+    "@a/npm-global-shared-cli": "./cli.js"
   }
 }
