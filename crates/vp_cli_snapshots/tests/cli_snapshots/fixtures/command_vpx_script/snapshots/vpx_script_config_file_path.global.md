@@ -10,14 +10,6 @@ Before Node.js 24.19 and 26.1, --experimental-config-file takes a separate .json
 tsconfig cli.json
 ```
 
-## `node watch-tsconfig.mjs`
-
-The same under --watch, given before the flag
-
-```
-vpx --watch --experimental-config-file custom.json --tsconfig cli.json --env-file=.env ./alias.ts: tsconfig cli.json
-```
-
 ## `vpx --experimental-config-file custom.json --watch --include extra.json`
 
 --watch after the path selects the watcher, which takes --include and reports the missing entry

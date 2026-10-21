@@ -129,25 +129,14 @@ pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
 /// it after the child exits, and ignores SIGINT meanwhile. On Windows, Ctrl+C is ignored
 /// meanwhile (`ConsoleCtrlGuard`), so this process waits for the child's own cleanup.
 pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
+    // Save terminal state and ignore SIGINT (Unix) or Ctrl+C (Windows) until the child exits.
     #[cfg(unix)]
-    {
-        use nix::libc::STDIN_FILENO;
+    let _guard = TerminalStateGuard::save(nix::libc::STDIN_FILENO);
+    #[cfg(windows)]
+    let _guard = ConsoleCtrlGuard::install();
 
-        // Save terminal state and ignore sigint signal for current process before spawning child
-        let _guard = TerminalStateGuard::save(STDIN_FILENO);
-
-        // Spawn and wait for child - guard will restore terminal state on drop
-        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-        child.wait().await.map_err(|e| Error::Anyhow(e.into()))
-    }
-
-    #[cfg(not(unix))]
-    {
-        #[cfg(windows)]
-        let _ctrl = ConsoleCtrlGuard::install();
-        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-        child.wait().await.map_err(|e| Error::Anyhow(e.into()))
-    }
+    let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+    child.wait().await.map_err(|e| Error::Anyhow(e.into()))
 }
 
 /// Build a `tokio::process::Command` for shell execution.
@@ -217,6 +206,9 @@ where
     );
     let mut cmd = build_command(&program, cwd);
     cmd.args(&prefix_args).args(&args).envs(envs);
+    // Wait out the child's own Ctrl+C cleanup; see `ConsoleCtrlGuard`.
+    #[cfg(windows)]
+    let _guard = ConsoleCtrlGuard::install();
     let status = cmd.status().await?;
     Ok(status)
 }
@@ -417,9 +409,7 @@ impl Drop for TerminalStateGuard {
 /// unlike `SetConsoleCtrlHandler(NULL, TRUE)`, is not inherited, so the child still gets
 /// the event. The `vpx.exe` trampoline does the same.
 #[cfg(windows)]
-pub struct ConsoleCtrlGuard {
-    installed: bool,
-}
+pub struct ConsoleCtrlGuard(());
 
 #[cfg(windows)]
 unsafe extern "system" {
@@ -443,18 +433,16 @@ impl ConsoleCtrlGuard {
     #[must_use]
     pub fn install() -> Self {
         // SAFETY: registers a handler routine that only returns a value.
-        let installed = unsafe { SetConsoleCtrlHandler(Some(Self::ignore), 1) } != 0;
-        Self { installed }
+        unsafe { SetConsoleCtrlHandler(Some(Self::ignore), 1) };
+        Self(())
     }
 }
 
 #[cfg(windows)]
 impl Drop for ConsoleCtrlGuard {
     fn drop(&mut self) {
-        if self.installed {
-            // SAFETY: removes the handler routine that install() registered.
-            unsafe { SetConsoleCtrlHandler(Some(Self::ignore), 0) };
-        }
+        // SAFETY: removes the routine install() registered; a no-op if it was not.
+        unsafe { SetConsoleCtrlHandler(Some(Self::ignore), 0) };
     }
 }
 
