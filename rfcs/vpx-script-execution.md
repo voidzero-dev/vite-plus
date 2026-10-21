@@ -352,7 +352,7 @@ Package mode through the global `vpx` is unchanged. What changes:
 
 ## Open Items
 
-- Windows Ctrl+C through the `vp.exe` spawn-and-wait path: `vp.exe` handles Ctrl+C and Ctrl+Break while it waits for the child (`vp_command::ConsoleCtrlGuard`, as the `vpx.exe` trampoline and `TerminalStateGuard` on Unix do), so the global `vpx` and `vp run` exit after the script's own cleanup. `vpx_script_ctrl_c_cleanup` and `vp_run_vpx_script_ctrl_c_cleanup` check that the CLI exits after a 300 ms `SIGINT` cleanup, with the script's code.
+- Windows Ctrl+C through the `vp.exe` spawn-and-wait path: `vp.exe` handles Ctrl+C and Ctrl+Break while it waits for the child (`vp_command::ConsoleCtrlGuard`, as the `vpx.exe` trampoline and `TerminalStateGuard` on Unix do), so the global `vpx` and `vp run` exit after the script's own cleanup. `vpx_script_ctrl_c_cleanup` and `vp_run_vpx_script_ctrl_c_cleanup` check that the CLI exits after a 300 ms `SIGINT` cleanup, with the script's code. On Windows only the `vp run` one runs: the snapshot runner starts steps with Ctrl+C ignored, which only vite-task clears, so the global vpx there is covered as `vp run`'s task.
 
 ## Future Enhancements
 

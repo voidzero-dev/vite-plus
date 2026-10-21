@@ -257,9 +257,11 @@ steps = [
 
 [[case]]
 name = "vpx_script_ctrl_c_cleanup"
-# The global vpx: on Windows it waits for the script through `vp.exe`, which Ctrl+C
-# used to end at once with STATUS_CONTROL_C_EXIT (0xC000013A).
 vp = "global"
+# On Windows, the runner starts steps with Ctrl+C ignored, which children inherit, and
+# nothing between it and the script clears that, so the script never gets Ctrl+C. vite-task
+# clears it, so `vp_run_vpx_script_ctrl_c_cleanup` covers the global vpx on Windows.
+skip-platforms = ["windows"]
 cwd = "ctrl-c"
 comment = "Ctrl+C reaches the script, and vpx exits after the script's SIGINT cleanup, with its exit code."
 steps = [
@@ -271,7 +273,8 @@ steps = [
 
 [[case]]
 name = "vp_run_vpx_script_ctrl_c_cleanup"
-# `vp run` waits for the local CLI through `vp.exe` on Windows too.
+# On Windows, the global vpx under `vp run` waits for the script through `vp.exe`, which
+# Ctrl+C used to end at once with STATUS_CONTROL_C_EXIT (0xC000013A).
 vp = "global"
 cwd = "ctrl-c"
 comment = "Ctrl+C under vp run reaches the script that vpx runs, and vp run exits after the script's SIGINT cleanup."
