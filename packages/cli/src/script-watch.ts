@@ -11,7 +11,9 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { runWatch } from '../../../oxc-node/packages/cli/src/watch/index.ts';
+// Upstream's declaration of `@oxc-node/cli/watch`; tsdown bundles the vendored sources
+// in its place (see `vendoredWatcherPlugin` in tsdown.config.ts).
+import { runWatch } from '../../../oxc-node/packages/cli/watch.js';
 
 // The watcher's `--tsconfig` reaches the loader as `OXC_TSCONFIG_PATH`, which an
 // inherited `vpx --tsconfig` choice would override.
