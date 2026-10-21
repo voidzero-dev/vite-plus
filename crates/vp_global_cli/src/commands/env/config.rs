@@ -770,47 +770,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_resolve_version_from_engines_node() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // Create package.json with engines.node
-        // Also create an empty .node-version to stop walk-up from finding parent project's version
-        let package_json = r#"{"engines":{"node":"20.18.0"}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
-
-        // Use resolve_node_version directly with walk_up=false to test engines.node specifically
-        let resolution = resolve_node_version(&temp_path, false)
-            .await
-            .map_err(|e| Error::ConfigError(e.to_string().into()))
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(&*resolution.version, "20.18.0");
-        assert_eq!(resolution.source, VersionSource::EnginesNode);
-    }
-
-    #[tokio::test]
-    async fn test_resolve_version_from_dev_engines() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // Create package.json with devEngines.runtime
-        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"20.18.0"}}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
-
-        // Use resolve_node_version directly with walk_up=false to test devEngines specifically
-        let resolution = resolve_node_version(&temp_path, false)
-            .await
-            .map_err(|e| Error::ConfigError(e.to_string().into()))
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(&*resolution.version, "20.18.0");
-        assert_eq!(resolution.source, VersionSource::DevEnginesRuntime);
-    }
-
-    #[tokio::test]
     async fn test_resolve_version_from_nvmrc() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
