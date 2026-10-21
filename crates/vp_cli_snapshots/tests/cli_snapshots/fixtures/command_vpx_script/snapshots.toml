@@ -193,7 +193,7 @@ steps = [
   ["node", "verify-watch.mjs", "tsconfig", "--watch"],
   ["node", "verify-watch.mjs", "created", "--watch"],
   { argv = ["node", "verify-watch.mjs", "pinned", "--tsconfig", "tsconfig.b.json", "--watch"], comment = "--tsconfig as a vpx option" },
-  { argv = ["node", "verify-watch.mjs", "pinned-env", "--watch", "--tsconfig", "tsconfig.b.json"], comment = "--tsconfig among the Node.js options wins over a TS_NODE_PROJECT from an env file" },
+  { argv = ["node", "verify-watch.mjs", "pinned-config", "--watch"], comment = "--watch before a separate config file path, and --tsconfig among the Node.js options after it, which wins over a TS_NODE_PROJECT from an env file" },
 ]
 
 [[case]]
@@ -225,3 +225,50 @@ cwd = "signals"
 env = { TMPDIR = "/tmp" }
 comment = "A SIGINT sent to the vpx --watch PID reaches the script once, and so does a SIGINT to its whole process group, as Ctrl+C sends it."
 steps = [["node", "watch.mjs"]]
+
+[[case]]
+name = "vpx_script_bare_config_flag"
+vp = ["local", "global"]
+# Detection has no Windows-specific code, and the shared case table runs there; this saves
+# a Node.js download on Windows.
+skip-platforms = ["windows"]
+cwd = "config-file"
+# The first release where the project-local bin sees the bare flag: before 26.12, the
+# Node.js running the bin rewrites it to `--experimental-config-file=node.config.json`.
+env = { VP_NODE_VERSION = "26.12.0" }
+comment = "From Node.js 24.19 and 26.1, a bare --experimental-config-file reads node.config.json and takes no value, so the arguments after it keep their meaning."
+steps = [
+  { argv = ["vpx", "--experimental-config-file", "./main.ts", "--watch"], comment = "--watch after the script belongs to the script" },
+  { argv = ["vpx", "--experimental-config-file", "--tsconfig", "cli.json", "--env-file=.env", "./alias.ts"], comment = "--tsconfig is still vpx's, and wins over the TS_NODE_PROJECT in .env" },
+  { argv = ["vpx", "--experimental-config-file", "--watch", "--include", "extra.json"], comment = "--watch still selects the watcher, which takes --include and reports the missing entry", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_script_config_file_path"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "config-file"
+# The fixture's Node.js, 22.18.0, takes the next argument as the config file. Node.js
+# warns that the flag is experimental, with a PID, in the launcher too.
+env = { NODE_NO_WARNINGS = "1" }
+comment = "Before Node.js 24.19 and 26.1, --experimental-config-file takes a separate .json path, so --tsconfig, --watch, and a watcher option after it keep their meaning."
+steps = [
+  { argv = ["vpx", "--experimental-config-file", "custom.json", "--tsconfig", "cli.json", "--env-file=.env", "./alias.ts"], comment = "--tsconfig after the path wins over the TS_NODE_PROJECT in .env" },
+  { argv = ["vpx", "--experimental-config-file", "custom.json", "--watch", "--include", "extra.json"], comment = "--watch after the path selects the watcher, which takes --include and reports the missing entry", continue-on-failure = true },
+]
+
+[[case]]
+name = "vp_run_vpx_script_ctrl_c_cleanup"
+vp = "global"
+# On Windows, the global vpx waits for the script through `vp.exe`, which Ctrl+C used to
+# end at once with STATUS_CONTROL_C_EXIT (0xC000013A). The runner starts steps with Ctrl+C
+# ignored, which children inherit; vite-task clears that, so the script under `vp run`
+# gets Ctrl+C there, where it would not under a direct `vpx`.
+cwd = "ctrl-c"
+comment = "Ctrl+C under vp run reaches the script that vpx runs, and vp run exits after the script's SIGINT cleanup."
+steps = [
+  { argv = ["vp", "run", "cleanup"], interactions = [
+    { "expect-milestone" = "ready" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]
