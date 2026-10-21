@@ -185,6 +185,21 @@ describe('vendored Vitest dependency alignment', () => {
     expect(merged.catalog?.tinybench).toBe('^6.0.0');
   });
 
+  // upgrade-deps.ts pins the oxc-node release it selected in the root catalog;
+  // rolldown's catalog can lag a major behind and must not block the merge.
+  test.each(['@oxc-node/cli', '@oxc-node/core'])(
+    'resolves the %s cross-major conflict to the higher version',
+    (name) => {
+      const merged = mergePnpmWorkspaces(
+        { catalog: { [name]: '^1.0.0' } },
+        { catalog: { [name]: '^0.1.0' } },
+        {},
+        verkit,
+      );
+      expect(merged.catalog?.[name]).toBe('^1.0.0');
+    },
+  );
+
   test.each(['@vitest/expect', '@vitest/runner'])(
     'rejects actual dependencies on removed package %s',
     (name) => {
