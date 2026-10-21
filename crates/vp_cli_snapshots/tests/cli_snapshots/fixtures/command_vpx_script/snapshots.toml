@@ -187,5 +187,27 @@ name = "vpx_script_watch"
 vp = ["local", "global"]
 skip-platforms = ["windows"]
 cwd = "watch"
-comment = "Node.js --watch restarts when an imported .ts file changes."
-steps = [["node", "verify-watch.mjs"]]
+comment = "Node.js --watch restarts when an imported .ts file changes, and on a tsconfig edit, which the loader reports."
+steps = [
+  ["node", "verify-watch.mjs", "dependency", "--watch"],
+  ["node", "verify-watch.mjs", "tsconfig", "--watch"],
+]
+
+[[case]]
+name = "vpx_script_watch_created"
+vp = ["local", "global"]
+# Node.js 22 and 24 on Linux watch each reported file itself, which fails for one that
+# does not exist yet.
+skip-platforms = ["windows", "linux"]
+cwd = "watch"
+comment = "Node.js --watch restarts when the file a failed import looked for is created, which the loader reports."
+steps = [["node", "verify-watch.mjs", "created", "--watch"]]
+
+[[case]]
+name = "vpx_script_watch_node24"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "watch"
+env = { VP_NODE_VERSION = "24.12.0" }
+comment = "On the in-thread module.registerHooks() path, the hooks report the tsconfig files they read too."
+steps = [["node", "verify-watch.mjs", "tsconfig", "--watch"]]

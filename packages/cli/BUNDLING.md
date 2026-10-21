@@ -314,6 +314,7 @@ A binding built by `pnpm build` contains:
 - `sync-remote` clones it into `oxc-node/` at the hash in `packages/tools/.upstream-versions.json`; CI checks it out in `.github/actions/clone`.
 - The source stays unpatched. The root `Cargo.toml` links it with `default-features = false`, so it registers no NAPI exports and declares no global allocator, and excludes `oxc-node/` from the workspace, so upstream code is not held to workspace lints. `binding/src/oxc_node.rs` forwards the functions the loader uses under an `oxcNode` namespace, so nothing collides with Rolldown's `transform`. `packages/tools/src/patch-oxc-node.ts` only sets oxc-node's `oxc` dependency to the workspace version.
 - `src/script-preload.ts` (the `--require` entry), `src/script-register.ts` (the `--import` entry), and `src/script-esm-hooks.ts` are adapted from oxc-node's `register.mjs` and `esm.mjs`. They load the hooks from this binding, pass `vpx --tsconfig` through `setTsconfigPath()`, and resolve oxc-node's runtime helpers from `@oxc-project/runtime`, a `vite-plus` dependency.
+- oxc-node's `packages/core/watch-report.mjs` and `signal-ack.mjs` (`@oxc-node/core/watch-report` and `/signal-ack`) are imported from the vendored source and bundled into the loader, so watch mode gets the reports in the format the binding records them.
 - `pirates`, the CommonJS hook, is bundled into `dist`.
 
 ### Export Chain

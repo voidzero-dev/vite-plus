@@ -4234,6 +4234,7 @@ export declare namespace oxcNode {
       arg1?: ResolveContext | undefined | null,
     ) => ResolveFnOutput | Promise<ResolveFnOutput>,
   ): ResolveFnOutput | Promise<ResolveFnOutput>;
+  export function enableWatchReport(): void;
   export function load(
     url: string,
     context: LoadContext,
@@ -4245,6 +4246,7 @@ export declare namespace oxcNode {
   ): LoadFnOutput | Promise<LoadFnOutput>;
   export function setTransformDeps(mode?: string | undefined | null): void;
   export function setTsconfigPath(path?: string | undefined | null): void;
+  export function takeWatchDependencies(): Array<string>;
   /** A file transformed for the CommonJS loader. */
   export interface TransformOutput {
     source: string;
