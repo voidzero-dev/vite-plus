@@ -14,7 +14,7 @@ use std::{
 use flate2::read::GzDecoder;
 use tar::Archive;
 use vp_js_runtime::{JsRuntimeType, download_runtime};
-use vp_pm_cli::bootstrap_pnpm;
+use vp_pm_cli::{bootstrap_pnpm, npm_user_config_path};
 use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -348,10 +348,7 @@ fn configure_pnpm_command(
         command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry);
         command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY_UPPER, registry);
     }
-    if let Some(path) = std::env::var_os("npm_config_userconfig")
-        .or_else(|| std::env::var_os("NPM_CONFIG_USERCONFIG"))
-        .filter(|path| !path.is_empty())
-    {
+    if let Some(path) = npm_user_config_path(None) {
         let path = vt_path::current_dir()?.join(path);
         command.env("npm_config_userconfig", path.as_path());
         command.env("NPM_CONFIG_USERCONFIG", path.as_path());
@@ -705,31 +702,56 @@ mod tests {
     use super::*;
 
     #[test]
-    fn keeps_explicit_userconfig_relative_to_the_caller() {
-        EnvConfig::with_vars(
-            [
-                ("npm_config_userconfig", None),
-                ("NPM_CONFIG_USERCONFIG", Some("config/enterprise.npmrc")),
-            ],
-            |_| {
-                let mut command = tokio::process::Command::new("node");
-                configure_pnpm_command(&mut command, Some("https://registry.example.test/"))
-                    .unwrap();
-                let expected = vt_path::current_dir().unwrap().join("config/enterprise.npmrc");
-                for (name, value) in command.as_std().get_envs() {
-                    match name.to_str().unwrap() {
-                        "npm_config_userconfig" | "NPM_CONFIG_USERCONFIG" => {
-                            assert_eq!(value.unwrap(), expected.as_path())
+    fn expands_userconfig_before_resolving_against_the_caller() {
+        let home = tempfile::tempdir().unwrap();
+        let relative = vt_path::current_dir().unwrap().join("config/enterprise.npmrc");
+        let cases = [
+            ("config/enterprise.npmrc", relative.as_path().to_path_buf()),
+            ("~/enterprise.npmrc", home.path().join("enterprise.npmrc")),
+            ("${HOME}/enterprise.npmrc", home.path().join("enterprise.npmrc")),
+        ];
+        for (selector, expected) in cases {
+            for variable in ["npm_config_userconfig", "NPM_CONFIG_USERCONFIG"] {
+                EnvConfig::with_vars(
+                    [
+                        ("HOME", home.path().to_str()),
+                        ("USERPROFILE", home.path().to_str()),
+                        (
+                            "npm_config_userconfig",
+                            (variable == "npm_config_userconfig").then_some(selector),
+                        ),
+                        (
+                            "NPM_CONFIG_USERCONFIG",
+                            (variable == "NPM_CONFIG_USERCONFIG").then_some(selector),
+                        ),
+                    ],
+                    |_| {
+                        let mut command = tokio::process::Command::new("node");
+                        configure_pnpm_command(
+                            &mut command,
+                            Some("https://registry.example.test/"),
+                        )
+                        .unwrap();
+                        let values: std::collections::BTreeMap<_, _> =
+                            command.as_std().get_envs().collect();
+                        for name in ["npm_config_userconfig", "NPM_CONFIG_USERCONFIG"] {
+                            assert_eq!(
+                                values[std::ffi::OsStr::new(name)].unwrap(),
+                                expected.as_os_str(),
+                                "{variable}={selector}"
+                            );
                         }
-                        "npm_config_registry" | "NPM_CONFIG_REGISTRY" => {
-                            assert_eq!(value.unwrap(), "https://registry.example.test/")
+                        for name in ["npm_config_registry", "NPM_CONFIG_REGISTRY"] {
+                            assert_eq!(
+                                values[std::ffi::OsStr::new(name)].unwrap(),
+                                "https://registry.example.test/"
+                            );
                         }
-                        other => panic!("unexpected environment setting {other}"),
-                    }
-                }
-                assert_eq!(command.as_std().get_args().len(), 0);
-            },
-        );
+                        assert_eq!(command.as_std().get_args().len(), 0);
+                    },
+                );
+            }
+        }
     }
 
     #[tokio::test]

@@ -50,6 +50,11 @@ const pnpmCode = `
   const fs = require('node:fs');
   const assert = require('node:assert/strict');
   if (process.argv.includes('install')) {
+    if (process.env.TEST_USERCONFIG) {
+      assert.equal(process.env.npm_config_userconfig, process.env.TEST_USERCONFIG);
+      assert.equal(process.env.NPM_CONFIG_USERCONFIG, process.env.TEST_USERCONFIG);
+      assert.ok(fs.readFileSync(process.env.npm_config_userconfig, 'utf8').includes('registry=' + process.env.TEST_REGISTRY + '/registry/'));
+    }
     assert.ok(process.argv.includes('--frozen-lockfile'));
     assert.equal(fs.readFileSync('pnpm-lock.yaml', 'utf8'), ${JSON.stringify(lockfile)});
     const version = JSON.parse(fs.readFileSync('package.json')).dependencies['vite-plus'];
@@ -296,11 +301,21 @@ try {
   override.NPM_CONFIG_REGISTRY = `${url}/registry/`;
   await run(publicVp, ['--help'], override);
 
-  const userconfig = environment('relative-userconfig');
-  const userconfigFile = path.join(userconfig.HOME, 'enterprise.npmrc');
-  fs.renameSync(path.join(userconfig.HOME, '.npmrc'), userconfigFile);
-  userconfig.NPM_CONFIG_USERCONFIG = path.relative(root, userconfigFile);
-  await run(publicVp, ['--help'], userconfig);
+  for (const [name, selector] of [
+    ['relative', null],
+    ['tilde', '~/enterprise.npmrc'],
+    ['environment', '${HOME}/enterprise.npmrc'],
+  ]) {
+    const userconfig = environment(`${name}-userconfig`);
+    const userconfigFile = path.join(userconfig.HOME, 'enterprise.npmrc');
+    fs.renameSync(path.join(userconfig.HOME, '.npmrc'), userconfigFile);
+    userconfig.NPM_CONFIG_USERCONFIG = selector ?? path.relative(root, userconfigFile);
+    userconfig.TEST_USERCONFIG = userconfigFile;
+    await run(publicVp, ['--help'], userconfig);
+  }
+  console.log(
+    'Relative, tilde, and environment-variable selectors reach pnpm as the same absolute user config.',
+  );
 
   const basic = environment('basic-auth');
   const encoded = Buffer.from('fixture:synthetic-password').toString('base64');
@@ -311,9 +326,7 @@ try {
   authorization = `Basic ${encoded}`;
   await run(publicVp, ['--help'], basic);
   authorization = `Bearer ${token}`;
-  console.log(
-    'Registry overrides, relative user configuration, and basic authentication work with the shared downloader.',
-  );
+  console.log('Registry overrides and basic authentication work with the shared downloader.');
 
   await run(publicVp, ['--help'], environment('unauthenticated', false), root, 1);
   corrupt = true;
