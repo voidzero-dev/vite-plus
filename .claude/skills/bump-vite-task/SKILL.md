@@ -91,21 +91,9 @@ After creating the PR, automatically watch CI without asking the user first. Ens
 - **Test** (Linux, Mac, Windows): Rust unit tests
 - **CLI snapshot test** (Linux, Mac, Windows): the PTY snapshot suite - most likely to fail on a vite-task bump (runner compiles against vite-task crates AND asserts CLI output)
 - **Run task**: Task runner integration tests
-- **Security Analysis**: `cargo deny` advisories. A bump changes `Cargo.lock`, so this check runs and must be fixed in this PR. See below.
+- **Security Analysis**: Fix any `cargo deny` advisories. It runs only when `Cargo.lock` changes, so a green `main` does not mean the lockfile is clean.
 
-The only **required** status check for merging is `done`, which aggregates the other checks. Security Analysis is not one of them. Still fix it when this PR is what made `cargo deny` run.
-
-### Security Analysis
-
-`.github/workflows/security.yml` uses `oxc-project/security-action`. `zizmor` always runs. `cargo deny` runs only when `Cargo.lock` differs from the pull request base. The log says `Cargo.lock changed: true` or `false`, and a `false` result skips `cargo deny` while the workflow stays green.
-
-A vite-task bump always changes `Cargo.lock`, so this PR is the run that rechecks advisories. Do not dismiss a failure because `main` already has the same crate versions or because the latest Security Analysis run on `main` is green. Pushes to `main` run this workflow only when `.github/workflows/**` changes, and pull requests that leave `Cargo.lock` untouched skip `cargo deny`. The vulnerable versions can sit on `main` while every recent run is green.
-
-When the advisory check fails:
-
-- Read each `RUSTSEC-...` id and its `Solution:` line. That line names the crate and the fixed version.
-- Upgrade those crates in this PR with `cargo update -p <crate>` (repeat for each crate the solution names). Keep the vite-task rev bump. Re-run `cargo check --locked` and the tests from step 5.
-- Do not add an ignore for the advisory to make the check pass. If a version requirement from vite-task or another dependency blocks the upgrade, say that in the PR and stop rather than ignoring the advisory.
+The only **required** status check for merging is `done`, which aggregates the other checks (excluding Security Analysis).
 
 ## Notes
 
