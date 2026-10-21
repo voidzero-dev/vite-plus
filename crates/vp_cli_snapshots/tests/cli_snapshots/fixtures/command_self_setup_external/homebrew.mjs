@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import fs from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
+
+import { createArchive } from './archive.mjs';
 
 const root = path.resolve('homebrew-test');
 const source =
@@ -20,7 +22,8 @@ const originalEnv = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => !/^(VP_|XDG_|npm_|NPM_|PNPM_)/.test(key)),
 );
 const token = 'synthetic-homebrew-token';
-const pin = '10.33.0';
+const pin = '10.34.7';
+const lockfile = "lockfileVersion: '9.0'\n";
 fs.writeFileSync(
   path.join(root, 'package.json'),
   JSON.stringify({ name: 'homebrew-fixture', packageManager: `pnpm@${pin}` }),
@@ -43,19 +46,12 @@ async function run(binary, args, env, cwd = root, status = 0) {
   return { stdout, stderr };
 }
 
-const packageRoot = path.join(root, 'fake-pnpm');
-fs.mkdirSync(path.join(packageRoot, 'bin'), { recursive: true });
-fs.writeFileSync(
-  path.join(packageRoot, 'package.json'),
-  JSON.stringify({
-    name: 'pnpm',
-    version: pin,
-    bin: { pnpm: 'bin/pnpm.cjs', pnpx: 'bin/pnpx.cjs' },
-  }),
-);
 const pnpmCode = `
   const fs = require('node:fs');
+  const assert = require('node:assert/strict');
   if (process.argv.includes('install')) {
+    assert.ok(process.argv.includes('--frozen-lockfile'));
+    assert.equal(fs.readFileSync('pnpm-lock.yaml', 'utf8'), ${JSON.stringify(lockfile)});
     const version = JSON.parse(fs.readFileSync('package.json')).dependencies['vite-plus'];
     fetch(process.env.TEST_REGISTRY + '/installed').then(response => {
       if (!response.ok) { console.error(process.env.NPM_TOKEN); process.exit(17); }
@@ -65,23 +61,16 @@ const pnpmCode = `
     });
   } else { console.log('pinned pnpm tool'); }
 `;
-for (const name of ['pnpm', 'pnpx'])
-  fs.writeFileSync(path.join(packageRoot, 'bin', `${name}.cjs`), pnpmCode);
-const packEnv = { ...originalEnv, HOME: root, npm_config_cache: path.join(root, 'pack-cache') };
-const packed = spawnSync(
-  node,
-  [
-    path.join(npmRoot, 'bin/npm-cli.js'),
-    'pack',
-    packageRoot,
-    '--ignore-scripts',
-    '--json',
-    '--workspaces=false',
-  ],
-  { cwd: root, env: packEnv, encoding: 'utf8' },
-);
-assert.equal(packed.status, 0, packed.stderr);
-const archive = fs.readFileSync(path.join(root, JSON.parse(packed.stdout)[0].filename));
+const archive = createArchive({
+  'package/package.json': JSON.stringify({
+    name: 'pnpm',
+    version: pin,
+    engines: { node: '>=18.12' },
+    bin: { pnpm: 'bin/pnpm.cjs', pnpx: 'bin/pnpx.cjs' },
+  }),
+  'package/bin/pnpm.cjs': pnpmCode,
+  'package/bin/pnpx.cjs': pnpmCode,
+});
 const integrity = 'sha512-' + createHash('sha512').update(archive).digest('base64');
 let downloads = 0,
   installs = 0,
@@ -97,18 +86,12 @@ const server = createServer((request, response) => {
   }
   if (request.headers.authorization !== authorization)
     return response.writeHead(401).end('Unauthorized');
-  if (request.url === '/registry/pnpm') {
+  if (request.url === `/registry/pnpm/${pin}`) {
     return response.end(
       JSON.stringify({
         name: 'pnpm',
-        'dist-tags': { latest: pin },
-        versions: {
-          [pin]: {
-            name: 'pnpm',
-            version: pin,
-            dist: { tarball: `${url}/registry/custom-pnpm.tgz`, integrity },
-          },
-        },
+        version: pin,
+        dist: { tarball: `${url}/registry/custom-pnpm.tgz`, integrity },
       }),
     );
   }
@@ -126,8 +109,11 @@ const publicVp = path.join(root, 'brew/bin/vp');
 function keg(version) {
   const prefix = path.join(root, 'brew/Cellar/vp', version);
   fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
-  fs.copyFileSync(source, path.join(prefix, 'bin/vp'));
-  fs.chmodSync(path.join(prefix, 'bin/vp'), 0o555);
+  fs.mkdirSync(path.join(prefix, 'libexec'));
+  fs.copyFileSync(source, path.join(prefix, 'libexec/vp'));
+  fs.writeFileSync(path.join(prefix, 'libexec/vp-install-lock.yaml'), lockfile);
+  fs.chmodSync(path.join(prefix, 'libexec/vp'), 0o555);
+  fs.symlinkSync('../libexec/vp', path.join(prefix, 'bin/vp'));
   fs.writeFileSync(
     path.join(prefix, 'INSTALL_RECEIPT.json'),
     JSON.stringify({
@@ -136,6 +122,7 @@ function keg(version) {
     }),
   );
   fs.chmodSync(path.join(prefix, 'bin'), 0o555);
+  fs.chmodSync(path.join(prefix, 'libexec'), 0o555);
   fs.chmodSync(prefix, 0o555);
   return prefix;
 }
@@ -185,6 +172,7 @@ function userPackage(env) {
 function unlock(prefix) {
   fs.chmodSync(prefix, 0o755);
   fs.chmodSync(path.join(prefix, 'bin'), 0o755);
+  fs.chmodSync(path.join(prefix, 'libexec'), 0o755);
 }
 
 try {
@@ -207,6 +195,17 @@ try {
   assert.ok(retry.every((result) => !result.stderr.includes('manage Node')));
   assert.equal(fs.readFileSync(settingsFile, 'utf8'), preferences);
   assert.ok(!fs.existsSync(path.join(old, 'bin/.vp-setup-complete')));
+  assert.equal(
+    fs.readFileSync(path.join(userPackage(env), 'bin/vp-install-lock.yaml'), 'utf8'),
+    lockfile,
+  );
+  assert.equal(
+    fs
+      .readFileSync(path.join(userPackage(env), 'node_modules/.vp-install-complete'))
+      .toString('hex'),
+    createHash('sha256').update(lockfile).digest('hex'),
+  );
+  console.log('First use copies the release lockfile and records a successful frozen install.');
   assert.ok(!fs.existsSync(path.join(env.VP_HOME, 'current')));
   assert.equal(fs.readlinkSync(path.join(env.VP_HOME, 'bin/vp')), publicVp);
   assert.equal(fs.readlinkSync(path.join(env.VP_HOME, 'fallback-bin/npm')), publicVp);
@@ -234,6 +233,16 @@ try {
   assert.equal(fs.readFileSync(settingsFile, 'utf8'), preferences);
   assert.equal(installs, 2);
   console.log('CLI, Node, npm, pn, and pnx shims survive Cellar replacement and removal.');
+
+  fs.writeFileSync(path.join(userPackage(env), 'pnpm-lock.yaml'), 'interrupted resolution');
+  rejectInstall = true;
+  await run(publicVp, ['--help'], { ...env, VP_SELF_SETUP_REPLACE_EXISTING: '1' }, root, 1);
+  assert.ok(!fs.existsSync(path.join(userPackage(env), '.vp-deps-complete')));
+  rejectInstall = false;
+  await run(publicVp, ['--help'], env);
+  assert.equal(installs, 4);
+  assert.equal(fs.readFileSync(settingsFile, 'utf8'), preferences);
+  console.log('A failed frozen refresh invalidates completion and retries with saved preferences.');
 
   const upgrade = await run(publicVp, ['upgrade'], env, root, 1);
   assert.ok(upgrade.stderr.includes('brew upgrade voidzero-dev/vite-plus/vp'));
@@ -264,7 +273,7 @@ try {
   const globalShim = path.join(secondUser.VP_HOME, 'bin/global-tool');
   fs.symlinkSync(previous, globalShim);
   await run(publicVp, ['--help'], secondUser);
-  assert.equal(installs, 3);
+  assert.equal(installs, 5);
   assert.notEqual(userPackage(env), userPackage(secondUser));
   assert.equal(fs.readlinkSync(globalShim), publicVp);
   assert.ok(fs.existsSync(metadata) && fs.existsSync(previous));
@@ -303,7 +312,7 @@ try {
   await run(publicVp, ['--help'], basic);
   authorization = `Bearer ${token}`;
   console.log(
-    'Registry overrides, relative user configuration, and basic authentication work with bundled npm.',
+    'Registry overrides, relative user configuration, and basic authentication work with the shared downloader.',
   );
 
   await run(publicVp, ['--help'], environment('unauthenticated', false), root, 1);

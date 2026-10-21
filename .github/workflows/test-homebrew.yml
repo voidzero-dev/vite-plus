@@ -19,7 +19,7 @@ on:
       - 'crates/vp_global_cli/src/self_setup*'
       - 'crates/vp_global_cli/src/self_setup/**'
       - 'crates/vp_global_cli/src/homebrew.rs'
-      - 'crates/vp_pm_cli/src/package_manager/bootstrap.rs'
+      - 'crates/vp_pm_cli/**'
 
 concurrency:
   # A skipped run for an unrelated label must not cancel installation tests.
@@ -47,9 +47,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24.18.0'
+          node-version-file: .node-version
           package-manager-cache: false
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -67,7 +67,7 @@ jobs:
               - 'crates/vp_global_cli/src/self_setup*'
               - 'crates/vp_global_cli/src/self_setup/**'
               - 'crates/vp_global_cli/src/homebrew.rs'
-              - 'crates/vp_pm_cli/src/package_manager/bootstrap.rs'
+              - 'crates/vp_pm_cli/**'
 
       - name: Check formula publication rules
         run: node --test .github/scripts/__tests__/homebrew-formula.mjs
@@ -101,15 +101,16 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: homebrew-${{ matrix.target }}
+          cache-key: homebrew-${{ matrix.target }}-ci
 
-      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
+      - uses: ./.github/actions/setup-ci-node
 
       - uses: ./.github/actions/build-upstream
         with:
+          profile: ci
           target: ${{ matrix.target }}
 
       - name: Pack the current checkout
@@ -131,8 +132,8 @@ jobs:
           fs.writeFileSync(file, source.replace(/^version = "[^"]+"/m, `version = "${next}"`));
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${next}\n`);
           JS
-          cargo build --release -p vp_global_cli --target "$TARGET"
-          cp "${CARGO_TARGET_DIR:-target}/$TARGET/release/vp" "$RUNNER_TEMP/vp-replacement"
+          cargo build --profile ci -p vp_global_cli --target "$TARGET"
+          cp "${CARGO_TARGET_DIR:-target}/$TARGET/ci/vp" "$RUNNER_TEMP/vp-replacement"
           git restore -- Cargo.lock crates/vp_global_cli/Cargo.toml
 
       - name: Check authentication, retries, and external ownership

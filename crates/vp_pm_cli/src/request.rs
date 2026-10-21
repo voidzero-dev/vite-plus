@@ -389,10 +389,7 @@ impl HttpClient {
     }
 }
 
-pub(crate) fn extract_tgz(
-    tgz_file: impl AsRef<Path>,
-    target_dir: impl AsRef<Path>,
-) -> Result<(), Error> {
+fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Result<(), Error> {
     let tgz_file = tgz_file.as_ref();
     let target_dir = target_dir.as_ref();
     tracing::debug!("Extract tgz: {:?} to {:?}", tgz_file, target_dir);

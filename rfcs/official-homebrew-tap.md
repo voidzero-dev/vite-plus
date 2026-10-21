@@ -33,8 +33,8 @@ The explicit repository URL is required because Homebrew otherwise looks for
 it from core's `vite-plus` formula and `vp` alias.
 
 Homebrew downloads the target's [GitHub release archive](https://github.com/voidzero-dev/vite-plus/releases),
-verifies its pinned SHA-256 checksum, and installs `vp` with `vpr` and `vpx`
-aliases. The formula needs no npm access, Node.js, or pnpm during installation.
+verifies its pinned SHA-256 checksum, and installs `vp` and its published dependency lockfile under `libexec`.
+Public `vp`, `vpr`, and `vpx` links point to that binary. The formula needs no npm access, Node.js, or pnpm during installation.
 
 On first use, `vp` installs the matching `vite-plus` npm package and its
 production dependencies into the user's data directory. It then configures the
@@ -77,9 +77,12 @@ and links the public commands. It creates no per-user Vite+ installation.
 <BREW>/
 ├── Cellar/vp/A/
 │   ├── bin/
-│   │   ├── vp
+│   │   ├── vp -> ../libexec/vp
 │   │   ├── vpr -> vp
 │   │   └── vpx -> vp
+│   ├── libexec/
+│   │   ├── vp
+│   │   └── vp-install-lock.yaml
 │   └── INSTALL_RECEIPT.json
 └── bin/
     ├── vp  -> ../Cellar/vp/A/bin/vp
@@ -89,9 +92,10 @@ and links the public commands. It creates no per-user Vite+ installation.
 
 ### 3. Prepare dependencies on first use
 
-The first `vp` invocation prepares Node.js and uses its bundled npm to download
-the pinned pnpm package. Then pnpm installs `vite-plus@A` and production
-dependencies in the user's data directory, keyed by CLI version and platform.
+The first `vp` invocation uses the shared authenticated downloader for pinned
+pnpm and prepares a compatible Node.js runtime. It copies `vp-install-lock.yaml`
+into the user directory and installs `vite-plus@A` with `--frozen-lockfile`.
+Dependencies are keyed by CLI version and platform.
 Setup saves management choices before downloads so a failed attempt can retry
 without asking again. The Homebrew files stay unchanged.
 
@@ -104,6 +108,7 @@ without asking again. The Homebrew files stay unchanged.
 │   └── lib/node_modules/npm/        # included in the Node.js distribution
 ├── package_manager/pnpm/<pnpm-version>/pnpm/
 └── cli-packages/A/<platform>/
+    ├── bin/vp-install-lock.yaml      # copy of the published lockfile
     ├── package.json
     ├── pnpm-lock.yaml
     └── node_modules/
@@ -137,7 +142,7 @@ Node.js and system-first npm:
 └── <receipt-for-A>.json
 ```
 
-The executable remains at `<BREW>/Cellar/vp/A/bin/vp` and loads JavaScript from
+The executable remains at `<BREW>/Cellar/vp/A/libexec/vp` and loads JavaScript from
 `<DATA>/cli-packages/A/<platform>/node_modules/vite-plus`. Later invocations
 reuse these files. The generated environment follows the existing
 [directory layout](directory-layout.md): `<BIN>` comes first on `PATH`, and
@@ -151,7 +156,8 @@ continue to point through those links, even after Homebrew removes version `A`.
 
 ```text
 <BREW>/Cellar/vp/B/
-├── bin/                            # new vp, vpr, vpx
+├── bin/                            # public vp, vpr, vpx links
+├── libexec/                        # new vp and vp-install-lock.yaml
 └── INSTALL_RECEIPT.json
 
 <BREW>/bin/
@@ -166,6 +172,7 @@ applicable.
 
 ```text
 <DATA>/cli-packages/B/<platform>/
+├── bin/vp-install-lock.yaml
 ├── package.json
 ├── pnpm-lock.yaml
 └── node_modules/
@@ -200,7 +207,7 @@ command. Setup must not write into the Cellar.
 
 ## Registry configuration
 
-The user runs `vp` outside Homebrew's build sandbox. Both npm and pnpm read
+The user runs `vp` outside Homebrew's build sandbox. The native downloader and pnpm read
 `~/.npmrc`, or the file selected by `NPM_CONFIG_USERCONFIG`, and inherit registry
 and token environment variables. Use [npm-compatible authentication](https://docs.npmjs.com/cli/v11/configuring-npm/npmrc/)
 at both stages, including registry-scoped tokens and basic authentication:
@@ -214,19 +221,16 @@ Users export `NPM_TOKEN` before running `vp`. They can also use
 `NPM_CONFIG_REGISTRY` for a registry override. No Homebrew-specific npm variables
 or Homebrew npm downloader are required.
 
-Change the shared [dependency installer](../crates/vp_setup/src/install.rs) to
-fetch pinned pnpm with Node's bundled npm. Invoke Node and `npm-cli.js` by their
-absolute paths. Use [`npm pack`](https://docs.npmjs.com/cli/v11/commands/npm-pack/)
-with an exact version, `--ignore-scripts`, `--json`, and `--workspaces=false` in
-a temporary directory. npm handles registry metadata, tarball URLs, integrity,
-and credentials. Reuse the existing pnpm cache layout and installation lock.
-Then use that pnpm for dependency installation.
+Reuse the shared [authenticated downloader](../crates/vp_pm_cli/src/package_manager.rs)
+for pnpm. A small setup adapter reads the exact version's metadata and supplies
+its tarball URL and integrity hash to the existing download, cache, and lock code.
+No npm subprocess is needed.
 
-Run both stages outside the calling project's workspace. Resolve an explicit
-relative `NPM_CONFIG_USERCONFIG` before changing directories, and pass the same
-registry override to both stages. Keep credentials out of command arguments,
-logs, and receipts. Authentication failures must stop setup without public
-registry fallback. pnpm-only credential helpers are outside the initial scope.
+Use the shared [dependency installer](../crates/vp_setup/src/install.rs) for
+runtime selection, frozen installation, and the explicit lockfile recovery option.
+Resolve relative `NPM_CONFIG_USERCONFIG` before pnpm changes directories. Keep
+credentials out of command arguments, logs, and receipts. Authentication failures
+stop setup without a public-registry fallback.
 
 ## Commands and migration
 
@@ -272,7 +276,7 @@ checksums. A failed update leaves the previous formula available. Use a formula
 `revision` for recipe fixes and a new release for CLI changes. A formula-only
 merge must not trigger another product release.
 
-The updater checks the release tag for the new bootstrap and formula before
+The updater checks the release tag for the tap formula before
 removing the initial disable gate. Existing releases cannot enable the tap.
 
 For early testing, `HOMEBREW_VP_PR_VERSION` selects a published preview by PR

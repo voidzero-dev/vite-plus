@@ -33,22 +33,6 @@ const nodeBin = join(external, 'node-bin');
 for (const directory of [home, user, nodeBin]) mkdirSync(directory, { recursive: true });
 // Expose only Node so the host's npm and npx do not change shim preferences.
 symlinkSync(process.execPath, join(nodeBin, 'node'));
-// Model Node's bundled npm while retaining deterministic download checkpoints.
-const npmBin = join(nodeBin, '../lib/node_modules/npm/bin');
-mkdirSync(npmBin, { recursive: true });
-writeFileSync(
-  join(npmBin, 'npm-cli.js'),
-  `
-  const fs = require('node:fs');
-  fetch(process.env.npm_config_registry + '/pnpm/-/pnpm-10.33.0.tgz')
-    .then(response => response.arrayBuffer())
-    .then(data => {
-      const filename = 'pnpm-10.33.0.tgz';
-      fs.writeFileSync(filename, Buffer.from(data));
-      console.log(JSON.stringify([{ name: 'pnpm', version: '10.33.0', filename }]));
-    });
-`,
-);
 copyFileSync(join(process.env.VP_HOME, 'bin/vp'), join(external, 'vp'));
 const lockfile = "lockfileVersion: '9.0'\n";
 writeFileSync(join(external, 'vp-install-lock.yaml'), lockfile);
@@ -119,6 +103,17 @@ async function handleRequest(request, response) {
     // A pinned default must not resolve the latest LTS alias.
     indexRequests++;
     response.writeHead(404).end();
+  } else if (request.url === '/pnpm/10.34.7') {
+    response.end(
+      JSON.stringify({
+        name: 'pnpm',
+        version: '10.34.7',
+        dist: {
+          tarball: `${mirror}/pnpm/-/pnpm-10.34.7.tgz`,
+          integrity: 'sha512-' + createHash('sha512').update(pnpmArchive).digest('base64'),
+        },
+      }),
+    );
   } else if (/^\/pnpm\/-\/pnpm-[\d.]+\.tgz$/.test(request.url)) {
     await checkpoint('download');
     response.setHeader('Content-Length', pnpmArchive.length);

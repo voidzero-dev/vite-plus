@@ -41,8 +41,10 @@ pub(crate) fn owns_current_exe() -> bool {
 fn installation(binary: &Path) -> Option<Installation> {
     // Resolve both Homebrew's public entrypoint and Vite+'s generated shims.
     let binary = std::fs::canonicalize(binary).ok()?;
-    let bin = binary.parent().filter(|bin| bin.file_name().is_some_and(|name| name == "bin"))?;
-    let prefix = bin.parent()?;
+    let executable_dir = binary.parent().filter(|directory| {
+        directory.file_name().is_some_and(|name| name == "bin" || name == "libexec")
+    })?;
+    let prefix = executable_dir.parent()?;
     let data = std::fs::read(prefix.join("INSTALL_RECEIPT.json")).ok()?;
     let receipt = serde_json::from_slice::<serde_json::Value>(&data).ok()?;
     if receipt.get("homebrew_version").and_then(serde_json::Value::as_str).is_none_or(str::is_empty)
@@ -163,8 +165,9 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         for version in ["old", "new"] {
             let prefix = root.path().join("Cellar/vp").join(version);
-            std::fs::create_dir_all(prefix.join("bin")).unwrap();
-            std::fs::write(prefix.join("bin/vp"), version).unwrap();
+            let directory = if version == "old" { "bin" } else { "libexec" };
+            std::fs::create_dir_all(prefix.join(directory)).unwrap();
+            std::fs::write(prefix.join(directory).join("vp"), version).unwrap();
             std::fs::write(prefix.join("INSTALL_RECEIPT.json"), br#"{"homebrew_version":"7.0.2"}"#)
                 .unwrap();
         }
@@ -174,7 +177,7 @@ mod tests {
         let old = installation(&public).unwrap();
         let stable = old.public_binary().unwrap();
         std::fs::remove_file(&public).unwrap();
-        std::os::unix::fs::symlink("../Cellar/vp/new/bin/vp", &public).unwrap();
+        std::os::unix::fs::symlink("../Cellar/vp/new/libexec/vp", &public).unwrap();
         std::fs::remove_dir_all(root.path().join("Cellar/vp/old")).unwrap();
         assert_eq!(std::fs::read_to_string(&stable).unwrap(), "new");
         assert_eq!(installation(&public).unwrap().public_binary().unwrap(), stable);

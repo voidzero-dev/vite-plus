@@ -92,11 +92,8 @@ export async function verifyRelease(version, release, fetchImpl = fetch) {
     assert.ok(response.ok, `Download failed: ${url} (HTTP ${response.status})`);
     return response;
   };
-  // Old tags do not contain the authenticated bootstrap or the bare Homebrew runtime.
-  // Check the release tag, never main, before enabling installation.
-  await get(
-    `https://raw.githubusercontent.com/${repository}/v${version}/crates/vp_pm_cli/src/package_manager/bootstrap.rs`,
-  );
+  // The formula is added with the per-user Homebrew runtime. Check the release
+  // tag, never main, before enabling installation.
   await get(`https://raw.githubusercontent.com/${repository}/v${version}/HomebrewFormula/vp.rb`);
   const checksumUrl = `https://github.com/${repository}/releases/download/v${version}/vp-checksums.txt`;
   const assets = releaseAssets(version, await (await get(checksumUrl)).text());

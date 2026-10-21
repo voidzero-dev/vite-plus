@@ -116,7 +116,8 @@ class Vp < Formula
   conflicts_with "vite-plus", because: "both install vp, vpr, and vpx"
 
   def install
-    bin.install "vp"
+    libexec.install "vp", "vp-install-lock.yaml"
+    bin.install_symlink libexec/"vp"
     bin.install_symlink "vp" => "vpr"
     bin.install_symlink "vp" => "vpx"
   end
@@ -125,7 +126,7 @@ class Vp < Formula
     <<~EOS
       Run vp to install your dependencies and configure your shell.
       First use needs access to the Node.js download service and your npm registry.
-      npm and pnpm read ~/.npmrc or NPM_CONFIG_USERCONFIG, including registry credentials.
+      vp and pnpm read ~/.npmrc or NPM_CONFIG_USERCONFIG, including registry credentials.
     EOS
   end
 
