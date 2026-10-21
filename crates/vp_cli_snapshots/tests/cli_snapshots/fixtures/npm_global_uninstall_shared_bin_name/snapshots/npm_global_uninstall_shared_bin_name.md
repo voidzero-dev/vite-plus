@@ -1,6 +1,6 @@
 # npm_global_uninstall_shared_bin_name
 
-## `npm install -g ./pkg-a`
+## `npm install -g --ignore-scripts ./pkg-a`
 
 Install pkg-a (creates link for npm-global-shared-cli)
 
@@ -30,9 +30,9 @@ BinConfig should point to pkg-a
 }
 ```
 
-## `npm install -g --force ./pkg-b`
+## `npm install -g --ignore-scripts --force ./pkg-b`
 
-Install pkg-b with force (overwrites npm-global-shared-cli)
+Install pkg-b with force so npm selects the last normalized target
 
 ```
 
@@ -69,7 +69,7 @@ Should print pkg-b message (latest installed)
 shared-cli from pkg-b
 ```
 
-## `npm uninstall -g npm-global-shared-pkg-a`
+## `npm uninstall -g --ignore-scripts npm-global-shared-pkg-a`
 
 Uninstall pkg-a, should NOT remove the link (owned by pkg-b now)
 
@@ -89,13 +89,13 @@ link should still exist
 
 ## `npm-global-shared-cli`
 
-Should still work (owned by pkg-b)
+Repair must keep pkg-b's last normalized target
 
 ```
 shared-cli from pkg-b
 ```
 
-## `npm uninstall -g npm-global-shared-pkg-b`
+## `npm uninstall -g --ignore-scripts npm-global-shared-pkg-b`
 
 Uninstall pkg-b, NOW should remove the link
 

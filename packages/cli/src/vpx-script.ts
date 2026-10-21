@@ -139,6 +139,20 @@ function nodeOptionName(arg: string): string {
   return name.startsWith('--') ? `--${name.slice(2).replaceAll('_', '-')}` : name;
 }
 
+/**
+ * Whether the option `name`, given without `=value`, takes `next` as its value. Node.js
+ * 24.19, 26.1, and later read a bare `--experimental-config-file` as `node.config.json`,
+ * and older releases take the next argument as the config file, so that argument is its
+ * value only when it is a `.json` file, which cannot be the script either way. Mirrors
+ * `takes_next_arg` in the global CLI.
+ */
+function takesNextArg(name: string, next: string): boolean {
+  if (name === '--experimental-config-file') {
+    return next.endsWith('.json') && !next.startsWith('-');
+  }
+  return NODE_OPTIONS_WITH_VALUE.has(name) || WATCH_OPTIONS_WITH_VALUE.has(name);
+}
+
 export interface VpxFlags {
   packages: string[];
   shellMode: boolean;
@@ -250,11 +264,8 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
     watch ||= name === '--watch-path';
     entry &&= !NODE_OPTIONS_WITHOUT_ENTRY.has(name);
     nodeArgs.push(arg);
-    if (
-      !arg.includes('=') &&
-      (NODE_OPTIONS_WITH_VALUE.has(name) || WATCH_OPTIONS_WITH_VALUE.has(name)) &&
-      positional[index + 1] !== undefined
-    ) {
+    const next = positional[index + 1];
+    if (!arg.includes('=') && next !== undefined && takesNextArg(name, next)) {
       nodeArgs.push(positional[++index]);
     }
   }
