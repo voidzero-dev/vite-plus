@@ -15,11 +15,14 @@
 import type { LoadFnOutput, LoadHookSync, ResolveHookSync } from 'node:module';
 import Module, { registerHooks, setSourceMapsSupport } from 'node:module';
 import path from 'node:path';
+import { isMainThread } from 'node:worker_threads';
 
 import { addHook } from 'pirates';
 
+import { installSignalAck } from '../../../oxc-node/packages/core/signal-ack.mjs';
 import {
   canRegisterSyncHooks,
+  flush,
   HELPER_MODULE_NAME,
   isCommonJsRequire,
   isSupportedNodeVersion,
@@ -27,6 +30,8 @@ import {
   resolveWithOxcNode,
   routeHelperRequires,
   SUPPORTED_NODE_RANGE,
+  threadWatchSink,
+  withFlush,
   withRequireAsyncModuleCode,
 } from './script-hooks.ts';
 
@@ -37,9 +42,23 @@ if (!isSupportedNodeVersion(process.versions.node)) {
   process.exit(1);
 }
 
+// Under `vpx --watch`, tell the watcher about each SIGINT the script handles, so a Ctrl+C
+// the script already got from the terminal is not sent again. A no-op otherwise.
+if (isMainThread) {
+  installSignalAck();
+}
+
 // Loaded after the version check so the native addon never loads on an
 // unsupported Node.js.
 const oxcNode = loadOxcNode();
+
+// Under `vpx --watch`, report what Node.js does not: the tsconfig files oxc-node read
+// and the paths a failed resolve looked for. Turned on before the first transform or
+// resolve, which is when tsconfig files are read.
+const watch = threadWatchSink();
+if (watch) {
+  oxcNode.enableWatchReport();
+}
 
 // `vpx --tsconfig` pins one config for every file. It must be set before the first
 // transform or resolve; the off-thread hooks load the same native library, so they
@@ -65,6 +84,11 @@ addHook(
       output = transformer.transform(filename, code);
     } catch (error) {
       throw withRequireAsyncModuleCode(error);
+    } finally {
+      // A transform reads the tsconfig of the file it compiles.
+      if (watch) {
+        flush(watch, oxcNode.takeWatchDependencies);
+      }
     }
     const source = output.source;
     const sourceMap = output.sourceMap;
@@ -111,5 +135,13 @@ const load: LoadHookSync = (url, context, nextLoad) => {
 };
 
 if (canRegisterSyncHooks(process.versions.node)) {
-  registerHooks({ resolve, load });
+  // Each hook reports what it read or looked for, even when it throws.
+  registerHooks(
+    watch
+      ? {
+          resolve: withFlush(resolve, watch, oxcNode.takeWatchDependencies),
+          load: withFlush(load, watch, oxcNode.takeWatchDependencies),
+        }
+      : { resolve, load },
+  );
 }

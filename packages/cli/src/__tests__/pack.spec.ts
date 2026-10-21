@@ -1,21 +1,10 @@
 import { expect, test } from 'vitest';
 
-import {
-  build,
-  defineConfig,
-  globalLogger,
-  mergeConfig,
-  resolveUserConfig,
-  buildWithConfigs,
-  enableDebug,
-} from '../pack.js';
-
-test('should export all pack APIs from @voidzero-dev/vite-plus-core/pack', () => {
-  expect(defineConfig).toBeTypeOf('function');
-  expect(build).toBeTypeOf('function');
-  expect(globalLogger).toBeDefined();
-  expect(mergeConfig).toBeTypeOf('function');
-  expect(resolveUserConfig).toBeTypeOf('function');
-  expect(buildWithConfigs).toBeTypeOf('function');
-  expect(enableDebug).toBeTypeOf('function');
+// `vite-plus/pack` re-exports the tsdown build bundled into core, so it must keep tsdown's runtime API.
+test('exposes every tsdown value export from vite-plus/pack', async () => {
+  const [pack, tsdown] = await Promise.all([import('../pack.js'), import('tsdown')]);
+  const expected = Object.keys(tsdown).filter((key) => key !== 'default');
+  expect(expected.length, 'sanity: tsdown should expose value exports').toBeGreaterThan(0);
+  const missing = expected.filter((key) => (pack as Record<string, unknown>)[key] === undefined);
+  expect(missing, 'tsdown value exports missing from vite-plus/pack').toEqual([]);
 });

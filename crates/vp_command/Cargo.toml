@@ -8,6 +8,7 @@ publish = false
 rust-version.workspace = true
 
 [dependencies]
+bitflags = { workspace = true }
 fspy = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

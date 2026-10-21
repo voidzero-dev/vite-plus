@@ -1,5 +1,5 @@
 {
-  "$comment": "Script detection cases shared by crates/vp_global_cli/src/commands/vpx_script.rs and packages/cli/src/__tests__/vpx-script.spec.ts, so the global vpx and the project-local bin decide the same way. `files` are created in a temporary project directory that is the cwd; `{cwd}` in `args` and `script` stands for that directory. `expect` is \"package\", { \"error\": message }, or { \"script\": Node.js arguments, \"tsconfig\": path }. `scriptExtensions`, `nodeOptionsWithValue`, and `nodeOptionsWithoutEntry` are the lists both implementations must declare. `packageSpecs` gives, for a package spec, whether it names a version and which binary it runs. `explicitPrograms` checks an explicit path that package mode runs as a program: `executable` lists the files made executable, `expect` is \"ok\" or { \"error\", \"note\" }, and `unixOnly` cases depend on mode bits.",
+  "$comment": "Script detection cases shared by crates/vp_global_cli/src/commands/vpx_script.rs and packages/cli/src/__tests__/vpx-script.spec.ts, so the global vpx and the project-local bin decide the same way. `files` are created in a temporary project directory that is the cwd; `{cwd}` in `args` and `script` stands for that directory. `expect` is \"package\", { \"error\": message }, or { \"script\": arguments, \"tsconfig\": path, \"watch\": true }, where `watch` runs the arguments with the watcher instead of Node.js. `scriptExtensions`, `nodeOptionsWithValue`, `nodeOptionsWithoutEntry`, and `watchOptionsWithValue` are the lists both implementations must declare. `packageSpecs` gives, for a package spec, whether it names a version and which binary it runs. `explicitPrograms` checks an explicit path that package mode runs as a program: `executable` lists the files made executable, `expect` is \"ok\" or { \"error\", \"note\" }, and `unixOnly` cases depend on mode bits.",
   "scriptExtensions": [".ts", ".mts", ".cts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"],
   "nodeOptionsWithValue": [
     "-C",
@@ -86,6 +86,13 @@
     "--watch-path"
   ],
   "nodeOptionsWithoutEntry": ["-e", "--eval", "-p", "-pe", "--print", "--run", "--test"],
+  "watchOptionsWithValue": [
+    "--exclude",
+    "--ignore",
+    "--include",
+    "--kill-signal",
+    "--kill-timeout"
+  ],
   "packageSpecs": [
     { "spec": "eslint", "versioned": false, "command": "eslint" },
     { "spec": "eslint@9", "versioned": true, "command": "eslint" },
@@ -264,9 +271,60 @@
       "files": {
         "server.ts": ""
       },
-      "args": ["--watch", "./server.ts", "--port", "3000"],
+      "args": ["--inspect", "./server.ts", "--port", "3000"],
       "expect": {
-        "script": ["--watch", "./server.ts", "--port", "3000"]
+        "script": ["--inspect", "./server.ts", "--port", "3000"]
+      }
+    },
+    {
+      "name": "--watch runs the watcher and is removed",
+      "files": {
+        "server.ts": ""
+      },
+      "args": ["--watch", "./server.ts", "--port", "3000", "--watch"],
+      "expect": {
+        "script": ["./server.ts", "--port", "3000", "--watch"],
+        "watch": true
+      }
+    },
+    {
+      "name": "--watch-path also runs the watcher, which reports it",
+      "files": {
+        "server.ts": ""
+      },
+      "args": ["--watch-path", "src", "./server.ts"],
+      "expect": {
+        "script": ["--watch-path", "src", "./server.ts"],
+        "watch": true
+      }
+    },
+    {
+      "name": "the value of a watcher option is not the script",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["--watch", "--exclude", "./gen.ts", "--kill-timeout", "100", "./main.ts"],
+      "expect": {
+        "script": ["--exclude", "./gen.ts", "--kill-timeout", "100", "./main.ts"],
+        "watch": true
+      }
+    },
+    {
+      "name": "--watch after the script belongs to the script",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["./main.ts", "--watch"],
+      "expect": {
+        "script": ["./main.ts", "--watch"]
+      }
+    },
+    {
+      "name": "--watch without a script still runs the watcher, which reports the missing entry",
+      "args": ["--watch"],
+      "expect": {
+        "script": [],
+        "watch": true
       }
     },
     {
@@ -319,9 +377,9 @@
     },
     {
       "name": "a missing bare name after Node.js options is left to Node.js",
-      "args": ["--watch", "seed.ts"],
+      "args": ["--no-warnings", "seed.ts"],
       "expect": {
-        "script": ["--watch", "seed.ts"]
+        "script": ["--no-warnings", "seed.ts"]
       }
     },
     {
@@ -430,8 +488,9 @@
       },
       "args": ["--watch", "--tsconfig", "tsconfig.scripts.json", "./a.ts"],
       "expect": {
-        "script": ["--watch", "./a.ts"],
-        "tsconfig": "tsconfig.scripts.json"
+        "script": ["./a.ts"],
+        "tsconfig": "tsconfig.scripts.json",
+        "watch": true
       }
     },
     {
@@ -439,9 +498,9 @@
       "files": {
         "a.ts": ""
       },
-      "args": ["--watch", "--tsconfig=x.json", "./a.ts", "--tsconfig", "y"],
+      "args": ["--no-warnings", "--tsconfig=x.json", "./a.ts", "--tsconfig", "y"],
       "expect": {
-        "script": ["--watch", "./a.ts", "--tsconfig", "y"],
+        "script": ["--no-warnings", "./a.ts", "--tsconfig", "y"],
         "tsconfig": "x.json"
       }
     },

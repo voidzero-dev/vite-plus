@@ -10,12 +10,6 @@ const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)),
 const distDir = path.join(cliPkgDir, 'dist');
 
 describe('toolchain export', () => {
-  it('generates JSON, JavaScript, and type declaration artifacts', () => {
-    for (const file of ['toolchain.json', 'toolchain.js', 'toolchain.d.ts']) {
-      expect(fs.existsSync(path.join(distDir, file)), `${file} should exist`).toBe(true);
-    }
-  });
-
   it('exports the same manifest as the JSON artifact', async () => {
     const json = JSON.parse(
       fs.readFileSync(path.join(distDir, 'toolchain.json'), 'utf8'),

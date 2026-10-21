@@ -1,49 +1,5 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`rewritePackageJson > should rewrite devDependencies and dependencies on npm monorepo project 1`] = `
-{
-  "dependencies": {
-    "foo": "1.0.0",
-  },
-  "devDependencies": {
-    "vite-plus": "latest",
-  },
-}
-`;
-
-exports[`rewritePackageJson > should rewrite devDependencies and dependencies on pnpm monorepo project 1`] = `
-{
-  "dependencies": {
-    "foo": "1.0.0",
-  },
-  "devDependencies": {
-    "vite-plus": "catalog:",
-  },
-}
-`;
-
-exports[`rewritePackageJson > should rewrite devDependencies and dependencies on standalone project 1`] = `
-{
-  "dependencies": {
-    "foo": "1.0.0",
-  },
-  "devDependencies": {
-    "vite-plus": "latest",
-  },
-}
-`;
-
-exports[`rewritePackageJson > should rewrite devDependencies and dependencies on yarn monorepo project 1`] = `
-{
-  "dependencies": {
-    "foo": "1.0.0",
-  },
-  "devDependencies": {
-    "vite-plus": "catalog:",
-  },
-}
-`;
-
 exports[`rewritePackageJson > should rewrite package.json scripts and extract staged config 1`] = `
 {
   "lint-staged": {

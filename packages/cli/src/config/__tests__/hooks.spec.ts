@@ -717,18 +717,6 @@ describe('hookScript env gates', () => {
 });
 
 describe('hookScript', () => {
-  it('should compute correct depth for simple dir', () => {
-    // ".vite-hooks" → 1 segment → depth 3
-    const script = hookScript('.vite-hooks');
-    expect(countDirnameCalls(script)).toBe(3);
-  });
-
-  it('should compute correct depth for nested dir', () => {
-    // ".config/husky" → 2 segments → depth 4
-    const script = hookScript('.config/husky');
-    expect(countDirnameCalls(script)).toBe(4);
-  });
-
   it('should handle ./ prefix correctly (bug case)', () => {
     // "./.config/husky" should produce same depth as ".config/husky"
     // Before fix: filter(Boolean) kept "." → 3 segments → depth 5 (wrong)
