@@ -73,6 +73,7 @@ jobs:
           # 0.0.0-commit.<sha> for preview builds). Anchored to the line-start
           # `version = "..."` so crate dependency versions are never touched.
           for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+            # shellcheck disable=SC2016 # JavaScript expands process.env.VERSION.
             node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"
           done
           # Keep the workspace package entries in Cargo.lock consistent with
@@ -121,6 +122,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vite-plus-native-${{ matrix.settings.target }}
+          overwrite: true
           path: ./packages/cli/binding/*.node
           if-no-files-found: error
 
@@ -128,6 +130,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vp-global-cli-${{ matrix.settings.target }}
+          overwrite: true
           path: |
             ./target/${{ matrix.settings.target }}/release/vp
             ./target/${{ matrix.settings.target }}/release/vp.exe
@@ -192,6 +195,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vp-release-archive-${{ matrix.settings.target }}
+          overwrite: true
           path: |
             ./target/${{ matrix.settings.target }}/release/vp-*.tar.gz
             ./target/${{ matrix.settings.target }}/release/vp-*.zip
@@ -202,6 +206,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vp-setup-${{ matrix.settings.target }}
+          overwrite: true
           path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
           if-no-files-found: error
 
@@ -215,6 +220,7 @@ jobs:
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: core
+          overwrite: true
           path: ./packages/core/dist
           if-no-files-found: error
 
@@ -223,6 +229,7 @@ jobs:
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: prompts
+          overwrite: true
           path: ./packages/prompts/dist
           if-no-files-found: error
 
@@ -231,6 +238,7 @@ jobs:
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: cli
+          overwrite: true
           path: ./packages/cli/dist
           if-no-files-found: error
 
@@ -239,6 +247,7 @@ jobs:
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: cli-docs
+          overwrite: true
           path: ./packages/cli/docs
           if-no-files-found: error
 
@@ -247,6 +256,7 @@ jobs:
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: licenses
+          overwrite: true
           path: |
             ./packages/core/LICENSE
             ./packages/cli/LICENSE

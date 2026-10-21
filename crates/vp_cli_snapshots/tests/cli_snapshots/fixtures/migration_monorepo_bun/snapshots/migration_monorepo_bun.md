@@ -19,6 +19,7 @@ VITE+ - The Unified Toolchain for the Web
 check vite.config.ts
 
 ```
+// vp migrate: merged .oxlintrc.json (aba19784a1d2c46ab69279abb5cab90f).
 import react from '@vitejs/plugin-react';
 import { defineConfig, lazyPlugins } from 'vite-plus';
 

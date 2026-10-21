@@ -70,8 +70,10 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 ├── current -> <version>/             # Symlink to active version
 ├── <version>/
 │   ├── bin/
-│   │   └── vp                        # Rust binary (from CLI platform package)
+│   │   ├── vp                        # Rust binary (from CLI platform package)
+│   │   └── vp-install-lock.yaml      # Published installation lockfile
 │   ├── package.json                  # Wrapper: { "dependencies": { "vite-plus": "<version>" } }
+│   ├── pnpm-lock.yaml                # Working copy restored from bin/vp-install-lock.yaml
 │   └── node_modules/
 │       ├── vite-plus/                # Installed as npm dependency
 │       │   ├── dist/bin.js           # JS entry point (found by Rust binary)
@@ -90,12 +92,17 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 **Install flows:**
 
 - **Production** (`curl -fsSL https://vite.plus | bash`):
-  Downloads CLI platform tarball from `@voidzero-dev/vite-plus-cli-{platform}` (extracts only `vp` binary),
-  generates wrapper `package.json`, runs `vp install --silent` which installs `vite-plus` + all transitive deps via npm.
+  Downloads the CLI platform archive from `@voidzero-dev/vite-plus-cli-{platform}`
+  and extracts the binary and its bundled `vp-install-lock.yaml`. The script
+  delegates to the binary's self-setup, which generates the wrapper `package.json`,
+  restores `pnpm-lock.yaml`, and installs dependencies with managed pnpm and
+  `--frozen-lockfile`. `install.ps1` uses the same flow on Windows.
 
 - **Upgrade** (`vp upgrade`):
-  Downloads CLI platform tarball from `@voidzero-dev/vite-plus-cli-{platform}` (binary only),
-  generates wrapper `package.json`, runs `vp install --silent`. No main tarball download needed.
+  Downloads the CLI platform archive with the binary and lockfile, generates the
+  wrapper `package.json`, and restores the bundled lockfile before the frozen
+  dependency install. pnpm downloads `vite-plus` and its dependencies using the
+  versions and integrity values recorded in that lockfile.
 
 - **Local dev** (`pnpm bootstrap-cli`):
   Copies `vp` binary, generates wrapper `package.json`, symlinks
@@ -105,6 +112,63 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 - **CI** (`pnpm bootstrap-cli:ci --tgz <path>`):
   Copies `vp` binary, generates wrapper `package.json` with `file:` protocol
   refs to tgz files, runs `npm install`.
+
+### Global Installation Lockfile
+
+Each `@voidzero-dev/vite-plus-cli-{platform}` package contains
+`vp-install-lock.yaml` beside `vp` or `vp.exe`. Release and commit preview builds
+both use this layout. Standalone release archives also include the companion.
+The lockfile describes the global wrapper's `vite-plus` dependency and its
+transitive dependencies, including optional packages for all supported platforms.
+CLI binary packages remain outside this dependency graph, so adding the lockfile
+to them cannot change an integrity value recorded inside it.
+
+Release builds publish the local CLI under `staging`, then use the installer's
+pinned pnpm version to generate a standard lockfile from that published version.
+The workflow promotes the local CLI to `latest` after the global packages are
+available. Preview builds also publish the local CLI first, generate the lockfile
+from the registry, then publish the global packages and update the PR tag.
+Publishing retries reuse the prepared artifacts.
+See [Global installation lockfile](../packages/cli/BUNDLING.md#global-installation-lockfile)
+for the publication order and generator entry points.
+
+The platform manifest advertises the companion with `vpInstallLockfile: true`.
+Extraction fails if an advertised companion is missing. A standalone executable
+or an older upgrade client can lose the companion; self-setup recovers it from
+the exact platform package and verifies that archive's integrity. Companion
+writes use a temporary file and atomic rename, so interrupted writes can be retried.
+A successful frozen install records the companion's SHA-256 digest in
+`node_modules/.vp-install-complete`. Self-setup reuses that install after an
+upgrade or a later setup failure. Missing receipts or changed lockfiles require
+another frozen install, even when `node_modules` already exists. Each install
+attempt clears the receipt before it starts. Older packages without a companion
+retain their existing installation behavior. Local development and already
+bundled external installations keep their existing setup paths.
+
+The installation's `.npmrc` keeps `minimum-release-age=0` so a newly published
+version can be installed immediately. This does not change the versions recorded
+in the installation lockfile. Generation and frozen installation pin all five
+settings that pnpm checks in `lockfile.settings`:
+`auto-install-peers=true`, `peers-suffix-max-length=1000`,
+`exclude-links-from-lockfile=false`, `dedupe-peers=false`, and
+`inject-workspace-packages=false`. Boolean values use command-line flags. The
+numeric peer suffix limit uses subprocess environment overrides because pnpm
+parses `--config` numbers as strings. Both override user files and inherited
+environment values. Registry, authentication, and proxy settings remain inherited.
+Frozen installation also sets `--lockfile=true` so user configuration cannot
+disable the published lockfile.
+
+`VP_SETUP_SKIP_INSTALL_LOCKFILE=1` is an explicit emergency override for setup and
+upgrades. It skips companion extraction, recovery, and restoration, then runs
+pnpm with `--no-frozen-lockfile --lockfile=false`. The installer warns that it is
+resolving dependencies again. The wrapper still pins the requested CLI version.
+There is no automatic fallback after a frozen install fails.
+
+A successful bypass writes `unlocked` to `node_modules/.vp-install-complete`,
+instead of a lockfile digest. This lets upgrade handoff finish without repeating
+dependency installation while the override is set. A later setup without the
+override cannot reuse this receipt as a frozen install. Failed attempts clear
+the receipt before running pnpm, as they do for frozen installs.
 
 ### Command Routing
 
@@ -223,7 +287,7 @@ if (command === 'create') {
    - `.node` NAPI binaries installed via npm optionalDependencies (not manually copied)
    - Removed `extract_main_package()`, `strip_dev_dependencies()`, `MAIN_PACKAGE_ENTRIES`
    - Added `generate_wrapper_package_json()` for upgrade command
-   - Simplified install scripts: only extract `vp` binary + generate wrapper
+   - Install scripts extract `vp` and its companion lockfile, then delegate permanent installation to self-setup
    - Simplified `install-global-cli.ts`: symlink-based local dev, wrapper-based CI
 
 5. **Updated build system**:
@@ -249,7 +313,7 @@ if (command === 'create') {
 
 10. **Separated `vp` binary into dedicated CLI platform packages**:
     - `@voidzero-dev/vite-plus-{platform}` packages now contain only the `.node` NAPI binding (~20MB)
-    - `@voidzero-dev/vite-plus-cli-{platform}` packages contain only the `vp` Rust binary (~5MB)
+    - `@voidzero-dev/vite-plus-cli-{platform}` packages contain the `vp` Rust binary and its installation lockfile; Windows packages also include `vp-shim.exe`
     - `publish-native-addons.ts` creates and publishes both NAPI and CLI packages separately
     - Install scripts (`install.sh`, `install.ps1`) construct CLI package suffix directly instead of querying optionalDependencies
     - Upgrade registry (`registry.rs`) queries CLI packages directly instead of looking up optionalDependencies

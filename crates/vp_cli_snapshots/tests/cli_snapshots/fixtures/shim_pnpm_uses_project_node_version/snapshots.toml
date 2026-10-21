@@ -35,7 +35,7 @@ local-registry = true
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "env", "default", "pnpm@10.18.0"], snapshot = false },
-  { argv = ["vp", "env", "default", "bun@1.2.0"], snapshot = false },
+  { argv = ["vp", "env", "default", "bun@1.3.11"], snapshot = false },
   { argv = ["vpt", "print-file", "$VP_HOME/config.json"], comment = "pnpm and Bun defaults are persisted independently" },
-  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');const pnpm=execFileSync('pnpm',['--version'],{encoding:'utf8'}).trim();const bun=execFileSync('bun',['--version'],{encoding:'utf8'}).trim();if(pnpm!=='10.18.0'||bun!=='1.2.0')throw new Error(`expected pnpm 10.18.0 and bun 1.2.0, got pnpm ${pnpm} and bun ${bun}`);console.log('direct shims use independent defaults')"], comment = "direct package-manager shims use their own configured versions" },
+  { argv = ["node", "-e", "const {execFileSync}=require('node:child_process');const pnpm=execFileSync('pnpm',['--version'],{encoding:'utf8'}).trim();const bun=execFileSync('bun',['--version'],{encoding:'utf8'}).trim();if(pnpm!=='10.18.0'||bun!=='1.3.11')throw new Error(`expected pnpm 10.18.0 and bun 1.3.11, got pnpm ${pnpm} and bun ${bun}`);console.log('direct shims use independent defaults')"], comment = "direct package-manager shims use their own configured versions" },
 ]

@@ -346,6 +346,72 @@ These are automatically installed via `optionalDependencies` based on the user's
 
 See `publish-native-addons.ts` for the publishing pipeline.
 
+### Global installation lockfile
+
+The release workflow publishes native bindings, prompts, and core first. It then
+publishes `vite-plus` with the `staging` tag and waits until that exact version is
+installable. `generate-install-lockfile.ts` runs pnpm `10.34.7`, the same version
+used by the installer, in an isolated `vp-global` wrapper directory. The wrapper
+pins `vite-plus` to the release version. `pnpm install --lockfile-only` generates
+a standard `pnpm-lock.yaml` from the published registry metadata. The script
+copies its contents unchanged to `vp-install-lock.yaml` for packaging. The
+lockfile includes package integrity and optional dependencies for all supported
+platforms.
+
+The workflow saves the lockfile in the `installation-lockfile` artifact before
+publishing any global CLI package. Release retries restore that lockfile. If the
+artifact is unavailable, the generator can recover the same lockfile from an
+already published global platform package. The local CLI is already published,
+so retries do not need to preserve or repack a local CLI archive.
+
+Build artifact uploads replace earlier build artifacts when a failed job runs
+again, but retries preserve the saved installation lockfile.
+Package publication skips versions that npm already accepted, including during
+its scanning window. A retry resumes uploads to a draft GitHub release and
+leaves an already published GitHub release and its assets unchanged.
+
+Each global CLI platform package and standalone release archive carries the
+lockfile beside `vp`. After the global packages propagate, the workflow runs
+`npm dist-tag add "vite-plus@${VERSION}" latest`. The installer continues to
+select the previous release until this step. The `staging` tag remains available
+for inspecting the most recently staged version.
+
+Tag promotion uses npm `11.21.0` with OIDC. The `vite-plus` trusted publisher for
+`release.yml` must enable **Allow npm dist-tag**, in addition to its existing
+publish permission. See [npm's trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/#managing-dist-tags-with-trusted-publishing).
+This is a distribution tag named `staging`, not the separate `npm stage publish`
+approval flow.
+
+Bootstrap scripts hand the binary and its companion to self-setup, which uses
+`--frozen-lockfile`. Upgrades use the same lockfile. A standalone binary or an
+older upgrade client can recover it from the verified platform package. Older
+packages without a companion retain their existing installation behavior. The
+release-age override remains `0` so a new release can be installed immediately.
+
+Preview builds pack the local packages and global CLI platform packages into
+separate artifacts. The trusted publishing workflow first publishes the local
+CLI and its dependencies under their exact commit version. It omits the PR URL
+from this phase, so the bridge exposes the commit version without moving the
+`pr-<number>` tag. A job without publishing credentials then runs the same pnpm
+lockfile generator against the registry bridge and bundles the result into the
+global CLI packages. The bridge supplies the published archive integrity and
+content-addressed URLs directly; the generator does not predict them.
+
+The workflow saves the prepared global packages before publishing them and
+reuses that artifact on retries. If a new run has no saved artifact, it recovers
+the lockfile from an already published global platform package before attempting
+a new pnpm resolution. A final publishing job validates and rebuilds
+those global packages, then updates the PR tag. Both publishing jobs re-check PR
+authorization and do not run dependency installation or preview code. The fork
+approval gate precedes both jobs. Global CLI packages stay outside the locked
+local CLI dependency graph, so adding the companion cannot change a hash in the
+lockfile.
+
+Use **Re-run failed jobs** to resume a failed release or preview publication.
+The release reuses the successful version check against `vite-plus@latest`.
+Preview retries still require the same PR head, an open PR, and the
+`preview-build` label. If the build artifacts expire, start a new preview build.
+
 ---
 
 ## Core Package Export Sync Details

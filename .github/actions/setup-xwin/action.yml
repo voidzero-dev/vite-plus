@@ -82,7 +82,8 @@ runs:
           echo "CL_FLAGS=${CL_FLAGS:-} -fno-delete-null-pointer-checks"
         } >> "$GITHUB_ENV"
 
-    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+    - name: Restore Windows SDK cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: sysroot-cache
       with:
         # This action only builds x64. Other architecture libraries are unused.
@@ -129,3 +130,14 @@ runs:
       env:
         SYSROOT_URL: https://github.com/trcrsired/windows-msvc-sysroot/releases/download/${{ steps.versions.outputs.sysroot-version }}/windows-msvc-sysroot.tar.xz
         SYSROOT_SHA256: ${{ steps.versions.outputs.sysroot-sha256 }}
+
+    # All branches use the same SDK; keep a shared copy on main.
+    - name: Save Windows SDK cache
+      if: github.ref == 'refs/heads/main' && steps.sysroot-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cache/cargo-xwin/windows-msvc-sysroot/include
+          ~/.cache/cargo-xwin/windows-msvc-sysroot/lib/x86_64-unknown-windows-msvc
+          ~/.cache/cargo-xwin/xwin
+        key: ${{ steps.sysroot-cache.outputs.cache-primary-key }}

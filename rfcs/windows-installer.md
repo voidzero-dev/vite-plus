@@ -221,6 +221,19 @@ platform payload or creates an installation root.
 
 The installer replicates the same result as `install.ps1`, implemented in Rust via `vp_setup`.
 
+For binaries that support self-setup, `vp-setup.exe` extracts the verified
+platform archive into a temporary directory and delegates permanent installation
+to the downloaded binary. The archive bundles `vp-install-lock.yaml` beside
+`vp.exe` and `vp-shim.exe`, for both releases and commit previews. Self-setup
+retains this companion in the version's `bin` directory and restores it as
+`pnpm-lock.yaml` before installing dependencies with `--frozen-lockfile`.
+
+An advertised but missing companion, a lockfile mismatch, or an integrity failure
+stops installation. Older packages without a companion retain their existing
+installation behavior. See [Global installation lockfile](./merge-global-and-local-cli.md#global-installation-lockfile)
+for publication and recovery details. The phases below describe the installation
+result; binaries without self-setup support use the installer's legacy path.
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      RESOLVE                                │
@@ -255,16 +268,19 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 ┌─────────────────────────────────────────────────────────────┐
 │                      INSTALL                                │
 │                                                             │
-│  ┌─ extract binary ──────── <DATA>\{version}\bin\            │
-│  │                          vp.exe + vp-shim.exe             │
+│  ┌─ extract package ────── <DATA>\{version}\bin\            │
+│  │                        vp.exe + vp-shim.exe              │
+│  │                        + vp-install-lock.yaml            │
 │  │                                                          │
-│  ├─ generate package.json ─ wrapper with vite-plus dep       │
-│  │                          pins pnpm@10.33.0                │
+│  ├─ generate package.json ─ wrapper with vite-plus dep      │
+│  │                          pins pnpm@10.34.7               │
 │  │                                                          │
-│  ├─ write .npmrc ────────── minimum-release-age=0            │
+│  ├─ restore lockfile ────── {version}\pnpm-lock.yaml        │
 │  │                                                          │
-│  └─ install deps ────────── spawn: vp install --silent       │
-│                              installs vite-plus + transitive │
+│  ├─ write .npmrc ────────── minimum-release-age=0           │
+│  │                                                          │
+│  └─ install deps ────────── managed pnpm                    │
+│                            install --frozen-lockfile        │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -307,23 +323,24 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 
 Each phase maps to `vp_setup` library functions shared with `vp upgrade`:
 
-| Phase             | Key function                               | Crate          |
-| ----------------- | ------------------------------------------ | -------------- |
-| Resolve           | `platform::detect_platform_suffix()`       | `vp_setup`     |
-| Resolve           | `install::read_current_version()`          | `vp_setup`     |
-| Resolve           | `registry::resolve_version_string()`       | `vp_setup`     |
-| Download & Verify | `registry::resolve_platform_package()`     | `vp_setup`     |
-| Download & Verify | `HttpClient::get_bytes()`                  | `vp_pm_cli`    |
-| Download & Verify | `integrity::verify_integrity()`            | `vp_setup`     |
-| Install           | `install::extract_platform_package()`      | `vp_setup`     |
-| Install           | `install::generate_wrapper_package_json()` | `vp_setup`     |
-| Install           | `install::write_release_age_overrides()`   | `vp_setup`     |
-| Install           | `install::install_production_deps()`       | `vp_setup`     |
-| Activate          | `install::save_previous_version()`         | `vp_setup`     |
-| Activate          | `install::swap_current_link()`             | `vp_setup`     |
-| Activate          | `install::cleanup_old_versions()`          | `vp_setup`     |
-| Configure         | `install::refresh_shims()`                 | `vp_setup`     |
-| Configure         | `windows_path::add_to_user_path()`         | `vp_installer` |
+| Phase             | Key function                                  | Crate          |
+| ----------------- | --------------------------------------------- | -------------- |
+| Resolve           | `platform::detect_platform_suffix()`          | `vp_setup`     |
+| Resolve           | `install::read_current_version()`             | `vp_setup`     |
+| Resolve           | `registry::resolve_version_string()`          | `vp_setup`     |
+| Download & Verify | `registry::resolve_platform_package()`        | `vp_setup`     |
+| Download & Verify | `HttpClient::get_bytes()`                     | `vp_pm_cli`    |
+| Download & Verify | `integrity::verify_integrity()`               | `vp_setup`     |
+| Install           | `install::extract_platform_package()`         | `vp_setup`     |
+| Install           | `install::generate_wrapper_package_json()`    | `vp_setup`     |
+| Install           | `lockfile::prepare()` / `lockfile::restore()` | `vp_setup`     |
+| Install           | `install::write_release_age_overrides()`      | `vp_setup`     |
+| Install           | `install::install_production_deps()`          | `vp_setup`     |
+| Activate          | `install::save_previous_version()`            | `vp_setup`     |
+| Activate          | `install::swap_current_link()`                | `vp_setup`     |
+| Activate          | `install::cleanup_old_versions()`             | `vp_setup`     |
+| Configure         | `install::refresh_shims()`                    | `vp_setup`     |
+| Configure         | `windows_path::add_to_user_path()`            | `vp_installer` |
 
 **Same-version repair**: When the resolved version matches the installed version, the DOWNLOAD/INSTALL/ACTIVATE phases are skipped entirely (saving 1 HTTP request + all I/O). The CONFIGURE phase always runs to repair shims, env files, and PATH if needed.
 

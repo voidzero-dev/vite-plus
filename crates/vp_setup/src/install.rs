@@ -15,9 +15,10 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 use vp_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
 use vp_pm_cli::{PackageManagerType, download_package_manager};
+use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use crate::error::Error;
+use crate::{error::Error, lockfile};
 
 /// Validate that a path from a tarball entry is safe (no path traversal).
 ///
@@ -31,11 +32,12 @@ fn is_safe_tar_path(path: &Path) -> bool {
         && !path.components().any(|c| matches!(c, std::path::Component::ParentDir))
 }
 
-/// Extract the platform-specific package (binary only).
+/// Extract the platform-specific binary and its installation lockfile.
 ///
 /// From the platform tarball, extracts:
 /// - The `vp` binary → `{version_dir}/bin/vp`
 /// - The `vp-shim.exe` trampoline → `{version_dir}/bin/vp-shim.exe` (Windows only)
+/// - The release lockfile → `{version_dir}/bin/vp-install-lock.yaml`
 ///
 /// `.node` files are no longer extracted here — npm installs them
 /// via the platform package's optionalDependencies.
@@ -48,11 +50,14 @@ pub async fn extract_platform_package(
 
     let data = tgz_data.to_vec();
     let bin_dir_clone = bin_dir.clone();
+    let skip_lockfile = EnvConfig::get().setup_skip_install_lockfile;
 
     tokio::task::spawn_blocking(move || {
         let cursor = Cursor::new(data);
         let decoder = GzDecoder::new(cursor);
         let mut archive = Archive::new(decoder);
+        let mut requires_lockfile = false;
+        let mut has_lockfile = false;
 
         for entry_result in archive.entries()? {
             let mut entry = entry_result?;
@@ -67,6 +72,23 @@ pub async fn extract_platform_package(
             }
 
             let file_name = relative.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            if relative == Path::new("package.json") && entry.header().entry_type().is_file() {
+                let manifest: serde_json::Value = serde_json::from_reader(&mut entry)?;
+                requires_lockfile = manifest
+                    .get("vpInstallLockfile")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+            } else if !skip_lockfile
+                && relative == Path::new(lockfile::INSTALL_LOCKFILE)
+                && entry.header().entry_type().is_file()
+            {
+                lockfile::write_atomic(
+                    &bin_dir_clone.join(lockfile::INSTALL_LOCKFILE),
+                    &mut entry,
+                )?;
+                has_lockfile = true;
+            }
 
             if file_name == "vp" || file_name == "vp.exe" || file_name == "vp-shim.exe" {
                 // Binary goes to bin/
@@ -84,6 +106,12 @@ pub async fn extract_platform_package(
             }
         }
 
+        if requires_lockfile && !has_lockfile && !skip_lockfile {
+            return Err(Error::Setup(
+                format!("Platform package is missing {}", lockfile::INSTALL_LOCKFILE).into(),
+            ));
+        }
+
         Ok::<(), Error>(())
     })
     .await
@@ -94,7 +122,7 @@ pub async fn extract_platform_package(
 
 /// The pnpm version pinned in the wrapper package.json for global installs.
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
-const PINNED_PNPM_VERSION: &str = "10.33.0";
+const PINNED_PNPM_VERSION: &str = "10.34.7";
 
 /// A reused target version must run its own setup again before accepting commands.
 pub async fn clear_self_setup_marker(version_dir: &AbsolutePath) -> Result<(), Error> {
@@ -180,16 +208,17 @@ pub async fn install_production_deps(
     preferred_node_version: Option<&str>,
 ) -> Result<(), Error> {
     tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
+    lockfile::invalidate_install(version_dir).await?;
+    if EnvConfig::get().setup_skip_install_lockfile {
+        vp_shared::output::warn(
+            "VP_SETUP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile; resolving dependencies again.",
+        );
+    }
 
     // Keep the bypass local to this Vite+ installation.
     write_release_age_overrides(version_dir).await?;
 
-    // An ancestor workspace must not capture the install or supply its lockfile.
-    let mut args = vec!["install", "--ignore-workspace"];
-    if let Some(registry_url) = registry {
-        args.push("--registry");
-        args.push(registry_url);
-    }
+    let args = dependency_install_args(version_dir, registry).await?;
 
     let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
         show_progress.then_some("Preparing Node.js and pnpm..."),
@@ -213,10 +242,41 @@ pub async fn install_production_deps(
         ));
     }
 
+    lockfile::record_install(version_dir).await?;
     if show_progress {
         vp_shared::output::success("Dependencies installed.");
     }
     Ok(())
+}
+
+async fn dependency_install_args<'a>(
+    version_dir: &AbsolutePath,
+    registry: Option<&'a str>,
+) -> Result<Vec<&'a str>, Error> {
+    // An ancestor workspace must not capture the install or supply its lockfile.
+    let mut args = vec!["install", "--ignore-workspace"];
+    if EnvConfig::get().setup_skip_install_lockfile {
+        // Disable both pnpm's CI default and reading any existing working lockfile.
+        args.extend(["--no-frozen-lockfile", "--lockfile=false"]);
+    } else if tokio::fs::try_exists(version_dir.join("bin").join(lockfile::INSTALL_LOCKFILE))
+        .await?
+    {
+        lockfile::restore(version_dir).await?;
+        // Keep these flags and the numeric setting in run_pnpm_install in sync with
+        // packages/cli/generate-install-lockfile.ts.
+        args.extend([
+            "--frozen-lockfile",
+            "--lockfile=true",
+            "--config.auto-install-peers=true",
+            "--config.exclude-links-from-lockfile=false",
+            "--config.dedupe-peers=false",
+            "--config.inject-workspace-packages=false",
+        ]);
+    }
+    if let Some(registry_url) = registry {
+        args.extend(["--registry", registry_url]);
+    }
+    Ok(args)
 }
 
 async fn prepare_install_runtime(
@@ -295,6 +355,13 @@ async fn run_pnpm_install(
         .current_dir(version_dir)
         .env("CI", "true")
         .env("PATH", path);
+
+    if args.contains(&"--frozen-lockfile") {
+        // --config leaves numbers as strings. Environment values get pnpm's numeric parsing.
+        // Override both spellings so neither an inherited value nor the user npmrc can win.
+        cmd.env("npm_config_peers_suffix_max_length", "1000")
+            .env("NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH", "1000");
+    }
 
     if let Some(registry_url) = registry {
         cmd.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
@@ -522,16 +589,7 @@ pub async fn cleanup_old_versions(
         }
     }
 
-    // Sort newest first (by creation time, matching install.sh)
-    versions.sort_by_key(|b| std::cmp::Reverse(b.0));
-
-    // Remove versions beyond the keep limit, but never remove protected versions
-    for (_time, path) in versions.into_iter().skip(max_keep) {
-        let name = path.as_path().file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if protected_versions.contains(&name) {
-            tracing::debug!("Skipping protected version: {}", name);
-            continue;
-        }
+    for path in versions_to_remove(versions, max_keep, protected_versions) {
         tracing::debug!("Cleaning up old version: {}", path.as_path().display());
         if let Err(e) = tokio::fs::remove_dir_all(&path).await {
             tracing::warn!("Failed to remove {}: {}", path.as_path().display(), e);
@@ -539,6 +597,31 @@ pub async fn cleanup_old_versions(
     }
 
     Ok(())
+}
+
+/// Select the version directories that [`cleanup_old_versions`] removes.
+///
+/// Kept apart from the directory scan so tests can supply exact creation times,
+/// which some filesystems record too coarsely (or not at all) to order fresh dirs.
+fn versions_to_remove(
+    mut versions: Vec<(SystemTime, AbsolutePathBuf)>,
+    max_keep: usize,
+    protected_versions: &[&str],
+) -> Vec<AbsolutePathBuf> {
+    // Sort newest first (by creation time, matching install.sh)
+    versions.sort_by_key(|b| std::cmp::Reverse(b.0));
+
+    // Remove versions beyond the keep limit, but never remove protected versions
+    let mut removable = Vec::new();
+    for (_time, path) in versions.into_iter().skip(max_keep) {
+        let name = path.as_path().file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if protected_versions.contains(&name) {
+            tracing::debug!("Skipping protected version: {}", name);
+            continue;
+        }
+        removable.push(path);
+    }
+    removable
 }
 
 /// Read the previous version from `.previous-version` file.
@@ -661,6 +744,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn release_archives_supply_the_frozen_dependency_tree() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let archive = lockfile::test_archive(true, Some(b"release dependency tree"));
+        extract_platform_package(&archive, &directory).await.unwrap();
+        let args =
+            dependency_install_args(&directory, Some("https://mirror.example")).await.unwrap();
+        assert_eq!(
+            args,
+            [
+                "install",
+                "--ignore-workspace",
+                "--frozen-lockfile",
+                "--lockfile=true",
+                "--config.auto-install-peers=true",
+                "--config.exclude-links-from-lockfile=false",
+                "--config.dedupe-peers=false",
+                "--config.inject-workspace-packages=false",
+                "--registry",
+                "https://mirror.example"
+            ]
+        );
+        assert_eq!(
+            tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
+            b"release dependency tree"
+        );
+    }
+
+    #[tokio::test]
+    async fn incomplete_release_archives_fail_but_old_archives_remain_supported() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let error = extract_platform_package(&lockfile::test_archive(true, None), &directory)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("missing vp-install-lock.yaml"));
+        extract_platform_package(&lockfile::test_archive(false, None), &directory).await.unwrap();
+        assert_eq!(
+            dependency_install_args(&directory, None).await.unwrap(),
+            ["install", "--ignore-workspace"]
+        );
+    }
+
+    #[tokio::test]
     async fn invalidate_only_the_target_versions_setup() {
         let root = tempfile::tempdir().unwrap();
         let root = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
@@ -753,103 +880,102 @@ mod tests {
         assert!(!is_safe_tar_path(Path::new("/usr/bin/vp")));
     }
 
-    #[tokio::test]
-    async fn test_cleanup_preserves_active_downgraded_version() {
-        let temp = tempfile::tempdir().unwrap();
-        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-
-        // Create 7 version directories with staggered creation times.
-        // Simulate: installed 0.1-0.7 in order, then rolled back to 0.2.0
-        for v in ["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            // Small delay to ensure distinct creation times
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-
-        // Simulate rollback: current points to 0.2.0 (low semver rank)
-        #[cfg(unix)]
-        tokio::fs::symlink("0.2.0", install_dir.join("current")).await.unwrap();
-
-        // Cleanup keeping top 5, with 0.2.0 protected (the active version)
-        cleanup_old_versions(&install_dir, 5, &["0.2.0"]).await.unwrap();
-
-        // 0.2.0 is the active version — it MUST survive cleanup
-        assert!(
-            tokio::fs::try_exists(install_dir.join("0.2.0")).await.unwrap(),
-            "Active version 0.2.0 was deleted by cleanup"
-        );
+    /// Select cleanup candidates from dirs created one second apart, oldest first.
+    fn removed_versions(
+        created_oldest_first: &[&str],
+        max_keep: usize,
+        protected_versions: &[&str],
+    ) -> Vec<std::ffi::OsString> {
+        let install_dir = AbsolutePathBuf::new(std::env::temp_dir()).unwrap();
+        let versions = created_oldest_first
+            .iter()
+            .zip(0..)
+            .map(|(name, secs)| {
+                (UNIX_EPOCH + std::time::Duration::from_secs(secs), install_dir.join(name))
+            })
+            .collect();
+        versions_to_remove(versions, max_keep, protected_versions)
+            .iter()
+            .map(|path| path.as_path().file_name().unwrap().to_os_string())
+            .collect()
     }
 
-    #[tokio::test]
-    async fn test_cleanup_sorts_by_creation_time_not_semver() {
-        let temp = tempfile::tempdir().unwrap();
-        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+    #[test]
+    fn test_cleanup_preserves_active_downgraded_version() {
+        // Simulate: installed 0.1-0.7 in order, then rolled back to 0.2.0.
+        // Keep the top 5, with 0.2.0 protected (the active version).
+        let removed = removed_versions(
+            &["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0"],
+            5,
+            &["0.2.0"],
+        );
 
-        // Create versions in non-semver order with creation times:
-        // 0.5.0 (oldest), 0.1.0, 0.3.0, 0.7.0, 0.2.0, 0.6.0 (newest)
-        for v in ["0.5.0", "0.1.0", "0.3.0", "0.7.0", "0.2.0", "0.6.0"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        // 0.2.0 is the active version — it MUST survive cleanup
+        assert_eq!(removed, ["0.1.0"], "Active version 0.2.0 must survive cleanup");
+    }
+
+    #[test]
+    fn test_cleanup_sorts_by_creation_time_not_semver() {
+        // Creation order: 0.5.0 (oldest), 0.1.0, 0.3.0, 0.7.0, 0.2.0, 0.6.0 (newest)
+        let removed =
+            removed_versions(&["0.5.0", "0.1.0", "0.3.0", "0.7.0", "0.2.0", "0.6.0"], 4, &[]);
 
         // Keep top 4 by creation time → keep 0.6.0, 0.2.0, 0.7.0, 0.3.0
         // Remove 0.1.0 and 0.5.0 (oldest by creation time)
-        cleanup_old_versions(&install_dir, 4, &[]).await.unwrap();
-
-        // The 4 newest by creation time should survive
-        assert!(tokio::fs::try_exists(install_dir.join("0.6.0")).await.unwrap());
-        assert!(tokio::fs::try_exists(install_dir.join("0.2.0")).await.unwrap());
-        assert!(tokio::fs::try_exists(install_dir.join("0.7.0")).await.unwrap());
-        assert!(tokio::fs::try_exists(install_dir.join("0.3.0")).await.unwrap());
-
-        // The 2 oldest by creation time should be removed
-        assert!(
-            !tokio::fs::try_exists(install_dir.join("0.5.0")).await.unwrap(),
-            "0.5.0 (oldest by creation time) should have been removed"
-        );
-        assert!(
-            !tokio::fs::try_exists(install_dir.join("0.1.0")).await.unwrap(),
-            "0.1.0 (second oldest by creation time) should have been removed"
-        );
+        assert_eq!(removed, ["0.1.0", "0.5.0"]);
     }
 
-    #[tokio::test]
-    async fn test_cleanup_removes_old_forced_reinstall_dir() {
-        let temp = tempfile::tempdir().unwrap();
-        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-
+    #[test]
+    fn test_cleanup_removes_old_forced_reinstall_dir() {
         // Forced reinstall directories use semver build metadata. They should
         // still be eligible for normal old-version cleanup.
         let old_forced = "0.1.23+force.123.456";
-        for v in [old_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        let removed = removed_versions(
+            &[old_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"],
+            5,
+            &[],
+        );
 
-        cleanup_old_versions(&install_dir, 5, &[]).await.unwrap();
+        assert_eq!(removed, [old_forced], "old forced reinstall directory should be removed");
+    }
+
+    #[test]
+    fn test_cleanup_preserves_protected_forced_reinstall_dir() {
+        let protected_forced = "0.1.23+force.123.456";
+        let removed = removed_versions(
+            &[protected_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"],
+            5,
+            &[protected_forced],
+        );
 
         assert!(
-            !tokio::fs::try_exists(install_dir.join(old_forced)).await.unwrap(),
-            "old forced reinstall directory should be removed by cleanup"
+            removed.is_empty(),
+            "active forced reinstall directory should be preserved when protected"
         );
     }
 
     #[tokio::test]
-    async fn test_cleanup_preserves_protected_forced_reinstall_dir() {
+    async fn test_cleanup_removes_only_unprotected_version_dirs() {
         let temp = tempfile::tempdir().unwrap();
         let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
 
-        let protected_forced = "0.1.23+force.123.456";
-        for v in [protected_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        // Keeping no versions makes the outcome independent of creation order.
+        let forced = "0.1.23+force.123.456";
+        for name in [forced, "0.1.24", "0.1.25", "current"] {
+            tokio::fs::create_dir(install_dir.join(name)).await.unwrap();
         }
 
-        cleanup_old_versions(&install_dir, 5, &[protected_forced]).await.unwrap();
+        cleanup_old_versions(&install_dir, 0, &["0.1.25"]).await.unwrap();
 
+        assert!(!tokio::fs::try_exists(install_dir.join(forced)).await.unwrap());
+        assert!(!tokio::fs::try_exists(install_dir.join("0.1.24")).await.unwrap());
         assert!(
-            tokio::fs::try_exists(install_dir.join(protected_forced)).await.unwrap(),
-            "active forced reinstall directory should be preserved when protected"
+            tokio::fs::try_exists(install_dir.join("0.1.25")).await.unwrap(),
+            "protected version must survive cleanup"
+        );
+        assert!(
+            tokio::fs::try_exists(install_dir.join("current")).await.unwrap(),
+            "non-version entries must survive cleanup"
         );
     }
 

@@ -20,6 +20,7 @@ VITE+ - The Unified Toolchain for the Web
 check vite.config.ts
 
 ```
+// vp migrate: merged .oxlintrc.json (aba19784a1d2c46ab69279abb5cab90f).
 import react from '@vitejs/plugin-react';
 import { defineConfig, lazyPlugins } from 'vite-plus';
 
@@ -225,6 +226,7 @@ check only-oxlint package.json
 check only-oxlint vite.config.ts
 
 ```
+// vp migrate: merged packages%2Fonly-oxlint%2F.oxlintrc.json (b648b436b7a8c2627c4008844cff0e45).
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({

@@ -675,14 +675,23 @@ mod tests {
             })
             .await
             .expect("at least one registry request should start");
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            // The server never responds, so a check that sent a request cannot finish here.
+            tokio::time::timeout(Duration::from_secs(2), async {
+                while checks.iter().filter(|check| check.is_finished()).count() < checks.len() - 1 {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("the other checks must back off while the first request is in flight");
 
+            let in_flight = checks.iter().filter(|check| !check.is_finished()).count();
             let observed_requests = request_count.load(Ordering::SeqCst);
             let cache_exists = home.path().join("cache").join(CACHE_FILE_NAME).exists();
             for check in checks {
                 check.abort();
             }
 
+            assert_eq!(in_flight, 1, "the first registry request must still be in flight");
             assert_eq!(observed_requests, 1, "concurrent checks must share one registry request");
             assert!(
                 cache_exists,

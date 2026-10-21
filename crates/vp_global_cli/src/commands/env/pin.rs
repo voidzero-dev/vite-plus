@@ -84,6 +84,7 @@ pub async fn execute(
     if let Some((package_manager, version, hash)) = specs.package_manager {
         pin_package_manager(
             &package_manager_root,
+            &cwd,
             package_manager,
             &version,
             hash.as_deref(),
@@ -822,7 +823,24 @@ pub async fn do_unpin_scope(
     Ok(ExitStatus::default())
 }
 
+fn package_manager_display_path(
+    path: &AbsolutePathBuf,
+    cwd: &AbsolutePathBuf,
+) -> std::path::PathBuf {
+    pathdiff::diff_paths(path.as_path(), cwd.as_path())
+        .unwrap_or_else(|| path.as_path().to_path_buf())
+}
+
+fn print_package_manager_target(path: &AbsolutePathBuf, cwd: &AbsolutePathBuf, field: &str) {
+    vp_shared::output::print_stdout_line(format_args!(
+        "  File: {}",
+        package_manager_display_path(path, cwd).display()
+    ));
+    vp_shared::output::print_stdout_line(format_args!("  Field: {field}"));
+}
+
 async fn pin_package_manager(
+    root: &AbsolutePathBuf,
     cwd: &AbsolutePathBuf,
     package_manager: PackageManagerType,
     version: &str,
@@ -834,13 +852,14 @@ async fn pin_package_manager(
     if matches!(target, Some(PinTarget::NodeVersion | PinTarget::Nvmrc)) {
         return Err(Error::Other("Node.js file targets cannot pin a package manager".into()));
     }
-    let resolved = resolve_package_manager_version_for_cwd(cwd, package_manager, version).await?;
-    package_manager::warn_if_target_differs(cwd, package_manager).await;
-    let package_json_path = cwd.join(PACKAGE_JSON_FILE);
+    let resolved = resolve_package_manager_version_for_cwd(root, package_manager, version).await?;
+    package_manager::warn_if_target_differs(root, package_manager).await;
+    let package_json_path = root.join(PACKAGE_JSON_FILE);
     let content = tokio::fs::read_to_string(&package_json_path).await?;
     let package_json: serde_json::Value = serde_json::from_str(&content)?;
     let use_top_level = matches!(target, Some(PinTarget::PackageManager))
         || (target.is_none() && package_json.get("packageManager").is_some());
+    let field = if use_top_level { "packageManager" } else { "devEngines.packageManager" };
     let shadowing_top_level =
         if use_top_level { None } else { existing_package_manager_pin(&content, true) };
     let shadowing_top_level = shadowing_top_level.filter(|(name, version)| {
@@ -850,10 +869,14 @@ async fn pin_package_manager(
     if let Some((name, version)) = existing_package_manager_pin(&content, use_top_level) {
         let existing = format!("{name}@{version}");
         let next = format!("{package_manager}@{resolved}");
-        if existing != next
-            && !confirm_overwrite_pin("Package manager already pinned to", &existing, &next, force)?
-        {
-            return Ok(ExitStatus::default());
+        if existing != next {
+            if !force {
+                print_package_manager_target(&package_json_path, cwd, field);
+            }
+            if !confirm_overwrite_pin("Package manager already pinned to", &existing, &next, force)?
+            {
+                return Ok(ExitStatus::default());
+            }
         }
     }
     let mut changed = false;
@@ -887,13 +910,15 @@ async fn pin_package_manager(
     .map_err(|error| Error::Other(format!("failed to update package.json: {error}").into()))?;
     if !changed {
         vp_shared::output::print_stdout_line(format_args!(
-            "Already pinned to {package_manager}@{resolved}"
+            "Already pinned to {package_manager}@{resolved}. No changes made."
         ));
+        print_package_manager_target(&package_json_path, cwd, field);
         return Ok(ExitStatus::default());
     }
     tokio::fs::write(&package_json_path, updated).await?;
     crate::shim::invalidate_cache();
     output::success(&format!("Pinned package manager to {package_manager}@{resolved}"));
+    print_package_manager_target(&package_json_path, cwd, field);
     if let Some((name, version)) = shadowing_top_level {
         output::warn(&format!(
             "Top-level packageManager {name}@{version} remains effective; remove or update it to use devEngines.packageManager {package_manager}@{resolved}."
@@ -902,7 +927,7 @@ async fn pin_package_manager(
     if no_install {
         output::note("Package manager will be downloaded on first use.");
     } else if let Err(error) =
-        download_package_manager_for_cwd(cwd, package_manager, &resolved, hash).await
+        download_package_manager_for_cwd(root, package_manager, &resolved, hash).await
     {
         output::warn(&format!("Failed to download {package_manager} {resolved}: {error}"));
     }
@@ -984,11 +1009,15 @@ async fn unpin_package_manager(
     }
     let root = workspace_root(cwd)?.unwrap_or_else(|| cwd.clone());
     let package_json_path = root.join(PACKAGE_JSON_FILE);
-    let Ok(content) = tokio::fs::read_to_string(&package_json_path).await else {
-        vp_shared::output::print_stdout_line(format_args!(
-            "No package manager pin found in current directory."
-        ));
-        return Ok(());
+    let content = match tokio::fs::read_to_string(&package_json_path).await {
+        Ok(content) => content,
+        Err(error) => {
+            vp_shared::output::print_stdout_line(format_args!(
+                "{}",
+                package_manager_read_failure(&package_json_path, cwd, &error)
+            ));
+            return Ok(());
+        }
     };
     let effective = resolve_package_manager_from_package_json(&root)?;
     let expected = match scope {
@@ -1007,9 +1036,16 @@ async fn unpin_package_manager(
         _ => effective.as_ref().map(|resolution| resolution.package_manager_type),
     };
     let mut changed = false;
+    let mut checked_fields = Vec::new();
+    let mut removed_field = None;
     let updated = vp_shared::edit_json_object(&content, |obj| {
         let remove_top_level = matches!(target, Some(PinTarget::PackageManager))
             || (target.is_none() && obj.get("packageManager").is_some());
+        checked_fields.push(if remove_top_level {
+            "packageManager"
+        } else {
+            "devEngines.packageManager"
+        });
         let top_level_matches = expected.is_none_or(|expected| {
             obj.get("packageManager")
                 .and_then(serde_json::Value::as_str)
@@ -1019,10 +1055,15 @@ async fn unpin_package_manager(
         });
         if remove_top_level && top_level_matches {
             changed = obj.remove("packageManager").is_some();
+            removed_field = Some("packageManager");
         } else if !matches!(target, Some(PinTarget::PackageManager))
             && let Some(expected) = expected
         {
+            if remove_top_level {
+                checked_fields.push("devEngines.packageManager");
+            }
             changed = remove_dev_engines_package_manager(obj, expected);
+            removed_field = Some("devEngines.packageManager");
         }
     })
     .map_err(|error| Error::Other(format!("failed to update package.json: {error}").into()))?;
@@ -1030,12 +1071,40 @@ async fn unpin_package_manager(
         tokio::fs::write(&package_json_path, updated).await?;
         crate::shim::invalidate_cache();
         output::success("Removed package-manager pin");
+        if let Some(field) = removed_field {
+            print_package_manager_target(&package_json_path, cwd, field);
+        }
     } else {
         vp_shared::output::print_stdout_line(format_args!(
-            "No package manager pin found in current directory."
+            "No matching package-manager pin found. No changes made."
         ));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  File: {}",
+            package_manager_display_path(&package_json_path, cwd).display()
+        ));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  Checked fields: {}",
+            checked_fields.join(", ")
+        ));
+        if let EnvScope::PackageManager(package_manager) = scope {
+            vp_shared::output::print_stdout_line(format_args!("  Scope: {package_manager}"));
+        }
     }
     Ok(())
+}
+
+fn package_manager_read_failure(
+    path: &AbsolutePathBuf,
+    cwd: &AbsolutePathBuf,
+    error: &std::io::Error,
+) -> String {
+    let display_path = package_manager_display_path(path, cwd);
+    let path = display_path.display();
+    if error.kind() == std::io::ErrorKind::NotFound {
+        format!("No package.json found at {path}. No changes made.")
+    } else {
+        format!("Could not read {path}: {error}\nNo changes made.")
+    }
 }
 
 fn workspace_root(cwd: &AbsolutePathBuf) -> Result<Option<AbsolutePathBuf>, Error> {
@@ -1091,6 +1160,27 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn package_manager_read_failure_does_not_claim_fields_were_checked() {
+        let temp = TempDir::new().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let path = cwd.join("package.json");
+        assert_eq!(
+            package_manager_read_failure(&path, &cwd, &std::io::ErrorKind::NotFound.into()),
+            "No package.json found at package.json. No changes made."
+        );
+        let denied = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied");
+        assert_eq!(
+            package_manager_read_failure(&path, &cwd, &denied),
+            "Could not read package.json: access denied\nNo changes made."
+        );
+        let invalid = std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid UTF-8");
+        assert_eq!(
+            package_manager_read_failure(&path, &cwd, &invalid),
+            "Could not read package.json: invalid UTF-8\nNo changes made."
+        );
+    }
+
     /// Shared VP_HOME for tests that hit the real Node.js version index:
     /// pinning isolates them from concurrent scopes, and one shared root
     /// keeps the index cache warm across tests and runs.
@@ -1145,9 +1235,18 @@ mod tests {
         .await
         .unwrap();
 
-        pin_package_manager(&cwd, PackageManagerType::Pnpm, "10.18.0", None, true, true, None)
-            .await
-            .unwrap();
+        pin_package_manager(
+            &cwd,
+            &cwd,
+            PackageManagerType::Pnpm,
+            "10.18.0",
+            None,
+            true,
+            true,
+            None,
+        )
+        .await
+        .unwrap();
 
         let content = tokio::fs::read_to_string(cwd.join("package.json")).await.unwrap();
         assert!(content.contains("pnpm@10.18.0+sha512.keep"));
@@ -1164,9 +1263,18 @@ mod tests {
         .await
         .unwrap();
 
-        pin_package_manager(&cwd, PackageManagerType::Pnpm, "10.18.0", None, true, true, None)
-            .await
-            .unwrap();
+        pin_package_manager(
+            &cwd,
+            &cwd,
+            PackageManagerType::Pnpm,
+            "10.18.0",
+            None,
+            true,
+            true,
+            None,
+        )
+        .await
+        .unwrap();
 
         let content = tokio::fs::read_to_string(cwd.join("package.json")).await.unwrap();
         assert!(content.contains("pnpm@10.18.0"));
@@ -1185,6 +1293,7 @@ mod tests {
         .unwrap();
 
         pin_package_manager(
+            &cwd,
             &cwd,
             PackageManagerType::Pnpm,
             "10.18.0",
