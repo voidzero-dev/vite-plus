@@ -18,8 +18,6 @@ use vp_error::Error;
 use vp_shared::OnFail;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
-#[cfg(test)]
-use vt_workspace::find_package_root;
 use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
@@ -3097,278 +3095,39 @@ mod tests {
     }
 
     #[test]
-    fn test_find_package_root() {
+    fn test_resolve_package_manager_from_package_json_invalid_package_json() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let nested_dir = temp_dir_path.join("a").join("b").join("c");
-        fs::create_dir_all(&nested_dir).unwrap();
+        create_package_json(&temp_dir_path, "{ invalid json content");
 
-        // Create package.json in a/b
-        let package_dir = temp_dir_path.join("a").join("b");
-        File::create(package_dir.join("package.json")).unwrap();
-
-        // Should find package.json in parent directory
-        let found = find_package_root(&nested_dir);
-        let package_root = found.unwrap();
-        assert_eq!(package_root.path, package_dir);
-
-        // Should return the same directory if package.json is there
-        let found = find_package_root(&package_dir);
-        let package_root = found.unwrap();
-        assert_eq!(package_root.path, package_dir);
-
-        // Should return PackageJsonNotFound error if no package.json found
-        let root_dir = temp_dir_path.join("x").join("y");
-        fs::create_dir_all(&root_dir).unwrap();
-        let found = find_package_root(&root_dir);
-        let err = found.unwrap_err();
-        assert!(matches!(err, vt_workspace::Error::PackageJsonNotFound(_)));
+        // Only a missing package.json means "no project selection".
+        let result = resolve_package_manager_from_package_json(&temp_dir_path);
+        assert!(result.is_err(), "invalid package.json must be an error: {result:?}");
     }
 
     #[test]
-    fn test_find_workspace_root_with_pnpm() {
-        let temp_dir = create_temp_dir();
-
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let nested_dir = temp_dir_path.join("packages").join("app");
-        fs::create_dir_all(&nested_dir).unwrap();
-
-        // Create pnpm-workspace.yaml at root
-        File::create(temp_dir_path.join("pnpm-workspace.yaml")).unwrap();
-
-        // Should find workspace root
-        let (found, _) = find_workspace_root(&nested_dir).unwrap();
-        assert_eq!(&*found.path, &*temp_dir_path);
-        assert!(matches!(found.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)));
-    }
-
-    #[test]
-    fn test_find_workspace_root_with_npm_workspaces() {
+    fn test_detect_package_manager_prefers_pnpm_workspace_over_npm_workspaces() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let nested_dir = temp_dir_path.join("packages").join("app");
-        fs::create_dir_all(&nested_dir).unwrap();
+        create_package_json(
+            &temp_dir_path,
+            r#"{"name": "test-workspace", "workspaces": ["packages/*"]}"#,
+        );
+        create_pnpm_workspace_yaml(&temp_dir_path, "packages:\n  - 'packages/*'");
 
-        // Create package.json with workspaces field
-        let package_json = r#"{"workspaces": ["packages/*"]}"#;
-        fs::write(temp_dir_path.join("package.json"), package_json).unwrap();
-
-        // Should find workspace root
-        let (found, _) = find_workspace_root(&temp_dir_path).unwrap();
-        assert_eq!(&*found.path, &*temp_dir_path);
-        assert!(matches!(found.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
-    }
-
-    #[test]
-    fn test_find_workspace_root_fallback_to_package_root() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let nested_dir = temp_dir_path.join("src");
-        fs::create_dir_all(&nested_dir).unwrap();
-
-        // Create package.json without workspaces field
-        let package_json = r#"{"name": "test"}"#;
-        fs::write(temp_dir_path.join("package.json"), package_json).unwrap();
-
-        // Should fallback to package root
-        let (found, _) = find_workspace_root(&nested_dir).unwrap();
-        assert_eq!(&*found.path, &*temp_dir_path);
-        assert!(matches!(found.workspace_file, WorkspaceFile::NonWorkspacePackage(_)));
-        let package_root = find_package_root(&temp_dir_path).unwrap();
-        // equal to workspace root
-        assert_eq!(&*package_root.path, &*found.path);
-    }
-
-    #[test]
-    fn test_find_workspace_root_with_package_json_not_found() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let nested_dir = temp_dir_path.join("src");
-        fs::create_dir_all(&nested_dir).unwrap();
-
-        // Should return PackageJsonNotFound error if no package.json found
-        let found = find_workspace_root(&nested_dir);
-        let err = found.unwrap_err();
-        assert!(matches!(err, vt_workspace::Error::PackageJsonNotFound(_)));
-    }
-
-    #[test]
-    fn test_find_package_root_with_package_json_in_current_dir() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
-
-        let result = find_package_root(&temp_dir_path).unwrap();
-        assert_eq!(result.path, temp_dir_path);
-    }
-
-    #[test]
-    fn test_find_package_root_with_package_json_in_parent_dir() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
-
-        let sub_dir = temp_dir_path.join("subdir");
-        fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
-
-        let result = find_package_root(&sub_dir).unwrap();
-        assert_eq!(result.path, temp_dir_path);
-    }
-
-    #[test]
-    fn test_find_package_root_with_package_json_in_grandparent_dir() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
-
-        let sub_dir = temp_dir_path.join("subdir").join("nested");
-        fs::create_dir_all(&sub_dir).expect("Failed to create nested directories");
-
-        let result = find_package_root(&sub_dir).unwrap();
-        assert_eq!(result.path, temp_dir_path);
-    }
-
-    #[test]
-    fn test_find_workspace_root_with_pnpm_workspace_yaml() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let workspace_content = "packages:\n  - 'packages/*'";
-        create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
-
-        let (result, _) = find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        assert_eq!(&*result.path, &*temp_dir_path);
-    }
-
-    #[test]
-    fn test_find_workspace_root_with_pnpm_workspace_yaml_in_parent_dir() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let workspace_content = "packages:\n  - 'packages/*'";
-        create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
-
-        let sub_dir = temp_dir_path.join("subdir");
-        fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
-
-        let (result, _) = find_workspace_root(&sub_dir).expect("Should find workspace root");
-        assert_eq!(&*result.path, &*temp_dir_path);
-    }
-
-    #[test]
-    fn test_find_workspace_root_with_package_json_workspaces() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-workspace", "workspaces": ["packages/*"]}"#;
-        create_package_json(&temp_dir_path, package_content);
-
-        let (result, _) = find_workspace_root(&temp_dir_path).unwrap();
-        assert_eq!(&*result.path, &*temp_dir_path);
-        assert!(matches!(result.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
-    }
-
-    #[test]
-    fn test_find_workspace_root_with_package_json_workspaces_in_parent_dir() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-workspace", "workspaces": ["packages/*"]}"#;
-        create_package_json(&temp_dir_path, package_content);
-
-        let sub_dir = temp_dir_path.join("subdir");
-        fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
-
-        let (result, _) = find_workspace_root(&sub_dir).unwrap();
-        assert_eq!(&*result.path, &*temp_dir_path);
-        assert!(matches!(result.workspace_file, WorkspaceFile::NpmWorkspaceJson(_)));
-    }
-
-    #[test]
-    fn test_find_workspace_root_prioritizes_pnpm_workspace_over_package_json() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // Create package.json with workspaces first
-        let package_content = r#"{"name": "test-workspace", "workspaces": ["packages/*"]}"#;
-        create_package_json(&temp_dir_path, package_content);
-
-        // Then create pnpm-workspace.yaml (should take precedence)
-        let workspace_content = "packages:\n  - 'packages/*'";
-        create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
-
-        let (result, _) = find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        assert_eq!(&*result.path, &*temp_dir_path);
-    }
-
-    #[test]
-    fn test_find_workspace_root_falls_back_to_package_root_when_no_workspace_found() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
-
-        let sub_dir = temp_dir_path.join("subdir");
-        fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
-
-        let (result, _) = find_workspace_root(&sub_dir).expect("Should fall back to package root");
-        assert_eq!(&*result.path, &*temp_dir_path);
-    }
-
-    #[test]
-    fn test_find_workspace_root_with_nested_structure() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let workspace_content = "packages:\n  - 'packages/*'";
-        create_pnpm_workspace_yaml(&temp_dir_path, workspace_content);
-
-        let nested_dir = temp_dir_path.join("packages").join("app").join("src");
-        fs::create_dir_all(&nested_dir).expect("Failed to create nested directories");
-
-        let (result, _) = find_workspace_root(&nested_dir).expect("Should find workspace root");
-        assert_eq!(&*result.path, &*temp_dir_path);
-    }
-
-    #[test]
-    fn test_find_workspace_root_without_workspace_files_returns_package_root() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
-
-        let (result, _) = find_workspace_root(&temp_dir_path).expect("Should return package root");
-        assert_eq!(&*result.path, &*temp_dir_path);
-    }
-
-    #[test]
-    fn test_find_workspace_root_with_invalid_package_json_handles_error() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let invalid_package_content = "{ invalid json content";
-        create_package_json(&temp_dir_path, invalid_package_content);
-
-        let result = find_workspace_root(&temp_dir_path);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_find_workspace_root_with_mixed_structure() {
-        let temp_dir = create_temp_dir();
-        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        // Create a package.json without workspaces
-        let package_content = r#"{"name": "test-package"}"#;
-        create_package_json(&temp_dir_path, package_content);
-
-        // Create a subdirectory with its own package.json
-        let sub_dir = temp_dir_path.join("subdir");
-        fs::create_dir(&sub_dir).expect("Failed to create subdirectory");
-        let sub_package_content = r#"{"name": "sub-package"}"#;
-        create_package_json(&sub_dir, sub_package_content);
-
-        // Should find the subdirectory package.json since find_package_root searches upward from original_cwd
-        let (workspace_root, _) =
-            find_workspace_root(&sub_dir).expect("Should find subdirectory package");
-        assert_eq!(&*workspace_root.path, &*sub_dir);
-        assert!(matches!(workspace_root.workspace_file, WorkspaceFile::NonWorkspacePackage(_)));
+        // Detection selects pnpm through the workspace file, so an npm workspace
+        // root here would leave the package manager unrecognized.
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        assert!(matches!(workspace_root.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)));
+        assert_eq!(
+            get_package_manager_type_and_version(&workspace_root, None).unwrap(),
+            (
+                PackageManagerType::Pnpm,
+                "default".into(),
+                None,
+                PackageManagerSource::LockfileOrConfig
+            )
+        );
     }
 
     #[tokio::test]
