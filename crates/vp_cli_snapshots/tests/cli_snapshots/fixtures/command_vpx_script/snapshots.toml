@@ -239,3 +239,30 @@ steps = [
   { argv = ["vpx", "--experimental-config-file", "--tsconfig", "cli.json", "--env-file=.env", "./alias.ts"], comment = "--tsconfig is still vpx's, and wins over the TS_NODE_PROJECT in .env" },
   { argv = ["vpx", "--experimental-config-file", "--watch", "--include", "extra.json"], comment = "--watch still selects the watcher, which takes --include and reports the missing entry", continue-on-failure = true },
 ]
+
+[[case]]
+name = "vpx_script_ctrl_c_cleanup"
+# The global vpx: on Windows it waits for the script through `vp.exe`, which Ctrl+C
+# used to end at once with STATUS_CONTROL_C_EXIT (0xC000013A).
+vp = "global"
+cwd = "ctrl-c"
+comment = "Ctrl+C reaches the script, and vpx exits after the script's SIGINT cleanup, with its exit code."
+steps = [
+  { argv = ["vpx", "./ctrlc.ts"], interactions = [
+    { "expect-milestone" = "ready" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]
+
+[[case]]
+name = "vp_run_vpx_script_ctrl_c_cleanup"
+# `vp run` waits for the local CLI through `vp.exe` on Windows too.
+vp = "global"
+cwd = "ctrl-c"
+comment = "Ctrl+C under vp run reaches the script that vpx runs, and vp run exits after the script's SIGINT cleanup."
+steps = [
+  { argv = ["vp", "run", "cleanup"], continue-on-failure = true, interactions = [
+    { "expect-milestone" = "ready" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]
