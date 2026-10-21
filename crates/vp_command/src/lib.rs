@@ -13,7 +13,7 @@ use std::{
     process::{ExitStatus, Stdio},
 };
 
-use fspy::AccessMode;
+use fspy::PathAccess;
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 use vp_error::Error;
@@ -29,7 +29,18 @@ pub struct FspyCommandResult {
     /// The termination status of the command.
     pub status: ExitStatus,
     /// The path accesses of the command.
-    pub path_accesses: HashMap<RelativePathBuf, AccessMode>,
+    pub path_accesses: HashMap<RelativePathBuf, AccessModes>,
+}
+
+/// The ways a command accessed one path, merged across all its accesses.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct AccessModes {
+    /// Whether the path was read.
+    pub read: bool,
+    /// Whether the path was written.
+    pub write: bool,
+    /// Whether the path was read as a directory.
+    pub read_dir: bool,
 }
 
 /// Resolve a binary name to a full path using the `which` crate.
@@ -265,11 +276,16 @@ where
     let termination = child.wait_handle.await?;
     let tracked_accesses = termination.path_accesses.map_err(|e| Error::Anyhow(e.into()))?;
 
-    let mut path_accesses = HashMap::<RelativePathBuf, AccessMode>::new();
+    let mut path_accesses = HashMap::<RelativePathBuf, AccessModes>::new();
     for access in tracked_accesses.iter() {
         tracing::debug!("Path access: {:?}", access);
-        let relative_path = access
-            .path
+        let (path, read, write, read_dir) = match access {
+            PathAccess::Read(path) => (path, true, false, false),
+            PathAccess::Write { path, .. } => (path, false, true, false),
+            PathAccess::ReadWrite { path, .. } => (path, true, true, false),
+            PathAccess::ReadDir(path) => (path, false, false, true),
+        };
+        let relative_path = path
             .strip_path_prefix(cwd, |strip_result| {
                 let Ok(stripped_path) = strip_result else {
                     return None;
@@ -286,10 +302,10 @@ where
         let Some(relative_path) = relative_path else {
             continue;
         };
-        path_accesses
-            .entry(relative_path)
-            .and_modify(|mode| *mode |= access.mode)
-            .or_insert(access.mode);
+        let modes = path_accesses.entry(relative_path).or_default();
+        modes.read |= read;
+        modes.write |= write;
+        modes.read_dir |= read_dir;
     }
 
     Ok(FspyCommandResult { status: termination.status, path_accesses })
@@ -621,7 +637,7 @@ mod tests {
                 .path_accesses
                 .get(&RelativePathBuf::new("package.json").unwrap())
                 .expect("package.json should be in path accesses");
-            assert!(path_access.contains(AccessMode::WRITE));
+            assert!(path_access.write);
             // Note: We don't assert !READ because writeFileSync may trigger reads
             // depending on Node.js internals and OS filesystem behavior
         }
@@ -656,8 +672,8 @@ mod tests {
                 .path_accesses
                 .get(&RelativePathBuf::new("package.json").unwrap())
                 .expect("package.json should be in path accesses");
-            assert!(path_access.contains(AccessMode::WRITE));
-            assert!(path_access.contains(AccessMode::READ));
+            assert!(path_access.write);
+            assert!(path_access.read);
         }
 
         #[tokio::test]

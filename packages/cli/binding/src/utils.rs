@@ -1,6 +1,5 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use fspy::AccessMode;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 use vp_command::run_command_with_fspy;
@@ -111,11 +110,7 @@ pub async fn run_command(options: RunCommandOptions) -> Result<RunCommandResult>
     for (path, mode) in result.path_accesses {
         path_accesses.insert(
             path.as_str().to_string(),
-            PathAccess {
-                read: mode.contains(AccessMode::READ),
-                write: mode.contains(AccessMode::WRITE),
-                read_dir: mode.contains(AccessMode::READ_DIR),
-            },
+            PathAccess { read: mode.read, write: mode.write, read_dir: mode.read_dir },
         );
     }
 
