@@ -28,19 +28,21 @@ fs.writeFileSync('duplicate-package/package.json', JSON.stringify({
   name: packageName,
   version: '1.0.0',
   bin: {
-    '@a/native-first': nativePath,
-    '@b/native-first': './cli.js',
-    '@a/js-first': './cli.js',
-    '@b/js-first': nativePath,
+    '@z/native-first': nativePath,
+    '@a/native-first': './cli.js',
+    '@z/js-first': './cli.js',
+    '@a/js-first': nativePath,
   },
 }));
 
 run('vp', ['install', '-g', '--ignore-scripts', '--node', process.version.slice(1), './duplicate-package']);
-assert.equal(run('native-first', ['-p', '"native target"']), 'native target');
-assert.equal(run('js-first'), 'JavaScript target');
-assert.equal(run('vp', ['env', 'exec', '--node', process.version.slice(1), 'native-first', '-p', '"native target"']), 'native target');
+assert.equal(run('native-first'), 'JavaScript target');
+assert.equal(run('js-first', ['-p', '"native target"']), 'native target');
+assert.match(run('vp', ['env', 'which', 'native-first']), /cli\.js/);
+assert.match(run('vp', ['env', 'which', 'js-first']), /native-tool/);
+assert.equal(run('vp', ['env', 'exec', '--node', process.version.slice(1), 'js-first', '-p', '"native target"']), 'native target');
 const metadata = JSON.parse(fs.readFileSync(path.join(process.env.VP_HOME, 'packages', `${packageName}.json`), 'utf8'));
 assert.deepEqual(metadata.bins.sort(), ['js-first', 'native-first']);
-assert.deepEqual(metadata.jsBins, ['js-first']);
+assert.deepEqual(metadata.jsBins, ['native-first']);
 run('vp', ['uninstall', '-g', packageName]);
-console.log('Duplicate normalized names keep the first valid target and its execution type.');
+console.log('Duplicate normalized names keep the last valid target and its execution type.');

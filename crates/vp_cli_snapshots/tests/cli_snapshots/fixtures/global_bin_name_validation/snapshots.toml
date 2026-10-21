@@ -7,7 +7,7 @@ steps = [{ argv = ["node", "verify.mjs"], tty = false }]
 [[case]]
 name = "global_bin_name_deduplication"
 vp = "global"
-comment = "Keep the first valid target for duplicate normalized bin names, including native and JavaScript collisions."
+comment = "Keep the last valid target for duplicate normalized bin names, including native and JavaScript collisions."
 steps = [{ argv = ["node", "verify-duplicates.mjs"], tty = false }]
 
 [[case]]

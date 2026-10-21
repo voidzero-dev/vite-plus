@@ -1187,7 +1187,6 @@ pub(crate) fn extract_binaries(
     }
 
     let package_root = package_dir.clean();
-    let mut seen_names = HashSet::new();
     bins.retain_mut(|bin| {
         if bin.name.starts_with('@') {
             if let Some((_, name)) = bin.name.split_once('/') {
@@ -1197,9 +1196,13 @@ pub(crate) fn extract_binaries(
         // Like pnpm, check lexical containment without requiring the target to exist.
         validate_bin_name(&bin.name).is_ok()
             && package_dir.join(&bin.path).clean().as_path().starts_with(package_root.as_path())
-            && seen_names.insert(bin.name.clone())
     });
-    bins
+    // Match npm: later valid entries overwrite earlier targets for the same command.
+    bins.into_iter()
+        .map(|bin| (bin.name.clone(), bin))
+        .collect::<IndexMap<_, _>>()
+        .into_values()
+        .collect()
 }
 
 /// Check if a file is a JavaScript file that should be run with Node.
@@ -1435,25 +1438,29 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_binaries_keeps_first_valid_normalized_name() {
+    fn test_extract_binaries_keeps_last_valid_normalized_name() {
         let temp = tempfile::tempdir().unwrap();
         let package_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        for (first, second, expected) in [
-            ("./native-tool", "./cli.js", "./native-tool"),
-            ("./cli.js", "./native-tool", "./cli.js"),
-            ("../outside", "./cli.js", "./cli.js"),
-        ] {
-            let manifest = serde_json::json!({ "bin": {
-                "@a/foo": first,
-                "@b/other": "./other.js",
-                "@c/foo": second,
-                "foo": "./last.js",
-            } });
-            let bins = extract_binaries(&manifest, &package_dir);
-            assert_eq!(bins.len(), 2);
-            let foo = bins.iter().find(|bin| bin.name == "foo").unwrap();
-            assert_eq!(foo.path, expected);
-            assert!(bins.iter().any(|bin| bin.name == "other" && bin.path == "./other.js"));
+        for (first_name, last_name) in
+            [("@z/foo", "@a/foo"), ("foo", "@scope/foo"), ("@scope/foo", "foo")]
+        {
+            for (first, last, expected) in [
+                ("./native-tool", "./cli.js", "./cli.js"),
+                ("./cli.js", "./native-tool", "./native-tool"),
+                ("../outside", "./cli.js", "./cli.js"),
+                ("./cli.js", "../outside", "./cli.js"),
+            ] {
+                let manifest = serde_json::json!({ "bin": {
+                    (first_name): first,
+                    "@b/other": "./other.js",
+                    (last_name): last,
+                } });
+                let bins = extract_binaries(&manifest, &package_dir);
+                assert_eq!(bins.len(), 2);
+                let foo = bins.iter().find(|bin| bin.name == "foo").unwrap();
+                assert_eq!(foo.path, expected);
+                assert!(bins.iter().any(|bin| bin.name == "other" && bin.path == "./other.js"));
+            }
         }
     }
 
