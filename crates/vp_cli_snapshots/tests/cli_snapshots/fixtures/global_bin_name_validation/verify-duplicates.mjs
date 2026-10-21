@@ -45,4 +45,20 @@ const metadata = JSON.parse(fs.readFileSync(path.join(process.env.VP_HOME, 'pack
 assert.deepEqual(metadata.bins.sort(), ['js-first', 'native-first']);
 assert.deepEqual(metadata.jsBins, ['native-first']);
 run('vp', ['uninstall', '-g', packageName]);
+
+if (process.platform !== 'win32') {
+  // npm only makes its own last-wins target executable, so Vite+ must fix the retained one.
+  const modePackageName = 'vp-bin-mode-fixture';
+  fs.mkdirSync('mode-package');
+  fs.writeFileSync('mode-package/native.sh', '#!/bin/sh\necho native target\n', { mode: 0o644 });
+  fs.writeFileSync('mode-package/ignored.sh', '#!/bin/sh\necho ignored target\n', { mode: 0o644 });
+  fs.writeFileSync('mode-package/package.json', JSON.stringify({
+    name: modePackageName,
+    version: '1.0.0',
+    bin: { 'probe-native': './native.sh', '@scope/probe-native': '../ignored.sh' },
+  }));
+  run('vp', ['install', '-g', '--ignore-scripts', '--node', process.version.slice(1), './mode-package']);
+  assert.equal(run('probe-native'), 'native target');
+  run('vp', ['uninstall', '-g', modePackageName]);
+}
 console.log('Duplicate normalized names keep the last valid target and its execution type.');

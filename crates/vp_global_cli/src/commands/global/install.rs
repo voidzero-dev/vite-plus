@@ -600,7 +600,9 @@ async fn install_one(
     for info in &binary_infos {
         bin_names.push(info.name.clone());
         let binary_path = node_modules_dir.join(&info.path);
-        match is_javascript_binary(&binary_path) {
+        match is_javascript_binary(&binary_path).and_then(|is_js| {
+            ensure_executable_bits(&binary_path, &node_modules_dir).map(|()| is_js)
+        }) {
             Ok(true) => {
                 js_bins.insert(info.name.clone());
             }
@@ -1247,6 +1249,35 @@ fn is_javascript_binary(path: &AbsolutePath) -> std::io::Result<bool> {
     }
 
     Ok(false)
+}
+
+/// Add missing executable bits to a binary target inside the package, like pnpm.
+///
+/// npm only fixes the targets selected by its own normalization, so a target Vite+
+/// retains instead can stay non-executable. Missing targets are skipped.
+fn ensure_executable_bits(path: &AbsolutePath, package_root: &AbsolutePath) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let target = match std::fs::canonicalize(path.as_path()) {
+            Ok(target) => target,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error),
+        };
+        // Never chmod a file that a symlink resolves to outside the package.
+        if !target.starts_with(std::fs::canonicalize(package_root.as_path())?) {
+            return Ok(());
+        }
+        let mode = std::fs::metadata(&target)?.permissions().mode();
+        // Skip files that are already executable so files owned by other users still work.
+        if mode & 0o111 != 0o111 {
+            std::fs::set_permissions(&target, std::fs::Permissions::from_mode(mode | 0o111))?;
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = (path, package_root);
+    Ok(())
 }
 
 /// Create a shim for a package binary.
@@ -2223,6 +2254,39 @@ mod tests {
         let (name, version) = parse_package_spec("@types/node@20.0.0").unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, Some("20.0.0".to_string()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_ensure_executable_bits_only_changes_package_files() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::TempDir::new().unwrap();
+        let package_dir = temp.path().join("package");
+        std::fs::create_dir(&package_dir).unwrap();
+        let mode =
+            |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        let write = |path: &std::path::Path, mode: u32| {
+            std::fs::write(path, "#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+        let package_root = AbsolutePathBuf::new(package_dir.clone()).unwrap();
+
+        let native = package_dir.join("native.sh");
+        write(&native, 0o640);
+        ensure_executable_bits(&AbsolutePathBuf::new(native.clone()).unwrap(), &package_root)
+            .unwrap();
+        assert_eq!(mode(&native), 0o751);
+
+        let outside = temp.path().join("outside.sh");
+        write(&outside, 0o644);
+        let link = package_dir.join("link.sh");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        ensure_executable_bits(&AbsolutePathBuf::new(link).unwrap(), &package_root).unwrap();
+        assert_eq!(mode(&outside), 0o644);
+
+        let missing = AbsolutePathBuf::new(package_dir.join("missing.sh")).unwrap();
+        ensure_executable_bits(&missing, &package_root).unwrap();
     }
 
     #[test]
