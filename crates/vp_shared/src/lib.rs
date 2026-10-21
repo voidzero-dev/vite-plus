@@ -28,7 +28,7 @@ pub use dirs::{
     VpDirsLayout, is_windows_trampoline, shim_pointer_file_name, validate_vp_dir_env,
 };
 pub use documentation::documentation_url;
-pub use env_config::EnvConfig;
+pub use env_config::{EnvConfig, ManagerPreference};
 pub use error::format_error_chain;
 pub use http::{
     HttpClientError, download_timeout, request_timeout, shared_http_client,

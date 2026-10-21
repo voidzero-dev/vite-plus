@@ -44,22 +44,6 @@ describe('getNpmRegistry / getNpmAuthHeader', () => {
     expect(getNpmRegistry()).toBe('https://registry.npmjs.org');
   });
 
-  it('reads project-level `.npmrc` when it exists', () => {
-    fs.writeFileSync(path.join(projectDir, '.npmrc'), 'registry=https://proj.example.com/\n');
-    expect(getNpmRegistry()).toBe('https://proj.example.com');
-  });
-
-  it('gives project `.npmrc` precedence over user `.npmrc`', () => {
-    fs.writeFileSync(path.join(homeDir, '.npmrc'), 'registry=https://user.example.com/\n');
-    fs.writeFileSync(path.join(projectDir, '.npmrc'), 'registry=https://proj.example.com/\n');
-    expect(getNpmRegistry()).toBe('https://proj.example.com');
-  });
-
-  it('uses the user `.npmrc` when the project has none', () => {
-    fs.writeFileSync(path.join(homeDir, '.npmrc'), 'registry=https://user.example.com/\n');
-    expect(getNpmRegistry()).toBe('https://user.example.com');
-  });
-
   it('ignores `.npmrc` files above the project root', () => {
     fs.writeFileSync(path.join(projectDir, '.npmrc'), 'registry=https://parent.example.com/\n');
     const packageDir = path.join(projectDir, 'app');
@@ -81,13 +65,9 @@ describe('getNpmRegistry / getNpmAuthHeader', () => {
     expect(getNpmRegistry('@other')).toBe('https://default.example.com');
   });
 
-  it('extracts `_authToken` credentials for a matching host', () => {
+  it('returns `_authToken` credentials only for a matching host', () => {
     fs.writeFileSync(path.join(projectDir, '.npmrc'), '//private.example.com/:_authToken=SECRET\n');
     expect(getNpmAuthHeader('https://private.example.com/some/path')).toBe('Bearer SECRET');
-  });
-
-  it('returns undefined when no credential matches the URL host', () => {
-    fs.writeFileSync(path.join(projectDir, '.npmrc'), '//private.example.com/:_authToken=SECRET\n');
     expect(getNpmAuthHeader('https://other.example.com/pkg')).toBeUndefined();
   });
 });

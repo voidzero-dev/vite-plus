@@ -102,22 +102,25 @@ describe('build artifacts', () => {
     expect(references).toMatchSnapshot();
   });
 
-  it('should include esm-shims.js in dist for tsdown shims support', () => {
+  it('should include esm-shims.js in dist for tsdown shims support', async () => {
     const shimsPath = path.join(distDir, 'esm-shims.js');
     expect(fs.existsSync(shimsPath), `${shimsPath} should exist`).toBe(true);
 
-    const content = fs.readFileSync(shimsPath, 'utf8');
-    expect(content).toContain('__dirname');
-    expect(content).toContain('__filename');
+    // tsdown's `shims` option injects named imports of these bindings into user bundles.
+    expect(await import(url.pathToFileURL(shimsPath).href)).toMatchObject({
+      __dirname: distDir,
+      __filename: shimsPath,
+    });
   });
 
   it('should include tsdown client.d.ts in dist/tsdown for pack/client support', () => {
     const clientPath = path.join(distDir, 'tsdown/client.d.ts');
     expect(fs.existsSync(clientPath), `${clientPath} should exist`).toBe(true);
 
-    const content = fs.readFileSync(clientPath, 'utf8');
-    expect(content).toContain('ImportMeta');
-    expect(content).toContain('glob');
+    // `vite-plus/pack/client` must publish the declarations of the tsdown version core bundles.
+    expect(fs.readFileSync(clientPath, 'utf8')).toBe(
+      fs.readFileSync(path.join(coreDir, 'node_modules/tsdown/client.d.ts'), 'utf8'),
+    );
   });
 
   it('should include the Vite bin script pointing at the bundled CLI', () => {

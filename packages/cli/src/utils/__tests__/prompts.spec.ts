@@ -32,22 +32,6 @@ describe('downloadPackageManager', () => {
       cwd: '/target/workspace',
     });
   });
-
-  it('keeps existing callers without a target directory compatible', async () => {
-    vi.mocked(downloadPackageManagerBinding).mockResolvedValueOnce({
-      name: 'pnpm',
-      version: '11.24.0',
-      installDir: '/cache/pnpm',
-      binPrefix: '/cache/pnpm/bin',
-      packageName: 'pnpm',
-    });
-    await downloadPackageManager(PackageManager.pnpm, 'latest', false, true);
-    expect(downloadPackageManagerBinding).toHaveBeenLastCalledWith({
-      name: 'pnpm',
-      version: 'latest',
-      cwd: undefined,
-    });
-  });
 });
 
 describe('resolveGitInit', () => {

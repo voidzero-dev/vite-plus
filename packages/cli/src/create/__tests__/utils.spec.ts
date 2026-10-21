@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import validateNpmPackageName from 'validate-npm-package-name';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -79,7 +80,9 @@ describe('formatTargetDir', () => {
     expect(formatTargetDir('../../foo/bar')).matchSnapshot();
   });
 
-  // Should work on all platforms (including Windows) - directory must always use forward slashes
+  // Regression test for https://github.com/voidzero-dev/vite-plus/issues/938
+  // On Windows, path.join/normalize produce backslashes which break when passed as CLI args.
+  // The snapshots pin forward slashes in every nested directory.
   it('should format target dir with valid input', () => {
     expect(formatTargetDir('./my-package')).matchSnapshot();
     expect(formatTargetDir('my-package')).matchSnapshot();
@@ -89,17 +92,6 @@ describe('formatTargetDir', () => {
     expect(formatTargetDir('./foo/bar/@scope/my-package')).matchSnapshot();
     expect(formatTargetDir('./foo/bar/@scope/my-package/')).matchSnapshot();
     expect(formatTargetDir('./foo/bar/@scope/my-package/sub-package')).matchSnapshot();
-  });
-
-  // Regression test for https://github.com/voidzero-dev/vite-plus/issues/938
-  // On Windows, path.join/normalize produce backslashes which break when passed as CLI args.
-  // Nested paths are the critical cases since they involve path separators.
-  it('should always use forward slashes in directory (issue #938)', () => {
-    expect(formatTargetDir('foo/@my-scope/my-package').directory).toBe('foo/my-package');
-    expect(formatTargetDir('./foo/bar/@scope/my-package').directory).toBe('foo/bar/my-package');
-    expect(formatTargetDir('./foo/bar/@scope/my-package/sub-package').directory).toBe(
-      'foo/bar/@scope/my-package/sub-package',
-    );
   });
 
   it('should format target dir with invalid package name', () => {
@@ -134,13 +126,13 @@ describe('deriveDefaultPackageName', () => {
     const result = deriveDefaultPackageName('/home/user/.hidden', undefined, 'vite-plus-app');
     // directory name starts with '.', so a random name is generated instead
     expect(result).not.toBe('.hidden');
-    expect(result.length).toBeGreaterThan(0);
+    expect(validateNpmPackageName(result).validForNewPackages).toBe(true);
   });
 
   it('should fallback when directory is filesystem root', () => {
     const result = deriveDefaultPackageName('/', undefined, 'vite-plus-app');
     // basename of '/' is empty, so a random name is generated
-    expect(result.length).toBeGreaterThan(0);
+    expect(validateNpmPackageName(result).validForNewPackages).toBe(true);
   });
 });
 

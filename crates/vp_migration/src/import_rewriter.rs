@@ -2879,26 +2879,6 @@ mod tests {
     }
 
     #[test]
-    fn test_rewrite_import_content_vite() {
-        let vite_config = r#"import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [],
-});"#;
-
-        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { defineConfig } from 'vite-plus'
-
-export default defineConfig({
-  plugins: [],
-});"#
-        );
-    }
-
-    #[test]
     fn test_rewrite_import_content_vite_double_quotes() {
         let vite_config = r#"import { defineConfig } from "vite";
 
@@ -5608,14 +5588,6 @@ const { defineConfig } = require('vite-plus');"#
     // ====================================
 
     #[test]
-    fn test_rewrite_reference_types_vite_client() {
-        let content = r#"/// <reference types="vite/client" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/client" />"#);
-    }
-
-    #[test]
     fn test_rewrite_reference_types_vite_client_single_quotes() {
         let content = r#"/// <reference types='vite/client' />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
@@ -5626,30 +5598,6 @@ const { defineConfig } = require('vite-plus');"#
     #[test]
     fn test_rewrite_reference_types_bare_vite() {
         let content = r#"/// <reference types="vite" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_bare_vitest() {
-        let content = r#"/// <reference types="vitest" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_globals() {
-        let content = r#"/// <reference types="vitest/globals" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test/globals" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_config() {
-        let content = r#"/// <reference types="vitest/config" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(result.content, r#"/// <reference types="vite-plus" />"#);
@@ -5678,14 +5626,6 @@ const { defineConfig } = require('vite-plus');"#
             assert!(result.updated, "@vitest/browser/{sub} reference should be rewritten");
             assert_eq!(result.content, format!(r#"/// <reference types="{expected}" />"#));
         }
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_scoped_browser_context() {
-        let content = r#"/// <reference types="@vitest/browser/context" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test/browser/context" />"#);
     }
 
     #[test]

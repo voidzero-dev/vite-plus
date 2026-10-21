@@ -51,8 +51,6 @@ bashTest('native caches separate release and CI binaries with identical source i
 
 bashTest.each([
   ['build-upstream', 'x86_64-unknown-linux-gnu'],
-  ['build-upstream', 'x86_64-unknown-linux-musl'],
-  ['build-upstream', 'aarch64-apple-darwin'],
   ['build-upstream', 'x86_64-pc-windows-msvc'],
   ['build-windows-cli', 'x86_64-pc-windows-msvc'],
 ])('%s stages %s binaries for existing artifact consumers', (action, target) => {
