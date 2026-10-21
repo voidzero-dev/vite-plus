@@ -5,7 +5,7 @@ Stable installation stays disabled until the first release with per-user Homebre
 Use the [script installer](/guide/global-cli) in the meantime.
 :::
 
-The official tap installs the native `vp` CLI from GitHub Releases on macOS and glibc Linux, for ARM64 and x64.
+The official tap installs the native `vp` CLI and its dependency lockfile from GitHub Releases on macOS and glibc Linux, for ARM64 and x64.
 Homebrew needs no Node.js, pnpm, or npm registry access to install it.
 
 When the tap becomes available, run:
@@ -18,7 +18,8 @@ vp
 
 The explicit repository URL is required. The formula is part of the Vite+ repository.
 
-On first use, `vp` downloads Node.js LTS, pinned pnpm, and matching CLI dependencies.
+On first use, `vp` prepares Node.js and pinned pnpm, then installs matching CLI dependencies from the published lockfile.
+It uses the same runtime selection and lockfile recovery options as the [script installer](/guide/global-cli#installation-variables).
 It stores dependencies in `<DATA>/cli-packages/<version>/<platform>` and sets up your preferences and shims.
 `<DATA>` comes from the [Vite+ directory configuration](/guide/global-cli#installation-variables).
 The native executable stays under Homebrew's control. Later invocations reuse the completed setup.
@@ -33,12 +34,12 @@ registry=https://registry.example.com/repository/npm/
 //registry.example.com/repository/npm/:_authToken=${NPM_TOKEN}
 ```
 
-Export `NPM_TOKEN` before running `vp`. Both npm, which downloads pnpm, and pnpm, which installs dependencies, use this configuration.
+Export `NPM_TOKEN` before running `vp`. The native pnpm downloader and pnpm dependency installation both use this configuration.
 You can select another file with `NPM_CONFIG_USERCONFIG` or override the registry with `NPM_CONFIG_REGISTRY`.
 Relative user-config paths resolve from your current directory. No Homebrew-specific npm variables are required.
 
 Authentication failures stop setup. Fix the configuration and run `vp` again; setup preserves your management choices.
-Failure logs record the exit code without registry output, which can contain credentials.
+If pnpm fails, setup reports its exit code and omits registry output, which can contain credentials.
 
 ## Switch from the script installer
 

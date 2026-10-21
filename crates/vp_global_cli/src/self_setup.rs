@@ -251,7 +251,7 @@ async fn run(
     let version_dir = if let Some(package) = user_package {
         // Save choices before network work so a failed install does not ask again.
         save_management_preferences(node_override, default_mode).await?;
-        tokio::fs::create_dir_all(package).await?;
+        tokio::fs::create_dir_all(package.join("bin")).await?;
         package.to_absolute_path_buf()
     } else if deploy {
         let name =
@@ -297,6 +297,13 @@ async fn run(
     let node_version =
         if !skip_deps && (deploy || needs_deps) { runtime::resolve().await? } else { None };
     if needs_deps {
+        if let Some(package) = user_package {
+            match tokio::fs::remove_file(package.join(external::PACKAGE_MARKER)).await {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
         if !skip_deps {

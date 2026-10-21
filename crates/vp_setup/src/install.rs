@@ -14,7 +14,7 @@ use std::{
 use flate2::read::GzDecoder;
 use tar::Archive;
 use vp_js_runtime::{JsRuntimeType, download_runtime};
-use vp_pm_cli::{PackageManagerType, configure_npm_command, download_package_manager};
+use vp_pm_cli::bootstrap_pnpm;
 use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -229,7 +229,7 @@ pub async fn install_production_deps(
 
     let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
         show_progress.then_some("Preparing Node.js and pnpm..."),
-        prepare_install_runtime(node_version),
+        prepare_install_runtime(node_version, registry),
     )
     .await?;
     let output = vp_shared::progress::with_spinner(
@@ -289,15 +289,11 @@ async fn dependency_install_args<'a>(
 
 async fn prepare_install_runtime(
     node_version: Option<NodeVersion<'_>>,
+    registry: Option<&str>,
 ) -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
-    let (pnpm_dir, _, _) =
-        download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
-            .await
-            .map_err(|error| {
-                Error::Setup(
-                    format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into(),
-                )
-            })?;
+    let pnpm_dir = bootstrap_pnpm(PINNED_PNPM_VERSION, registry).await.map_err(|error| {
+        Error::Setup(format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into())
+    })?;
     let pnpm_entry = pnpm_dir.join("bin").join("pnpm.cjs");
     if !tokio::fs::try_exists(&pnpm_entry).await.unwrap_or(false) {
         return Err(Error::Setup(
@@ -342,6 +338,27 @@ fn supports_pnpm_node(package: &serde_json::Value, version: &str) -> bool {
     range.satisfies(&version)
 }
 
+/// Keep pnpm's registry and user config aligned with the native downloader when
+/// its working directory differs from the caller's.
+fn configure_pnpm_command(
+    command: &mut tokio::process::Command,
+    registry: Option<&str>,
+) -> Result<(), Error> {
+    if let Some(registry) = registry {
+        command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry);
+        command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY_UPPER, registry);
+    }
+    if let Some(path) = std::env::var_os("npm_config_userconfig")
+        .or_else(|| std::env::var_os("NPM_CONFIG_USERCONFIG"))
+        .filter(|path| !path.is_empty())
+    {
+        let path = vt_path::current_dir()?.join(path);
+        command.env("npm_config_userconfig", path.as_path());
+        command.env("NPM_CONFIG_USERCONFIG", path.as_path());
+    }
+    Ok(())
+}
+
 async fn run_pnpm_install(
     version_dir: &AbsolutePath,
     node_runtime: &vp_js_runtime::JsRuntime,
@@ -373,8 +390,7 @@ async fn run_pnpm_install(
             .env("NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH", "1000");
     }
 
-    configure_npm_command(&mut cmd, registry)
-        .map_err(|error| Error::Setup(error.to_string().into()))?;
+    configure_pnpm_command(&mut cmd, registry)?;
 
     let output = cmd.output().await?;
     Ok(output)
@@ -688,6 +704,34 @@ pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn keeps_explicit_userconfig_relative_to_the_caller() {
+        EnvConfig::with_vars(
+            [
+                ("npm_config_userconfig", None),
+                ("NPM_CONFIG_USERCONFIG", Some("config/enterprise.npmrc")),
+            ],
+            |_| {
+                let mut command = tokio::process::Command::new("node");
+                configure_pnpm_command(&mut command, Some("https://registry.example.test/"))
+                    .unwrap();
+                let expected = vt_path::current_dir().unwrap().join("config/enterprise.npmrc");
+                for (name, value) in command.as_std().get_envs() {
+                    match name.to_str().unwrap() {
+                        "npm_config_userconfig" | "NPM_CONFIG_USERCONFIG" => {
+                            assert_eq!(value.unwrap(), expected.as_path())
+                        }
+                        "npm_config_registry" | "NPM_CONFIG_REGISTRY" => {
+                            assert_eq!(value.unwrap(), "https://registry.example.test/")
+                        }
+                        other => panic!("unexpected environment setting {other}"),
+                    }
+                }
+                assert_eq!(command.as_std().get_args().len(), 0);
+            },
+        );
+    }
+
     #[tokio::test]
     async fn bootstrap_reuses_compatible_node_and_otherwise_uses_pinned_default() {
         use vp_js_runtime::{JsRuntimeProvider, NodeProvider, Platform};
@@ -732,27 +776,33 @@ mod tests {
                 }
 
                 let (runtime, entry) =
-                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1"))).await.unwrap();
+                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1")), None)
+                        .await
+                        .unwrap();
                 assert_eq!(runtime.version(), "22.23.1");
                 assert_eq!(entry, pnpm.join("bin/pnpm.cjs"));
                 index.assert_calls(0);
 
                 let (runtime, _) =
-                    prepare_install_runtime(Some(NodeVersion::Required("22.23.1"))).await.unwrap();
+                    prepare_install_runtime(Some(NodeVersion::Required("22.23.1")), None)
+                        .await
+                        .unwrap();
                 assert_eq!(runtime.version(), "22.23.1");
                 index.assert_calls(0);
 
-                let (runtime, _) = prepare_install_runtime(None).await.unwrap();
+                let (runtime, _) = prepare_install_runtime(None, None).await.unwrap();
                 assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
                 index.assert_calls(0);
 
                 tokio::fs::write(manifest, r#"{"engines":{"node":">=24"}}"#).await.unwrap();
                 let (runtime, _) =
-                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1"))).await.unwrap();
+                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1")), None)
+                        .await
+                        .unwrap();
                 assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
                 index.assert_calls(0);
 
-                let error = prepare_install_runtime(Some(NodeVersion::Required("22.23.1")))
+                let error = prepare_install_runtime(Some(NodeVersion::Required("22.23.1")), None)
                     .await
                     .unwrap_err();
                 assert!(error.to_string().contains(
