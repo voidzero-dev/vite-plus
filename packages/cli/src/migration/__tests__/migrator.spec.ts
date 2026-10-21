@@ -1856,6 +1856,43 @@ describe('standalone pnpm child project boundaries', () => {
     vi.unstubAllEnvs();
   });
 
+  it.each([
+    ['file', (file: string) => fs.writeFileSync(file, 'gitdir: external\n')],
+    ['directory', (directory: string) => fs.mkdirSync(directory)],
+  ])('leaves nested checkouts with a .git %s untouched', async (_kind, createGit) => {
+    // The migration root can itself be a checkout or worktree.
+    for (const directory of [tmpDir, path.join(tmpDir, 'web')]) {
+      createGit(path.join(directory, '.git'));
+    }
+    fs.mkdirSync(path.join(tmpDir, 'web/example'));
+    fs.copyFileSync(
+      path.join(tmpDir, 'web/package.json'),
+      path.join(tmpDir, 'web/example/package.json'),
+    );
+    fs.mkdirSync(path.join(tmpDir, 'sibling'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'sibling/package.json'),
+      JSON.stringify({ name: 'sibling', packageManager: 'pnpm@10.33.0' }),
+    );
+    const install = vi.spyOn(command, 'runCommandSilently').mockResolvedValue({
+      exitCode: 0,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
+    });
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    await updateStandalonePnpmLockfiles(projects);
+
+    expect(projects).toEqual([path.join(tmpDir, 'sibling')]);
+    expect(fs.existsSync(path.join(tmpDir, 'sibling/pnpm-workspace.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'web/example/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8')).toBe(
+      'lockfileVersion: "9.0"\n',
+    );
+    expect(install).not.toHaveBeenCalled();
+  });
+
   it('updates child lockfiles after copying settings without running lifecycle scripts', async () => {
     const install = vi.spyOn(command, 'runCommandSilently').mockResolvedValue({
       exitCode: 0,

@@ -209,6 +209,10 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
   const directories = [path.resolve(projectPath)];
   const workspaceMembers = new Set<string>();
   for (const directory of directories) {
+    // Nested checkouts own their projects, including descendants outside workspace globs.
+    if (directory !== directories[0] && fs.existsSync(path.join(directory, '.git'))) {
+      continue;
+    }
     const workspaceFile = path.join(directory, 'pnpm-workspace.yaml');
     const hasWorkspaceFile = fs.existsSync(workspaceFile);
     let pkg: Record<string, unknown> | undefined;
