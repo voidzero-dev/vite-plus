@@ -39,15 +39,11 @@ Execute a command from a local or remote npm package, or run a script file
 
 Usage: vpx [OPTIONS] <pkg[@version]> [args...]
        vpx [OPTIONS] [NODE_OPTIONS] <script> [args...]
-       vpx watch [WATCH_OPTIONS] [NODE_OPTIONS] <script> [args...]
 
 Arguments:
   <pkg[@version]>  Package binary to execute
   <script>         Script file to run (.ts, .mts, .cts, .tsx, .js, .mjs, .cjs, .jsx)
   [args...]        Arguments to pass to the command or script
-
-Commands:
-  watch  Run a script and rerun it when a file it uses changes (see `vpx watch --help`)
 
 Options:
   -p, --package <NAME>  Package(s) to install if not found locally
@@ -57,14 +53,16 @@ Options:
   -v, --version         Print the Vite+ version
   -h, --help            Print help
 
+Before a script, --watch reruns it when a file it uses changes (see `vpx --watch --help`).
+
 Examples:
   vpx eslint .                           # Run local eslint (or download)
   vpx create-vue my-app                  # Download and run create-vue
   vpx oxlint@1.85.0 --version            # Run specific version
   vpx -p cowsay -c 'echo \"hi\" | cowsay'  # Shell mode with package
   vpx ./scripts/seed.ts --dry-run        # Run a TypeScript script
-  vpx watch ./server.ts                  # Rerun the script when a file it uses changes
-  vpx --watch ./server.ts                # Pass Node.js options before the script";
+  vpx --inspect ./server.ts              # Pass Node.js options before the script
+  vpx --watch ./server.ts                # Rerun the script when a file it uses changes";
 
 /// A globally installed binary found via `vp install -g`.
 struct GlobalBinary {
@@ -114,13 +112,6 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
 
     // Script mode is decided before package-spec parsing: script paths can contain `@`.
     let package_flags = !flags.packages.is_empty() || flags.shell_mode;
-
-    // `vpx watch` runs the watcher, as `tsx watch` and `oxnode watch` do; `watch@<version>`
-    // or `--package` still runs the npm package `watch`.
-    if cmd_spec == "watch" && !package_flags {
-        return vpx_script::execute_watch(&positional[1..], flags.tsconfig, cwd).await;
-    }
-
     if !package_flags || !cmd_spec.starts_with('-') {
         match vpx_script::detect(&positional, cwd) {
             Ok(Some(_)) if package_flags => {

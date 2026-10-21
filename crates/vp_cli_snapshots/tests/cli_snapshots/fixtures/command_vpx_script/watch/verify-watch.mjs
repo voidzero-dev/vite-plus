@@ -46,12 +46,17 @@ const SCENARIOS = {
     done: 'restarted after the file an import looked for was created',
   },
 };
+// `pinned` with an env file whose TS_NODE_PROJECT names `tsconfig.json`. The scenario
+// passes it: on this script's command line Node.js would read it for this script too.
+SCENARIOS['pinned-env'] = { ...SCENARIOS.pinned, args: ['--env-file=.env.tsconfig'] };
 
 const [name, ...vpxArgs] = process.argv.slice(2);
 const scenario = SCENARIOS[name];
 process.chdir(scenario.cwd);
 
-const child = spawn('vpx', [...vpxArgs, './main.ts'], { stdio: ['ignore', 'pipe', 'pipe'] });
+const child = spawn('vpx', [...vpxArgs, ...(scenario.args ?? []), './main.ts'], {
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
 let logs = '';
 const waiters = [];
 const onData = (data) => {
@@ -91,7 +96,7 @@ try {
   } finally {
     clearInterval(timer);
   }
-  console.log(`vpx ${vpxArgs.join(' ')} ${scenario.done}`);
+  console.log(`vpx ${[...vpxArgs, ...(scenario.args ?? [])].join(' ')} ${scenario.done}`);
 } catch (error) {
   console.error(logs);
   throw error;

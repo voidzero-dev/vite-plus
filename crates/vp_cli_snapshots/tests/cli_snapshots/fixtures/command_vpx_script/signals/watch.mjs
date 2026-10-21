@@ -1,4 +1,4 @@
-// `vpx watch` runs the watcher in the vpx process and the script in a child of it. A
+// `vpx --watch` runs the watcher in the vpx process and the script in a child of it. A
 // SIGINT sent to the vpx PID alone is passed on to the script. Ctrl+C from a terminal
 // signals the whole process group, so the script has it already; it tells the watcher,
 // which then does not send a second one.
@@ -10,7 +10,7 @@ const WATCHER_LOG = /^\d\d:\d\d:\d\d \[vpx\] /;
 
 async function interrupt(target) {
   // Its own process group, as a terminal gives a job, without a terminal on stdin.
-  const child = spawn('vpx', ['watch', './count.ts'], {
+  const child = spawn('vpx', ['--watch', './count.ts'], {
     detached: true,
     stdio: ['ignore', 'pipe', 'inherit'],
   });

@@ -42,7 +42,7 @@ if (!isSupportedNodeVersion(process.versions.node)) {
   process.exit(1);
 }
 
-// Under `vpx watch`, tell the watcher about each SIGINT the script handles, so a Ctrl+C
+// Under `vpx --watch`, tell the watcher about each SIGINT the script handles, so a Ctrl+C
 // the script already got from the terminal is not sent again. A no-op otherwise.
 if (isMainThread) {
   installSignalAck();
@@ -52,9 +52,9 @@ if (isMainThread) {
 // unsupported Node.js.
 const oxcNode = loadOxcNode();
 
-// Under watch mode (`vpx --watch`, `vpx watch`), report what Node.js does not: the
-// tsconfig files oxc-node read and the paths a failed resolve looked for. Turned on
-// before the first transform or resolve, which is when tsconfig files are read.
+// Under `vpx --watch`, report what Node.js does not: the tsconfig files oxc-node read
+// and the paths a failed resolve looked for. Turned on before the first transform or
+// resolve, which is when tsconfig files are read.
 const watch = threadWatchSink();
 if (watch) {
   oxcNode.enableWatchReport();

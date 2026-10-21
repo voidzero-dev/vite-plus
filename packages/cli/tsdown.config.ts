@@ -90,7 +90,7 @@ export default defineConfig([
       // (the `--require` preload is built as CommonJS below).
       'script-register': './src/script-register.ts',
       'script-esm-hooks': './src/script-esm-hooks.ts',
-      // `vpx watch`: oxc-node's watcher with that loader.
+      // `vpx --watch`: oxc-node's watcher with that loader.
       'script-watch': './src/script-watch.ts',
       // Project-local `vpx` bin; kept apart from bin.js so it loads no binding.
       'vpx-bin': './src/vpx-bin.ts',

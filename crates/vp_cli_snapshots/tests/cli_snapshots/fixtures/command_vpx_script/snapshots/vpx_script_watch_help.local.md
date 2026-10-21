@@ -1,11 +1,11 @@
-# vpx_watch_help
+# vpx_script_watch_help
 
-vpx watch is a subcommand: its help and errors use the vpx watch name.
+vpx --watch is the watcher: its help and errors use the vpx --watch name, and --watch-path, which would start Node.js' watch mode, is an error.
 
-## `vpx watch --help`
+## `vpx --watch --help`
 
 ```
-Usage: vpx watch [options] [node options] [--] <entry> [script args...]
+Usage: vpx --watch [options] [node options] [--] <entry> [script args...]
 
 Run <entry> with oxc-node and run it again when a file it uses changes.
 
@@ -33,19 +33,31 @@ Keys:  Return        rerun now (press again while stopping to force kill)
        Ctrl+C        stop (press again to force kill)
 
 Examples:
-  vpx watch ./src/server.ts
-  vpx watch --include "./config/*.json" --exclude "src/**/*.test.ts" ./src/server.ts --port 3000
-  vpx watch --inspect --clear-screen=false ./src/index.ts
+  vpx --watch ./src/server.ts
+  vpx --watch --include "./config/*.json" --exclude "src/**/*.test.ts" ./src/server.ts --port 3000
+  vpx --watch --inspect --clear-screen=false ./src/index.ts
 ```
 
-## `vpx watch`
+## `vpx --watch`
 
 No entry file
 
 **Exit code:** 1
 
 ```
-vpx watch: missing <entry>
-Usage: vpx watch [options] [node options] [--] <entry> [script args...]
-Run "vpx watch --help" for the options.
+vpx --watch: missing <entry>
+Usage: vpx --watch [options] [node options] [--] <entry> [script args...]
+Run "vpx --watch --help" for the options.
+```
+
+## `vpx --watch-path=src ./src/args.ts`
+
+--watch-path
+
+**Exit code:** 1
+
+```
+vpx --watch: --watch-path is not supported by vpx --watch: use --include
+Usage: vpx --watch [options] [node options] [--] <entry> [script args...]
+Run "vpx --watch --help" for the options.
 ```

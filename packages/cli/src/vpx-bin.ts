@@ -3,8 +3,8 @@
  *
  * Package managers and `vp run` put `node_modules/.bin` first on `PATH`, so this bin,
  * not the global `vpx`, runs in package.json scripts. It never hands off to the global
- * CLI. Script files run with the loader shipped in this package, and `vpx watch` runs
- * the watcher in `script-watch.ts` in this process. A binary installed in
+ * CLI. Script files run with the loader shipped in this package, and `--watch` runs the
+ * watcher in `script-watch.ts` in this process. A binary installed in
  * `node_modules/.bin` runs directly; a versioned package, `--package`, or
  * `--shell-mode` runs with this package's `vp dlx`. See `packageInvocation`.
  *
@@ -193,15 +193,11 @@ const LOCAL_HELP = `Execute a binary from node_modules/.bin or a remote npm pack
 
 Usage: vpx [OPTIONS] <pkg[@version]> [args...]
        vpx [OPTIONS] [NODE_OPTIONS] <script> [args...]
-       vpx watch [WATCH_OPTIONS] [NODE_OPTIONS] <script> [args...]
 
 Arguments:
   <pkg[@version]>  Package binary to execute
   <script>         Script file to run (.ts, .mts, .cts, .tsx, .js, .mjs, .cjs, .jsx)
   [args...]        Arguments to pass to the command or script
-
-Commands:
-  watch  Run a script and rerun it when a file it uses changes (see \`vpx watch --help\`)
 
 Options:
   -p, --package <NAME>  Package(s) to download
@@ -211,6 +207,8 @@ Options:
   -v, --version         Print the Vite+ version
   -h, --help            Print help
 
+Before a script, --watch reruns it when a file it uses changes (see \`vpx --watch --help\`).
+
 This project-local vpx runs in package.json scripts. It runs binaries installed in
 node_modules/.bin, and downloads a package only for a version, --package, or --shell-mode.
 
@@ -219,8 +217,8 @@ Examples:
   vpx create-vue@latest my-app           # Download and run create-vue
   vpx -p cowsay -c 'echo "hi" | cowsay'  # Shell mode with package
   vpx ./scripts/seed.ts --dry-run        # Run a TypeScript script
-  vpx watch ./server.ts                  # Rerun the script when a file it uses changes
-  vpx --watch ./server.ts                # Pass Node.js options before the script
+  vpx --inspect ./server.ts              # Pass Node.js options before the script
+  vpx --watch ./server.ts                # Rerun the script when a file it uses changes
 `;
 
 function fail(message: string, note?: string): never {
@@ -257,11 +255,8 @@ if (first === undefined) {
 
 // Script mode is decided before package-spec parsing: script paths can contain `@`.
 const packageFlags = flags.packages.length > 0 || flags.shellMode;
-// `vpx watch` runs the watcher, as `tsx watch` and `oxnode watch` do; `watch@<version>`
-// or `--package` still runs the npm package `watch`.
-const watch = first === 'watch' && !packageFlags;
 let invocation;
-if (!watch && (!packageFlags || !first.startsWith('-'))) {
+if (!packageFlags || !first.startsWith('-')) {
   try {
     invocation = detectScript(positional, cwd);
   } catch (error) {
@@ -281,18 +276,10 @@ if (!watch && (!packageFlags || !first.startsWith('-'))) {
   }
 }
 
-if (watch) {
-  // The watcher runs in this process, as `vp dlx` does below, and starts the script
-  // itself. The script sees node_modules/.bin first on PATH, as in script mode.
-  prependLocalBins(process.env, cwd);
-  process.argv = [
-    ...process.argv.slice(0, 2),
-    ...(flags.tsconfig === undefined ? [] : ['--tsconfig', flags.tsconfig]),
-    ...rest,
-  ];
-  await import(new URL('./script-watch.js', import.meta.url).href);
-} else if (invocation) {
-  const env = childEnv(cwd);
+if (invocation) {
+  // With `--watch`, the watcher runs in this process, as `vp dlx` does below, and starts
+  // the script itself, so it takes this process's environment.
+  const env = invocation.watch ? prependLocalBins(process.env, cwd) : childEnv(cwd);
   const tsconfig = invocation.tsconfig ?? flags.tsconfig;
   if (tsconfig === undefined) {
     delete env.VP_SCRIPT_TSCONFIG;
@@ -303,21 +290,26 @@ if (watch) {
     }
     env.VP_SCRIPT_TSCONFIG = file;
   }
-  // The preload registers the hooks before any user `--require`; the `--import`
-  // registers the off-thread hooks on older Node.js and routes the entry point
-  // through the ESM loader.
-  runAndExit(
-    process.execPath,
-    [
-      '--require',
-      fileURLToPath(new URL('./script-preload.cjs', import.meta.url)),
-      '--import',
-      new URL('./script-register.js', import.meta.url).href,
-      ...invocation.nodeArgs,
-    ],
-    env,
-    { relayIpc: true },
-  );
+  if (invocation.watch) {
+    process.argv = [...process.argv.slice(0, 2), ...invocation.nodeArgs];
+    await import(new URL('./script-watch.js', import.meta.url).href);
+  } else {
+    // The preload registers the hooks before any user `--require`; the `--import`
+    // registers the off-thread hooks on older Node.js and routes the entry point
+    // through the ESM loader.
+    runAndExit(
+      process.execPath,
+      [
+        '--require',
+        fileURLToPath(new URL('./script-preload.cjs', import.meta.url)),
+        '--import',
+        new URL('./script-register.js', import.meta.url).href,
+        ...invocation.nodeArgs,
+      ],
+      env,
+      { relayIpc: true },
+    );
+  }
 } else {
   if (flags.tsconfig !== undefined) {
     fail('vpx: --tsconfig can only be used when running a script');

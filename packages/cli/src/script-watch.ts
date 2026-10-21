@@ -1,11 +1,13 @@
 /**
- * `vpx watch`: oxc-node's watcher (`@oxc-node/cli/watch`), bundled from the vendored
- * source, running the script with the `vpx <script>` loader. Built to
- * `dist/script-watch.js`.
+ * `vpx --watch`: oxc-node's watcher (`@oxc-node/cli/watch`), bundled from the vendored
+ * source, running the script with the `vpx <script>` loader instead of Node.js' own watch
+ * mode. Built to `dist/script-watch.js`.
  *
  * The global `vpx` runs `node dist/script-watch.js <args>`, and the project-local bin
- * imports it in process; either way the watcher's arguments are `process.argv.slice(2)`.
- * The watcher owns SIGINT, SIGTERM, SIGHUP, stdin, and the IPC channel until it stops.
+ * imports it in process; either way the watcher's arguments are `process.argv.slice(2)`,
+ * the `vpx` arguments without `--watch` and `--tsconfig`, which the CLIs pass on as
+ * `VP_SCRIPT_TSCONFIG`, as for a script. The watcher owns SIGINT, SIGTERM, SIGHUP,
+ * stdin, and the IPC channel until it stops.
  */
 
 import path from 'node:path';
@@ -15,14 +17,10 @@ import { fileURLToPath } from 'node:url';
 // in its place (see `vendoredWatcherPlugin` in tsdown.config.ts).
 import { runWatch } from '../../../oxc-node/packages/cli/watch.js';
 
-// The watcher's `--tsconfig` reaches the loader as `OXC_TSCONFIG_PATH`, which an
-// inherited `vpx --tsconfig` choice would override.
-delete process.env.VP_SCRIPT_TSCONFIG;
-
 const dist = path.dirname(fileURLToPath(import.meta.url));
 
 process.exitCode = await runWatch(process.argv.slice(2), {
-  name: 'vpx watch',
+  name: 'vpx --watch',
   // As in script mode; see `vpx-bin.ts`.
   loaderArgs: [
     '--require',
