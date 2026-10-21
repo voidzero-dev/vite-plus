@@ -1208,13 +1208,23 @@ pub(crate) fn extract_binaries(
 /// - The file has a .js, .mjs, or .cjs extension
 /// - The file has a shebang containing "node"
 ///
-/// Reads only the first 256 bytes and propagates errors other than NotFound.
+/// Reads only the first 256 bytes, tolerating genuinely missing targets.
 fn is_javascript_binary(path: &AbsolutePath) -> std::io::Result<bool> {
     // Probe even known extensions so directories and unreadable files fail installation.
     let mut buffer = [0u8; 256];
     let n = match std::fs::File::open(path.as_path()).and_then(|mut file| file.read(&mut buffer)) {
         Ok(n) => n,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Windows can report NotFound when opening an existing directory with a trailing separator.
+            match std::fs::metadata(path.as_path()) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+                Err(error) => return Err(error),
+                Ok(metadata) if metadata.is_dir() => {
+                    return Err(std::io::ErrorKind::IsADirectory.into());
+                }
+                Ok(_) => return Err(error),
+            }
+        }
         Err(error) => return Err(error),
     };
 
@@ -2332,7 +2342,9 @@ mod tests {
         for name in ["directory", "directory.js", "directory.mjs", "directory.cjs"] {
             let path = AbsolutePathBuf::new(temp_dir.path().join(name)).unwrap();
             std::fs::create_dir(&path).unwrap();
-            assert!(is_javascript_binary(&path).is_err(), "{name}");
+            for target in [path.clone(), path.join(""), path.join(".")] {
+                assert!(is_javascript_binary(&target).is_err(), "{target:?}");
+            }
         }
     }
 
