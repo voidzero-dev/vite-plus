@@ -351,7 +351,7 @@ Package mode through the global `vpx` is unchanged. What changes:
 
 ## Open Items
 
-- Windows Ctrl+C through the `vp.exe` spawn-and-wait path is not verified.
+- Windows Ctrl+C through the `vp.exe` spawn-and-wait path: `vp.exe` handles Ctrl+C and Ctrl+Break while it waits for the child (`vp_command::ConsoleCtrlGuard`, as the `vpx.exe` trampoline and `TerminalStateGuard` on Unix do), so the global `vpx` and `vp run` exit after the script's own cleanup. No snapshot covers it yet.
 
 ## Future Enhancements
 

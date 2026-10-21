@@ -126,7 +126,8 @@ pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
 /// is interrupted (e.g., via Ctrl+C) while the terminal is in a non-standard state.
 ///
 /// On Unix, saves the terminal state before spawning the child process and restores
-/// it after the child exits. On Windows, this is a simple pass-through.
+/// it after the child exits, and ignores SIGINT meanwhile. On Windows, Ctrl+C is ignored
+/// meanwhile (`ConsoleCtrlGuard`), so this process waits for the child's own cleanup.
 pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
     #[cfg(unix)]
     {
@@ -142,6 +143,8 @@ pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus,
 
     #[cfg(not(unix))]
     {
+        #[cfg(windows)]
+        let _ctrl = ConsoleCtrlGuard::install();
         let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
         child.wait().await.map_err(|e| Error::Anyhow(e.into()))
     }
@@ -404,6 +407,53 @@ impl Drop for TerminalStateGuard {
         // SAFETY: restores the signal disposition captured by save().
         if let Some(original_sigint) = self.original_sigint.take() {
             let _ = unsafe { sigaction(Signal::SIGINT, &original_sigint) };
+        }
+    }
+}
+
+/// While alive, Ctrl+C and Ctrl+Break do not end this process, as `TerminalStateGuard`
+/// ignores SIGINT on Unix: the console sends them to the child too, and this process
+/// waits for the child to finish its cleanup and exits with its code. A handler routine,
+/// unlike `SetConsoleCtrlHandler(NULL, TRUE)`, is not inherited, so the child still gets
+/// the event. The `vpx.exe` trampoline does the same.
+#[cfg(windows)]
+pub struct ConsoleCtrlGuard {
+    installed: bool,
+}
+
+#[cfg(windows)]
+unsafe extern "system" {
+    fn SetConsoleCtrlHandler(
+        handler: Option<unsafe extern "system" fn(ctrl_type: u32) -> i32>,
+        add: i32,
+    ) -> i32;
+}
+
+#[cfg(windows)]
+impl ConsoleCtrlGuard {
+    const CTRL_BREAK_EVENT: u32 = 1;
+    const CTRL_C_EVENT: u32 = 0;
+
+    /// Handle Ctrl+C and Ctrl+Break by doing nothing; leave other events, such as closing
+    /// the console, to the next handler.
+    unsafe extern "system" fn ignore(ctrl_type: u32) -> i32 {
+        i32::from(ctrl_type == Self::CTRL_C_EVENT || ctrl_type == Self::CTRL_BREAK_EVENT)
+    }
+
+    #[must_use]
+    pub fn install() -> Self {
+        // SAFETY: registers a handler routine that only returns a value.
+        let installed = unsafe { SetConsoleCtrlHandler(Some(Self::ignore), 1) } != 0;
+        Self { installed }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for ConsoleCtrlGuard {
+    fn drop(&mut self) {
+        if self.installed {
+            // SAFETY: removes the handler routine that install() registered.
+            unsafe { SetConsoleCtrlHandler(Some(Self::ignore), 0) };
         }
     }
 }
