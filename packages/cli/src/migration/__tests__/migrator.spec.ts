@@ -2279,6 +2279,8 @@ describe('standalone pnpm child project boundaries', () => {
     { file: 'yarn.lock' },
     { file: 'package-lock.json' },
     { file: 'bun.lock' },
+    { file: 'bunfig.toml' },
+    { file: 'yarn.config.cjs' },
   ])('preserves a non-pnpm workspace rooted at a matched member (%j)', (declaration) => {
     fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: ["vendor/*"]\n');
     for (const child of ['packages/pinned', 'packages/locked', 'examples/demo']) {

@@ -229,9 +229,15 @@ export function collectStandalonePnpmProjects(projectPath: string): string[] {
       const usesNonPnpm = declared
         ? declared.name !== PackageManager.pnpm
         : !fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) &&
-          ['yarn.lock', '.yarnrc.yml', 'package-lock.json', 'bun.lock', 'bun.lockb'].some((file) =>
+          (['yarn.lock', '.yarnrc.yml', 'package-lock.json', 'bun.lock', 'bun.lockb'].some((file) =>
             fs.existsSync(path.join(directory, file)),
-          );
+          ) ||
+            (!['.pnpmfile.cjs', 'pnpmfile.cjs'].some((file) =>
+              fs.existsSync(path.join(directory, file)),
+            ) &&
+              ['bunfig.toml', 'yarn.config.cjs'].some((file) =>
+                fs.existsSync(path.join(directory, file)),
+              )));
       // pnpm members' npm-style workspaces do not own their descendants.
       if (workspaceMembers.has(directory) && !usesNonPnpm) {
         patterns = undefined;
