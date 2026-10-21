@@ -46,9 +46,19 @@ const SCENARIOS = {
     done: 'restarted after the file an import looked for was created',
   },
 };
-// `pinned` with an env file whose TS_NODE_PROJECT names `tsconfig.json`. The scenario
-// passes it: on this script's command line Node.js would read it for this script too.
-SCENARIOS['pinned-env'] = { ...SCENARIOS.pinned, args: ['--env-file=.env.tsconfig'] };
+// `pinned` with a separate config file path before `--tsconfig`, and an env file whose
+// TS_NODE_PROJECT names `tsconfig.json`. The scenario passes them: on this script's command
+// line, Node.js would read the config file and the env file for this script too.
+SCENARIOS['pinned-config'] = {
+  ...SCENARIOS.pinned,
+  args: [
+    '--experimental-config-file',
+    'custom.json',
+    '--tsconfig',
+    'tsconfig.b.json',
+    '--env-file=.env.tsconfig',
+  ],
+};
 
 const [name, ...vpxArgs] = process.argv.slice(2);
 const scenario = SCENARIOS[name];

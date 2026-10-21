@@ -28,10 +28,10 @@ vpx --watch restarted after the file an import looked for was created
 vpx --tsconfig tsconfig.b.json --watch restarted after an edit to the tsconfig it was given
 ```
 
-## `node verify-watch.mjs pinned-env --watch --tsconfig tsconfig.b.json`
+## `node verify-watch.mjs pinned-config --watch`
 
---tsconfig among the Node.js options wins over a TS_NODE_PROJECT from an env file
+--watch before a separate config file path, and --tsconfig among the Node.js options after it, which wins over a TS_NODE_PROJECT from an env file
 
 ```
-vpx --watch --tsconfig tsconfig.b.json --env-file=.env.tsconfig restarted after an edit to the tsconfig it was given
+vpx --watch --experimental-config-file custom.json --tsconfig tsconfig.b.json --env-file=.env.tsconfig restarted after an edit to the tsconfig it was given
 ```
