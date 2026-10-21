@@ -225,3 +225,17 @@ cwd = "signals"
 env = { TMPDIR = "/tmp" }
 comment = "A SIGINT sent to the vpx --watch PID reaches the script once, and so does a SIGINT to its whole process group, as Ctrl+C sends it."
 steps = [["node", "watch.mjs"]]
+
+[[case]]
+name = "vpx_script_bare_config_flag"
+vp = ["local", "global"]
+cwd = "config-file"
+# The first release where the project-local bin sees the bare flag: before 26.12, the
+# Node.js running the bin rewrites it to `--experimental-config-file=node.config.json`.
+env = { VP_NODE_VERSION = "26.12.0" }
+comment = "From Node.js 24.19 and 26.1, a bare --experimental-config-file reads node.config.json and takes no value, so the arguments after it keep their meaning."
+steps = [
+  { argv = ["vpx", "--experimental-config-file", "./main.ts", "--watch"], comment = "--watch after the script belongs to the script" },
+  { argv = ["vpx", "--experimental-config-file", "--tsconfig", "cli.json", "--env-file=.env", "./alias.ts"], comment = "--tsconfig is still vpx's, and wins over the TS_NODE_PROJECT in .env" },
+  { argv = ["vpx", "--experimental-config-file", "--watch", "--include", "extra.json"], comment = "--watch still selects the watcher, which takes --include and reports the missing entry", continue-on-failure = true },
+]

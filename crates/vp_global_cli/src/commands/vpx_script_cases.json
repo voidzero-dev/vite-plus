@@ -23,7 +23,6 @@
     "--env-file",
     "--env-file-if-exists",
     "--eval",
-    "--experimental-config-file",
     "--experimental-default-type",
     "--experimental-loader",
     "--experimental-package-map",
@@ -324,6 +323,57 @@
       "args": ["--watch"],
       "expect": {
         "script": [],
+        "watch": true
+      }
+    },
+    {
+      "name": "a bare --experimental-config-file takes no value, so a --watch after the script belongs to the script",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["--experimental-config-file", "main.ts", "--watch"],
+      "expect": {
+        "script": ["--experimental-config-file", "main.ts", "--watch"]
+      }
+    },
+    {
+      "name": "a bare --experimental-config-file does not take --watch or a watcher option",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["--experimental-config-file", "--watch", "--include", "extra.json", "main.ts"],
+      "expect": {
+        "script": ["--experimental-config-file", "--include", "extra.json", "main.ts"],
+        "watch": true
+      }
+    },
+    {
+      "name": "a bare --experimental-config-file does not take --tsconfig",
+      "files": {
+        "main.ts": ""
+      },
+      "args": [
+        "--watch",
+        "--experimental-config-file",
+        "--tsconfig",
+        "cli.json",
+        "--env-file=.env",
+        "main.ts"
+      ],
+      "expect": {
+        "script": ["--experimental-config-file", "--env-file=.env", "main.ts"],
+        "tsconfig": "cli.json",
+        "watch": true
+      }
+    },
+    {
+      "name": "--experimental-config-file= names a config file on every Node.js",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["--experimental-config-file=custom.json", "--watch", "main.ts", "--watch"],
+      "expect": {
+        "script": ["--experimental-config-file=custom.json", "main.ts", "--watch"],
         "watch": true
       }
     },

@@ -36,6 +36,10 @@ const TS_EXTENSIONS: &[&str] = &[".ts", ".mts", ".cts", ".tsx"];
 /// Node.js options that take a required value, which may come as the next argument:
 /// those `node --help` lists as `--option=...` on Node.js 22, 24, and 26. Best effort:
 /// a missing entry only moves the missing-file check for the script to Node.js.
+///
+/// Not `--experimental-config-file`: Node.js 24.19, 26.1, and later read it bare as
+/// `node.config.json`. Older releases take the next argument as the config file, which
+/// `--experimental-config-file=<path>` names on every release.
 const NODE_OPTIONS_WITH_VALUE: &[&str] = &[
     "-C",
     "-e",
@@ -58,7 +62,6 @@ const NODE_OPTIONS_WITH_VALUE: &[&str] = &[
     "--env-file",
     "--env-file-if-exists",
     "--eval",
-    "--experimental-config-file",
     "--experimental-default-type",
     "--experimental-loader",
     "--experimental-package-map",

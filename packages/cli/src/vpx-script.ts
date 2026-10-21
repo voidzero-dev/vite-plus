@@ -17,7 +17,11 @@ import path from 'node:path';
 export const SCRIPT_EXTENSIONS = ['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
 const TS_EXTENSIONS = new Set(['.ts', '.mts', '.cts', '.tsx']);
 
-/** Node.js options that take a required value, which may come as the next argument (best effort). */
+/**
+ * Node.js options that take a required value, which may come as the next argument (best effort).
+ * Not `--experimental-config-file`, which Node.js 24.19, 26.1, and later read bare as
+ * `node.config.json`; see `NODE_OPTIONS_WITH_VALUE` in the global CLI.
+ */
 export const NODE_OPTIONS_WITH_VALUE = new Set([
   '-C',
   '-e',
@@ -40,7 +44,6 @@ export const NODE_OPTIONS_WITH_VALUE = new Set([
   '--env-file',
   '--env-file-if-exists',
   '--eval',
-  '--experimental-config-file',
   '--experimental-default-type',
   '--experimental-loader',
   '--experimental-package-map',
