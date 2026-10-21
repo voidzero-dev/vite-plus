@@ -1,7 +1,5 @@
 //! Shared clap error details and diagnostics. Callers own headers and command correction.
 
-#![warn(clippy::print_stdout)]
-
 use clap::error::{ContextKind, ContextValue};
 use console::style;
 use vp_shared::output;
