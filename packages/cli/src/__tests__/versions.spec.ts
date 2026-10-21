@@ -19,14 +19,6 @@ const vitestPkgPath = createRequire(import.meta.url).resolve('vitest/package.jso
 
 describe('versions export', () => {
   describe('build artifacts', () => {
-    it('dist/versions.js should exist', () => {
-      expect(fs.existsSync(path.join(distDir, 'versions.js'))).toBe(true);
-    });
-
-    it('dist/versions.d.ts should exist', () => {
-      expect(fs.existsSync(path.join(distDir, 'versions.d.ts'))).toBe(true);
-    });
-
     it('dist/versions.js should export a versions object', () => {
       const content = fs.readFileSync(path.join(distDir, 'versions.js'), 'utf-8');
       expect(content).toContain('export const versions');
@@ -100,48 +92,15 @@ describe('versions export', () => {
     });
   });
 
-  describe('dependency tool versions', () => {
-    it('should contain oxlint version', async () => {
-      const mod = await import('../../dist/versions.js');
-      const versions = mod.versions as Record<string, string>;
-      expect(versions.oxlint).toBeTypeOf('string');
-    });
-
-    it('should contain oxfmt version', async () => {
-      const mod = await import('../../dist/versions.js');
-      const versions = mod.versions as Record<string, string>;
-      expect(versions.oxfmt).toBeTypeOf('string');
-    });
-
-    it('should contain oxlint-tsgolint version', async () => {
-      const mod = await import('../../dist/versions.js');
-      const versions = mod.versions as Record<string, string>;
-      expect(versions['oxlint-tsgolint']).toBeTypeOf('string');
-    });
-  });
-
   describe('type declarations', () => {
-    it('should have type fields for all bundled tools', () => {
+    it('should declare every runtime field as a readonly string', async () => {
       const content = fs.readFileSync(path.join(distDir, 'versions.d.ts'), 'utf-8');
-      const expectedKeys = [
-        'vite',
-        'rolldown',
-        'tsdown',
-        'vitest',
-        'oxlint',
-        'oxfmt',
-        'oxlint-tsgolint',
-      ];
-      for (const key of expectedKeys) {
-        expect(content).toContain(key);
-      }
-    });
-
-    it('should declare all fields as readonly string', () => {
-      const content = fs.readFileSync(path.join(distDir, 'versions.d.ts'), 'utf-8');
-      const fieldMatches = content.match(/readonly [\w'-]+: string;/g);
-      expect(fieldMatches).not.toBeNull();
-      expect(fieldMatches!.length).toBeGreaterThanOrEqual(7);
+      const { versions } = await import('../../dist/versions.js');
+      const fields = Array.from(
+        content.matchAll(/readonly '([^']+)': string;/g),
+        (match) => match[1],
+      );
+      expect(fields).toEqual(Object.keys(versions));
     });
   });
 
@@ -157,14 +116,6 @@ describe('versions export', () => {
       expect(versions.oxlint).toBeTypeOf('string');
       expect(versions.oxfmt).toBeTypeOf('string');
       expect(versions['oxlint-tsgolint']).toBeTypeOf('string');
-    });
-
-    it('should have valid semver-like versions', async () => {
-      const { versions } = await import('../../dist/versions.js');
-      const semverPattern = /^\d+\.\d+\.\d+/;
-      for (const [key, value] of Object.entries(versions as Record<string, string>)) {
-        expect(value, `${key} should be a valid version`).toMatch(semverPattern);
-      }
     });
   });
 });

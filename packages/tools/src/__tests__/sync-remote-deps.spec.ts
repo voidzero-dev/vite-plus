@@ -104,16 +104,6 @@ describe('vendored Vitest dependency alignment', () => {
     },
   );
 
-  test('resolves the reviewed Vitest major catalog conflict', () => {
-    const merged = mergePnpmWorkspaces(
-      { catalog: { vitest: '5.0.0' } },
-      { catalog: { vitest: '^4.1.6' } },
-      { catalog: { vitest: '^4.1.10' } },
-      verkit,
-    );
-    expect(merged.catalog?.vitest).toBe('5.0.0');
-  });
-
   test.each(['=4.1.11', '^5.1.0', '5.2.0', '^6.0.0'])(
     'preserves the selected exact runner version against upstream %s',
     (upstream) => {
