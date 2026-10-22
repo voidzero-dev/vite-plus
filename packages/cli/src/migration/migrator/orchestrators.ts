@@ -12,12 +12,14 @@ import {
   collectOxlintDependencyNames,
   collectOxlintOwnerDirs,
   collectProviderSourceModes,
+  collectStandalonePnpmProjects,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
   dropDeadOxlintPluginsDependency,
   dropRemovePackageOverrideKeys,
   ensurePnpmWorkspaceExoticSubdepsSetting,
   ensurePnpmWorkspacePackages,
+  ensureStandalonePnpmWorkspace,
   findYarnWorkspaceHoisting,
   hasDirectVitePlusInstallEntry,
   hasOwnWebdriverioDependency,
@@ -81,6 +83,8 @@ export function rewriteStandaloneProject(
   }
 
   const packageManager = workspaceInfo.packageManager;
+  const standalonePnpmProjects =
+    packageManager === PackageManager.pnpm ? collectStandalonePnpmProjects(projectPath) : [];
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
@@ -312,6 +316,9 @@ export function rewriteStandaloneProject(
 
   if (packageManager === PackageManager.pnpm) {
     ensurePnpmWorkspaceExoticSubdepsSetting(projectPath);
+    for (const directory of standalonePnpmProjects) {
+      ensureStandalonePnpmWorkspace(directory);
+    }
   }
 
   if (packageManager === PackageManager.yarn) {
@@ -357,6 +364,10 @@ export function rewriteMonorepo(
   silent = false,
   report?: MigrationReport,
 ): void {
+  const standalonePnpmProjects =
+    workspaceInfo.packageManager === PackageManager.pnpm
+      ? collectStandalonePnpmProjects(workspaceInfo.rootDir)
+      : [];
   const catalogDependencyResolver = createCatalogDependencyResolver(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
@@ -456,6 +467,9 @@ export function rewriteMonorepo(
       migratePnpmOverridesToWorkspaceYaml(workspaceInfo.rootDir, {
         [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
       });
+    }
+    for (const directory of standalonePnpmProjects) {
+      ensureStandalonePnpmWorkspace(directory);
     }
   }
   // (mergeViteConfigFiles below will sanitize the merged lint config

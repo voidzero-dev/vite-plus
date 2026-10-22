@@ -1,0 +1,19 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .:
+    dependencies:
+      test-vite-plus-install:
+        specifier: 1.0.0
+        version: 1.0.0
+
+packages:
+  test-vite-plus-install@1.0.0:
+    resolution: {integrity: sha512-1tUZpG9YerpEquQ6jf5SnzNGP0tx02aiSF+h2UUErgWPJfPCAk/696KJGMjOVEqG6x6HeKjHZj2v6fZU+xGZ4g==}
+
+snapshots:
+  test-vite-plus-install@1.0.0: {}

@@ -1,0 +1,68 @@
+[[case]]
+name = "migration_nested_pnpm_postinstall"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "migrate a standalone project whose postinstall installs a nested pnpm project", timeout = 120000 },
+  { argv = ["vp", "install"], comment = "install completes without postinstall recursion", snapshot = false, timeout = 120000 },
+  { argv = ["pnpm", "install", "--frozen-lockfile"], cwd = "web", comment = "the child's frozen install still succeeds", snapshot = false, timeout = 120000 },
+  { argv = ["vpt", "print-file", "web/pnpm-workspace.yaml"], comment = "the child keeps its install boundary" },
+  { argv = ["vpt", "stat-file", "web/node_modules/test-vite-plus-install", "--assert-not", "missing"], comment = "the child's dependency was installed" },
+]
+
+[[case]]
+name = "migration_nested_pnpm11_overrides"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.25.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "web/package.json", "packageManager", "pnpm@11.25.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "web/package.json", "pnpm.overrides", '{"test-vite-plus-install":"1.0.0"}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "web/package.json", "scripts.postinstall", "echo yes > postinstall-ran"], snapshot = false },
+  { argv = ["pnpm", "install", "--frozen-lockfile", "--lockfile-only", "--ignore-scripts"], cwd = "web", comment = "the child's original lockfile is valid while pnpm 11 ignores package.json overrides", snapshot = false, timeout = 120000 },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "copying the child's overrides to YAML updates its lockfile", timeout = 120000 },
+  { argv = ["vpt", "stat-file", "web/postinstall-ran", "--assert", "missing"], comment = "updating the child's lockfile does not run its lifecycle scripts" },
+  { argv = ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"], cwd = "web", comment = "the child's frozen install succeeds immediately after migration", snapshot = false, timeout = 120000 },
+  { argv = ["vpt", "print-file", "web/pnpm-workspace.yaml"], comment = "the child keeps its install boundary and migrated overrides" },
+]
+
+[[case]]
+name = "migration_nested_pnpm11_overrides_failure"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.25.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "web/package.json", "packageManager", "pnpm@11.25.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "web/package.json", "pnpm.overrides", '{"test-vite-plus-install":"file:./missing"}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "web/package.json", "scripts.postinstall", "echo yes > postinstall-ran"], snapshot = false },
+  { argv = ["pnpm", "install", "--frozen-lockfile", "--lockfile-only", "--ignore-scripts"], cwd = "web", comment = "the original lockfile is valid before the ignored override becomes active", snapshot = false, timeout = 120000 },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a failed child lockfile update reports a warning and completes the root install and migration summary", continue-on-failure = true, timeout = 120000 },
+  { argv = ["vpt", "stat-file", "node_modules/vite-plus", "--assert-not", "missing"], comment = "the root's final install completed despite the child lockfile update failure" },
+  { argv = ["vpt", "print-file", "web/pnpm-workspace.yaml"], comment = "the child's install boundary is preserved" },
+  { argv = ["vpt", "replace-file-content", "web/pnpm-workspace.yaml", "file:./missing", "1.0.0"], comment = "repair the child's effective override", snapshot = false },
+  { argv = ["vp", "install", "--lockfile-only", "--ignore-scripts", "--no-frozen-lockfile"], cwd = "web", comment = "the reported manual recovery command updates the child's lockfile", snapshot = false, timeout = 120000 },
+  { argv = ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"], cwd = "web", comment = "the child's frozen install succeeds after manual recovery", snapshot = false, timeout = 120000 },
+  { argv = ["vpt", "stat-file", "web/postinstall-ran", "--assert", "missing"], comment = "neither update attempt ran the child's lifecycle scripts" },
+]
+
+[[case]]
+name = "migration_nested_pnpm_workspace_member"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "mkdir", "vendor/packages/app/examples"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "web", "vendor/packages/app/examples/demo"], snapshot = false },
+  { argv = ["vpt", "rm", "-r", "web"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.postinstall", "cd vendor/packages/app/examples/demo && pnpm install"], snapshot = false },
+  { argv = ["pnpm", "install", "--frozen-lockfile"], cwd = "vendor/packages/app/examples/demo", comment = "install the independent demo before migration", snapshot = false, timeout = 120000 },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "preserve the independent demo below a workspace member", timeout = 120000 },
+  { argv = ["vp", "install"], comment = "install completes without postinstall recursion", snapshot = false, timeout = 120000 },
+  { argv = ["pnpm", "install", "--frozen-lockfile"], cwd = "vendor/packages/app/examples/demo", comment = "the demo's frozen install still succeeds", snapshot = false, timeout = 120000 },
+  { argv = ["vpt", "print-file", "vendor/packages/app/examples/demo/pnpm-workspace.yaml"], comment = "the demo keeps its install boundary" },
+  { argv = ["vpt", "stat-file", "vendor/packages/app/pnpm-workspace.yaml", "--assert", "missing"], comment = "the workspace member gets no boundary" },
+  { argv = ["vpt", "stat-file", "vendor/packages/app/examples/demo/node_modules/test-vite-plus-install", "--assert-not", "missing"], comment = "the demo's dependency was installed" },
+]

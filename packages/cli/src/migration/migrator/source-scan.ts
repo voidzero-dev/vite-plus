@@ -1,17 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { type WorkspacePackage } from '../../types/index.ts';
+import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { hasVitestTypesInTsconfig } from '../../utils/tsconfig.ts';
+import { findPackageJsonFilesFromPatterns } from '../../utils/workspace.ts';
+import { readYamlFile } from '../../utils/yaml.ts';
 import { projectUsesVitestDirectly } from '../migrator.ts';
 import {
   OPT_IN_BROWSER_PROVIDERS,
   OXLINT_PLUGINS_PACKAGE,
   packageOwnsOxlintApi,
   PLAYWRIGHT_PROVIDER,
+  isPlainRecord,
   readPackageJsonIfExists,
   type DependencyBag,
 } from './shared.ts';
@@ -171,6 +174,129 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
 // Built plugins can still load the original API after migration. Skip installed
 // source and VCS metadata; dependency peer contracts are checked separately.
 const OXLINT_RETENTION_SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn']);
+
+// Match the Rust precedence: packageManager, then the first supported devEngines
+// entry. Unsupported entries block file-based fallback unless onFail permits it.
+export function declaredPackageManager(
+  pkg: Record<string, unknown>,
+): { name: string; version?: string } | undefined {
+  if (typeof pkg.packageManager === 'string' && pkg.packageManager.includes('@')) {
+    const [name = '', version] = pkg.packageManager.split('@');
+    return { name, version: version?.split('+')[0] };
+  }
+  const field = isPlainRecord(pkg.devEngines) ? pkg.devEngines.packageManager : undefined;
+  const entries = (Array.isArray(field) ? field : [field])
+    .filter(
+      (entry): entry is Record<string, unknown> & { name: string } =>
+        isPlainRecord(entry) && typeof entry.name === 'string' && entry.name.trim().length > 0,
+    )
+    .map((entry) => ({
+      name: entry.name.trim(),
+      version: typeof entry.version === 'string' ? entry.version : undefined,
+      onFail: entry.onFail,
+    }));
+  const supported = entries.find((entry) =>
+    Object.values(PackageManager).some((name) => name === entry.name),
+  );
+  const last = entries.at(-1);
+  return supported ?? (last?.onFail === 'ignore' || last?.onFail === 'warn' ? undefined : last);
+}
+
+// Capture independent pnpm install roots before creating workspace files.
+// Existing workspaces own their matched members, not every descendant.
+export function collectStandalonePnpmProjects(projectPath: string): string[] {
+  const projects: string[] = [];
+  const directories = [path.resolve(projectPath)];
+  const workspaceMembers = new Set<string>();
+  for (const directory of directories) {
+    // Nested checkouts own their projects, including descendants outside workspace globs.
+    if (directory !== directories[0] && fs.existsSync(path.join(directory, '.git'))) {
+      continue;
+    }
+    const workspaceFile = path.join(directory, 'pnpm-workspace.yaml');
+    const hasWorkspaceFile = fs.existsSync(workspaceFile);
+    let pkg: Record<string, unknown> | undefined;
+    // Matched members can themselves root a non-pnpm workspace.
+    if (fs.existsSync(path.join(directory, 'package.json'))) {
+      try {
+        const parsed = readJsonFile(path.join(directory, 'package.json'));
+        if (isPlainRecord(parsed)) {
+          pkg = parsed;
+        }
+      } catch {
+        // A malformed manifest must not hide independent projects below it.
+      }
+    }
+    let patterns = pkg?.workspaces;
+    if (pkg) {
+      const declared = declaredPackageManager(pkg);
+      const usesNonPnpm = declared
+        ? declared.name !== PackageManager.pnpm
+        : !fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) &&
+          (['yarn.lock', '.yarnrc.yml', 'package-lock.json', 'bun.lock', 'bun.lockb'].some((file) =>
+            fs.existsSync(path.join(directory, file)),
+          ) ||
+            (!['.pnpmfile.cjs', 'pnpmfile.cjs'].some((file) =>
+              fs.existsSync(path.join(directory, file)),
+            ) &&
+              ['bunfig.toml', 'yarn.config.cjs'].some((file) =>
+                fs.existsSync(path.join(directory, file)),
+              )));
+      // pnpm members' npm-style workspaces do not own their descendants.
+      if (workspaceMembers.has(directory) && !usesNonPnpm) {
+        patterns = undefined;
+      }
+      if (
+        directory !== directories[0] &&
+        !workspaceMembers.has(directory) &&
+        !hasWorkspaceFile &&
+        (declared
+          ? declared.name === PackageManager.pnpm
+          : fs.existsSync(path.join(directory, 'pnpm-lock.yaml')) ||
+            (!usesNonPnpm &&
+              ['.pnpmfile.cjs', 'pnpmfile.cjs'].some((file) =>
+                fs.existsSync(path.join(directory, file)),
+              )))
+      ) {
+        projects.push(directory);
+      }
+    }
+    // A newly created boundary stays single-package; package.json#workspaces
+    // must not enable additional members that pnpm did not install before.
+    if (projects.at(-1) !== directory) {
+      if (hasWorkspaceFile) {
+        try {
+          patterns = (readYamlFile(workspaceFile) as { packages?: unknown })?.packages;
+        } catch {
+          // Leave an unreadable existing workspace and its descendants alone.
+          continue;
+        }
+      } else if (isPlainRecord(patterns)) {
+        patterns = patterns.packages;
+      }
+      if (Array.isArray(patterns)) {
+        for (const file of findPackageJsonFilesFromPatterns(
+          patterns.filter((pattern): pattern is string => typeof pattern === 'string'),
+          directory,
+        )) {
+          workspaceMembers.add(path.resolve(path.dirname(file)));
+        }
+      }
+    }
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && !OXLINT_RETENTION_SKIP_DIRS.has(entry.name)) {
+        directories.push(path.join(directory, entry.name));
+      }
+    }
+  }
+  return projects;
+}
 
 /**
  * Detect whether a package uses vitest's browser mode.

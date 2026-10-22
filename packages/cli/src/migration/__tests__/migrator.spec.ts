@@ -8,6 +8,7 @@ import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
 import { rewriteScripts } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.js';
+import * as command from '../../utils/command.ts';
 import {
   SETUP_VP_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -67,6 +68,8 @@ const {
   pnpmSupportsWorkspaceSettings,
   pnpmOverrideKey,
   setPackageManager,
+  collectStandalonePnpmProjects,
+  updateStandalonePnpmLockfiles,
 } = await import('../migrator.js');
 
 // pnpm's managed override keys are range-qualified so they never rewrite an
@@ -1787,6 +1790,806 @@ function overrideMap(pkg: Record<string, unknown>, manager: PackageManager, vers
     string
   >;
 }
+
+describe('standalone pnpm child project boundaries', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-nested-pnpm-'));
+    fs.mkdirSync(path.join(tmpDir, 'web'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        devDependencies: { vite: '^8.0.1' },
+        scripts: { postinstall: 'cd web && pnpm install' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'web/package.json'),
+      JSON.stringify({
+        name: 'web',
+        packageManager: 'pnpm@10.33.0',
+        pnpm: { overrides: { example: '1.0.0' } },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'lockfileVersion: "9.0"\n');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    ['file', (file: string) => fs.writeFileSync(file, 'gitdir: external\n')],
+    ['directory', (directory: string) => fs.mkdirSync(directory)],
+  ])('leaves nested checkouts with a .git %s untouched', async (_kind, createGit) => {
+    // The migration root can itself be a checkout or worktree.
+    for (const directory of [tmpDir, path.join(tmpDir, 'web')]) {
+      createGit(path.join(directory, '.git'));
+    }
+    fs.mkdirSync(path.join(tmpDir, 'web/example'));
+    fs.copyFileSync(
+      path.join(tmpDir, 'web/package.json'),
+      path.join(tmpDir, 'web/example/package.json'),
+    );
+    fs.mkdirSync(path.join(tmpDir, 'sibling'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'sibling/package.json'),
+      JSON.stringify({ name: 'sibling', packageManager: 'pnpm@10.33.0' }),
+    );
+    const install = vi.spyOn(command, 'runCommandSilently').mockResolvedValue({
+      exitCode: 0,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
+    });
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    await updateStandalonePnpmLockfiles(projects);
+
+    expect(projects).toEqual([path.join(tmpDir, 'sibling')]);
+    expect(fs.existsSync(path.join(tmpDir, 'sibling/pnpm-workspace.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'web/example/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8')).toBe(
+      'lockfileVersion: "9.0"\n',
+    );
+    expect(install).not.toHaveBeenCalled();
+  });
+
+  it('updates child lockfiles after copying settings without running lifecycle scripts', async () => {
+    const install = vi.spyOn(command, 'runCommandSilently').mockResolvedValue({
+      exitCode: 0,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
+    });
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    await expect(updateStandalonePnpmLockfiles(projects)).resolves.toBe(true);
+
+    expect(install).toHaveBeenCalledExactlyOnceWith({
+      command: process.env.VP_CLI_BIN ?? 'vp',
+      args: ['install', '--lockfile-only', '--ignore-scripts', '--no-frozen-lockfile'],
+      cwd: path.join(tmpDir, 'web'),
+      envs: process.env,
+    });
+  });
+
+  it.each([
+    [
+      'the child has no pnpm settings',
+      () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'web/package.json'),
+          JSON.stringify({ name: 'web', packageManager: 'pnpm@11.25.0' }),
+        );
+      },
+    ],
+    [
+      'the child pins pnpm older than 10.6.2',
+      () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'web/package.json'),
+          JSON.stringify({
+            name: 'web',
+            packageManager: 'pnpm@10.5.0',
+            pnpm: { overrides: { example: '1.0.0' } },
+          }),
+        );
+      },
+    ],
+    ['the child has no lockfile', () => fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'))],
+    [
+      'the child already has a workspace file',
+      () => fs.writeFileSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'), 'packages: ["."]\n'),
+    ],
+    ['installation is skipped', () => vi.stubEnv('VP_SKIP_INSTALL', '1')],
+  ])('does not update child lockfiles when %s', async (_, setup) => {
+    const install = vi.spyOn(command, 'runCommandSilently');
+    setup();
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    await updateStandalonePnpmLockfiles(projects);
+
+    expect(install).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed child lockfile update without throwing or removing its boundary', async () => {
+    vi.spyOn(command, 'runCommandSilently').mockResolvedValue({
+      exitCode: 1,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.from('Unable to resolve child dependency'),
+    });
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const report = createMigrationReport();
+
+    await expect(updateStandalonePnpmLockfiles(projects, report)).resolves.toBe(false);
+
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining(
+        `Could not update dependencies for the nested project at ${path.join(tmpDir, 'web')}.\nUnable to resolve child dependency`,
+      ),
+    );
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+      overrides: { example: '1.0.0' },
+    });
+    expect(collectStandalonePnpmProjects(tmpDir)).toEqual([]);
+  });
+
+  it('continues other children when a child install command throws', async () => {
+    fs.mkdirSync(path.join(tmpDir, 'web2'));
+    for (const file of ['package.json', 'pnpm-lock.yaml']) {
+      fs.copyFileSync(path.join(tmpDir, 'web', file), path.join(tmpDir, 'web2', file));
+    }
+    const install = vi
+      .spyOn(command, 'runCommandSilently')
+      .mockRejectedValueOnce(new Error('Failed to start vp'))
+      .mockResolvedValue({ exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) });
+    const projects = collectStandalonePnpmProjects(tmpDir);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const report = createMigrationReport();
+
+    await expect(updateStandalonePnpmLockfiles(projects, report)).resolves.toBe(false);
+    expect(install).toHaveBeenCalledTimes(2);
+    expect(report.warnings).toContainEqual(expect.stringContaining('Failed to start vp'));
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'web2/pnpm-workspace.yaml'))).toBe(true);
+  });
+
+  it('preserves the child install boundary when migrating with pnpm', () => {
+    const manifest = fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8');
+    const lockfile = fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8');
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+      overrides: { example: '1.0.0' },
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+    expect(fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8')).toBe(lockfile);
+    expect(readJson(path.join(tmpDir, 'package.json')).scripts).toEqual({
+      postinstall: 'cd web && pnpm install',
+    });
+    const childYaml = readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'));
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(childYaml);
+  });
+
+  it('preserves the child install boundary when upgrading with pnpm', () => {
+    const manifest = fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8');
+    const lockfile = fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        ...readJson(path.join(tmpDir, 'package.json')),
+        devDependencies: { 'vite-plus': '^0.1.12', vite: '^8.0.1' },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+      overrides: { example: '1.0.0' },
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+    expect(fs.readFileSync(path.join(tmpDir, 'web/pnpm-lock.yaml'), 'utf8')).toBe(lockfile);
+    expect(readJson(path.join(tmpDir, 'package.json')).scripts).toEqual({
+      postinstall: 'cd web && pnpm install',
+    });
+    const childYaml = readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'));
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(childYaml);
+  });
+
+  it.each([
+    [
+      'the child declares npm in packageManager',
+      'web/package.json',
+      JSON.stringify({ name: 'web', packageManager: 'npm@10.9.4' }),
+    ],
+    [
+      'the child declares npm in devEngines',
+      'web/package.json',
+      JSON.stringify({ name: 'web', devEngines: { packageManager: { name: 'npm' } } }),
+    ],
+    [
+      'the parent declares workspaces',
+      'package.json',
+      JSON.stringify({ name: 'root', workspaces: ['web'], devDependencies: { vite: '^8.0.1' } }),
+    ],
+    ['the parent already has a pnpm workspace', 'pnpm-workspace.yaml', 'packages:\n  - web\n'],
+  ])('does not add a child boundary when %s', (_, file, content) => {
+    fs.writeFileSync(path.join(tmpDir, file), content);
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it.each([
+    { workspaces: ['services/*'] },
+    { workspaces: { packages: ['services/*', '!services/fixtures'] } },
+  ])(
+    'preserves the child pnpm boundary without enabling package.json workspaces (%j)',
+    ({ workspaces }) => {
+      const manifest = JSON.stringify({
+        name: 'web',
+        packageManager: 'pnpm@10.33.0',
+        workspaces,
+      });
+      fs.writeFileSync(path.join(tmpDir, 'web/package.json'), manifest);
+      const lockfile = readYaml(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+      expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+        packages: ['.'],
+      });
+      expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+      expect(readYaml(path.join(tmpDir, 'web/pnpm-lock.yaml'))).toBe(lockfile);
+    },
+  );
+
+  it.each([
+    { packageManager: 'pnpm@10.6.1', settingsInYaml: false },
+    { packageManager: 'pnpm@10.6.2', settingsInYaml: true },
+    { packageManager: 'pnpm@10.6.2+sha512.example', settingsInYaml: true },
+    { packageManager: 'pnpm@11.0.0-beta.1', settingsInYaml: true },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: '10.14.0-0' } },
+      settingsInYaml: true,
+    },
+    { devEngines: { packageManager: { name: 'pnpm', version: '10.5.0' } }, settingsInYaml: false },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: '>=10.6.0 <10.6.2' } },
+      settingsInYaml: false,
+    },
+    { devEngines: { packageManager: { name: 'pnpm', version: '~10.5.0' } }, settingsInYaml: false },
+    { devEngines: { packageManager: { name: 'pnpm', version: '<10.6.2' } }, settingsInYaml: false },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: '<10.6.2 >=10.6.0' } },
+      settingsInYaml: false,
+    },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: '<10.6.2 || 9.x' } },
+      settingsInYaml: false,
+    },
+    { devEngines: { packageManager: { name: 'pnpm', version: '^10.0.0' } }, settingsInYaml: true },
+    { devEngines: { packageManager: { name: 'pnpm', version: '10.6.x' } }, settingsInYaml: true },
+    {
+      devEngines: {
+        packageManager: [{ name: 'unsupported' }, { name: 'pnpm', version: '10.6.1' }],
+      },
+      settingsInYaml: false,
+    },
+    { devEngines: { packageManager: { name: 'pnpm', version: '*' } }, settingsInYaml: true },
+    { devEngines: { packageManager: { name: 'pnpm', version: '>=10' } }, settingsInYaml: true },
+    { devEngines: { packageManager: { name: 'pnpm', version: '^10' } }, settingsInYaml: true },
+    {
+      devEngines: { packageManager: { name: 'pnpm', version: 'not-a-version' } },
+      settingsInYaml: true,
+    },
+    { devEngines: { packageManager: { name: 'pnpm', version: 'latest' } }, settingsInYaml: true },
+  ])('preserves child pnpm settings according to its own pin (%j)', (declaration) => {
+    const manifest = JSON.stringify({
+      name: 'web',
+      ...declaration,
+      pnpm: { onlyBuiltDependencies: ['example'], overrides: { example: '1.0.0' } },
+    });
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), manifest);
+    const lockfile = readYaml(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+      ...(declaration.settingsInYaml
+        ? { onlyBuiltDependencies: ['example'], overrides: { example: '1.0.0' } }
+        : {}),
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+    expect(readYaml(path.join(tmpDir, 'web/pnpm-lock.yaml'))).toBe(lockfile);
+  });
+
+  it.each(['10.5.0', '10.33.0', '11.25.0'])(
+    'detects and repairs a missing child boundary on a pnpm %s workspace upgrade',
+    (version) => {
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, version);
+      ensureVitePlusBootstrap(workspace);
+      workspace.isMonorepo = true;
+      workspace.workspacePatterns = ['.'];
+      ensureVitePlusBootstrap(workspace);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, [], version)).toBe(false);
+      expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+      const childYaml = readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'));
+      fs.unlinkSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'));
+
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, [], version)).toBe(true);
+      const report = createMigrationReport();
+      expect(ensureVitePlusBootstrap(workspace, report).packageManagerConfig).toBe(true);
+      expect(report.packageManagerBootstrapConfigured).toBe(true);
+      expect(readYaml(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(childYaml);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, [], version)).toBe(false);
+      expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+    },
+  );
+
+  it.each([
+    ['outside workspace globs', 'packages: ["packages/*"]\n', undefined, true],
+    [
+      'matched by ancestor globs',
+      'packages: ["packages/*", "packages/*/examples/*"]\n',
+      undefined,
+      false,
+    ],
+    [
+      'outside the member workspace globs',
+      'packages: ["packages/*"]\n',
+      'packages: ["services/*"]\n',
+      true,
+    ],
+  ])('collects independent descendants %s', (_label, ancestorYaml, memberYaml, collected) => {
+    fs.mkdirSync(path.join(tmpDir, 'vendor/packages/app/examples/demo'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'vendor/packages/app/services/api'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'vendor/pnpm-workspace.yaml'), ancestorYaml);
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/packages/app/package.json'),
+      JSON.stringify({
+        name: 'app',
+        packageManager: 'pnpm@10.33.0',
+        workspaces: ['examples/*'],
+      }),
+    );
+    for (const child of ['examples/demo', 'services/api']) {
+      fs.writeFileSync(
+        path.join(tmpDir, 'vendor/packages/app', child, 'package.json'),
+        JSON.stringify({ name: child, packageManager: 'pnpm@10.33.0' }),
+      );
+    }
+    if (memberYaml) {
+      fs.writeFileSync(path.join(tmpDir, 'vendor/packages/app/pnpm-workspace.yaml'), memberYaml);
+    }
+
+    const projects = collectStandalonePnpmProjects(tmpDir);
+
+    expect(projects).not.toContain(path.join(tmpDir, 'vendor/packages/app'));
+    expect(projects.includes(path.join(tmpDir, 'vendor/packages/app/examples/demo'))).toBe(
+      collected,
+    );
+    expect(projects.includes(path.join(tmpDir, 'vendor/packages/app/services/api'))).toBe(
+      !memberYaml,
+    );
+  });
+
+  it.each([false, true])(
+    'repairs independent children outside existing workspace globs (monorepo: %s)',
+    (monorepo) => {
+      fs.mkdirSync(path.join(tmpDir, 'packages/member'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'packages/member/package.json'),
+        JSON.stringify({ name: 'member', packageManager: 'pnpm@10.33.0' }),
+      );
+      fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+      workspace.isMonorepo = monorepo;
+      workspace.workspacePatterns = ['packages/*'];
+      workspace.packages = [{ name: 'member', path: 'packages/member' }];
+
+      if (monorepo) {
+        rewriteMonorepo(workspace, true, true);
+      } else {
+        rewriteStandaloneProject(tmpDir, workspace, true, true);
+      }
+
+      expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'packages/member/pnpm-workspace.yaml'))).toBe(false);
+    },
+  );
+
+  it.each([
+    ['a pnpm-workspace.yaml glob', 'pnpm-workspace.yaml', 'packages:\n  - "**"\n'],
+    [
+      'package.json workspaces',
+      'package.json',
+      JSON.stringify({
+        name: 'root',
+        workspaces: ['**'],
+        devDependencies: { vite: '^8.0.1' },
+      }),
+    ],
+  ])('does not treat installed dependency manifests as members of %s', (_label, file, content) => {
+    fs.mkdirSync(path.join(tmpDir, 'node_modules/foo'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'node_modules/foo/package.json'),
+      JSON.stringify({ name: 'foo', packageManager: 'pnpm@10.33.0' }),
+    );
+    const stored = path.join(tmpDir, 'node_modules/.pnpm/y@1.0.0/node_modules/y');
+    fs.mkdirSync(stored, { recursive: true });
+    fs.writeFileSync(
+      path.join(stored, 'package.json'),
+      JSON.stringify({ name: 'y', packageManager: 'pnpm@10.33.0' }),
+    );
+    fs.symlinkSync(stored, path.join(tmpDir, 'node_modules/y'), 'dir');
+    fs.writeFileSync(path.join(tmpDir, file), content);
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    // `**` still owns the real child, and installed manifests get no boundary.
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'node_modules/foo/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(stored, 'pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it.each([
+    { packageManager: 'yarn@4.9.2' },
+    { packageManager: 'npm@10.9.4' },
+    { packageManager: 'bun@1.3.0' },
+    { devEngines: { packageManager: { name: 'yarn' } } },
+    { file: 'yarn.lock' },
+    { file: 'package-lock.json' },
+    { file: 'bun.lock' },
+  ])('does not split members of a nested non-pnpm workspace (%j)', (declaration) => {
+    fs.mkdirSync(path.join(tmpDir, 'vendor/packages/app'), { recursive: true });
+    const manifest = JSON.stringify({ name: 'vendor', workspaces: ['packages/*'], ...declaration });
+    fs.writeFileSync(path.join(tmpDir, 'vendor/package.json'), manifest);
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/packages/app/package.json'),
+      JSON.stringify({ name: 'app' }),
+    );
+    if (declaration.file !== undefined) {
+      fs.writeFileSync(path.join(tmpDir, 'vendor', declaration.file), '');
+    }
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'vendor/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'vendor/packages/app/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'vendor/package.json'), 'utf8')).toBe(manifest);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(true);
+  });
+
+  it.each([
+    { packageManager: 'yarn@4.9.2' },
+    { packageManager: 'npm@10.9.4' },
+    { packageManager: 'bun@1.3.0' },
+    { devEngines: { packageManager: { name: 'yarn' } } },
+    { file: 'yarn.lock' },
+    { file: 'package-lock.json' },
+    { file: 'bun.lock' },
+    { file: 'bunfig.toml' },
+    { file: 'yarn.config.cjs' },
+  ])('preserves a non-pnpm workspace rooted at a matched member (%j)', (declaration) => {
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: ["vendor/*"]\n');
+    for (const child of ['packages/pinned', 'packages/locked', 'examples/demo']) {
+      fs.mkdirSync(path.join(tmpDir, 'vendor/app', child), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'vendor/app', child, 'package.json'),
+        JSON.stringify({
+          name: child,
+          ...(child === 'packages/pinned' ? { packageManager: 'pnpm@10.33.0' } : {}),
+        }),
+      );
+      fs.writeFileSync(path.join(tmpDir, 'vendor/app', child, 'pnpm-lock.yaml'), '');
+    }
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/app/package.json'),
+      JSON.stringify({ name: 'app', workspaces: ['packages/*'], ...declaration }),
+    );
+    if (declaration.file !== undefined) {
+      fs.writeFileSync(path.join(tmpDir, 'vendor/app', declaration.file), '');
+    }
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    for (const child of ['', 'packages/pinned', 'packages/locked']) {
+      expect(fs.existsSync(path.join(tmpDir, 'vendor/app', child, 'pnpm-workspace.yaml'))).toBe(
+        false,
+      );
+    }
+    expect(fs.existsSync(path.join(tmpDir, 'vendor/app/examples/demo/pnpm-workspace.yaml'))).toBe(
+      true,
+    );
+  });
+
+  it('continues scanning below a non-pnpm standalone project', () => {
+    fs.mkdirSync(path.join(tmpDir, 'vendor/app'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/package.json'),
+      JSON.stringify({ name: 'vendor', packageManager: 'npm@10.9.4' }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vendor/app/package.json'),
+      JSON.stringify({ name: 'app', packageManager: 'pnpm@11.25.0' }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'vendor/pnpm-workspace.yaml'))).toBe(false);
+    expect(readYamlObject(path.join(tmpDir, 'vendor/app/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+    });
+  });
+
+  it('leaves a malformed child manifest alone without hiding projects below it', () => {
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), '{');
+    fs.mkdirSync(path.join(tmpDir, 'web/server'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'web/server/package.json'),
+      JSON.stringify({ name: 'server', packageManager: 'pnpm@10.33.0' }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+    expect(readYamlObject(path.join(tmpDir, 'web/server/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+    });
+  });
+
+  it('leaves a child without pnpm signals unchanged even when postinstall installs it', () => {
+    fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+    const manifest = JSON.stringify({ name: 'web' });
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), manifest);
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '11.25.0'),
+      true,
+      true,
+    );
+
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-lock.yaml'))).toBe(false);
+  });
+
+  it.each([
+    'yarn.lock',
+    '.yarnrc.yml',
+    'package-lock.json',
+    'bun.lock',
+    'bun.lockb',
+    'bunfig.toml',
+    'yarn.config.cjs',
+  ])('does not add a boundary to an unpinned child identified by %s', (file) => {
+    fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), JSON.stringify({ name: 'web' }));
+    fs.writeFileSync(path.join(tmpDir, 'web', file), '');
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it.each([
+    { packageManager: 'pnpm@11.25.0' },
+    { devEngines: { packageManager: { name: 'pnpm' } } },
+  ])('preserves an explicitly declared pnpm child before its first install (%j)', (declaration) => {
+    fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+    const manifest = JSON.stringify({ name: 'web', ...declaration });
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), manifest);
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '11.25.0'),
+      true,
+      true,
+    );
+
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'web/package.json'), 'utf8')).toBe(manifest);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-lock.yaml'))).toBe(false);
+  });
+
+  it.each(['.pnpmfile.cjs', 'pnpmfile.cjs'])(
+    'preserves a pnpm child identified by %s before its first install',
+    (file) => {
+      fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+      fs.writeFileSync(path.join(tmpDir, 'web/package.json'), JSON.stringify({ name: 'web' }));
+      fs.writeFileSync(path.join(tmpDir, 'web', file), 'module.exports = { hooks: {} };');
+      fs.writeFileSync(path.join(tmpDir, 'web/bunfig.toml'), '');
+      fs.writeFileSync(path.join(tmpDir, 'web/yarn.config.cjs'), 'module.exports = {};');
+
+      rewriteStandaloneProject(
+        tmpDir,
+        makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '11.25.0'),
+        true,
+        true,
+      );
+
+      expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+        packages: ['.'],
+      });
+      expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-lock.yaml'))).toBe(false);
+    },
+  );
+
+  it('prefers a child yarn lockfile over its pnpmfile', () => {
+    fs.unlinkSync(path.join(tmpDir, 'web/pnpm-lock.yaml'));
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), JSON.stringify({ name: 'web' }));
+    fs.writeFileSync(path.join(tmpDir, 'web/.pnpmfile.cjs'), 'module.exports = { hooks: {} };');
+    fs.writeFileSync(path.join(tmpDir, 'web/yarn.lock'), '');
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it('does not create pnpm workspace files when the parent uses npm', () => {
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it('detects a pnpm child from its own lockfile without a packageManager declaration', () => {
+    fs.writeFileSync(path.join(tmpDir, 'web/package.json'), JSON.stringify({ name: 'web' }));
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+      packages: ['.'],
+    });
+  });
+
+  it.each([
+    { packageManager: 'pnpm@10.33.0', expected: true },
+    { packageManager: 'yarn@4.9.2', expected: false },
+    { devEngines: { packageManager: { name: 'pnpm' } }, expected: true },
+    { devEngines: { packageManager: { name: 'yarn' } }, expected: false },
+    { expected: true },
+  ])('resolves conflicting child lockfiles after explicit declarations (%j)', (declaration) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'web/package.json'),
+      JSON.stringify({ name: 'web', ...declaration }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'web/yarn.lock'), '');
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(declaration.expected);
+  });
+
+  it.each([
+    { packageManager: '', devEngine: undefined, expected: true },
+    { packageManager: 'pnpm', devEngine: undefined, expected: true },
+    { packageManager: '', devEngine: 'pnpm', expected: true },
+    { packageManager: 'pnpm', devEngine: 'npm', expected: false },
+    { packageManager: 'npm@10.9.4', devEngine: 'pnpm', expected: false },
+  ])(
+    'resolves child packageManager fallback in the correct order (%j)',
+    ({ packageManager, devEngine, expected }) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'web/package.json'),
+        JSON.stringify({
+          name: 'web',
+          packageManager,
+          devEngines: devEngine === undefined ? undefined : { packageManager: { name: devEngine } },
+        }),
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+      expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(expected);
+    },
+  );
+
+  it.each([
+    { packageManager: { name: 'pnpm' } },
+    { packageManager: [{ name: 'pnpm' }] },
+    { packageManager: [{ name: 'pnpm' }, { name: 'npm' }] },
+  ])(
+    'preserves a child that declares pnpm in devEngines (%j) and has its own lockfile',
+    ({ packageManager }) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'web/package.json'),
+        JSON.stringify({ name: 'web', devEngines: { packageManager } }),
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+      expect(readYamlObject(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toEqual({
+        packages: ['.'],
+      });
+    },
+  );
+
+  it.each(['npm', 'yarn', 'bun'])(
+    'does not add a child boundary when devEngines lists %s before pnpm',
+    (name) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'web/package.json'),
+        JSON.stringify({
+          name: 'web',
+          devEngines: { packageManager: [{ name }, { name: 'pnpm' }] },
+        }),
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+      expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(false);
+    },
+  );
+
+  it.each([
+    { packageManager: [], expected: true },
+    { packageManager: {}, expected: true },
+    { packageManager: null, expected: true },
+    { packageManager: [null, {}, { name: 42 }, { name: ' \t' }], expected: true },
+    { packageManager: { name: ' pnpm ' }, expected: true },
+    { packageManager: [{ name: ' npm ' }, { name: 'pnpm' }], expected: false },
+    {
+      packageManager: [{ name: 'unsupported', onFail: 'ignore' }, {}],
+      expected: true,
+    },
+    { packageManager: [{ name: 'unsupported' }, { onFail: 'ignore' }], expected: false },
+    { packageManager: { name: 'unsupported', onFail: 'ignore' }, expected: true },
+    { packageManager: [{ name: 'unsupported', onFail: 'warn' }], expected: true },
+    {
+      packageManager: [{ name: 'unsupported' }, { name: 'other', onFail: 'ignore' }],
+      expected: true,
+    },
+    { packageManager: [{ name: 'unsupported' }], expected: false },
+    { packageManager: [{ name: 'unsupported', onFail: 'error' }], expected: false },
+    { packageManager: [{ name: 'unsupported', onFail: 'download' }], expected: false },
+    {
+      packageManager: [{ name: 'unsupported', onFail: 'ignore' }, { name: 'other' }],
+      expected: false,
+    },
+  ])(
+    'uses the child pnpm lockfile only when devEngines permits fallback (%j)',
+    ({ packageManager, expected }) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'web/package.json'),
+        JSON.stringify({ name: 'web', devEngines: { packageManager } }),
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+      expect(fs.existsSync(path.join(tmpDir, 'web/pnpm-workspace.yaml'))).toBe(expected);
+    },
+  );
+
+  it('preserves independent install roots in multiple child projects', () => {
+    fs.mkdirSync(path.join(tmpDir, 'apps'));
+    fs.renameSync(path.join(tmpDir, 'web'), path.join(tmpDir, 'apps/web'));
+    fs.mkdirSync(path.join(tmpDir, 'apps/mobile'));
+    fs.writeFileSync(path.join(tmpDir, 'apps/mobile/package.json'), '{"name":"mobile"}');
+    fs.writeFileSync(path.join(tmpDir, 'apps/mobile/pnpm-lock.yaml'), 'lockfileVersion: "9.0"\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        ...readJson(path.join(tmpDir, 'package.json')),
+        scripts: { postinstall: 'pnpm --dir apps/web install && pnpm --dir apps/mobile install' },
+      }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    for (const directory of ['apps/web', 'apps/mobile']) {
+      expect(readYamlObject(path.join(tmpDir, directory, 'pnpm-workspace.yaml')).packages).toEqual([
+        '.',
+      ]);
+    }
+  });
+});
 
 describe('WebDriverIO browser overrides', () => {
   let tmpDir: string;

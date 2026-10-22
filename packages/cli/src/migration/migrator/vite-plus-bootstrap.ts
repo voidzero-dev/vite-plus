@@ -17,9 +17,11 @@ import {
   applyBuildAllowanceToPackageJsonPnpm,
   applyYarnWorkspaceHoistingFix,
   collectProviderSourceModes,
+  collectStandalonePnpmProjects,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
   ensurePnpmWorkspacePackages,
+  ensureStandalonePnpmWorkspace,
   findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
   getCatalogDependencySpec,
@@ -751,6 +753,9 @@ export function detectVitePlusBootstrapPending(
     );
   }
   if (packageManager === PackageManager.pnpm) {
+    if (collectStandalonePnpmProjects(projectPath).length > 0) {
+      return true;
+    }
     if (!pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath)) {
       return true;
     }
@@ -967,6 +972,11 @@ export function ensureVitePlusBootstrap(
   if (!fs.existsSync(packageJsonPath)) {
     return result;
   }
+
+  const standalonePnpmProjects =
+    workspaceInfo.packageManager === PackageManager.pnpm
+      ? collectStandalonePnpmProjects(projectPath)
+      : [];
 
   // Shared override/catalog sinks are workspace-wide, so keep vitest managed
   // when any package needs it. Each package's direct vitest dependency is
@@ -1249,6 +1259,10 @@ export function ensureVitePlusBootstrap(
       }
       const after = readTextFileIfExists(pnpmWorkspaceYamlPath);
       result.packageManagerConfig = exoticChanged || pnpmWorkspaceCatalogBefore !== after;
+    }
+    for (const directory of standalonePnpmProjects) {
+      const changed = ensureStandalonePnpmWorkspace(directory);
+      result.packageManagerConfig = result.packageManagerConfig || changed;
     }
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');

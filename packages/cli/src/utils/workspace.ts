@@ -32,7 +32,15 @@ export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string
   }
   return globSync(
     patterns.map((pattern) => `${pattern}/package.json`),
-    { absolute: true, cwd, expandDirectories: false },
+    {
+      absolute: true,
+      cwd,
+      // Installed dependencies are not workspace members. A broad pattern such
+      // as `**` would otherwise walk node_modules, including pnpm's symlink
+      // layout, after migrate has already installed dependencies.
+      ignore: ['**/node_modules/**'],
+      expandDirectories: false,
+    },
   );
 }
 
