@@ -15,15 +15,12 @@ added 1 package in <duration>
 Linked 'npm-global-custom-prefix-cli' to <home>/.vite-plus/bin/npm-global-custom-prefix-cli
 ```
 
-## `vpt stat-file custom-prefix/bin/npm-global-custom-prefix-cli --assert file`
+## `vpt stat-file custom-prefix/bin/npm-global-custom-prefix-cli --assert symlink`
 
-Verify installed to custom prefix
-
-**Exit code:** 1
+Verify installed to custom prefix (npm links the bin into <prefix>/bin)
 
 ```
 custom-prefix/bin/npm-global-custom-prefix-cli: symlink
-stat-file assertion failed
 ```
 
 ## `vpt stat-file $VP_HOME/bin/npm-global-custom-prefix-cli --assert symlink`
