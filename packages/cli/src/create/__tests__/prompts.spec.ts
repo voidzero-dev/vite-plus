@@ -71,6 +71,20 @@ describe('emptyDir', () => {
     expect(fs.readFileSync(path.join(linkedDir, 'keep.txt'), 'utf8')).toBe('keep\n');
   });
 
+  it('removes a symlinked target given with a trailing separator', () => {
+    const cwd = makeTempDir();
+    const linkedDir = path.join(cwd, 'linked-directory');
+    const targetDir = path.join(cwd, 'new-project');
+    fs.mkdirSync(linkedDir);
+    fs.writeFileSync(path.join(linkedDir, 'keep.txt'), 'keep\n');
+    fs.symlinkSync(linkedDir, targetDir, 'dir');
+
+    emptyDir(`${targetDir}${path.sep}`);
+
+    expect(fs.existsSync(targetDir)).toBe(false);
+    expect(fs.readFileSync(path.join(linkedDir, 'keep.txt'), 'utf8')).toBe('keep\n');
+  });
+
   it('ignores a missing target', () => {
     expect(() => emptyDir(path.join(makeTempDir(), 'missing'))).not.toThrow();
   });

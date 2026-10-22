@@ -97,7 +97,8 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
   }
 
   // Handle directory if it exists and is not empty
-  const isSymlink = fs.lstatSync(projectDirFullPath).isSymbolicLink();
+  // `path.resolve` drops a trailing separator, which would make `lstat` follow the link.
+  const isSymlink = fs.lstatSync(path.resolve(projectDirFullPath)).isSymbolicLink();
   const overwrite = await prompts.select({
     message: isSymlink
       ? `Target directory "${projectDirFullPath}" is a symbolic link to "${fs.realpathSync(projectDirFullPath)}", which is not empty. Please choose how to proceed:`
@@ -135,13 +136,15 @@ function isEmpty(path: string) {
 }
 
 export function emptyDir(dir: string) {
-  const stat = fs.lstatSync(dir, { throwIfNoEntry: false });
+  // `path.resolve` drops a trailing separator, which would make `lstat` follow the link.
+  const target = path.resolve(dir);
+  const stat = fs.lstatSync(target, { throwIfNoEntry: false });
   if (!stat) {
     return;
   }
   // Remove a symlinked target itself, never the contents of the directory it points to.
   if (stat.isSymbolicLink()) {
-    fs.unlinkSync(dir);
+    fs.unlinkSync(target);
     return;
   }
   for (const file of fs.readdirSync(dir)) {
