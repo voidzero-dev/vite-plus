@@ -308,10 +308,10 @@ steps = [
   { argv = ["vpt", "write-file", "packages/c/.oxlintrc.json", '{"extends":["../../shared/base.json"]}'], snapshot = false },
   { argv = ["vpt", "write-file", "packages/c/index.js", 'console.log("hello");'], snapshot = false },
   { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/c", comment = "A new workspace uses the retained shared JSON", continue-on-failure = true },
-  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "An upgrade does not treat shared modules as a pending migration for the new workspace" },
-  { argv = ["vpt", "print-file", "packages/c/vite.config.mjs"], comment = "The unmarked workspace keeps its original Vite config" },
-  { argv = ["vpt", "print-file", "packages/c/.oxlintrc.json"], comment = "Its newly authored JSON config remains intact" },
-  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/c", comment = "The JSON config retains the same lint output", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Recover the unreferenced workspace config even without a pending marker" },
+  { argv = ["vpt", "print-file", "packages/c/vite.config.mjs"], comment = "The workspace imports the existing shared module" },
+  { argv = ["vpt", "stat-file", "packages/c/.oxlintrc.json", "--assert", "missing"], comment = "The recovered config no longer needs its standalone JSON" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/c", comment = "Plain lint retains the same diagnostic and exit status", continue-on-failure = true },
 ]
 
 [[case]]
@@ -323,11 +323,39 @@ steps = [
   { argv = ["vp", "add", "-D", "vite-plus", "prettier@3.6.2"], snapshot = false },
   { argv = ["vpt", "write-file", ".prettierrc.json", '{"singleQuote":true}'], snapshot = false },
   { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "The existing workspace consumer inherits the root JSON rule" },
-  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Prettier migration merges the root configs without migrating package configs" },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Recover workspace configs and merge the migrated Prettier config" },
   { argv = ["vpt", "print-file", "vite.config.mjs"], comment = "The root uses its shared module" },
-  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"], comment = "The root JSON remains available to untouched consumers" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"], comment = "The root JSON remains available to package b while its output conflict remains" },
   { argv = ["vpt", "stat-file", ".oxlintrc.ts", "--assert", "file"] },
-  { argv = ["vpt", "print-file", "packages/a/vite.config.mjs"], comment = "The package Vite config remains unchanged" },
-  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], cwd = "packages/a", comment = "The preserved package JSON still reports the same diagnostic" },
+  { argv = ["vpt", "print-file", "packages/a/vite.config.mjs"], comment = "The recovered package uses the shared module" },
+  { argv = ["vpt", "stat-file", "packages/a/.oxlintrc.json", "--assert", "file"] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/a", comment = "The recovered package reports the same diagnostic" },
   { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated root enforces the same rule" },
+]
+
+
+[[case]]
+name = "migration_oxc_reference_retry"
+vp = ["global", "local"]
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "rules.no-debugger", '"error"'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Package b cannot merge while extra.ts conflicts with its config" },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.lint:a", '"vp lint -c packages/a/.oxlintrc.json packages/a/index.js"'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.lint:b", '"vp lint -c packages/b/.oxlintrc.json packages/b/index.js"'], snapshot = false },
+  { argv = ["vpt", "rm", "packages/b/extra.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "New script references protect both completed and pending JSON configs on retry" },
+  ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"],
+  ["vpt", "stat-file", "packages/a/.oxlintrc.json", "--assert", "file"],
+  ["vpt", "stat-file", "packages/b/.oxlintrc.json", "--assert", "file"],
+  ["vpt", "print-file", "packages/b/vite.config.mjs"],
+  { argv = ["vp", "run", "lint:a"], comment = "The completed config remains usable as JSON", continue-on-failure = true },
+  { argv = ["vp", "run", "lint:b"], comment = "The pending config retains its complete inheritance chain", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "scripts", '{}'], continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Removing the references allows migration and deferred cleanup to finish" },
+  ["vpt", "stat-file", ".oxlintrc.json", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/a/.oxlintrc.json", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/b/.oxlintrc.json", "--assert", "missing"],
+  { argv = ["vp", "lint", "--threads=1", "index.js"], cwd = "packages/b", comment = "Plain lint enforces the inherited error after recovery", continue-on-failure = true },
 ]
