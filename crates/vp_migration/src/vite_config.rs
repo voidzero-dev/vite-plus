@@ -98,21 +98,22 @@ fn merge_json_config_content(
     // Strip "$schema" property — it's a JSON Schema annotation not valid in OxlintConfig
     let ts_config = strip_schema_property(ts_config);
 
-    // Generate the ast-grep rules with a placeholder for the config
-    let rule_yaml = generate_merge_rule(CONFIG_PLACEHOLDER, config_key);
+    // Config text is spliced in after the rules run so it never passes through
+    // YAML or a `fix` template, where `$NAME` is a metavariable.
+    let mut placeholder = String::from("__VITE_PLUS_CONFIG__");
+    while vite_config_content.contains(&placeholder) {
+        placeholder.push('_');
+    }
+    let rule_yaml = generate_merge_rule(&placeholder, config_key);
 
     // Apply the transformation
     let (content, updated) = ast_grep::apply_rules(vite_config_content, &rule_yaml)?;
 
-    Ok(MergeResult { content: splice_config(&content, &ts_config), updated })
+    Ok(MergeResult { content: splice_config(&content, &placeholder, &ts_config), updated })
 }
 
-// Config text is spliced in after the rules run so it never passes through
-// YAML or a `fix` template, where `$NAME` is a metavariable.
-const CONFIG_PLACEHOLDER: &str = "__VITE_PLUS_CONFIG__";
-
-fn splice_config(content: &str, ts_config: &str) -> String {
-    let mut parts = content.split(CONFIG_PLACEHOLDER);
+fn splice_config(content: &str, placeholder: &str, ts_config: &str) -> String {
+    let mut parts = content.split(placeholder);
     let mut out = parts.next().unwrap_or_default().to_owned();
     for part in parts {
         let line = &out[out.rfind('\n').map_or(0, |i| i + 1)..];
@@ -1878,6 +1879,9 @@ export default defineConfig({});"#;
                 merge_json_config_content("export default defineConfig({});", &config, "fmt");
             assert!(result.unwrap().content.contains(&config));
         }
+        let vite_config = "export default defineConfig({ define: { X: '__VITE_PLUS_CONFIG__' } });";
+        let result = merge_json_config_content(vite_config, "{}", "fmt").unwrap();
+        assert!(result.content.contains("X: '__VITE_PLUS_CONFIG__'"));
     }
 
     #[test]
