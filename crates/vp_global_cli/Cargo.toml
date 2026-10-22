@@ -53,6 +53,7 @@ url = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
+httpmock = { workspace = true }
 serial_test = { workspace = true }
 temp-env = { workspace = true }
 vp_shared = { workspace = true, features = ["test-utils"] }

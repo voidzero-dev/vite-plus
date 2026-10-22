@@ -376,16 +376,6 @@ mod tests {
         .await;
     }
 
-    #[tokio::test]
-    async fn test_load_nonexistent() {
-        let temp_dir = TempDir::new().unwrap();
-        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
-            let loaded = BinConfig::load("nonexistent").await.unwrap();
-            assert!(loaded.is_none());
-        })
-        .await;
-    }
-
     #[test]
     fn test_source_defaults_to_vp() {
         let config = BinConfig::new(

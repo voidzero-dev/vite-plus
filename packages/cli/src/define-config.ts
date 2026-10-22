@@ -851,8 +851,9 @@ function withoutVitePlusTestPlugins(plugin: PluginOption): PluginOption {
   if (Array.isArray(plugin)) {
     return plugin.filter(keepUserPlugin).map(withoutVitePlusTestPlugins);
   }
+  // Injected plugins are never async, and re-wrapping with `.then` drops own props that tools like Vike look up.
   if (plugin instanceof Promise) {
-    return plugin.then(withoutVitePlusTestPlugins);
+    return plugin;
   }
   return plugin && VITE_PLUS_TEST_PLUGIN_NAMES.has(plugin.name) ? false : plugin;
 }

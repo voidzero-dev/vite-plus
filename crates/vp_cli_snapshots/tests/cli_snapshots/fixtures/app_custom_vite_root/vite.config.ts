@@ -13,6 +13,8 @@ function emitMilestone(name: string): void {
 export default defineConfig({
   clearScreen: false,
   root: 'src',
+  // This routing fixture has no dependencies. Avoid a background scan racing shutdown.
+  optimizeDeps: { noDiscovery: true },
   server: {
     host: '127.0.0.1',
     port: 0,
