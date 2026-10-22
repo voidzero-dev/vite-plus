@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -82,9 +83,10 @@ describe('Oxlint JSON extends migration', () => {
     write('vite.config.mjs', 'export default {};');
   });
 
-  afterEach(() => {
-    // Windows can keep the temp directory locked briefly after Vite loads the config.
-    fs.rmSync(project, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  afterEach(async () => {
+    // Vite removes its bundled config asynchronously. Async rm lets that finish
+    // and retries Windows EPERM errors that rmSync can throw without retrying.
+    await rm(project, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it('resolves nested JSONC paths relative to each declaring file and retains inheritance order', async () => {
