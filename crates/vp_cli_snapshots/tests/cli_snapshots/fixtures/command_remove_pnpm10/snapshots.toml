@@ -15,7 +15,19 @@ steps = [
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "remove", "-O", "test-vite-plus-package-optional", "--", "--loglevel=warn"], comment = "support remove package from optional dependencies and pass through arguments" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
-  { argv = ["vp", "remove", "-g", "--dry-run", "testnpm2"], comment = "support remove global package with dry-run" },
-  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "rm", "--stream", "foo"], comment = "should show tips to use pass through arguments when options are not supported", continue-on-failure = true },
+]
+
+# Global removal is package-manager independent, so only this case covers the
+# dry-run preview; command_pm_global_rejected covers the local CLI rejection.
+[[case]]
+name = "command_remove_global_dry_run"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", "vp-test-echo"], snapshot = false },
+  { argv = ["vp", "remove", "-g", "--dry-run", "vp-test-echo"], comment = "previews the shims and package files it would remove" },
+  { argv = ["vp", "list", "-g", "vp-test-echo"], comment = "the dry run leaves the package installed" },
+  { argv = ["vp-test-echo", "still", "callable"], comment = "and its shim callable" },
 ]
