@@ -78,7 +78,9 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
         }
     }
 
-    if !delete_set.iter().any(|root| root.as_path().exists()) {
+    let global_bin_lock = dirs.bin.join(".vp-global-bin.lock");
+    if !delete_set.iter().any(|root| root.as_path().exists()) && !global_bin_lock.as_path().exists()
+    {
         if homebrew {
             output::info("No Vite+-managed data directories exist.");
             print_homebrew_uninstall_notice();
@@ -129,6 +131,13 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     // Remove vp-owned shim files from the (potentially shared) bin directory,
     // then the owned roots.
     remove_shim_files(dirs);
+    match std::fs::remove_file(global_bin_lock.as_path()) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            output::warn(&vt_str::format!("Failed to remove global package lock: {e}"));
+        }
+    }
     for root in &delete_set {
         if root.as_path().exists() {
             #[cfg(unix)]
@@ -1545,7 +1554,7 @@ mod tests {
     }
 
     #[test]
-    fn execute_normalizes_category_roots_before_deduplication() {
+    fn execute_removes_split_roots_and_global_bin_lock() {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = temp_dir.path().join("home");
         let bin = temp_dir.path().join("bin");
@@ -1572,13 +1581,27 @@ mod tests {
                 ("USERPROFILE", Some(home.as_os_str())),
             ],
             |_| {
+                let lock_path = bin.join(".vp-global-bin.lock");
+                drop(crate::commands::global::bin_lock::acquire_sync().unwrap());
+                assert!(lock_path.is_file());
+                let unrelated = bin.join("unrelated-tool");
+                std::fs::write(&unrelated, b"keep").unwrap();
+
                 let result = execute(true).unwrap();
                 assert!(result.success());
+                assert!(!lock_path.exists(), "global bin lock must be removed");
+                assert_eq!(std::fs::read(&unrelated).unwrap(), b"keep");
                 assert!(!data.exists(), "data root must be removed");
                 assert!(
                     !normalized_cache.exists(),
                     "lexically distinct cache root must be removed"
                 );
+
+                // A failed uninstall can create only the lock, without any data roots.
+                drop(crate::commands::global::bin_lock::acquire_sync().unwrap());
+                assert!(execute(true).unwrap().success());
+                assert!(!lock_path.exists(), "a lone global bin lock must also be removed");
+                assert_eq!(std::fs::read(&unrelated).unwrap(), b"keep");
             },
         );
     }
