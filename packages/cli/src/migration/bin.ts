@@ -49,12 +49,14 @@ import {
   checkViteVersion,
   collectToolchainVersionChanges,
   confirmPrettierMigration,
+  confirmTsxMigration,
   detectEslintProject,
   detectFramework,
   detectNodeVersionManagerFile,
   detectPendingCoreMigration,
   detectPrettierProject,
   detectTsupProject,
+  detectTsxProject,
   detectVitePlusBootstrapPending,
   detectYarnPnpMode,
   ensureVitePlusBootstrap,
@@ -72,6 +74,7 @@ import {
   migratePrettierToOxfmt,
   migrateSetupVpVersion,
   migrateTsupToTsdown,
+  migrateTsxToVpx,
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
@@ -281,6 +284,7 @@ interface MigrationPlan extends MigrationSetupPlan {
   prettierConfigFile?: string;
   migrateTsup: boolean;
   tsupConfigFile?: string;
+  migrateTsx: boolean;
   fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
@@ -377,6 +381,7 @@ function hasExistingVitePlusMigrationCandidates(
     eslintProject.hasDependency ||
     prettierProject.hasDependency ||
     tsupProject.hasDependency ||
+    detectTsxProject(workspaceInfo.rootDir, workspaceInfo.packages) ||
     detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined ||
     getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0
   );
@@ -436,6 +441,10 @@ async function collectMigrationPlan(
     packages,
   );
 
+  // 3c. tsx detection + prompt
+  const migrateTsx =
+    detectTsxProject(rootDir, packages) && (await confirmTsxMigration(options.interactive));
+
   // 9. tsconfig baseUrl prompt
   const fixBaseUrl = hasBaseUrlInWorkspace({ rootDir, packages })
     ? await confirmBaseUrlFix(options.interactive)
@@ -463,6 +472,7 @@ async function collectMigrationPlan(
     prettierConfigFile: prettierProject.configFile,
     migrateTsup,
     tsupConfigFile,
+    migrateTsx,
     fixBaseUrl,
     migrateNodeVersionFile,
     nodeVersionDetection,
@@ -570,6 +580,9 @@ function showMigrationSummary(options: {
   }
   if (report.tsupMigrated) {
     log(`${styleText('gray', '•')} tsup config migrated to tsdown (\`vp pack\`)`);
+  }
+  if (report.tsxMigrated) {
+    log(`${styleText('gray', '•')} tsx scripts migrated to \`vpx\``);
   }
   if (report.nodeVersionFileMigrated) {
     log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);
@@ -844,6 +857,12 @@ async function executeMigrationPlan(
       failMigrationProgress('Migration failed');
       cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
     }
+  }
+
+  // 6c. tsx → vpx (before main rewrite so rewritten lint-staged tasks get merged)
+  if (plan.migrateTsx) {
+    updateMigrationProgress('Migrating tsx scripts');
+    migrateTsxToVpx(workspaceInfo.rootDir, workspaceInfo.packages, report);
   }
 
   // Earlier setup and tool migrations can abort or change the preflight inputs.
@@ -1370,6 +1389,27 @@ async function main() {
           cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
         }
         tsupMigrated = true;
+      }
+    }
+
+    if (
+      fullSetup &&
+      detectTsxProject(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
+    ) {
+      // Interactive only: stop any active spinner so it does not animate beneath
+      // the confirm prompt.
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
+      if (await confirmTsxMigration(options.interactive)) {
+        updateMigrationProgress('Migrating tsx scripts');
+        const tsxResult = migrateTsxToVpx(
+          workspaceInfoOptional.rootDir,
+          workspaceInfoOptional.packages,
+          report,
+        );
+        didMigrate ||= tsxResult.changed;
+        needsInstall ||= tsxResult.dependencyRemoved;
       }
     }
 

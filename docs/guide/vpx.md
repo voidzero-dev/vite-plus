@@ -183,7 +183,7 @@ JSX that depends on a compiler plugin is not supported. `vpx` compiles JSX only 
 
 ### Coming from tsx
 
-Most scripts that run with tsx run with `vpx` unchanged. These differences can need a change:
+`vp migrate` rewrites tsx commands in `package.json` scripts to `vpx` and removes the `tsx` devDependency once nothing uses it; see [tsx to `vpx`](/guide/migrate-rules#tsx-to-vpx). Most scripts that run with tsx run with `vpx` unchanged. These differences can need a change:
 
 - **JSX default**: without a tsconfig `jsx` option, tsx compiles JSX to `React.createElement()`, which needs `React` in scope, while `vpx` uses the automatic runtime. Set `"jsx": "react"` to keep the classic output. Because of its default, tsx also ignores a lone `/** @jsxImportSource … */` comment unless the file has `/** @jsxRuntime automatic */` or the tsconfig sets `"jsx": "react-jsx"`; `vpx` applies the comment on its own.
 - **`.cts` files with `import` or `export`**: tsx compiles them to CommonJS, and `vpx` reports an error. Rename the file to `.mts`, or write it with `import x = require()` and `export =`.
