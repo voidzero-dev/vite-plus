@@ -52,6 +52,10 @@ pub enum Error {
     #[error("Upgrade error: {0}")]
     Upgrade(Str),
 
+    /// A `VP_*_MANAGER=system-only` variable requires a system tool that PATH lacks.
+    #[error("{variable}=system-only requires a system '{tool}' on PATH, but none was found")]
+    SystemToolNotFound { tool: Str, variable: &'static str },
+
     #[error("{0}")]
     Setup(#[from] vp_setup::error::Error),
 
