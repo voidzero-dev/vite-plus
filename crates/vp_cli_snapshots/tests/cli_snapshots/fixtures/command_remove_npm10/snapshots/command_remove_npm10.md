@@ -101,15 +101,3 @@ removed 1 package in <duration>
   "packageManager": "npm@10.9.4"
 }
 ```
-
-## `vp remove -g --dry-run testnpm2`
-
-support remove global package with dry-run
-
-**Exit code:** 1
-
-```
-Failed to uninstall testnpm2: Package testnpm2 is not installed
-```
-
-*(skipped 1 step(s) to the next line boundary: step failed)*

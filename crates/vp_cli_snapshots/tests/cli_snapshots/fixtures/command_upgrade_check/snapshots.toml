@@ -1,9 +1,9 @@
 [[case]]
 name = "command_upgrade_check"
 vp = "global"
-skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "upgrade", "--check", "--tag", "alpha"], comment = "alpha tag avoids release-day flake (dev version equals npm latest right after a release, hiding the Update-available branch)", continue-on-failure = true },
+  { argv = ["vp", "upgrade", "--check"], comment = "mock-manifest.json pins `latest` to 999.0.0, so the Update-available branch is deterministic." },
 ]
 
 [[case]]

@@ -37,7 +37,7 @@ defaults:
 
 env:
   # New Node.js releases can appear before both musl archives are available.
-  MUSL_NODE_VERSION: '24.21.0'
+  MUSL_NODE_VERSION: '24.22.1'
 
 jobs:
   test-install-sh:
@@ -1932,7 +1932,7 @@ jobs:
           $env:VP_NODE_MANAGER = "yes"
           # The path assertions require managed npm, regardless of the runner's system tools.
           $env:VP_PM_MANAGER = "yes"
-          $env:VP_NODE_VERSION = "22.13.1"
+          $env:VP_NODE_VERSION = "22.23.4"
           $env:CI = "true"
           Remove-Item Env:VP_BIN_DIR -ErrorAction SilentlyContinue
           Remove-Item Env:VP_DATA_DIR -ErrorAction SilentlyContinue

@@ -82,6 +82,12 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     return 'vite-plus';
   }
 
+  // `vite-plus` doesn't export `rolldown` subpaths; they keep resolving through
+  // the core alias. Mirrors the migrate rewriter's exclusion in import_rewriter.rs.
+  if (specifier === 'vite/rolldown' || specifier.startsWith('vite/rolldown/')) {
+    return null;
+  }
+
   if (specifier.startsWith('vite/')) {
     return `vite-plus/${specifier.slice('vite/'.length)}`;
   }
