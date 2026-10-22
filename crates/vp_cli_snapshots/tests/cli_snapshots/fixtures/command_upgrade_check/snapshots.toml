@@ -2,7 +2,6 @@
 name = "command_upgrade_check"
 vp = "global"
 skip-platforms = ["windows"]
-local-registry = true
 steps = [
   { argv = ["vp", "upgrade", "--check"], comment = "mock-manifest.json pins `latest` to 999.0.0, so the Update-available branch is deterministic." },
 ]
