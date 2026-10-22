@@ -3,12 +3,12 @@ name = "npm_global_install_custom_prefix"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vpt", "mkdir", "-p", "custom-prefix"], continue-on-failure = true },
-  { tty = false, argv = ["npm", "install", "-g", "./npm-global-custom-prefix-pkg"], envs = [["NPM_CONFIG_PREFIX", "./custom-prefix"]], comment = "Should install to custom prefix and create link", continue-on-failure = true },
-  { argv = ["vpt", "stat-file", "custom-prefix/bin/npm-global-custom-prefix-cli", "--assert", "file"], comment = "Verify installed to custom prefix", continue-on-failure = true },
-  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-custom-prefix-cli", "--assert", "symlink"], comment = "Link should exist", continue-on-failure = true },
-  { argv = ["npm-global-custom-prefix-cli"], comment = "Should be callable via the link", continue-on-failure = true },
-  { argv = ["vpt", "rm", "-f", "$VP_HOME/bin/npm-global-custom-prefix-cli"], comment = "Cleanup link", continue-on-failure = true },
-  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-custom-prefix-pkg"], envs = [["NPM_CONFIG_PREFIX", "./custom-prefix"]], comment = "Cleanup", continue-on-failure = true },
-  { argv = ["vpt", "rm", "-rf", "custom-prefix"], continue-on-failure = true },
+  ["vpt", "mkdir", "-p", "custom-prefix"],
+  { tty = false, argv = ["npm", "install", "-g", "./npm-global-custom-prefix-pkg"], envs = [["NPM_CONFIG_PREFIX", "./custom-prefix"]], comment = "Should install to custom prefix and create link" },
+  { argv = ["vpt", "stat-file", "custom-prefix/bin/npm-global-custom-prefix-cli", "--assert", "symlink"], comment = "Verify installed to custom prefix (npm links the bin into <prefix>/bin)" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/npm-global-custom-prefix-cli", "--assert", "symlink"], comment = "Link should exist" },
+  { argv = ["npm-global-custom-prefix-cli"], comment = "Should be callable via the link" },
+  { argv = ["vpt", "rm", "-f", "$VP_HOME/bin/npm-global-custom-prefix-cli"], comment = "Cleanup link" },
+  { tty = false, argv = ["npm", "uninstall", "-g", "npm-global-custom-prefix-pkg"], envs = [["NPM_CONFIG_PREFIX", "./custom-prefix"]], comment = "Cleanup" },
+  ["vpt", "rm", "-rf", "custom-prefix"],
 ]
