@@ -181,6 +181,15 @@ The loader is resolved from the project's `vite-plus` first (`JsExecutor::resolv
 
 For a script, the local bin and the global shim resolve the same loader and Node.js; the difference is the local bin's own Node.js startup before it execs the script, about 23–30 ms against the global shim's 5–10 ms ([Performance](#performance)).
 
+## Migration from tsx
+
+`vp migrate` rewrites tsx commands to `vpx` as an optional migration, like Prettier and tsup: always on a fresh project, and with `--full` on one already using Vite+ (`packages/cli/src/migration/migrator/tsx.ts`; behavior in [Migration Rules](../docs/guide/migrate-rules.md#tsx-to-vpx)).
+
+- It reads commands with the same literal-command parser as the other script rewrites and finds the script the way `vpx` does, with the shared value-taking option lists. Commands it cannot read, and forms `vpx` cannot run (eval, `--check`, the REPL, `--test` without files or in watch mode, an entry without an extension), keep tsx with a warning.
+- It has no Node.js check of its own: `vpx` needs the `engines.node` range of `vite-plus` (`SUPPORTED_NODE_RANGE` in `script-hooks.ts`, which a unit test keeps equal), and migration already upgrades incompatible runtime pins to that range for Vite+ itself.
+- The `tsx` devDependency goes only when no scripts, imports (including build output and `package.json#imports` aliases), shebangs, tool settings such as `--import=tsx`, CI workflows, git hooks, or shell scripts use tsx anymore, including in nested packages that can resolve it. A package that lists tsx in `dependencies`, `optionalDependencies`, or `peerDependencies` keeps it, since `vpx` comes from a devDependency.
+- It reads the scripts a command runs, and its local preloads, and keeps tsx when one does not exist yet, as when an earlier command generates it, and when `vpx` would fail on one: a `require()` of `./a.js` that only tsx resolves to `a.ts`, a `.cts` file with `import` or `export`, and a file that mixes `import` with `__dirname`, `__filename`, `require()`, or `module.exports` in a package without `"type": "module"`. tsx compiles the last two to CommonJS; `vpx` rejects the first of them and runs the second as an ES module. These checks are exact and local. The migration skips globs and scripts after a shell state change, and does not look for differences that need module-graph or tsconfig analysis (imports of the named files, standard decorators, tsconfig `paths` in `require()`, a tsconfig `module` of `node16` or `nodenext`); `vpx` reports those when the script runs.
+
 ## Native Side
 
 oxc-node is vendored the way Rolldown is:
@@ -356,7 +365,7 @@ Package mode through the global `vpx` is unchanged. What changes:
 
 ## Future Enhancements
 
-- **`vp migrate` support**: rewrite `tsx` invocations in `package.json` scripts to `vpx`, only when the project's Node.js satisfies the script-mode range and for the cases under "Coming from tsx" in the guide, and remove the devDependency. `ts-node` (which type-checks by default), `esno`, and `jiti` need their own rules.
+- **`vp migrate` rules for other runners**: `ts-node` (which type-checks by default), `esno`, and `jiti` need their own rules.
 - **Public loader entry**: `node --import vite-plus/register ./a.ts`, for tools that must start `node` themselves.
 - **TypeScript eval and REPL**, once oxc-node transforms eval input.
 - **Opt-in transform cache**, keyed like tsx's.
