@@ -22,7 +22,7 @@ vp toolchain vite rolldown oxc
 vp toolchain --json
 ```
 
-The command uses the local `vite-plus` package when the project has one. Use `--global` to show the release for the global `vp` command:
+The command uses the local `vite-plus` package when the project has one. Use `--global` or `-g` to show the release for the global `vp` command:
 
 ```bash
 vp toolchain --global
