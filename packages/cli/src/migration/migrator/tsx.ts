@@ -45,6 +45,8 @@ const LOADER_OPTIONS = new Set([
   '-r',
 ]);
 const TSX_LOADER = /^tsx(?:\/(?:esm|cjs))?$/;
+// Tool settings that name modules to preload, as in Mocha's `"import": "tsx"`.
+const LOADER_SETTINGS = new Set(['import', 'loader', 'require']);
 
 const KEEP_EVAL = '`vpx` does not run TypeScript passed to --eval or --print';
 const KEEP_CHECK = '`vpx` does not transform TypeScript for -c or --check';
@@ -772,7 +774,7 @@ function findTsxUse(dir: string): string | undefined {
       if (LOCKFILES.has(path.basename(file))) {
         return false;
       }
-      const uses = fileUsesTsx(content, path.extname(file));
+      const uses = fileUsesTsx(content, file);
       if (uses) {
         found = `${displayRelative(file)} still uses tsx`;
       }
@@ -801,11 +803,20 @@ function findTsxUse(dir: string): string | undefined {
   return found;
 }
 
-/** Whether a file with `extension` runs, imports, or loads tsx. */
-function fileUsesTsx(content: string, extension: string): boolean {
+/** Whether `file` runs, imports, or loads tsx. */
+function fileUsesTsx(content: string, file: string): boolean {
   if (TSX_SHEBANG.test(content)) {
     return true;
   }
+  // lint-staged runs a bare `tsx` task too, with the staged files as its arguments.
+  const name = path.basename(file);
+  if (
+    LINT_STAGED_JSON_CONFIG_FILES.some((config) => config === name) &&
+    jsonUsesTsx(parseJsonc(content), true)
+  ) {
+    return true;
+  }
+  const extension = path.extname(file);
   if (extension === '.json' || extension === '.jsonc') {
     return jsonUsesTsx(parseJsonc(content), false);
   }
@@ -820,8 +831,8 @@ function fileUsesTsx(content: string, extension: string): boolean {
  * Whether a JSON value holds a string that runs or loads tsx: a tsx command with an
  * argument, a loader flag such as `--import=tsx` or `["--import", "tsx"]`, or a subpath
  * such as `tsx/cjs`. A bare `tsx` counts only in `commands` (scripts, lint-staged tasks,
- * and `imports` aliases); elsewhere it is often a file extension, as in
- * `moduleFileExtensions`.
+ * and `imports` aliases) and as a loader setting such as Mocha's `"import": "tsx"`;
+ * elsewhere it is often a file extension, as in `moduleFileExtensions`.
  */
 function jsonUsesTsx(value: unknown, commands: boolean): boolean {
   if (typeof value === 'string') {
@@ -836,7 +847,15 @@ function jsonUsesTsx(value: unknown, commands: boolean): boolean {
           TSX_LOADER.test(String(value[index + 1]))),
     );
   }
-  return isPlainRecord(value) && Object.values(value).some((item) => jsonUsesTsx(item, commands));
+  return (
+    isPlainRecord(value) &&
+    Object.entries(value).some(
+      ([key, item]) =>
+        jsonUsesTsx(item, commands) ||
+        (LOADER_SETTINGS.has(key) &&
+          [item].flat().some((loader) => TSX_LOADER.test(String(loader)))),
+    )
+  );
 }
 
 /**

@@ -537,6 +537,30 @@ describe('migrateTsxToVpx', () => {
       '.mocharc.json still uses tsx',
     ],
     [
+      'a bare loader in a JSON tool config',
+      '.mocharc.json',
+      '{ "import": "tsx" }\n',
+      '.mocharc.json still uses tsx',
+    ],
+    [
+      'a bare loader list in a JSON tool config',
+      '.mocharc.json',
+      '{ "require": ["tsx"] }\n',
+      '.mocharc.json still uses tsx',
+    ],
+    [
+      'a bare lint-staged task',
+      '.lintstagedrc.json',
+      '{ "*.ts": "tsx" }\n',
+      '.lintstagedrc.json still uses tsx',
+    ],
+    [
+      'a bare lint-staged task in an extensionless config',
+      '.lintstagedrc',
+      '{"*.ts":"tsx"}\n',
+      '.lintstagedrc still uses tsx',
+    ],
+    [
       'a JSONC tool config',
       'wrangler.jsonc',
       '{\n  // Build step\n  "build": { "command": "tsx scripts/build.ts" },\n}\n',
