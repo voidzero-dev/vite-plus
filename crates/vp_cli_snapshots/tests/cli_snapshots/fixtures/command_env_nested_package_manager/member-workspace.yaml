@@ -1,0 +1,4 @@
+# Same settings, but svc/ is a workspace package.
+packages:
+  - svc
+onlyBuiltDependencies: []
