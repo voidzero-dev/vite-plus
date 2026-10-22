@@ -21,7 +21,10 @@ use crate::{
             package_manager,
             package_metadata::PackageMetadata,
         },
-        global::install::{extract_binaries, is_protected_shim},
+        global::{
+            bin_lock,
+            install::{extract_binaries, is_protected_shim},
+        },
     },
     error::Error,
 };
@@ -234,6 +237,13 @@ fn check_npm_global_install_result(
     }
 
     let is_interactive = vp_shared::is_stdin_terminal();
+    let lock = match bin_lock::acquire_sync() {
+        Ok(lock) => lock,
+        Err(error) => {
+            output::error(&error.to_string());
+            return;
+        }
+    };
     // (bin_name, source_path, package_name)
     let mut missing_bins: Vec<(String, AbsolutePathBuf, String)> = Vec::new();
     let mut managed_conflicts: Vec<(String, String)> = Vec::new();
@@ -326,6 +336,9 @@ fn check_npm_global_install_result(
         }
     }
 
+    // Never hold the lock while waiting for a user to answer the prompt.
+    drop(lock);
+
     // Deduplicate by bin_name so that when two packages declare the same binary,
     // only the last one is linked (matching npm's "last writer wins" behavior).
     let missing_bins = dedup_missing_bins(missing_bins);
@@ -364,8 +377,49 @@ fn check_npm_global_install_result(
     };
 
     if should_link {
-        for (bin_name, source_path, package_name) in &missing_bins {
-            create_bin_link(&bin_dir, bin_name, source_path, package_name, node_version);
+        link_missing_npm_bins(&bin_dir, &missing_bins, node_version);
+    }
+}
+
+fn link_missing_npm_bins(
+    bin_dir: &AbsolutePath,
+    missing_bins: &[(String, AbsolutePathBuf, String)],
+    node_version: &str,
+) {
+    let _lock = match bin_lock::acquire_sync() {
+        Ok(lock) => lock,
+        Err(error) => {
+            output::error(&error.to_string());
+            return;
+        }
+    };
+    for (bin_name, source_path, package_name) in missing_bins {
+        // A different operation may have claimed this name while the prompt was open.
+        match BinConfig::load_sync(bin_name) {
+            Ok(Some(config)) if config.source == BinSource::Vp => {
+                output::warn(&vt_str::format!(
+                    "Skipped '{bin_name}': managed by `vp install -g {}`.",
+                    config.package
+                ));
+                continue;
+            }
+            Err(error) => {
+                output::error(&error.to_string());
+                continue;
+            }
+            _ => {}
+        }
+        if std::fs::symlink_metadata(bin_dir.join(bin_name)).is_ok() {
+            continue;
+        }
+        #[cfg(windows)]
+        if ["exe", "cmd"].iter().any(|extension| {
+            std::fs::symlink_metadata(bin_dir.join(format!("{bin_name}.{extension}"))).is_ok()
+        }) {
+            continue;
+        }
+        if source_path.as_path().exists() {
+            create_bin_link(bin_dir, bin_name, source_path, package_name, node_version);
         }
     }
 }
@@ -469,6 +523,13 @@ fn remove_npm_global_uninstall_links(
     npm_prefix: &AbsolutePath,
 ) {
     let Ok(bin_dir) = config::get_bin_dir() else { return };
+    let _lock = match bin_lock::acquire_sync() {
+        Ok(lock) => lock,
+        Err(error) => {
+            output::error(&error.to_string());
+            return;
+        }
+    };
 
     for (bin_name, package_name, package_dir) in bin_entries {
         // Skip protected shims: a stale Npm BinConfig must not let
@@ -1826,6 +1887,41 @@ mod tests {
             for name in ["outside", "outside.cmd", "outside.json"] {
                 assert!(std::fs::symlink_metadata(temp.path().join(name)).is_err());
             }
+        });
+    }
+
+    #[test]
+    fn test_npm_link_rechecks_owner_after_prompt() {
+        let temp = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let bin_dir = config::get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let source = bin_dir.join("source.js");
+            std::fs::write(&source, "console.log('test');").unwrap();
+            let candidates = vec![("test-cli".into(), source, "npm-package".into())];
+
+            // Another activation claims the name while npm's link prompt is open.
+            BinConfig::new(
+                "test-cli".into(),
+                "managed-package".into(),
+                "1.0.0".into(),
+                "22.18.0".into(),
+            )
+            .save_sync()
+            .unwrap();
+            link_missing_npm_bins(&bin_dir, &candidates, "22.18.0");
+            assert_eq!(
+                BinConfig::load_sync("test-cli").unwrap().unwrap().package,
+                "managed-package"
+            );
+            for name in ["test-cli", "test-cli.cmd", "test-cli.exe"] {
+                assert!(std::fs::symlink_metadata(bin_dir.join(name)).is_err());
+            }
+
+            BinConfig::delete_sync("test-cli").unwrap();
+            link_missing_npm_bins(&bin_dir, &candidates, "22.18.0");
+            assert_eq!(BinConfig::load_sync("test-cli").unwrap().unwrap().package, "npm-package");
+            assert!(bin_dir.join("test-cli").as_path().exists());
         });
     }
 

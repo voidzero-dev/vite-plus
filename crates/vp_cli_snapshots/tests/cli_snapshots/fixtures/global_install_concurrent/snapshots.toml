@@ -1,0 +1,8 @@
+[[case]]
+name = "global_install_concurrent"
+vp = "global"
+comment = "Concurrent npm preparation must remain parallel, and activation must leave an executable active installation. Forced replacement must not deadlock."
+env = { npm_config_offline = "true", npm_config_audit = "false" }
+steps = [
+  { argv = ["node", "verify.mjs"], tty = false },
+]
