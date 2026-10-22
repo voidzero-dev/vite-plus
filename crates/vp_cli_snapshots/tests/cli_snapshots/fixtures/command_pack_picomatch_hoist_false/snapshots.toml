@@ -1,10 +1,11 @@
 [[case]]
 name = "command_pack_picomatch_hoist_false"
 vp = "global"
+comment = "With pnpm `hoist: false`, `vp pack` must not depend on an undeclared runtime `picomatch` lookup from the bundled tsdown. `latest` resolves to the packed checkout."
 # Exceeded 40 seconds on Windows in CI run 38687702831.
 skip-platforms = ["windows"]
 local-registry = true
 steps = [
-  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false, continue-on-failure = true },
-  { argv = ["vp", "pack", "src/index.ts"], continue-on-failure = true },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  ["vp", "pack", "src/index.ts"],
 ]
