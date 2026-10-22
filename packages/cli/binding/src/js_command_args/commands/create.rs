@@ -23,6 +23,13 @@ struct CreateCliArgs {
 
     #[arg(
         long,
+        action = ArgAction::SetTrue,
+        help = "Scaffold into a non-empty directory, keeping existing files"
+    )]
+    force: bool,
+
+    #[arg(
+        long,
         value_name = "NAME",
         action = ArgAction::Append,
         overrides_with = "no_agent",
@@ -155,6 +162,7 @@ fn create_command() -> Command {
 pub struct CreateArgs {
     pub template_name: Option<String>,
     pub directory: Option<String>,
+    pub force: Option<bool>,
     #[napi(ts_type = "false | string | Array<string>")]
     pub agent: Option<Either3<bool, String, Vec<String>>>,
     #[napi(ts_type = "false | string")]
@@ -175,6 +183,7 @@ impl From<CreateCliArgs> for CreateArgs {
         Self {
             template_name: value.template,
             directory: value.directory,
+            force: value.force.then_some(true),
             agent: agent_option(value.agent, value.no_agent),
             editor: editor_option(value.editor, value.no_editor),
             git: boolean_option(value.git, value.no_git),
@@ -293,6 +302,7 @@ mod tests {
         let args = parsed(&[
             "--directory",
             "project",
+            "--force",
             "--no-agent",
             "--no-editor",
             "--approve-builds",
@@ -300,6 +310,7 @@ mod tests {
             "--list",
         ]);
         assert_eq!(args.directory.as_deref(), Some("project"));
+        assert_eq!(args.force, Some(true));
         assert!(matches!(args.agent, Some(Either3::A(false))));
         assert!(matches!(args.editor, Some(Either::A(false))));
         assert_eq!(args.approve_builds, Some(true));
