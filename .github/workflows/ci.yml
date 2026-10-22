@@ -308,7 +308,11 @@ jobs:
         run: |
           # GitHub Actions sets HOME=/github/home in containers, but rustup expects euid home (/root)
           export HOME=/root
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+          # Retry connection resets, and run only a complete installer download.
+          curl --proto '=https' --tlsv1.2 -sSf --retry 3 --retry-all-errors \
+            --retry-delay 2 --connect-timeout 30 --max-time 120 \
+            --output "$RUNNER_TEMP/rustup-init.sh" https://sh.rustup.rs
+          sh "$RUNNER_TEMP/rustup-init.sh" -y --default-toolchain none
           echo "/root/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Install Rust toolchain
