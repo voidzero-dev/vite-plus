@@ -312,6 +312,11 @@ export function rewriteStandaloneProject(
 
   if (packageManager === PackageManager.pnpm) {
     ensurePnpmWorkspaceExoticSubdepsSetting(projectPath);
+    if (fs.existsSync(path.join(projectPath, 'pnpm-workspace.yaml'))) {
+      // pnpm reads settings from this file for standalone projects too. Declare
+      // the root package so workspace-aware installs can resolve it.
+      ensurePnpmWorkspacePackages(projectPath, ['.']);
+    }
   }
 
   if (packageManager === PackageManager.yarn) {
