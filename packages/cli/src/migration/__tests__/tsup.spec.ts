@@ -63,6 +63,7 @@ describe('tsup migration', () => {
   let projectPath: string;
 
   beforeEach(() => {
+    vi.stubEnv('VP_CLI_BIN', undefined);
     projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-tsup-'));
     fs.writeFileSync(
       path.join(projectPath, 'package.json'),
@@ -81,6 +82,7 @@ describe('tsup migration', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(projectPath, { recursive: true, force: true });
     mockRunCommandSilently.mockReset();
     mockConfirm.mockReset();

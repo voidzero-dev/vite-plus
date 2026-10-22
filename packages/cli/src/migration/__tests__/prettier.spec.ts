@@ -28,11 +28,13 @@ describe('Prettier migration', () => {
   };
 
   beforeEach(() => {
+    vi.stubEnv('VP_CLI_BIN', undefined);
     projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-prettier-'));
     fs.writeFileSync(path.join(projectPath, 'package.json'), JSON.stringify(packageJson));
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(projectPath, { recursive: true, force: true });
     mockRunCommandSilently.mockReset();
   });
