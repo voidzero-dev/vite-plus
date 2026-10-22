@@ -18,10 +18,30 @@ Migration is idempotent: running it again after a successful migration should no
 
 On a project that already depends on `vite-plus`, `vp migrate` performs an upgrade only: it updates dependencies and package-manager configuration and finalizes imports. It does not touch project setup.
 
-- `--full` also runs the setup actions: git hooks, editor config, agent files, ESLint, Prettier, and tsup migration, framework shims, the tsconfig `baseUrl` fix, and the `.nvmrc`/Volta to `.node-version` conversion.
+- `--full` also runs the setup actions: git hooks, editor config, agent files, ESLint, Prettier, and tsup migration, framework shims, the tsconfig `baseUrl` fix, and the Volta to `.node-version` conversion.
 - `--hooks`, `--agent`, and `--editor` opt into a single setup action without `--full`.
 
 When a default upgrade skips setup actions that would apply, it prints a hint to run `vp migrate --full`. Fresh (non Vite+) projects always run the full migration.
+
+## Oxlint JSON Inheritance
+
+When `.oxlintrc.json` or `.oxlintrc.jsonc` uses `extends`, `vp migrate` resolves each file path relative to the config that declares it. It creates shared TypeScript configs and imports them through `lint.extends`, including nested inheritance. Oxlint applies the existing merge order, rule severities, and overrides. Plain `vp lint` uses the migrated rules without a `-c` flag.
+
+Migration assumes ESM projects. Shared configs become sibling `.ts` files. Imports from JavaScript and TypeScript configs use `.js` specifiers, which Vite and TypeScript resolve to the generated source files without changing compiler settings. File-level TypeScript pragmas stay before generated imports. Workspace consumers reuse the same generated modules, including the workspace that owns a shared config. Migration defaults stay in each workspace's local `lint` block. Edit these TypeScript files to update shared settings. Original shared JSON and JSONC files remain available to other consumers; edits to those originals do not update the migrated configs.
+
+JS-plugin declarations stay in their original config or override. Relative plugin paths become absolute paths at runtime through `fileURLToPath(new URL(..., import.meta.url))`. Explicit inherited `typeAware` and `typeCheck` settings take precedence over migration defaults.
+
+Cleanup removes each completed workspace symlink independently. Shared aliases that remain on disk keep their targets and dependencies available.
+
+A shared config's owner keeps `env`, `globals`, `settings`, and `ignorePatterns` at the top level of its `lint` block through references to the shared module. Edits to these fields apply to the owner. Other consumers do not inherit them.
+
+Generated modules include a source marker. A later migration attempt reuses these modules without replacing user edits, so a preserved consumer can migrate after its conflict is resolved. Existing modules without a matching marker remain conflicts.
+
+Failed merges and existing `lint` blocks record a pending marker in the Vite config, so an isolated failure can be retried after the conflict is resolved. A successful merge removes this marker. Completed workspace merges record a completion marker, including configs merged inline. After fixing an unreadable config, run `vp migrate` again to migrate the remaining consumers and remove JSON files that are no longer needed.
+
+Shared config imports use literal paths so Vite and TypeScript can resolve filenames containing `#` or `%`. A relative import path containing `?` or a literal backslash requires a manual migration: Vite treats `?` as a query delimiter, and TypeScript treats backslashes as path separators. Migration preserves the JSON config and reports a warning in these cases.
+
+Missing files, invalid JSON, inheritance cycles, conflicting output files, and package-local plugins that resolve differently from the Vite config directory produce a warning and leave the original config in place. Configs outside the project or workspace, configs inside `node_modules`, CommonJS Vite configs, and an existing `lint` block require a manual merge. Workspace JSON removal waits until all migration outcomes are known. Preserved JSON consumers retain their transitive dependencies, including configs whose owners migrated successfully. If an inheritance graph cannot be read, workspace JSON files are kept and their owners use shared modules, because the unreadable consumer can reference them. `vp lint` continues to reject string paths in `lint.extends`; path resolution happens only during migration.
 
 ## Pack Configuration
 
@@ -185,6 +205,8 @@ Object-valued nested npm and Bun overrides are preserved: they are user-defined 
 
 Plugin packages (an unscoped name starting with `vite-plugin-` or `unplugin-`, or `vite` in `peerDependencies`/`dependencies`) skip the rewrite even in config files. Only the `vite` specifier is in scope for this rule.
 
+`vite/rolldown` and `vite/rolldown/*` are never rewritten, because `vite-plus` does not export those subpaths; they keep resolving through the core alias.
+
 `declare module 'vite'` augmentations follow the same rule and are preserved outside config files. Through the core alias they reach the same `@voidzero-dev/vite-plus-core` module whose `UserConfig` types `defineConfig` from `vite-plus`, so they keep working after migration; `vite-plus` itself exports no `UserConfig` symbol, so a rewritten `declare module 'vite-plus'` augmentation would merge with nothing. Extensions aimed at `vite-plus`'s own surface are written against `vite-plus` by hand.
 
 ### `vitest` and Browser Imports
@@ -257,10 +279,9 @@ Migration replaces exact `voidzero-dev/setup-vp@v1` references in GitHub Actions
 
 ## Node.js Version Rules
 
-Migration converts legacy Node.js version-manager files to `.node-version`, the format Vite+ reads. On an existing Vite+ project this conversion is part of the full setup bucket, so it runs with `vp migrate --full`; fresh migrations run it unconditionally.
+Migration converts the Volta `volta.node` pin to `.node-version`, because Vite+ does not read Volta. On an existing Vite+ project this conversion is part of the full setup bucket, so it runs with `vp migrate --full`; fresh migrations run it unconditionally.
 
-- `.nvmrc` and Volta `volta.node` pins are converted to `.node-version`. An existing `.node-version` is kept.
-- When `.nvmrc` is removed, any `actions/setup-node` `node-version-file: .nvmrc` reference in `.github/workflows/*.{yml,yaml}` and composite actions under `.github` (`.github/**/action.{yml,yaml}`) is repointed to `.node-version` so CI does not fail with "node version file ... does not exist".
+- When `.node-version` or `.nvmrc` exists, migration keeps it and skips the Volta conversion. Vite+ reads both files directly (see [Node.js Selection](/guide/env#node-js-selection)).
 
 ## Package-Manager Rules
 

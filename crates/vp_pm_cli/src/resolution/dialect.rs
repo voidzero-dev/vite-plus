@@ -101,9 +101,25 @@ impl Pnpm {
         self.version >= Version::new(11, 3, 0)
     }
 
-    /// `approve-builds !<pkg>` deny syntax landed in pnpm 11.
+    /// Native `login`, `logout`, `whoami`, `dist-tag`, `deprecate`, `ping`, and `search`
+    /// landed in pnpm 11, along with the `approve-builds !<pkg>` deny syntax.
     pub(crate) fn supports_v11_commands(&self) -> bool {
         self.version >= Version::new(11, 0, 0)
+    }
+
+    /// `owner` landed in pnpm 11.1.0.
+    pub(crate) fn supports_v11_1_commands(&self) -> bool {
+        self.version >= Version::new(11, 1, 0)
+    }
+
+    /// `token` landed in pnpm 12.13.0.
+    pub(crate) fn supports_v12_13_commands(&self) -> bool {
+        self.version >= Version::new(12, 13, 0)
+    }
+
+    /// Native `team` commands landed in pnpm 11.13.0.
+    pub(crate) fn supports_v11_13_commands(&self) -> bool {
+        self.version >= Version::new(11, 13, 0)
     }
 }
 

@@ -13,15 +13,30 @@ use std::{
     process::{ExitStatus, Stdio},
 };
 
-use fspy::AccessMode;
+use bitflags::bitflags;
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 use vp_error::Error;
 use vt_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
+mod external_tool;
 mod ps1_shim;
 
+pub use external_tool::{ExternalToolQuery, find_external_tool, is_managed_install};
 pub use ps1_shim::rewrite_cmd_to_powershell;
+
+bitflags! {
+    /// File-system operations observed for one path.
+    ///
+    /// fspy reports each operation as its own access. This set combines the
+    /// operations that touched the same workspace-relative path.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct AccessMode: u8 {
+        const READ = 1;
+        const WRITE = 1 << 1;
+        const READ_DIR = 1 << 2;
+    }
+}
 
 /// Result of running a command with fspy tracking.
 #[derive(Debug)]
@@ -111,25 +126,17 @@ pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
 /// is interrupted (e.g., via Ctrl+C) while the terminal is in a non-standard state.
 ///
 /// On Unix, saves the terminal state before spawning the child process and restores
-/// it after the child exits. On Windows, this is a simple pass-through.
+/// it after the child exits, and ignores SIGINT meanwhile. On Windows, Ctrl+C is ignored
+/// meanwhile (`ConsoleCtrlGuard`), so this process waits for the child's own cleanup.
 pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
+    // Save terminal state and ignore SIGINT (Unix) or Ctrl+C (Windows) until the child exits.
     #[cfg(unix)]
-    {
-        use nix::libc::STDIN_FILENO;
+    let _guard = TerminalStateGuard::save(nix::libc::STDIN_FILENO);
+    #[cfg(windows)]
+    let _guard = ConsoleCtrlGuard::install();
 
-        // Save terminal state and ignore sigint signal for current process before spawning child
-        let _guard = TerminalStateGuard::save(STDIN_FILENO);
-
-        // Spawn and wait for child - guard will restore terminal state on drop
-        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-        child.wait().await.map_err(|e| Error::Anyhow(e.into()))
-    }
-
-    #[cfg(not(unix))]
-    {
-        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-        child.wait().await.map_err(|e| Error::Anyhow(e.into()))
-    }
+    let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+    child.wait().await.map_err(|e| Error::Anyhow(e.into()))
 }
 
 /// Build a `tokio::process::Command` for shell execution.
@@ -199,6 +206,9 @@ where
     );
     let mut cmd = build_command(&program, cwd);
     cmd.args(&prefix_args).args(&args).envs(envs);
+    // Wait out the child's own Ctrl+C cleanup; see `ConsoleCtrlGuard`.
+    #[cfg(windows)]
+    let _guard = ConsoleCtrlGuard::install();
     let status = cmd.status().await?;
     Ok(status)
 }
@@ -268,8 +278,13 @@ where
     let mut path_accesses = HashMap::<RelativePathBuf, AccessMode>::new();
     for access in tracked_accesses.iter() {
         tracing::debug!("Path access: {:?}", access);
-        let relative_path = access
-            .path
+        let (ipc_path, mode) = match access {
+            fspy::PathAccess::Read(path) => (path, AccessMode::READ),
+            fspy::PathAccess::Write(path) => (path, AccessMode::WRITE),
+            fspy::PathAccess::ReadWrite(path) => (path, AccessMode::READ | AccessMode::WRITE),
+            fspy::PathAccess::ReadDir(path) => (path, AccessMode::READ_DIR),
+        };
+        let relative_path = ipc_path
             .strip_path_prefix(cwd, |strip_result| {
                 let Ok(stripped_path) = strip_result else {
                     return None;
@@ -286,10 +301,7 @@ where
         let Some(relative_path) = relative_path else {
             continue;
         };
-        path_accesses
-            .entry(relative_path)
-            .and_modify(|mode| *mode |= access.mode)
-            .or_insert(access.mode);
+        path_accesses.entry(relative_path).and_modify(|existing| *existing |= mode).or_insert(mode);
     }
 
     Ok(FspyCommandResult { status: termination.status, path_accesses })
@@ -388,6 +400,49 @@ impl Drop for TerminalStateGuard {
         if let Some(original_sigint) = self.original_sigint.take() {
             let _ = unsafe { sigaction(Signal::SIGINT, &original_sigint) };
         }
+    }
+}
+
+/// While alive, Ctrl+C and Ctrl+Break do not end this process, as `TerminalStateGuard`
+/// ignores SIGINT on Unix: the console sends them to the child too, and this process
+/// waits for the child to finish its cleanup and exits with its code. A handler routine,
+/// unlike `SetConsoleCtrlHandler(NULL, TRUE)`, is not inherited, so the child still gets
+/// the event. The `vpx.exe` trampoline does the same.
+#[cfg(windows)]
+pub struct ConsoleCtrlGuard(());
+
+#[cfg(windows)]
+unsafe extern "system" {
+    fn SetConsoleCtrlHandler(
+        handler: Option<unsafe extern "system" fn(ctrl_type: u32) -> i32>,
+        add: i32,
+    ) -> i32;
+}
+
+#[cfg(windows)]
+impl ConsoleCtrlGuard {
+    const CTRL_BREAK_EVENT: u32 = 1;
+    const CTRL_C_EVENT: u32 = 0;
+
+    /// Handle Ctrl+C and Ctrl+Break by doing nothing; leave other events, such as closing
+    /// the console, to the next handler.
+    unsafe extern "system" fn ignore(ctrl_type: u32) -> i32 {
+        i32::from(ctrl_type == Self::CTRL_C_EVENT || ctrl_type == Self::CTRL_BREAK_EVENT)
+    }
+
+    #[must_use]
+    pub fn install() -> Self {
+        // SAFETY: registers a handler routine that only returns a value.
+        unsafe { SetConsoleCtrlHandler(Some(Self::ignore), 1) };
+        Self(())
+    }
+}
+
+#[cfg(windows)]
+impl Drop for ConsoleCtrlGuard {
+    fn drop(&mut self) {
+        // SAFETY: removes the routine install() registered; a no-op if it was not.
+        unsafe { SetConsoleCtrlHandler(Some(Self::ignore), 0) };
     }
 }
 

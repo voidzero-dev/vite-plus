@@ -1,9 +1,31 @@
 import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { defineConfig } from 'tsdown';
 
 const require = createRequire(import.meta.url);
 const lintStagedPackageJson = require('lint-staged/package.json') as { version: string };
+
+const oxcNodeCli = fileURLToPath(new URL('../../oxc-node/packages/cli/', import.meta.url));
+
+/**
+ * Bundle oxc-node's watcher (`@oxc-node/cli/watch`) from the vendored source.
+ *
+ * `src/script-watch.ts` imports `oxc-node/packages/cli/watch.js`, which exists only as
+ * upstream's hand-written `watch.d.ts`, so type checking sees that declaration rather
+ * than upstream's sources, which upstream checks against its own `@types/node`. This
+ * resolves the import to the sources for the bundle.
+ */
+const vendoredWatcherPlugin = {
+  name: 'vendored-oxc-node-watcher',
+  resolveId(source: string, importer: string | undefined) {
+    if (importer && path.resolve(path.dirname(importer), source) === `${oxcNodeCli}watch.js`) {
+      return `${oxcNodeCli}src/watch/index.ts`;
+    }
+    return undefined;
+  },
+};
 
 /**
  * Rewrite `../versions.js` → `./versions.js` at resolve time.
@@ -64,6 +86,14 @@ export default defineConfig([
       'config/bin': './src/config/bin.ts',
       'hooks/bin': './src/hooks/bin.ts',
       'staged/bin': './src/staged/bin.ts',
+      // `vpx <script>` loader: `--import` entry and its off-thread ESM hooks
+      // (the `--require` preload is built as CommonJS below).
+      'script-register': './src/script-register.ts',
+      'script-esm-hooks': './src/script-esm-hooks.ts',
+      // `vpx --watch`: oxc-node's watcher with that loader.
+      'script-watch': './src/script-watch.ts',
+      // Project-local `vpx` bin; kept apart from bin.js so it loads no binding.
+      'vpx-bin': './src/vpx-bin.ts',
     },
     outDir: 'dist',
     format: 'esm',
@@ -81,7 +111,26 @@ export default defineConfig([
         mainFields: ['module', 'main'],
       },
     },
-    plugins: [fixVersionsPathPlugin, inlineLintStagedVersionPlugin],
+    plugins: [fixVersionsPathPlugin, inlineLintStagedVersionPlugin, vendoredWatcherPlugin],
+  },
+
+  // `vpx <script>` `--require` preload. CommonJS, so it loads before any user
+  // `--require` without going through `require(esm)`; see src/script-preload.ts.
+  {
+    name: 'script-preload',
+    entry: {
+      'script-preload': './src/script-preload.ts',
+    },
+    outDir: 'dist',
+    format: 'cjs',
+    fixedExtension: true,
+    shims: true,
+    dts: false,
+    clean: false,
+    deps: { neverBundle: [/\.\.\/binding\/index\.(js|cjs)/] },
+    outputOptions: {
+      codeSplitting: false,
+    },
   },
 
   // Standalone machine protocol shipped with the prebuilt `vp` archive.

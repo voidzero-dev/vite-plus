@@ -212,7 +212,7 @@ Use these when you need lower-level package-manager behavior.
   - **Patching**: `patch`, `patch-commit`
   - **Packaging and publishing**: `pack`, `version`, `publish`, `stage`, `dist-tag`, `deprecate`
   - **Inspection**: `view`, `search`, `licenses`, `audit`, `fund`, `ping`
-  - **Authentication and access**: `login`, `logout`, `whoami`, `token`, `owner`
+  - **Authentication and access**: `login`, `logout`, `whoami`, `token`, `owner`, `team`
   - **Configuration**: `config`, `cache`
   - **Package manifest**: `pkg get`, `pkg set`, `pkg delete`, `pkg fix`
 

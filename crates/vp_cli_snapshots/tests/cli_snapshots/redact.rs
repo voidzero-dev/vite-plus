@@ -71,6 +71,24 @@ static THREAD_RE: LazyLock<regex::Regex> =
 // thread counts.
 static CLEANING_COUNT_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Cleaning \d+ files").unwrap());
+const TS7_WARNING: &str = "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.";
+// Task-cache replay merges stdout and stderr. Only the known compiler warning
+// can move within pack's startup messages; other diagnostics delimit the block.
+static PACK_STARTUP_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(&format!(
+        r"(?m)(?:^(?:ℹ (?:entry: [^\n]*|tsconfig: [^\n]*|Build start|Emit types with typescript@[^\n]*)|{})(?:\n|$))+",
+        regex::escape(TS7_WARNING)
+    ))
+    .unwrap()
+});
+// tsup's JS and declaration workers report progress concurrently. Recognize
+// only progress lines, after duration/size redaction, and keep diagnostics out.
+static TSUP_PROGRESS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)(?:^(?:CJS|ESM|DTS) (?:Build start|⚡️ Build success in <duration>|[^\n]+ <size> (?:B|kB|KB|KiB|MB|MiB|GB|GiB))(?:\n|$))+",
+    )
+    .unwrap()
+});
 // Oxlint's summary line prints its active rule count ("with 95 rules"), which
 // grows with every bundled oxlint upgrade; mask it like thread counts so lint
 // baselines survive routine dep bumps.
@@ -483,11 +501,19 @@ fn path_variants(path: &str, label: &'static str) -> Vec<(String, &'static str)>
         .into_iter()
         .flatten()
         .flat_map(|p| {
-            [
-                p.to_owned(),
-                p.cow_replace('\\', r"\\").into_owned(),
-                p.cow_replace('\\', "/").into_owned(),
-            ]
+            let forward = p.cow_replace('\\', "/").into_owned();
+            // A file URL keeps the slash before a drive letter (`file:///D:/ws`) and
+            // percent-encodes its path, so also redact that spelling: the URL becomes
+            // `file://<label>` on every platform. Set as a string, so Windows-style paths
+            // work on Unix too; the setter encodes `#` and `?`, and `%` is encoded first,
+            // as `pathToFileURL` does.
+            let url_path = url::Url::parse("file:///").ok().map(|mut url| {
+                url.set_path(&forward.cow_replace('%', "%25"));
+                url.path().to_owned()
+            });
+            [p.to_owned(), p.cow_replace('\\', r"\\").into_owned(), forward]
+                .into_iter()
+                .chain(url_path)
         })
         .collect();
     variants.sort_by_key(|v| std::cmp::Reverse(v.len()));
@@ -734,6 +760,18 @@ pub fn redact_output(
         output = sort_diagnostic_blocks(&output);
     }
 
+    if output.contains(TS7_WARNING) {
+        output = PACK_STARTUP_RE
+            .replace_all(&output, |caps: &regex::Captures| normalize_pack_startup(&caps[0]))
+            .into_owned();
+    }
+
+    if output.contains("DTS Build start") {
+        output = TSUP_PROGRESS_RE
+            .replace_all(&output, |caps: &regex::Captures| normalize_tsup_progress(&caps[0]))
+            .into_owned();
+    }
+
     output
 }
 
@@ -745,6 +783,54 @@ pub fn redact_output(
 #[expect(clippy::disallowed_types, reason = "String required by regex replace_all API")]
 pub fn redact_version_probe_output(output: String) -> String {
     BARE_VERSION_BLOCK_RE.replace_all(&output, "${1}<version>${2}").into_owned()
+}
+
+#[expect(clippy::disallowed_types, reason = "String return required by regex replace_all API")]
+fn normalize_pack_startup(block: &str) -> String {
+    let lines: Vec<_> = block.split('\n').collect();
+    let warnings = lines.iter().filter(|&&line| line == TS7_WARNING).count();
+    let starts = lines.iter().filter(|&&line| line == "ℹ Build start").count();
+    let entries = lines.iter().filter(|line| line.starts_with("ℹ entry: ")).count();
+    if warnings == 0 || starts != 1 || entries != 1 {
+        return block.to_owned();
+    }
+
+    let mut ordered = Vec::with_capacity(lines.len());
+    for line in lines {
+        if line == TS7_WARNING {
+            continue;
+        }
+        ordered.push(line);
+        if line == "ℹ Build start" {
+            ordered.extend(std::iter::repeat_n(TS7_WARNING, warnings));
+        }
+    }
+    ordered.join("\n")
+}
+
+#[expect(clippy::disallowed_types, reason = "String return required by regex replace_all API")]
+fn normalize_tsup_progress(block: &str) -> String {
+    const PHASES: [&str; 3] = ["CJS ", "ESM ", "DTS "];
+    let mut lines: Vec<_> = block.split('\n').collect();
+    for phase in PHASES {
+        let progress: Vec<_> = lines.iter().filter_map(|line| line.strip_prefix(phase)).collect();
+        if progress.is_empty() {
+            continue;
+        }
+        let starts = progress.iter().filter(|&&line| line == "Build start").count();
+        let successes =
+            progress.iter().filter(|&&line| line == "⚡️ Build success in <duration>").count();
+        if starts != 1 || successes != 1 {
+            return block.to_owned();
+        }
+    }
+
+    // Stable sorting preserves every line and each worker's order.
+    // An empty final element preserves the original trailing newline.
+    lines.sort_by_key(|line| {
+        PHASES.iter().position(|phase| line.starts_with(phase)).unwrap_or(PHASES.len())
+    });
+    lines.join("\n")
 }
 
 #[expect(

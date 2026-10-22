@@ -11,6 +11,7 @@ catalog:
   '@babel/preset-env': ^7.29.7
   '@babel/preset-typescript': ^7.29.7
   '@clack/core': ^1.5.1
+  '@e18e/eslint-plugin': ^0.8.1
   '@emnapi/core': 2.0.0-alpha.5
   '@emnapi/runtime': 2.0.0-alpha.5
   '@iconify/vue': ^5.0.0
@@ -18,12 +19,12 @@ catalog:
   '@napi-rs/cli': ^3.10.0
   '@napi-rs/wasm-runtime': ~1.2.5
   '@nkzw/safe-word-list': ^3.1.0
-  '@oxc-node/cli': ^0.1.7
-  '@oxc-node/core': ^0.1.7
-  '@oxc-project/runtime': =0.154.0
-  '@oxc-project/types': =0.154.0
+  '@oxc-node/cli': ^1.0.0
+  '@oxc-node/core': ^1.0.0
+  '@oxc-project/runtime': =0.155.0
+  '@oxc-project/types': =0.155.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
-  '@oxlint/plugins': =1.88.0
+  '@oxlint/plugins': =1.89.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
   '@rollup/plugin-commonjs': ^29.0.0
@@ -46,15 +47,15 @@ catalog:
   '@types/validate-npm-package-name': ^4.0.2
   '@types/ws': ^8.18.0
   '@typescript/native-preview': 7.0.0-dev.20260707.2
-  '@vitest/browser': 5.0.4
-  '@vitest/browser-playwright': 5.0.4
-  '@vitest/browser-preview': 5.0.4
+  '@vitest/browser': 5.0.5
+  '@vitest/browser-playwright': 5.0.5
+  '@vitest/browser-preview': 5.0.5
   '@vitest/browser-webdriverio': 5.0.0
-  '@vitest/mocker': 5.0.4
-  '@vitest/pretty-format': 5.0.4
-  '@vitest/snapshot': 5.0.4
-  '@vitest/spy': 5.0.4
-  '@vitest/utils': 5.0.4
+  '@vitest/mocker': 5.0.5
+  '@vitest/pretty-format': 5.0.5
+  '@vitest/snapshot': 5.0.5
+  '@vitest/spy': 5.0.5
+  '@vitest/utils': 5.0.5
   '@voidzero-dev/vitepress-theme': 5.0.7
   acorn: ^8.17.0
   acorn-import-assertions: ^1.9.0
@@ -90,15 +91,16 @@ catalog:
   micromatch: ^4.0.9
   minimatch: ^10.0.3
   nanotar: ^0.3.0
-  oxc-minify: =0.154.0
-  oxc-parser: =0.154.0
-  oxc-transform: =0.154.0
-  oxfmt: =0.73.0
-  oxlint: =1.88.0
+  oxc-minify: =0.155.0
+  oxc-parser: =0.155.0
+  oxc-transform: =0.155.0
+  oxfmt: =0.74.0
+  oxlint: =1.89.0
   oxlint-tsgolint: =7.0.2004
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
+  pirates: ^4.0.7
   playwright: ^1.57.0
   react: ^19.1.0
   react-dom: ^19.1.0
@@ -115,9 +117,10 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
+  tinyglobby: ^0.2.15
   tsdown: ^0.23.1
   tsx: ^4.22.0
-  typescript: ^6.0.0
+  typescript: ~7.0.2
   unified: ^11.0.5
   valibot: 1.5.0
   validate-npm-package-name: ^8.0.0
@@ -127,7 +130,7 @@ catalog:
   vitepress-plugin-group-icons: ^1.7.1
   vitepress-plugin-llms: ^1.1.0
   vitepress-plugin-og: ^0.0.5
-  vitest: 5.0.4
+  vitest: 5.0.5
   vue: ^3.5.35
   web-tree-sitter: ^0.27.0
   ws: ^8.22.0
@@ -198,10 +201,14 @@ minimumReleaseAgeExclude:
   - emnapi
   - '@vitejs/devtools'
   - '@vitejs/devtools-*'
+  - resolve.exports@2.0.4
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
+  rolldown>typescript: ^6.0.0
+  '@volar/typescript>typescript@>=7': '-'
+  '@volar/language-service>typescript@>=7': '-'
 packageExtensions:
   '@rollup/plugin-dynamic-import-vars':
     dependencies:
@@ -215,6 +222,7 @@ packageExtensions:
   '@volar/typescript':
     dependencies:
       '@volar/language-service': 2.4.28
+      typescript: ~6.0.3
   '@vue/compiler-core':
     dependencies:
       '@babel/types': ^7.29.8
@@ -224,6 +232,10 @@ packageExtensions:
   '@vue/language-core':
     dependencies:
       '@vue/compiler-sfc': ^3.5.0
+      typescript: ~6.0.3
+  '@volar/language-service':
+    dependencies:
+      typescript: ~6.0.3
 patchedDependencies:
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch

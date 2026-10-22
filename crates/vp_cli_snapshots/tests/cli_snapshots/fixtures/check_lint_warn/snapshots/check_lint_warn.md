@@ -36,3 +36,24 @@ standalone lint has the same warning suppression semantics
 Found 1 warning and 0 errors.
 Finished in <duration> on 2 files with <n> rules using <n> threads.
 ```
+
+## `vp check --deny-warnings`
+
+warnings fail the check
+
+**Exit code:** 1
+
+```
+pass: All 3 files are correctly formatted (<duration>, <n> threads)
+warn: Lint warnings found
+⚠ eslint(no-console): Unexpected console statement.
+   ╭─[src/index.js:2:3]
+ 1 │ function hello() {
+ 2 │   console.log("hello");
+   ·   ───────────
+ 3 │ }
+   ╰────
+  help: Delete this console statement.
+
+Found 0 errors and 1 warning in 2 files (<duration>, <n> threads)
+```

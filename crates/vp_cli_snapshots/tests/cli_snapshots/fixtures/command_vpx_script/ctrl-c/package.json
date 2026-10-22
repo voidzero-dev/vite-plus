@@ -1,0 +1,11 @@
+{
+  "name": "command-vpx-script-ctrl-c",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cleanup": "vpx ./ctrlc.ts"
+  },
+  "engines": {
+    "node": "22.18.0"
+  }
+}

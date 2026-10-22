@@ -11,6 +11,112 @@ mod redact;
 
 use redact::{redact_output, redact_version_probe_output};
 
+const TS7_WARNING: &str = "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.";
+
+#[test]
+fn normalizes_pack_warning_interleavings_without_dropping_messages() {
+    let startup = [
+        "ℹ entry: ./src/index.ts",
+        "ℹ tsconfig: tsconfig.json",
+        "ℹ Build start",
+        "ℹ Emit types with typescript@7.0.2",
+    ];
+    for copies in [1, 2] {
+        for position in 0..=startup.len() {
+            for ending in ["", "\n"] {
+                let mut lines = startup.to_vec();
+                lines.splice(position..position, std::iter::repeat_n(TS7_WARNING, copies));
+                let mut expected = startup.to_vec();
+                expected.splice(3..3, std::iter::repeat_n(TS7_WARNING, copies));
+                let expected = format!("{}{}", expected.join("\n"), ending);
+                let input = format!("{}{}", lines.join("\n"), ending);
+                for input in [input.clone(), input.replace('\n', "\r\n")] {
+                    assert_eq!(redact_output(input, &[], true), expected);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn keeps_pack_warnings_outside_a_complete_startup_block_in_place() {
+    for lines in [
+        vec![TS7_WARNING, "ℹ Emit types with typescript@7.0.2"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "warn: plugin failed", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "$ vp pack", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "ℹ Build start", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "ℹ entry: b.ts", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", "warn: another warning", "ℹ Build start"],
+    ] {
+        let input = lines.join("\n");
+        assert_eq!(redact_output(input.clone(), &[], true), input);
+    }
+}
+
+#[test]
+fn normalizes_concurrent_tsup_workers_without_changing_each_workers_order() {
+    let js =
+        ["CJS Build start", "CJS dist/index.cjs <size> B", "CJS ⚡️ Build success in <duration>"];
+    let dts =
+        ["DTS Build start", "DTS ⚡️ Build success in <duration>", "DTS dist/index.d.cts <size> B"];
+    // Enumerate every interleaving while preserving each worker's own order.
+    for mask in (0u32..64).filter(|mask| mask.count_ones() == 3) {
+        let mut js_lines = js.iter();
+        let mut dts_lines = dts.iter();
+        let lines: Vec<_> = (0..6)
+            .map(|bit| {
+                if mask & (1 << bit) == 0 {
+                    *js_lines.next().unwrap()
+                } else {
+                    *dts_lines.next().unwrap()
+                }
+            })
+            .collect();
+        for ending in ["", "\n"] {
+            let input = format!("{}{}", lines.join("\n"), ending);
+            let expected = format!("{}{}", [js, dts].concat().join("\n"), ending);
+            for input in [input.clone(), input.replace('\n', "\r\n")] {
+                assert_eq!(redact_output(input, &[], true), expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn preserves_tsup_artifacts_and_separate_builds() {
+    let input = concat!(
+        "ESM Build start\nDTS Build start\nCJS Build start\n",
+        "ESM dist/index.mjs 10 B\nCJS dist/z.cjs 20 B\nCJS dist/a.cjs 30 B\n",
+        "CJS dist/a.cjs 30 B\nDTS ⚡️ Build success in 1.5s\n",
+        "DTS dist/index.d.ts 15 B\nCJS ⚡️ Build success in 20ms\n",
+        "ESM ⚡️ Build success in 30ms\n",
+    );
+    let expected = concat!(
+        "CJS Build start\nCJS dist/z.cjs <size> B\nCJS dist/a.cjs <size> B\n",
+        "CJS dist/a.cjs <size> B\nCJS ⚡️ Build success in <duration>\n",
+        "ESM Build start\nESM dist/index.mjs <size> B\nESM ⚡️ Build success in <duration>\n",
+        "DTS Build start\nDTS ⚡️ Build success in <duration>\nDTS dist/index.d.ts <size> B\n",
+    );
+    assert_eq!(
+        redact_output(format!("$ vp run build a\n{input}$ vp run build b\n{input}"), &[], true),
+        format!("$ vp run build a\n{expected}$ vp run build b\n{expected}")
+    );
+}
+
+#[test]
+fn preserves_incomplete_or_failed_tsup_builds() {
+    for input in [
+        "DTS Build start\nCJS Build start\nCJS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nCJS Build start\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nCJS ⚡️ Build success in <duration>\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nError: build failed\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nwarn: plugin warning\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+    ] {
+        assert_eq!(redact_output(input.into(), &[], true), input);
+    }
+}
+
 #[test]
 fn masks_yarn_compound_elapsed_times_as_one_duration() {
     for elapsed in ["999ms", "1s", "1s 0ms", "1m 2s", "1h 2m 3s 4ms"] {
@@ -674,8 +780,30 @@ fn redacts_forward_slash_windows_path_variants() {
     let input = "at file:///E:/Temp/ws/src/main.ts\n".to_owned();
     assert_eq!(
         redact_output(input, &[("E:\\Temp\\ws", "<workspace>")], true),
-        "at file:///<workspace>/src/main.ts\n"
+        "at file://<workspace>/src/main.ts\n"
     );
+}
+
+#[test]
+fn file_urls_redact_to_one_spelling_on_every_platform() {
+    // The slash before a Windows drive letter is part of the URL, not the path.
+    let windows = "Failed to transform file:///D:/a/ws/main.ts\n".to_owned();
+    let unix = "Failed to transform file:///tmp/ws/main.ts\n".to_owned();
+    let expected = "Failed to transform file://<workspace>/main.ts\n";
+    assert_eq!(redact_output(windows, &[("D:\\a\\ws", "<workspace>")], true), expected);
+    assert_eq!(redact_output(unix, &[("/tmp/ws", "<workspace>")], true), expected);
+}
+
+#[test]
+fn file_urls_with_percent_encoded_paths_redact() {
+    let windows = "at file:///C:/Users/First%20Last/ws/main.ts\n".to_owned();
+    let unix = "at file:///home/first%20last/ws/main.ts\n".to_owned();
+    let expected = "at file://<workspace>/main.ts\n";
+    assert_eq!(
+        redact_output(windows, &[("C:\\Users\\First Last\\ws", "<workspace>")], true),
+        expected
+    );
+    assert_eq!(redact_output(unix, &[("/home/first last/ws", "<workspace>")], true), expected);
 }
 
 #[cfg(windows)]

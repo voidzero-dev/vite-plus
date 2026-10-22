@@ -1,6 +1,6 @@
 [package]
 name = "vite-plus-cli"
-version = "1.2.0"
+version = "1.3.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,7 @@ publish = false
 rust-version.workspace = true
 
 [features]
+oxc-node = ["dep:oxc-node"]
 rolldown = ["dep:rolldown_binding"]
 
 [dependencies]
@@ -16,7 +17,6 @@ async-trait = { workspace = true }
 base64-simd = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cow-utils = { workspace = true }
-fspy = { workspace = true }
 rustc-hash = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
@@ -42,6 +42,7 @@ vt = { workspace = true }
 vt_casefold = { workspace = true }
 vt_workspace = { workspace = true }
 rolldown_binding = { workspace = true, optional = true, features = ["disable_panic_hook"] }
+oxc-node = { workspace = true, optional = true }
 
 [build-dependencies]
 napi-build = { workspace = true }

@@ -264,6 +264,7 @@ impl HttpClient {
                 .with_min_delay(Duration::from_millis(self.min_delay))
                 .with_max_times(self.max_times),
         )
+        .when(|error| !is_not_found(error))
         .await
     }
 
@@ -614,10 +615,15 @@ async fn download_and_extract_tgz_once(
 ///   from a `spawn_blocking` panic, …) is permanent and is not retried.
 fn is_retryable_download_error(err: &Error) -> bool {
     match err {
-        Error::Reqwest(e) => e.status() != Some(StatusCode::NOT_FOUND),
+        Error::Reqwest(_) => !is_not_found(err),
         Error::Io(_) | Error::IoWithPath { .. } | Error::HashMismatch { .. } => true,
         _ => false,
     }
+}
+
+/// A registry 404 means the package, version, or dist-tag does not exist, so retrying cannot help.
+pub(crate) fn is_not_found(err: &Error) -> bool {
+    matches!(err, Error::Reqwest(e) if e.status() == Some(StatusCode::NOT_FOUND))
 }
 
 /// Compute the digest of a file in chunks.
@@ -1223,7 +1229,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("test.txt");
 
-        server.mock(|when, then| {
+        let mock = server.mock(|when, then| {
             when.method(GET).path("/server_error");
             then.status(500).body("Internal Server Error");
         });
@@ -1233,8 +1239,10 @@ mod tests {
 
         // Should fail after retries
         let result = client.download_file(&url, &target_file, None).await;
-        // println!("result: {:?}", result);
         assert!(result.is_err(), "Expected download to fail with 500 after retries");
+
+        // Should try 3 times, 1 for first request, 2 for retries
+        mock.assert_hits(3);
     }
 
     #[tokio::test]
@@ -1403,7 +1411,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Flaky on musl/Alpine — temp file race condition
     async fn test_verify_file_hash_sha1() {
         use sha1::Sha1;
         use sha2::Digest;
@@ -1416,6 +1423,8 @@ mod tests {
         let content = b"Hello, World!";
         let mut file = tokio::fs::File::create(&test_file).await.unwrap();
         file.write_all(content).await.unwrap();
+        // Finish the background write before hashing through another file handle.
+        file.flush().await.unwrap();
 
         // Calculate expected SHA1
         let mut hasher = Sha1::new();
@@ -1424,12 +1433,12 @@ mod tests {
 
         // Test successful verification
         let result = verify_file_hash(&test_file, &expected_hash).await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{result:?}");
 
         // Test failed verification
         let wrong_hash = "sha1.0000000000000000000000000000000000000000";
         let result = verify_file_hash(&test_file, wrong_hash).await;
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::HashMismatch { .. })), "{result:?}");
     }
 
     #[tokio::test]
@@ -1464,7 +1473,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Flaky on musl/Alpine — temp file race condition
     async fn test_verify_file_hash_sha224() {
         use sha2::{Digest, Sha224};
         use tokio::io::AsyncWriteExt;
@@ -1476,6 +1484,8 @@ mod tests {
         let content = b"Test content for SHA224";
         let mut file = tokio::fs::File::create(&test_file).await.unwrap();
         file.write_all(content).await.unwrap();
+        // Finish the background write before hashing through another file handle.
+        file.flush().await.unwrap();
 
         // Calculate expected SHA224
         let mut hasher = Sha224::new();
@@ -1484,12 +1494,12 @@ mod tests {
 
         // Test successful verification
         let result = verify_file_hash(&test_file, &expected_hash).await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{result:?}");
 
         // Test failed verification
         let wrong_hash = "sha224.00000000000000000000000000000000000000000000000000000000";
         let result = verify_file_hash(&test_file, wrong_hash).await;
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::HashMismatch { .. })), "{result:?}");
     }
 
     #[tokio::test]

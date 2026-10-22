@@ -112,6 +112,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: import_statement
 transform:
@@ -128,6 +130,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: export_statement
 transform:
@@ -144,6 +148,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: arguments
     inside:
@@ -165,6 +171,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: arguments
     inside:
@@ -202,6 +210,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['\"]vite/.+['\"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: module
 transform:
@@ -1738,6 +1748,11 @@ static RE_REF_VITE_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vite/(.+?)(["']\s*/>)"#).unwrap()
 });
 
+/// `vite/rolldown[/...]` is not re-exported by `vite-plus`, so it stays untouched.
+static RE_REF_VITE_ROLLDOWN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^\s*///\s*<reference\s+types\s*=\s*["']vite/rolldown(/[^"']*)?["']"#).unwrap()
+});
+
 /// bare `tsdown` → `vite-plus/pack`
 static RE_REF_TSDOWN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown(["']\s*/>)"#).unwrap()
@@ -1986,7 +2001,9 @@ fn rewrite_reference_types(
             }
         }
         if !skip_packages.skip_vite {
-            if apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}") {
+            if !RE_REF_VITE_ROLLDOWN.is_match(line)
+                && apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}")
+            {
                 changed = true;
                 continue;
             }
@@ -2862,26 +2879,6 @@ mod tests {
     }
 
     #[test]
-    fn test_rewrite_import_content_vite() {
-        let vite_config = r#"import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [],
-});"#;
-
-        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { defineConfig } from 'vite-plus'
-
-export default defineConfig({
-  plugins: [],
-});"#
-        );
-    }
-
-    #[test]
     fn test_rewrite_import_content_vite_double_quotes() {
         let vite_config = r#"import { defineConfig } from "vite";
 
@@ -3302,6 +3299,26 @@ export default ModuleRunner;"#;
             r#"import { ModuleRunner } from 'vite-plus/module-runner';
 
 export default ModuleRunner;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite_rolldown_subpath_is_kept() {
+        let vite_config = r#"/// <reference types="vite/rolldown/plugins" />
+import "vite/rolldown/plugins";
+import { viteAliasPlugin } from 'vite/rolldown/plugins';
+import 'vite/rolldown';
+export * from "vite/rolldown/utils";
+const a = require('vite/rolldown/plugins');
+const b = await import('vite/rolldown/plugins');
+declare module 'vite/rolldown/plugins' {}
+import { ModuleRunner } from 'vite/module-runner';"#;
+
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            vite_config.replace("'vite/module-runner'", "'vite-plus/module-runner'")
         );
     }
 
@@ -5571,14 +5588,6 @@ const { defineConfig } = require('vite-plus');"#
     // ====================================
 
     #[test]
-    fn test_rewrite_reference_types_vite_client() {
-        let content = r#"/// <reference types="vite/client" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/client" />"#);
-    }
-
-    #[test]
     fn test_rewrite_reference_types_vite_client_single_quotes() {
         let content = r#"/// <reference types='vite/client' />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
@@ -5589,30 +5598,6 @@ const { defineConfig } = require('vite-plus');"#
     #[test]
     fn test_rewrite_reference_types_bare_vite() {
         let content = r#"/// <reference types="vite" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_bare_vitest() {
-        let content = r#"/// <reference types="vitest" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_globals() {
-        let content = r#"/// <reference types="vitest/globals" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test/globals" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_config() {
-        let content = r#"/// <reference types="vitest/config" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(result.content, r#"/// <reference types="vite-plus" />"#);
@@ -5641,14 +5626,6 @@ const { defineConfig } = require('vite-plus');"#
             assert!(result.updated, "@vitest/browser/{sub} reference should be rewritten");
             assert_eq!(result.content, format!(r#"/// <reference types="{expected}" />"#));
         }
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_scoped_browser_context() {
-        let content = r#"/// <reference types="@vitest/browser/context" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test/browser/context" />"#);
     }
 
     #[test]

@@ -16,12 +16,12 @@ use super::{
 use crate::{
     commands::{
         env::{
-            bin_config::{BinConfig, BinSource},
+            bin_config::{BinConfig, BinSource, validate_bin_name},
             config::{self, ShimMode},
             package_manager,
             package_metadata::PackageMetadata,
         },
-        global::install::is_protected_shim,
+        global::install::{extract_binaries, is_protected_shim},
     },
     error::Error,
 };
@@ -30,12 +30,12 @@ use crate::{
 struct NpmGlobalCommand {
     /// Package names/specs extracted from args (e.g., ["codex", "typescript@5"])
     packages: Vec<String>,
-    /// Explicit `--prefix <dir>` from the CLI args, if present.
+    /// Explicit `--prefix <dir>` or `-C <dir>` from the CLI args, if present.
     explicit_prefix: Option<String>,
 }
 
 /// Value-bearing npm flags whose next arg should be skipped during package extraction.
-/// Note: `--prefix` is handled separately to capture its value.
+/// Note: `--prefix` and `-C` are handled separately to capture their values.
 const NPM_VALUE_FLAGS: &[&str] = &["--registry", "--tag", "--cache", "--tmp"];
 
 /// Install subcommands recognized by npm.
@@ -59,7 +59,7 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
     let mut seen_positional = false;
 
     for arg in args {
-        // Capture the value after --prefix
+        // Capture the value after --prefix or -C
         if prefix_next {
             prefix_next = false;
             explicit_prefix = Some(arg.clone());
@@ -76,12 +76,12 @@ fn parse_npm_global_command(args: &[String], subcommands: &[&str]) -> Option<Npm
             continue;
         }
 
-        // Capture --prefix specially (its value is needed for prefix resolution)
-        if arg == "--prefix" {
+        // Capture prefix options specially (their values are needed for prefix resolution)
+        if arg == "--prefix" || arg == "-C" {
             prefix_next = true;
             continue;
         }
-        if let Some(value) = arg.strip_prefix("--prefix=") {
+        if let Some(value) = arg.strip_prefix("--prefix=").or_else(|| arg.strip_prefix("-C=")) {
             explicit_prefix = Some(value.to_string());
             continue;
         }
@@ -240,15 +240,16 @@ fn check_npm_global_install_result(
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-        let Some(content) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
+        let Some((package_dir, content)) =
+            read_npm_package_json(npm_prefix, node_dir, &package_name)
+        else {
             continue;
         };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
-        let bin_names = extract_bin_names(&package_json);
-
-        for bin_name in bin_names {
+        for bin in extract_binaries(&package_json, &package_dir) {
+            let bin_name = bin.name;
             // Skip protected shims (core shims and default env shims). Tell
             // the user for non-core names: npm installed the package, but the
             // binary stays unlinked.
@@ -369,47 +370,6 @@ fn check_npm_global_install_result(
     }
 }
 
-/// Extract binary names from a package.json value.
-fn extract_bin_names(package_json: &serde_json::Value) -> Vec<String> {
-    let mut bins = Vec::new();
-
-    if let Some(bin) = package_json.get("bin") {
-        match bin {
-            serde_json::Value::String(_) => {
-                // Single binary with package name
-                if let Some(name) = package_json["name"].as_str() {
-                    let bin_name = name.split('/').last().unwrap_or(name);
-                    bins.push(bin_name.to_string());
-                }
-            }
-            serde_json::Value::Object(map) => {
-                for name in map.keys() {
-                    bins.push(name.clone());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    bins
-}
-
-/// Extract the relative path for a specific bin name from a package.json "bin" field.
-fn extract_bin_path(package_json: &serde_json::Value, bin_name: &str) -> Option<String> {
-    match package_json.get("bin")? {
-        serde_json::Value::String(path) => {
-            // Single binary — matches if the package name's last segment equals bin_name
-            let pkg_name = package_json["name"].as_str()?;
-            let expected = pkg_name.split('/').last().unwrap_or(pkg_name);
-            if expected == bin_name { Some(path.clone()) } else { None }
-        }
-        serde_json::Value::Object(map) => {
-            map.get(bin_name).and_then(|v| v.as_str()).map(str::to_string)
-        }
-        _ => None,
-    }
-}
-
 /// Create a bin link for a binary and record it via BinConfig.
 pub(crate) fn create_bin_link(
     bin_dir: &AbsolutePath,
@@ -418,6 +378,10 @@ pub(crate) fn create_bin_link(
     package_name: &str,
     node_version: &str,
 ) {
+    if let Err(error) = validate_bin_name(bin_name) {
+        output::error(&error.to_string());
+        return;
+    }
     let mut linked = false;
 
     #[cfg(unix)]
@@ -500,13 +464,21 @@ fn dedup_missing_bins(
 /// When a bin is owned by a **different** npm package (not being uninstalled), npm may
 /// still delete its binary from `npm_bin_dir`, leaving our symlink dangling. In that
 /// case we repair the link by pointing directly at the surviving package's binary.
-fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefix: &AbsolutePath) {
+fn remove_npm_global_uninstall_links(
+    bin_entries: &[(String, String, AbsolutePathBuf)],
+    npm_prefix: &AbsolutePath,
+) {
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
-    for (bin_name, package_name) in bin_entries {
+    for (bin_name, package_name, package_dir) in bin_entries {
         // Skip protected shims: a stale Npm BinConfig must not let
         // `npm uninstall -g` delete a default shim that `vp env setup` owns.
         if is_protected_shim(bin_name, false) {
+            continue;
+        }
+
+        // A successful npm command may be a dry-run configured through flags, env, or npmrc.
+        if package_dir.as_path().try_exists().unwrap_or(true) {
             continue;
         }
 
@@ -564,10 +536,13 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            let Some(bin_rel_path) = extract_bin_path(&package_json, bin_name) else {
+            let Some(bin) = extract_binaries(&package_json, &node_modules_dir)
+                .into_iter()
+                .find(|bin| bin.name == *bin_name)
+            else {
                 continue;
             };
-            let source_path = node_modules_dir.join(&bin_rel_path);
+            let source_path = node_modules_dir.join(&bin.path);
             if source_path.as_path().exists() {
                 let _ = std::fs::remove_file(link_path.as_path());
                 #[cfg(windows)]
@@ -587,41 +562,41 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
     }
 }
 
-/// Read the installed package.json from npm's node_modules directory.
+/// Read the installed package.json and return its installation directory with the contents.
 /// Tries the npm prefix first (handles custom prefix), then falls back to node_dir.
 fn read_npm_package_json(
     npm_prefix: &AbsolutePath,
     node_dir: &AbsolutePath,
     package_name: &str,
-) -> Option<String> {
-    std::fs::read_to_string(
-        config::get_node_modules_dir(npm_prefix, package_name).join("package.json").as_path(),
-    )
-    .ok()
-    .or_else(|| {
-        let dir = config::get_node_modules_dir(node_dir, package_name);
-        std::fs::read_to_string(dir.join("package.json").as_path()).ok()
+) -> Option<(AbsolutePathBuf, String)> {
+    [npm_prefix, node_dir].into_iter().find_map(|prefix| {
+        let dir = config::get_node_modules_dir(prefix, package_name);
+        std::fs::read_to_string(dir.join("package.json").as_path())
+            .ok()
+            .map(|content| (dir, content))
     })
 }
 
-/// Collect (bin_name, package_name) pairs from packages by reading their installed package.json files.
+/// Collect bin names, package names, and their pre-uninstall installation paths.
 fn collect_bin_names_from_npm(
     packages: &[String],
     npm_prefix: &AbsolutePath,
     node_dir: &AbsolutePath,
-) -> Vec<(String, String)> {
+) -> Vec<(String, String, AbsolutePathBuf)> {
     let mut all_bins = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-        let Some(content) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
+        let Some((package_dir, content)) =
+            read_npm_package_json(npm_prefix, node_dir, &package_name)
+        else {
             continue;
         };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
-        for bin_name in extract_bin_names(&package_json) {
-            all_bins.push((bin_name, package_name.clone()));
+        for bin in extract_binaries(&package_json, &package_dir) {
+            all_bins.push((bin.name, package_name.clone(), package_dir.clone()));
         }
     }
 
@@ -737,16 +712,7 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         PackageManagerType::from_tool(tool).map_or(tool, |kind| kind.bin_name_for_tool(tool));
     if env.contains(inherited_tool)
         && let Some(path) = find_system_tool(inherited_tool)
-        && let Ok(target) = path.as_path().canonicalize()
-        && ["js_runtime", "package_manager"].iter().any(|directory| {
-            vp_shared::EnvConfig::get()
-                .dirs
-                .data
-                .join(directory)
-                .as_path()
-                .canonicalize()
-                .is_ok_and(|root| target.starts_with(root))
-        })
+        && vp_command::is_managed_install(path.as_path())
     {
         return exec::exec_tool(&path, args, env);
     }
@@ -1059,29 +1025,11 @@ pub(crate) fn locate_package_binary(
     let package_json: serde_json::Value =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse package.json: {e}"))?;
 
-    let binary_path = match package_json.get("bin") {
-        Some(serde_json::Value::String(path)) => {
-            // Single binary - check if it matches the name
-            let pkg_name = package_json["name"].as_str().unwrap_or("");
-            let expected_name = pkg_name.split('/').last().unwrap_or(pkg_name);
-            if expected_name == binary_name {
-                node_modules_dir.join(path)
-            } else {
-                return Err(format!("Binary {} not found in package", binary_name));
-            }
-        }
-        Some(serde_json::Value::Object(map)) => {
-            // Multiple binaries - find the one we need
-            if let Some(serde_json::Value::String(path)) = map.get(binary_name) {
-                node_modules_dir.join(path)
-            } else {
-                return Err(format!("Binary {} not found in package", binary_name));
-            }
-        }
-        _ => {
-            return Err(format!("No bin field in package.json for {}", package_name));
-        }
-    };
+    let bin = extract_binaries(&package_json, &node_modules_dir)
+        .into_iter()
+        .find(|bin| bin.name == binary_name)
+        .ok_or_else(|| format!("Binary {} not found in package", binary_name))?;
+    let binary_path = node_modules_dir.join(&bin.path);
 
     if !binary_path.as_path().exists() {
         return Err(format!(
@@ -1323,68 +1271,40 @@ fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf
     }
 }
 
-/// Explicit bypass skips Vite+ installations and the directories listed by the caller.
-fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let bin_dir = config::get_bin_dir().ok();
-    let path_var = std::env::var_os("PATH")?;
-    tracing::debug!("path_var: {:?}", path_var);
+/// Process-dependent inputs for [`vp_command::find_external_tool`].
+struct ExternalToolInputs {
+    path: std::ffi::OsString,
+    bypass: Vec<std::path::PathBuf>,
+    self_exe: Option<std::path::PathBuf>,
+}
 
-    // Parse VP_BYPASS as a PATH-style list of additional directories to skip.
-    // This prevents infinite loops when multiple vite-plus installations exist in PATH.
-    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
-        .map(|v| std::env::split_paths(&v).collect())
-        .unwrap_or_default();
-    tracing::debug!("bypass_paths: {:?}", bypass_paths);
+impl ExternalToolInputs {
+    /// Read PATH, `VP_BYPASS`, and the canonical `current_exe()`.
+    /// Returns `None` when PATH is unset.
+    fn from_process_env() -> Option<Self> {
+        let path = std::env::var_os("PATH")?;
+        // Parse VP_BYPASS as a PATH-style list of additional directories to skip.
+        // This prevents infinite loops when multiple vite-plus installations exist in PATH.
+        let bypass = std::env::var_os(env_vars::VP_BYPASS)
+            .map(|v| std::env::split_paths(&v).collect())
+            .unwrap_or_default();
+        let self_exe = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
+        Some(Self { path, bypass, self_exe })
+    }
 
-    // Filter PATH to exclude our bin directory and any bypass directories.
-    // Relative entries are resolved against cwd because `which` reports
-    // matches from them as relative paths, which `AbsolutePathBuf` rejects;
-    // `~`-prefixed entries are left to `which`'s own tilde expansion.
-    let mut filtered_paths: Vec<_> = std::env::split_paths(&path_var)
-        .filter(|p| {
-            if let Some(ref bin) = bin_dir {
-                if p == bin.as_path() {
-                    return false;
-                }
-            }
-            !bypass_paths.iter().any(|bp| p == bp)
-        })
-        .map(|p| if p.is_absolute() || p.starts_with("~") { p } else { cwd.as_path().join(p) })
-        .collect();
-
-    // Exclude our executable and shims from other installations, which would
-    // otherwise dispatch back into vp.
-    let self_real = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
-    loop {
-        // Use vp_command::resolve_bin with filtered PATH - stops at first match
-        let search_path = std::env::join_paths(&filtered_paths).ok()?;
-        let resolved = vp_command::resolve_bin(tool, Some(&search_path), cwd).ok()?;
-        let canonical = resolved.as_path().canonicalize().ok();
-        // A sibling `vp` may itself be a shim sharing an external manager's executable.
-        let is_unix_shim = cfg!(unix)
-            && canonical
-                .as_ref()
-                .is_some_and(|target| target.file_name().is_some_and(|name| name == "vp"));
-        if !vp_shared::is_windows_trampoline(resolved.as_path())
-            && !is_unix_shim
-            && (self_real.is_none() || canonical != self_real)
-        {
-            return Some(resolved);
-        }
-        // Canonicalize both sides of the comparison so symlink-aliased PATH
-        // entries still match the resolved parent.
-        let self_dir = resolved.as_path().parent()?.to_path_buf();
-        let canonical_self_dir = self_dir.canonicalize().ok();
-        let len_before = filtered_paths.len();
-        filtered_paths.retain(|p| {
-            *p != self_dir
-                && (canonical_self_dir.is_none() || p.canonicalize().ok() != canonical_self_dir)
-        });
-        if filtered_paths.len() == len_before {
-            // Nothing left to drop; give up rather than loop forever.
-            return None;
+    fn query(&self) -> vp_command::ExternalToolQuery<'_> {
+        vp_command::ExternalToolQuery {
+            path: &self.path,
+            bypass: &self.bypass,
+            self_exe: self.self_exe.as_deref(),
         }
     }
+}
+
+/// Explicit bypass skips Vite+ installations and the directories listed by the caller.
+fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let inputs = ExternalToolInputs::from_process_env()?;
+    vp_command::find_external_tool(tool, &inputs.query(), cwd)
 }
 
 #[cfg(test)]
@@ -1894,6 +1814,136 @@ mod tests {
         assert!(result.is_none(), "URLs should be filtered");
     }
 
+    #[test]
+    fn test_create_bin_link_rejects_invalid_binary_name() {
+        let temp = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let bin_dir = config::get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let source = bin_dir.join("source.js");
+            std::fs::write(&source, "console.log('test');").unwrap();
+            create_bin_link(&bin_dir, "../outside", &source, "test-package", "22.18.0");
+            for name in ["outside", "outside.cmd", "outside.json"] {
+                assert!(std::fs::symlink_metadata(temp.path().join(name)).is_err());
+            }
+        });
+    }
+
+    #[test]
+    fn test_npm_uninstall_preserves_links_until_package_is_removed() {
+        let temp = TempDir::new().unwrap();
+        let npm_prefix = AbsolutePathBuf::new(temp.path().join("npm-prefix")).unwrap();
+        let package_dir = config::get_node_modules_dir(&npm_prefix, "test-package");
+        std::fs::create_dir_all(&package_dir).unwrap();
+        let source = package_dir.join("cli.js");
+        std::fs::write(&source, "console.log('test');").unwrap();
+        std::fs::write(
+            package_dir.join("package.json"),
+            r#"{"name":"test-package","bin":{"test-cli":"cli.js"}}"#,
+        )
+        .unwrap();
+
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let bin_dir = config::get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            create_bin_link(&bin_dir, "test-cli", &source, "test-package", "22.18.0");
+            let link = bin_dir.join("test-cli");
+            let metadata_path = BinConfig::path("test-cli").unwrap();
+            let metadata = std::fs::read(&metadata_path).unwrap();
+            assert!(link.as_path().exists());
+
+            let bins = collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix, &npm_prefix);
+            assert_eq!(bins.len(), 1);
+            #[cfg(unix)]
+            let local_dir = npm_prefix.join("node_modules").join("test-package");
+            #[cfg(unix)]
+            std::fs::create_dir_all(&local_dir).unwrap();
+            remove_npm_global_uninstall_links(&bins, &npm_prefix);
+
+            assert!(link.as_path().exists(), "dry-run must preserve the installed command");
+            assert_eq!(std::fs::read(&metadata_path).unwrap(), metadata);
+            #[cfg(windows)]
+            assert!(bin_dir.join("test-cli.cmd").as_path().exists());
+
+            std::fs::remove_dir_all(&package_dir).unwrap();
+            remove_npm_global_uninstall_links(&bins, &npm_prefix);
+
+            assert!(std::fs::symlink_metadata(&link).is_err());
+            assert!(!metadata_path.as_path().exists());
+            #[cfg(unix)]
+            assert!(local_dir.as_path().exists());
+            #[cfg(windows)]
+            assert!(!bin_dir.join("test-cli.cmd").as_path().exists());
+        });
+    }
+
+    #[test]
+    fn test_npm_uninstall_prefers_configured_prefix() {
+        let temp = TempDir::new().unwrap();
+        let npm_prefix = AbsolutePathBuf::new(temp.path().join("npm-prefix")).unwrap();
+        let node_dir = AbsolutePathBuf::new(temp.path().join("node")).unwrap();
+        for prefix in [&npm_prefix, &node_dir] {
+            let package_dir = config::get_node_modules_dir(prefix, "test-package");
+            std::fs::create_dir_all(&package_dir).unwrap();
+            std::fs::write(
+                package_dir.join("package.json"),
+                r#"{"name":"test-package","bin":{"test-cli":"cli.js"}}"#,
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix, &node_dir),
+            vec![(
+                "test-cli".to_string(),
+                "test-package".to_string(),
+                config::get_node_modules_dir(&npm_prefix, "test-package"),
+            )]
+        );
+    }
+
+    #[test]
+    fn test_npm_uninstall_preserves_fallback_links_until_package_is_removed() {
+        let temp = TempDir::new().unwrap();
+        let npm_prefix = AbsolutePathBuf::new(temp.path().join("npm-prefix")).unwrap();
+        let node_dir = AbsolutePathBuf::new(temp.path().join("node")).unwrap();
+        let package_dir = config::get_node_modules_dir(&node_dir, "test-package");
+        std::fs::create_dir_all(&package_dir).unwrap();
+        std::fs::write(
+            package_dir.join("package.json"),
+            r#"{"name":"test-package","bin":{"test-cli":"cli.js"}}"#,
+        )
+        .unwrap();
+
+        let source = package_dir.join("cli.js");
+        std::fs::write(&source, "console.log('test');").unwrap();
+        let bins = collect_bin_names_from_npm(&s(&["test-package"]), &npm_prefix, &node_dir);
+        assert_eq!(
+            bins,
+            vec![("test-cli".to_string(), "test-package".to_string(), package_dir.clone())]
+        );
+
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let bin_dir = config::get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            create_bin_link(&bin_dir, "test-cli", &source, "test-package", "22.18.0");
+            let link = bin_dir.join("test-cli");
+            let metadata_path = BinConfig::path("test-cli").unwrap();
+            let metadata = std::fs::read(&metadata_path).unwrap();
+
+            remove_npm_global_uninstall_links(&bins, &npm_prefix);
+            assert!(
+                link.as_path().exists(),
+                "a surviving fallback installation must keep its link"
+            );
+            assert_eq!(std::fs::read(&metadata_path).unwrap(), metadata);
+
+            std::fs::remove_dir_all(&package_dir).unwrap();
+            remove_npm_global_uninstall_links(&bins, &npm_prefix);
+            assert!(std::fs::symlink_metadata(&link).is_err());
+            assert!(!metadata_path.as_path().exists());
+        });
+    }
+
     // --- parse_npm_global_uninstall tests ---
 
     #[test]
@@ -2003,37 +2053,66 @@ mod tests {
         assert_eq!(resolve_package_name("./nonexistent"), None);
     }
 
-    // --- extract_bin_names tests ---
-
     #[test]
-    fn test_extract_bin_names_single() {
-        let json: serde_json::Value =
-            serde_json::from_str(r#"{"name": "my-pkg", "bin": "./cli.js"}"#).unwrap();
-        assert_eq!(extract_bin_names(&json), vec!["my-pkg"]);
+    fn test_locate_package_binary_filters_unsafe_entries() {
+        let temp = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let metadata = PackageMetadata::new(
+                "my-pkg".to_string(),
+                "1.0.0".to_string(),
+                "22.18.0".to_string(),
+                None,
+                vec!["valid".to_string(), "outside".to_string()],
+                Default::default(),
+                "npm".to_string(),
+            );
+            let package_dir =
+                config::get_node_modules_dir(&metadata.installation_dir().unwrap(), &metadata.name);
+            std::fs::create_dir_all(&package_dir).unwrap();
+            std::fs::write(package_dir.join("cli.js"), "console.log('valid');").unwrap();
+            std::fs::write(package_dir.join("../outside.js"), "console.log('outside');").unwrap();
+            std::fs::write(
+                package_dir.join("package.json"),
+                serde_json::json!({"bin": {
+                    "@scope/valid": "cli.js", "outside": "../outside.js",
+                }})
+                .to_string(),
+            )
+            .unwrap();
+            assert_eq!(
+                locate_package_binary(&metadata, "valid").unwrap(),
+                package_dir.join("cli.js")
+            );
+            assert!(locate_package_binary(&metadata, "outside").is_err());
+        });
     }
 
     #[test]
-    fn test_extract_bin_names_scoped_single() {
-        let json: serde_json::Value =
-            serde_json::from_str(r#"{"name": "@scope/my-pkg", "bin": "./cli.js"}"#).unwrap();
-        assert_eq!(extract_bin_names(&json), vec!["my-pkg"]);
-    }
-
-    #[test]
-    fn test_extract_bin_names_object() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{"name": "pkg", "bin": {"cli-a": "./a.js", "cli-b": "./b.js"}}"#,
-        )
-        .unwrap();
-        let mut names = extract_bin_names(&json);
-        names.sort();
-        assert_eq!(names, vec!["cli-a", "cli-b"]);
-    }
-
-    #[test]
-    fn test_extract_bin_names_no_bin() {
-        let json: serde_json::Value = serde_json::from_str(r#"{"name": "pkg"}"#).unwrap();
-        assert!(extract_bin_names(&json).is_empty());
+    fn test_npm_bin_collection_filters_unsafe_entries() {
+        let temp = TempDir::new().unwrap();
+        let prefix = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let package_dir = config::get_node_modules_dir(&prefix, "my-pkg");
+        std::fs::create_dir_all(&package_dir).unwrap();
+        for (manifest, expected) in [
+            (serde_json::json!({"name": "my-pkg", "bin": "./cli.js"}), vec!["my-pkg"]),
+            (serde_json::json!({"name": "@scope/my-pkg", "bin": "./cli.js"}), vec!["my-pkg"]),
+            (
+                serde_json::json!({"bin": {
+                    "cli-a": "./a.js", "@scope/cli-b": "./b.js",
+                    "../victim": "./a.js", "outside": "../outside.js",
+                }}),
+                vec!["cli-a", "cli-b"],
+            ),
+            (serde_json::json!({"name": "my-pkg"}), vec![]),
+        ] {
+            std::fs::write(package_dir.join("package.json"), manifest.to_string()).unwrap();
+            let mut names: Vec<_> = collect_bin_names_from_npm(&s(&["my-pkg"]), &prefix, &prefix)
+                .into_iter()
+                .map(|(name, _, _)| name)
+                .collect();
+            names.sort();
+            assert_eq!(names, expected);
+        }
     }
 
     // --- is_local_path tests ---
@@ -2179,6 +2258,23 @@ mod tests {
         let parsed = result.unwrap();
         assert_eq!(parsed.packages, vec!["pkg"]);
         assert_eq!(parsed.explicit_prefix.as_deref(), Some("/custom/dir"));
+    }
+
+    #[test]
+    fn test_parse_npm_global_command_prefix_shorthand() {
+        for command in ["install", "uninstall"] {
+            for args in [
+                s(&[command, "-g", "-C", "/tmp/test", "pkg"]),
+                s(&["-C", "/tmp/test", command, "-g", "pkg"]),
+                s(&[command, "-g", "-C=/tmp/test", "pkg"]),
+                s(&[command, "-g", "--prefix", "/tmp/other", "-C", "/tmp/test", "pkg"]),
+                s(&[command, "-g", "-C", "/tmp/other", "--prefix", "/tmp/test", "pkg"]),
+            ] {
+                let parsed = parse_npm_global_command(&args, &[command]).unwrap();
+                assert_eq!(parsed.explicit_prefix.as_deref(), Some("/tmp/test"), "{args:?}");
+                assert_eq!(parsed.packages, vec!["pkg"], "{args:?}");
+            }
+        }
     }
 
     // --- resolve_npm_prefix tests ---

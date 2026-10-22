@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
+import { parseCargoOxcVersions, replaceCargoCrateVersion } from './cargo-toml.ts';
+import { OXC_NODE_DIR, patchOxcNode } from './patch-oxc-node.ts';
 import {
   alignVendoredVitestDependencies,
   REMOVED_VITEST_PACKAGES,
@@ -358,6 +360,7 @@ export function syncViteDevtoolsDependencies(corePkg: PackageJson, vitePkg: Pack
 
 // Oxc-related packages that should use the higher version on conflict
 const OXC_PACKAGE_PREFIXES = [
+  '@oxc-node/',
   '@oxc-project/',
   '@oxlint/',
   '@oxc-minify/',
@@ -499,7 +502,7 @@ function globToRegExp(pattern: string): RegExp {
 function mergeMinimumReleaseAgeExclude(entries: string[]): string[] {
   // Dedupe exact-string duplicates (Set preserves insertion order) and parse
   // each entry once.
-  const parsed = [...new Set(entries)].map((entry) => {
+  const parsed = Array.from(new Set(entries), (entry) => {
     const { name, version } = parseExcludeEntry(entry);
     return { entry, name, version };
   });
@@ -520,6 +523,7 @@ export function mergePnpmWorkspaces(
   main: PnpmWorkspace,
   rolldown: PnpmWorkspace,
   rolldownVite: PnpmWorkspace,
+  vitePackage: PackageJson,
   verkit: typeof import('verkit'),
 ): PnpmWorkspace {
   const result: PnpmWorkspace = { ...main };
@@ -537,9 +541,20 @@ export function mergePnpmWorkspaces(
   // The upgrade script selects the latest supported Vitest release and updates
   // the runtime constant with it. Upstream catalogs must not replace that pin.
   const vitestVersion = main.catalog?.vitest;
-  const catalog: Record<string, string> = {};
+  // Vite declares its compiler in the root package.json, outside its catalog.
+  // Follow that range exactly, even when Rolldown still uses an older major.
+  const typescriptSpecifier = vitePackage.devDependencies?.typescript;
+  const typescriptRange =
+    typescriptSpecifier === 'catalog:' ? rolldownVite.catalog?.typescript : typescriptSpecifier;
+  if (!typescriptRange || !verkit.normalizeRange(typescriptRange)) {
+    throw new Error('Vite must declare a valid TypeScript devDependency range');
+  }
+  const catalog: Record<string, string> = { typescript: typescriptRange };
   for (const workspace of [main, rolldown, rolldownVite]) {
     for (const [pkg, version] of Object.entries(workspace.catalog || {})) {
+      if (pkg === 'typescript') {
+        continue;
+      }
       if (REMOVED_VITEST_PACKAGES.has(pkg)) {
         // Unused upstream entries are harmless; actual dependency uses fail in
         // alignVendoredVitestDependencies instead of reinstalling removed packages.
@@ -578,6 +593,22 @@ export function mergePnpmWorkspaces(
       },
       {} as Record<string, string>,
     );
+
+  // Vite's language-tooling overrides keep legacy compiler API consumers working.
+  const typescriptOverrides = Object.fromEntries(
+    Object.entries(rolldownVite.overrides ?? {}).filter(([selector]) =>
+      />typescript(?:@|$)/.test(selector),
+    ),
+  );
+
+  // Rolldown's build uses the compiler API from its own TypeScript range.
+  // Its catalog reference must not pick up Vite's compiler after the merge.
+  if (rolldown.catalog?.typescript) {
+    typescriptOverrides['rolldown>typescript'] = rolldown.catalog.typescript;
+  }
+  if (Object.keys(typescriptOverrides).length > 0) {
+    result.overrides = { ...result.overrides, ...typescriptOverrides };
+  }
 
   // Merge minimumReleaseAgeExclude
   result.minimumReleaseAgeExclude = mergeMinimumReleaseAgeExclude([
@@ -679,6 +710,7 @@ export function mergeWorkspaceYaml(
   mainSrc: string,
   rolldownSrc: string,
   rolldownViteSrc: string,
+  vitePackage: PackageJson,
   yaml: typeof import('yaml'),
   verkit: typeof import('verkit'),
 ): string {
@@ -690,6 +722,7 @@ export function mergeWorkspaceYaml(
     (mainDoc.toJSON() as PnpmWorkspace) ?? {},
     rolldown ?? {},
     rolldownVite ?? {},
+    vitePackage,
     verkit,
   );
 
@@ -703,43 +736,6 @@ export function mergeWorkspaceYaml(
   reconcileMap(mainDoc.contents, merged, yaml);
 
   return mainDoc.toString(stringifyOptions);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// Parse every `oxc*` crate version from a Cargo.toml in a single pass, keyed by
-// crate name. Handles both the bare `oxc_x = "X"` form and the inline-table
-// `oxc = { version = "X", features = [...] }` form (which may span lines, but
-// always lists `version` before its `[...]` feature array, so `[^}]*?` reaches
-// it without crossing the closing `}`).
-function parseCargoOxcVersions(src: string): Map<string, string> {
-  const versions = new Map<string, string>();
-  const re = /^\s*(oxc[\w-]*)\s*=\s*(?:"([^"]+)"|\{[^}]*?version\s*=\s*"([^"]+)")/gm;
-  for (let m = re.exec(src); m; m = re.exec(src)) {
-    versions.set(m[1], m[2] ?? m[3]);
-  }
-  return versions;
-}
-
-// Replace the version of a single crate entry in-place, preserving features,
-// formatting, and surrounding text. Only the first matching entry is rewritten.
-function replaceCargoCrateVersion(src: string, key: string, newVersion: string): string {
-  const escaped = escapeRegExp(key);
-  const bareRe = new RegExp(`^(\\s*${escaped}\\s*=\\s*")[^"]+(")`, 'm');
-  if (bareRe.test(src)) {
-    return src.replace(bareRe, `$1${newVersion}$2`);
-  }
-  const tableStart = new RegExp(`^\\s*${escaped}\\s*=\\s*\\{`, 'm').exec(src);
-  if (!tableStart) {
-    return src;
-  }
-  const start = tableStart.index;
-  const close = src.indexOf('}', start);
-  const end = close >= 0 ? close : src.length;
-  const table = src.slice(start, end).replace(/(version\s*=\s*")[^"]+(")/, `$1${newVersion}$2`);
-  return src.slice(0, start) + table + src.slice(end);
 }
 
 export interface CargoOxcChange {
@@ -846,19 +842,20 @@ export async function syncRemote() {
 
   // Get the root directory (assuming script is run from root)
   const rootDir = process.cwd();
+  // Each upstream checkout and its pin in `.upstream-versions.json`.
+  const upstreamRepos = [
+    [ROLLDOWN_DIR, upstreamVersions.rolldown],
+    [VITE_DIR, upstreamVersions.vite],
+    [OXC_NODE_DIR, upstreamVersions['oxc-node']],
+  ] as const;
 
   if (values.clean) {
     log('Cleaning existing repositories...');
-    if (existsSync(join(rootDir, ROLLDOWN_DIR))) {
-      rmSync(join(rootDir, ROLLDOWN_DIR), { recursive: true, force: true });
-      log(`Removed ${ROLLDOWN_DIR}`);
-    }
-    if (existsSync(join(rootDir, VITE_DIR))) {
-      rmSync(join(rootDir, VITE_DIR), {
-        recursive: true,
-        force: true,
-      });
-      log(`Removed ${VITE_DIR}`);
+    for (const [dir] of upstreamRepos) {
+      if (existsSync(join(rootDir, dir))) {
+        rmSync(join(rootDir, dir), { recursive: true, force: true });
+        log(`Removed ${dir}`);
+      }
     }
     // Clean up legacy 'rolldown-vite' directory (renamed to 'vite')
     const legacyViteDir = join(rootDir, 'rolldown-vite');
@@ -868,19 +865,9 @@ export async function syncRemote() {
     }
   }
 
-  // Clone or reset repos
-  cloneOrResetRepo(
-    upstreamVersions.rolldown.repo,
-    join(rootDir, ROLLDOWN_DIR),
-    upstreamVersions.rolldown.branch,
-    upstreamVersions.rolldown.hash,
-  );
-  cloneOrResetRepo(
-    upstreamVersions['vite'].repo,
-    join(rootDir, VITE_DIR),
-    upstreamVersions['vite'].branch,
-    upstreamVersions['vite'].hash,
-  );
+  for (const [dir, { repo, branch, hash }] of upstreamRepos) {
+    cloneOrResetRepo(repo, join(rootDir, dir), branch, hash);
+  }
 
   // Dynamically import dependencies after git clone. Capture the whole `yaml`
   // module (we need `yaml.parseDocument` to preserve comments).
@@ -907,11 +894,21 @@ export async function syncRemote() {
   const mainSrc = readFileSync(mainWorkspacePath, 'utf-8');
   const rolldownSrc = readFileSync(rolldownWorkspacePath, 'utf-8');
   const rolldownViteSrc = readFileSync(rolldownViteWorkspacePath, 'utf-8');
+  const viteRootPackage = JSON.parse(
+    readFileSync(join(rootDir, VITE_DIR, 'package.json'), 'utf-8'),
+  ) as PackageJson;
 
   log('Merging pnpm-workspace.yaml files...');
 
   // Merge upstream catalogs into the main workspace while preserving its comments.
-  const yamlContent = mergeWorkspaceYaml(mainSrc, rolldownSrc, rolldownViteSrc, yaml, verkit);
+  const yamlContent = mergeWorkspaceYaml(
+    mainSrc,
+    rolldownSrc,
+    rolldownViteSrc,
+    viteRootPackage,
+    yaml,
+    verkit,
+  );
 
   const vitestVersion = (yaml.parse(yamlContent) as PnpmWorkspace).catalog?.vitest;
   if (!vitestVersion || !verkit.normalize(vitestVersion)) {
@@ -938,6 +935,10 @@ export async function syncRemote() {
   // Keep the root Cargo.toml oxc pins in lockstep with the vendored rolldown.
   log('Syncing Cargo.toml oxc versions with rolldown...');
   syncCargoOxcWithRolldown(rootDir);
+
+  // oxc-node compiles into the native binding; it follows the oxc pins above.
+  log('Patching vendored oxc-node...');
+  patchOxcNode(rootDir);
 
   // Merge package.json exports
   log('Merging package.json exports...');

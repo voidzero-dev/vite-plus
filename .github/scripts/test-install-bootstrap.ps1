@@ -67,8 +67,10 @@ $originalVpShell = $env:VP_SHELL
 $fixtureSha = '0123456789012345678901234567890123456789'
 New-Item -ItemType Directory -Path "$testRoot/package", "$testRoot/tmp", "$testRoot/scripts" | Out-Null
 Set-Content -LiteralPath "$testRoot/package/vp.exe" -Value 'Payload fixture'
+Set-Content -LiteralPath "$testRoot/package/vp-install-lock.yaml" -Value 'Lockfile fixture'
 @'
 if ($args.Count -eq 0) {
+    if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'vp-install-lock.yaml'))) { exit 95 }
     if (Test-Path Env:VP_SELF_SETUP_SUPPORT_CHECK) { exit 99 }
     New-Item -ItemType File -Path "$testRoot/binary-invoked" | Out-Null
     if ($scenario -eq 'failure') { exit 42 }

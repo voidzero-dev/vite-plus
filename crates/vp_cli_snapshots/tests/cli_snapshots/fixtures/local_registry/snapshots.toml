@@ -7,3 +7,10 @@ steps = [
   { argv = ["npm", "install", "@vp-smoke/hello", "--no-save", "--no-audit", "--no-fund"], comment = "install a package served only by the local registry", snapshot = false, continue-on-failure = true },
   { argv = ["vpt", "print-file", "node_modules/@vp-smoke/hello/package.json"], comment = "the local registry served the packument and its tarball (integrity verified by npm)", continue-on-failure = true },
 ]
+
+[[case]]
+name = "local_registry_overlay"
+vp = "global"
+# No local-registry flag: fixture overlays must also work in direct mode
+# without opting into packed checkout packages.
+steps = [["node", "assert-overlay.mjs"]]

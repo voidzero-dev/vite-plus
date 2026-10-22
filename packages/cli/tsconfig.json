@@ -3,7 +3,6 @@
   "compilerOptions": {
     "experimentalDecorators": true
   },
-  "files": [],
-  "include": [],
-  "exclude": ["**/*"]
+  "include": ["src/**/*.ts", "src/**/*.cts"],
+  "exclude": ["src/**/__tests__/**"]
 }

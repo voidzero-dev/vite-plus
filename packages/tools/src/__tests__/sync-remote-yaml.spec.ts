@@ -2,7 +2,6 @@ import * as verkit from 'verkit';
 import { describe, expect, test } from 'vitest';
 import * as yaml from 'yaml';
 
-import { findLatestStableVersionForMajor } from '../../../../.github/scripts/upgrade-deps-utils.ts';
 import { mergePnpmWorkspaces, mergeWorkspaceYaml } from '../sync-remote-deps.ts';
 
 // `pnpm tool sync-remote` rewrites the whole pnpm-workspace.yaml. It must merge
@@ -10,6 +9,8 @@ import { mergePnpmWorkspaces, mergeWorkspaceYaml } from '../sync-remote-deps.ts'
 // comments authors put in the main file (e.g. the zod-v3 pin rationale added in
 // PR #1777). `mergeWorkspaceYaml` is the comment-preserving parse+merge+serialize
 // seam that syncRemote uses.
+const VITE_PACKAGE = { devDependencies: { typescript: '~7.0.2' } };
+
 const MAIN_SRC = `packages:
   - packages/*
 catalog:
@@ -39,13 +40,96 @@ const VITE_SRC = `catalog:
 `;
 
 describe('mergeWorkspaceYaml()', () => {
+  test.each(['~7.0.2', '~7.1.0', '~6.0.3'])(
+    "follows Vite's TypeScript declaration %s instead of merging catalog ranges",
+    (typescript) => {
+      const main = `catalog:
+  # Follow the compiler declared by Vite.
+  typescript: ^6.0.0
+overrides:
+  vite: workspace:@voidzero-dev/vite-plus-core@*
+`;
+      const rolldown = 'catalog:\n  typescript: =6.0.3\n';
+      const vite = 'catalog:\n  typescript: ^7.2.0\n';
+      const vitePackage = { devDependencies: { typescript } };
+      const output = mergeWorkspaceYaml(main, rolldown, vite, vitePackage, yaml, verkit);
+
+      expect(yaml.parse(output).catalog.typescript).toBe(typescript);
+      expect(yaml.parse(output).overrides).toEqual({
+        vite: 'workspace:@voidzero-dev/vite-plus-core@*',
+        'rolldown>typescript': '=6.0.3',
+      });
+      expect(output).toContain('# Follow the compiler declared by Vite.');
+      expect(mergeWorkspaceYaml(output, rolldown, vite, vitePackage, yaml, verkit)).toBe(output);
+    },
+  );
+
+  test('resolves a TypeScript catalog reference from Vite', () => {
+    const output = mergeWorkspaceYaml(
+      'catalog:\n  typescript: ^6.0.0\n',
+      'catalog:\n  typescript: ^6.0.0\n',
+      'catalog:\n  typescript: ~7.0.2\n',
+      { devDependencies: { typescript: 'catalog:' } },
+      yaml,
+      verkit,
+    );
+    expect(yaml.parse(output).catalog.typescript).toBe('~7.0.2');
+  });
+
+  test('updates the Rolldown compiler override when its catalog changes', () => {
+    const output = mergeWorkspaceYaml(
+      'overrides:\n  rolldown>typescript: ^6.0.0\n',
+      'catalog:\n  typescript: ~7.0.2\n',
+      VITE_SRC,
+      VITE_PACKAGE,
+      yaml,
+      verkit,
+    );
+    expect(yaml.parse(output).overrides['rolldown>typescript']).toBe('~7.0.2');
+  });
+
+  test("preserves Vite's TypeScript compatibility overrides without replacing workspace aliases", () => {
+    const output = mergeWorkspaceYaml(
+      MAIN_SRC,
+      'catalog:\n  typescript: ^6.0.0\n',
+      `overrides:
+  vite: workspace:*
+  '@volar/typescript>typescript@>=7': '-'
+  '@volar/language-service>typescript@>=7': '-'
+`,
+      VITE_PACKAGE,
+      yaml,
+      verkit,
+    );
+    expect(yaml.parse(output).overrides).toEqual({
+      rolldown: 'workspace:rolldown@*',
+      'rolldown>typescript': '^6.0.0',
+      '@volar/typescript>typescript@>=7': '-',
+      '@volar/language-service>typescript@>=7': '-',
+    });
+  });
+
+  test.each([undefined, 'invalid', 'catalog:'])(
+    'rejects a missing or unresolved Vite TypeScript range: %s',
+    (typescript) => {
+      expect(() =>
+        mergeWorkspaceYaml(
+          'catalog:\n  typescript: ^6.0.0\n',
+          ROLLDOWN_SRC,
+          VITE_SRC,
+          { devDependencies: typescript === undefined ? {} : { typescript } },
+          yaml,
+          verkit,
+        ),
+      ).toThrow('Vite must declare a valid TypeScript devDependency range');
+    },
+  );
+
   test('preserves the latest supported pin across repeated upstream syncs', () => {
-    const version = findLatestStableVersionForMajor(['5.0.0', '5.1.2', '5.2.0-beta.1', '6.0.0'], 5);
-    expect(version).toBe('5.1.2');
     const main = `catalog:
   # Keep the runner and official packages on the selected release.
-  vitest: ${version}
-  '@vitest/browser': ${version}
+  vitest: 5.1.2
+  '@vitest/browser': 5.1.2
 `;
     const rolldown = `catalog:
   vitest: '=4.1.11'
@@ -56,19 +140,20 @@ describe('mergeWorkspaceYaml()', () => {
   '@vitest/browser': '^5.2.0'
 `;
 
-    const output = mergeWorkspaceYaml(main, rolldown, vite, yaml, verkit);
+    const output = mergeWorkspaceYaml(main, rolldown, vite, VITE_PACKAGE, yaml, verkit);
 
     expect(yaml.parse(output).catalog).toEqual({
+      typescript: '~7.0.2',
       vitest: '5.1.2',
       '@vitest/browser': '5.1.2',
       '@vitest/utils': '5.1.2',
     });
     expect(output).toContain('# Keep the runner and official packages on the selected release.');
-    expect(mergeWorkspaceYaml(output, rolldown, vite, yaml, verkit)).toBe(output);
+    expect(mergeWorkspaceYaml(output, rolldown, vite, VITE_PACKAGE, yaml, verkit)).toBe(output);
   });
 
   test('preserves comments from the main workspace', () => {
-    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, verkit);
+    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, VITE_PACKAGE, yaml, verkit);
 
     expect(output).toContain('# keep zod on v3 until bingo supports zod 4');
     expect(output).toContain('# bingo introspects template option schemas via zod 3 internals;');
@@ -79,16 +164,17 @@ describe('mergeWorkspaceYaml()', () => {
       yaml.parse(MAIN_SRC),
       yaml.parse(ROLLDOWN_SRC),
       yaml.parse(VITE_SRC),
+      VITE_PACKAGE,
       verkit,
     );
 
-    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, verkit);
+    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, VITE_PACKAGE, yaml, verkit);
 
     expect(yaml.parse(output)).toEqual(expected);
   });
 
   test('merges upstream catalog entries and dedupes redundant exclude entries', () => {
-    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, yaml, verkit);
+    const output = mergeWorkspaceYaml(MAIN_SRC, ROLLDOWN_SRC, VITE_SRC, VITE_PACKAGE, yaml, verkit);
     const parsed = yaml.parse(output);
 
     // Upstream catalog entries merged in, original pin kept.

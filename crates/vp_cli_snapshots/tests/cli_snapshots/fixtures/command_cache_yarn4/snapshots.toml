@@ -1,6 +1,8 @@
 [[case]]
 name = "command_cache_yarn4"
 vp = "global"
+# This case checks Yarn's default cache location in the isolated case home.
+unset-env = ["YARN_GLOBAL_FOLDER"]
 skip-platforms = ["windows", "macos"]
 steps = [
   { argv = ["vp", "pm", "cache", "dir"], comment = "should show cache directory (uses yarn config get cacheFolder)", continue-on-failure = true },

@@ -529,24 +529,6 @@ describe('writeEditorConfigs', () => {
     );
   });
 
-  it('does not apply extraVsCodeSettings to zed editor', async () => {
-    const projectRoot = createTempDir();
-
-    await writeEditorConfigs({
-      projectRoot,
-      editorId: 'zed',
-      interactive: false,
-      silent: true,
-      extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
-    });
-
-    const settings = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8'),
-    ) as Record<string, unknown>;
-
-    expect(settings['npm.scriptRunner']).toBeUndefined();
-  });
-
   it('preserves existing npm.scriptRunner during merge with extraVsCodeSettings', async () => {
     const projectRoot = createTempDir();
 

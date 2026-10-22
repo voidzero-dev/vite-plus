@@ -122,7 +122,7 @@ should support json output
       "testnpm2": {
         "from": "testnpm2",
         "version": "1.0.1",
-        "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+        "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
         "path": "<workspace>/node_modules/.pnpm/testnpm2@1.0.1/node_modules/testnpm2"
       }
     }
@@ -220,4 +220,32 @@ command-why-pnpm10@1.0.0 <workspace>
 
 dependencies:
 testnpm2 1.0.1
+```
+
+## `vp why --find-by customFinder`
+
+Package names remain required even when a finder is supplied.
+
+**Exit code:** 2
+
+```
+error: the following required arguments were not provided:
+  <PACKAGES>...
+
+Usage: vp why --find-by <FINDER_NAME> <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+For more information, try '--help'.
+```
+
+## `vpt json-edit package.json packageManager pnpm@10.15.1`
+
+
+## `vp why testnpm2 --find-by customFinder`
+
+Reject finders before pnpm 10.16.0.
+
+**Exit code:** 1
+
+```
+pnpm < 10.16.0 does not support --find-by.
 ```

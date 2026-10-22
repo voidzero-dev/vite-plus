@@ -1,6 +1,6 @@
 [package]
 name = "vp_global_cli"
-version = "1.2.0"
+version = "1.3.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -30,6 +30,7 @@ tracing = { workspace = true }
 console = { workspace = true }
 same-file = { workspace = true }
 oxc_resolver = { workspace = true }
+pathdiff = { workspace = true }
 vt_pty_terminal_test_client = { workspace = true, features = ["testing"] }
 rustc-hash = { workspace = true }
 crossterm = { workspace = true }
@@ -48,9 +49,11 @@ vp_shared = { workspace = true }
 vp_toolchain = { workspace = true }
 vt_str = { workspace = true }
 vt_workspace = { workspace = true }
+url = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
+httpmock = { workspace = true }
 serial_test = { workspace = true }
 temp-env = { workspace = true }
 vp_shared = { workspace = true, features = ["test-utils"] }

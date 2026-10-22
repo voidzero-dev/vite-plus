@@ -13,6 +13,7 @@ steps = [
   { argv = ["node", "list-shims.cjs", "$VP_HOME/bin", "$VP_HOME/fallback-bin"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "Only Node moves to fallback." },
   { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "The shell selects system Node before fallback." },
   { argv = ["node", "assert-node-resolution.cjs"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Internal Node resolution agrees with PATH." },
+  { argv = ["vp", "node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "vp node (env exec node) selects system Node like the shell." },
 
   # Move the pnpm family together; refresh must preserve both preferences.
   ["vp", "env", "off", "pnpm"],
@@ -23,6 +24,7 @@ steps = [
   # Reverse PATH: reaching the Vite+ shim first must select managed Node.
   { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "A fallback shim before system Node selects managed Node." },
   { argv = ["node", "assert-node-resolution.cjs"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Internal resolution must also stop at the first Vite+ shim." },
+  { argv = ["vp", "node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "vp node also stops at the first Vite+ shim." },
 
   # Restore each family independently; fallback should end up empty.
   ["vp", "env", "on", "node"],
@@ -88,4 +90,19 @@ skip-platforms = ["windows"]
 requires = ["bash"]
 steps = [
   { argv = ["bash", "placement.sh"], comment = "Reloading env is idempotent; mode changes invalidate Bash command paths." },
+]
+
+[[case]]
+name = "vpx_script_follows_vp_node"
+vp = "global"
+cwd = "vpx-project"
+comment = "vpx script mode runs on the Node.js that vp node selects, including system-first mode."
+steps = [
+  { argv = ["node", "../setup-system-node.cjs"], snapshot = false },
+  { argv = ["vp", "env", "on"], snapshot = false },
+  { argv = ["vp", "env", "off", "node"], snapshot = false },
+  { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "System-first: the system Node.js found on PATH, as vp node selects." },
+  { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "A Vite+ shim before system Node.js selects managed Node.js." },
+  ["vp", "env", "on", "node"],
+  { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode ignores system Node.js." },
 ]

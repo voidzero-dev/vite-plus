@@ -1,6 +1,7 @@
 //! First-start installation followed by command execution through the deployed binary.
 
 mod external;
+mod runtime;
 mod shell;
 
 use std::{path::Path, process::ExitCode};
@@ -8,7 +9,7 @@ use std::{path::Path, process::ExitCode};
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use vp_pm_cli::PackageManagerType;
 use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install, is_commit_preview_version};
-use vp_shared::{EnvConfig, env_vars, output};
+use vp_shared::{EnvConfig, ManagerPreference, env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{
@@ -174,7 +175,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         ));
     }
     let previous_install = if deploy { previous_install()? } else { None };
-    let node_override = manager_mode("VP_NODE_MANAGER");
+    let node_override = shim_mode(env.node_manager);
     // A package upgrade can change the executable path or expire its receipt.
     // Preferences belong to the user, not to that particular binary.
     let configured = bundled && config::get_config_path()?.as_path().is_file();
@@ -237,12 +238,35 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
             temporary.persist(binary.as_path()).map_err(|error| error.error)?;
         }
     }
-    if !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file() {
+    // Old upgrade clients and interrupted installs may leave an incomplete tree.
+    // Only an explicit lockfile bypass can reuse a completed unlocked install.
+    let needs_dependency_install = if !skip_deps && !bundled {
+        let source = AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?;
+        vp_setup::lockfile::prepare(&source, &version_dir, version, registry).await?
+    } else {
+        false
+    };
+    let needs_deps = needs_dependency_install
+        || !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file();
+    // Standalone retries also return the selected runtime when dependencies already exist.
+    let node_version =
+        if !skip_deps && (deploy || needs_deps) { runtime::resolve().await? } else { None };
+    if needs_deps {
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
         if !skip_deps {
-            install::install_production_deps(&version_dir, registry, true).await?;
+            let preferred =
+                node_version.as_deref().filter(|version| runtime::supports_cli(version));
+            if let Some(version) = node_version.as_deref().filter(|_| preferred.is_none()) {
+                output::info(&format!(
+                    "Requested Node.js {version} does not support this Vite+ release; using a separate installation runtime."
+                ));
+            }
+            install::install_production_deps(&version_dir, registry, true, preferred).await?;
         }
+    }
+    if let Some(version) = node_version {
+        runtime::write_resolution(&version).await?;
     }
     #[cfg(windows)]
     if !bundled && !version_dir.join("bin/vp-shim.exe").as_path().is_file() {
@@ -286,14 +310,14 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         if let Some(mode) = node_override.or(default_mode) {
             settings.node_shim_mode = mode;
         }
-        let pm_mode = manager_mode("VP_PM_MANAGER").or(default_mode);
-        for (family, variable) in [
-            (PackageManagerType::Npm, "VP_NPM_MANAGER"),
-            (PackageManagerType::Pnpm, "VP_PNPM_MANAGER"),
-            (PackageManagerType::Yarn, "VP_YARN_MANAGER"),
-            (PackageManagerType::Bun, "VP_BUN_MANAGER"),
+        let pm_mode = shim_mode(env.pm_manager).or(default_mode);
+        for (family, preference) in [
+            (PackageManagerType::Npm, env.npm_manager),
+            (PackageManagerType::Pnpm, env.pnpm_manager),
+            (PackageManagerType::Yarn, env.yarn_manager),
+            (PackageManagerType::Bun, env.bun_manager),
         ] {
-            if let Some(mode) = manager_mode(variable).or(pm_mode) {
+            if let Some(mode) = shim_mode(preference).or(pm_mode) {
                 settings.set_package_manager_shim_mode(family, mode);
             }
         }
@@ -365,11 +389,10 @@ fn confirm(prompt: &str, default: bool) -> Result<bool, Error> {
         .map_err(|error| Error::Other(error.to_string().into()))
 }
 
-fn manager_mode(variable: &str) -> Option<config::ShimMode> {
-    match std::env::var(variable).as_deref() {
-        Ok("yes") => Some(config::ShimMode::Managed),
-        Ok("no") => Some(config::ShimMode::SystemFirst),
-        _ => None,
+fn shim_mode(preference: Option<ManagerPreference>) -> Option<config::ShimMode> {
+    match preference? {
+        ManagerPreference::Yes => Some(config::ShimMode::Managed),
+        ManagerPreference::No => Some(config::ShimMode::SystemFirst),
     }
 }
 

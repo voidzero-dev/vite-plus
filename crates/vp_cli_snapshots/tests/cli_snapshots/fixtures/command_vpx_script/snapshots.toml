@@ -1,0 +1,274 @@
+[[case]]
+name = "vpx_script_ts_syntax"
+vp = ["local", "global"]
+comment = "TypeScript syntax that Node.js type stripping rejects runs through the oxc-node loader."
+steps = [
+  { argv = ["vpx", "./src/syntax.ts"], comment = "Enums, namespaces, parameter properties, decorators, and a lowered class field" },
+  { argv = ["vpx", "./src/bom-shebang.ts"], comment = "A byte order mark before a shebang, as Windows editors save it" },
+]
+
+[[case]]
+name = "vpx_script_resolution"
+vp = ["local", "global"]
+comment = "Module resolution matches tsx: tsconfig paths, .js to .ts, extensionless imports, JSON, and CommonJS."
+steps = [
+  { argv = ["vpx", "src/resolution.ts"], comment = "A bare relative path runs when the file exists" },
+  { argv = ["vpx", "--tsconfig", "tsconfig.alt.json", "src/resolution.ts"], comment = "--tsconfig replaces per-file tsconfig selection" },
+  { argv = ["vpx", "--no-warnings", "--tsconfig=tsconfig.alt.json", "src/resolution.ts"], comment = "--tsconfig is also recognized among Node.js options" },
+  { argv = ["vpx", "./main.ts"], cwd = "order", comment = "A .ts next to its compiled .js wins for ./dep.js and ./dep, as with tsc and tsx" },
+  { argv = ["vpx", "./scripts/seed.ts"], cwd = "outside-include", comment = "A file outside every tsconfig include resolves paths through the nearest tsconfig" },
+]
+
+[[case]]
+name = "vpx_script_args_and_options"
+vp = ["local", "global"]
+comment = "Script arguments, Node.js options, and the exit code pass through unchanged."
+steps = [
+  { argv = ["vpx", "./src/args.ts", "a", "--", "--flag"], comment = "Arguments after the script belong to it; exit code 7 propagates", continue-on-failure = true },
+  { argv = ["vpx", "--env-file", ".env", "--import", "./src/setup.ts", "./src/args.ts"], comment = "Node.js options before the script, including a TypeScript --import preload", continue-on-failure = true },
+  { argv = ["vpx", "--import", "./src/setup", "./src/args.ts"], comment = "An extensionless --import preload resolves from the working directory", continue-on-failure = true },
+  { argv = ["vpx", "--eval", "console.log('eval without a script')"], comment = "Node.js invocations without a script still run Node.js" },
+  { argv = ["vpx", "--eval", "console.log(process.argv.slice(1))", "./src/missing.ts"], comment = "After --eval code, a path is an argument, not a script to check" },
+]
+
+[[case]]
+name = "vpx_script_errors"
+vp = ["local", "global"]
+comment = "Script paths never fall back to a remote package download."
+steps = [
+  { argv = ["vpx", "./src/missing.ts"], comment = "Missing explicit path", continue-on-failure = true },
+  { argv = ["vpx", "seed.ts"], comment = "Missing bare name with a TypeScript extension", continue-on-failure = true },
+  { argv = ["vpx", "--tsconfig", "missing.json", "./src/syntax.ts"], comment = "Missing tsconfig", continue-on-failure = true },
+  { argv = ["vpx", "--tsconfig"], comment = "--tsconfig without a path, as a vpx option", continue-on-failure = true },
+  { argv = ["vpx", "-p", "cowsay", "./src/syntax.ts"], comment = "--package selects package mode", continue-on-failure = true },
+  { argv = ["vpx", "-p", "cowsay", "./src/missing.ts"], comment = "A missing explicit path never falls through to a package download, even with --package", continue-on-failure = true },
+  { argv = ["vpx", "-p", "cowsay", "seed.ts"], comment = "Nor does a missing bare name with a TypeScript extension", continue-on-failure = true },
+  { argv = ["vpx", "./bin/missing"], comment = "Nor a missing explicit path without an extension", continue-on-failure = true },
+  { argv = ["vpx"], comment = "Without a command, both CLIs print the same usage", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_script_module_formats"
+vp = ["local", "global"]
+comment = "CommonJS and ESM interop, preloads, child processes, and node:test."
+steps = [
+  { argv = ["vpx", "./src/both.cts"], comment = "A .cts that uses export is CommonJS with ES module syntax; it fails with a clear error", continue-on-failure = true },
+  { argv = ["vpx", "./src/import-cts.ts"], comment = "Importing it reports the same error", continue-on-failure = true },
+  { argv = ["vpx", "--require", "./src/setup.cts", "./src/print-setup.ts"], comment = "A TypeScript --require preload runs after the loader" },
+  { argv = ["vpx", "./src/fork.ts"], comment = "fork() and Worker inherit the loader" },
+  { argv = ["vpx", "--test", "--test-reporter=dot", "./tests/enum.test.ts"], comment = "node:test runs .ts test files" },
+  { argv = ["vpx", "--test", "--test-reporter=dot", "./tests/**/*.test.ts"], comment = "A test glob reaches node:test as a pattern, not a script path" },
+  { argv = ["vpx", "./src/data-url.ts"], comment = "data: URL imports keep Node.js' handling" },
+  { argv = ["vpx", "./src/require-tla.cts"], comment = "require() of a module with top-level await reports Node.js' error code" },
+]
+
+[[case]]
+name = "vpx_script_ts_dependency"
+vp = ["local", "global"]
+comment = "TypeScript published in node_modules is transformed, which Node.js type stripping refuses."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules/ts-dep"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-dep/package.json", "{ \"name\": \"ts-dep\", \"type\": \"module\", \"exports\": \"./index.ts\" }\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-dep/index.ts", "export enum Level { High = 'high' }\nexport const level: Level = Level.High;\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/ts-cjs-dep"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-cjs-dep/package.json", "{ \"name\": \"ts-cjs-dep\", \"main\": \"./index.ts\" }\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-cjs-dep/index.ts", "enum Kind { Cjs = 'cjs' }\nconst kind: Kind = Kind.Cjs;\nmodule.exports = { kind };\n"], snapshot = false },
+  { argv = ["vpx", "./src/ts-dependency.ts"] },
+  { argv = ["vpx", "./src/require-ts-dependency.cts"], comment = "A CommonJS TypeScript dependency loaded with require()" },
+]
+
+[[case]]
+name = "vpx_script_tsconfig_transforms"
+vp = ["local", "global"]
+comment = "tsconfig options that change the transform, and the decorator error."
+steps = [
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-classic", comment = "\"jsx\": \"react\" with jsxFactory and jsxFragmentFactory" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-automatic", comment = "\"jsx\": \"react-jsx\" with a jsxImportSource mapped by paths" },
+  { argv = ["vpx", "./main.ts"], cwd = "plain", comment = "Native class fields without legacy decorators; verbatimModuleSyntax keeps the side-effect import" },
+  { argv = ["vpx", "./decorators.ts"], cwd = "plain", comment = "Decorators without experimentalDecorators fail with a clear error", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_script_jsx_custom"
+vp = ["local", "global"]
+comment = "JSX customizations with a runtime installed as a package: classic and automatic runtimes, the development runtime, pragma comments, .jsx with allowJs, and JSX in a CommonJS package."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "jsx-custom/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "jsx-custom/mini-jsx", "jsx-custom/node_modules/mini-jsx"], snapshot = false },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/classic-import", comment = "\"jsx\": \"react\" with jsxFactory and jsxFragmentFactory imported from the package; the import is kept" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/automatic-package", comment = "\"jsx\": \"react-jsx\" with the package as jsxImportSource" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/automatic-dev", comment = "\"jsx\": \"react-jsxdev\": jsxDEV from the package's jsx-dev-runtime, with source line numbers" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/pragma-automatic", comment = "A @jsxImportSource pragma comment" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/pragma-classic", comment = "@jsxRuntime classic, @jsx, and @jsxFrag pragma comments" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/pragma-mixed", comment = "Hono's @jsx plus @jsxImportSource pair: the automatic runtime applies and @jsx is ignored" },
+  { argv = ["vpx", "./main.jsx"], cwd = "jsx-custom/jsx-allowjs", comment = "A .jsx file gets the tsconfig's JSX options when allowJs is on" },
+  { argv = ["vpx", "./main.tsx"], cwd = "jsx-custom/automatic-cjs", comment = "A .tsx in a package without \"type\" runs as CommonJS and requires the runtime" },
+]
+
+[[case]]
+name = "vpx_script_shebang"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+requires = ["sh"]
+comment = "#!/usr/bin/env vpx works for executable script files."
+steps = [
+  { argv = ["vpt", "chmod", "+x", "bin/tool.ts"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "bin/tool"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "bin/commonjs/tool"], snapshot = false },
+  { argv = ["sh", "-c", "./bin/tool.ts"], comment = "An executable .ts file" },
+  { argv = ["sh", "-c", "./bin/tool"], comment = "An extensionless file runs as JavaScript instead of re-entering vpx" },
+  { argv = ["sh", "-c", "./bin/commonjs/tool"], comment = "In a package without type, an extensionless file with ES module syntax runs as an ES module" },
+]
+
+[[case]]
+name = "vpx_script_file_names"
+vp = ["local", "global"]
+cwd = "names"
+comment = "File names with # and % run the named file, even when the name cut at the # or decoded at the % also exists."
+steps = [
+  { argv = ["vpx", "./main#hash.ts"], comment = "./main also exists" },
+  { argv = ["vpx", "./main%41.ts"], comment = "./mainA.ts also exists" },
+  { argv = ["vpx", "./main%file.ts"], comment = "Not a valid percent escape" },
+  { argv = ["vpx", "./hash#dir/main.ts"], comment = "A # in a directory name" },
+  { argv = ["vpx", "./fragment.ts"], comment = "In an import, # starts a URL fragment, even when a#b.ts exists" },
+]
+
+[[case]]
+name = "vpx_script_ipc"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "ipc"
+comment = "An IPC channel from the process that starts vpx reaches the script in both directions, including messages sent right before it exits."
+steps = [["node", "parent.mjs"]]
+
+[[case]]
+name = "vpx_script_signals"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "signals"
+comment = "A signal sent to the PID of vpx reaches the script, as tools that stop a TypeScript runner send it."
+steps = [["node", "parent.mjs"]]
+
+[[case]]
+name = "vpx_package_installed"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+comment = "A package binary installed in node_modules/.bin runs from the project or a subdirectory, with its arguments and exit code."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules/.bin"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/.bin/fake-tool", "#!/bin/sh\necho \"fake-tool: $*\"\nexit 3\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "node_modules/.bin/fake-tool"], snapshot = false },
+  { argv = ["vpx", "fake-tool", "a", "--help"], comment = "Arguments, including --help, belong to the binary; exit code 3 propagates", continue-on-failure = true },
+  { argv = ["vpx", "fake-tool", "b"], cwd = "src", comment = "node_modules/.bin is found from a subdirectory", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_package_installed_windows"
+vp = ["local", "global"]
+skip-platforms = ["linux", "macos"]
+comment = "On Windows, a cmd-shim style .cmd binary in node_modules/.bin runs through cmd.exe and passes its arguments and exit code through."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules/.bin"], snapshot = false },
+  { argv = ["vpt", "cp", "win-tools/fake-tool.cmd", "node_modules/.bin/fake-tool.cmd"], snapshot = false },
+  { argv = ["vpt", "cp", "win-tools/fake-tool.js", "node_modules/.bin/fake-tool.js"], snapshot = false },
+  { argv = ["vpx", "fake-tool", "a", "--help", "b c"], comment = "Arguments, including --help and one with a space, reach the program unchanged; exit code 3 propagates", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_package_not_installed"
+vp = "local"
+comment = "The project-local vpx, which package.json scripts run, searches only node_modules/.bin, never global packages or PATH. A binary that is not installed is an error with a hint, not a download."
+steps = [
+  { argv = ["vpx", "fake-missing-tool", "."], continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_script_watch"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "watch"
+comment = "vpx --watch runs oxc-node's watcher, never Node.js' own watch mode, with the script loader. It reruns the script when an imported file or a tsconfig changes, when the file a failed import looked for is created, and when the tsconfig given by --tsconfig changes."
+steps = [
+  ["node", "verify-watch.mjs", "dependency", "--watch"],
+  ["node", "verify-watch.mjs", "tsconfig", "--watch"],
+  ["node", "verify-watch.mjs", "created", "--watch"],
+  { argv = ["node", "verify-watch.mjs", "pinned", "--tsconfig", "tsconfig.b.json", "--watch"], comment = "--tsconfig as a vpx option" },
+  { argv = ["node", "verify-watch.mjs", "pinned-config", "--watch"], comment = "--watch before a separate config file path, and --tsconfig among the Node.js options after it, which wins over a TS_NODE_PROJECT from an env file" },
+]
+
+[[case]]
+name = "vpx_script_watch_node24"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "watch"
+env = { VP_NODE_VERSION = "24.12.0" }
+comment = "On the in-thread module.registerHooks() path, the hooks report the tsconfig files they read too."
+steps = [["node", "verify-watch.mjs", "tsconfig", "--watch"]]
+
+[[case]]
+name = "vpx_script_watch_help"
+vp = ["local", "global"]
+comment = "vpx --watch is the watcher: its help and errors use the vpx --watch name, and --watch-path, which would start Node.js' watch mode, is an error."
+steps = [
+  ["vpx", "--watch", "--help"],
+  { argv = ["vpx", "--watch"], comment = "No entry file", continue-on-failure = true },
+  { argv = ["vpx", "--watch-path=src", "./src/args.ts"], comment = "--watch-path", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_script_watch_signals"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "signals"
+# The script acks a SIGINT on a unix socket in TMPDIR, which the watcher skips when the
+# path would pass 100 bytes; the runner's macOS TMPDIR is that long.
+env = { TMPDIR = "/tmp" }
+comment = "A SIGINT sent to the vpx --watch PID reaches the script once, and so does a SIGINT to its whole process group, as Ctrl+C sends it."
+steps = [["node", "watch.mjs"]]
+
+[[case]]
+name = "vpx_script_bare_config_flag"
+vp = ["local", "global"]
+# Detection has no Windows-specific code, and the shared case table runs there; this saves
+# a Node.js download on Windows.
+skip-platforms = ["windows"]
+cwd = "config-file"
+# The first release where the project-local bin sees the bare flag: before 26.12, the
+# Node.js running the bin rewrites it to `--experimental-config-file=node.config.json`.
+env = { VP_NODE_VERSION = "26.12.0" }
+comment = "From Node.js 24.19 and 26.1, a bare --experimental-config-file reads node.config.json and takes no value, so the arguments after it keep their meaning."
+steps = [
+  { argv = ["vpx", "--experimental-config-file", "./main.ts", "--watch"], comment = "--watch after the script belongs to the script" },
+  { argv = ["vpx", "--experimental-config-file", "--tsconfig", "cli.json", "--env-file=.env", "./alias.ts"], comment = "--tsconfig is still vpx's, and wins over the TS_NODE_PROJECT in .env" },
+  { argv = ["vpx", "--experimental-config-file", "--watch", "--include", "extra.json"], comment = "--watch still selects the watcher, which takes --include and reports the missing entry", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_script_config_file_path"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "config-file"
+# The fixture's Node.js, 22.18.0, takes the next argument as the config file. Node.js
+# warns that the flag is experimental, with a PID, in the launcher too.
+env = { NODE_NO_WARNINGS = "1" }
+comment = "Before Node.js 24.19 and 26.1, --experimental-config-file takes a separate .json path, so --tsconfig, --watch, and a watcher option after it keep their meaning."
+steps = [
+  { argv = ["vpx", "--experimental-config-file", "custom.json", "--tsconfig", "cli.json", "--env-file=.env", "./alias.ts"], comment = "--tsconfig after the path wins over the TS_NODE_PROJECT in .env" },
+  { argv = ["vpx", "--experimental-config-file", "custom.json", "--watch", "--include", "extra.json"], comment = "--watch after the path selects the watcher, which takes --include and reports the missing entry", continue-on-failure = true },
+]
+
+[[case]]
+name = "vp_run_vpx_script_ctrl_c_cleanup"
+vp = "global"
+# On Windows, the global vpx waits for the script through `vp.exe`, which Ctrl+C used to
+# end at once with STATUS_CONTROL_C_EXIT (0xC000013A). The runner starts steps with Ctrl+C
+# ignored, which children inherit; vite-task clears that, so the script under `vp run`
+# gets Ctrl+C there, where it would not under a direct `vpx`.
+cwd = "ctrl-c"
+comment = "Ctrl+C under vp run reaches the script that vpx runs, and vp run exits after the script's SIGINT cleanup."
+steps = [
+  { argv = ["vp", "run", "cleanup"], interactions = [
+    { "expect-milestone" = "ready" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]

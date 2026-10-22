@@ -113,13 +113,13 @@ should list packages in JSON format
       "test-vite-plus-package-optional": {
         "from": "test-vite-plus-package-optional",
         "version": "1.0.0",
-        "resolved": "https://registry.npmjs.org/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+        "resolved": "http://127.0.0.1:<port>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
         "path": "<workspace>/node_modules/.pnpm/test-vite-plus-package-optional@1.0.0/node_modules/test-vite-plus-package-optional"
       },
       "testnpm2": {
         "from": "testnpm2",
         "version": "1.0.1",
-        "resolved": "https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz",
+        "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz",
         "path": "<workspace>/node_modules/.pnpm/testnpm2@1.0.1/node_modules/testnpm2"
       }
     },
@@ -127,7 +127,7 @@ should list packages in JSON format
       "test-vite-plus-package": {
         "from": "test-vite-plus-package",
         "version": "1.0.0",
-        "resolved": "https://registry.npmjs.org/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+        "resolved": "http://127.0.0.1:<port>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
         "path": "<workspace>/node_modules/.pnpm/test-vite-plus-package@1.0.0/node_modules/test-vite-plus-package"
       }
     }
@@ -278,4 +278,17 @@ testnpm2 1.0.1
 
 devDependencies:
 test-vite-plus-package 1.0.0
+```
+
+## `vpt json-edit package.json packageManager pnpm@10.15.1`
+
+
+## `vp pm list --find-by customFinder`
+
+Reject finders before pnpm 10.16.0.
+
+**Exit code:** 1
+
+```
+pnpm < 10.16.0 does not support --find-by.
 ```

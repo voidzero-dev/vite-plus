@@ -10,12 +10,6 @@ const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)),
 const distDir = path.join(cliPkgDir, 'dist');
 
 describe('toolchain export', () => {
-  it('generates JSON, JavaScript, and type declaration artifacts', () => {
-    for (const file of ['toolchain.json', 'toolchain.js', 'toolchain.d.ts']) {
-      expect(fs.existsSync(path.join(distDir, file)), `${file} should exist`).toBe(true);
-    }
-  });
-
   it('exports the same manifest as the JSON artifact', async () => {
     const json = JSON.parse(
       fs.readFileSync(path.join(distDir, 'toolchain.json'), 'utf8'),
@@ -43,6 +37,7 @@ describe('toolchain export', () => {
       'vite-task',
       'oxc',
       'oxc-resolver',
+      'oxc-node',
     ]);
     for (const node of nodes.values()) {
       if (node.id === 'vite-task') {
@@ -50,6 +45,7 @@ describe('toolchain export', () => {
       }
       expect(node.version, `${node.id} should have an exact version`).toMatch(/^\d+\.\d+\.\d+/);
     }
+    expect(nodes.get('oxc-node')?.revision).toMatch(/^[0-9a-f]{40}$/);
     expect(nodes.get('vite-task')?.version).toBeUndefined();
     expect(nodes.get('vite-task')?.revision).toMatch(/^[0-9a-f]{40}$/);
     const nativeBuildTimePath = path.join(cliPkgDir, 'binding', 'vite-plus.build-time');

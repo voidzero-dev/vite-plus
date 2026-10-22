@@ -31,6 +31,7 @@ serde = { workspace = true }
 shell-escape = { workspace = true }
 tempfile = { workspace = true }
 toml = { workspace = true }
+url = { workspace = true }
 vt_pty_terminal_test = { workspace = true }
 vt_snapshot_test = { workspace = true }
 which = { workspace = true }

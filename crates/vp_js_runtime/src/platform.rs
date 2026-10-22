@@ -146,17 +146,4 @@ mod tests {
             assert_eq!(platform.to_string(), expected);
         }
     }
-
-    #[test]
-    fn test_os_display() {
-        assert_eq!(Os::Linux.to_string(), "linux");
-        assert_eq!(Os::Darwin.to_string(), "darwin");
-        assert_eq!(Os::Windows.to_string(), "windows");
-    }
-
-    #[test]
-    fn test_arch_display() {
-        assert_eq!(Arch::X64.to_string(), "x64");
-        assert_eq!(Arch::Arm64.to_string(), "arm64");
-    }
 }

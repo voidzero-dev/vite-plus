@@ -99,6 +99,7 @@ async fn execute_direct_subcommand(
         SynthesizableSubcommand::Check {
             fix,
             quiet,
+            deny_warnings,
             no_fmt,
             no_lint,
             no_error_on_unmatched_pattern,
@@ -108,6 +109,7 @@ async fn execute_direct_subcommand(
                 &resolver,
                 fix,
                 quiet,
+                deny_warnings,
                 no_fmt,
                 no_lint,
                 no_error_on_unmatched_pattern,
