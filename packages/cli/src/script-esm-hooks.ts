@@ -31,7 +31,13 @@ const loadHook: LoadHook = (url, context, nextLoad) =>
 let watchHooks: { resolve: ResolveHook; load: LoadHook } | undefined;
 
 /** Receives the port `script-register.ts` relays watch reports through. */
-export const initialize: InitializeHook<{ watchPort?: MessagePort } | undefined> = (data) => {
+export const initialize: InitializeHook<
+  { tsconfigPath?: string; watchPort?: MessagePort } | undefined
+> = (data) => {
+  // Native loader state belongs to a thread. Copy the registering thread's choice
+  // explicitly, including discovery when its environment cleared a parent config.
+  oxcNode.initializeLoader(data?.tsconfigPath);
+  oxcNode.setTransformDeps('typescript');
   const port = data?.watchPort;
   if (port) {
     port.unref();

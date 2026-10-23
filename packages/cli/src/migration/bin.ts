@@ -582,7 +582,7 @@ function showMigrationSummary(options: {
     log(`${styleText('gray', '•')} tsup config migrated to tsdown (\`vp pack\`)`);
   }
   if (report.tsxMigrated) {
-    log(`${styleText('gray', '•')} tsx scripts migrated to \`vpx\``);
+    log(`${styleText('gray', '•')} tsx scripts migrated to Vite+`);
   }
   if (report.nodeVersionFileMigrated) {
     log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);

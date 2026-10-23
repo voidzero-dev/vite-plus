@@ -32,7 +32,9 @@
     "templates"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/register.js"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -85,6 +87,10 @@
       "types": "./dist/oxlint-plugin.d.ts"
     },
     "./package.json": "./package.json",
+    "./register": {
+      "types": "./dist/register.d.ts",
+      "default": "./dist/register.js"
+    },
     "./pack": {
       "types": "./dist/pack.d.ts",
       "import": "./dist/pack.js"

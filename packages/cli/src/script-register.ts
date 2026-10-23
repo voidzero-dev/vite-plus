@@ -10,7 +10,13 @@
 
 import * as NodeModule from 'node:module';
 
-import { canRegisterSyncHooks, createRelay, loadOxcNode, threadWatchSink } from './script-hooks.ts';
+import {
+  canRegisterSyncHooks,
+  createRelay,
+  loadOxcNode,
+  threadScriptConfig,
+  threadWatchSink,
+} from './script-hooks.ts';
 
 // Look `register` up on the namespace: a named import would fail to link on every
 // version once Node.js removes the deprecated API (DEP0205), even where it is unused.
@@ -22,7 +28,7 @@ if (!canRegisterSyncHooks(process.versions.node)) {
   const watch = threadWatchSink();
   const watchPort = watch ? createRelay(watch, loadOxcNode().takeWatchDependencies) : undefined;
   register!(new URL('./script-esm-hooks.js', import.meta.url), {
-    data: { watchPort },
+    data: { ...threadScriptConfig(), watchPort },
     transferList: watchPort ? [watchPort] : [],
   });
 }
