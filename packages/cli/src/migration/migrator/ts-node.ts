@@ -22,6 +22,14 @@ import { type MigrationReport } from '../report.ts';
 const TS_NODE_REFERENCE =
   /(?:^|[\s;&|("'=/\\`])ts-node(?:-(?:cwd|esm|script|transpile-only))?(?:\.(?:cmd|exe|ps1))?(?=$|[@/\s;&|)"'`])/i;
 const TS_NODE_LOADERS = /^ts-node(?:\/.*)?$/;
+function isTsNodeLoader(option: string, value: string): boolean {
+  return (
+    ((option === '-r' || option === '--require' || option === '--import') &&
+      /^ts-node\/register(?:\/(?:transpile-only|type-check|files))?$/.test(value)) ||
+    ((option === '--loader' || option === '--experimental-loader') &&
+      /^ts-node\/esm(?:\/transpile-only)?(?:\.mjs)?$/.test(value))
+  );
+}
 const TS_NODE_RUNNER: ScriptRunnerMigration = {
   name: 'ts-node',
   aliases: ['ts-node-esm', 'ts-node-transpile-only'],
@@ -29,14 +37,9 @@ const TS_NODE_RUNNER: ScriptRunnerMigration = {
   dependencies: ['ts-node'],
   commandPattern: TS_NODE_REFERENCE,
   loaderPattern: TS_NODE_LOADERS,
-  isLoader(option, value) {
-    return (
-      ((option === '-r' || option === '--require' || option === '--import') &&
-        /^ts-node\/register(?:\/(?:transpile-only|type-check|files))?$/.test(value)) ||
-      ((option === '--loader' || option === '--experimental-loader') &&
-        /^ts-node\/esm(?:\/transpile-only)?(?:\.mjs)?$/.test(value))
-    );
-  },
+  isLoader: isTsNodeLoader,
+  isRegister: isTsNodeLoader,
+  registerEnvRequiresNode: true,
   envShebang:
     /^(#!\s*\S*\benv\s+(?:-S\s+)?)(ts-node(?:-(?:esm|transpile-only))?(?=[ \t\r\n]|$)[^\r\n]*)/,
   shebangPattern: /^#![^\n]*[\s/]ts-node(?:-(?:cwd|esm|script|transpile-only))?(?=\s|$)/,
@@ -123,10 +126,10 @@ export async function confirmTsNodeMigration(interactive: boolean): Promise<bool
   if (interactive) {
     const confirmed = await prompts.confirm({
       message:
-        'Migrate ts-node scripts to vpx?\n  ' +
+        'Migrate ts-node scripts to Vite+?\n  ' +
         styleText(
           'gray',
-          'Commands with type-checking disabled become `vpx`. Commands that type-check or use custom ts-node settings stay unchanged. The ts-node devDependency is removed once nothing uses it.',
+          'Commands with type-checking disabled become `vpx`. Supported Node.js preloads become `vite-plus/register`. Commands that type-check or use custom ts-node settings stay unchanged. The ts-node devDependency is removed once nothing uses it.',
         ),
       initialValue: true,
     });
@@ -135,6 +138,6 @@ export async function confirmTsNodeMigration(interactive: boolean): Promise<bool
     }
     return confirmed;
   }
-  prompts.log.info('ts-node scripts detected. Auto-migrating supported commands to vpx...');
+  prompts.log.info('ts-node scripts detected. Auto-migrating supported commands to Vite+...');
   return true;
 }

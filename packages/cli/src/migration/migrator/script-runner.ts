@@ -48,6 +48,8 @@ export interface ScriptRunnerMigration {
   registerKeepOptions?: ReadonlyMap<string, string>;
   registerPreloadKeepReason?: (option: string, value: string) => string | undefined;
   registerInlineCodeKeepReason?: (code: string) => string | undefined;
+  /** Require a literal Node.js invocation when configuration preflight depends on its argv. */
+  registerEnvRequiresNode?: boolean;
   prepareRun?: (
     args: readonly string[],
     context: {
@@ -56,6 +58,9 @@ export interface ScriptRunnerMigration {
       nodeLoader: boolean;
       executable: string;
       shebang?: boolean;
+      publicRegister?: boolean;
+      /** Original literal NODE_OPTIONS arguments, or undefined when they cannot be parsed. */
+      nodeOptionsArgs?: readonly string[];
     },
   ) => {
     keepReason?: string;
@@ -260,6 +265,10 @@ function rewriteSegment(
     }
   } else if (values.slice(start).some((value) => runner.commandPattern.test(value))) {
     rewrite.kept.push(`vp migrate does not rewrite this use of ${runner.name}`);
+  } else if (environment.replacements.length && runner.registerEnvRequiresNode) {
+    rewrite.kept.push(
+      `vp migrate only replaces ${runner.name} in NODE_OPTIONS for a literal node command`,
+    );
   }
   if (environment.replacements.length) {
     // All children inherit this assignment. Keep it and their edits together if one
@@ -321,6 +330,7 @@ function literalEdit(command: string, token: LiteralCommandToken, value: string)
 interface EnvironmentOptions {
   replacements: { index: number; value: string }[];
   preloads: string[];
+  args?: string[];
   keepReason?: string;
 }
 
@@ -329,7 +339,7 @@ function scanEnvironmentOptions(
   runner: ScriptRunnerMigration,
   assignments: readonly string[],
 ): EnvironmentOptions {
-  const result: EnvironmentOptions = { replacements: [], preloads: [] };
+  const result: EnvironmentOptions = { replacements: [], preloads: [], args: [] };
   for (const [index, assignment] of assignments.entries()) {
     if (!/^NODE_OPTIONS=/i.test(assignment)) {
       continue;
@@ -338,6 +348,7 @@ function scanEnvironmentOptions(
     const shellOnlySyntax = value.includes("'") || value.replaceAll(/"[^"]*"/g, '').includes('\t');
     const segments = shellOnlySyntax ? undefined : parseLiteralCommands(value, false);
     if (!segments || segments.length !== 1) {
+      result.args = undefined;
       if (runner.commandPattern.test(value)) {
         result.keepReason =
           runner.envKeepReason([assignment]) ??
@@ -345,6 +356,7 @@ function scanEnvironmentOptions(
       }
       continue;
     }
+    result.args?.push(...segments[0].map(({ value }) => value));
     const scanned = scanOptions(runner, segments[0], 0, false);
     result.preloads.push(...scanned.preloads);
     result.keepReason ??= scanned.registerKeepReason;
@@ -463,7 +475,15 @@ function rewriteNodeLoader(
     original.loaders === original.imports.length &&
     (original.imports.length || environmentOptions.replacements.length)
   ) {
-    const prepared = prepareRun(runner, rewrite, tokens, start, environment, true);
+    const prepared = prepareRun(
+      runner,
+      rewrite,
+      tokens,
+      start,
+      environment,
+      true,
+      environmentOptions,
+    );
     const scanned = scanOptions(runner, prepared.tokens, start + 1, false);
     // Keep Node.js in charge of eval, test discovery, and native watch mode.
     const scripts = scanned.inlineCode
@@ -533,6 +553,7 @@ function prepareRun(
   start: number,
   environment: readonly string[],
   nodeLoader: boolean,
+  publicRegister?: EnvironmentOptions,
 ): { tokens: LiteralCommandToken[]; edits: Edit[]; keepReason?: string } {
   const prepared = runner.prepareRun?.(
     tokens.slice(start + 1).map(({ value }) => value),
@@ -541,6 +562,8 @@ function prepareRun(
       environment,
       nodeLoader,
       executable: tokens[start].value,
+      publicRegister: publicRegister !== undefined,
+      nodeOptionsArgs: publicRegister?.args,
     },
   );
   const edits: Edit[] = [];
@@ -608,7 +631,7 @@ interface ScannedOptions {
   removals: Edit[];
   loaders: number;
   runnerLoader: boolean;
-  imports: { token: LiteralCommandToken; value: string }[];
+  imports: { token: LiteralCommandToken; value: string; option?: LiteralCommandToken }[];
   registerKeepReason?: string;
   inlineCode: boolean;
   /** Local `--require` and `--import` modules, which load before the scripts. */
@@ -619,7 +642,10 @@ interface ScannedOptions {
 }
 
 function importEdits(command: string, scanned: ScannedOptions): Edit[] {
-  return scanned.imports.map(({ token, value }) => literalEdit(command, token, value));
+  return scanned.imports.flatMap(({ token, value, option }) => [
+    ...(option ? [literalEdit(command, option, '--import')] : []),
+    literalEdit(command, token, value),
+  ]);
 }
 
 /** Read options from the executable to the entry file. */
@@ -674,9 +700,8 @@ function scanOptions(
         if (runner.isRegister?.(name, loader)) {
           scanned.imports.push({
             token: tokens[inline ? index : index + 1],
-            value: inline
-              ? `${value.slice(0, value.indexOf('=') + 1)}vite-plus/register`
-              : 'vite-plus/register',
+            value: inline ? '--import=vite-plus/register' : 'vite-plus/register',
+            option: !inline && name !== '--import' ? tokens[index] : undefined,
           });
         }
       } else if (loader !== undefined) {
