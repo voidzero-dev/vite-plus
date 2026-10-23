@@ -41,7 +41,7 @@ describe('vendored Vitest dependency alignment', () => {
     expect(workspace.catalog.vitest).toBe(VITEST_VERSION);
   });
 
-  test.each(['4.1.10', '^5.0.0', '5.1.0-beta.1'])(
+  test.each(['4.1.10', '^5.0.0', '^5.1.0-beta.1', '6.0.0-beta.1', '5.1.0-beta..1', '5.1.0-beta_1'])(
     'rejects an unsupported bootstrap runtime pin %s before changing manifests',
     (version) => {
       const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-bootstrap-'));
@@ -56,14 +56,14 @@ describe('vendored Vitest dependency alignment', () => {
         copyFileSync(new URL('../vendored-vitest.ts', import.meta.url), script);
         const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
         expect(result.status).not.toBe(0);
-        expect(result.stderr).toContain('VITEST_VERSION must declare an exact stable v5 version');
+        expect(result.stderr).toContain('VITEST_VERSION must declare an exact v5 version');
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
     },
   );
 
-  test.each(['5.0.0', '5.1.2'])(
+  test.each(['5.0.0', '5.1.2', '5.1.0-beta.1'])(
     'runs before dependency installation with the selected %s runtime pin',
     (version) => {
       const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-bootstrap-'));
@@ -120,64 +120,73 @@ describe('vendored Vitest dependency alignment', () => {
     },
   );
 
-  test('aligns official catalog entries to the selected runner and preserves the community provider', () => {
-    const merged = mergePnpmWorkspaces(
-      {
-        catalog: {
-          vitest: '5.1.2',
-          '@vitest/browser': '5.0.0',
-          '@vitest/browser-webdriverio': '5.0.0-rc.1',
+  test.each(['5.1.2', '5.1.0-beta.1'])(
+    'aligns official catalog entries to %s and preserves the community provider',
+    (version) => {
+      const merged = mergePnpmWorkspaces(
+        {
+          catalog: {
+            vitest: version,
+            '@vitest/browser': '5.0.0',
+            '@vitest/browser-webdriverio': '5.0.0-rc.1',
+          },
         },
-      },
-      {
-        catalog: {
-          vitest: '^4.1.6',
-          '@vitest/browser': '^5.2.0',
-          '@vitest/browser-webdriverio': '5.3.0',
-          '@vitest/utils': '4.1.11',
-          '@vitest/expect': '4.1.11',
-          '@vitest/runner': '4.1.11',
-          '@vitest/eslint-plugin': '^1.0.0',
+        {
+          catalog: {
+            vitest: '^4.1.6',
+            '@vitest/browser': '^5.2.0',
+            '@vitest/browser-webdriverio': '5.3.0',
+            '@vitest/utils': '4.1.11',
+            '@vitest/expect': '4.1.11',
+            '@vitest/runner': '4.1.11',
+            '@vitest/eslint-plugin': '^1.0.0',
+          },
         },
-      },
-      {
-        catalog: {
-          '@vitest/coverage-v8': '4.1.11',
-          '@vitest/coverage-istanbul': '^4.1.11',
-          '@vitest/ui': '^5.2.0',
-          '@vitest/web-worker': '4.1.11',
+        {
+          catalog: {
+            '@vitest/coverage-v8': '4.1.11',
+            '@vitest/coverage-istanbul': '^4.1.11',
+            '@vitest/ui': '^5.2.0',
+            '@vitest/web-worker': '4.1.11',
+          },
         },
-      },
-      VITE_PACKAGE,
-      verkit,
-    );
-    expect(merged.catalog).toEqual({
-      typescript: '~7.0.2',
-      vitest: '5.1.2',
-      '@vitest/browser': '5.1.2',
-      '@vitest/browser-webdriverio': '5.0.0-rc.1',
-      '@vitest/utils': '5.1.2',
-      '@vitest/coverage-v8': '5.1.2',
-      '@vitest/coverage-istanbul': '5.1.2',
-      '@vitest/ui': '5.1.2',
-      '@vitest/web-worker': '5.1.2',
-      '@vitest/eslint-plugin': '^1.0.0',
-    });
-  });
-
-  test.each(['^5.0.0', '=5.0.0', '4.1.11', '6.0.0', '5.1.0-beta.1'])(
-    'rejects an unreviewed root runner version %s',
-    (vitest) => {
-      expect(() =>
-        mergePnpmWorkspaces({ catalog: { vitest } }, {}, {}, VITE_PACKAGE, verkit),
-      ).toThrow('The root Vitest catalog entry must be an exact stable v5 version');
+        VITE_PACKAGE,
+        verkit,
+      );
+      expect(merged.catalog).toEqual({
+        typescript: '~7.0.2',
+        vitest: version,
+        '@vitest/browser': version,
+        '@vitest/browser-webdriverio': '5.0.0-rc.1',
+        '@vitest/utils': version,
+        '@vitest/coverage-v8': version,
+        '@vitest/coverage-istanbul': version,
+        '@vitest/ui': version,
+        '@vitest/web-worker': version,
+        '@vitest/eslint-plugin': '^1.0.0',
+      });
     },
   );
+
+  test.each([
+    '^5.0.0',
+    '=5.0.0',
+    '4.1.11',
+    '6.0.0',
+    '^5.1.0-beta.1',
+    '6.0.0-beta.1',
+    '5.1.0-beta..1',
+    '5.1.0-beta_1',
+  ])('rejects an unreviewed root runner version %s', (vitest) => {
+    expect(() =>
+      mergePnpmWorkspaces({ catalog: { vitest } }, {}, {}, VITE_PACKAGE, verkit),
+    ).toThrow('The root Vitest catalog entry must be an exact v5 version');
+  });
 
   test('does not infer a missing root pin from an upstream catalog', () => {
     expect(() =>
       mergePnpmWorkspaces({}, { catalog: { vitest: '^4.1.6' } }, {}, VITE_PACKAGE, verkit),
-    ).toThrow('The root Vitest catalog entry must be an exact stable v5 version');
+    ).toThrow('The root Vitest catalog entry must be an exact v5 version');
   });
 
   test('still resolves tinybench to the higher major version', () => {
