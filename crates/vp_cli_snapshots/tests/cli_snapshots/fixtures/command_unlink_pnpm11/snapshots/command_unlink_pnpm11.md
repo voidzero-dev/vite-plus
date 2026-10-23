@@ -19,7 +19,7 @@ Options:
   -r, --recursive  Unlink in every workspace package
   -h, --help       Print help
 
-Documentation: https://viteplus.dev/guide/package-management
+Documentation: https://viteplus.dev/package-management/
 ```
 
 ## `vpt mkdir -p ../unlink-test-lib`

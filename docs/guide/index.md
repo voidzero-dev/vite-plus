@@ -100,9 +100,9 @@ Vite+ covers the full frontend development cycle, from starting a project throug
 
 - [`vp create`](/guide/create) creates new apps, packages, and monorepos.
 - [`vp migrate`](/guide/migrate) moves existing projects onto Vite+.
-- [`vp install`](/guide/package-management) installs dependencies with the right package manager.
-- [`vp add`](/guide/package-management), [`vp remove`](/guide/package-management), [`vp update`](/guide/package-management), [`vp dedupe`](/guide/package-management), [`vp outdated`](/guide/package-management), [`vp list`](/guide/package-management), [`vp why`](/guide/package-management), and [`vp info`](/guide/package-management) cover the rest of the package-management workflow.
-- [`vp link`](/guide/package-management), [`vp unlink`](/guide/package-management), [`vp rebuild`](/guide/package-management), and [`vp pm <command>`](/guide/package-management) provide lower-level package-manager operations.
+- [`vp install`](/package-management/install) installs dependencies with the right package manager.
+- [`vp add`](/package-management/add), [`vp remove`](/package-management/remove), [`vp update`](/package-management/update), [`vp dedupe`](/package-management/dedupe), [`vp outdated`](/package-management/outdated), [`vp list`](/package-management/list), [`vp why`](/package-management/why), and [`vp info`](/package-management/info) cover the rest of the package-management workflow.
+- [`vp link`](/package-management/link), [`vp unlink`](/package-management/unlink), [`vp rebuild`](/package-management/rebuild), and [`vp pm <command>`](/package-management/) provide lower-level package-manager operations.
 
 ### Project Toolchain
 

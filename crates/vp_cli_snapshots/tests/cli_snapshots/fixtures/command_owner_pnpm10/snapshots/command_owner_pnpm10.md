@@ -19,7 +19,7 @@ Commands:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/package-management
+Documentation: https://viteplus.dev/package-management/
 ```
 
 ## `vp pm owner list testnpm2`

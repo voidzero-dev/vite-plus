@@ -52,7 +52,7 @@ const guideSidebar = [
         ],
       },
       { text: 'Update Vite+', link: '/guide/upgrade-project' },
-      { text: 'Package Management', link: '/guide/package-management' },
+      { text: 'Package Management', link: '/package-management/' },
     ],
   },
   {
@@ -109,6 +109,85 @@ const guideSidebar = [
   {
     text: 'Reference',
     items: [{ text: 'Troubleshooting', link: '/guide/troubleshooting' }],
+  },
+];
+
+const packageManagementSidebar = [
+  {
+    text: 'Getting Started',
+    items: [
+      { text: 'Overview', link: '/package-management/' },
+      { text: 'Package Manager Selection', link: '/package-management/package-manager-selection' },
+      { text: 'Global Packages', link: '/package-management/global-packages' },
+    ],
+  },
+  {
+    text: 'Dependency Management',
+    items: [
+      { text: 'install', link: '/package-management/install' },
+      { text: 'add', link: '/package-management/add' },
+      { text: 'remove', link: '/package-management/remove' },
+      { text: 'update', link: '/package-management/update' },
+      { text: 'dedupe', link: '/package-management/dedupe' },
+      { text: 'ci', link: '/package-management/ci' },
+      { text: 'prune', link: '/package-management/prune' },
+    ],
+  },
+  {
+    text: 'Inspection and Diagnostics',
+    items: [
+      { text: 'list', link: '/package-management/list' },
+      { text: 'why', link: '/package-management/why' },
+      { text: 'info', link: '/package-management/info' },
+      { text: 'outdated', link: '/package-management/outdated' },
+      { text: 'licenses', link: '/package-management/licenses' },
+      { text: 'search', link: '/package-management/search' },
+      { text: 'audit', link: '/package-management/audit' },
+      { text: 'fund', link: '/package-management/fund' },
+      { text: 'ping', link: '/package-management/ping' },
+    ],
+  },
+  {
+    text: 'Local Development',
+    items: [
+      { text: 'link', link: '/package-management/link' },
+      { text: 'unlink', link: '/package-management/unlink' },
+      { text: 'rebuild', link: '/package-management/rebuild' },
+      { text: 'approve-builds', link: '/package-management/approve-builds' },
+      { text: 'patch', link: '/package-management/patch' },
+      { text: 'patch-commit', link: '/package-management/patch-commit' },
+      { text: 'dlx', link: '/package-management/dlx' },
+    ],
+  },
+  {
+    text: 'Publishing',
+    items: [
+      { text: 'pack', link: '/package-management/pack' },
+      { text: 'version', link: '/package-management/version' },
+      { text: 'publish', link: '/package-management/publish' },
+      { text: 'stage', link: '/package-management/stage' },
+      { text: 'dist-tag', link: '/package-management/dist-tag' },
+      { text: 'deprecate', link: '/package-management/deprecate' },
+    ],
+  },
+  {
+    text: 'Registry and Accounts',
+    items: [
+      { text: 'login', link: '/package-management/login' },
+      { text: 'logout', link: '/package-management/logout' },
+      { text: 'whoami', link: '/package-management/whoami' },
+      { text: 'token', link: '/package-management/token' },
+      { text: 'owner', link: '/package-management/owner' },
+      { text: 'team', link: '/package-management/team' },
+    ],
+  },
+  {
+    text: 'Configuration and Maintenance',
+    items: [
+      { text: 'config', link: '/package-management/config' },
+      { text: 'pkg', link: '/package-management/pkg' },
+      { text: 'cache', link: '/package-management/cache' },
+    ],
   },
 ];
 
@@ -175,6 +254,11 @@ export default extendConfig(
             activeMatch: '^/guide/',
           },
           {
+            text: 'Package Management',
+            link: '/package-management/',
+            activeMatch: '^/package-management/',
+          },
+          {
             text: 'Config',
             link: '/config/',
             activeMatch: '^/config/',
@@ -198,6 +282,7 @@ export default extendConfig(
         ],
         sidebar: {
           '/guide/': guideSidebar,
+          '/package-management/': packageManagementSidebar,
           '/config/': [
             {
               text: 'Configuration',
