@@ -4837,6 +4837,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml).toContain('overrides:');
     expect(yaml).toContain('peerDependencyRules:');
     expect(yaml).toContain('catalog:');
+    expect(readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')).packages).toEqual(['.']);
 
     // package.json should not have pnpm section
     const pkg = readJson(path.join(tmpDir, 'package.json'));
@@ -4846,6 +4847,10 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const devDeps = pkg.devDependencies as Record<string, string>;
     expect(devDeps.vite).toBe('catalog:');
     expect(devDeps['vite-plus']).toBe('catalog:');
+
+    const firstMigration = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8');
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    expect(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')).toBe(firstMigration);
   });
 
   // PR #1891 review (P1): pnpm 9.5.0-10.6.1 supports catalogs (>= 9.5.0) but not
@@ -4875,6 +4880,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml).toContain('catalog:');
     expect(yaml).toContain('vite-plus:');
     expect(yaml).not.toContain('overrides:');
+    expect(readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')).packages).toEqual(['.']);
   });
 
   it('does not duplicate vite-plus into devDependencies when it already lives in dependencies', () => {
