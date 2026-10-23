@@ -363,6 +363,22 @@ export function prepareTsNodeRun(
       }
     }
     configFile = nearestTsconfig(searchDir);
+    if (context.publicRegister && !configFile) {
+      let entryConfig: string | undefined;
+      try {
+        entryConfig = nearestTsconfig(path.dirname(fs.realpathSync(path.resolve(cwd, entry))));
+      } catch {
+        return {
+          keepReason: `\`${entry}\` cannot be resolved, so its ts-node configuration cannot be checked`,
+        };
+      }
+      if (entryConfig) {
+        return {
+          keepReason:
+            'the Node.js preload would discover an entrypoint tsconfig that ts-node does not use; select the intended config with TS_NODE_PROJECT before migrating',
+        };
+      }
+    }
   }
   const config = configFile ? readTsNodeOptions(configFile) : { options: {} };
   if (config.keepReason) {
