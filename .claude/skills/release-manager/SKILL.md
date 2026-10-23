@@ -180,7 +180,6 @@ vite and rolldown are built from pinned commits, so link the commit. The npm-ins
 - No em dashes or en dashes anywhere in the title or body. Use commas, colons, or parentheses.
 - Keep the PR title plain (`release: vX.Y.Z`) and the GitHub release title plain (`vite-plus vX.Y.Z`); the theme goes in the opening sentence. Lead the opening theme with the most important user-visible behavior. Avoid vague benefit-only wording that the body must explain.
 - Say what a feature does. Do not compare it to the tool it replaces, and do not say it works "without" a dependency it never needed.
-- Round performance and size numbers measured on one machine (for example `30%+ smaller`); leave per-platform byte counts and exact benchmark percentages to the PR.
 - When naming a package version in prose or a heading, use one inline literal, `package@version`. Keep separate version columns in tables.
 - Link unfamiliar technical abbreviations to the relevant documentation section; keep the short abbreviation as the link text.
 - The Upgrade section is a `vp upgrade` code block.
