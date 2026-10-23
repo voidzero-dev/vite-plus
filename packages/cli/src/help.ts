@@ -213,7 +213,7 @@ const commandHelpDocs = {
           {
             label: '--api [port]',
             description:
-              "Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204 or 63315 in browser mode. Use '--help --api' for more info.",
+              "Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204 or 23315 in browser mode. Use '--help --api' for more info.",
           },
           {
             label: '--silent [value]',
@@ -310,6 +310,15 @@ const commandHelpDocs = {
           {
             label: '--changed [since]',
             description: 'Run tests that are affected by the changed files (default: false)',
+          },
+          {
+            label: '--since-last-run',
+            description:
+              'Run tests with dependencies modified since their last run, plus tests that failed (default: false)',
+          },
+          {
+            label: '--lastFailed',
+            description: 'Run only the tests that failed in the last run (default: false)',
           },
           {
             label: '--sequence <options>',

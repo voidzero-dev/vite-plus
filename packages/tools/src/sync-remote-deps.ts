@@ -563,10 +563,10 @@ export function mergePnpmWorkspaces(
       if (VITEST_EXACT_VERSION_PACKAGES.has(pkg)) {
         if (
           !vitestVersion ||
-          !/^5\.\d+\.\d+$/.test(vitestVersion) ||
+          !/^5\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(vitestVersion) ||
           verkit.normalize(vitestVersion) !== vitestVersion
         ) {
-          throw new Error('The root Vitest catalog entry must be an exact stable v5 version');
+          throw new Error('The root Vitest catalog entry must be an exact v5 version');
         }
         catalog[pkg] = vitestVersion;
       } else if (pkg === '@vitest/browser-webdriverio' && main.catalog?.[pkg]) {
