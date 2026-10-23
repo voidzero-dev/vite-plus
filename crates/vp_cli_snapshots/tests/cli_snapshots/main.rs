@@ -746,6 +746,12 @@ impl CaseHome {
             // to the real user's persistent PATH. Case commands do not
             // inherit this override, so self-setup fixtures retain coverage.
             .env("VP_SELF_SETUP_NO_MODIFY_PATH", "1")
+            // The checkout package is already installed in this home. Without
+            // this, a build with no `vp-install-lock.yaml` beside it looks up
+            // its own version's platform package on npm, which does not exist
+            // on a release branch before publishing. Case commands do not
+            // inherit this override either.
+            .env("VP_SKIP_DEPS_INSTALL", "1")
             .output()
             .map_err(|e| format!("failed to run first-start setup: {e}"))?;
         if output.status.success() {
