@@ -280,15 +280,20 @@ function rewriteSegment(
     rewriteRunner(runner, rewrite, tokens, first, start, envReason, assignments);
   } else if (values[start] === 'node') {
     rewriteNodeLoader(runner, rewrite, tokens, first, start, envReason, assignments, environment);
-  } else if (shell) {
-    for (const token of tokens.slice(start)) {
-      rewriteQuotedCommand(runner, rewrite, token, assignments);
-    }
-  } else if (launcher) {
-    for (let index = start + 1; index < tokens.length; index++) {
-      if (launcher(values[index - 1])) {
-        rewriteQuotedCommand(runner, rewrite, tokens[index], assignments);
+  } else if (shell || launcher) {
+    const commands = shell
+      ? tokens.slice(start)
+      : tokens.slice(start + 1).filter((_, index) => launcher!(values[start + index]));
+    let checked = commands.length > 0;
+    for (const token of commands) {
+      if (!rewriteQuotedCommand(runner, rewrite, token, assignments)) {
+        checked = false;
       }
+    }
+    if (!checked && environment.replacements.length && runner.registerEnvRequiresNode) {
+      rewrite.kept.push(
+        `vp migrate only replaces ${runner.name} in NODE_OPTIONS when every launcher target is a quoted literal node command`,
+      );
     }
   } else if (values.slice(start).some((value) => runner.commandPattern.test(value))) {
     rewrite.kept.push(`vp migrate does not rewrite this use of ${runner.name}`);
@@ -874,11 +879,11 @@ function rewriteQuotedCommand(
   rewrite: Rewrite,
   token: LiteralCommandToken,
   environment: readonly string[],
-): void {
+): boolean {
   const raw = rewrite.command.slice(token.start, token.end);
   const quote = raw[0];
   if ((quote !== '"' && quote !== "'") || raw.length < 2 || !raw.endsWith(quote)) {
-    return;
+    return false;
   }
   const inner = rewriteScriptRunnerCommand(
     runner,
@@ -891,6 +896,7 @@ function rewriteQuotedCommand(
   if (inner.command !== token.value) {
     rewrite.edits.push(literalEdit(rewrite.command, token, inner.command));
   }
+  return token.value.trim() !== '';
 }
 
 /** The commands in a scripts or lint-staged record. */

@@ -95,6 +95,10 @@ describe('ts-node migration', () => {
       'NODE_OPTIONS="--import vite-plus/register" concurrently "node a.ts" "node b.ts"',
     ],
     [
+      'cross-env-shell NODE_OPTIONS="--require ts-node/register/transpile-only" "node a.ts"',
+      'cross-env-shell NODE_OPTIONS="--import vite-plus/register" "node a.ts"',
+    ],
+    [
       'cross-env TS_NODE_TRANSPILE_ONLY=true ts-node a.ts',
       'cross-env TS_NODE_TRANSPILE_ONLY=true vpx a.ts',
     ],
@@ -182,7 +186,20 @@ describe('ts-node migration', () => {
     ['node -r ts-node/register/transpile-only --print=1 a.ts', 'inline code or REPL'],
     ['node -r ts-node/register/transpile-only -pe1 a.ts', 'inline code or REPL'],
     ['node -r ts-node/register/transpile-only --interactive a.ts', 'inline code or REPL'],
+    [
+      'NODE_OPTIONS="--require ts-node/register/transpile-only" node --run check -- a.ts',
+      'package script',
+    ],
     ['NODE_OPTIONS="--require ts-node/register/transpile-only" mocha', 'literal node command'],
+    ['NODE_OPTIONS="--require ts-node/register" concurrently npm:check', 'every launcher target'],
+    [
+      'NODE_OPTIONS="--require ts-node/register/transpile-only" concurrently "node a.ts" npm:check',
+      'every launcher target',
+    ],
+    ['NODE_OPTIONS="--require ts-node/register" nodemon --exec node a.ts', 'every launcher target'],
+    ['cross-env-shell NODE_OPTIONS="--require ts-node/register" node a.ts', 'type-checks'],
+    ['cross-env-shell NODE_OPTIONS="--require ts-node/register" mocha', 'every launcher target'],
+    ['NODE_OPTIONS="--require ts-node/register" nodemon a.ts', 'every launcher target'],
     [
       'NODE_OPTIONS="--require ts-node/register" concurrently "node a.ts" "npm run test"',
       'type-checks',
