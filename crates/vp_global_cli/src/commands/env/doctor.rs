@@ -106,7 +106,13 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
     // Section: Configuration
     print_section("Configuration");
-    let (environment_config, system_node_path) = check_shim_mode(scope).await;
+    let (environment_config, system_node_path) = match check_shim_mode(scope).await {
+        Some(result) => result,
+        None => {
+            has_errors = true;
+            (config::Config::default(), None)
+        }
+    };
 
     // Check env sourcing: IDE-relevant profiles first, then all shell profiles
     let env_status = cfg!(not(windows)).then(check_env_sourcing);
@@ -125,7 +131,11 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     // Section: Version Resolution
     let resolution = if scope.includes_node() {
         print_section("Node.js Resolution");
-        check_current_resolution(&cwd, environment_config.node_shim_mode, system_node_path).await
+        let (ok, resolution) =
+            check_current_resolution(&cwd, environment_config.node_shim_mode, system_node_path)
+                .await;
+        has_errors |= !ok;
+        resolution
     } else {
         None
     };
@@ -261,17 +271,24 @@ async fn check_shims(scope: EnvScope) -> bool {
     }
 }
 
-/// Check and display shim mode. Returns the mode and any found system node path.
-async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePathBuf>) {
+/// Check and display shim mode. Returns the mode and any found system node path,
+/// or `None` when the config cannot be read.
+async fn check_shim_mode(scope: EnvScope) -> Option<(config::Config, Option<AbsolutePathBuf>)> {
     let config = match load_config().await {
         Ok(c) => c,
         Err(e) => {
             print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
-                "Node.js",
-                &style(format!("config error: {e}")).yellow().to_string(),
+                &style(output::CROSS).red().to_string(),
+                "Config",
+                &style(format!("failed to read: {e}")).red().to_string(),
             );
-            return (config::Config::default(), None);
+            if let Ok(path) = config::get_config_path() {
+                print_hint(&format!(
+                    "Fix or remove {}.",
+                    abbreviate_home(&path.as_path().display().to_string())
+                ));
+            }
+            return None;
         }
     };
 
@@ -328,7 +345,7 @@ async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePat
         }
     }
 
-    (config, system_node_path)
+    Some((config, system_node_path))
 }
 
 async fn check_package_manager_session_override() {
@@ -569,6 +586,7 @@ async fn check_path(scope: EnvScope) -> bool {
     };
 
     // Show which tool would be executed for each shim
+    let mut ok = vp_path.is_some();
     for tool in selected_shim_tools(scope) {
         if let Some(tool_path) = find_in_path(tool) {
             let expected_dir = super::setup::shim_dir(&settings, tool);
@@ -594,11 +612,16 @@ async fn check_path(scope: EnvScope) -> bool {
                 );
             }
         } else {
-            print_check(" ", tool, "not found");
+            print_check(
+                &style(output::CROSS).red().to_string(),
+                tool,
+                &style("not found").red().to_string(),
+            );
+            ok = false;
         }
     }
 
-    vp_path.is_some()
+    ok
 }
 
 /// Find an executable in PATH.
@@ -778,19 +801,29 @@ fn format_version_source(source: &str, source_path: Option<&vt_path::AbsolutePat
     }
 }
 
-/// Check current directory version resolution.
+/// Check current directory version resolution. Returns whether the check passed
+/// and the managed resolution, if any.
 async fn check_current_resolution(
     cwd: &AbsolutePathBuf,
     shim_mode: ShimMode,
     system_node_path: Option<AbsolutePathBuf>,
-) -> Option<config::VersionResolution> {
+) -> (bool, Option<config::VersionResolution>) {
     print_check(" ", "Directory", &cwd.as_path().display().to_string());
 
     // In system-first mode, show system Node.js info instead of managed resolution
     if shim_mode == ShimMode::SystemFirst {
         if let Some(system_node) = system_node_path {
-            let version = get_node_version(&system_node).await;
             print_check(" ", "Source", "system PATH");
+            let Some(version) = try_get_tool_version(&system_node).await else {
+                print_check(
+                    &style(output::CROSS).red().to_string(),
+                    "Node binary",
+                    &style(format!("{} (could not execute)", system_node.as_path().display()))
+                        .red()
+                        .to_string(),
+                );
+                return (false, None);
+            };
             print_check(" ", "Version", &style(&version).green().bright().to_string());
             print_check(
                 &style(output::CHECK).green().to_string(),
@@ -805,7 +838,7 @@ async fn check_current_resolution(
             );
             print_hint("Install Node.js or run 'vp env on' to use managed Node.js.");
         }
-        return None;
+        return (true, None);
     }
 
     match resolve_version(cwd).await {
@@ -838,7 +871,7 @@ async fn check_current_resolution(
                 );
                 print_hint("Version will be downloaded on first use.");
             }
-            Some(resolution)
+            (true, Some(resolution))
         }
         Err(e) => {
             print_check(
@@ -846,18 +879,9 @@ async fn check_current_resolution(
                 "Resolution",
                 &style(format!("failed: {e}")).red().to_string(),
             );
-            None
+            (false, None)
         }
     }
-}
-
-/// Get the version string from a Node.js binary.
-async fn get_node_version(node_path: &vt_path::AbsolutePath) -> String {
-    get_tool_version(node_path).await
-}
-
-async fn get_tool_version(tool_path: &vt_path::AbsolutePath) -> String {
-    try_get_tool_version(tool_path).await.unwrap_or_else(|| "unknown".to_string())
 }
 
 async fn try_get_tool_version(tool_path: &vt_path::AbsolutePath) -> Option<String> {
