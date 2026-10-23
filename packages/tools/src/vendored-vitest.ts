@@ -78,9 +78,11 @@ if (
   // upgrade-deps.ts keeps this exact runtime pin in sync with the root catalog.
   // Read the declaration without importing CLI code or an installed YAML parser.
   const constants = readFileSync(join(rootDir, 'packages/cli/src/utils/constants.ts'), 'utf8');
-  const version = constants.match(/^export const VITEST_VERSION = '(5\.\d+\.\d+)';\r?$/m)?.[1];
+  const version = constants.match(
+    /^export const VITEST_VERSION = '(5\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)';\r?$/m,
+  )?.[1];
   if (!version) {
-    throw new Error('VITEST_VERSION must declare an exact stable v5 version');
+    throw new Error('VITEST_VERSION must declare an exact v5 version');
   }
   alignVendoredVitestDependencies(rootDir, version);
 }
