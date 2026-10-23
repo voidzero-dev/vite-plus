@@ -33,6 +33,7 @@ describe('ts-node migration', () => {
       write(file, 'export {};\n');
     }
     write('a.cts', 'exports.value = 1;\n');
+    write('setup.cjs', "process.env.TS_NODE_TYPE_CHECK = 'true';\n");
   });
 
   afterEach(() => {
@@ -51,11 +52,48 @@ describe('ts-node migration', () => {
     ['npm exec -- ts-node -T a.ts', 'vpx a.ts'],
     ['yarn ts-node -T a.ts', 'vpx a.ts'],
     ['bunx ts-node -T a.ts', 'vpx a.ts'],
-    ['node -r ts-node/register/transpile-only a.ts', 'vpx a.ts'],
-    ['node --require=ts-node/register/transpile-only a.cts', 'vpx a.cts'],
-    ['node --loader ts-node/esm/transpile-only a.ts', 'vpx a.ts'],
-    ['node --loader=ts-node/esm/transpile-only.mjs --inspect a.ts', 'vpx --inspect a.ts'],
-    ['node -C dev -r ts-node/register/transpile-only a.ts', 'vpx -C dev a.ts'],
+    ['node -r ts-node/register/transpile-only a.ts', 'node --import vite-plus/register a.ts'],
+    [
+      'node --require=ts-node/register/transpile-only a.cts',
+      'node --import=vite-plus/register a.cts',
+    ],
+    ['node --loader ts-node/esm/transpile-only a.ts', 'node --import vite-plus/register a.ts'],
+    [
+      'node --loader=ts-node/esm/transpile-only.mjs --inspect a.ts',
+      'node --import=vite-plus/register --inspect a.ts',
+    ],
+    [
+      'node -C dev -r ts-node/register/transpile-only a.ts',
+      'node -C dev --import vite-plus/register a.ts',
+    ],
+    [
+      'node --experimental-loader ts-node/esm/transpile-only --watch a.ts',
+      'node --import vite-plus/register --watch a.ts',
+    ],
+    [
+      'node --import ts-node/register/transpile-only --test a.ts',
+      'node --import vite-plus/register --test a.ts',
+    ],
+    [
+      'TS_NODE_TRANSPILE_ONLY=1 node -r ts-node/register a.ts',
+      'TS_NODE_TRANSPILE_ONLY=1 node --import vite-plus/register a.ts',
+    ],
+    [
+      'NODE_OPTIONS="--require ts-node/register/transpile-only" node a.ts',
+      'NODE_OPTIONS="--import vite-plus/register" node a.ts',
+    ],
+    [
+      'NODE_OPTIONS=--loader=ts-node/esm/transpile-only node a.ts',
+      'NODE_OPTIONS=--import=vite-plus/register node a.ts',
+    ],
+    [
+      'NODE_OPTIONS="--trace-warnings" node -r ts-node/register/transpile-only a.ts',
+      'NODE_OPTIONS="--trace-warnings" node --import vite-plus/register a.ts',
+    ],
+    [
+      'NODE_OPTIONS="--require ts-node/register/transpile-only" concurrently "node a.ts" "node b.ts"',
+      'NODE_OPTIONS="--import vite-plus/register" concurrently "node a.ts" "node b.ts"',
+    ],
     [
       'cross-env TS_NODE_TRANSPILE_ONLY=true ts-node a.ts',
       'cross-env TS_NODE_TRANSPILE_ONLY=true vpx a.ts',
@@ -89,13 +127,12 @@ describe('ts-node migration', () => {
     ['ts-node -T watch a.ts', 'cannot be resolved'],
     ['ts-node -T --eval 1', 'does not translate'],
     ['ts-node -T', 'name a script'],
-    ['node -r ts-node/register/transpile-only --watch a.ts', 'different watchers'],
     ['node -r ts-node/register/transpile-only --env-file=.env a.ts', 'can configure ts-node'],
     ['node --env_file=.env -r ts-node/register/transpile-only a.ts', 'can configure ts-node'],
     ['node -r dotenv/config -r ts-node/register/transpile-only a.ts', 'additional preload'],
     [
       'NODE_OPTIONS="-r ./setup.cjs" node -r ts-node/register/transpile-only a.ts',
-      'configuration preloads',
+      'additional preload',
     ],
     ['NODE_OPTIONS="-r dotenv/config" ts-node -T a.ts', 'configuration preloads'],
     ['node -r ts-node/register/transpile-only --import ./setup.ts a.ts', 'additional preload'],
@@ -108,6 +145,48 @@ describe('ts-node migration', () => {
     ['ts-node-cwd -T a.ts', 'does not rewrite'],
     ['ts-node -T a.ts | tee output', 'shell syntax'],
     ['ts-node -T $ENTRY', 'shell syntax'],
+    ['NODE_OPTIONS="--require ts-node/register" node a.ts', 'type-checks'],
+    [
+      'TS_NODE_TYPE_CHECK=1 NODE_OPTIONS="--require ts-node/register/transpile-only" node a.ts',
+      'type-checks',
+    ],
+    [
+      'NODE_OPTIONS="--require ts-node/register/transpile-only" node -r ts-node/register/transpile-only a.ts',
+      'more than once',
+    ],
+    [
+      'NODE_OPTIONS="--require ts-node/register/transpile-only -r dotenv/config" node a.ts',
+      'additional preload',
+    ],
+    [
+      'NODE_OPTIONS="--require ts-node/register/transpile-only" node --env-file=.env a.ts',
+      'can configure ts-node',
+    ],
+    [
+      'TSX_TSCONFIG_PATH=other.json node -r ts-node/register/transpile-only a.ts',
+      'different configuration',
+    ],
+    [
+      'VP_SCRIPT_TSCONFIG=other.json node -r ts-node/register/transpile-only a.ts',
+      'different configuration',
+    ],
+    [
+      'OXC_TSCONFIG_PATH=other.json node -r ts-node/register/transpile-only a.ts',
+      'different configuration',
+    ],
+    ['node -r ts-node/register/transpile-only --test', 'name a script'],
+    [
+      'node -r ts-node/register/transpile-only -e "require(\'ts-node\').register({ typeCheck: true })" a.ts',
+      'inline code or REPL',
+    ],
+    ['node -r ts-node/register/transpile-only --print=1 a.ts', 'inline code or REPL'],
+    ['node -r ts-node/register/transpile-only -pe1 a.ts', 'inline code or REPL'],
+    ['node -r ts-node/register/transpile-only --interactive a.ts', 'inline code or REPL'],
+    ['NODE_OPTIONS="--require ts-node/register/transpile-only" mocha', 'literal node command'],
+    [
+      'NODE_OPTIONS="--require ts-node/register" concurrently "node a.ts" "npm run test"',
+      'type-checks',
+    ],
     ['cd scripts && ts-node -T a.ts', 'working directory is unknown'],
   ])('retains %s', (command, reason) => {
     expect(rewriteTsNodeCommand(command, root)).toEqual({
@@ -116,7 +195,7 @@ describe('ts-node migration', () => {
     });
   });
 
-  it('pins the config selected by the CLI or Node loader without overlapping loader edits', () => {
+  it('pins the CLI config and retains Node loaders that need an implicit config pin', () => {
     write('tsconfig.json', { 'ts-node': { transpileOnly: true } });
     write('scripts/tsconfig.json', {
       'ts-node': { transpileOnly: true },
@@ -130,11 +209,47 @@ describe('ts-node migration', () => {
       '--require ts-node/register',
       '--require=ts-node/register/transpile-only',
     ]) {
-      expect(rewriteTsNodeCommand(`node ${loader} scripts/a.ts`, root)).toEqual({
-        command: 'vpx --tsconfig=tsconfig.json scripts/a.ts',
+      const command = `node ${loader} scripts/a.ts`;
+      expect(rewriteTsNodeCommand(command, root)).toEqual({
+        command,
+        kept: [expect.stringContaining('set TS_NODE_PROJECT')],
+      });
+    }
+  });
+
+  it('keeps explicit TS_NODE_PROJECT files for Node loaders and literal NODE_OPTIONS', () => {
+    write('tsconfig.json', { 'ts-node': { typeCheck: true } });
+    write('configs/runner.json', { 'ts-node': { transpileOnly: true } });
+    for (const [before, after] of [
+      ['node -r ts-node/register a.ts', 'node --import vite-plus/register a.ts'],
+      [
+        'NODE_OPTIONS="--require ts-node/register" node a.ts',
+        'NODE_OPTIONS="--import vite-plus/register" node a.ts',
+      ],
+    ]) {
+      const prefix = 'TS_NODE_PROJECT=configs/runner.json ';
+      expect(rewriteTsNodeCommand(prefix + before, root)).toEqual({
+        command: prefix + after,
         kept: [],
       });
     }
+  });
+
+  it('removes ts-node when all Node.js loader and NODE_OPTIONS uses migrate', () => {
+    write('package.json', {
+      scripts: {
+        seed: 'node -r ts-node/register/transpile-only a.ts',
+        test: 'NODE_OPTIONS="--loader=ts-node/esm/transpile-only" node --test b.ts',
+      },
+      devDependencies: { 'ts-node': '^10.9.2' },
+    });
+    expect(migrateTsNodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: true });
+    expect(readJson('package.json').scripts).toEqual({
+      seed: 'node --import vite-plus/register a.ts',
+      test: 'NODE_OPTIONS="--import=vite-plus/register" node --test b.ts',
+    });
+    expect(readJson('package.json').devDependencies).toEqual({});
+    expect(migrateTsNodeToVpx(root)).toEqual({ changed: false, dependencyRemoved: false });
   });
 
   it('translates explicit project paths with spaces using portable quotes', () => {
