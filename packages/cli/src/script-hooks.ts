@@ -26,6 +26,24 @@ export function loadOxcNode(): OxcNodeBinding {
 }
 
 const WATCH_SINK = Symbol.for('vite-plus:script-watch-sink');
+const SCRIPT_CONFIG = Symbol.for('vite-plus:script-config');
+
+/**
+ * Capture this JavaScript thread's configuration before its first resolve. Worker
+ * environments can differ from the native process environment, including clearing
+ * the parent's variables. Both emitted preload entries share this selection.
+ */
+export function threadScriptConfig(): { tsconfigPath: string | undefined } {
+  const holder = globalThis as { [SCRIPT_CONFIG]?: { tsconfigPath: string | undefined } };
+  return (holder[SCRIPT_CONFIG] ??= {
+    tsconfigPath:
+      process.env.VP_SCRIPT_TSCONFIG ||
+      process.env.TSX_TSCONFIG_PATH ||
+      process.env.TS_NODE_PROJECT ||
+      process.env.OXC_TSCONFIG_PATH ||
+      undefined,
+  });
+}
 
 /**
  * Where this thread reports the files watch mode restarts on, or `null` when nobody is

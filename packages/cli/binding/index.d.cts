@@ -4238,6 +4238,11 @@ export declare namespace oxcNode {
     ) => ResolveFnOutput | Promise<ResolveFnOutput>,
   ): ResolveFnOutput | Promise<ResolveFnOutput>;
   export function enableWatchReport(): void;
+  /**
+   * Configure this JavaScript thread from its own environment. `None` requests
+   * discovery and does not fall back to the parent process's native environment.
+   */
+  export function initializeLoader(path?: string | undefined | null): void;
   export function load(
     url: string,
     context: LoadContext,
