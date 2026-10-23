@@ -345,8 +345,8 @@ catalogs:
       specifier: '=1.89.0'
       version: 1.89.0
     oxlint-tsgolint:
-      specifier: '=7.0.2004'
-      version: 7.0.2004
+      specifier: '=7.0.2005'
+      version: 7.0.2005
     pathe:
       specifier: ^2.0.3
       version: 2.0.3
@@ -450,7 +450,7 @@ importers:
     devDependencies:
       '@e18e/eslint-plugin':
         specifier: 'catalog:'
-        version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.89.0(oxlint-tsgolint@7.0.2004)(vite-plus@packages+cli))
+        version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.89.0(oxlint-tsgolint@7.0.2005)(vite-plus@packages+cli))
       '@emnapi/core':
         specifier: 'catalog:'
         version: 2.0.0-alpha.5
@@ -525,10 +525,10 @@ importers:
         version: 0.74.0(vite-plus@packages+cli)
       oxlint:
         specifier: 'catalog:'
-        version: 1.89.0(oxlint-tsgolint@7.0.2004)(vite-plus@packages+cli)
+        version: 1.89.0(oxlint-tsgolint@7.0.2005)(vite-plus@packages+cli)
       oxlint-tsgolint:
         specifier: 'catalog:'
-        version: 7.0.2004
+        version: 7.0.2005
       playwright:
         specifier: '*'
         version: 1.62.1
@@ -1048,7 +1048,7 @@ importers:
     devDependencies:
       '@e18e/eslint-plugin':
         specifier: ^0.8.1
-        version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.89.0(oxlint-tsgolint@7.0.2004)(vite-plus@packages+cli))
+        version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.89.0(oxlint-tsgolint@7.0.2005)(vite-plus@packages+cli))
       '@type-challenges/utils':
         specifier: ^0.1.1
         version: 0.1.1
@@ -1099,10 +1099,10 @@ importers:
         version: 0.73.0(vite-plus@packages+cli)
       oxlint:
         specifier: ^1.88.0
-        version: 1.89.0(oxlint-tsgolint@7.0.2004)(vite-plus@packages+cli)
+        version: 1.89.0(oxlint-tsgolint@7.0.2005)(vite-plus@packages+cli)
       oxlint-tsgolint:
         specifier: ^7.0.2004
-        version: 7.0.2004
+        version: 7.0.2005
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
@@ -3826,33 +3826,33 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@oxlint-tsgolint/darwin-arm64@7.0.2004':
-    resolution: {integrity: sha512-uJk3ttju7Lz+Nv8WG4CsLyewoL1qf/Ny8S8OksJ7Bm/F14Tc9gMfW6arM1PCc57IzH/X/I79YsCWTgxX1FKibQ==}
+  '@oxlint-tsgolint/darwin-arm64@7.0.2005':
+    resolution: {integrity: sha512-VqDZxcZVjlonNLuuvraVNgDQt+1ndwa4yJo8OqsK4HYh/61ba9IlMStCVfi/aaIqRoDhNbAKC8gdcTrXqnb+Ug==}
     cpu: [arm64]
     os: [darwin]
 
-  '@oxlint-tsgolint/darwin-x64@7.0.2004':
-    resolution: {integrity: sha512-0BFfHTzDxNDFPcu0UZAXT6CyCJHAXM0dZveyDb4KEHa2qF/DSnOKOrmvK/wFuFol9kvijbGM9JfuOsor+zWXRw==}
+  '@oxlint-tsgolint/darwin-x64@7.0.2005':
+    resolution: {integrity: sha512-4kUfLRNYoVpv0Tm3jPYrvxyfOc/LmdvFC3pKZ4tL6K7lA7K/VS81SAtmxRzbYXYSyb3SBWhwsuX+df4neqzxxA==}
     cpu: [x64]
     os: [darwin]
 
-  '@oxlint-tsgolint/linux-arm64@7.0.2004':
-    resolution: {integrity: sha512-TAehQc+qdRXyDN3nl/r/3/oPrBVrbtrDeGMkFyG6mf+XphpoJ2lAMVFLclyvrVZCw02RbKROjyw8h72XwQQHcw==}
+  '@oxlint-tsgolint/linux-arm64@7.0.2005':
+    resolution: {integrity: sha512-rhUNcPsBlKvhXtrbhbBUidtRBRdJ8fbEHN9H5Q5N59gby18ruGuDA7KUxl7oRnUzp797uykYQhkBDm+0KpfK/Q==}
     cpu: [arm64]
     os: [linux]
 
-  '@oxlint-tsgolint/linux-x64@7.0.2004':
-    resolution: {integrity: sha512-LPunZvm6ZbWPfHMAyfZf9ci3HHvNEzLejO8zdqO3GoVGoSEHqqufHUD7+OgeatVSaJP7uXDJ2HaNOHIoH7go4Q==}
+  '@oxlint-tsgolint/linux-x64@7.0.2005':
+    resolution: {integrity: sha512-tKs9yinDQZOHygM0e8EJnjTU3mzJtdfkOZP6Udu82iLMePUSHOhTJ9zzU/mSd1hQxURI4LTRRiFhfzC+PzwdNA==}
     cpu: [x64]
     os: [linux]
 
-  '@oxlint-tsgolint/win32-arm64@7.0.2004':
-    resolution: {integrity: sha512-FVWplzDImWhiuawnIZVETaQecv4GWom6Jv4Fx2xj7hhXXDZ5okEgiw1gTCImHTIQsi2ycC5oSxVwrn69bMh7iw==}
+  '@oxlint-tsgolint/win32-arm64@7.0.2005':
+    resolution: {integrity: sha512-VYPnu1gjfbSv+ROhuyNfMs382D4zQU2ZRc8Uc3nuEZo1k2kf+1KfTrg4hrlWh73h9GI+dUWyo+DYCQzUBlPwcQ==}
     cpu: [arm64]
     os: [win32]
 
-  '@oxlint-tsgolint/win32-x64@7.0.2004':
-    resolution: {integrity: sha512-7PsxuUx11Ry9DYTWcljTzRbmZY9B6O9fFFfZV+aodQEMy6pfRT3fhoQRv9PtGN/89z1pPz3nFKrsFm6WqNtX7w==}
+  '@oxlint-tsgolint/win32-x64@7.0.2005':
+    resolution: {integrity: sha512-ekU89cTGy9fpQzuvxIsFHrnoP8XoFjGIRgPEW6eqgY2NYjGy9pwpjF79o04WXRMJFKRrcaVqkZXUUBdLsqpQDw==}
     cpu: [x64]
     os: [win32]
 
@@ -6629,8 +6629,8 @@ packages:
       vite-plus:
         optional: true
 
-  oxlint-tsgolint@7.0.2004:
-    resolution: {integrity: sha512-vQ9WDF3fiZJvRdSDosNOflerOCOpwol6vWzVDxW76RcU19cjTh7engvkHLvmv+tzedR8fAiJUVUGr6IVZdkzXQ==}
+  oxlint-tsgolint@7.0.2005:
+    resolution: {integrity: sha512-6ccPGu4u4J9bwYPHXBFPee3RZrX3BboRdU7k14zRDDB1lvN3O7J/vPRFdaEfa1+CWx4xnQQOp4ctoaF66oO0uw==}
     hasBin: true
 
   oxlint@1.89.0:
@@ -9025,14 +9025,14 @@ snapshots:
       '@devframes/hub-ui': 1.2.6(@devframes/hub@1.2.6(@devframes/agentic@1.2.6)(crossws@0.4.12(srvx@1.0.6))(devframe@1.2.6))(@devframes/json-render@1.2.6(@devframes/hub@1.2.6(@devframes/agentic@1.2.6)(crossws@0.4.12(srvx@1.0.6))(devframe@1.2.6))(devframe@1.2.6))(devframe@1.2.6)
       vite: link:packages/core
 
-  '@e18e/eslint-plugin@0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.89.0(oxlint-tsgolint@7.0.2004)(vite-plus@packages+cli))':
+  '@e18e/eslint-plugin@0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.89.0(oxlint-tsgolint@7.0.2005)(vite-plus@packages+cli))':
     dependencies:
       empathic: 2.1.0
       module-replacements: 3.3.0
       verkit: 0.4.0
     optionalDependencies:
       eslint: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
-      oxlint: 1.89.0(oxlint-tsgolint@7.0.2004)(vite-plus@packages+cli)
+      oxlint: 1.89.0(oxlint-tsgolint@7.0.2005)(vite-plus@packages+cli)
 
   '@edge-runtime/primitives@6.0.0':
     optional: true
@@ -10357,22 +10357,22 @@ snapshots:
   '@oxfmt/binding-win32-x64-msvc@0.74.0':
     optional: true
 
-  '@oxlint-tsgolint/darwin-arm64@7.0.2004':
+  '@oxlint-tsgolint/darwin-arm64@7.0.2005':
     optional: true
 
-  '@oxlint-tsgolint/darwin-x64@7.0.2004':
+  '@oxlint-tsgolint/darwin-x64@7.0.2005':
     optional: true
 
-  '@oxlint-tsgolint/linux-arm64@7.0.2004':
+  '@oxlint-tsgolint/linux-arm64@7.0.2005':
     optional: true
 
-  '@oxlint-tsgolint/linux-x64@7.0.2004':
+  '@oxlint-tsgolint/linux-x64@7.0.2005':
     optional: true
 
-  '@oxlint-tsgolint/win32-arm64@7.0.2004':
+  '@oxlint-tsgolint/win32-arm64@7.0.2005':
     optional: true
 
-  '@oxlint-tsgolint/win32-x64@7.0.2004':
+  '@oxlint-tsgolint/win32-x64@7.0.2005':
     optional: true
 
   '@oxlint/binding-android-arm-eabi@1.89.0':
@@ -13094,16 +13094,16 @@ snapshots:
       '@oxfmt/binding-win32-x64-msvc': 0.74.0
       vite-plus: link:packages/cli
 
-  oxlint-tsgolint@7.0.2004:
+  oxlint-tsgolint@7.0.2005:
     optionalDependencies:
-      '@oxlint-tsgolint/darwin-arm64': 7.0.2004
-      '@oxlint-tsgolint/darwin-x64': 7.0.2004
-      '@oxlint-tsgolint/linux-arm64': 7.0.2004
-      '@oxlint-tsgolint/linux-x64': 7.0.2004
-      '@oxlint-tsgolint/win32-arm64': 7.0.2004
-      '@oxlint-tsgolint/win32-x64': 7.0.2004
+      '@oxlint-tsgolint/darwin-arm64': 7.0.2005
+      '@oxlint-tsgolint/darwin-x64': 7.0.2005
+      '@oxlint-tsgolint/linux-arm64': 7.0.2005
+      '@oxlint-tsgolint/linux-x64': 7.0.2005
+      '@oxlint-tsgolint/win32-arm64': 7.0.2005
+      '@oxlint-tsgolint/win32-x64': 7.0.2005
 
-  oxlint@1.89.0(oxlint-tsgolint@7.0.2004)(vite-plus@packages+cli):
+  oxlint@1.89.0(oxlint-tsgolint@7.0.2005)(vite-plus@packages+cli):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.89.0
       '@oxlint/binding-android-arm64': 1.89.0
@@ -13124,7 +13124,7 @@ snapshots:
       '@oxlint/binding-win32-arm64-msvc': 1.89.0
       '@oxlint/binding-win32-ia32-msvc': 1.89.0
       '@oxlint/binding-win32-x64-msvc': 1.89.0
-      oxlint-tsgolint: 7.0.2004
+      oxlint-tsgolint: 7.0.2005
       vite-plus: link:packages/cli
 
   p-limit@3.1.0:
