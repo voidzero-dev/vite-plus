@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { isTargetDirAvailable, suggestAvailableTargetDir } from '../prompts.js';
+import { emptyDir, isTargetDirAvailable, suggestAvailableTargetDir } from '../prompts.js';
 
 const tempDirs: string[] = [];
 
@@ -42,5 +42,50 @@ describe('target directory helpers', () => {
 
     const suggested = suggestAvailableTargetDir('fate-template', cwd);
     expect(fs.existsSync(path.join(cwd, suggested))).toBe(false);
+  });
+});
+
+describe('emptyDir', () => {
+  it('removes existing files but keeps .git', () => {
+    const targetDir = makeTempDir();
+    fs.mkdirSync(path.join(targetDir, '.git'));
+    fs.mkdirSync(path.join(targetDir, 'src'));
+    fs.writeFileSync(path.join(targetDir, 'package.json'), '{}');
+
+    emptyDir(targetDir);
+
+    expect(fs.readdirSync(targetDir)).toEqual(['.git']);
+  });
+
+  it('removes a symlinked target without touching the linked directory', () => {
+    const cwd = makeTempDir();
+    const linkedDir = path.join(cwd, 'linked-directory');
+    const targetDir = path.join(cwd, 'new-project');
+    fs.mkdirSync(linkedDir);
+    fs.writeFileSync(path.join(linkedDir, 'keep.txt'), 'keep\n');
+    fs.symlinkSync(linkedDir, targetDir, 'dir');
+
+    emptyDir(targetDir);
+
+    expect(fs.existsSync(targetDir)).toBe(false);
+    expect(fs.readFileSync(path.join(linkedDir, 'keep.txt'), 'utf8')).toBe('keep\n');
+  });
+
+  it('removes a symlinked target given with a trailing separator', () => {
+    const cwd = makeTempDir();
+    const linkedDir = path.join(cwd, 'linked-directory');
+    const targetDir = path.join(cwd, 'new-project');
+    fs.mkdirSync(linkedDir);
+    fs.writeFileSync(path.join(linkedDir, 'keep.txt'), 'keep\n');
+    fs.symlinkSync(linkedDir, targetDir, 'dir');
+
+    emptyDir(`${targetDir}${path.sep}`);
+
+    expect(fs.existsSync(targetDir)).toBe(false);
+    expect(fs.readFileSync(path.join(linkedDir, 'keep.txt'), 'utf8')).toBe('keep\n');
+  });
+
+  it('ignores a missing target', () => {
+    expect(() => emptyDir(path.join(makeTempDir(), 'missing'))).not.toThrow();
   });
 });
