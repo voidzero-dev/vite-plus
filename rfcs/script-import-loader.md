@@ -104,12 +104,11 @@ captures the effective config in JavaScript, and `initializeLoader` explicitly
 selects that path or automatic discovery. The asynchronous ESM hook receives the
 same selection through `module.register` data before its first resolve.
 
-The pinned oxc-node source currently stores these values process-wide. A checked-in
-source patch changes that storage to a loader context per thread; the vendoring
-preparation step applies it idempotently and rejects upstream drift. Async native
-transform tasks carry their caller's context onto the task thread. This patch is
-needed until equivalent isolation is available upstream; copying or reloading the
-native addon per worker is not an acceptable substitute.
+The pinned oxc-node commit includes
+[oxc-node#885](https://github.com/oxc-project/oxc-node/pull/885), which stores these
+values in a loader context per thread. Async native transform tasks carry their
+caller's context onto the task thread. Vite+ consumes that upstream source without
+a local source patch.
 
 Do not load tsx and this preload together. They both claim TypeScript files, and
 their registration order is not a supported compatibility mechanism.
