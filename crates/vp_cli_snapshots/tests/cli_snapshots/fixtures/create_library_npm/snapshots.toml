@@ -1,0 +1,10 @@
+[[case]]
+name = "create_library_npm"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "An npm library uses the creating CLI's version for both vite-plus and the Vite override."
+steps = [
+  { argv = ["vp", "create", "vite:library", "--directory", "library", "--package-manager", "npm", "--no-interactive", "--no-git", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, timeout = 120000 },
+  { argv = ["node", "assert-version.mjs"] },
+]
