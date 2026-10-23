@@ -3,11 +3,12 @@ name = "migration_ts_node_scripts"
 vp = "local"
 comment = "Local stub dependencies keep the runner migration independent of npm packages."
 steps = [
-  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "transpile-only commands, loaders, and shebangs migrate to vpx" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "transpile-only commands and shebangs use vpx; preloads keep Node.js" },
   ["vpt", "print-file", "package.json"],
   ["vpt", "print-file", "scripts/release.ts"],
   { argv = ["vp", "run", "seed"], comment = "the migrated script runs TypeScript without ts-node" },
   ["vp", "run", "loader"],
+  { argv = ["vp", "run", "register"], comment = "the CommonJS registration option becomes the public ESM preload" },
 ]
 
 [[case]]
@@ -26,7 +27,7 @@ steps = [
   { argv = ["vpt", "rm", "scripts/release.ts"], snapshot = false },
   { argv = ["vpt", "write-file", "tsconfig.json", "{\"ts-node\":{\"transpileOnly\":true}}\n"], snapshot = false },
   { argv = ["vpt", "json-edit", "package.json", "scripts.seed", "ts-node ./scripts/seed.ts"], snapshot = false },
-  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "tsconfig can explicitly disable ts-node type-checking" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "the runner pins its config; Node preloads keep ts-node until TS_NODE_PROJECT names that file" },
   ["vpt", "print-file", "package.json"],
   ["vp", "run", "seed"],
 ]

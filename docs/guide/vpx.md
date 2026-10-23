@@ -234,7 +234,7 @@ JSX that depends on a compiler plugin is not supported. `vpx` compiles JSX only 
 
 ### Coming from ts-node
 
-`vp migrate` can replace supported transpile-only ts-node commands with `vpx`. It keeps commands that type-check because `vpx` does not perform that check. Custom compiler settings and remaining loader or API usage can also keep `ts-node` installed. See [ts-node to `vpx`](/guide/migrate-rules#ts-node-to-vpx).
+`vp migrate` can replace supported transpile-only ts-node commands with `vpx`. Supported Node.js preloads and literal `NODE_OPTIONS` assignments use `vite-plus/register`. Migration keeps commands that type-check because neither replacement performs that check. Custom compiler settings and remaining loader or API usage can also keep `ts-node` installed. See [ts-node to `vpx`](/guide/migrate-rules#ts-node-to-vpx).
 
 ## `vp exec`
 

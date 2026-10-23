@@ -4,16 +4,16 @@ Local stub dependencies keep the runner migration independent of npm packages.
 
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
 
-transpile-only commands, loaders, and shebangs migrate to vpx
+transpile-only commands and shebangs use vpx; preloads keep Node.js
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-● ts-node scripts detected. Auto-migrating supported commands to vpx...
+● ts-node scripts detected. Auto-migrating supported commands to Vite+...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
-• ts-node scripts migrated to `vpx`
+• ts-node scripts migrated to Vite+
 ```
 
 ## `vpt print-file package.json`
@@ -24,7 +24,9 @@ VITE+ - The Unified Toolchain for the Web
   "type": "module",
   "scripts": {
     "seed": "vpx ./scripts/seed.ts",
-    "loader": "vpx ./scripts/seed.ts"
+    "loader": "node --import vite-plus/register ./scripts/seed.ts",
+    "register": "node --import=vite-plus/register ./scripts/seed.ts",
+    "env-loader": "NODE_OPTIONS='--import vite-plus/register' node ./scripts/seed.ts"
   },
   "devDependencies": {
     "typescript": "file:.fixture/typescript",
@@ -54,6 +56,15 @@ ready
 ## `vp run loader`
 
 ```
-$ vpx ./scripts/seed.ts ⊘ cache disabled
+$ node --import vite-plus/register ./scripts/seed.ts ⊘ cache disabled
+ready
+```
+
+## `vp run register`
+
+the CommonJS registration option becomes the public ESM preload
+
+```
+$ node --import=vite-plus/register ./scripts/seed.ts ⊘ cache disabled
 ready
 ```
