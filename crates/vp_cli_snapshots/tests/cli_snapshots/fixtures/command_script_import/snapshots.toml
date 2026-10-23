@@ -1,40 +1,272 @@
 [[case]]
 name = "script_import_node22_async"
-vp = ["local", "global"]
-env = { EXPECTED_NODE_VERSION = "22.18.0" }
+vp = ["local","global"]
+env = { VP_NODE_VERSION = "22.18.0" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
 comment = "The public installed package preload works without tsx on the asynchronous hook path."
 steps = [
-  ["node", "verify.mjs"],
-  { argv = ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"], comment = "The CLI's existing flags and the public entry share one registration" },
+  { argv = ["vpt","cp","-r","dependencies","node_modules"], snapshot = false },
+  { argv = ["node","runtime.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/main.ts"] },
+  { argv = ["node","--import","vite-plus/register","./src/main.cts"] },
+  { argv = ["node","resolved-import.mjs","url"], comment = "A resolved file URL and an encoded script filename reach Node unchanged." },
+  { argv = ["node","./src/main.ts"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/main.cts"], envs = [["NODE_OPTIONS","--import vite-plus/register"]] },
+  { argv = ["node","src/argv-host.mjs","--import=vite-plus/register","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], continue-on-failure = true, comment = "Report argv, preload state, process identity, and the script's exit code." },
+  { argv = ["node","src/argv-host.mjs","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]], continue-on-failure = true },
+  { argv = ["node","--import=vite-plus/register","--input-type=module","--eval","const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--eval","console.log(require('./src/common.cts').format);"] },
+  { argv = ["vpt","pipe-stdin","const { format } = await import('./src/module.mts'); console.log(format);","--","node","--import=vite-plus/register","--input-type=module","-"] },
+  { argv = ["vpt","pipe-stdin","console.log(require('./src/common.cts').format);","--","node","--import=vite-plus/register","-"] },
+  { argv = ["node","--input-type=module","--eval","await import('vite-plus/register'); const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot","./tests/enum.test.ts"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot"], cwd = "tests", comment = "Node discovers the TypeScript test without an explicit filename." },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"] },
+  { argv = ["node","./src/children.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/spawn.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config-workers.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/parent.json"],["TS_NODE_PROJECT","configs with spaces/parent.json"],["OXC_TSCONFIG_PATH","configs with spaces/parent.json"]] },
+  { argv = ["node","./src/worker-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/cluster.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","./src/internal-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","--import","vite-plus/register","./src/dedup.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/dedup.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG",""],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG","configs with spaces/explicit.json"],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"],["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./error.ts"], continue-on-failure = true, comment = "Show the application source-map location." },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./dependency-error.ts"], continue-on-failure = true, comment = "Show the installed dependency's source-map location." },
+  { argv = ["vpx","--import=vite-plus/register","./src/dedup.mjs"], comment = "The CLI and public preload share one registration." },
 ]
 
 [[case]]
 name = "script_import_node22_sync"
 vp = "global"
-env = { VP_NODE_VERSION = "22.23.2", EXPECTED_NODE_VERSION = "22.23.2" }
+env = { VP_NODE_VERSION = "22.23.2" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
 comment = "The complete preload contract also runs on Node.js 22 synchronous hooks."
-steps = [["node", "verify.mjs"], ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"]]
+steps = [
+  { argv = ["vpt","cp","-r","dependencies","node_modules"], snapshot = false },
+  { argv = ["node","runtime.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/main.ts"] },
+  { argv = ["node","--import","vite-plus/register","./src/main.cts"] },
+  { argv = ["node","resolved-import.mjs","url"], comment = "A resolved file URL and an encoded script filename reach Node unchanged." },
+  { argv = ["node","./src/main.ts"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/main.cts"], envs = [["NODE_OPTIONS","--import vite-plus/register"]] },
+  { argv = ["node","src/argv-host.mjs","--import=vite-plus/register","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], continue-on-failure = true, comment = "Report argv, preload state, process identity, and the script's exit code." },
+  { argv = ["node","src/argv-host.mjs","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]], continue-on-failure = true },
+  { argv = ["node","--import=vite-plus/register","--input-type=module","--eval","const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--eval","console.log(require('./src/common.cts').format);"] },
+  { argv = ["vpt","pipe-stdin","const { format } = await import('./src/module.mts'); console.log(format);","--","node","--import=vite-plus/register","--input-type=module","-"] },
+  { argv = ["vpt","pipe-stdin","console.log(require('./src/common.cts').format);","--","node","--import=vite-plus/register","-"] },
+  { argv = ["node","--input-type=module","--eval","await import('vite-plus/register'); const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot","./tests/enum.test.ts"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot"], cwd = "tests", comment = "Node discovers the TypeScript test without an explicit filename." },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"] },
+  { argv = ["node","./src/children.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/spawn.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config-workers.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/parent.json"],["TS_NODE_PROJECT","configs with spaces/parent.json"],["OXC_TSCONFIG_PATH","configs with spaces/parent.json"]] },
+  { argv = ["node","./src/worker-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/cluster.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","./src/internal-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","--import","vite-plus/register","./src/dedup.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/dedup.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG",""],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG","configs with spaces/explicit.json"],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"],["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./error.ts"], continue-on-failure = true, comment = "Show the application source-map location." },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./dependency-error.ts"], continue-on-failure = true, comment = "Show the installed dependency's source-map location." },
+  { argv = ["vpx","--import=vite-plus/register","./src/dedup.mjs"], comment = "The CLI and public preload share one registration." },
+]
 
 [[case]]
 name = "script_import_node24_async"
 vp = "global"
-env = { VP_NODE_VERSION = "24.11.0", EXPECTED_NODE_VERSION = "24.11.0" }
+env = { VP_NODE_VERSION = "24.11.0" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
 comment = "The earliest supported Node.js 24 also uses asynchronous hooks, including workers with independent configs."
-steps = [["node", "verify.mjs"], ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"]]
+steps = [
+  { argv = ["vpt","cp","-r","dependencies","node_modules"], snapshot = false },
+  { argv = ["node","runtime.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/main.ts"] },
+  { argv = ["node","--import","vite-plus/register","./src/main.cts"] },
+  { argv = ["node","resolved-import.mjs","url"], comment = "A resolved file URL and an encoded script filename reach Node unchanged." },
+  { argv = ["node","./src/main.ts"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/main.cts"], envs = [["NODE_OPTIONS","--import vite-plus/register"]] },
+  { argv = ["node","src/argv-host.mjs","--import=vite-plus/register","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], continue-on-failure = true, comment = "Report argv, preload state, process identity, and the script's exit code." },
+  { argv = ["node","src/argv-host.mjs","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]], continue-on-failure = true },
+  { argv = ["node","--import=vite-plus/register","--input-type=module","--eval","const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--eval","console.log(require('./src/common.cts').format);"] },
+  { argv = ["vpt","pipe-stdin","const { format } = await import('./src/module.mts'); console.log(format);","--","node","--import=vite-plus/register","--input-type=module","-"] },
+  { argv = ["vpt","pipe-stdin","console.log(require('./src/common.cts').format);","--","node","--import=vite-plus/register","-"] },
+  { argv = ["node","--input-type=module","--eval","await import('vite-plus/register'); const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot","./tests/enum.test.ts"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot"], cwd = "tests", comment = "Node discovers the TypeScript test without an explicit filename." },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"] },
+  { argv = ["node","./src/children.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/spawn.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config-workers.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/parent.json"],["TS_NODE_PROJECT","configs with spaces/parent.json"],["OXC_TSCONFIG_PATH","configs with spaces/parent.json"]] },
+  { argv = ["node","./src/worker-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/cluster.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","./src/internal-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","--import","vite-plus/register","./src/dedup.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/dedup.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG",""],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG","configs with spaces/explicit.json"],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"],["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./error.ts"], continue-on-failure = true, comment = "Show the application source-map location." },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./dependency-error.ts"], continue-on-failure = true, comment = "Show the installed dependency's source-map location." },
+  { argv = ["vpx","--import=vite-plus/register","./src/dedup.mjs"], comment = "The CLI and public preload share one registration." },
+]
 
 [[case]]
 name = "script_import_node24_sync"
 vp = "global"
-env = { VP_NODE_VERSION = "24.12.0", EXPECTED_NODE_VERSION = "24.12.0" }
+env = { VP_NODE_VERSION = "24.12.0" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
 comment = "The complete preload contract runs on Node.js 24 synchronous hooks."
-steps = [["node", "verify.mjs"], ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"]]
+steps = [
+  { argv = ["vpt","cp","-r","dependencies","node_modules"], snapshot = false },
+  { argv = ["node","runtime.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/main.ts"] },
+  { argv = ["node","--import","vite-plus/register","./src/main.cts"] },
+  { argv = ["node","resolved-import.mjs","url"], comment = "A resolved file URL and an encoded script filename reach Node unchanged." },
+  { argv = ["node","./src/main.ts"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/main.cts"], envs = [["NODE_OPTIONS","--import vite-plus/register"]] },
+  { argv = ["node","src/argv-host.mjs","--import=vite-plus/register","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], continue-on-failure = true, comment = "Report argv, preload state, process identity, and the script's exit code." },
+  { argv = ["node","src/argv-host.mjs","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]], continue-on-failure = true },
+  { argv = ["node","--import=vite-plus/register","--input-type=module","--eval","const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--eval","console.log(require('./src/common.cts').format);"] },
+  { argv = ["vpt","pipe-stdin","const { format } = await import('./src/module.mts'); console.log(format);","--","node","--import=vite-plus/register","--input-type=module","-"] },
+  { argv = ["vpt","pipe-stdin","console.log(require('./src/common.cts').format);","--","node","--import=vite-plus/register","-"] },
+  { argv = ["node","--input-type=module","--eval","await import('vite-plus/register'); const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot","./tests/enum.test.ts"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot"], cwd = "tests", comment = "Node discovers the TypeScript test without an explicit filename." },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"] },
+  { argv = ["node","./src/children.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/spawn.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config-workers.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/parent.json"],["TS_NODE_PROJECT","configs with spaces/parent.json"],["OXC_TSCONFIG_PATH","configs with spaces/parent.json"]] },
+  { argv = ["node","./src/worker-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/cluster.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","./src/internal-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","--import","vite-plus/register","./src/dedup.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/dedup.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG",""],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG","configs with spaces/explicit.json"],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"],["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./error.ts"], continue-on-failure = true, comment = "Show the application source-map location." },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./dependency-error.ts"], continue-on-failure = true, comment = "Show the installed dependency's source-map location." },
+  { argv = ["vpx","--import=vite-plus/register","./src/dedup.mjs"], comment = "The CLI and public preload share one registration." },
+]
 
 [[case]]
 name = "script_import_node26_sync"
 vp = "global"
-env = { VP_NODE_VERSION = "26.5.0", EXPECTED_NODE_VERSION = "26.5.0" }
+env = { VP_NODE_VERSION = "26.5.0" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
 comment = "The complete preload contract runs on Node.js 26 synchronous hooks."
-steps = [["node", "verify.mjs"], ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"]]
+steps = [
+  { argv = ["vpt","cp","-r","dependencies","node_modules"], snapshot = false },
+  { argv = ["node","runtime.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/main.ts"] },
+  { argv = ["node","--import","vite-plus/register","./src/main.cts"] },
+  { argv = ["node","resolved-import.mjs","url"], comment = "A resolved file URL and an encoded script filename reach Node unchanged." },
+  { argv = ["node","./src/main.ts"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/main.cts"], envs = [["NODE_OPTIONS","--import vite-plus/register"]] },
+  { argv = ["node","src/argv-host.mjs","--import=vite-plus/register","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], continue-on-failure = true, comment = "Report argv, preload state, process identity, and the script's exit code." },
+  { argv = ["node","src/argv-host.mjs","--import","./src/setup.ts","./src/argv.ts","one","--","--flag","space argument"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]], continue-on-failure = true },
+  { argv = ["node","--import=vite-plus/register","--input-type=module","--eval","const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--eval","console.log(require('./src/common.cts').format);"] },
+  { argv = ["vpt","pipe-stdin","const { format } = await import('./src/module.mts'); console.log(format);","--","node","--import=vite-plus/register","--input-type=module","-"] },
+  { argv = ["vpt","pipe-stdin","console.log(require('./src/common.cts').format);","--","node","--import=vite-plus/register","-"] },
+  { argv = ["node","--input-type=module","--eval","await import('vite-plus/register'); const { format } = await import('./src/module.mts'); console.log(format);"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot","./tests/enum.test.ts"] },
+  { argv = ["node","--import=vite-plus/register","--test","--test-reporter=dot"], cwd = "tests", comment = "Node discovers the TypeScript test without an explicit filename." },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"] },
+  { argv = ["node","./src/children.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","./src/spawn.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/children.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config-workers.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/parent.json"],["TS_NODE_PROJECT","configs with spaces/parent.json"],["OXC_TSCONFIG_PATH","configs with spaces/parent.json"]] },
+  { argv = ["node","./src/worker-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/cluster.mjs"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","./src/internal-host.mjs"] },
+  { argv = ["node","--import=vite-plus/register","--import","vite-plus/register","./src/dedup.mjs"] },
+  { argv = ["node","--import=vite-plus/register","./src/dedup.mjs"], envs = [["NODE_OPTIONS","--import=vite-plus/register"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TS_NODE_PROJECT","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG",""],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/config.ts"], envs = [["VP_SCRIPT_TSCONFIG","configs with spaces/explicit.json"],["TSX_TSCONFIG_PATH","configs with spaces/compat.json"],["OXC_TSCONFIG_PATH","configs with spaces/upstream.json"],["TS_NODE_PROJECT","configs with spaces/upstream.json"]] },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./error.ts"], continue-on-failure = true, comment = "Show the application source-map location." },
+  { argv = ["node","--import=vite-plus/register","./src/error-report.mjs","./dependency-error.ts"], continue-on-failure = true, comment = "Show the installed dependency's source-map location." },
+  { argv = ["vpx","--import=vite-plus/register","./src/dedup.mjs"], comment = "The CLI and public preload share one registration." },
+]
+
+[[case]]
+name = "script_import_node22_async_absolute_path"
+vp = ["local","global"]
+env = { VP_NODE_VERSION = "22.18.0" }
+skip-platforms = ["windows"]
+comment = "Node also accepts an absolute POSIX path for the public preload."
+steps = [["node", "resolved-import.mjs", "path"]]
+
+[[case]]
+name = "script_import_node22_sync_absolute_path"
+vp = "global"
+env = { VP_NODE_VERSION = "22.23.2" }
+skip-platforms = ["windows"]
+comment = "Node also accepts an absolute POSIX path for the public preload."
+steps = [["node", "resolved-import.mjs", "path"]]
+
+[[case]]
+name = "script_import_node24_async_absolute_path"
+vp = "global"
+env = { VP_NODE_VERSION = "24.11.0" }
+skip-platforms = ["windows"]
+comment = "Node also accepts an absolute POSIX path for the public preload."
+steps = [["node", "resolved-import.mjs", "path"]]
+
+[[case]]
+name = "script_import_node24_sync_absolute_path"
+vp = "global"
+env = { VP_NODE_VERSION = "24.12.0" }
+skip-platforms = ["windows"]
+comment = "Node also accepts an absolute POSIX path for the public preload."
+steps = [["node", "resolved-import.mjs", "path"]]
+
+[[case]]
+name = "script_import_node26_sync_absolute_path"
+vp = "global"
+env = { VP_NODE_VERSION = "26.5.0" }
+skip-platforms = ["windows"]
+comment = "Node also accepts an absolute POSIX path for the public preload."
+steps = [["node", "resolved-import.mjs", "path"]]
 
 [[case]]
 name = "script_import_native_watch"
