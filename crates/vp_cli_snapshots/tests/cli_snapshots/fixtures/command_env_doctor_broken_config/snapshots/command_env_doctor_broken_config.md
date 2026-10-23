@@ -25,8 +25,7 @@ Installation
   ✓ State dir         ~/.vite-plus
 
 Configuration
-  ✗ Config            failed to read: JSON error: key must be a string at line 1 column 3
-  note: Fix or remove ~/.vite-plus/config.json.
+  ✗ Config            ~/.vite-plus/config.json (could not read)
   ✓ IDE integration   env sourced in ~/.profile
 
 PATH
@@ -35,10 +34,10 @@ PATH
 
 Node.js Resolution
     Directory         <workspace>
-  ✗ Resolution        failed: JSON error: key must be a string at line 1 column 3
+  ✗ Resolution        ~/.vite-plus/config.json (could not read)
 
 Package Manager Resolution
     Package manager   not selected
 
-✗ Some issues found. Run the suggested commands to fix them.
+✗ Some issues found.
 ```

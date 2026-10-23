@@ -106,13 +106,10 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
     // Section: Configuration
     print_section("Configuration");
-    let (environment_config, system_node_path) = match check_shim_mode(scope).await {
-        Some(result) => result,
-        None => {
-            has_errors = true;
-            (config::Config::default(), None)
-        }
-    };
+    let shim_mode = check_shim_mode(scope).await;
+    let config_readable = shim_mode.is_some();
+    has_errors |= !config_readable;
+    let (environment_config, system_node_path) = shim_mode.unwrap_or_default();
 
     // Check env sourcing: IDE-relevant profiles first, then all shell profiles
     let env_status = cfg!(not(windows)).then(check_env_sourcing);
@@ -131,9 +128,13 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     // Section: Version Resolution
     let resolution = if scope.includes_node() {
         print_section("Node.js Resolution");
-        let (ok, resolution) =
-            check_current_resolution(&cwd, environment_config.node_shim_mode, system_node_path)
-                .await;
+        let (ok, resolution) = check_current_resolution(
+            &cwd,
+            environment_config.node_shim_mode,
+            system_node_path,
+            config_readable,
+        )
+        .await;
         has_errors |= !ok;
         resolution
     } else {
@@ -164,9 +165,7 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     if has_errors {
         vp_shared::output::print_stdout_line(format_args!(
             "{}",
-            style("\u{2717} Some issues found. Run the suggested commands to fix them.")
-                .red()
-                .bold()
+            style("\u{2717} Some issues found.").red().bold()
         ));
         Ok(super::exit_status(1))
     } else {
@@ -276,18 +275,8 @@ async fn check_shims(scope: EnvScope) -> bool {
 async fn check_shim_mode(scope: EnvScope) -> Option<(config::Config, Option<AbsolutePathBuf>)> {
     let config = match load_config().await {
         Ok(c) => c,
-        Err(e) => {
-            print_check(
-                &style(output::CROSS).red().to_string(),
-                "Config",
-                &style(format!("failed to read: {e}")).red().to_string(),
-            );
-            if let Ok(path) = config::get_config_path() {
-                print_hint(&format!(
-                    "Fix or remove {}.",
-                    abbreviate_home(&path.as_path().display().to_string())
-                ));
-            }
+        Err(_) => {
+            print_check(&style(output::CROSS).red().to_string(), "Config", &unreadable_config());
             return None;
         }
     };
@@ -346,6 +335,13 @@ async fn check_shim_mode(scope: EnvScope) -> Option<(config::Config, Option<Abso
     }
 
     Some((config, system_node_path))
+}
+
+fn unreadable_config() -> String {
+    let path = config::get_config_path()
+        .map(|path| abbreviate_home(&path.as_path().display().to_string()))
+        .unwrap_or_default();
+    style(format!("{path} (could not read)")).red().to_string()
 }
 
 async fn check_package_manager_session_override() {
@@ -807,6 +803,7 @@ async fn check_current_resolution(
     cwd: &AbsolutePathBuf,
     shim_mode: ShimMode,
     system_node_path: Option<AbsolutePathBuf>,
+    config_readable: bool,
 ) -> (bool, Option<config::VersionResolution>) {
     print_check(" ", "Directory", &cwd.as_path().display().to_string());
 
@@ -874,11 +871,19 @@ async fn check_current_resolution(
             (true, Some(resolution))
         }
         Err(e) => {
-            print_check(
-                &style(output::CROSS).red().to_string(),
-                "Resolution",
-                &style(format!("failed: {e}")).red().to_string(),
-            );
+            // Without a `VP_NODE_VERSION` override or a project version, resolution reads the global config.
+            let reads_config = !config_readable
+                && vp_shared::EnvConfig::get()
+                    .node_version
+                    .as_deref()
+                    .is_none_or(|version| version.trim().is_empty())
+                && matches!(config::resolve_project_version_source(cwd, false).await, Ok(None));
+            let message = if reads_config {
+                unreadable_config()
+            } else {
+                style(format!("failed: {e}")).red().to_string()
+            };
+            print_check(&style(output::CROSS).red().to_string(), "Resolution", &message);
             (false, None)
         }
     }
