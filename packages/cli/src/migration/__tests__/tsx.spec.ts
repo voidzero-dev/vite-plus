@@ -636,6 +636,199 @@ describe('migrateTsxToVpx', () => {
   });
 
   it.each([
+    'node --run generate',
+    'node --run=generate',
+    'npm run generate',
+    'npm run-script generate',
+    'npx npm run generate',
+    'pnpm exec npm run generate',
+    'pnpm run generate',
+    'yarn generate',
+    'bun run generate',
+  ])('keeps an inherited preload when %s launches a retained tsx script', (launcher) => {
+    const build = `NODE_OPTIONS=--import=tsx ${launcher}`;
+    write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+    write('package.json', {
+      type: 'module',
+      scripts: { build, generate: 'tsx bad.cts' },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+      changed: false,
+      dependencyRemoved: false,
+    });
+    expect(readJson('package.json').scripts).toEqual({ build, generate: 'tsx bad.cts' });
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining('script `generate` needs tsx: `bad.cts` uses import or export'),
+    );
+  });
+
+  it.each(['node bad.cts', 'npm run nested', 'node --run nested'])(
+    'checks child commands that inherit tsx without naming it: %s',
+    (generate) => {
+      const build = 'NODE_OPTIONS=--import=tsx node --run generate';
+      write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+      write('package.json', {
+        type: 'module',
+        scripts: { build, generate, nested: 'node bad.cts' },
+        devDependencies: { tsx: '^4.23.15' },
+      });
+
+      expect(migrateTsxToVpx(root).dependencyRemoved).toBe(false);
+      expect(readJson('package.json').scripts.build).toBe(build);
+    },
+  );
+
+  it.each(['npm run generate', 'node --run generate'])(
+    'migrates an inherited preload with compatible child scripts through %s',
+    (launcher) => {
+      write('package.json', {
+        type: 'module',
+        scripts: {
+          build: `NODE_OPTIONS=--import=tsx ${launcher}`,
+          generate: 'npm run nested && node scripts/seed.ts',
+          nested: 'tsx scripts/check.ts',
+        },
+        devDependencies: { tsx: '^4.23.15' },
+      });
+      const report = createMigrationReport();
+
+      expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(true);
+      expect(readJson('package.json').scripts).toEqual({
+        build: `NODE_OPTIONS=--import=vite-plus/register ${launcher}`,
+        generate: 'npm run nested && node scripts/seed.ts',
+        nested: 'vpx scripts/check.ts',
+      });
+      expect(report.warnings).toEqual([]);
+    },
+  );
+
+  it.each(['pregenerate', 'postgenerate'])(
+    'checks package-manager lifecycle script %s under the inherited preload',
+    (hook) => {
+      const build = 'NODE_OPTIONS=--import=tsx npm run generate';
+      write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+      write('package.json', {
+        type: 'module',
+        scripts: { build, generate: 'node scripts/seed.ts', [hook]: 'node bad.cts' },
+        devDependencies: { tsx: '^4.23.15' },
+      });
+
+      expect(migrateTsxToVpx(root).dependencyRemoved).toBe(false);
+      expect(readJson('package.json').scripts.build).toBe(build);
+    },
+  );
+
+  it.each([
+    'node --run missing',
+    'npm --prefix tools run generate',
+    'npm run generate --workspace=tools',
+    'pnpm --filter tools run generate',
+    'pnpm run generate --filter=tools',
+    'npm run generate -- bad.cts',
+    'node --run generate -- bad.cts',
+    'node --run cycle',
+  ])('keeps an inherited preload when the task cannot be resolved: %s', (launcher) => {
+    const build = `NODE_OPTIONS=--import=tsx ${launcher}`;
+    write('package.json', {
+      scripts: { build, generate: 'node scripts/seed.ts', cycle: 'npm run cycle' },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(false);
+    expect(readJson('package.json').scripts.build).toBe(build);
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining('child command that vp migrate cannot check'),
+    );
+  });
+
+  it.each([true, false])(
+    'checks child scripts independently of record order (%s)',
+    (childFirst) => {
+      const build = 'NODE_OPTIONS=--import=tsx npm run generate';
+      const generate = 'tsx bad.cts';
+      write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+      write('package.json', {
+        type: 'module',
+        scripts: childFirst ? { generate, build } : { build, generate },
+        devDependencies: { tsx: '^4.23.15' },
+      });
+
+      expect(migrateTsxToVpx(root).dependencyRemoved).toBe(false);
+      expect(readJson('package.json').scripts).toEqual({ build, generate });
+    },
+  );
+
+  it.each([
+    'NODE_OPTIONS=--import=tsx env node bad.cts',
+    'env NODE_OPTIONS=--import=tsx node bad.cts',
+    'NODE_OPTIONS=--import=tsx env MODE=test node bad.cts',
+    'NODE_OPTIONS=--import=tsx env -- node bad.cts',
+    'NODE_OPTIONS=--import=tsx env -C tools node bad.cts',
+    'NODE_OPTIONS=--import=tsx pnpm exec env node bad.cts',
+    'NODE_OPTIONS=--import=tsx npx env node bad.cts',
+    'NODE_OPTIONS=--import=tsx npm exec env node bad.cts',
+    'NODE_OPTIONS=--import=tsx pnpm exec cross-env MODE=test node bad.cts',
+    'NODE_OPTIONS=--import=tsx pnpm exec cross-env-shell MODE=test "node bad.cts"',
+    'NODE_OPTIONS=--import=tsx env cross-env MODE=test node bad.cts',
+  ])('keeps the preload and dependency for a wrapped incompatible entry: %s', (build) => {
+    write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+    write('package.json', {
+      type: 'module',
+      scripts: { build },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+      changed: false,
+      dependencyRemoved: false,
+    });
+    expect(readJson('package.json').scripts.build).toBe(build);
+    expect(report.warnings).toContainEqual(expect.stringContaining('Kept tsx in'));
+  });
+
+  it('inspects a compatible command through env without removing the wrapper', () => {
+    write('package.json', {
+      type: 'module',
+      scripts: { build: 'NODE_OPTIONS=--import=tsx env MODE=test node scripts/seed.ts' },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+
+    expect(migrateTsxToVpx(root).dependencyRemoved).toBe(true);
+    expect(readJson('package.json').scripts.build).toBe(
+      'NODE_OPTIONS=--import=vite-plus/register env MODE=test node scripts/seed.ts',
+    );
+  });
+
+  it('resolves inherited script preloads within each workspace package', () => {
+    write('package.json', {
+      scripts: {
+        build: 'NODE_OPTIONS=--import=tsx node --run generate',
+        generate: 'node scripts/seed.ts',
+      },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+    const build = 'NODE_OPTIONS=--import=tsx npm run generate';
+    write('packages/a/package.json', {
+      type: 'module',
+      scripts: { build, generate: 'tsx bad.cts' },
+    });
+    write('packages/a/bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+
+    expect(migrateTsxToVpx(root, [{ name: 'a', path: 'packages/a' }]).dependencyRemoved).toBe(
+      false,
+    );
+    expect(readJson('package.json').scripts.build).toBe(
+      'NODE_OPTIONS=--import=vite-plus/register node --run generate',
+    );
+    expect(readJson('packages/a/package.json').scripts.build).toBe(build);
+  });
+
+  it.each([
     ['a kept script', 'package.json', undefined, '`scripts` in package.json still uses tsx'],
     [
       'an import of the tsx API',

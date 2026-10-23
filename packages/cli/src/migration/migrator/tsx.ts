@@ -59,6 +59,8 @@ const KEEP_SHELL =
 const KEEP_OTHER = 'vp migrate does not rewrite this use of tsx';
 const KEEP_NODE_OPTIONS =
   '`NODE_OPTIONS` loads tsx, whose hooks would compete with those of `vpx`; remove it first';
+const KEEP_INHERITED_OPTIONS =
+  '`NODE_OPTIONS` loads tsx into a child command that vp migrate cannot check';
 const KEEP_WATCH_TEST = '`vpx --watch` does not run `--test`';
 
 // Options that `vpx` does not run as tsx does. `-c` is Node.js' `--check`, but `vpx -c`
@@ -235,6 +237,8 @@ interface Rewrite {
   cwd?: string;
   edits: Edit[];
   kept: string[];
+  /** Package scripts already being checked through an inherited preload. */
+  checkingScripts: ReadonlySet<string>;
 }
 
 /**
@@ -246,13 +250,14 @@ interface Rewrite {
  * in, the scripts it runs are checked for syntax `vpx` runs differently.
  */
 export function rewriteTsxCommand(command: string, cwd?: string): TsxCommandRewrite {
-  return rewriteCommand(command, cwd, []);
+  return rewriteCommand(command, cwd, [], new Set());
 }
 
 function rewriteCommand(
   command: string,
   cwd: string | undefined,
   inherited: readonly string[],
+  checkingScripts: ReadonlySet<string>,
 ): TsxCommandRewrite {
   if (!TSX_COMMAND.test(command) && !envKeepReason(inherited)) {
     return { command, kept: [] };
@@ -262,7 +267,7 @@ function rewriteCommand(
   if (!segments || /%\w+%/.test(command)) {
     return { command, kept: [KEEP_SHELL] };
   }
-  const rewrite: Rewrite = { command, cwd, edits: [], kept: [] };
+  const rewrite: Rewrite = { command, cwd, edits: [], kept: [], checkingScripts };
   for (const tokens of segments) {
     const name = tokens[0].value;
     // After `cd` or another shell state change, scripts are no longer checked.
@@ -299,6 +304,20 @@ function rewriteSegment(
     first++;
     skipAssignments();
   }
+  // Inspect simple `env KEY=value command` wrappers. Options can change the
+  // environment or working directory, so retain preloads for those forms.
+  let unknownEnvironment = false;
+  while (values[first] === 'env') {
+    first++;
+    if (values[first] === '--') {
+      first++;
+    }
+    if (values[first]?.startsWith('-')) {
+      unknownEnvironment = true;
+      break;
+    }
+    skipAssignments();
+  }
   if (first >= values.length) {
     return;
   }
@@ -307,12 +326,20 @@ function rewriteSegment(
   const assignments = [...inherited, ...values.slice(0, first)];
   const envReason = envKeepReason(assignments);
   const environment = scanEnvironmentOptions(assignments);
+  if (unknownEnvironment) {
+    environment.keepReason ??= KEEP_INHERITED_OPTIONS;
+  }
   environment.keepReason ??= environment.preloads
     .map((script) => scriptKeepReason(rewrite.cwd, script))
     .find((reason) => reason !== undefined);
   const editStart = rewrite.edits.length;
   const keptStart = rewrite.kept.length;
   const start = first + getCommandStartIndex(values.slice(first));
+  // Nested wrappers can reveal another environment command whose assignments
+  // and options were not inspected above.
+  if (['env', 'cross-env', 'cross-env-shell'].includes(values[start])) {
+    environment.keepReason ??= KEEP_INHERITED_OPTIONS;
+  }
   const launcher = COMMAND_LAUNCHERS.get(values[start]);
   if (values[start] === 'tsx') {
     rewriteTsx(rewrite, tokens, first, start, envReason);
@@ -334,8 +361,12 @@ function rewriteSegment(
   if (environment.replacements.length) {
     // All children inherit this assignment. Keep it and their edits together if one
     // still needs tsx, rather than installing both loaders in the same process.
-    if (environment.keepReason && rewrite.kept.length === keptStart) {
-      rewrite.kept.push(environment.keepReason);
+    const taskStart = ['npm', 'pnpm', 'yarn', 'bun'].includes(values[start]) ? start : first;
+    const reason =
+      environment.keepReason ??
+      packageTaskKeepReason(rewrite, values.slice(taskStart), assignments);
+    if (reason && rewrite.kept.length === keptStart) {
+      rewrite.kept.push(reason);
     }
     if (rewrite.kept.length !== keptStart) {
       rewrite.edits.length = editStart;
@@ -349,6 +380,76 @@ function rewriteSegment(
       }
     }
   }
+}
+
+/** Check package scripts that inherit a preload without changing their definitions here. */
+function taskKeepReason(
+  rewrite: Rewrite,
+  name: string | undefined,
+  inherited: readonly string[],
+  lifecycle: boolean,
+): string | undefined {
+  if (!name || !rewrite.cwd) {
+    return KEEP_INHERITED_OPTIONS;
+  }
+  const scripts = readNearestPackageJson(rewrite.cwd)?.scripts;
+  if (!isPlainRecord(scripts) || typeof scripts[name] !== 'string') {
+    return KEEP_INHERITED_OPTIONS;
+  }
+  const names = lifecycle ? [`pre${name}`, name, `post${name}`] : [name];
+  for (const task of names) {
+    const command = scripts[task];
+    if (typeof command !== 'string') {
+      continue;
+    }
+    const key = `${rewrite.cwd}\0${task}`;
+    if (rewrite.checkingScripts.has(key)) {
+      return KEEP_INHERITED_OPTIONS;
+    }
+    const checking = new Set([...rewrite.checkingScripts, key]);
+    // The task has its own migration. Check that result under the inherited
+    // preload too: `node file.cts` can need tsx without naming it in the task.
+    const migrated = rewriteCommand(command, rewrite.cwd, [], checking);
+    const reason =
+      migrated.kept[0] ??
+      rewriteCommand(migrated.command, rewrite.cwd, inherited, checking).kept[0];
+    if (reason) {
+      return `script \`${task}\` needs tsx: ${reason}`;
+    }
+  }
+  return undefined;
+}
+
+function packageTaskKeepReason(
+  rewrite: Rewrite,
+  values: readonly string[],
+  inherited: readonly string[],
+): string | undefined {
+  const [manager, command, name] = values;
+  if (!['npm', 'pnpm', 'yarn', 'bun'].includes(manager)) {
+    return undefined;
+  }
+  if (['exec', 'x', 'dlx'].includes(command)) {
+    return undefined;
+  }
+  if (command === 'run' || command === 'run-script') {
+    // Later flags can select another workspace; forwarded arguments can supply
+    // an entry that the script itself does not name. Neither is resolved here.
+    return taskKeepReason(
+      rewrite,
+      values.length !== 3 || name?.startsWith('-') ? undefined : name,
+      inherited,
+      true,
+    );
+  }
+  // Includes npm's lifecycle commands and package-manager script shorthands.
+  // Unknown options (workspace filters, --prefix, etc.) cannot select this package.
+  return taskKeepReason(
+    rewrite,
+    values.length !== 2 || command?.startsWith('-') ? undefined : command,
+    inherited,
+    true,
+  );
 }
 
 function applyEdits(command: string, edits: readonly Edit[]): string {
@@ -377,6 +478,7 @@ function literalEdit(command: string, token: LiteralCommandToken, value: string)
 }
 
 interface EnvironmentOptions {
+  assignments: readonly string[];
   replacements: { index: number; value: string }[];
   preloads: string[];
   keepReason?: string;
@@ -384,7 +486,7 @@ interface EnvironmentOptions {
 
 /** NODE_OPTIONS uses double quotes and spaces, not shell single quotes or tab separators. */
 function scanEnvironmentOptions(assignments: readonly string[]): EnvironmentOptions {
-  const result: EnvironmentOptions = { replacements: [], preloads: [] };
+  const result: EnvironmentOptions = { assignments, replacements: [], preloads: [] };
   for (const [index, assignment] of assignments.entries()) {
     if (!/^NODE_OPTIONS=/i.test(assignment)) {
       continue;
@@ -599,6 +701,14 @@ function rewriteNodeLoader(
       : tokens.slice(scanned.entryIndex).map(({ value }) => value);
     const reason =
       environment.keepReason ??
+      (environment.replacements.length && scanned.runScript !== undefined
+        ? taskKeepReason(
+            rewrite,
+            scanned.entryIndex < tokens.length ? undefined : scanned.runScript,
+            environment.assignments,
+            false,
+          )
+        : undefined) ??
       [...scanned.preloads, ...(scanned.test ? scripts : scripts.slice(0, 1))]
         .map((script) => scriptKeepReason(rewrite.cwd, script))
         .find((reason) => reason !== undefined);
@@ -642,6 +752,7 @@ interface ScannedOptions {
   test: boolean;
   watch: boolean;
   inlineCode: boolean;
+  runScript?: string;
 }
 
 function importEdits(command: string, scanned: ScannedOptions): Edit[] {
@@ -702,6 +813,11 @@ function scanOptions(tokens: LiteralCommandToken[], index: number, tsx: boolean)
     scanned.test ||= name === '--test';
     scanned.watch ||= name === '--watch';
     scanned.inlineCode ||= ['-e', '-p', '-pe', '--eval', '--print', '--run'].includes(name);
+    if (name === '--run') {
+      scanned.runScript = inline
+        ? value.slice(value.indexOf('=') + 1)
+        : (tokens[index + 1]?.value ?? '');
+    }
     if (
       !inline &&
       (NODE_OPTIONS_WITH_VALUE.has(name) ||
@@ -747,7 +863,7 @@ function rewriteQuotedCommand(
   if ((quote !== '"' && quote !== "'") || raw.length < 2 || !raw.endsWith(quote)) {
     return;
   }
-  const inner = rewriteCommand(token.value, rewrite.cwd, inherited);
+  const inner = rewriteCommand(token.value, rewrite.cwd, inherited, rewrite.checkingScripts);
   rewrite.kept.push(...inner.kept);
   if (inner.command === token.value) {
     return;
