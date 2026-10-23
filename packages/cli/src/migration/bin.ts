@@ -50,6 +50,7 @@ import {
   collectToolchainVersionChanges,
   confirmPrettierMigration,
   confirmTsxMigration,
+  confirmOxnodeMigration,
   detectEslintProject,
   detectFramework,
   detectNodeVersionManagerFile,
@@ -57,6 +58,7 @@ import {
   detectPrettierProject,
   detectTsupProject,
   detectTsxProject,
+  detectOxnodeProject,
   detectVitePlusBootstrapPending,
   detectYarnPnpMode,
   ensureVitePlusBootstrap,
@@ -75,6 +77,7 @@ import {
   migrateSetupVpVersion,
   migrateTsupToTsdown,
   migrateTsxToVpx,
+  migrateOxnodeToVpx,
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
@@ -285,6 +288,7 @@ interface MigrationPlan extends MigrationSetupPlan {
   migrateTsup: boolean;
   tsupConfigFile?: string;
   migrateTsx: boolean;
+  migrateOxnode: boolean;
   fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
@@ -382,6 +386,7 @@ function hasExistingVitePlusMigrationCandidates(
     prettierProject.hasDependency ||
     tsupProject.hasDependency ||
     detectTsxProject(workspaceInfo.rootDir, workspaceInfo.packages) ||
+    detectOxnodeProject(workspaceInfo.rootDir, workspaceInfo.packages) ||
     detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined ||
     getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0
   );
@@ -444,6 +449,8 @@ async function collectMigrationPlan(
   // 3c. tsx detection + prompt
   const migrateTsx =
     detectTsxProject(rootDir, packages) && (await confirmTsxMigration(options.interactive));
+  const migrateOxnode =
+    detectOxnodeProject(rootDir, packages) && (await confirmOxnodeMigration(options.interactive));
 
   // 9. tsconfig baseUrl prompt
   const fixBaseUrl = hasBaseUrlInWorkspace({ rootDir, packages })
@@ -473,6 +480,7 @@ async function collectMigrationPlan(
     migrateTsup,
     tsupConfigFile,
     migrateTsx,
+    migrateOxnode,
     fixBaseUrl,
     migrateNodeVersionFile,
     nodeVersionDetection,
@@ -583,6 +591,9 @@ function showMigrationSummary(options: {
   }
   if (report.tsxMigrated) {
     log(`${styleText('gray', '•')} tsx scripts migrated to Vite+`);
+  }
+  if (report.oxnodeMigrated) {
+    log(`${styleText('gray', '•')} oxnode scripts migrated to Vite+`);
   }
   if (report.nodeVersionFileMigrated) {
     log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);
@@ -863,6 +874,10 @@ async function executeMigrationPlan(
   if (plan.migrateTsx) {
     updateMigrationProgress('Migrating tsx scripts');
     migrateTsxToVpx(workspaceInfo.rootDir, workspaceInfo.packages, report);
+  }
+  if (plan.migrateOxnode) {
+    updateMigrationProgress('Migrating oxnode scripts');
+    migrateOxnodeToVpx(workspaceInfo.rootDir, workspaceInfo.packages, report);
   }
 
   // Earlier setup and tool migrations can abort or change the preflight inputs.
@@ -1410,6 +1425,25 @@ async function main() {
         );
         didMigrate ||= tsxResult.changed;
         needsInstall ||= tsxResult.dependencyRemoved;
+      }
+    }
+
+    if (
+      fullSetup &&
+      detectOxnodeProject(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
+    ) {
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
+      if (await confirmOxnodeMigration(options.interactive)) {
+        updateMigrationProgress('Migrating oxnode scripts');
+        const oxnodeResult = migrateOxnodeToVpx(
+          workspaceInfoOptional.rootDir,
+          workspaceInfoOptional.packages,
+          report,
+        );
+        didMigrate ||= oxnodeResult.changed;
+        needsInstall ||= oxnodeResult.dependencyRemoved;
       }
     }
 
