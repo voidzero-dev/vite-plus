@@ -137,10 +137,7 @@ describe('prepareTsNodeRun', () => {
   it('maps project directories and gives CLI project selection precedence over the environment', () => {
     config({ 'ts-node': { transpileOnly: true } }, 'scripts/tsconfig.json');
     expect(prepare(['-P', 'scripts', 'scripts/a.ts'], ['TS_NODE_PROJECT=missing.json'])).toEqual({
-      edits: [
-        { index: 0, value: `--tsconfig=${path.join('scripts', 'tsconfig.json')}` },
-        { index: 1 },
-      ],
+      edits: [{ index: 0, value: '--tsconfig=scripts/tsconfig.json' }, { index: 1 }],
     });
     expect(prepare(['scripts/a.ts'], ['TS_NODE_PROJECT=scripts/tsconfig.json'])).toEqual({
       edits: [],
