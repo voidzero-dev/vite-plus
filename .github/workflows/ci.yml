@@ -1061,6 +1061,9 @@ jobs:
             "$snapshot_shell" --version
           done
 
+      # Temporary workaround for setup-nu release discovery failures.
+      # Switch back to hustcer/setup-nu, with a pinned Nu version, once an action
+      # release includes https://github.com/hustcer/setup-nu/pull/225.
       - name: Install Nushell
         env:
           NU_VERSION: '0.116.1'
