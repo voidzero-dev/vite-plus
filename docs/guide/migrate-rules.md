@@ -250,19 +250,20 @@ The `prefer-vite-plus-imports` lint rule follows the same Nuxt exception, so lin
 
 Migration rewrites commands provided by the Vite+ toolchain in `package.json` scripts while preserving their arguments:
 
-| Before        | After                                       |
-| ------------- | ------------------------------------------- |
-| `vite`        | `vp dev`, or the matching `vp` subcommand   |
-| `vitest`      | `vp test`                                   |
-| `oxlint`      | `vp lint`                                   |
-| `oxfmt`       | `vp fmt`                                    |
-| `tsdown`      | `vp pack`                                   |
-| `lint-staged` | `vp staged`                                 |
-| `eslint`      | `vp lint`, when its optional migration runs |
-| `prettier`    | `vp fmt`, when its optional migration runs  |
-| `tsup`        | `vp pack`, when its optional migration runs |
-| `tsx`         | `vpx`, when its optional migration runs     |
-| `oxnode`      | `vpx`, when its optional migration runs     |
+| Before        | After                                        |
+| ------------- | -------------------------------------------- |
+| `vite`        | `vp dev`, or the matching `vp` subcommand    |
+| `vitest`      | `vp test`                                    |
+| `oxlint`      | `vp lint`                                    |
+| `oxfmt`       | `vp fmt`                                     |
+| `tsdown`      | `vp pack`                                    |
+| `lint-staged` | `vp staged`                                  |
+| `eslint`      | `vp lint`, when its optional migration runs  |
+| `prettier`    | `vp fmt`, when its optional migration runs   |
+| `tsup`        | `vp pack`, when its optional migration runs  |
+| `tsx`         | `vpx`, when its optional migration runs      |
+| `oxnode`      | `vpx`, when its optional migration runs      |
+| `ts-node`     | `vpx`, for supported transpile-only commands |
 
 For commands launched through `bunx`, migration preserves `bunx` and its `--bun` flag (keeping the user's chosen runtime) and rewrites only the managed command. tsx is the exception: `bunx tsx` becomes `vpx`, and `bunx --bun tsx` keeps tsx (see [tsx to `vpx`](#tsx-to-vpx)). This also works when `bunx` follows a command-launcher delimiter such as `run` or `--`:
 
@@ -323,6 +324,29 @@ Commands that explicitly set `OXC_TRANSFORM_ALL` to anything other than `typescr
 Node.js preload commands also stay unchanged when another startup preload can change loader settings, or inline code still calls standalone oxc-node APIs.
 
 The `@oxc-node/cli` and `@oxc-node/core` development dependencies are removed only when no remaining use needs them. Loader references, API imports, CI commands, hooks, and shell scripts can keep these dependencies installed. Runtime and peer dependencies stay in place.
+
+### ts-node to `vpx`
+
+Migration offers to replace supported ts-node commands with `vpx` only when type-checking is explicitly disabled. Plain `ts-node` type-checks before execution; `vpx` does not. Commands that still type-check stay unchanged with a warning, even when another option enables transpile-only mode.
+
+| Before                                                                            | After                                                               |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `ts-node --transpileOnly ./scripts/seed.ts`                                       | `vpx ./scripts/seed.ts`                                             |
+| `ts-node -T -P tsconfig.scripts.json ./scripts/seed.ts`                           | `vpx --tsconfig=tsconfig.scripts.json ./scripts/seed.ts`            |
+| `ts-node-transpile-only ./scripts/seed.ts`                                        | `vpx ./scripts/seed.ts`                                             |
+| `node -r ts-node/register/transpile-only ./scripts/seed.ts`                       | `node --import vite-plus/register ./scripts/seed.ts`                |
+| `node --loader ts-node/esm/transpile-only ./scripts/seed.ts`                      | `node --import vite-plus/register ./scripts/seed.ts`                |
+| `NODE_OPTIONS='--require ts-node/register/transpile-only' node ./scripts/seed.ts` | `NODE_OPTIONS='--import vite-plus/register' node ./scripts/seed.ts` |
+
+The migration also reads `transpileOnly` and `typeCheck` from local JSONC tsconfig files, local `extends` chains, and literal `TS_NODE_TRANSPILE_ONLY` / `TS_NODE_TYPE_CHECK` assignments. `-P`, `--project`, and `TS_NODE_PROJECT` select the configuration. A directory passed to `-P` or `--project` resolves to its `tsconfig.json`; a directory in `TS_NODE_PROJECT` stays unchanged. When ts-node discovers a config implicitly, migration pins that file with `--tsconfig` so `vpx` uses it for the whole run. `ts-node-esm` and `--esm` are supported when type-checking is disabled.
+
+Supported Node.js preload commands keep Node.js and replace both the old loader option and module with `--import vite-plus/register`. Literal `NODE_OPTIONS` assignments also migrate when they reach a known `node` command and pass the same checks. An existing `TS_NODE_PROJECT` file selection stays in place. A preload that needs an implicit config pinned stays unchanged: set `TS_NODE_PROJECT` to the config file before migration, because Node.js cannot take `--tsconfig`.
+
+Preloads also stay unchanged when the working directory has no config but the entry file would discover a different one. Migration does not scan imported modules for additional config files.
+
+Custom compilers, transpilers, SWC, ts-node compiler overrides, unsupported configuration inheritance, eval, and REPL usage stay unchanged. Environment files, Node.js config files, additional preloads, and unsupported `NODE_OPTIONS` assignments also keep the original command because they can change ts-node settings before registration. Nonempty `VP_SCRIPT_TSCONFIG`, `TSX_TSCONFIG_PATH`, or `OXC_TSCONFIG_PATH` assignments stay unchanged because they would select a different config. Migration checks named scripts for known module incompatibilities; it does not follow their imports. Migrated scripts use the [tsconfig and module rules of `vpx`](/guide/vpx#tsconfig).
+
+As with oxnode, migration rewrites package scripts, JSON lint-staged tasks, and supported env shebangs. Shebangs that need a pinned config stay unchanged because the config path depends on the caller's working directory. Existing Vite+ projects use `vp migrate --full`. The `ts-node` development dependency is removed only when no remaining command, loader, API import, or config reference needs it. Runtime and peer dependencies remain, and `typescript` is not removed.
 
 ## Continuous Integration Rules
 
