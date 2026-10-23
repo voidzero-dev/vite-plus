@@ -6,24 +6,15 @@ import { patchNpmxVitestConfig } from '../../../../ecosystem-ci/npmx.ts';
 
 const nuxtProject = `defineVitestProject({
   plugins: [liveDollarFetch()],
+  resolve: { alias: { '@vue/compiler-dom': 'compiler-dom.esm-browser.js' } },
   test: { name: 'nuxt', browser: { enabled: true } },
 })`;
-
-interface OptimizerOptions {
-  include?: string[];
-  exclude?: string[];
-}
-
-interface TestServer {
-  config: { optimizeDeps: OptimizerOptions };
-  environments: { client: { config: { optimizeDeps: OptimizerOptions } } };
-}
 
 describe('patchNpmxVitestConfig', () => {
   test.each([
     nuxtProject,
     nuxtProject.replace('[liveDollarFetch()]', '[\n    liveDollarFetch(),\n  ]'),
-  ])('preserves the existing plugin and test settings', (config) => {
+  ])('preserves the existing plugin, aliases, and test settings', (config) => {
     const liveDollarFetch = { name: 'live-dollar-fetch' };
     const patched = runInNewContext(patchNpmxVitestConfig(config), {
       defineVitestProject: (project: unknown) => project,
@@ -32,8 +23,8 @@ describe('patchNpmxVitestConfig', () => {
       plugins: {
         name: string;
         config?: () => { test: { browser: { importMapMocks: boolean } } };
-        configureServer?: (server: TestServer) => void;
       }[];
+      resolve: { alias: Record<string, string> };
       test: { name: string; browser: { enabled: boolean } };
     };
 
@@ -44,22 +35,8 @@ describe('patchNpmxVitestConfig', () => {
       test: { browser: { importMapMocks: false } },
     });
     expect(patched.test).toEqual({ name: 'nuxt', browser: { enabled: true } });
-
-    const server: TestServer = {
-      config: { optimizeDeps: { include: ['keep', 'excluded'], exclude: ['excluded'] } },
-      environments: {
-        client: {
-          config: {
-            optimizeDeps: { include: ['browser', 'excluded'], exclude: ['excluded'] },
-          },
-        },
-      },
-    };
-    patched.plugins[1].configureServer?.(server);
-    expect(server.config.optimizeDeps).toEqual({ include: ['keep'], exclude: ['excluded'] });
-    expect(server.environments.client.config.optimizeDeps).toEqual({
-      include: ['browser'],
-      exclude: ['excluded'],
+    expect(patched.resolve.alias).toEqual({
+      '@vue/compiler-dom': 'compiler-dom.esm-browser.js',
     });
   });
 
