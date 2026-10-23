@@ -716,38 +716,46 @@ mod tests {
                     [
                         ("HOME", home.path().to_str()),
                         ("USERPROFILE", home.path().to_str()),
-                        (
-                            "npm_config_userconfig",
-                            (variable == "npm_config_userconfig").then_some(selector),
-                        ),
-                        (
-                            "NPM_CONFIG_USERCONFIG",
-                            (variable == "NPM_CONFIG_USERCONFIG").then_some(selector),
-                        ),
+                        ("npm_config_userconfig", None),
+                        ("NPM_CONFIG_USERCONFIG", None),
                     ],
                     |_| {
-                        let mut command = tokio::process::Command::new("node");
-                        configure_pnpm_command(
-                            &mut command,
-                            Some("https://registry.example.test/"),
-                        )
-                        .unwrap();
-                        let values: std::collections::BTreeMap<_, _> =
-                            command.as_std().get_envs().collect();
-                        for name in ["npm_config_userconfig", "NPM_CONFIG_USERCONFIG"] {
-                            assert_eq!(
-                                values[std::ffi::OsStr::new(name)].unwrap(),
-                                expected.as_os_str(),
-                                "{variable}={selector}"
-                            );
-                        }
-                        for name in ["npm_config_registry", "NPM_CONFIG_REGISTRY"] {
-                            assert_eq!(
-                                values[std::ffi::OsStr::new(name)].unwrap(),
-                                "https://registry.example.test/"
-                            );
-                        }
-                        assert_eq!(command.as_std().get_args().len(), 0);
+                        // Clear both spellings before setting either: they alias on Windows.
+                        EnvConfig::with_vars([(variable, selector)], |_| {
+                            let mut command = tokio::process::Command::new("node");
+                            configure_pnpm_command(
+                                &mut command,
+                                Some("https://registry.example.test/"),
+                            )
+                            .unwrap();
+                            let command_env = |name: &str| {
+                                command
+                                    .as_std()
+                                    .get_envs()
+                                    .find(|(key, _)| {
+                                        if cfg!(windows) {
+                                            key.eq_ignore_ascii_case(name)
+                                        } else {
+                                            *key == name
+                                        }
+                                    })
+                                    .and_then(|(_, value)| value)
+                            };
+                            for name in ["npm_config_userconfig", "NPM_CONFIG_USERCONFIG"] {
+                                assert_eq!(
+                                    command_env(name),
+                                    Some(expected.as_os_str()),
+                                    "{variable}={selector}"
+                                );
+                            }
+                            for name in ["npm_config_registry", "NPM_CONFIG_REGISTRY"] {
+                                assert_eq!(
+                                    command_env(name),
+                                    Some(std::ffi::OsStr::new("https://registry.example.test/"))
+                                );
+                            }
+                            assert_eq!(command.as_std().get_args().len(), 0);
+                        });
                     },
                 );
             }
