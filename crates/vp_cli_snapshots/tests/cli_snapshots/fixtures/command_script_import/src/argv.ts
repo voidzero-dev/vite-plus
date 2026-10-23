@@ -1,8 +1,12 @@
-import assert from 'node:assert/strict';
 import path from 'node:path';
-assert.equal(process.execPath, process.env.EXPECTED_EXEC_PATH);
-assert.equal(process.ppid, Number(process.env.EXPECTED_PARENT_PID));
-assert.equal(process.argv[1], path.resolve('src/argv.ts'));
-assert.equal((globalThis as any).setup, 'loaded');
-console.log(JSON.stringify({ args: process.argv.slice(2), execArgv: process.execArgv }));
+
+console.log(JSON.stringify({
+  sameExecutable: process.execPath === process.env.EXPECTED_EXEC_PATH,
+  directChild: process.ppid === Number(process.env.EXPECTED_PARENT_PID),
+  absoluteScript: path.isAbsolute(process.argv[1]),
+  script: path.relative(process.cwd(), process.argv[1]).split(path.sep).join('/'),
+  setup: (globalThis as any).setup,
+  args: process.argv.slice(2),
+  execArgv: process.execArgv,
+}, null, 2));
 process.exitCode = 7;
