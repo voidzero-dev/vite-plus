@@ -25,15 +25,15 @@ catalog:
   '@types/node': 24.10.3
   '@types/validate-npm-package-name': ^4.0.2
   '@typescript/native-preview': 7.0.0-dev.20260707.2
-  '@vitest/browser': 5.0.5
-  '@vitest/browser-playwright': 5.0.5
-  '@vitest/browser-preview': 5.0.5
+  '@vitest/browser': 5.1.0-beta.1
+  '@vitest/browser-playwright': 5.1.0-beta.1
+  '@vitest/browser-preview': 5.1.0-beta.1
   '@vitest/browser-webdriverio': 5.0.0
-  '@vitest/mocker': 5.0.5
-  '@vitest/pretty-format': 5.0.5
-  '@vitest/snapshot': 5.0.5
-  '@vitest/spy': 5.0.5
-  '@vitest/utils': 5.0.5
+  '@vitest/mocker': 5.1.0-beta.1
+  '@vitest/pretty-format': 5.1.0-beta.1
+  '@vitest/snapshot': 5.1.0-beta.1
+  '@vitest/spy': 5.1.0-beta.1
+  '@vitest/utils': 5.1.0-beta.1
   bingo: ^0.13.2
   cac: ^7.0.0
   consola: ^3.4.2
@@ -71,7 +71,7 @@ catalog:
   valibot: 1.5.0
   validate-npm-package-name: ^8.0.0
   verkit: ^0.5.0
-  vitest: 5.0.5
+  vitest: 5.1.0-beta.1
   yaml: ^2.9.1
   # Keep generator option schemas compatible with bingo's Zod version.
   zod: ^4.4.3
@@ -140,6 +140,8 @@ minimumReleaseAgeExclude:
   - '@vitejs/devtools-*'
   - resolve.exports@2.0.4
 overrides:
+  # The community provider's stable range excludes the selected Vitest prerelease.
+  '@vitest/browser-webdriverio>@vitest/browser': 'catalog:'
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
