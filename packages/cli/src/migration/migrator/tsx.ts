@@ -133,7 +133,7 @@ const TSX_RUNNER: ScriptRunnerMigration = {
   optionsWithValue: new Set([...WATCH_OPTIONS_WITH_VALUE, '--tsconfig']),
   testWithoutFilesReason: KEEP_TEST_GLOBS,
   envKeepReason,
-  scriptKeepReason,
+  scriptKeepReason: (cwd, script) => typescriptScriptKeepReason(cwd, script, 'tsx'),
 };
 
 export type TsxCommandRewrite = ScriptRunnerCommandRewrite;
@@ -178,7 +178,11 @@ function envKeepReason(assignments: readonly string[]): string | undefined {
  * Node.js does, rejects ES module syntax in a `.cts` file, and runs the other files as ES
  * modules, so `__dirname`, `__filename`, and `require` are not defined.
  */
-function scriptKeepReason(cwd: string | undefined, script: string): string | undefined {
+export function typescriptScriptKeepReason(
+  cwd: string | undefined,
+  script: string,
+  runner: string,
+): string | undefined {
   // A glob is not checked: its files can differ when the command runs.
   if (
     cwd === undefined ||
@@ -199,13 +203,13 @@ function scriptKeepReason(cwd: string | undefined, script: string): string | und
       ? `\`${script}\` does not exist yet, so vp migrate cannot check it`
       : undefined;
   }
-  for (const [, base, extension] of source.matchAll(RELATIVE_REQUIRE)) {
+  for (const [, base, extension] of runner === 'tsx' ? source.matchAll(RELATIVE_REQUIRE) : []) {
     const resolve = (ext: string) => path.resolve(path.dirname(file), `${base}.${ext}`);
     const typescript = fs.existsSync(resolve(extension))
       ? undefined
       : TYPESCRIPT_EXTENSIONS[extension].find((ext) => fs.existsSync(resolve(ext)));
     if (typescript) {
-      return `\`${script}\` requires \`${base}.${extension}\`, which only tsx resolves to \`${base}.${typescript}\`; write the TypeScript extension`;
+      return `\`${script}\` requires \`${base}.${extension}\`, which only ${runner} resolves to \`${base}.${typescript}\`; write the TypeScript extension`;
     }
   }
   // A comment can start a line before ES module syntax, as in `/* banner */ import ...`.
