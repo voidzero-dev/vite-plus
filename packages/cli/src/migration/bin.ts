@@ -604,7 +604,7 @@ function showMigrationSummary(options: {
     log(`${styleText('gray', '•')} oxnode scripts migrated to Vite+`);
   }
   if (report.tsNodeMigrated) {
-    log(`${styleText('gray', '•')} ts-node scripts migrated to \`vpx\``);
+    log(`${styleText('gray', '•')} ts-node scripts migrated to Vite+`);
   }
   if (report.nodeVersionFileMigrated) {
     log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);

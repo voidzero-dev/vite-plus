@@ -3,7 +3,9 @@
   "type": "module",
   "scripts": {
     "seed": "ts-node --transpileOnly ./scripts/seed.ts",
-    "loader": "node --loader ts-node/esm/transpile-only ./scripts/seed.ts"
+    "loader": "node --loader ts-node/esm/transpile-only ./scripts/seed.ts",
+    "register": "node --require=ts-node/register/transpile-only ./scripts/seed.ts",
+    "env-loader": "NODE_OPTIONS='--require ts-node/register/transpile-only' node ./scripts/seed.ts"
   },
   "devDependencies": {
     "ts-node": "file:.fixture/ts-node",
