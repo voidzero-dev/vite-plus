@@ -4,6 +4,8 @@ name = "pm_audit_bun"
 skip-platforms = ["windows"]
 vp = "global"
 cwd = "bun"
+# mock-manifest.json keeps audit responses local so these command-routing checks
+# do not depend on the availability or contents of npm's advisory service.
 steps = [
   { argv = ["vp", "install", "--", "--silent"], comment = "should install packages first", continue-on-failure = true },
   { argv = ["vp", "pm", "audit", "--production"], comment = "should audit production dependencies" },

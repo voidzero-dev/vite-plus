@@ -1061,11 +1061,12 @@ jobs:
             "$snapshot_shell" --version
           done
 
-      # https://github.com/marketplace/actions/setup-nu
+      # Includes release lookup retries: https://github.com/hustcer/setup-nu/pull/225.
       - name: Install Nushell
-        uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3.25
+        uses: hustcer/setup-nu@eacad52a4634c4f8d17a94916f93be6856861b9c # v3.29
         with:
-          version: '*'
+          # renovate: datasource=github-releases depName=nushell/nushell
+          version: '0.116.1'
 
       - uses: ./.github/actions/setup-ci-node
 
@@ -1259,8 +1260,15 @@ jobs:
           # Generate the overrides from the fixtures, including automatic Ctrl-C
           # isolation, so this configuration cannot drift from the runner.
           VP_SNAP_NEXTEST_CONFIG="$RUNNER_TEMP/snapshot-nextest.toml" \
+            VP_SNAP_PREWARM_MANIFEST="$RUNNER_TEMP/snapshot-prewarm.json" \
             cargo-nextest nextest list --archive-file windows-snapshot-tests.tar.zst --workspace-remap . \
             > "$RUNNER_TEMP/snapshot-test-list.txt"
+          # Derive Bun archives from the same fixtures as the test list, so
+          # version changes need no matching CI edit. Only response bytes are shared.
+          node packages/tools/src/local-npm-registry.ts \
+            --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \
+            --request-log "$VP_SNAP_ARTIFACTS_DIR/prewarm/registry.jsonl" \
+            --prewarm-manifest "$RUNNER_TEMP/snapshot-prewarm.json"
           nextest_run_args=(
             --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml"
             --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast
