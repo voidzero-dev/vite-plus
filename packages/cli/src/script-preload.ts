@@ -30,6 +30,7 @@ import {
   resolveWithOxcNode,
   routeHelperRequires,
   SUPPORTED_NODE_RANGE,
+  threadScriptConfig,
   threadWatchSink,
   withFlush,
   withRequireAsyncModuleCode,
@@ -60,10 +61,9 @@ if (watch) {
   oxcNode.enableWatchReport();
 }
 
-// `vpx --tsconfig` pins one config for every file. It must be set before the first
-// transform or resolve; the off-thread hooks load the same native library, so they
-// see it too. Without it, each file uses its nearest tsconfig.
-oxcNode.setTsconfigPath(process.env.VP_SCRIPT_TSCONFIG);
+// Pin this thread's config before its first transform or resolve. The ESM entry
+// passes the same choice to the off-thread hooks on older Node.js releases.
+oxcNode.initializeLoader(threadScriptConfig().tsconfigPath);
 // Dependencies run as published, except TypeScript, which Node.js refuses to strip
 // under `node_modules`. Set the same way, before the first transform or resolve.
 oxcNode.setTransformDeps('typescript');

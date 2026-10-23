@@ -24,6 +24,13 @@ pub fn set_tsconfig_path(path: Option<String>) -> Result<()> {
     ::oxc_node::set_tsconfig_path(path)
 }
 
+/// Configure this JavaScript thread from its own environment. `None` requests
+/// discovery and does not fall back to the parent process's native environment.
+#[napi(namespace = "oxcNode")]
+pub fn initialize_loader(path: Option<String>) -> Result<()> {
+    ::oxc_node::initialize_loader(path)
+}
+
 #[napi(namespace = "oxcNode")]
 pub fn set_transform_deps(mode: Option<String>) -> Result<()> {
     ::oxc_node::set_transform_deps(mode)

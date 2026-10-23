@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "@value": [
+        "./src/config-compat.ts"
+      ]
+    },
+    "useDefineForClassFields": true
+  }
+}

@@ -4,11 +4,11 @@
  * `sync-remote` clones oxc-node into `oxc-node/`, and CI checks it out at the hash in
  * `.upstream-versions.json`. The binding links it with `default-features = false`, so it
  * registers no NAPI exports of its own; `packages/cli/binding/src/oxc_node.rs` forwards
- * the ones the loader uses under an `oxcNode` namespace. The source stays unpatched.
+ * the ones the loader uses under an `oxcNode` namespace.
  *
  * This script points the `oxc` dependency at the workspace version, so the binding links
- * one copy of oxc. It is idempotent. Keep it free of package imports: CI runs it right
- * after checkout, before dependencies are installed.
+ * one copy of oxc. It does not change upstream source. Keep this free of package
+ * imports: CI runs it right after checkout, before dependencies are installed.
  */
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
