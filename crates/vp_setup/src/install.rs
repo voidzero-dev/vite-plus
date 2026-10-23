@@ -14,7 +14,7 @@ use std::{
 use flate2::read::GzDecoder;
 use tar::Archive;
 use vp_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
-use vp_pm_cli::{PackageManagerType, download_package_manager};
+use vp_pm_cli::{bootstrap_pnpm, npm_user_config_path};
 use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -171,7 +171,7 @@ fn format_install_failure_message(exit_code: i32, log_path: Option<&AbsolutePath
     format!("Failed to install production dependencies (exit code: {exit_code}){log_msg}")
 }
 
-/// Write stdout and stderr from a failed install to `upgrade.log`.
+/// Record the exit code without registry output, which can contain credentials.
 ///
 /// The log is written to the **parent** of `version_dir` (i.e. `<DATA>/upgrade.log`)
 /// so it survives the cleanup that removes `version_dir` on failure.
@@ -179,15 +179,14 @@ fn format_install_failure_message(exit_code: i32, log_path: Option<&AbsolutePath
 /// Returns the log file path on success, or `None` if writing failed.
 pub async fn write_upgrade_log(
     version_dir: &AbsolutePath,
-    stdout: &[u8],
-    stderr: &[u8],
+    exit_code: i32,
 ) -> Option<AbsolutePathBuf> {
     // Write to parent dir so the log survives version_dir cleanup on failure
     let parent = version_dir.as_path().parent()?;
     let log_path = AbsolutePathBuf::new(parent.join("upgrade.log"))?;
-    let stdout_str = String::from_utf8_lossy(stdout);
-    let stderr_str = String::from_utf8_lossy(stderr);
-    let content = format!("=== stdout ===\n{stdout_str}\n=== stderr ===\n{stderr_str}");
+    let content = format!(
+        "pnpm install failed with exit code {exit_code}.\nCheck npm registry access and authentication in your user configuration.\nRegistry output is not saved because it can contain credentials.\n"
+    );
     match tokio::fs::write(&log_path, &content).await {
         Ok(()) => Some(log_path),
         Err(e) => {
@@ -199,8 +198,8 @@ pub async fn write_upgrade_log(
 
 /// Install production dependencies with a compatible managed Node.js and pinned pnpm.
 ///
-/// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace [--registry <url>]`
-/// with `CI=true`. On failure, writes stdout+stderr to the parent directory's `upgrade.log`.
+/// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace`
+/// with `CI=true`. On failure, records the exit code in the parent directory's `upgrade.log`.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
@@ -222,7 +221,7 @@ pub async fn install_production_deps(
 
     let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
         show_progress.then_some("Preparing Node.js and pnpm..."),
-        prepare_install_runtime(preferred_node_version),
+        prepare_install_runtime(preferred_node_version, registry),
     )
     .await?;
     let output = vp_shared::progress::with_spinner(
@@ -232,7 +231,8 @@ pub async fn install_production_deps(
     .await?;
 
     if !output.status.success() {
-        let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
+        let exit_code = vp_shared::exit_code_from_status(output.status);
+        let log_path = write_upgrade_log(version_dir, exit_code).await;
         return Err(Error::Setup(
             format_install_failure_message(
                 vp_shared::exit_code_from_status(output.status),
@@ -281,15 +281,11 @@ async fn dependency_install_args<'a>(
 
 async fn prepare_install_runtime(
     preferred_node_version: Option<&str>,
+    registry: Option<&str>,
 ) -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
-    let (pnpm_dir, _, _) =
-        download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
-            .await
-            .map_err(|error| {
-                Error::Setup(
-                    format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into(),
-                )
-            })?;
+    let pnpm_dir = bootstrap_pnpm(PINNED_PNPM_VERSION, registry).await.map_err(|error| {
+        Error::Setup(format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into())
+    })?;
     let pnpm_entry = pnpm_dir.join("bin").join("pnpm.cjs");
     if !tokio::fs::try_exists(&pnpm_entry).await.unwrap_or(false) {
         return Err(Error::Setup(
@@ -332,6 +328,24 @@ fn supports_pnpm_node(package: &serde_json::Value, version: &str) -> bool {
     range.satisfies(&version)
 }
 
+/// Keep pnpm's registry and user config aligned with the native downloader when
+/// its working directory differs from the caller's.
+fn configure_pnpm_command(
+    command: &mut tokio::process::Command,
+    registry: Option<&str>,
+) -> Result<(), Error> {
+    if let Some(registry) = registry {
+        command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry);
+        command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY_UPPER, registry);
+    }
+    if let Some(path) = npm_user_config_path(None) {
+        let path = vt_path::current_dir()?.join(path);
+        command.env("npm_config_userconfig", path.as_path());
+        command.env("NPM_CONFIG_USERCONFIG", path.as_path());
+    }
+    Ok(())
+}
+
 async fn run_pnpm_install(
     version_dir: &AbsolutePath,
     node_runtime: &vp_js_runtime::JsRuntime,
@@ -363,9 +377,7 @@ async fn run_pnpm_install(
             .env("NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH", "1000");
     }
 
-    if let Some(registry_url) = registry {
-        cmd.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
-    }
+    configure_pnpm_command(&mut cmd, registry)?;
 
     let output = cmd.output().await?;
     Ok(output)
@@ -679,6 +691,67 @@ pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn expands_userconfig_before_resolving_against_the_caller() {
+        let home = tempfile::tempdir().unwrap();
+        let relative = vt_path::current_dir().unwrap().join("config/enterprise.npmrc");
+        let cases = [
+            ("config/enterprise.npmrc", relative.as_path().to_path_buf()),
+            ("~/enterprise.npmrc", home.path().join("enterprise.npmrc")),
+            ("${HOME}/enterprise.npmrc", home.path().join("enterprise.npmrc")),
+        ];
+        for (selector, expected) in cases {
+            for variable in ["npm_config_userconfig", "NPM_CONFIG_USERCONFIG"] {
+                EnvConfig::with_vars(
+                    [
+                        ("HOME", home.path().to_str()),
+                        ("USERPROFILE", home.path().to_str()),
+                        ("npm_config_userconfig", None),
+                        ("NPM_CONFIG_USERCONFIG", None),
+                    ],
+                    |_| {
+                        // Clear both spellings before setting either: they alias on Windows.
+                        EnvConfig::with_vars([(variable, selector)], |_| {
+                            let mut command = tokio::process::Command::new("node");
+                            configure_pnpm_command(
+                                &mut command,
+                                Some("https://registry.example.test/"),
+                            )
+                            .unwrap();
+                            let command_env = |name: &str| {
+                                command
+                                    .as_std()
+                                    .get_envs()
+                                    .find(|(key, _)| {
+                                        if cfg!(windows) {
+                                            key.eq_ignore_ascii_case(name)
+                                        } else {
+                                            *key == name
+                                        }
+                                    })
+                                    .and_then(|(_, value)| value)
+                            };
+                            for name in ["npm_config_userconfig", "NPM_CONFIG_USERCONFIG"] {
+                                assert_eq!(
+                                    command_env(name).map(std::path::Path::new),
+                                    Some(expected.as_path()),
+                                    "{variable}={selector}"
+                                );
+                            }
+                            for name in ["npm_config_registry", "NPM_CONFIG_REGISTRY"] {
+                                assert_eq!(
+                                    command_env(name),
+                                    Some(std::ffi::OsStr::new("https://registry.example.test/"))
+                                );
+                            }
+                            assert_eq!(command.as_std().get_args().len(), 0);
+                        });
+                    },
+                );
+            }
+        }
+    }
+
     #[tokio::test]
     async fn bootstrap_reuses_project_node_and_only_resolves_lts_for_incompatible_pnpm() {
         use vp_js_runtime::{JsRuntimeProvider, Platform};
@@ -722,13 +795,14 @@ mod tests {
                     tokio::fs::write(binary, "").await.unwrap();
                 }
 
-                let (runtime, entry) = prepare_install_runtime(Some("22.23.1")).await.unwrap();
+                let (runtime, entry) =
+                    prepare_install_runtime(Some("22.23.1"), None).await.unwrap();
                 assert_eq!(runtime.version(), "22.23.1");
                 assert_eq!(entry, pnpm.join("bin/pnpm.cjs"));
                 index.assert_calls(0);
 
                 tokio::fs::write(manifest, r#"{"engines":{"node":">=24"}}"#).await.unwrap();
-                let (runtime, _) = prepare_install_runtime(Some("22.23.1")).await.unwrap();
+                let (runtime, _) = prepare_install_runtime(Some("22.23.1"), None).await.unwrap();
                 assert_eq!(runtime.version(), "24.11.0");
                 index.assert_calls(1);
             },
@@ -997,10 +1071,7 @@ mod tests {
         let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 
-        let stdout = b"some stdout output";
-        let stderr = b"error: something went wrong";
-
-        let result = write_upgrade_log(&version_dir, stdout, stderr).await;
+        let result = write_upgrade_log(&version_dir, 17).await;
         assert!(result.is_some(), "write_upgrade_log should return log path");
 
         let log_path = result.unwrap();
@@ -1013,28 +1084,12 @@ mod tests {
         assert!(log_path.as_path().exists(), "upgrade.log should exist");
 
         let content = tokio::fs::read_to_string(&log_path).await.unwrap();
-        assert!(content.contains("=== stdout ==="), "log should have stdout section");
-        assert!(content.contains("some stdout output"), "log should contain stdout");
-        assert!(content.contains("=== stderr ==="), "log should have stderr section");
-        assert!(content.contains("error: something went wrong"), "log should contain stderr");
+        assert!(content.contains("exit code 17"));
+        assert!(content.contains("Registry output is not saved"));
 
         // Log should survive version_dir removal
         tokio::fs::remove_dir_all(&version_dir).await.unwrap();
         assert!(log_path.as_path().exists(), "upgrade.log should survive version_dir cleanup");
-    }
-
-    #[tokio::test]
-    async fn test_write_upgrade_log_handles_empty_output() {
-        let temp = tempfile::tempdir().unwrap();
-        let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
-        tokio::fs::create_dir(&version_dir).await.unwrap();
-
-        let result = write_upgrade_log(&version_dir, b"", b"").await;
-        assert!(result.is_some());
-
-        let content = tokio::fs::read_to_string(result.unwrap()).await.unwrap();
-        assert!(content.contains("=== stdout ==="));
-        assert!(content.contains("=== stderr ==="));
     }
 
     #[tokio::test]

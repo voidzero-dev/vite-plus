@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import {
   copyFileSync,
@@ -79,6 +79,17 @@ async function handleRequest(request, response) {
   if (request.url === '/index.json') {
     await checkpoint('prepare');
     response.end(JSON.stringify([{ version: 'v99.0.0', lts: 'Fixture' }]));
+  } else if (request.url === '/pnpm/10.34.7') {
+    response.end(
+      JSON.stringify({
+        name: 'pnpm',
+        version: '10.34.7',
+        dist: {
+          tarball: `${mirror}/pnpm/-/pnpm-10.34.7.tgz`,
+          integrity: 'sha512-' + createHash('sha512').update(pnpmArchive).digest('base64'),
+        },
+      }),
+    );
   } else if (/^\/pnpm\/-\/pnpm-[\d.]+\.tgz$/.test(request.url)) {
     await checkpoint('download');
     response.setHeader('Content-Length', pnpmArchive.length);
@@ -191,9 +202,9 @@ try {
   if (failure) {
     assert.equal(stdout, '');
     const log = readFileSync(join(home, 'upgrade.log'), 'utf8');
-    assert.ok(log.includes('pnpm captured stdout'));
-    assert.ok(log.includes('pnpm captured stderr'));
-    console.log('Failure log preserves pnpm stdout and stderr.');
+    assert.ok(log.includes('exit code 17'));
+    assert.ok(!log.includes('pnpm captured'));
+    console.log('Failure log records the exit code without registry output.');
   } else if (upgradeHandoff) {
     assert.ok(stdout.includes('Usage:'));
     console.log('The first command runs after self-setup completes.');
