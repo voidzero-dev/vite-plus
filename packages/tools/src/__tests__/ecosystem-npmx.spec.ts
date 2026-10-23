@@ -29,13 +29,20 @@ describe('patchNpmxVitestConfig', () => {
       defineVitestProject: (project: unknown) => project,
       liveDollarFetch: () => liveDollarFetch,
     }) as {
-      plugins: { name: string; configureServer?: (server: TestServer) => void }[];
+      plugins: {
+        name: string;
+        config?: () => { test: { browser: { importMapMocks: boolean } } };
+        configureServer?: (server: TestServer) => void;
+      }[];
       test: { name: string; browser: { enabled: boolean } };
     };
 
     expect(patched.plugins).toHaveLength(2);
     expect(patched.plugins[0]).toBe(liveDollarFetch);
-    expect(patched.plugins[1].name).toBe('npmx:test:preserve-optimizer-exclusions');
+    expect(patched.plugins[1].name).toBe('npmx:test:vitest-compat');
+    expect(patched.plugins[1].config?.()).toEqual({
+      test: { browser: { importMapMocks: false } },
+    });
     expect(patched.test).toEqual({ name: 'nuxt', browser: { enabled: true } });
 
     const server: TestServer = {
