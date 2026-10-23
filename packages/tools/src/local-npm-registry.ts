@@ -37,6 +37,7 @@
 //                         and env exports instead of wrapping a command
 //   --snapshot-cache <dir> share successful upstream GETs for one snapshot run
 //   --prewarm <url>      download an archive into --snapshot-cache, then exit
+//   --prewarm-manifest <file> prepare the runner's JSON array of archive URLs
 //   --snapshot-fixtures <dir> serve recorded manifest.json and tarballs/ data
 //   --snapshot-runner    wrap a test runner with a shared registry; the runner
 //                         still gives each case its own package-manager caches
@@ -83,6 +84,7 @@ let serve = false;
 let snapshotRunner = false;
 let snapshotCacheDir: string | undefined;
 let prewarmUrl: string | undefined;
+let prewarmManifest: string | undefined;
 let snapshotFixtures: string | undefined;
 let requestLog: string | undefined;
 let live = false;
@@ -99,6 +101,8 @@ for (let i = 0; i < flags.length; i++) {
     snapshotCacheDir = flags[++i];
   } else if (flags[i] === '--prewarm' && flags[i + 1]) {
     prewarmUrl = flags[++i];
+  } else if (flags[i] === '--prewarm-manifest' && flags[i + 1]) {
+    prewarmManifest = flags[++i];
   } else if (flags[i] === '--snapshot-fixtures' && flags[i + 1]) {
     snapshotFixtures = flags[++i];
   } else if (flags[i] === '--request-log' && flags[i + 1]) {
@@ -132,14 +136,33 @@ if (requestLog) {
   mkdirSync(path.dirname(requestLog), { recursive: true });
 }
 
-if (prewarmUrl) {
-  if (!snapshotCacheDir || command.length || serve || snapshotRunner || pack || packTo) {
-    console.error('local-npm-registry: --prewarm requires --snapshot-cache and no runner command');
+if (prewarmUrl || prewarmManifest) {
+  if (
+    !snapshotCacheDir ||
+    command.length ||
+    serve ||
+    snapshotRunner ||
+    pack ||
+    packTo ||
+    (prewarmUrl && prewarmManifest)
+  ) {
+    console.error(
+      'local-npm-registry: prewarming requires --snapshot-cache, one input, and no runner command',
+    );
     process.exit(2);
   }
   // A large archive can take longer than the normal per-request budget.
   // Prepare it once before eight test workers start their command timers.
-  await new RegistryCache(snapshotCacheDir, true, requestLog, 180_000).prewarm(prewarmUrl);
+  const urls: unknown = prewarmManifest
+    ? JSON.parse(await readFile(prewarmManifest, 'utf8'))
+    : [prewarmUrl];
+  if (!Array.isArray(urls) || urls.some((url) => typeof url !== 'string')) {
+    throw new Error('local-npm-registry: prewarm manifest must be a JSON array of archive URLs');
+  }
+  const cache = new RegistryCache(snapshotCacheDir, true, requestLog, 180_000);
+  for (const url of new Set<string>(urls)) {
+    await cache.prewarm(url);
+  }
   process.exit(0);
 }
 

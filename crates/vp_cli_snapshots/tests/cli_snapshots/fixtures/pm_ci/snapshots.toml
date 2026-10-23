@@ -1,5 +1,6 @@
 [[case]]
 name = "pm_ci_package_managers"
+prewarm-bun = false # This case installs fake package managers.
 vp = "global"
 comment = """
 Covers `vp pm ci` command delegation for each supported package manager.

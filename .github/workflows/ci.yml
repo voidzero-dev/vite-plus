@@ -1255,19 +1255,19 @@ jobs:
           # Keep pwsh at its canonical installation path; copying pwsh.exe
           # alone can break its adjacent runtime dependencies.
           export VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v pwsh.exe)")"
-          # Bun 1.3.11 is a fixture pin. Its 40 MB Windows archive can exceed
-          # a command's deadline when fetched alongside eight test workers.
-          # Share the downloaded bytes, while keeping each case's install isolated.
-          node packages/tools/src/local-npm-registry.ts \
-            --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \
-            --request-log "$VP_SNAP_ARTIFACTS_DIR/prewarm/registry.jsonl" \
-            --prewarm https://registry.npmjs.org/@oven/bun-windows-x64/-/bun-windows-x64-1.3.11.tgz
           # Reserve all nextest workers for cases that need the execution gate.
           # Generate the overrides from the fixtures, including automatic Ctrl-C
           # isolation, so this configuration cannot drift from the runner.
           VP_SNAP_NEXTEST_CONFIG="$RUNNER_TEMP/snapshot-nextest.toml" \
+            VP_SNAP_PREWARM_MANIFEST="$RUNNER_TEMP/snapshot-prewarm.json" \
             cargo-nextest nextest list --archive-file windows-snapshot-tests.tar.zst --workspace-remap . \
             > "$RUNNER_TEMP/snapshot-test-list.txt"
+          # Derive Bun archives from the same fixtures as the test list, so
+          # version changes need no matching CI edit. Only response bytes are shared.
+          node packages/tools/src/local-npm-registry.ts \
+            --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \
+            --request-log "$VP_SNAP_ARTIFACTS_DIR/prewarm/registry.jsonl" \
+            --prewarm-manifest "$RUNNER_TEMP/snapshot-prewarm.json"
           nextest_run_args=(
             --test-threads 8 --config-file "$RUNNER_TEMP/snapshot-nextest.toml"
             --archive-file windows-snapshot-tests.tar.zst --workspace-remap . --no-fail-fast

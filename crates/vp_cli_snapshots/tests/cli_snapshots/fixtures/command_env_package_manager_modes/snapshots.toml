@@ -1,5 +1,6 @@
 [[case]]
 name = "command_env_package_manager_modes"
+prewarm-bun = false # Inspect configuration without downloading Bun.
 vp = "global"
 seed-runtime = false
 steps = [
