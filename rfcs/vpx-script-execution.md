@@ -2,7 +2,7 @@
 
 - Status: Implemented in [#2936](https://github.com/voidzero-dev/vite-plus/pull/2936); CI covers Linux, macOS, and Windows on Node.js 22, 24, and 26
 - Related: [`vpx` command](./vpx-command.md), [JavaScript runtime management](./js-runtime.md), [CLI bundling](../packages/cli/BUNDLING.md), [Core binding resolution](./core-binding-resolution.md)
-- Upstream: [oxc-node](https://github.com/oxc-project/oxc-node) at `ce22828`, a `main` commit after v0.1.7 with fixes not yet released, vendored and compiled into the Vite+ native binding, as Rolldown is
+- Upstream: [oxc-node](https://github.com/oxc-project/oxc-node) at the revision in [the upstream pins](../packages/tools/.upstream-versions.json), vendored and compiled into the Vite+ native binding, as Rolldown is
 - Prior art: [tsx](https://github.com/privatenumber/tsx) 4.23.15
 
 ## Summary
@@ -199,7 +199,7 @@ The `vpx` command restrictions below apply to CLI migrations, not that preload p
 
 oxc-node is vendored the way Rolldown is:
 
-- `packages/tools/.upstream-versions.json` pins `c0c33f8`, the commit from [oxc-node#885](https://github.com/oxc-project/oxc-node/pull/885) with worker loader isolation. The daily `upgrade-deps` workflow bumps it to the latest stable tag, but only to one that contains the pinned commit, so the pin stays until a release has those fixes.
+- `packages/tools/.upstream-versions.json` pins the commit from [oxc-node#885](https://github.com/oxc-project/oxc-node/pull/885) with worker loader isolation. The daily `upgrade-deps` workflow bumps it to the latest stable tag, but only to one that contains the pinned commit, so the pin stays until a release has those fixes.
 - `sync-remote` clones it into the gitignored `oxc-node/` and runs `packages/tools/src/patch-oxc-node.ts`. CI checks it out in the shared clone action and the security workflow and runs the script before any cargo command, because `Cargo.lock` records the rewritten manifest.
 - `patch-oxc-node.ts` only points oxc-node's `oxc` dependency at the workspace version, so the binding links one copy of oxc; the source is not patched.
 - The root `Cargo.toml` adds `oxc-node = { path = "./oxc-node", default-features = false, features = ["yarn_pnp"] }` and excludes `oxc-node/` from the workspace lints. `yarn_pnp` matches the `oxc_resolver` feature the workspace enables, which changes oxc-node's file system signature. Without its `napi` feature, oxc-node links as a plain library with no NAPI exports and no global allocator, so nothing collides with the `transform` export that `rolldown_binding` links.
