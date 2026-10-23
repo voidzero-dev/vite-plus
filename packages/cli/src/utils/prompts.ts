@@ -4,7 +4,7 @@ import { coerce, isGreaterThanOrEqual } from 'verkit';
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
-import { runCommandSilently } from './command.ts';
+import { getVpCommand, runCommandSilently } from './command.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
@@ -145,8 +145,7 @@ export async function runViteInstall(
   const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: process.env.VP_CLI_BIN ?? 'vp',
-    args: ['install', ...installArgs],
+    ...getVpCommand(['install', ...installArgs]),
     cwd,
     envs: process.env,
   });
@@ -191,8 +190,7 @@ export async function runViteFmt(
   spinner.start(`Formatting code...`);
 
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: options?.command ?? process.env.VP_CLI_BIN ?? 'vp',
-    args: [...(options?.commandArgs ?? []), 'fmt', ...(paths ?? [])],
+    ...getVpCommand([...(options?.commandArgs ?? []), 'fmt', ...(paths ?? [])], options?.command),
     cwd,
     envs: process.env,
   });

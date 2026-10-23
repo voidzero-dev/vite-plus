@@ -1,0 +1,14 @@
+{
+  "name": "migration-tsx",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/server.ts",
+    "seed": "cross-env NODE_ENV=development npx tsx scripts/seed.ts",
+    "bench": "node --import tsx ./scripts/bench.ts",
+    "start": "concurrently \"tsx watch src/server.ts\" \"vp dev\""
+  },
+  "devDependencies": {
+    "tsx": "file:.fixture/tsx",
+    "vite": "^7.0.0"
+  }
+}

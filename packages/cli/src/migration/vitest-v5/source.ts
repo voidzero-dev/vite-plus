@@ -380,6 +380,94 @@ function looksLikeConstructorMock(editor: SourceEditor, node: t.CallExpression):
   return false;
 }
 
+function unwrapTypeExpression(node: t.Node): t.Node {
+  while (
+    node.type === 'TSAsExpression' ||
+    node.type === 'TSSatisfiesExpression' ||
+    node.type === 'TSNonNullExpression' ||
+    node.type === 'TSTypeAssertion'
+  ) {
+    node = node.expression;
+  }
+  return node;
+}
+
+/** Recognize a local promise consumed by a later statement without crossing
+ * control flow or function boundaries. Ambiguous paths still need review. */
+function isAssertionBindingHandled(editor: SourceEditor, node: t.CallExpression): boolean {
+  let initializer: t.Node = node;
+  let declarator = editor.parent(initializer);
+  while (declarator && unwrapTypeExpression(declarator) === node) {
+    initializer = declarator;
+    declarator = editor.parent(initializer);
+  }
+  if (
+    declarator?.type !== 'VariableDeclarator' ||
+    declarator.init !== initializer ||
+    declarator.id.type !== 'Identifier'
+  ) {
+    return false;
+  }
+  const binding = editor.binding(declarator.id);
+  const declaration = editor.parent(declarator);
+  const block = declaration && editor.parent(declaration);
+  const fn = editor.functionParent(node);
+  if (
+    !binding?.constant ||
+    declaration?.type !== 'VariableDeclaration' ||
+    declaration.kind !== 'const' ||
+    block?.type !== 'BlockStatement' ||
+    !fn ||
+    fn.generator
+  ) {
+    return false;
+  }
+  // A catch can swallow an error before the consumer, and a finally can replace
+  // a returned promise. Keep these paths for review rather than assuming calls
+  // and initializers between the declaration and consumer cannot throw.
+  for (
+    let ancestor = editor.parent(block);
+    ancestor && ancestor !== fn;
+    ancestor = editor.parent(ancestor)
+  ) {
+    if (ancestor.type === 'TryStatement') {
+      return false;
+    }
+  }
+  for (const statement of block.body.slice(block.body.indexOf(declaration) + 1)) {
+    switch (statement.type) {
+      case 'ReturnStatement': {
+        if (!statement.argument) {
+          return false;
+        }
+        let expression = unwrapTypeExpression(statement.argument);
+        if (expression.type === 'AwaitExpression') {
+          expression = unwrapTypeExpression(expression.argument);
+        }
+        return editor.binding(expression) === binding;
+      }
+      case 'ExpressionStatement': {
+        const expression = unwrapTypeExpression(statement.expression);
+        if (
+          expression.type === 'AwaitExpression' &&
+          editor.binding(unwrapTypeExpression(expression.argument)) === binding
+        ) {
+          return true;
+        }
+        break;
+      }
+      case 'VariableDeclaration':
+      case 'FunctionDeclaration':
+      case 'EmptyStatement':
+        break;
+      default:
+        // Keep intervening branches, loops, and try blocks for manual review.
+        return false;
+    }
+  }
+  return false;
+}
+
 function chain(
   node: t.Node,
   isApi: (node: t.Node) => boolean,
@@ -849,7 +937,8 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
           asynchronous &&
           parent?.type !== 'MemberExpression' &&
           parent?.type !== 'AwaitExpression' &&
-          parent?.type !== 'ReturnStatement'
+          parent?.type !== 'ReturnStatement' &&
+          !isAssertionBindingHandled(editor, node)
         ) {
           editor.report(
             node,

@@ -24,7 +24,8 @@ vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   },
 }));
 
-vi.mock('../../utils/command.ts', () => ({
+vi.mock(import('../../utils/command.ts'), async (importOriginal) => ({
+  ...(await importOriginal()),
   runCommandSilently: vi.fn(),
 }));
 vi.mock('../../utils/prompts.ts', () => ({
@@ -62,6 +63,7 @@ describe('tsup migration', () => {
   let projectPath: string;
 
   beforeEach(() => {
+    vi.stubEnv('VP_CLI_BIN', undefined);
     projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-tsup-'));
     fs.writeFileSync(
       path.join(projectPath, 'package.json'),
@@ -80,6 +82,7 @@ describe('tsup migration', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(projectPath, { recursive: true, force: true });
     mockRunCommandSilently.mockReset();
     mockConfirm.mockReset();
@@ -96,7 +99,16 @@ describe('tsup migration', () => {
 
     expect(mockRunCommandSilently).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: ['dlx', 'tsdown-migrate@0.99.0', '--yes', '--package-manager', 'npm', '--no-install'],
+        command: process.execPath,
+        args: [
+          expect.any(String),
+          'dlx',
+          'tsdown-migrate@0.99.0',
+          '--yes',
+          '--package-manager',
+          'npm',
+          '--no-install',
+        ],
       }),
     );
   });

@@ -2,6 +2,7 @@ export * from './migrator/shared.ts';
 export * from './migrator/eslint.ts';
 export * from './migrator/prettier.ts';
 export * from './migrator/tsup.ts';
+export * from './migrator/tsx.ts';
 export * from './migrator/tsconfig.ts';
 export * from './migrator/framework-shim.ts';
 export * from './migrator/vitest-ecosystem.ts';

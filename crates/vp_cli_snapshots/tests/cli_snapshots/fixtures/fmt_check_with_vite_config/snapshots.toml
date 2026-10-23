@@ -1,6 +1,9 @@
 [[case]]
 name = "fmt_check_with_vite_config"
 vp = "local"
+comment = "src/valid.js follows the `singleQuote` / `semi: false` options from vite.config.ts, so it passes only when the config is read."
 steps = [
-  { argv = ["vp", "fmt", "--check"], comment = "Test that vp fmt --check uses vite.config.ts", continue-on-failure = true },
+  { argv = ["vp", "fmt", "--check"], comment = "Passes with the vite.config.ts fmt options" },
+  { argv = ["vpt", "rm", "vite.config.ts"], snapshot = false },
+  { argv = ["vp", "fmt", "--check"], comment = "Fails with the default options once the config is removed", continue-on-failure = true },
 ]
