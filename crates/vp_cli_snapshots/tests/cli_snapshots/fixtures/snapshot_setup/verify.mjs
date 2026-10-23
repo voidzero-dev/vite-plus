@@ -9,6 +9,7 @@ const referenceHome = path.resolve('reference-home');
 const reference = path.join(referenceHome, '.vite-plus');
 const windows = process.platform === 'win32';
 assert.equal(process.env.VP_SELF_SETUP_NO_MODIFY_PATH, undefined);
+assert.equal(process.env.VP_SKIP_DEPS_INSTALL, undefined);
 if (windows) {
   const result = spawnSync(
     'powershell.exe',
@@ -46,10 +47,14 @@ for (const name of Object.keys(env)) {
     delete env[name];
   }
 }
+// Match the runner's preparation overrides. Without VP_SKIP_DEPS_INSTALL,
+// setup looks up the platform package for the binary version on npm, which
+// does not exist until that version is released.
 Object.assign(env, {
   VP_HOME: reference,
   VP_CLI_TEST: '1',
   VP_SELF_SETUP_NO_MODIFY_PATH: '1',
+  VP_SKIP_DEPS_INSTALL: '1',
   HOME: referenceHome,
   USERPROFILE: referenceHome,
   PATH: windows
