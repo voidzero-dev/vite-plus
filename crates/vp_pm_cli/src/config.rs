@@ -91,6 +91,10 @@ impl NpmConfig {
         Self { values }
     }
 
+    pub(crate) fn set_registry(&mut self, registry: &str) {
+        self.values.insert("registry".to_string(), expand_value(registry));
+    }
+
     pub(crate) fn registry_for_package(&self, package: &str) -> String {
         let scope =
             package.strip_prefix('@').and_then(|rest| rest.split_once('/')).map(|(scope, _)| scope);

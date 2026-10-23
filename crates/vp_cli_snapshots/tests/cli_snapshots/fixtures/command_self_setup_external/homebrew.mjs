@@ -292,14 +292,21 @@ try {
   );
   console.log('User installations and cleanup stay independent.');
 
-  const override = environment('registry-override');
-  const config = path.join(override.HOME, '.npmrc');
-  fs.writeFileSync(
-    config,
-    fs.readFileSync(config, 'utf8').replace(`${url}/registry/`, 'http://127.0.0.1:1/unavailable/'),
-  );
-  override.NPM_CONFIG_REGISTRY = `${url}/registry/`;
-  await run(publicVp, ['--help'], override);
+  for (const [name, registry] of [
+    ['direct', `${url}/registry/`],
+    ['interpolated', '${TEST_REGISTRY}/registry/'],
+  ]) {
+    const override = environment(`${name}-registry-override`);
+    const config = path.join(override.HOME, '.npmrc');
+    fs.writeFileSync(
+      config,
+      fs
+        .readFileSync(config, 'utf8')
+        .replace(`${url}/registry/`, 'http://127.0.0.1:1/unavailable/'),
+    );
+    override.NPM_CONFIG_REGISTRY = registry;
+    await run(publicVp, ['--help'], override);
+  }
 
   for (const [name, selector] of [
     ['relative', null],

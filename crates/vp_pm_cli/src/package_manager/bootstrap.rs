@@ -46,7 +46,7 @@ pub async fn bootstrap_pnpm(
 
     let mut config = NpmConfig::load();
     if let Some(registry) = registry {
-        config.values.insert("registry".to_string(), registry.to_string());
+        config.set_registry(registry);
     }
     let metadata: Metadata = HttpClient::with_npm_config(3, 500, config.clone())
         .get_json(&config.package_version_url("pnpm", version))
