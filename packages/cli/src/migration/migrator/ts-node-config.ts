@@ -230,6 +230,12 @@ export function prepareTsNodeRun(
         ? originalOption.replaceAll('_', '-')
         : originalOption;
     const inline = equals < 0 ? undefined : value.slice(equals + 1);
+    if (context.publicRegister && name === '--run') {
+      return {
+        keepReason:
+          'vp migrate cannot check the ts-node settings of a package script run by Node.js',
+      };
+    }
     if (
       context.publicRegister &&
       (name === '--eval' ||
