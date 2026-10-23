@@ -26,7 +26,7 @@ use crate::{
             package_metadata::{PackageMetadata, is_legacy_install_id, is_nested_install_id},
         },
         global::{
-            LEGACY_PACKAGE_MANAGER_PACKAGES, is_local_package_spec, parse_package_spec,
+            LEGACY_PACKAGE_MANAGER_PACKAGES, bin_lock, is_local_package_spec, parse_package_spec,
             update_version_spec,
         },
     },
@@ -274,7 +274,6 @@ pub async fn install(
     progress.finish_and_clear();
 
     // 5. Finalize installed packages.
-    let mut bin_owners = HashMap::<String, String>::new();
     for (index, (package_name, Package { spec, install })) in packages.into_iter().enumerate() {
         let lock_file = install_locks.remove(&package_name);
         let Some(InstalledPackage {
@@ -286,6 +285,18 @@ pub async fn install(
         }) = install
         else {
             continue;
+        };
+
+        // Re-read ownership under the shared lock and hold it through rollback and cleanup.
+        let activation_lock = match bin_lock::acquire().await {
+            Ok(lock) => lock,
+            Err(error) => {
+                let _ = cleanup_failed_install(&install_dir).await;
+                if first_error.is_none() {
+                    first_error = Some(package_error(&package_name, error));
+                }
+                continue;
+            }
         };
 
         // Load previous metadata once for stale-bin detection below.
@@ -337,13 +348,6 @@ pub async fn install(
 
         // 5.1 Detect binary ownership conflicts before writing metadata.
         for bin_name in &bin_names {
-            if let Some(owner) = bin_owners.get(bin_name)
-                && owner != &package_name
-            {
-                conflicts.push((bin_name.clone(), owner.clone()));
-                continue;
-            }
-
             match BinConfig::load(bin_name).await {
                 Ok(Some(config)) => {
                     if config.package != package_name {
@@ -376,7 +380,7 @@ pub async fn install(
                         "Uninstalling {} (conflicts with {})...",
                         pkg, package_name
                     ));
-                    if let Err(error) = Box::pin(uninstall(&pkg, false)).await {
+                    if let Err(error) = uninstall_locked(&pkg, false).await {
                         let _ = cleanup_failed_install(&install_dir).await;
                         if first_error.is_none() {
                             first_error = Some(package_error(&package_name, error));
@@ -484,13 +488,10 @@ pub async fn install(
             continue;
         }
 
-        for bin_name in &bin_names {
-            bin_owners.insert(bin_name.clone(), package_name.clone());
-        }
-
         // 5.6 Remove stale installations for this package.
         cleanup_stale_installations(&package_name, &install_id).await;
         drop(lock_file);
+        drop(activation_lock);
 
         // 5.7 Print success message
         output::raw(&format!(
@@ -1071,6 +1072,12 @@ async fn stale_bin_names_for_package(
 /// 1. Try to use PackageMetadata for binary list
 /// 2. Fallback to scanning BinConfig files for orphaned binaries
 pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
+    let _lock = bin_lock::acquire().await?;
+    uninstall_locked(package_name, dry_run).await
+}
+
+// Called directly by forced activation, which already holds the global bin lock.
+async fn uninstall_locked(package_name: &str, dry_run: bool) -> Result<(), Error> {
     if is_local_package_spec(package_name) {
         // We can't resolve local packages for uninstall, follow npm's behavior
         return Err(Error::Other(
@@ -1400,6 +1407,110 @@ mod tests {
         let trampoline = dir.join("vp-shim.exe");
         std::fs::write(&trampoline, b"fake-trampoline").unwrap();
         trampoline
+    }
+
+    #[tokio::test]
+    async fn test_uninstall_waits_for_global_activation() {
+        let temp = tempfile::tempdir().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp.path())], |_| async {
+            let metadata = PackageMetadata::new(
+                "test-package".into(),
+                "1.0.0".into(),
+                "22.18.0".into(),
+                None,
+                vec![],
+                HashSet::new(),
+                "npm".into(),
+            );
+            metadata.save().await.unwrap();
+            let bin_dir = get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let lock = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(bin_dir.join(".vp-global-bin.lock"))
+                .unwrap();
+            lock.lock().unwrap();
+
+            let removal = uninstall("test-package", false);
+            tokio::pin!(removal);
+            assert!(tokio::time::timeout(Duration::from_millis(150), &mut removal).await.is_err());
+            assert!(PackageMetadata::load("test-package").await.unwrap().is_some());
+            drop(lock);
+            tokio::time::timeout(Duration::from_secs(5), removal).await.unwrap().unwrap();
+            assert!(PackageMetadata::load("test-package").await.unwrap().is_none());
+        })
+        .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_concurrent_installs_prepare_outside_lock_and_keep_active_installation() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp.path())], |env| async move {
+            // A local npm stand-in exercises activation without downloads or lifecycle scripts.
+            let node_bin = env.dirs.data.join("js_runtime/node/22.18.0/bin");
+            std::fs::create_dir_all(&node_bin).unwrap();
+            std::fs::write(node_bin.join("node"), b"").unwrap();
+            let npm = node_bin.join("npm");
+            std::fs::write(&npm, r#"#!/bin/sh
+set -eu
+package="$npm_config_prefix/lib/node_modules/test-package"
+mkdir -p "$package"
+printf '%s' '{"name":"test-package","version":"1.0.0","bin":{"test-cli":"cli"}}' > "$package/package.json"
+printf '#!/bin/sh\nprintf working' > "$package/cli"
+touch "$npm_config_prefix/prepared"
+"#).unwrap();
+            std::fs::set_permissions(&npm, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+            let lock = bin_lock::acquire().await.unwrap();
+            let specs = vec!["test-package".to_string()];
+            let options = || InstallOptions {
+                node_version: Some("22.18.0"),
+                force: false,
+                ignore_scripts: true,
+                concurrency: 5,
+                update: false,
+            };
+            let mut installs = Box::pin(async {
+                tokio::join!(install(&specs, options()), install(&specs, options()))
+            });
+            let package_dir = PackageMetadata::installation_dir_for("test-package", "").unwrap();
+            let prepared = async {
+                loop {
+                    let count = std::fs::read_dir(&package_dir).into_iter().flatten().flatten()
+                        .filter(|entry| entry.path().join("prepared").exists()).count();
+                    if count == 2 {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            };
+            tokio::select! {
+                _ = &mut installs => panic!("installation finished while activation was locked"),
+                result = tokio::time::timeout(Duration::from_secs(10), prepared) => result.unwrap(),
+            }
+            assert!(tokio::time::timeout(Duration::from_millis(150), &mut installs).await.is_err());
+            assert!(PackageMetadata::load("test-package").await.unwrap().is_none());
+            drop(lock);
+            let (first, second) = tokio::time::timeout(Duration::from_secs(10), installs).await.unwrap();
+            first.unwrap();
+            second.unwrap();
+            let active = PackageMetadata::load("test-package").await.unwrap().unwrap();
+            let installation = active.installation_dir().unwrap();
+            let binary = get_node_modules_dir(&installation, "test-package").join("cli");
+            let output = Command::new(binary.as_path()).output().await.unwrap();
+            assert!(output.status.success());
+            assert_eq!(output.stdout, b"working");
+            let installations: Vec<_> = std::fs::read_dir(&package_dir).unwrap()
+                .map(Result::unwrap).filter(|entry| entry.file_type().unwrap().is_dir()).collect();
+            assert_eq!(installations.len(), 1);
+            assert_eq!(installations[0].path(), installation.as_path());
+        }).await;
     }
 
     #[test]
