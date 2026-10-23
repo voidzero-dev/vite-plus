@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   log: { info: vi.fn(), success: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('../../utils/command.ts', () => ({
+vi.mock(import('../../utils/command.ts'), async (importOriginal) => ({
+  ...(await importOriginal()),
   runCommandSilently: vi.fn(),
 }));
 
@@ -27,11 +28,13 @@ describe('Prettier migration', () => {
   };
 
   beforeEach(() => {
+    vi.stubEnv('VP_CLI_BIN', undefined);
     projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-prettier-'));
     fs.writeFileSync(path.join(projectPath, 'package.json'), JSON.stringify(packageJson));
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(projectPath, { recursive: true, force: true });
     mockRunCommandSilently.mockReset();
   });
@@ -56,7 +59,10 @@ describe('Prettier migration', () => {
     ).resolves.toBe('skipped');
 
     expect(mockRunCommandSilently).toHaveBeenCalledWith(
-      expect.objectContaining({ args: ['fmt', '--migrate=prettier'], cwd: projectPath }),
+      expect.objectContaining({
+        args: [expect.any(String), 'fmt', '--migrate=prettier'],
+        cwd: projectPath,
+      }),
     );
     expect(fs.readFileSync(path.join(projectPath, configFile), 'utf8')).toBe(config);
     expect(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8')).toBe(
