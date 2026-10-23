@@ -1061,28 +1061,12 @@ jobs:
             "$snapshot_shell" --version
           done
 
-      # Temporary workaround for setup-nu release discovery failures.
-      # Switch back to hustcer/setup-nu, with a pinned Nu version, once an action
-      # release includes https://github.com/hustcer/setup-nu/pull/225.
+      # Includes release lookup retries: https://github.com/hustcer/setup-nu/pull/225.
       - name: Install Nushell
-        env:
-          NU_VERSION: '0.116.1'
-          NU_TARGET: ${{ matrix.target }}
-        run: |
-          # Download a fixed release without querying the GitHub releases API.
-          nu_dir="$RUNNER_TEMP/nushell"
-          archive="nu-$NU_VERSION-$NU_TARGET.tar.gz"
-          release_url="https://github.com/nushell/nushell/releases/download/$NU_VERSION"
-          mkdir -p "$nu_dir"
-          cd "$nu_dir"
-          curl --fail --location --retry 3 --retry-all-errors \
-            "$release_url/$archive" --output "$archive"
-          curl --fail --location --retry 3 --retry-all-errors \
-            "$release_url/SHA256SUMS" --output SHA256SUMS
-          grep --fixed-strings "  $archive" SHA256SUMS | shasum --algorithm 256 --check
-          tar -xzf "$archive" --strip-components=1
-          "$nu_dir/nu" --version
-          echo "$nu_dir" >> "$GITHUB_PATH"
+        uses: hustcer/setup-nu@eacad52a4634c4f8d17a94916f93be6856861b9c # v3.29
+        with:
+          # renovate: datasource=github-releases depName=nushell/nushell
+          version: '0.116.1'
 
       - uses: ./.github/actions/setup-ci-node
 
