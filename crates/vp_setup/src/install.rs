@@ -743,8 +743,8 @@ mod tests {
                             };
                             for name in ["npm_config_userconfig", "NPM_CONFIG_USERCONFIG"] {
                                 assert_eq!(
-                                    command_env(name),
-                                    Some(expected.as_os_str()),
+                                    command_env(name).map(std::path::Path::new),
+                                    Some(expected.as_path()),
                                     "{variable}={selector}"
                                 );
                             }
