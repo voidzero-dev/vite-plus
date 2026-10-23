@@ -228,6 +228,10 @@ JSX that depends on a compiler plugin is not supported. `vpx` compiles JSX only 
 - **`node --import tsx`**: replace it with [`node --import vite-plus/register`](#using-nodejs-directly), including in tool settings and `NODE_OPTIONS`.
 - **Other loaders**: replace `--import tsx` with `--import vite-plus/register`. Registering both TypeScript loaders makes them compete for the same files.
 
+### Coming from oxnode
+
+`vp migrate` can replace `oxnode <file>` with `vpx <file>` and `oxnode watch <file>` with `vpx --watch <file>`. Both use oxc-node's transformer and watcher. Node.js commands and literal `NODE_OPTIONS` assignments that load `@oxc-node/core/register` use `vite-plus/register` instead. Migration removes the standalone development dependencies only when no remaining commands or imports need them. See [oxnode to `vpx`](/guide/migrate-rules#oxnode-to-vpx).
+
 ## `vp exec`
 
 Use `vp exec` to run tools already installed in your project or available in your environment.
