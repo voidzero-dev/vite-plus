@@ -1,0 +1,13 @@
+{
+  "name": "migration-ts-node",
+  "type": "module",
+  "scripts": {
+    "seed": "ts-node --transpileOnly ./scripts/seed.ts",
+    "loader": "node --loader ts-node/esm/transpile-only ./scripts/seed.ts"
+  },
+  "devDependencies": {
+    "ts-node": "file:.fixture/ts-node",
+    "typescript": "file:.fixture/typescript",
+    "vite": "^7.0.0"
+  }
+}
