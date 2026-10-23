@@ -252,6 +252,17 @@ describe('ts-node migration', () => {
     }
   });
 
+  it.each([
+    'node -r ts-node/register/transpile-only scripts/a.ts',
+    'NODE_OPTIONS="--require ts-node/register/transpile-only" node scripts/a.ts',
+  ])('retains %s when the public preload would discover a new entrypoint config', (command) => {
+    write('scripts/tsconfig.json', { compilerOptions: { useDefineForClassFields: true } });
+    expect(rewriteTsNodeCommand(command, root)).toEqual({
+      command,
+      kept: [expect.stringContaining('an entrypoint tsconfig that ts-node does not use')],
+    });
+  });
+
   it('removes ts-node when all Node.js loader and NODE_OPTIONS uses migrate', () => {
     write('package.json', {
       scripts: {
