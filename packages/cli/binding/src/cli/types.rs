@@ -118,7 +118,7 @@ pub struct ToolchainArgs {
     pub json: bool,
 
     /// Use the global Vite+ toolchain
-    #[arg(long)]
+    #[arg(short = 'g', long)]
     pub global: bool,
 }
 

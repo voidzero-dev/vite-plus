@@ -220,7 +220,7 @@ pub enum Commands {
         json: bool,
 
         /// Use the global Vite+ toolchain
-        #[arg(long)]
+        #[arg(short = 'g', long)]
         global: bool,
     },
 
@@ -1342,6 +1342,20 @@ mod tests {
     fn raw_subcommand_is_none_without_a_subcommand() {
         assert_eq!(raw_subcommand(&argv(&["vp"])), None);
         assert_eq!(raw_subcommand(&argv(&["vp", "--version"])), None);
+    }
+
+    #[test]
+    fn parses_toolchain_global_flags() {
+        for flag in ["--global", "-g"] {
+            let parsed = try_parse_args_from(argv(&["vp", "toolchain", "vite", "--json", flag]))
+                .expect("toolchain global flag should parse");
+            let Some(Commands::Toolchain { tools, json, global }) = parsed.command else {
+                panic!("expected toolchain command");
+            };
+            assert_eq!(tools, vec!["vite"]);
+            assert!(json);
+            assert!(global);
+        }
     }
 
     #[test]

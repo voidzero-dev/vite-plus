@@ -243,7 +243,10 @@ preference inference or an empty installation must create a separate home, as th
 `shim_package_manager_setup` fixture does.
 The preparation command sets `VP_SELF_SETUP_NO_MODIFY_PATH=1` so Windows
 self-setup does not add temporary case homes to the user's persistent `PATH`.
-This override applies only to runner preparation, not to fixture commands.
+It also sets `VP_SKIP_DEPS_INSTALL=1`: the case home already has the checkout
+package, and setup would otherwise look up the build's version on npm, which
+is unpublished on a release branch.
+These overrides apply only to runner preparation, not to fixture commands.
 
 A step is a bare argv array or a table:
 

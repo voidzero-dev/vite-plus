@@ -1,6 +1,6 @@
 # migration_eslint_rerun_dual_config
 
-## `vp migrate --no-interactive`
+## `vp migrate --full --no-interactive`
 
 should detect vite-plus + eslint and auto-migrate eslint
 
@@ -12,8 +12,9 @@ VITE+ - The Unified Toolchain for the Web
 • Dependencies:
     vite-plus  latest → <version>
     vite              → <version>
+• 5 config updates applied
+• ESLint rules migrated to Oxlint
 • Package manager settings configured
-• Skipped editor, hooks, and lint setup. Run `vp migrate --full` to apply them.
 ```
 
 ## `vpt print-file package.json`
@@ -24,10 +25,10 @@ check eslint removed and scripts rewritten
 {
   "name": "migration-eslint-rerun-dual-config",
   "scripts": {
-    "lint": "eslint ."
+    "lint": "vp lint .",
+    "prepare": "vp config"
   },
   "devDependencies": {
-    "eslint": "^9.0.0",
     "vite-plus": "catalog:"
   }
 }
@@ -37,31 +38,55 @@ check eslint removed and scripts rewritten
 
 check flat config is removed
 
-**Exit code:** 1
-
 ```
-eslint.config.mjs: file
-stat-file assertion failed
+eslint.config.mjs: missing
 ```
 
 ## `vpt stat-file .eslintrc --assert-not file`
 
 check legacy config is also removed
 
-**Exit code:** 1
-
 ```
-.eslintrc: file
-stat-file assertion failed
+.eslintrc: missing
 ```
 
 ## `vpt print-file vite.config.ts`
 
 check oxlint config merged into vite.config.ts
 
-**Exit code:** 1
-
 ```
-vite.config.ts: not found
-missing file
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
+  lint: {
+    "plugins": [
+      "oxc",
+      "typescript",
+      "unicorn"
+    ],
+    "categories": {
+      "correctness": "warn"
+    },
+    "env": {
+      "builtin": true
+    },
+    "rules": {
+      "no-unused-vars": "error",
+      "vite-plus/prefer-vite-plus-imports": "error"
+    },
+    "options": {
+      "typeAware": true,
+      "typeCheck": true
+    },
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ]
+  },
+});
 ```
