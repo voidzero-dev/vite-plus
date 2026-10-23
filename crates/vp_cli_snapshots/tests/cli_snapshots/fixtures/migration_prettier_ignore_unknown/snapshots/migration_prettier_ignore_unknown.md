@@ -50,6 +50,8 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
+packages:
+  - .
 ```
 
 ## `vpt stat-file .prettierrc.json --assert-not file`

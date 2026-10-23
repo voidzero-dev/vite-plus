@@ -11,18 +11,21 @@ verify next command suggests vp run
 → Next: cd vite-plus-library && vp run
 ```
 
-## `vpt grep-file vite-plus-library/pnpm-workspace.yaml packages:`
-
-standalone library workspace declares its root package
-
-```
-vite-plus-library/pnpm-workspace.yaml: found "packages:"
-```
-
-## `vpt grep-file vite-plus-library/pnpm-workspace.yaml '  - .'`
+## `vpt print-file vite-plus-library/pnpm-workspace.yaml`
 
 standalone library workspace includes the root package
 
 ```
-vite-plus-library/pnpm-workspace.yaml: found "  - ."
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@<version>
+  vite-plus: <version>
+overrides:
+  vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
+packages:
+  - .
 ```
