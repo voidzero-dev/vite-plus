@@ -347,6 +347,22 @@ describe('prepareTsNodeRun', () => {
     ).toEqual({ edits: [] });
   });
 
+  it('retains a public preload that would discover a new config from the real entrypoint', () => {
+    config({ compilerOptions: { useDefineForClassFields: true } }, 'scripts/tsconfig.json');
+    fs.symlinkSync(path.join(cwd, 'scripts/a.ts'), path.join(cwd, 'linked.ts'));
+    for (const entry of ['scripts/a.ts', 'linked.ts']) {
+      expect(
+        prepareTsNodeRun(['-r', 'ts-node/register/transpile-only', entry], {
+          cwd,
+          environment: [],
+          executable: 'node',
+          nodeLoader: true,
+          publicRegister: true,
+        }).keepReason,
+      ).toContain('an entrypoint tsconfig that ts-node does not use');
+    }
+  });
+
   it.each(['VP_SCRIPT_TSCONFIG', 'TSX_TSCONFIG_PATH', 'OXC_TSCONFIG_PATH'])(
     'retains %s because the public preload gives it different precedence',
     (name) => {
