@@ -1,0 +1,50 @@
+[[case]]
+name = "script_import_node22_async"
+vp = ["local", "global"]
+env = { EXPECTED_NODE_VERSION = "22.18.0" }
+comment = "The public installed package preload works without tsx on the asynchronous hook path."
+steps = [
+  ["node", "verify.mjs"],
+  { argv = ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"], comment = "The CLI's existing flags and the public entry share one registration" },
+]
+
+[[case]]
+name = "script_import_node22_sync"
+vp = "global"
+env = { VP_NODE_VERSION = "22.23.2", EXPECTED_NODE_VERSION = "22.23.2" }
+comment = "The complete preload contract also runs on Node.js 22 synchronous hooks."
+steps = [["node", "verify.mjs"], ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"]]
+
+[[case]]
+name = "script_import_node24_async"
+vp = "global"
+env = { VP_NODE_VERSION = "24.11.0", EXPECTED_NODE_VERSION = "24.11.0" }
+comment = "The earliest supported Node.js 24 also uses asynchronous hooks, including workers with independent configs."
+steps = [["node", "verify.mjs"], ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"]]
+
+[[case]]
+name = "script_import_node24_sync"
+vp = "global"
+env = { VP_NODE_VERSION = "24.12.0", EXPECTED_NODE_VERSION = "24.12.0" }
+comment = "The complete preload contract runs on Node.js 24 synchronous hooks."
+steps = [["node", "verify.mjs"], ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"]]
+
+[[case]]
+name = "script_import_node26_sync"
+vp = "global"
+env = { VP_NODE_VERSION = "26.5.0", EXPECTED_NODE_VERSION = "26.5.0" }
+comment = "The complete preload contract runs on Node.js 26 synchronous hooks."
+steps = [["node", "verify.mjs"], ["vpx", "--import=vite-plus/register", "./src/dedup.mjs"]]
+
+[[case]]
+name = "script_import_native_watch"
+vp = "global"
+comment = "A public preload preserves Node.js native watch mode."
+steps = [["node", "verify-watch.mjs"]]
+
+[[case]]
+name = "script_import_unsupported_node"
+vp = "global"
+env = { VP_NODE_VERSION = "20.19.0" }
+comment = "Unsupported Node.js reaches the version diagnostic before loading native code."
+steps = [["node", "verify-unsupported.mjs"]]
