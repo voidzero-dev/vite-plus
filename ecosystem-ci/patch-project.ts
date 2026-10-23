@@ -274,14 +274,8 @@ const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.fo
 // runner+provider pair, exactly as a user who followed the guard's advice would.
 const vitestOverrides = {
   vitest: VITEST_VERSION,
-  // This fixture has no coverage provider. Forcing beta coverage peers makes
-  // npm loop while resolving optional peers of stable Vitest, until it OOMs.
-  ...(project === 'vite-plus-jest-dom-repro'
-    ? {}
-    : {
-        '@vitest/coverage-v8': VITEST_VERSION,
-        '@vitest/coverage-istanbul': VITEST_VERSION,
-      }),
+  '@vitest/coverage-v8': VITEST_VERSION,
+  '@vitest/coverage-istanbul': VITEST_VERSION,
 };
 
 // E2E intentionally installs just-published toolchain packages (e.g.
