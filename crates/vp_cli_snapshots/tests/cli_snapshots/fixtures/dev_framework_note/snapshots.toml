@@ -1,0 +1,112 @@
+[[case]]
+name = "dev_framework_note"
+vp = ["local", "global"]
+comment = "Framework dependencies without a dev script or task get a hint. Vite still starts."
+steps = [
+  # Copy before Vite creates a dependency cache tied to the original directory.
+  { argv = ["vpt", "cp", "-r", "app", "app with spaces"], snapshot = false },
+  { argv = ["vp", "dev"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "-C", "app", "dev"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "dev"], cwd = "default-package", comment = "The hint uses the resolved defaultPackage, which depends on Nuxt, not the caller's Astro dependency.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "-C", "app with spaces", "dev"], comment = "The directory instruction identifies paths with spaces without requiring shell-specific quoting.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "dev_framework_note_vitepress"
+vp = ["local", "global"]
+comment = "VitePress hints use the detected documentation root and are suppressed for Vite apps."
+steps = [
+  { argv = ["vp", "-C", "site", "dev"], comment = "Documentation under docs/ needs a root argument.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "cp", "-r", "site/docs/.vitepress", "site/.vitepress"], snapshot = false },
+  { argv = ["vp", "-C", "site", "dev"], comment = "Configuration at the package root takes precedence.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "write-file", "site/index.html", "<div id='app'></div>"], snapshot = false },
+  { argv = ["vp", "-C", "site", "dev"], comment = "A Vite app with a documentation dependency gets no framework hint.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "dev_framework_note_picker"
+vp = ["local", "global"]
+comment = "The hint identifies the package selected in the workspace picker."
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - app\n  - plain\n"], snapshot = false },
+  { argv = ["vp", "dev"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write" = "nuxt-app" },
+    { "expect-milestone" = "package-select:nuxt-app:0" },
+    { "write-key" = "enter" },
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "dev_framework_note_tasks"
+vp = ["local", "global"]
+comment = "Configured dev tasks suppress the raw framework command hint, including tasks from dynamic config. Other tasks do not suppress it."
+steps = [
+  { argv = ["vpt", "write-file", "app/vite.config.ts", "import base from '../vite.config.ts';\nexport default { ...base, clearScreen: false, run: { tasks: { dev: { command: 'nuxt dev --host' } } } };\n"], snapshot = false },
+  { argv = ["vp", "-C", "app", "dev"], comment = "A static dev task must not get a suggestion to bypass its command options.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "write-file", "app/vite.config.ts", "import base from '../vite.config.ts';\nconst tasks = { dev: { command: 'nuxt dev --host' } };\nexport default { ...base, clearScreen: false, run: { tasks } };\n"], snapshot = false },
+  { argv = ["vp", "-C", "app", "dev"], comment = "A dev task that needs runtime config resolution also suppresses the hint.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "write-file", "app/vite.config.ts", "import base from '../vite.config.ts';\nexport default { ...base, clearScreen: false, run: { tasks: { build: { command: 'nuxt build' } } } };\n"], snapshot = false },
+  { argv = ["vp", "-C", "app", "dev"], comment = "A build task does not suppress the dev hint.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "dev_framework_note_suppression"
+vp = ["local", "global"]
+comment = "Explicit Vite arguments, script execution, and packages without a direct framework dependency get no framework hint."
+steps = [
+  { argv = ["vp", "dev", "--host", "127.0.0.1"], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "dev"], envs = [["VP_RUN", "1"]], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "dev"], envs = [["npm_lifecycle_event", "start"]], interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "dev"], cwd = "plain", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vpt", "write-file", "package.json", '{"name":"framework-note","type":"module","dependencies":{"astro":"*"},"scripts":{"dev":"astro dev"}}'], snapshot = false },
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "export default {", "export default { clearScreen: false,"], snapshot = false },
+  { argv = ["vp", "dev"], comment = "An existing dev script gets only the existing vpr note.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
