@@ -13,6 +13,50 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+export type LockfileReader = <T>(file: string, parse: (source: string) => T) => T | undefined;
+
+/** Create one reader per preflight, with a single parser for each lockfile path. */
+export function createLockfileReader(): LockfileReader {
+  const locks = new Map<string, unknown>();
+  return <T>(file: string, parse: (source: string) => T): T | undefined => {
+    if (!locks.has(file)) {
+      // Cache failed reads and parses too, until the next preflight.
+      locks.set(file, undefined);
+      try {
+        locks.set(file, parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')));
+      } catch {
+        // Missing or malformed locks are not evidence of a runner version.
+      }
+    }
+    return locks.get(file) as T | undefined;
+  };
+}
+
+function parseYarnLockfile(text: string) {
+  if (/^__metadata:/m.test(text)) {
+    const document = parseDocument(text);
+    if (document.errors.length) {
+      return undefined;
+    }
+    return { modern: true as const, entries: record(document.toJS()) ?? {} };
+  }
+  // Classic's quoted descriptor lists are YAML flow scalars, but its entry
+  // bodies are not YAML. Read only the exact descriptor and version field.
+  const entries: { keys: unknown[]; version: string | undefined }[] = [];
+  for (const block of text.split(/\r?\n(?=[^\s#])/)) {
+    const [header] = block.split(/\r?\n/);
+    if (!header.endsWith(':')) {
+      continue;
+    }
+    const document = parseDocument(`[${header.slice(0, -1)}]`);
+    const keys: unknown = document.errors.length ? undefined : document.toJS();
+    if (Array.isArray(keys)) {
+      entries.push({ keys, version: /^  version "([^"]+)"\r?$/m.exec(block)?.[1] });
+    }
+  }
+  return { modern: false as const, entries };
+}
+
 function declaredVitest(pkg: unknown): unknown {
   const manifest = record(pkg);
   for (const field of [
@@ -37,6 +81,7 @@ export function lockedVitestVersion(
   directory: string,
   manager: PackageManager,
   spec: string,
+  readLockfile: LockfileReader,
 ): string | undefined {
   const range = spec.replace(/^npm:vitest@/, '');
   const validRange = normalizeRange(range);
@@ -52,18 +97,18 @@ export function lockedVitestVersion(
       : undefined;
   }
   const relative = path.relative(root, directory).replaceAll('\\', '/');
-  const read = (name: string) =>
-    fs.readFileSync(path.join(root, name), 'utf8').replace(/^\uFEFF/, '');
   try {
     if (manager === PackageManager.npm) {
-      const lock = JSON.parse(
-        read(
+      const lock = readLockfile(
+        path.join(
+          root,
           fs.existsSync(path.join(root, 'npm-shrinkwrap.json'))
             ? 'npm-shrinkwrap.json'
             : 'package-lock.json',
         ),
+        (source) => record(JSON.parse(source)),
       );
-      const packages = record(lock.packages);
+      const packages = record(lock?.packages);
       if (!packages) {
         // npm v1 locks have no importer specifiers to prove this direct edge.
         return undefined;
@@ -87,14 +132,13 @@ export function lockedVitestVersion(
       }
     }
     if (manager === PackageManager.yarn) {
-      const text = read('yarn.lock');
-      if (/^__metadata:/m.test(text)) {
-        const document = parseDocument(text);
-        if (document.errors.length) {
-          return undefined;
-        }
+      const lock = readLockfile(path.join(root, 'yarn.lock'), parseYarnLockfile);
+      if (!lock) {
+        return undefined;
+      }
+      if (lock.modern) {
         const descriptors = new Set([`vitest@${spec}`, `vitest@npm:${range}`]);
-        const entries = Object.entries(record(document.toJS()) ?? {}).filter(([keys]) =>
+        const entries = Object.entries(lock.entries).filter(([keys]) =>
           keys.split(/,\s+/).some((key) => descriptors.has(key)),
         );
         if (entries.length !== 1) {
@@ -105,18 +149,9 @@ export function lockedVitestVersion(
           ? valid(entry.resolution.slice('vitest@npm:'.length))
           : undefined;
       }
-      // Classic's quoted descriptor lists are YAML flow scalars, but its entry
-      // bodies are not YAML. Read only the exact descriptor and version field.
       const matches: string[] = [];
-      for (const block of text.split(/\r?\n(?=[^\s#])/)) {
-        const [header] = block.split(/\r?\n/);
-        if (!header.endsWith(':')) {
-          continue;
-        }
-        const document = parseDocument(`[${header.slice(0, -1)}]`);
-        const keys: unknown = document.errors.length ? undefined : document.toJS();
-        if (Array.isArray(keys) && keys.includes(`vitest@${spec}`)) {
-          const version = /^  version "([^"]+)"\r?$/m.exec(block)?.[1];
+      for (const { keys, version } of lock.entries) {
+        if (keys.includes(`vitest@${spec}`)) {
           if (!version) {
             return undefined;
           }
@@ -126,9 +161,12 @@ export function lockedVitestVersion(
       return matches.length === 1 ? valid(matches[0]) : undefined;
     }
     if (manager === PackageManager.bun) {
-      const errors: ParseError[] = [];
-      const lock = record(parseJsonc(read('bun.lock'), errors, { allowTrailingComma: true }));
-      if (errors.length || declaredVitest(record(lock?.workspaces)?.[relative]) !== spec) {
+      const lock = readLockfile(path.join(root, 'bun.lock'), (source) => {
+        const errors: ParseError[] = [];
+        const parsed = record(parseJsonc(source, errors, { allowTrailingComma: true }));
+        return errors.length ? undefined : parsed;
+      });
+      if (declaredVitest(record(lock?.workspaces)?.[relative]) !== spec) {
         return undefined;
       }
       const packages = record(lock?.packages);
