@@ -224,19 +224,60 @@ function gitConfigLocalMissing(key: string): boolean {
   return spawnSync('git', ['config', '--local', '--get-all', key]).status === 1;
 }
 
+// `git config` exits with CONFIG_NO_LOCK (-1) when it cannot take `config.lock`.
+// https://github.com/git/git/blob/47fdf2208c5b94c8cc01c106b8f7c85efb91c926/config.h#L30-L31
+// Git 2.37+ keeps the low 8 bits on every platform, so -1 becomes 255. Older Git for
+// Windows can keep the full 32-bit value.
+// https://github.com/git/git/blob/47fdf2208c5b94c8cc01c106b8f7c85efb91c926/common-exit.c#L14-L20
+const GIT_CONFIG_LOCK_STATUSES: ReadonlySet<number | null> = new Set([255, 0xffffffff]);
+
+// Git 2.56+ retries the lock for `core.configLockTimeout` (1s by default) and older Git
+// does not retry. Turn off the Git retry so the wait below is the same on every version.
+// https://git-scm.com/docs/git-config#Documentation/git-config.txt-coreconfigLockTimeout
+const GIT_CONFIG_NO_LOCK_RETRY = ['-c', 'core.configLockTimeout=0'];
+
+// Doubling delays: a writer holds the lock for a few ms, so most runs finish after
+// the first wait. The total (1.55s) is close to Git's own 1s default.
+const GIT_CONFIG_LOCK_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
+
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Atomics/wait
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+// First runs in linked worktrees race for the shared lock. Every worktree writes
+// the same values, so wait and stop as soon as another run has applied ours.
+function writeGitConfig(
+  args: string[],
+  isApplied: () => boolean,
+): { status: number | null; stderr: string } {
+  const gitArgs = [...GIT_CONFIG_NO_LOCK_RETRY, ...args];
+  let result = spawnSync('git', gitArgs);
+  for (const delay of GIT_CONFIG_LOCK_RETRY_DELAYS_MS) {
+    if (!GIT_CONFIG_LOCK_STATUSES.has(result.status)) {
+      break;
+    }
+    sleepSync(delay);
+    if (isApplied()) {
+      return { status: 0, stderr: '' };
+    }
+    result = spawnSync('git', gitArgs);
+  }
+  return { status: result.status, stderr: result.stderr?.toString().trim() ?? '' };
+}
+
 function gitConfigSet(key: string, value: string): { ok: boolean; error?: string } {
   if (gitConfigLocalHas(key, value)) {
     return { ok: true };
   }
-  const result = spawnSync('git', ['config', '--local', key, value]);
+  const result = writeGitConfig(['config', '--local', key, value], () =>
+    gitConfigLocalHas(key, value),
+  );
   if (result.status == null) {
     return { ok: false, error: 'git command not found' };
   }
   if (result.status !== 0) {
-    return {
-      ok: false,
-      error: result.stderr?.toString().trim() || `failed to set ${key}`,
-    };
+    return { ok: false, error: result.stderr || `failed to set ${key}` };
   }
   return { ok: true };
 }
@@ -245,16 +286,15 @@ function gitConfigUnset(key: string): { ok: boolean; error?: string } {
   if (gitConfigLocalMissing(key)) {
     return { ok: true };
   }
-  const result = spawnSync('git', ['config', '--local', '--unset-all', key]);
+  const result = writeGitConfig(['config', '--local', '--unset-all', key], () =>
+    gitConfigLocalMissing(key),
+  );
   if (result.status == null) {
     return { ok: false, error: 'git command not found' };
   }
   // status 5 = key not found
   if (result.status !== 0 && result.status !== 5) {
-    return {
-      ok: false,
-      error: result.stderr?.toString().trim() || `failed to unset ${key}`,
-    };
+    return { ok: false, error: result.stderr || `failed to unset ${key}` };
   }
   return { ok: true };
 }
@@ -575,14 +615,9 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
     writeFileSync(internal(hook), HOOK_STUB_SCRIPT, { mode: 0o755 });
     chmodSync(internal(hook), 0o755);
   }
-  if (!gitConfigLocalHas('core.hooksPath', location.target)) {
-    const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', location.target]);
-    if (status == null) {
-      return { message: 'git command not found', isError: true };
-    }
-    if (status) {
-      return { message: '' + stderr, isError: true };
-    }
+  const storeHooksPath = gitConfigSet('core.hooksPath', location.target);
+  if (!storeHooksPath.ok) {
+    return { message: storeHooksPath.error || 'failed to set core.hooksPath', isError: true };
   }
 
   // Persist enabled state + directory for later enable/disable/status.
