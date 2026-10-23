@@ -17,6 +17,7 @@ import {
   SUPPORTED_GIT_HOOK_NAMES,
 } from '../../config/hooks.ts';
 import type { PackageManager, WorkspacePackage } from '../../types/index.ts';
+import { getVpCommand } from '../../utils/command.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
 import { findGitRoot } from '../../utils/git.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
@@ -460,10 +461,9 @@ export function installGitHooks(
     return true;
   }
 
-  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
-
   // Install git hooks via vp config (--no-agent to skip agent setup, handled by migration)
-  const configResult = spawn.sync(vpBin, ['config', '--no-agent'], {
+  const { command, args } = getVpCommand(['config', '--no-agent']);
+  const configResult = spawn.sync(command, args, {
     cwd: projectPath,
     stdio: 'pipe',
   });

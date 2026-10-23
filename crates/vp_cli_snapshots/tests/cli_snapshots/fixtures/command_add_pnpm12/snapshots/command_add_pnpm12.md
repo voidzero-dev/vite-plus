@@ -61,32 +61,13 @@ Usage: vp add <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 For more information, try '--help'.
 ```
 
-## `vp add testnpm2 -D -- --loglevel=verbose --verbose`
+## `vp add testnpm2 -D`
 
 should add package as dev dependencies
 
-**Exit code:** 2
-
-```
-error: unexpected argument '--loglevel' found
-
-  tip: to pass '--loglevel' as a value, use '-- --loglevel'
-
-Usage: pnpm add --save-dev <PACKAGE_NAMES>...
-
-For more information, try '--help'.
 ```
 
-*(skipped 1 step(s) to the next line boundary: step failed)*
-
-## `vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install`
-
-should add packages to dependencies
-
-```
-
-dependencies:
- test-vite-plus-install 1.0.0
+devDependencies:
  testnpm2 1.0.1
 
 Done in <duration> using pnpm <version>
@@ -99,9 +80,37 @@ Done in <duration> using pnpm <version>
   "name": "command-add-pnpm12",
   "version": "1.0.0",
   "packageManager": "pnpm@12.0.0-beta.0",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0",
+  "devDependencies": {
     "testnpm2": "^1.0.1"
+  }
+}
+```
+
+## `vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install`
+
+should add packages to dependencies
+
+```
+✓ Lockfile passes supply-chain policies (verified <duration> ago)
+
+dependencies:
+ test-vite-plus-install 1.0.0
+
+Done in <duration> using pnpm <version>
+```
+
+## `vpt print-file package.json`
+
+```
+{
+  "name": "command-add-pnpm12",
+  "version": "1.0.0",
+  "packageManager": "pnpm@12.0.0-beta.0",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
   }
 }
 ```
@@ -128,12 +137,12 @@ Done in <duration> using pnpm <version>
   "name": "command-add-pnpm12",
   "version": "1.0.0",
   "packageManager": "pnpm@12.0.0-beta.0",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
     "testnpm2": "^1.0.1"
   },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package": "1.0.0"
@@ -161,12 +170,12 @@ Done in <duration> using pnpm <version>
   "name": "command-add-pnpm12",
   "version": "1.0.0",
   "packageManager": "pnpm@12.0.0-beta.0",
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
     "testnpm2": "^1.0.1"
   },
-  "devDependencies": {
-    "test-vite-plus-package": "1.0.0"
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package": "1.0.0"
@@ -177,20 +186,39 @@ Done in <duration> using pnpm <version>
 }
 ```
 
-## `vp add test-vite-plus-package-optional -- --loglevel=warn`
+## `vp add is-number -- --save-exact`
 
-support pass through arguments
-
-**Exit code:** 2
+support pass through arguments: pnpm saves the exact version without `^`
 
 ```
-error: unexpected argument '--loglevel' found
+✓ Lockfile passes supply-chain policies (verified <duration> ago)
 
-  tip: to pass '--loglevel' as a value, use '-- --loglevel'
+dependencies:
+ is-number 7.0.0
 
-Usage: pnpm add [OPTIONS] <PACKAGE_NAMES>...
-
-For more information, try '--help'.
+Done in <duration> using pnpm <version>
 ```
 
-*(skipped 1 step(s) to the next line boundary: step failed)*
+## `vpt print-file package.json`
+
+```
+{
+  "name": "command-add-pnpm12",
+  "version": "1.0.0",
+  "packageManager": "pnpm@12.0.0-beta.0",
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "is-number": "7.0.0",
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "peerDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+```

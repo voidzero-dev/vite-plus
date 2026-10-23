@@ -13,6 +13,7 @@ import {
   packageOwnsOxlintApi,
   PLAYWRIGHT_PROVIDER,
   readPackageJsonIfExists,
+  RETENTION_SCAN_SKIP_DIRS,
   type DependencyBag,
 } from './shared.ts';
 
@@ -168,10 +169,6 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
   '.yarn',
 ]);
 
-// Built plugins can still load the original API after migration. Skip installed
-// source and VCS metadata; dependency peer contracts are checked separately.
-const OXLINT_RETENTION_SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn']);
-
 /**
  * Detect whether a package uses vitest's browser mode.
  *
@@ -196,13 +193,14 @@ const OXLINT_RETENTION_SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn
  * is a separate package that the migration scans on its own pass, so the root
  * package must not inherit a browser-mode signal from a sub-package.
  */
-function sourceTreeMatches(
+export function sourceTreeMatches(
   projectPath: string,
-  matchesContent: (content: string) => boolean,
+  matchesContent: (content: string, file: string) => boolean,
   options: {
     // Nested examples can resolve the root's dependency through source or
     // package imports/scripts, even when they are not workspace members.
     crossPackageBoundaries?: boolean;
+    extensions?: ReadonlySet<string>;
     includePackageReferences?: boolean;
     includeExtensionless?: boolean;
     matchesPackage?: (projectPath: string, pkg: DependencyBag) => boolean;
@@ -210,6 +208,7 @@ function sourceTreeMatches(
   } = {},
 ): boolean {
   const skipDirs = options.skipDirs ?? VITEST_SCAN_SKIP_DIRS;
+  const extensions = options.extensions ?? VITEST_SCAN_EXTENSIONS;
   function scanDir(dir: string, isRoot: boolean): boolean {
     let entries: fs.Dirent[];
     try {
@@ -238,7 +237,7 @@ function sourceTreeMatches(
       } else if (
         entry.isFile() &&
         !['.pnp.cjs', '.pnp.loader.mjs'].includes(entry.name) &&
-        (VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name)) ||
+        (extensions.has(path.extname(entry.name)) ||
           (options.includeExtensionless && path.extname(entry.name) === '') ||
           (options.includePackageReferences && entry.name === 'package.json'))
       ) {
@@ -256,7 +255,7 @@ function sourceTreeMatches(
             }
             content = JSON.stringify({ imports: pkg.imports, scripts: pkg.scripts });
           }
-          if (matchesContent(content)) {
+          if (matchesContent(content, entryPath)) {
             return true;
           }
         } catch {
@@ -377,7 +376,7 @@ export function sourceTreeReferencesOxlintPluginsPackage(
         retainUnknownPeers: originalDependencies.has(dir),
         originalDependencyNames: originalDependencies.get(dir),
       }),
-    skipDirs: OXLINT_RETENTION_SKIP_DIRS,
+    skipDirs: RETENTION_SCAN_SKIP_DIRS,
   });
 }
 
