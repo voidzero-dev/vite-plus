@@ -103,6 +103,38 @@ Scripts can use `vpx` as their interpreter. Make the file executable and keep it
 
 The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "vpx ./scripts/seed.ts"` works in `package.json` scripts without the global CLI. It runs them on the Node.js that started it, which inside `vp run` and package manager scripts is the project's version.
 
+### Node.js Preload
+
+If a tool starts Node.js itself, replace `--import=tsx` with `--import=vite-plus/register`:
+
+```bash
+node --import=vite-plus/register ./scripts/seed.ts
+node --import vite-plus/register --test ./test/example.test.ts
+NODE_OPTIONS='--import=vite-plus/register' node ./scripts/seed.ts
+```
+
+Install `vite-plus` in the project first. The preload resolves from the project and runs on the Node.js that started the command; it requires the same Node.js versions as Vite+. It provides the same TypeScript transforms, tsconfig resolution, and source maps as `vpx`.
+
+Tools with a Node.js argument setting can replace `["--import", "tsx"]` with `["--import", "vite-plus/register"]`. For example, an AVA configuration can use:
+
+```json
+{
+  "ava": {
+    "nodeArguments": ["--import=vite-plus/register"]
+  }
+}
+```
+
+Keep the tool's existing TypeScript file patterns and other settings. A JavaScript launcher can also run `await import('vite-plus/register')` before dynamically importing a TypeScript file. A static TypeScript import in that launcher is resolved before registration, so use `--import` for static imports.
+
+`fork()` and workers inherit the preload through Node.js arguments. `NODE_OPTIONS` also passes it to spawned Node.js processes. Replacing a child's arguments or environment follows Node.js's normal inheritance rules.
+
+To select a tsconfig, set `VP_SCRIPT_TSCONFIG=tsconfig.scripts.json`. The existing `TSX_TSCONFIG_PATH` variable also works, with `VP_SCRIPT_TSCONFIG` taking precedence. Otherwise the [usual tsconfig discovery](#tsconfig) applies. Each worker selects its config from its own environment, so workers can use different configs without changing their parent.
+
+Node.js owns its flags, test discovery, and native watch mode. Eval and stdin can import TypeScript files, but their input text is not transformed. All `--require` preloads run before `--import`: put a TypeScript setup file after the loader as `--import ./setup.ts`. Repeated imports of `vite-plus/register` are harmless, including when a tool already runs under `vpx`.
+
+Remove the old tsx preload when you add this one. The [compiler differences from tsx](#coming-from-tsx) also apply to the public preload.
+
 ### Watch Mode
 
 ```bash
@@ -132,7 +164,7 @@ It watches every file the script imports or requires (in worker threads too, on 
 
 `vpx` reads compiler options from a tsconfig but does not type-check with it. Each file uses the nearest `tsconfig.json` above it that includes it through `files`, `include`, `exclude`, or project `references`, as `tsc` does, and `extends` is followed. Files in `node_modules` use no tsconfig, and neither does a file that no tsconfig includes, so it gets the defaults below. Such a file still resolves `paths` aliases through the nearest `tsconfig.json` above it, as tsx does: with a root tsconfig whose `include` is `["src"]`, a script in `scripts/` can import the same aliases as `src/`. Because the config depends on the file's location, not on the working directory, `vpx` compiles a file the same way wherever it runs from.
 
-`--tsconfig <path>` applies one config to every file instead, including files that config does not include. Without `--tsconfig`, an `OXC_TSCONFIG_PATH` or `TS_NODE_PROJECT` environment variable does the same. If it names a file that does not exist, or a tsconfig fails to parse, `vpx` prints a warning and runs without that config.
+`--tsconfig <path>` applies one config to every file instead, including files that config does not include. Without `--tsconfig`, `TSX_TSCONFIG_PATH`, `TS_NODE_PROJECT`, or `OXC_TSCONFIG_PATH` can select a config, in that order. If it names a file that does not exist, or a tsconfig fails to parse, `vpx` prints a warning and runs without that config.
 
 A file that no tsconfig applies to runs as if its `compilerOptions` were empty:
 
@@ -193,8 +225,8 @@ JSX that depends on a compiler plugin is not supported. `vpx` compiles JSX only 
 - **Node.js version**: `vpx` needs Node.js `^22.18.0 || ^24.11.0 || >=26.0.0`, while tsx also runs on older releases.
 - **Watch mode**: `tsx watch` becomes `vpx --watch`, which takes tsx watch's options (see [Watch Mode](#watch-mode)). It also reruns the script on tsconfig edits and when a file a failed import looked for is created, which tsx watch misses.
 - **Eval, REPL, and `--check`**: `vpx --eval`, the REPL, and `vpx --check` do not transform TypeScript.
-- **`node --import tsx`**: `vpx` has no equivalent for tools that must start `node` themselves.
-- **Other loaders**: remove `--import tsx` from `NODE_OPTIONS`. Two loaders registered together compete for the same files.
+- **`node --import tsx`**: replace it with [`node --import vite-plus/register`](#nodejs-preload), including in tool settings and `NODE_OPTIONS`.
+- **Other loaders**: replace the tsx preload instead of adding a second loader. Two loaders registered together compete for the same files.
 
 ## `vp exec`
 
