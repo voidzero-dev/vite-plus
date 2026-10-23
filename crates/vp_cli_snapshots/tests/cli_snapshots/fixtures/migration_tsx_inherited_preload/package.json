@@ -1,0 +1,13 @@
+{
+  "name": "migration-tsx-inherited-preload",
+  "type": "module",
+  "scripts": {
+    "generate": "tsx bad.cts",
+    "inherited": "NODE_OPTIONS=--import=tsx node --run generate",
+    "compatible": "tsx good.ts"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "vite-plus": "latest"
+  }
+}
