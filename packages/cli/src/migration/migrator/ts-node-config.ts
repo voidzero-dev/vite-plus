@@ -12,6 +12,8 @@ interface TsNodeRunContext {
   nodeLoader: boolean;
   executable: string;
   shebang?: boolean;
+  publicRegister?: boolean;
+  nodeOptionsArgs?: readonly string[];
 }
 
 interface TsNodeRunPreparation {
@@ -146,6 +148,17 @@ export function prepareTsNodeRun(
   if (!cwd) {
     return { keepReason: KEEP_CWD };
   }
+  if (context.publicRegister) {
+    if (
+      context.nodeOptionsArgs === undefined &&
+      context.environment.some((assignment) => /^NODE_OPTIONS=.+/i.test(assignment))
+    ) {
+      return {
+        keepReason: 'the literal NODE_OPTIONS arguments cannot be checked for ts-node settings',
+      };
+    }
+    args = [...(context.nodeOptionsArgs ?? []), ...args];
+  }
   const environment: TsNodeOptions = {};
   let environmentProject: string | undefined;
   for (const assignment of context.environment) {
@@ -156,6 +169,11 @@ export function prepareTsNodeRun(
     const originalName = assignment.slice(0, separator);
     const name = originalName.toUpperCase();
     const value = assignment.slice(separator + 1);
+    if (context.publicRegister && name === 'NODE_OPTIONS' && originalName !== name) {
+      return {
+        keepReason: `\`${originalName}\` uses platform-dependent environment variable casing`,
+      };
+    }
     if (name.startsWith('TS_NODE_') && originalName !== name) {
       return {
         keepReason: `\`${originalName}\` uses platform-dependent environment variable casing`,
@@ -173,8 +191,13 @@ export function prepareTsNodeRun(
       return {
         keepReason: `\`${name}\` configures ts-node behavior that vp migrate does not translate`,
       };
-    } else if (name === 'OXC_TSCONFIG_PATH' && value) {
-      return { keepReason: '`OXC_TSCONFIG_PATH` would select a different configuration for `vpx`' };
+    } else if (
+      ['OXC_TSCONFIG_PATH', 'TSX_TSCONFIG_PATH', 'VP_SCRIPT_TSCONFIG'].includes(name) &&
+      value
+    ) {
+      return {
+        keepReason: `\`${name}\` would select a different configuration for the Vite+ loader`,
+      };
     }
   }
 
@@ -207,6 +230,18 @@ export function prepareTsNodeRun(
         ? originalOption.replaceAll('_', '-')
         : originalOption;
     const inline = equals < 0 ? undefined : value.slice(equals + 1);
+    if (
+      context.publicRegister &&
+      (name === '--eval' ||
+        name === '--print' ||
+        /^-[ep]/.test(name) ||
+        name === '-i' ||
+        name === '--interactive')
+    ) {
+      return {
+        keepReason: 'vp migrate does not translate ts-node inline code or REPL execution',
+      };
+    }
     if (nodeLoader && (name === '--env-file' || name === '--env-file-if-exists')) {
       return {
         keepReason: `\`${name}\` can configure ts-node through environment variables; vp migrate does not translate those settings`,
@@ -347,6 +382,12 @@ export function prepareTsNodeRun(
     }
   }
   if (configFile && selectedProject === undefined) {
+    if (context.publicRegister) {
+      return {
+        keepReason:
+          'the Node.js preload needs the ts-node config pinned explicitly; set TS_NODE_PROJECT to its file path before migrating',
+      };
+    }
     // ts-node applies its selected config to the whole run; vpx otherwise discovers
     // configs per file. Pin the same file with a portable path from the command's cwd.
     const relative = path

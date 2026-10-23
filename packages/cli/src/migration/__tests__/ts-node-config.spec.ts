@@ -299,4 +299,66 @@ describe('prepareTsNodeRun', () => {
       expect(prepare(['-T', entry]).keepReason).toContain('cannot be resolved');
     }
   });
+
+  it('validates literal NODE_OPTIONS loader arguments before preserving Node.js', () => {
+    const context = {
+      cwd,
+      environment: ['NODE_OPTIONS=--require ts-node/register/transpile-only'],
+      executable: 'node',
+      nodeLoader: true,
+      publicRegister: true,
+      nodeOptionsArgs: ['--require', 'ts-node/register/transpile-only'],
+    };
+    expect(prepareTsNodeRun(['scripts/a.ts'], context)).toEqual({ edits: [] });
+    expect(
+      prepareTsNodeRun(['scripts/a.ts'], { ...context, nodeOptionsArgs: undefined }).keepReason,
+    ).toContain('cannot be checked');
+    expect(
+      prepareTsNodeRun(['scripts/a.ts'], {
+        ...context,
+        nodeOptionsArgs: ['-r', 'ts-node/register'],
+      }).keepReason,
+    ).toContain('type-checks');
+    expect(
+      prepareTsNodeRun(['scripts/a.ts'], {
+        ...context,
+        nodeOptionsArgs: [...context.nodeOptionsArgs, '-r', 'dotenv/config'],
+      }).keepReason,
+    ).toContain('additional preload');
+  });
+
+  it('does not pass an implicit tsconfig pin to Node.js', () => {
+    config({ 'ts-node': { transpileOnly: true } });
+    const context = {
+      cwd,
+      environment: [],
+      executable: 'node',
+      nodeLoader: true,
+      publicRegister: true,
+    };
+    expect(
+      prepareTsNodeRun(['-r', 'ts-node/register', 'scripts/a.ts'], context).keepReason,
+    ).toContain('set TS_NODE_PROJECT');
+    expect(
+      prepareTsNodeRun(['-r', 'ts-node/register', 'scripts/a.ts'], {
+        ...context,
+        environment: ['TS_NODE_PROJECT=tsconfig.json'],
+      }),
+    ).toEqual({ edits: [] });
+  });
+
+  it.each(['VP_SCRIPT_TSCONFIG', 'TSX_TSCONFIG_PATH', 'OXC_TSCONFIG_PATH'])(
+    'retains %s because the public preload gives it different precedence',
+    (name) => {
+      expect(
+        prepareTsNodeRun(['-r', 'ts-node/register/transpile-only', 'scripts/a.ts'], {
+          cwd,
+          environment: [`${name}=other.json`],
+          executable: 'node',
+          nodeLoader: true,
+          publicRegister: true,
+        }).keepReason,
+      ).toContain('different configuration');
+    },
+  );
 });
