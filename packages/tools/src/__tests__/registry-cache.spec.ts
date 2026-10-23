@@ -103,6 +103,42 @@ it('can bypass response storage for a live-network benchmark', async () => {
   expect((await cache.get(url, 'application/json')).body.toString()).toBe('2');
 });
 
+it('prepares an archive once for eight workers with shorter request budgets', async () => {
+  let requests = 0;
+  const bytes = Buffer.from([0, 255, 10, 128, 31, 139]);
+  const url = `${await upstream((_req, res) => {
+    requests++;
+    setTimeout(() => res.end(bytes), 150);
+  })}/tool.tgz`;
+  const dir = await directory();
+  await new RegistryCache(dir).prewarm(url);
+  const responses = await Promise.all(
+    Array.from({ length: 8 }, () =>
+      new RegistryCache(dir, true, undefined, 50).get(url, 'application/json'),
+    ),
+  );
+  expect(requests).toBe(1);
+  for (const response of responses) {
+    expect(response.body).toEqual(bytes);
+  }
+});
+
+it('retries a failed preparation without caching the failed response', async () => {
+  let requests = 0;
+  const url = await upstream((_req, res) => {
+    if (++requests === 1) {
+      res.writeHead(503);
+      res.end('retry');
+    } else {
+      res.end('archive');
+    }
+  });
+  const cache = new RegistryCache(await directory());
+  await cache.prewarm(url);
+  expect((await cache.get(url, 'application/octet-stream')).body.toString()).toBe('archive');
+  expect(requests).toBe(2);
+});
+
 it('bounds an unfinished download and releases its lock for another registry', async () => {
   let complete = false;
   const url = await upstream((_req, res) => {

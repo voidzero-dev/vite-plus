@@ -140,6 +140,12 @@ including across nextest processes when `VP_SNAP_REGISTRY_CACHE_DIR` is set.
 Use a fresh directory per run; this is not a persistent dependency cache.
 Package-manager caches and installed packages remain isolated per case.
 
+Windows CI prepares the large Bun `1.3.11` archive with the registry helper's
+`--prewarm <url>` option before starting test commands. Preparation retries
+failed downloads and permits up to 180 seconds per attempt. Tests reuse the
+cached response with their existing deadlines and isolated installations.
+Preparation requests are logged in `prewarm/registry.jsonl` under the artifact root.
+
 `local-registry = true` additionally serves the packed checkout packages.
 Published versions remain available for cases that deliberately install an older
 release. Their upstream metadata is fetched once per run and merged with the

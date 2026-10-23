@@ -36,6 +36,7 @@
 //   --serve               keep the server running and print the registry URL
 //                         and env exports instead of wrapping a command
 //   --snapshot-cache <dir> share successful upstream GETs for one snapshot run
+//   --prewarm <url>      download an archive into --snapshot-cache, then exit
 //   --snapshot-fixtures <dir> serve recorded manifest.json and tarballs/ data
 //   --snapshot-runner    wrap a test runner with a shared registry; the runner
 //                         still gives each case its own package-manager caches
@@ -81,6 +82,7 @@ let packTo: string | undefined;
 let serve = false;
 let snapshotRunner = false;
 let snapshotCacheDir: string | undefined;
+let prewarmUrl: string | undefined;
 let snapshotFixtures: string | undefined;
 let requestLog: string | undefined;
 let live = false;
@@ -95,6 +97,8 @@ for (let i = 0; i < flags.length; i++) {
     packTo = flags[++i];
   } else if (flags[i] === '--snapshot-cache' && flags[i + 1]) {
     snapshotCacheDir = flags[++i];
+  } else if (flags[i] === '--prewarm' && flags[i + 1]) {
+    prewarmUrl = flags[++i];
   } else if (flags[i] === '--snapshot-fixtures' && flags[i + 1]) {
     snapshotFixtures = flags[++i];
   } else if (flags[i] === '--request-log' && flags[i + 1]) {
@@ -126,6 +130,17 @@ if (snapshotRunner) {
 }
 if (requestLog) {
   mkdirSync(path.dirname(requestLog), { recursive: true });
+}
+
+if (prewarmUrl) {
+  if (!snapshotCacheDir || command.length || serve || snapshotRunner || pack || packTo) {
+    console.error('local-npm-registry: --prewarm requires --snapshot-cache and no runner command');
+    process.exit(2);
+  }
+  // A large archive can take longer than the normal per-request budget.
+  // Prepare it once before eight test workers start their command timers.
+  await new RegistryCache(snapshotCacheDir, true, requestLog, 180_000).prewarm(prewarmUrl);
+  process.exit(0);
 }
 
 // `--ps` / `--kill`: troubleshoot registry processes left behind by

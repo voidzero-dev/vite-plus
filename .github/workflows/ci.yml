@@ -1255,6 +1255,13 @@ jobs:
           # Keep pwsh at its canonical installation path; copying pwsh.exe
           # alone can break its adjacent runtime dependencies.
           export VP_SNAP_PWSH_BIN="$(cygpath -w "$(command -v pwsh.exe)")"
+          # Bun 1.3.11 is a fixture pin. Its 40 MB Windows archive can exceed
+          # a command's deadline when fetched alongside eight test workers.
+          # Share the downloaded bytes, while keeping each case's install isolated.
+          node packages/tools/src/local-npm-registry.ts \
+            --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \
+            --request-log "$VP_SNAP_ARTIFACTS_DIR/prewarm/registry.jsonl" \
+            --prewarm https://registry.npmjs.org/@oven/bun-windows-x64/-/bun-windows-x64-1.3.11.tgz
           # Reserve all nextest workers for cases that need the execution gate.
           # Generate the overrides from the fixtures, including automatic Ctrl-C
           # isolation, so this configuration cannot drift from the runner.
