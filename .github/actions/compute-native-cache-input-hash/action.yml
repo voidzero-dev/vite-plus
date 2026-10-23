@@ -31,7 +31,6 @@ runs:
             hashFiles(
               'packages/tools/.upstream-versions.json',
               'packages/tools/src/patch-oxc-node.ts',
-              'packages/tools/patches/oxc-node-loader-context.patch',
               'packages/tools/src/cargo-toml.ts',
               'rust-toolchain.toml',
               '.node-version',
