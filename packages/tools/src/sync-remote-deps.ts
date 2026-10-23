@@ -125,7 +125,25 @@ function execCommand(command: string, cwd?: string): string {
   }
 }
 
-function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main', hash?: string) {
+function fetchPinnedCommit(dir: string, hash: string): void {
+  if (spawnSync('git', ['cat-file', '-e', `${hash}^{commit}`], { cwd: dir }).status === 0) {
+    return;
+  }
+  // A pin can name an unmerged pull request, which a branch/tag fetch omits.
+  const result = spawnSync('git', ['fetch', 'origin', hash], { cwd: dir, encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to fetch pinned commit ${hash}: ${result.error?.message ?? result.stderr}`,
+    );
+  }
+}
+
+export function cloneOrResetRepo(
+  repoUrl: string,
+  dir: string,
+  branch: string = 'main',
+  hash?: string,
+) {
   log(`Processing ${dir}...`);
 
   if (existsSync(dir)) {
@@ -158,6 +176,7 @@ function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main',
 
       if (hash) {
         // Reset to specific hash
+        fetchPinnedCommit(dir, hash);
         log(`Resetting ${dir} to pinned hash ${hash.substring(0, 8)}...`);
         execCommand(`git checkout ${branch}`, dir);
         execCommand(`git reset --hard ${hash}`, dir);
@@ -198,6 +217,7 @@ function cloneRepo(repoUrl: string, dir: string, branch: string, hash?: string) 
   log(`Cloning ${repoUrl} (${branch}) into ${dir}...`);
   execCommand(`git clone --branch ${branch} ${repoUrl} ${dir}`);
   if (hash) {
+    fetchPinnedCommit(dir, hash);
     log(`Checking out pinned hash ${hash.substring(0, 8)}...`);
     execCommand(`git reset --hard ${hash}`, dir);
     log(`${dir} cloned and reset to ${hash.substring(0, 8)}`);
