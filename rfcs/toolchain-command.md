@@ -108,7 +108,7 @@ Arguments:
 
 Options:
       --json    Print the graph as JSON
-      --global  Use the global Vite+ toolchain
+  -g, --global  Use the global Vite+ toolchain
   -h, --help    Print help
 ```
 
