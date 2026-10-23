@@ -1,0 +1,8 @@
+{
+  "name": "fixture-ts-import",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./error": "./error.ts"
+  }
+}

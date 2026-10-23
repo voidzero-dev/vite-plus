@@ -1,4 +1,3 @@
-const assert = require('node:assert/strict');
 const common = require('./common.cts');
 const dependency: string = require('fixture-ts-require');
 const decorated: string[] = [];
@@ -9,8 +8,6 @@ class Counter {
   @record
   total() { return this.initial + this.field; }
 }
-assert.deepEqual(common, { format: 'cts' });
-assert.equal(dependency, 'cjs dependency');
-assert.equal(new Counter(3).total(), 5);
-assert.deepEqual(decorated, ['total']);
-console.log('cjs syntax, nested require, helpers, and dependencies');
+console.log(JSON.stringify({
+  common, dependency, total: new Counter(3).total(), decorated,
+}, null, 2));

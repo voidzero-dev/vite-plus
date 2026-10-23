@@ -1,4 +1,3 @@
-import assert from 'node:assert/strict';
 import { value } from '@value';
 import { value as remapped } from './remapped.js';
 import { format } from './module.mts';
@@ -17,14 +16,7 @@ class Counter {
   @record
   total() { return this.initial + this.field; }
 }
-assert.equal(value, 'default');
-assert.equal(remapped, 'remapped');
-assert.equal(format, 'mts');
-assert.deepEqual(common, { format: 'cts' });
-assert.deepEqual(view, { tag: 'section', children: ['tsx'] });
-assert.deepEqual(jsx, { tag: 'section', children: ['jsx'] });
-assert.equal(kind, 'esm dependency');
-assert.equal(dependency, 'cjs dependency');
-assert.equal(new Counter(Options.count).total(), 5);
-assert.deepEqual(decorated, ['total']);
-console.log('esm syntax, resolution, JSX, helpers, and dependencies');
+console.log(JSON.stringify({
+  value, remapped, format, common, view, jsx, kind, dependency,
+  total: new Counter(Options.count).total(), decorated,
+}, null, 2));
