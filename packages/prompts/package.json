@@ -35,6 +35,7 @@
     "fast-string-width": "^3.0.0",
     "fast-wrap-ansi": "^0.2.0",
     "is-unicode-supported": "^2.0.0",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "typescript": "7.1.0-beta"
   }
 }

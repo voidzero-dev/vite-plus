@@ -742,10 +742,9 @@ async function mergePackageJson() {
   );
 
   // Merge peerDependencies from rolldown-plugin-dts, tsdown and vite. The bundled
-  // dts plugin still resolves `vue-tsc`, `@volar/typescript`,
-  // `@vue/language-core` and `@typescript/native-preview` from core at runtime,
-  // and its declarations import their types, so isolated installs need them
-  // declared here.
+  // dts plugin still resolves `vue-tsc`, `@volar/typescript` and
+  // `@vue/language-core` from core at runtime, and its declarations import
+  // their types, so isolated installs need them declared here.
   destPkg.peerDependencies = {
     ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,

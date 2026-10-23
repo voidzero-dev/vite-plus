@@ -386,6 +386,7 @@
     "pirates": "catalog:",
     "tinyglobby": "catalog:",
     "tsdown": "catalog:",
+    "typescript": "7.1.0-beta",
     "validate-npm-package-name": "catalog:",
     "verkit": "catalog:",
     "yaml": "catalog:",
