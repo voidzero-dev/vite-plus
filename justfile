@@ -17,7 +17,8 @@ _clean_dist:
   Remove-Item -Path 'packages/*/dist' -Recurse -Force -ErrorAction SilentlyContinue
 
 init: _clean_dist _fix_symlinks
-  cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
+  # Run directly so mbx does not probe the workspace before sync-remote.
+  cargo-binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
   node packages/tools/src/index.ts sync-remote
   pnpm install
   pnpm -C docs install

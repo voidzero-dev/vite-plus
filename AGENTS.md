@@ -13,7 +13,7 @@ This guide applies to this repository; `CLAUDE.md` points here. For changes to t
 - **Bundled tools and exports**: use [CLI bundling](packages/cli/BUNDLING.md) and [core bundling](packages/core/BUNDLING.md). Test resolution starts at `packages/cli/src/resolve-test.ts`; `packages/cli/build.ts` generates test API shims.
 - **Testing a local build in a project**: follow [CONTRIBUTING.md](CONTRIBUTING.md) for linking and installation. For `vp migrate` / `vp create`, use the local registry in `packages/tools/src/local-npm-registry.ts`, which also serves PTY fixtures and ecosystem tests.
 - **Product documentation**: start at `README.md` and the VitePress site in `docs/guide/` and `docs/config/`.
-- **Setup and build commands**: use `CONTRIBUTING.md`, `justfile`, and `package.json`. Start with `just init` for initial setup. Repository lint, format, and test configuration lives in `vite.config.ts`; TypeScript settings live in `tsconfig.json`.
+- **Setup and build commands**: use `CONTRIBUTING.md`, `justfile`, and `package.json`. Follow the [contributor setup](CONTRIBUTING.md#shared-rust-build-cache) to use mbx for local builds, including parallel worktrees. Start with `just init` after setup. Repository lint, format, and test configuration lives in `vite.config.ts`; TypeScript settings live in `tsconfig.json`.
 
 ## Repository Constraints
 
