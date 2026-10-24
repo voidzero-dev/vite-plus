@@ -8529,6 +8529,7 @@ dependencies = [
  "vt_pty_terminal_test_client",
  "vt_str",
  "vt_workspace",
+ "winreg 0.56.0",
 ]
 
 [[package]]
