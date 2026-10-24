@@ -30,8 +30,8 @@ catalog:
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
-  '@tsdown/css': ^0.23.1
-  '@tsdown/exe': ^0.23.1
+  '@tsdown/css': ^0.23.2
+  '@tsdown/exe': ^0.23.2
   '@types/babel__core': 7.20.5
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
@@ -118,7 +118,7 @@ catalog:
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
   tinyglobby: ^0.2.15
-  tsdown: ^0.23.1
+  tsdown: ^0.23.2
   tsx: ^4.22.0
   typescript: ~7.0.2
   unified: ^11.0.5
@@ -207,6 +207,11 @@ overrides:
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
   rolldown>typescript: ^6.0.0
+  # rolldown-plugin-dts 0.29 dropped the tsgo subprocess fallback; its tsc
+  # generator needs the classic TypeScript API, which typescript@7 (native)
+  # no longer provides. Give the plugin a classic TypeScript for dts emit,
+  # matching the rolldown>typescript and @volar/typescript pins.
+  'rolldown-plugin-dts@0.29.0-beta.2>typescript': ~6.0.3
   '@volar/typescript>typescript@>=7': '-'
   '@volar/language-service>typescript@>=7': '-'
 packageExtensions:
@@ -251,3 +256,7 @@ peerDependencyRules:
     oxlint-tsgolint: '*'
     rolldown: '*'
     vite: '*'
+    # packages/core pins typescript@7 and drives the plugin's oxc generator,
+    # which never loads typescript, so the overridden ~6.0.3 peer (see
+    # overrides) is allowed to stay unmet there.
+    'rolldown-plugin-dts@0.29.0-beta.2>typescript': 7.0.2
