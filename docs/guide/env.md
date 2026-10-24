@@ -180,6 +180,19 @@ In CI, `vp env use` can run without shell initialization. It writes a temporary 
 
 #### Shell completion
 
+In Bash, Zsh, Fish, and PowerShell, `vp test` also completes Vitest option names,
+short options, and nested options such
+as `--coverage.reporter`. Supported test subcommands include `run`, `watch`, `dev`,
+`related`, `bench`, `list`, and `doctor`. Descriptions appear where supported by
+your shell. Option values, test names, and project names are not completed.
+
+Test completion follows the selected project-local Vite+ toolchain, falling back
+to the global toolchain only when no runnable local CLI is installed. Both the
+global launcher and the selected Vite+ package must support this feature. Missing
+or mismatched completion metadata silently falls back to the original completion
+behavior without the additional Vitest option candidates. Pressing Tab does not
+install dependencies or load project configuration.
+
 The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShell. Run `vp env setup` and follow its printed shell setup instructions to enable it. Press Tab to complete commands, or project task names after `vp run` and `vpr`.
 
 - **Zsh**: Run `autoload -Uz compinit; compinit` before loading the setup script if your shell has not initialized completion.

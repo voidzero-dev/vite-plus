@@ -488,6 +488,13 @@ jobs:
           RUST_BACKTRACE: '1'
           RUST_MIN_STACK: 8388608
 
+      - name: Test completion integration
+        run: vp env exec --node ${{ matrix.test-node }} node packages/tools/src/test-completion.ts
+        env:
+          VP_COMPLETION_CONSUMER_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/vp${{ runner.os == 'Windows' && '.exe' || '' }}
+          RUST_BACKTRACE: '1'
+          RUST_MIN_STACK: 8388608
+
       - name: Test global package install (powershell)
         if: ${{ runner.os != 'Linux' }}
         shell: pwsh

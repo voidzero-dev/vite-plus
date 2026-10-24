@@ -31,6 +31,7 @@ import { format } from 'oxfmt';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import corePkg from '../core/package.json' with { type: 'json' };
+import { writeTestCompletionMetadata } from './build/completion-metadata.ts';
 import { VITEST_VERSION } from './src/utils/constants.ts';
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
@@ -136,6 +137,7 @@ if (!skipTs) {
   await syncCorePackageExports();
   await syncTestPackageExports();
   await syncToolchainExports();
+  await writeTestCompletionMetadata(projectDir, VITEST_VERSION);
 }
 await copyBundledDocs();
 await syncReadmeFromRoot();
