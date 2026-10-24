@@ -49,7 +49,18 @@ const stripDestructiveANSI = (input: string): string => {
 /**
  * Renders a log which clears on success and remains on failure
  */
-export const taskLog = (opts: TaskLogOptions) => {
+export const taskLog = (
+  opts: TaskLogOptions,
+): {
+  message(msg: string, mopts?: TaskLogMessageOptions): void;
+  group(name: string): {
+    message(msg: string, mopts?: TaskLogMessageOptions): void;
+    error(message: string): void;
+    success(message: string): void;
+  };
+  error(message: string, opts?: TaskLogCompletionOptions): void;
+  success(message: string, opts?: TaskLogCompletionOptions): void;
+} => {
   const output: Writable = opts.output ?? process.stdout;
   const columns = getColumns(output);
   const secondarySymbol = color.gray(S_BAR);
@@ -197,10 +208,14 @@ export const taskLog = (opts: TaskLogOptions) => {
   };
 
   return {
-    message(msg: string, mopts?: TaskLogMessageOptions) {
+    message(msg: string, mopts?: TaskLogMessageOptions): void {
       message(buffers[0], msg, mopts);
     },
-    group(name: string) {
+    group(name: string): {
+      message(msg: string, mopts?: TaskLogMessageOptions): void;
+      error(message: string): void;
+      success(message: string): void;
+    } {
       const buffer: BufferEntry = {
         header: name,
         value: '',
@@ -208,16 +223,16 @@ export const taskLog = (opts: TaskLogOptions) => {
       };
       buffers.push(buffer);
       return {
-        message(msg: string, mopts?: TaskLogMessageOptions) {
+        message(msg: string, mopts?: TaskLogMessageOptions): void {
           message(buffer, msg, mopts);
         },
-        error(message: string) {
+        error(message: string): void {
           completeBuffer(buffer, {
             status: 'error',
             message,
           });
         },
-        success(message: string) {
+        success(message: string): void {
           completeBuffer(buffer, {
             status: 'success',
             message,

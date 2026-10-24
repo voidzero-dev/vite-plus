@@ -147,7 +147,6 @@
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
     "@types/node": "^20.19.0 || >=22.12.0",
-    "@typescript/native-preview": "*",
     "@vitejs/devtools": "^0.7.1 || ^0.8.0",
     "@volar/typescript": "~2.4.0",
     "@vue/language-core": "~3.2.0 || ~3.3.0",
@@ -168,9 +167,6 @@
     "yaml": "^2.4.2"
   },
   "peerDependenciesMeta": {
-    "@typescript/native-preview": {
-      "optional": true
-    },
     "@volar/typescript": {
       "optional": true
     },
@@ -241,6 +237,6 @@
   "bundledVersions": {
     "vite": "8.3.5",
     "rolldown": "1.2.15",
-    "tsdown": "0.23.1"
+    "tsdown": "0.23.2"
   }
 }
