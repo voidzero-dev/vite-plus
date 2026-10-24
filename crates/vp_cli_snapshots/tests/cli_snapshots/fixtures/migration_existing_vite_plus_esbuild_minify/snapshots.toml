@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_existing_vite_plus_esbuild_minify"
+vp = "global"
+skip-platforms = ["windows"]
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, comment = "Converge the project to a fully migrated Vite+ project; this pass rewrites the import and switches the minifier." },
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "minify: true", "minify: 'esbuild'"], snapshot = false, comment = "Reintroduce the Vite 7-era esbuild minify as the project's ONLY pending change." },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "The static minify rewrite emits no warnings, so it must mark the migration as done instead of hitting the already-using-Vite+ fast exit." },
+  { argv = ["vpt", "grep-file", "vite.config.ts", "minify: true"], comment = "The rewrite is applied to vite.config." },
+]

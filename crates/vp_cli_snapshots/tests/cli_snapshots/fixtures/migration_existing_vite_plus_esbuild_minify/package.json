@@ -1,0 +1,7 @@
+{
+  "name": "migration-existing-vite-plus-esbuild-minify",
+  "packageManager": "pnpm@12.11.2",
+  "devDependencies": {
+    "vite-plus": "latest"
+  }
+}
