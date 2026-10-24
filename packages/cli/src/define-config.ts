@@ -1015,7 +1015,7 @@ let configMetadataDepth = 0;
 let configMetadataSavedValue: string | undefined;
 
 /**
- * Run a config-metadata resolution (a `resolveConfig` call that loads the
+ * Run a config-metadata resolution (a config load that evaluates the
  * user's config purely to read a non-plugin block) with the metadata marker
  * set, so any `lazyPlugins` evaluated during it skips the plugin factory.
  *

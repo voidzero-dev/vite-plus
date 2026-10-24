@@ -1,7 +1,7 @@
 // Runs staged linters on staged files using the lint-staged programmatic API.
 // Bundled by rolldown — no runtime dependency needed in user projects.
 //
-// Reads the "staged" key from vite.config.ts via resolveConfig() and passes it
+// Loads the "staged" metadata from vite.config.ts and passes it
 // to lint-staged as an explicit config object.  Exits with a warning if no
 // staged config is found.
 //
