@@ -266,6 +266,22 @@ $ vp build ○ cache miss: 'index.html' modified, executing
 vp run: 1/2 cache hit (50%), 2/2 successful, 120ms saved.
 ```
 
+### Environment Variable Prefixes
+
+Vite Task parses simple commands and `&&` chains itself, including environment variable prefixes such as `FOO=bar command`. These work on every platform, including Windows, without `cross-env`:
+
+```json [package.json]
+{
+  "scripts": {
+    "build": "NODE_ENV=production vp build"
+  }
+}
+```
+
+A prefix applies only to the command it precedes. In `FOO=1 a && b`, `FOO` is set for `a` but not for `b`.
+
+If any part of a command uses other shell syntax, such as pipes, redirects, or variable expansion, the whole command runs in the system shell instead: `/bin/sh -c` on macOS and Linux, and `cmd.exe /d /s /c` on Windows. In that case, `FOO=bar command` does not work on Windows, so use `cross-env` there.
+
 ### Nested `vp run`
 
 When a command contains `vp run`, Vite Task inlines it as separate tasks instead of spawning a nested process. Each sub-task is cached independently and output stays flat:
