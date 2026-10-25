@@ -42,24 +42,12 @@ pub(crate) fn roots(dirs: &VpDirs) -> Vec<AbsolutePathBuf> {
     roots
 }
 
-fn is_owned(root: &AbsolutePathBuf) -> Result<bool, Error> {
+pub(crate) fn is_owned(root: &AbsolutePathBuf) -> Result<bool, Error> {
     match fs::symlink_metadata(root.join(OWNERSHIP_MARKER)) {
         Ok(metadata) => Ok(metadata.is_file()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error.into()),
     }
-}
-
-pub(crate) fn require_owned(roots: &[AbsolutePathBuf]) -> Result<(), Error> {
-    for root in roots {
-        if root.as_path().try_exists()? && !is_owned(root)? {
-            return Err(Error::Other(vt_str::format!(
-                "Refusing to remove {}: Vite+ directory ownership could not be verified. Unmarked directories, including older installations, must be inspected and removed manually.",
-                root.as_path().display()
-            )));
-        }
-    }
-    Ok(())
 }
 
 /// Claim only empty or newly created roots. Installing into an unowned, nonempty
@@ -164,7 +152,7 @@ mod tests {
             }
             assert!(!dirs.cache.join(OWNERSHIP_MARKER).as_path().exists());
             assert_eq!(fs::read(dirs.cache.join("personal.txt")).unwrap(), b"keep");
-            assert!(require_owned(&roots(&dirs)).is_err());
+            assert!(!is_owned(&dirs.cache).unwrap());
         });
     }
 
@@ -172,23 +160,22 @@ mod tests {
     fn ownership_requires_a_regular_marker_file() {
         EnvConfig::scoped(|env| {
             prepare(&env.dirs).unwrap();
-            let roots = roots(&env.dirs);
             let marker = env.dirs.cache.join(OWNERSHIP_MARKER);
             fs::remove_file(&marker).unwrap();
-            assert!(require_owned(&roots).is_err());
+            assert!(!is_owned(&env.dirs.cache).unwrap());
             fs::create_dir(&marker).unwrap();
-            assert!(require_owned(&roots).is_err());
+            assert!(!is_owned(&env.dirs.cache).unwrap());
             fs::remove_dir(&marker).unwrap();
             #[cfg(unix)]
             {
                 let target = env.dirs.data.join("elsewhere");
                 fs::write(&target, OWNERSHIP_CONTENT).unwrap();
                 std::os::unix::fs::symlink(&target, &marker).unwrap();
-                assert!(require_owned(&roots).is_err());
+                assert!(!is_owned(&env.dirs.cache).unwrap());
                 fs::remove_file(&marker).unwrap();
             }
             fs::write(&marker, b"").unwrap();
-            require_owned(&roots).unwrap();
+            assert!(is_owned(&env.dirs.cache).unwrap());
         });
     }
 }

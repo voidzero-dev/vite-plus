@@ -19,6 +19,24 @@
 '`
 
 
+## `VP_HOME=${HOME}/Documents vp implode --yes`
+
+An unrelated override fails before touching files or profiles
+
+**Exit code:** 1
+
+```
+error: Refusing to remove <home>/Documents: Vite+ installation ownership could not be verified. Check your directory overrides and inspect unmarked directories manually.
+```
+
+## `vpt print-file $HOME/.bashrc`
+
+```
+# personal config
+# Vite+ bin
+. "$HOME/Documents/env"
+```
+
 ## `VP_HOME=${HOME}/Documents ./external/vp`
 
 Setup succeeds without claiming a nonempty personal directory
@@ -32,12 +50,33 @@ Setup succeeds without claiming a nonempty personal directory
 
 ## `VP_HOME=${HOME}/Documents vp implode --yes`
 
-Changing VP_HOME cannot authorize recursive deletion
-
-**Exit code:** 1
+Only the newly owned cache is removed; the unmarked parent is preserved
 
 ```
-error: Refusing to remove <home>/Documents: Vite+ directory ownership could not be verified. Unmarked directories, including older installations, must be inspected and removed manually.
+✓ Cleaned ~/.bashrc
+✓ Removed <home>/Documents/cache
+
+✓ Vite+ removed its verified files and shell entries from your system.
+note: Some paths were preserved to protect unverified data. Inspect them before removing anything:
+  <home>/Documents/0.0.0-test
+  <home>/Documents/bin
+  <home>/Documents/config.json
+  <home>/Documents/current
+  <home>/Documents/env
+  <home>/Documents/env.fish
+  <home>/Documents/env.nu
+  <home>/Documents/env.ps1
+  <home>/Documents/fallback-bin
+  <home>/Documents/personal.txt
+  <home>/Documents/self-setup
+  <home>/Documents/vp.ps1
+note: Restart your terminal to apply shell changes.
+```
+
+## `vpt stat-file $HOME/Documents/cache --assert missing`
+
+```
+<home>/Documents/cache: missing
 ```
 
 ## `vpt stat-file $HOME/Documents/.vp-owned --assert missing`
@@ -56,6 +95,4 @@ keep my documents
 
 ```
 # personal config
-# Vite+ bin
-. "$HOME/Documents/env"
 ```

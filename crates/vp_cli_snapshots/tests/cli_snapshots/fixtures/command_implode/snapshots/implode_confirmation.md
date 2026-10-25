@@ -1,22 +1,5 @@
 # implode_confirmation
 
-## `vpt rm $VP_HOME/cache/.vp-owned`
-
-
-## `vp implode --yes`
-
-A nested cache needs its own ownership marker before any deletion
-
-**Exit code:** 1
-
-```
-error: Refusing to remove <home>/.vite-plus/cache: Vite+ directory ownership could not be verified. Unmarked directories, including older installations, must be inspected and removed manually.
-```
-
-## `vpt write-file $VP_HOME/cache/.vp-owned 'vite-plus-owned-directory
-'`
-
-
 ## `vp implode`
 
 The old confirmation word leaves the installation intact
@@ -28,7 +11,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 ```
@@ -40,7 +24,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 uninstall
@@ -64,7 +49,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 ```
@@ -76,7 +62,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 implode
@@ -100,7 +87,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 ```
@@ -112,7 +100,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 
