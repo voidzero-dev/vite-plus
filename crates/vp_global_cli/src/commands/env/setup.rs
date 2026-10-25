@@ -663,6 +663,7 @@ async fn refresh_package_shims(
     bin_dir: &vt_path::AbsolutePath,
 ) -> Result<(), Error> {
     let target = resolve_unix_vp_shim_target(current_exe).await?;
+    let _lock = crate::commands::global::bin_lock::acquire().await?;
     for name in BinConfig::find_all_vp_source().await? {
         if crate::commands::global::install::is_protected_shim(&name, true) {
             continue;
@@ -2582,6 +2583,66 @@ mod tests {
                         "legacy corepack shim should be removed"
                     );
                 }
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_package_shim_refresh_waits_for_ownership_changes() {
+        use std::time::Duration;
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = temp_dir.path().join(".vite-plus");
+        let external_vp = temp_dir.path().join("external-vp");
+        let previous = temp_dir.path().join("removed-keg/bin/vp");
+        tokio::fs::write(&external_vp, b"vp").await.unwrap();
+        let external_vp = tokio::fs::canonicalize(external_vp).await.unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(&home, temp_dir.path()),
+            |env| async move {
+                let bin_dir = &env.dirs.bin;
+                tokio::fs::create_dir_all(bin_dir).await.unwrap();
+                for name in ["managed-tool", "reassigned-tool"] {
+                    BinConfig::new(name.into(), name.into(), "1.0.0".into(), "22.18.0".into())
+                        .save()
+                        .await
+                        .unwrap();
+                    tokio::fs::symlink(&previous, bin_dir.join(name)).await.unwrap();
+                }
+
+                let lock = crate::commands::global::bin_lock::acquire().await.unwrap();
+                let refresh = refresh_package_shims(&external_vp, bin_dir);
+                tokio::pin!(refresh);
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(150), &mut refresh).await.is_err()
+                );
+                for name in ["managed-tool", "reassigned-tool"] {
+                    assert_eq!(tokio::fs::read_link(bin_dir.join(name)).await.unwrap(), previous);
+                }
+
+                // Another operation changes ownership before releasing the shared lock.
+                BinConfig::new_npm(
+                    "reassigned-tool".into(),
+                    "npm-package".into(),
+                    "22.18.0".into(),
+                )
+                .save()
+                .await
+                .unwrap();
+                drop(lock);
+                tokio::time::timeout(Duration::from_secs(5), refresh).await.unwrap().unwrap();
+
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("managed-tool")).await.unwrap(),
+                    external_vp
+                );
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("reassigned-tool")).await.unwrap(),
+                    previous
+                );
             },
         )
         .await;
