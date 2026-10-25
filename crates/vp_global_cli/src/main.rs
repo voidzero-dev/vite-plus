@@ -314,8 +314,10 @@ fn dump_dirs_from_env_config() -> bool {
 #[tokio::main]
 async fn main() -> ExitCode {
     // Probe before tracing, directory resolution, or argument dispatch can emit output.
-    if env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK).is_some() {
-        vp_shared::output::print_stdout_line(format_args!("vite-plus-self-setup-v1"));
+    if let Some(check) = env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK) {
+        for line in vp_setup::support::support_response(&check) {
+            vp_shared::output::print_stdout_line(format_args!("{line}"));
+        }
         return ExitCode::SUCCESS;
     }
 

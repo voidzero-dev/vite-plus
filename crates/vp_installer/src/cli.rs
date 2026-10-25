@@ -30,9 +30,49 @@ pub struct Options {
     #[arg(long = "no-node-manager")]
     pub no_node_manager: bool,
 
+    /// Resolved Node.js and package-manager management choice. `run` derives
+    /// it from `--no-node-manager`, `VP_NODE_MANAGER` and auto-detection.
+    #[arg(skip)]
+    pub node_manager: NodeManager,
+
     /// Do not modify the User PATH
     #[arg(long = "no-modify-path")]
     pub no_modify_path: bool,
+}
+
+/// Node.js management choice passed to the installed binary's self-setup.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NodeManager {
+    /// Vite+ manages Node.js (`VP_NODE_MANAGER=yes`).
+    #[default]
+    Enabled,
+    /// Prefer the system Node.js (`VP_NODE_MANAGER=no`).
+    Disabled,
+    /// Use only the system Node.js. Only `VP_NODE_MANAGER=system-only` selects
+    /// it, and the interactive menu cannot change it.
+    SystemOnly,
+}
+
+impl NodeManager {
+    /// The `VP_NODE_MANAGER` value for this choice.
+    #[must_use]
+    pub const fn env_value(self) -> &'static str {
+        match self {
+            Self::Enabled => "yes",
+            Self::Disabled => "no",
+            Self::SystemOnly => vp_shared::env_vars::SYSTEM_ONLY,
+        }
+    }
+
+    /// The menu label for this choice.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Enabled => "enabled",
+            Self::Disabled => "disabled",
+            Self::SystemOnly => "system-only (set by VP_NODE_MANAGER)",
+        }
+    }
 }
 
 /// Parse CLI arguments, merging with environment variables.

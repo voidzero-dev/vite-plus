@@ -9,7 +9,7 @@ use console::style;
 use vp_pm_cli::HttpClient;
 use vp_setup::{install, integrity, platform, registry};
 use vp_shared::output;
-use vt_path::AbsolutePathBuf;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
 
@@ -228,6 +228,9 @@ async fn install_platform_and_main(
         ));
     }
 
+    // A target without system-only support would download managed tools.
+    ensure_system_only_support(&binary_path, new_version).await?;
+
     // Generate wrapper package.json that declares vite-plus as a dependency
     install::generate_wrapper_package_json(version_dir, new_version).await?;
 
@@ -280,6 +283,22 @@ async fn install_platform_and_main(
     Ok(ExitStatus::default())
 }
 
+/// Refuse to switch to `binary` while a `VP_*_MANAGER=system-only` variable is
+/// set, unless the binary supports system-only mode.
+async fn ensure_system_only_support(binary: &AbsolutePath, target: &str) -> Result<(), Error> {
+    let variables = vp_shared::EnvConfig::get().system_only_variables();
+    if variables.is_empty() {
+        return Ok(());
+    }
+    let support = vp_setup::support::probe_self_setup(binary, true).await?;
+    if support == vp_setup::support::SelfSetupSupport::SystemOnly {
+        return Ok(());
+    }
+    Err(Error::Upgrade(
+        vp_setup::support::system_only_unsupported_message(target, &variables).into(),
+    ))
+}
+
 /// Execute rollback to the previous version.
 #[allow(clippy::print_stderr)]
 async fn execute_rollback(
@@ -305,6 +324,9 @@ async fn execute_rollback(
         output::info(&format!("switching from {} {} {}", current_version, output::ARROW, previous));
     }
 
+    ensure_system_only_support(&prev_dir.join("bin").join(vp_setup::VP_BINARY_NAME), &previous)
+        .await?;
+
     // Save the current version as the new "previous" before swapping
     install::save_previous_version(install_dir).await?;
 
@@ -323,4 +345,56 @@ async fn execute_rollback(
     }
 
     Ok(ExitStatus::default())
+}
+
+#[cfg(test)]
+mod tests {
+    use vp_shared::{EnvConfig, env_vars};
+
+    use super::*;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn system_only_requires_target_support() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let script = |name: &str, body: &str| {
+            let path = temp.path().join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            AbsolutePathBuf::new(path).unwrap()
+        };
+        let supported = script(
+            "supported",
+            r#"echo vite-plus-self-setup-v1; [ "$VP_SELF_SETUP_SUPPORT_CHECK" = system-only ] && echo vite-plus-self-setup-system-only; exit 0"#,
+        );
+        let unsupported = script("unsupported", "echo vite-plus-self-setup-v1");
+
+        let managers = |node: Option<&'static str>| {
+            [
+                (env_vars::VP_NODE_MANAGER, node),
+                (env_vars::VP_PM_MANAGER, None),
+                (env_vars::VP_NPM_MANAGER, None),
+                (env_vars::VP_PNPM_MANAGER, None),
+                (env_vars::VP_YARN_MANAGER, None),
+                (env_vars::VP_BUN_MANAGER, None),
+            ]
+        };
+        EnvConfig::with_vars_async(managers(None), |_| async {
+            ensure_system_only_support(&unsupported, "0.1.0").await.unwrap();
+        })
+        .await;
+        EnvConfig::with_vars_async(managers(Some("system-only")), |_| async {
+            ensure_system_only_support(&supported, "9.0.0").await.unwrap();
+            let error = ensure_system_only_support(&unsupported, "0.1.0").await.unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("vite-plus 0.1.0 does not support VP_NODE_MANAGER=system-only"),
+                "{error}"
+            );
+        })
+        .await;
+    }
 }

@@ -35,6 +35,9 @@ if [ "$#" -eq 0 ]; then
   if [[ "$scenario" == *pr ]]; then
     test "$NPM_CONFIG_REGISTRY" = https://registry-bridge.viteplus.dev/ || exit 97
   fi
+  if [[ "$scenario" == system-only* ]]; then
+    test "${VP_NODE_MANAGER:-}" = system-only || exit 95
+  fi
   printf 'INSTALL_DIR=%q\n' "$test_root/data"
   printf 'SHIM_DIR=%q\n' "$test_root/installed bin"
   printf 'CACHE_DIR=%q\n' "$test_root/cache"
@@ -42,11 +45,20 @@ if [ "$#" -eq 0 ]; then
   printf 'STATE_DIR=%q\n' "$test_root/state"
   exit 0
 fi
-test "${VP_SELF_SETUP_SUPPORT_CHECK:-}" = 1 || exit 99
+# Only a system-only setting asks for the second response line.
+case "$scenario:${VP_SELF_SETUP_SUPPORT_CHECK:-}" in
+  system-only*:system-only|pm-system-only:system-only) ;;
+  *:1) ;;
+  *) exit 99 ;;
+esac
 touch "$test_root/binary-probed"
 case "$scenario" in
-  legacy|legacy-failure|piped-legacy|piped-legacy-failure|pr) printf 'Usage: vp [COMMAND]\n' ;;
-  *) printf 'vite-plus-self-setup-v1\n' ;;
+  legacy|legacy-failure|piped-legacy|piped-legacy-failure|pr|system-only-legacy) printf 'Usage: vp [COMMAND]\n' ;;
+  *)
+    printf 'vite-plus-self-setup-v1\n'
+    if [ "$VP_SELF_SETUP_SUPPORT_CHECK" = system-only ] && [ "$scenario" != system-only-v1 ]; then
+      printf 'vite-plus-self-setup-system-only\n'
+    fi ;;
 esac
 BINARY
 chmod +x "$test_root/package/vp"
@@ -128,6 +140,7 @@ curl() {
 }
 
 for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failure failure pr supported-pr \
+  system-only system-only-v1 system-only-legacy pm-system-only mixed-case-system-only \
   missing-hash-tools missing-hash-tools-pr \
   escaped-integrity escaped-integrity-pr escaped-integrity-all escaped-integrity-lower escaped-integrity-key escaped-integrity-slash \
   integrity-missing integrity-malformed integrity-unsupported integrity-noncanonical integrity-wrong-type \
@@ -156,6 +169,13 @@ for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failur
     fi
     if [[ "$scenario" == *pr ]]; then PR_VERSION=2406; fi
     if [ "$scenario" = supported ]; then export VP_SELF_SETUP_SUPPORT_CHECK=original; fi
+    unset VP_NODE_MANAGER VP_PM_MANAGER VP_NPM_MANAGER VP_PNPM_MANAGER VP_YARN_MANAGER VP_BUN_MANAGER
+    case "$scenario" in
+      system-only*) export VP_NODE_MANAGER=system-only ;;
+      pm-system-only) export VP_PNPM_MANAGER=system-only ;;
+      # Only the exact lowercase value is system-only.
+      mixed-case-system-only) export VP_NODE_MANAGER=System-Only ;;
+    esac
     main
     test "$NPM_CONFIG_REGISTRY" = https://custom.example
     test "$INSTALL_DIR" = "$test_root/data"
@@ -186,13 +206,20 @@ for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failur
     test "$status" -eq 42
   elif [[ "$scenario" == *legacy-failure ]]; then
     test "$status" -eq 43
+  elif [ "$scenario" = system-only-v1 ] || [ "$scenario" = system-only-legacy ]; then
+    test "$status" -ne 0
+    grep -q 'does not support VP_NODE_MANAGER=system-only' "$test_root/output"
+    test -f "$test_root/binary-probed"
   elif [ "$status" -ne 0 ]; then
     cat "$test_root/output"
     exit 1
   fi
   case "$scenario" in
-    supported|supported-pr|failure|missing-hash-tools*|escaped-integrity*)
+    supported|supported-pr|failure|missing-hash-tools*|escaped-integrity*|system-only|pm-system-only|mixed-case-system-only)
       test -f "$test_root/binary-invoked"
+      test ! -f "$test_root/legacy" ;;
+    system-only-v1|system-only-legacy)
+      test ! -f "$test_root/binary-invoked"
       test ! -f "$test_root/legacy" ;;
     legacy|legacy-failure|piped-legacy|piped-legacy-failure|pr)
       test -f "$test_root/legacy"
