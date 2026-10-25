@@ -50,6 +50,33 @@ fn lexical_path(path: &Path) -> PathBuf {
     normalized
 }
 
+fn validate_delete_roots(
+    roots: &[AbsolutePathBuf],
+    user_home: &AbsolutePathBuf,
+) -> Result<(), Error> {
+    let home = lexical_path(user_home.as_path());
+    let canonical_home = dunce::canonicalize(user_home)?;
+    for root in roots {
+        let path = root.as_path();
+        let canonical = match dunce::canonicalize(path) {
+            Ok(path) => path,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => path.to_path_buf(),
+            Err(error) => return Err(error.into()),
+        };
+        if path.parent().is_none()
+            || home.starts_with(path)
+            || canonical.parent().is_none()
+            || canonical_home.starts_with(&canonical)
+        {
+            return Err(Error::Other(vt_str::format!(
+                "Refusing to remove protected directory {}: it is a filesystem root, the user home, or an ancestor of the user home. Check your Vite+ directory overrides.",
+                path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     let env_config = vp_shared::EnvConfig::get();
     let dirs = &env_config.dirs;
@@ -88,8 +115,9 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
         return Ok(exit_status(0));
     }
 
-    // Use the user home to resolve shell-profile paths.
+    // Validate every deletion target before changing profiles, PATH, or files, even with --yes.
     let user_home = &env_config.user_home;
+    validate_delete_roots(&delete_set, user_home)?;
 
     let source_matcher = VitePlusSourceMatcher::new(&dirs.config, user_home);
 
@@ -1542,6 +1570,113 @@ mod tests {
             assert!(result.is_ok());
             assert!(result.unwrap().success());
         });
+    }
+
+    #[test]
+    fn validate_delete_roots_rejects_home_ancestors_and_filesystem_roots() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join("home")).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        for ancestor in home.as_path().ancestors() {
+            let root = AbsolutePathBuf::new(ancestor.to_path_buf()).unwrap();
+            let error = validate_delete_roots(std::slice::from_ref(&root), &home).unwrap_err();
+            assert!(error.to_string().contains("Refusing to remove protected directory"));
+        }
+    }
+
+    #[test]
+    fn validate_delete_roots_allows_dedicated_installations() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join("home")).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        let roots = [home.join(".vite-plus"), home.join("../home-other"), home.join("../custom")];
+        for root in &roots {
+            std::fs::create_dir_all(root).unwrap();
+        }
+        validate_delete_roots(&roots, &home).unwrap();
+        validate_delete_roots(&[home.join("missing")], &home).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_delete_roots_checks_symlinked_roots_and_home() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let home = base.join("home");
+        let alias = base.join("alias");
+        std::fs::create_dir_all(home.join(".vite-plus")).unwrap();
+        std::os::unix::fs::symlink(&base, &alias).unwrap();
+        for root in [&alias, &alias.join("home")] {
+            assert!(validate_delete_roots(std::slice::from_ref(root), &home).is_err());
+        }
+        let aliased_home = alias.join("home");
+        assert!(validate_delete_roots(std::slice::from_ref(&home), &aliased_home).is_err());
+        validate_delete_roots(&[alias.join("home/.vite-plus")], &home).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn execute_rejects_user_home_before_modifying_files() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = temp_dir.path().join("home");
+        let xdg = temp_dir.path().join("xdg");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(home.join("personal.txt"), "keep").unwrap();
+        let profile = "# Vite+ bin\n. \"$HOME/env\"\n";
+        std::fs::write(home.join(".bashrc"), profile).unwrap();
+
+        for root in [&home, &home.join("child/.."), &home.join("..")] {
+            vp_shared::EnvConfig::with_vars(
+                [
+                    (env_vars::VP_HOME, root.as_os_str()),
+                    ("HOME", home.as_os_str()),
+                    ("USERPROFILE", home.as_os_str()),
+                    ("ZDOTDIR", home.as_os_str()),
+                    (env_vars::XDG_CONFIG_HOME, xdg.as_os_str()),
+                    (env_vars::XDG_DATA_HOME, xdg.as_os_str()),
+                ],
+                |_| {
+                    let error = execute(true).unwrap_err();
+                    assert!(error.to_string().contains("Refusing to remove protected directory"));
+                    assert_eq!(std::fs::read_to_string(home.join("personal.txt")).unwrap(), "keep");
+                    assert_eq!(std::fs::read_to_string(home.join(".bashrc")).unwrap(), profile);
+                },
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn execute_validates_all_split_roots_before_deleting_any() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = temp_dir.path().join("z-home");
+        let data = temp_dir.path().join("a-data");
+        let bin = temp_dir.path().join("bin");
+        let xdg = temp_dir.path().join("xdg");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(home.join("personal.txt"), "keep").unwrap();
+        std::fs::write(data.join("data.txt"), "keep").unwrap();
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, None),
+                (env_vars::VP_BIN_DIR, Some(bin.as_os_str())),
+                (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+                (env_vars::VP_CACHE_DIR, Some(home.as_os_str())),
+                (env_vars::XDG_CONFIG_HOME, Some(xdg.as_os_str())),
+                (env_vars::XDG_DATA_HOME, Some(xdg.as_os_str())),
+                (env_vars::XDG_STATE_HOME, Some(xdg.as_os_str())),
+                ("HOME", Some(home.as_os_str())),
+                ("USERPROFILE", Some(home.as_os_str())),
+                ("ZDOTDIR", Some(home.as_os_str())),
+            ],
+            |_| {
+                let error = execute(true).unwrap_err();
+                assert!(error.to_string().contains("Refusing to remove protected directory"));
+                assert_eq!(std::fs::read_to_string(home.join("personal.txt")).unwrap(), "keep");
+                assert_eq!(std::fs::read_to_string(data.join("data.txt")).unwrap(), "keep");
+            },
+        );
     }
 
     #[test]
