@@ -20,7 +20,7 @@ export type Task = {
 /**
  * Define a group of tasks to be executed
  */
-export const tasks = async (tasks: Task[], opts?: CommonOptions) => {
+export const tasks = async (tasks: Task[], opts?: CommonOptions): Promise<void> => {
   for (const task of tasks) {
     if (task.enabled === false) {
       continue;
