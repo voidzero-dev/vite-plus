@@ -117,7 +117,7 @@ steps = [
   { argv = ["node", "setup-system-node.cjs"], snapshot = false },
   { argv = ["node", "setup-system-tools.cjs"], snapshot = false },
   { argv = ["vpt", "write-file", "package.json", '{"packageManager":"pnpm@10.18.0"}'], snapshot = false },
-  { argv = ["node", "list-managed.cjs"], comment = "Managed installs before the system-only steps (the seeded runtime only)." },
+  { argv = ["node", "list-managed.cjs"], comment = "Managed installs before the system-only steps: the pinned runtime is cached, and the override is not." },
 
   # The unreachable mirror and registry fail any request, and VP_NODE_VERSION would select a managed version.
   { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_VERSION", "24.0.0"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "The node shim runs system Node.js, ignoring the session override and the cached managed runtime." },
@@ -128,7 +128,7 @@ steps = [
   { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PNPM_MANAGER", "system-only"], ["VP_PM_MANAGER", "yes"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "VP_PNPM_MANAGER=system-only wins over VP_PM_MANAGER=yes and over the packageManager pin. Node.js stays managed, so only its directory is added to the child PATH." },
   { argv = ["npm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PNPM_MANAGER", "yes"], ["VP_PM_MANAGER", "system-only"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "VP_PM_MANAGER=system-only applies to families without their own value." },
   { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "System-Only"]], comment = "Only the exact lowercase value is system-only; managed config.json stays in effect." },
-  { argv = ["node", "list-managed.cjs"], comment = "The system-only steps downloaded nothing and wrote no version index." },
+  { argv = ["node", "list-managed.cjs"], comment = "The system-only steps downloaded nothing." },
 
   { argv = ["node", "check-managed-pnpm.cjs"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PNPM_MANAGER", "yes"], ["VP_PM_MANAGER", "system-only"]], comment = "VP_PNPM_MANAGER=yes wins over VP_PM_MANAGER=system-only, so the shim selects the pinned managed pnpm instead of the system one." },
   { argv = ["node", "--version"], envs = [["PATH", "${VP_HOME}/bin"], ["VP_NODE_MANAGER", "system-only"]], comment = "Without a system Node.js on PATH, the shim fails instead of using the managed runtime.", continue-on-failure = true },

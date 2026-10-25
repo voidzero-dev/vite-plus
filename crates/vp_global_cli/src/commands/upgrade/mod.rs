@@ -347,13 +347,12 @@ async fn execute_rollback(
     Ok(ExitStatus::default())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use vp_shared::{EnvConfig, env_vars};
 
     use super::*;
 
-    #[cfg(unix)]
     #[tokio::test]
     async fn system_only_requires_target_support() {
         use std::os::unix::fs::PermissionsExt;

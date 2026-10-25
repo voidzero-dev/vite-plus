@@ -13,10 +13,11 @@ With managed config.json, VP_*_MANAGER=system-only makes the shims use only syst
 
 ## `node list-managed.cjs`
 
-Managed installs before the system-only steps (the seeded runtime only).
+Managed installs before the system-only steps: the pinned runtime is cached, and the override is not.
 
 ```
-js_runtime/node: 20.20.2, 20.20.2.lock
+managed Node.js (.node-version pin): true
+managed Node.js (VP_NODE_VERSION override): false
 package_manager: (empty)
 ```
 
@@ -73,10 +74,11 @@ false
 
 ## `node list-managed.cjs`
 
-The system-only steps downloaded nothing and wrote no version index.
+The system-only steps downloaded nothing.
 
 ```
-js_runtime/node: 20.20.2, 20.20.2.lock
+managed Node.js (.node-version pin): true
+managed Node.js (VP_NODE_VERSION override): false
 package_manager: (empty)
 ```
 

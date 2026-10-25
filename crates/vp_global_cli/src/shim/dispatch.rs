@@ -782,13 +782,13 @@ struct CoreToolSelection {
 
 /// Select Node.js and `tool` for a core shim and prepare the child PATH.
 ///
-/// Returns the user-facing error lines on failure. This function never
-/// executes the tool, so it can be tested directly.
+/// On failure, returns the user-facing messages, each printed with a `vp: `
+/// prefix. This function never executes the tool, so it can be tested directly.
 async fn select_core_tool(
     tool: &str,
     cwd: &AbsolutePathBuf,
     env: ToolPathEnv,
-) -> Result<CoreToolSelection, String> {
+) -> Result<CoreToolSelection, Vec<String>> {
     // Ensure Node.js is installed and locate its binary for PATH preparation.
     // Package-manager shims can use their own declared version, but JS-based
     // package managers still need the Node.js runtime selected by its mode.
@@ -801,21 +801,25 @@ async fn select_core_tool(
     .flatten();
     let node_is_inherited = inherited_node.is_some();
     let system_node = if node_system_only {
-        resolve_effective_tool("node", EffectiveMode::SystemOnly).map_err(|e| e.to_string())?
+        resolve_effective_tool("node", EffectiveMode::SystemOnly)
+            .map_err(|e| vec![e.to_string()])?
     } else if node_is_inherited {
         inherited_node
     } else if PackageManagerType::from_tool(tool).is_some() {
         let config = config::load_config()
             .await
-            .map_err(|error| format!("Failed to load Node.js shim mode: {error}"))?;
+            .map_err(|error| vec![format!("Failed to load Node.js shim mode: {error}")])?;
         resolve_effective_tool("node", config::effective_node_mode(&config))
-            .map_err(|e| e.to_string())?
+            .map_err(|e| vec![e.to_string()])?
     } else {
         None
     };
     let resolution = if system_node.is_none() {
         Some(resolve_with_cache(cwd).await.map_err(|error| {
-            format!("Failed to resolve Node version: {error}\nRun 'vp env doctor' for diagnostics")
+            vec![
+                format!("Failed to resolve Node version: {error}"),
+                "Run 'vp env doctor' for diagnostics".to_string(),
+            ]
         })?)
     } else {
         None
@@ -824,9 +828,9 @@ async fn select_core_tool(
         system_node
     } else {
         let resolution = resolution.as_ref().expect("managed Node.js has no resolution");
-        ensure_installed(&resolution.version)
-            .await
-            .map_err(|error| format!("Failed to install Node {}: {error}", resolution.version))?
+        ensure_installed(&resolution.version).await.map_err(|error| {
+            vec![format!("Failed to install Node {}: {error}", resolution.version)]
+        })?
     };
 
     // Package managers use a matching project pin or their family-specific
@@ -836,11 +840,11 @@ async fn select_core_tool(
         Ok(None) => {
             let (runtime_path, tool_path) =
                 resolve_bundled_tool(node_path, tool, resolution.is_none())
-                    .map_err(|error| format!("Tool '{tool}' not found: {error}"))?;
+                    .map_err(|error| vec![format!("Tool '{tool}' not found: {error}")])?;
             node_path = runtime_path;
             (tool_path, true)
         }
-        Err(e) => return Err(format!("Failed to resolve package manager for '{tool}': {e}")),
+        Err(e) => return Err(vec![format!("Failed to resolve package manager for '{tool}': {e}")]),
     };
 
     // Prepare environment for recursive invocations. Keep the project Node.js
@@ -853,7 +857,7 @@ async fn select_core_tool(
     } else {
         prepare_js_child_path(cwd, node_bin_dir, env)
             .await
-            .map_err(|error| format!("Failed to prepare child process PATH: {error}"))?
+            .map_err(|error| vec![format!("Failed to prepare child process PATH: {error}")])?
     };
     // A system-only family, or npm bundled with system-only Node.js, lives in
     // a system directory, which stays out of the child PATH.
@@ -864,7 +868,7 @@ async fn select_core_tool(
     {
         child_env
             .prepend(bin_dir, kind.bin_names(), PrependOptions::default())
-            .map_err(|error| format!("Failed to prepare package manager PATH: {error}"))?;
+            .map_err(|error| vec![format!("Failed to prepare package manager PATH: {error}")])?;
     }
 
     Ok(CoreToolSelection { node_path, tool_path, resolution, child_env })
@@ -937,9 +941,9 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
     let CoreToolSelection { node_path, tool_path, resolution, child_env } =
         match select_core_tool(tool, &cwd, env).await {
             Ok(selection) => selection,
-            Err(error) => {
-                for line in error.lines() {
-                    eprintln!("vp: {line}");
+            Err(messages) => {
+                for message in messages {
+                    eprintln!("vp: {message}");
                 }
                 return 1;
             }
