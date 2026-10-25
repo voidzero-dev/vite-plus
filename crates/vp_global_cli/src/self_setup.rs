@@ -229,7 +229,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
     };
     crate::install_dirs::prepare(
         dirs,
-        in_place || configured || active_binary.as_path().is_file(),
+        in_place || configured || std::fs::symlink_metadata(dirs.data.join("current")).is_ok(),
     )?;
     if deploy {
         tokio::fs::create_dir_all(version_dir.join("bin")).await?;

@@ -532,6 +532,7 @@ jobs:
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
 
           test -f "$GRAND/.vite-plus/.keep"
+          test ! -e "$GRAND/.vite-plus/.vp-owned"
           test -e "$GRAND/.vite-plus/current"
           test -e "$GRAND/.vite-plus/bin/vp"
           test ! -d "$GRAND/.local/share/vite-plus"
@@ -2167,6 +2168,9 @@ jobs:
           }
           if (-not (Test-Path (Join-Path $env:VP_HOME "current/bin/.vp-setup-complete"))) {
             throw "vp-setup.exe did not complete the binary's self-setup"
+          }
+          if (Test-Path (Join-Path $env:VP_HOME ".vp-owned")) {
+            throw "Repair claimed ownership of an unmarked installation root"
           }
           if ([Environment]::GetEnvironmentVariable("Path", "User") -cne $pathBefore) {
             throw "--no-modify-path changed User PATH"
