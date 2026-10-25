@@ -21,12 +21,13 @@
 
 ## `VP_HOME=${HOME}/Documents ./external/vp`
 
-A fresh install cannot claim a nonempty personal directory
+Setup succeeds without claiming a nonempty personal directory
 
-**Exit code:** 1
+
+## `vpt stat-file $HOME/Documents/current/bin/.vp-setup-complete --assert file`
 
 ```
-error: Refusing to initialize <home>/Documents: the directory is not empty and Vite+ ownership could not be verified. Choose an empty installation directory.
+<home>/Documents/current/bin/.vp-setup-complete: file
 ```
 
 ## `VP_HOME=${HOME}/Documents vp implode --yes`

@@ -227,10 +227,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
     } else {
         version_dir.join("bin").join(VP_BINARY_NAME)
     };
-    crate::install_dirs::prepare(
-        dirs,
-        in_place || configured || std::fs::symlink_metadata(dirs.data.join("current")).is_ok(),
-    )?;
+    crate::install_dirs::prepare(dirs)?;
     if deploy {
         tokio::fs::create_dir_all(version_dir.join("bin")).await?;
         install::clear_self_setup_marker(&version_dir).await?;

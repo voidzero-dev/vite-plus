@@ -1682,7 +1682,7 @@ mod tests {
                 ("ZDOTDIR", Some(home.as_os_str())),
             ],
             |config| {
-                install_dirs::prepare(&config.dirs, false).unwrap();
+                install_dirs::prepare(&config.dirs).unwrap();
                 std::fs::write(data.join("data.txt"), b"data").unwrap();
                 std::fs::write(normalized_cache.join("cache.txt"), b"cache").unwrap();
                 let profile = vt_str::format!(

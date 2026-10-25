@@ -62,9 +62,9 @@ pub(crate) fn require_owned(roots: &[AbsolutePathBuf]) -> Result<(), Error> {
     Ok(())
 }
 
-/// Claim only empty or newly created roots. Legacy installs may remain unowned,
-/// but updating them must never grant permission to delete their entire roots.
-pub(crate) fn prepare(dirs: &VpDirs, existing_install: bool) -> Result<(), Error> {
+/// Claim only empty or newly created roots. Installing into an unowned, nonempty
+/// directory must never grant permission to delete its existing contents.
+pub(crate) fn prepare(dirs: &VpDirs) -> Result<(), Error> {
     let mut empty = Vec::new();
     // Preflight all roots before creating directories or ownership markers.
     for root in roots(dirs) {
@@ -77,13 +77,7 @@ pub(crate) fn prepare(dirs: &VpDirs, existing_install: bool) -> Result<(), Error
             Err(error) => return Err(error.into()),
         };
         if nonempty {
-            if existing_install {
-                continue;
-            }
-            return Err(Error::Other(vt_str::format!(
-                "Refusing to initialize {}: the directory is not empty and Vite+ ownership could not be verified. Choose an empty installation directory.",
-                root.as_path().display()
-            )));
+            continue;
         }
         empty.push(root);
     }
@@ -132,12 +126,12 @@ mod tests {
                     fs::create_dir_all(&dirs.bin).unwrap();
                     fs::write(dirs.bin.join("other-tool"), b"keep").unwrap();
                 }
-                prepare(&dirs, false).unwrap();
+                prepare(&dirs).unwrap();
                 for root in roots(&dirs) {
                     assert!(is_owned(&root).unwrap());
                 }
                 fs::write(dirs.data.join("payload"), b"vp").unwrap();
-                prepare(&dirs, false).unwrap();
+                prepare(&dirs).unwrap();
                 assert_eq!(fs::read(dirs.data.join("payload")).unwrap(), b"vp");
                 assert!(!dirs.bin.join(OWNERSHIP_MARKER).as_path().exists());
                 if split {
@@ -148,21 +142,26 @@ mod tests {
     }
 
     #[test]
-    fn prepare_preflights_all_roots_and_never_claims_legacy_contents() {
+    fn prepare_preflights_all_roots_and_never_claims_existing_contents() {
         EnvConfig::scoped(|env| {
             let mut dirs = env.dirs.clone();
             dirs.data = env.dirs.data.join("a-data");
             dirs.config = env.dirs.data.join("b-config");
             dirs.state = env.dirs.data.join("c-state");
             dirs.cache = env.dirs.data.join("z-cache");
-            fs::create_dir_all(&dirs.cache).unwrap();
-            fs::write(dirs.cache.join("personal.txt"), b"keep").unwrap();
-            assert!(prepare(&dirs, false).is_err());
+            fs::create_dir_all(&env.dirs.data).unwrap();
+            fs::write(&dirs.cache, b"not a directory").unwrap();
+            assert!(prepare(&dirs).is_err());
             for root in [&dirs.data, &dirs.config, &dirs.state] {
                 assert!(!root.as_path().exists());
             }
-            prepare(&dirs, true).unwrap();
-            assert!(is_owned(&dirs.data).unwrap());
+            fs::remove_file(&dirs.cache).unwrap();
+            fs::create_dir_all(&dirs.cache).unwrap();
+            fs::write(dirs.cache.join("personal.txt"), b"keep").unwrap();
+            prepare(&dirs).unwrap();
+            for root in [&dirs.data, &dirs.config, &dirs.state] {
+                assert!(is_owned(root).unwrap());
+            }
             assert!(!dirs.cache.join(OWNERSHIP_MARKER).as_path().exists());
             assert_eq!(fs::read(dirs.cache.join("personal.txt")).unwrap(), b"keep");
             assert!(require_owned(&roots(&dirs)).is_err());
@@ -172,7 +171,7 @@ mod tests {
     #[test]
     fn ownership_requires_a_regular_marker_file() {
         EnvConfig::scoped(|env| {
-            prepare(&env.dirs, false).unwrap();
+            prepare(&env.dirs).unwrap();
             let roots = roots(&env.dirs);
             let marker = env.dirs.cache.join(OWNERSHIP_MARKER);
             fs::remove_file(&marker).unwrap();
