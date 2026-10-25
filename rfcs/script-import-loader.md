@@ -104,7 +104,7 @@ captures the effective config in JavaScript, and `initializeLoader` explicitly
 selects that path or automatic discovery. The asynchronous ESM hook receives the
 same selection through `module.register` data before its first resolve.
 
-The pinned oxc-node commit includes
+The pinned oxc-node `v1.0.1` release includes
 [oxc-node#888](https://github.com/oxc-project/oxc-node/pull/888), which stores these
 values in a loader context per thread. Async native transform tasks carry their
 caller's context onto the task thread. Vite+ consumes that upstream source without
