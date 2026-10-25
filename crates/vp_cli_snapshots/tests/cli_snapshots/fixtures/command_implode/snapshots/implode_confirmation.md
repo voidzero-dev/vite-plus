@@ -1,5 +1,22 @@
 # implode_confirmation
 
+## `vpt rm $VP_HOME/cache/.vp-owned`
+
+
+## `vp implode --yes`
+
+A nested cache needs its own ownership marker before any deletion
+
+**Exit code:** 1
+
+```
+error: Refusing to remove <home>/.vite-plus/cache: Vite+ directory ownership could not be verified. Unmarked directories, including older installations, must be inspected and removed manually.
+```
+
+## `vpt write-file $VP_HOME/cache/.vp-owned 'vite-plus-owned-directory
+'`
+
+
 ## `vp implode`
 
 The old confirmation word leaves the installation intact

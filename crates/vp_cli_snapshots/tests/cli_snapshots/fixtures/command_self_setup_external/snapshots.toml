@@ -55,6 +55,7 @@ skip-platforms = ["windows"]
 env = { VP_SKIP_DEPS_INSTALL = "1", VP_VERSION = "external-test", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
 steps = [
   { argv = ["vpt", "mkdir", "-p", "external", "home/external-test/bin"], snapshot = false },
+  { argv = ["vpt", "write-file", "home/.vp-owned", "vite-plus-owned-directory\n"], comment = "An interrupted fresh install already claimed its empty root", snapshot = false },
   { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
   { argv = ["vpt", "chmod", "555", "external/vp"], snapshot = false },
   { argv = ["vpt", "cp", "external/vp", "home/external-test/bin/vp"], snapshot = false },

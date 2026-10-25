@@ -1,10 +1,8 @@
 //! `vp implode` — completely remove vp and all its data from this system.
 
-use std::{
-    io::Write,
-    path::{Component, Path, PathBuf},
-    process::ExitStatus,
-};
+#[cfg(any(windows, test))]
+use std::path::{Path, PathBuf};
+use std::{io::Write, process::ExitStatus};
 
 use console::style;
 use rustc_hash::FxHashSet;
@@ -20,6 +18,7 @@ use crate::{
         shell::{ALL_SHELL_PROFILES, ShellProfileKind, abbreviate_home_path, resolve_profile_path},
     },
     error::Error,
+    install_dirs::{self, lexical_path},
     shim::DEFAULT_SHIM_TOOLS,
 };
 
@@ -35,20 +34,6 @@ const DEFERRED_DELETE_ATTEMPTS: usize = 100;
 
 #[cfg(windows)]
 const DEFERRED_DELETE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
-
-fn lexical_path(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            _ => normalized.push(component.as_os_str()),
-        }
-    }
-    normalized
-}
 
 fn validate_delete_roots(
     roots: &[AbsolutePathBuf],
@@ -89,21 +74,7 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     // The default Unix `<BIN>` is under `<DATA>`, so removal of `<DATA>` also
     // removes it. Never remove a separately resolved `<BIN>` because a bin from
     // an explicit override group can be shared. Remove only Vite+-owned shims.
-    let mut roots: Vec<AbsolutePathBuf> = [&dirs.data, &dirs.cache, &dirs.config, &dirs.state]
-        .into_iter()
-        .map(|root| {
-            AbsolutePathBuf::new(lexical_path(root.as_path()))
-                .expect("resolved Vite+ roots remain absolute after lexical normalization")
-        })
-        .collect();
-    roots.sort_by(|a, b| a.as_path().cmp(b.as_path()));
-    roots.dedup();
-    let mut delete_set: Vec<AbsolutePathBuf> = Vec::new();
-    for root in roots {
-        if !delete_set.iter().any(|kept| root.as_path().starts_with(kept.as_path())) {
-            delete_set.push(root);
-        }
-    }
+    let mut delete_set = install_dirs::roots(dirs);
 
     if !delete_set.iter().any(|root| root.as_path().exists()) {
         if homebrew {
@@ -118,6 +89,9 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     // Validate every deletion target before changing profiles, PATH, or files, even with --yes.
     let user_home = &env_config.user_home;
     validate_delete_roots(&delete_set, user_home)?;
+    install_dirs::require_owned(&delete_set)?;
+    // Sorted roots can be collapsed only after every category has passed validation.
+    delete_set.dedup_by(|child, parent| child.as_path().starts_with(parent.as_path()));
 
     let source_matcher = VitePlusSourceMatcher::new(&dirs.config, user_home);
 
@@ -1679,8 +1653,9 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
-    fn execute_normalizes_category_roots_before_deduplication() {
+    fn execute_requires_each_owned_root_before_removing_split_installation() {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = temp_dir.path().join("home");
         let bin = temp_dir.path().join("bin");
@@ -1692,8 +1667,6 @@ mod tests {
         std::fs::create_dir_all(&home).unwrap();
         std::fs::create_dir_all(&data).unwrap();
         std::fs::create_dir_all(&normalized_cache).unwrap();
-        std::fs::write(data.join("data.txt"), b"data").unwrap();
-        std::fs::write(normalized_cache.join("cache.txt"), b"cache").unwrap();
 
         vp_shared::EnvConfig::with_vars(
             [
@@ -1702,13 +1675,43 @@ mod tests {
                 (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
                 (env_vars::VP_CACHE_DIR, Some(cache.as_os_str())),
                 (env_vars::XDG_CONFIG_HOME, Some(xdg_config.as_os_str())),
+                (env_vars::XDG_DATA_HOME, Some(xdg_config.as_os_str())),
                 (env_vars::XDG_STATE_HOME, Some(xdg_state.as_os_str())),
                 ("HOME", Some(home.as_os_str())),
                 ("USERPROFILE", Some(home.as_os_str())),
+                ("ZDOTDIR", Some(home.as_os_str())),
             ],
-            |_| {
+            |config| {
+                install_dirs::prepare(&config.dirs, false).unwrap();
+                std::fs::write(data.join("data.txt"), b"data").unwrap();
+                std::fs::write(normalized_cache.join("cache.txt"), b"cache").unwrap();
+                let profile = vt_str::format!(
+                    "# personal config\n# Vite+ bin\n. \"{}/env\"\n",
+                    config.dirs.config.as_path().display()
+                );
+                std::fs::write(home.join(".bashrc"), profile.as_bytes()).unwrap();
+                for root in install_dirs::roots(&config.dirs) {
+                    let marker = root.join(install_dirs::OWNERSHIP_MARKER);
+                    let contents = std::fs::read(&marker).unwrap();
+                    std::fs::remove_file(&marker).unwrap();
+                    assert!(execute(true).unwrap_err().to_string().contains("ownership"));
+                    assert_eq!(std::fs::read(data.join("data.txt")).unwrap(), b"data");
+                    assert_eq!(
+                        std::fs::read(normalized_cache.join("cache.txt")).unwrap(),
+                        b"cache"
+                    );
+                    assert_eq!(
+                        std::fs::read_to_string(home.join(".bashrc")).unwrap(),
+                        profile.as_str()
+                    );
+                    std::fs::write(&marker, contents).unwrap();
+                }
                 let result = execute(true).unwrap();
                 assert!(result.success());
+                assert_eq!(
+                    std::fs::read_to_string(home.join(".bashrc")).unwrap(),
+                    "# personal config\n"
+                );
                 assert!(!data.exists(), "data root must be removed");
                 assert!(
                     !normalized_cache.exists(),
