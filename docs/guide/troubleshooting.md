@@ -72,7 +72,7 @@ If `vp staged` fails or your pre-commit hook does not run:
 - if status shows `Preference: disabled (local)`, re-enable with `vp hooks enable`
 - check whether hooks were skipped intentionally through `VP_GIT_HOOKS=0`
 
-To stop hooks in this clone without deleting project policy files, run `vp hooks disable`. See the [Commit hooks guide](/guide/commit-hooks) for the full workflow.
+To stop hooks in this clone without deleting project policy files, run `vp hooks disable`. See the [Commit Hooks](/guide/commit-hooks) for the full workflow.
 
 A minimal staged config looks like this:
 
