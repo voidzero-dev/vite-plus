@@ -1,92 +1,103 @@
 # Run
 
-`vp run` runs `package.json` scripts and tasks defined in `vite.config.ts`. It works like `pnpm run`, with caching, dependency ordering, and workspace-aware execution built in. The task runner is available from both the [global CLI](/guide/global-cli) and the [project-local CLI](/guide/local-cli).
+Use `vp run <name>` to run a script from `package.json` or a task defined under `run.tasks` in `vite.config.ts`. It supports caching, dependency ordering, and running commands across workspace packages. You can use it through either the [global CLI](/guide/global-cli) or the [project-local CLI](/guide/local-cli).
 
 ::: tip
-`vpr` is available as a standalone shorthand for `vp run`. All examples below work with both `vp run` and `vpr`.
+`vpr` is shorthand for `vp run`. You can replace `vp run` with `vpr` in the examples below.
 :::
 
 ## Overview
 
-Use `vp run` with existing `package.json` scripts:
+Start with the scripts in your project's `package.json`:
 
 ```json [package.json]
 {
   "scripts": {
-    "build": "node compile-legacy-app.js",
-    "test": "jest"
+    "build": "vp build",
+    "lint": "vp lint",
+    "test": "vp test"
   }
 }
 ```
 
-`vp run build` executes the associated build script:
+Run a script by name:
+
+```bash
+vp run build
+```
+
+This runs the `build` script, which calls the built-in `vp build` command:
 
 ```
-$ node compile-legacy-app.js
-
-building legacy app for production...
-
+$ vp build
 ✓ built in 69s
 ```
 
-Use `vp run` without a task name to use the interactive task runner:
+Run `vp run` without a name to select a script or task interactively:
 
 ```
 Select a task (↑/↓, Enter to run, type to search):
 
-  › build: node compile-legacy-app.js
-    test: jest
+  › build: vp build
+    lint: vp lint
+    test: vp test
 ```
 
-With [shell completion](/guide/env#shell-completion) enabled, press Tab after `vp run ` or `vpr ` to complete task names from your project.
+With [shell completion](/guide/env#shell-completion) enabled, press Tab after `vp run ` or `vpr ` to complete script and task names from your project.
 
 ## Built-in Commands vs Scripts
 
-`vp dev` is a built-in command. `vp run dev` is your `dev` script. Built-in commands cannot be overwritten, so adding a `dev` script does not change what `vp dev` does:
+`vp <command>` runs a built-in command. `vp run <name>` runs the script or task your project defines with that name. Defining a script or task does not override a built-in command:
 
-| Command                    | What it runs                                                              |
-| -------------------------- | ------------------------------------------------------------------------- |
-| `vp dev`                   | The built-in Vite dev server                                              |
-| `vp run dev` / `vpr dev`   | The `dev` script in `package.json`, or a `dev` task in `vite.config.ts`   |
-| `vp test`                  | The built-in Vitest command                                               |
-| `vp run test` / `vpr test` | The `test` script in `package.json`, or a `test` task in `vite.config.ts` |
+| Command                    | What it runs                                                           |
+| -------------------------- | ---------------------------------------------------------------------- |
+| `vp dev`                   | The built-in Vite dev server                                           |
+| `vp run dev` / `vpr dev`   | The `dev` script in `package.json`, or the `dev` task in `run.tasks`   |
+| `vp test`                  | The built-in Vitest command                                            |
+| `vp run test` / `vpr test` | The `test` script in `package.json`, or the `test` task in `run.tasks` |
 
 `build`, `preview`, `lint`, `fmt`, `check`, and `pack` work the same way.
 
-If the project defines that script or task, run it with `vp run <name>`. For example, with a `"dev": "astro dev"` script, `vp run dev` starts Astro, while `vp dev` ignores the script and starts Vite.
+Use `vp run <name>` when you want your project's command. For example, in an Astro project with a `"dev": "astro dev"` script, `vp run dev` starts Astro. `vp dev` starts the built-in Vite dev server.
+
+If your Astro, Nuxt, or VitePress project has no `dev` script or task, running `vp dev` without arguments can suggest a framework command such as `vp exec astro dev` or `vp exec vitepress dev docs`. The command still starts the Vite dev server.
 
 ## Caching
 
-`package.json` scripts are not cached by default. Use `--cache` to enable caching:
+By default, `vp run` caches [tasks defined in `vite.config.ts`](#task-definitions), but not `package.json` scripts. Add `--cache` to cache a script run:
 
 ```bash
 vp run --cache build
 ```
 
 ```
-$ node compile-legacy-app.js
+$ vp build
 ✓ built in 69s
 ```
 
-If nothing changes, the output is replayed from the cache on the next run:
+When the inputs are unchanged, `vp run` replays the cached output and restores the output files on the next run:
 
 ```
-$ node compile-legacy-app.js ◉ cache hit, replaying
+$ vp build ◉ cache hit, replaying
 ✓ built in 69s
 
 ---
 vp run: cache hit, 69s saved.
 ```
 
-If an input changes, the task runs again:
+If an input changes, `vp run` runs the command again:
 
 ```
-$ node compile-legacy-app.js ○ cache miss: 'legacy/index.js' modified, executing
+$ vp build ○ cache miss: 'src/main.ts' modified, executing
 ```
+
+`vp run` uses [automatic data tracking](/guide/automatic-data-tracking) to identify cache inputs and outputs. See [When Is Caching Enabled?](/guide/cache#when-is-caching-enabled) for how flags and configuration control caching.
 
 ## Task Definitions
 
-Vite Task [automatically tracks](/guide/automatic-data-tracking) what each task needs for caching. You can define tasks directly in `vite.config.ts` to enable caching by default or control which files and environment variables affect cache behavior.
+Define a task under `run.tasks` in `vite.config.ts` when you need dependency ordering or cache configuration. Each task needs an explicit `command`.
+
+To convert the `build` script above into a task, remove it from `package.json` and add it to `run.tasks`. A name must appear in only one of these files. The `lint` and `test` scripts can stay in `package.json`:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
@@ -97,9 +108,6 @@ export default defineConfig({
       build: {
         command: 'vp build',
         dependsOn: ['lint'],
-        cache: {
-          env: ['NODE_ENV'],
-        },
       },
       deploy: {
         command: 'deploy-script --prod',
@@ -111,19 +119,15 @@ export default defineConfig({
 });
 ```
 
-If you want to run an existing `package.json` script as-is, use `vp run <script>`. If you want task-level caching, dependencies, or environment/input controls, define a task with an explicit `command`. A task name can come from `vite.config.ts` or `package.json`, but not both.
+You still run the build with `vp run build`. It now waits for `lint` and uses caching by default. The `deploy` task disables caching because it changes an external system.
 
-::: info
-Tasks defined in `vite.config.ts` are cached by default. `package.json` scripts are not. See [When Is Caching Enabled?](/guide/cache#when-is-caching-enabled) for the full resolution order.
-:::
-
-See [Run Config](/config/run) for the full `run` block reference.
+See [Run Config](/config/run) to configure environment variables, file inputs, outputs, and other task settings.
 
 ## Task Dependencies
 
-Use [`dependsOn`](/config/run#dependson) to run tasks in the right order. Running `vp run deploy` with the config above runs `build` and `test` first.
+Use [`dependsOn`](/config/run#dependson) to declare which scripts or tasks must finish before a task starts. In the configuration above, `deploy` waits for `build` and `test`, and `build` waits for `lint`.
 
-String task names in `dependsOn` reference tasks in the current or another package:
+String entries name a script or task in the current package or another workspace package:
 
 ```ts [vite.config.ts]
 dependsOn: [
@@ -132,7 +136,7 @@ dependsOn: [
 ];
 ```
 
-Use the object form when you need to reference all tasks with a given name from the current package's dependencies:
+Use the object form to run a named script or task in each workspace dependency. For example, move `test` from `package.json` into `run.tasks` to make it wait for dependency builds:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
@@ -149,7 +153,7 @@ export default defineConfig({
 });
 ```
 
-In this example, `vp run test` checks the current package's `dependencies`. For each direct workspace dependency that defines `build`, Vite Task runs that dependency's `build` task before `test`.
+In this example, `vp run test` checks the current package's `dependencies`. It runs `build` in each direct workspace dependency that defines that script or task before it starts `test`.
 
 Use an array when you need more than one dependency field:
 
@@ -159,40 +163,38 @@ dependsOn: [{ task: 'build', from: ['dependencies', 'devDependencies'] }];
 
 ## Running in a Workspace
 
-With no package-selection flags, `vp run` runs the task in the package in your current working directory:
+By default, `vp run` selects the script or task from the package containing your current working directory:
 
 ```bash
 cd packages/app
 vp run build
 ```
 
-You can also target a package explicitly from anywhere:
+To select another workspace package, use `<package>#<name>`:
 
 ```bash
 vp run @my/app#build
 ```
 
-Workspace package ordering is based on the normal monorepo dependency graph declared in each package's `package.json`. In other words, when Vite+ talks about package dependencies, it means the regular `dependencies` relationships between workspace packages, not a separate task-runner-specific graph.
+The `-r` and `-t` options use the workspace dependencies declared in each package's `package.json` to determine which packages run and in what order. Use [`dependsOn`](#task-dependencies) for additional ordering between named scripts and tasks.
 
 ### Recursive (`-r`)
 
-Run the task in every workspace package, in dependency order:
+Run the named script or task across workspace packages, in dependency order:
 
 ```bash
 vp run -r build
 ```
 
-That dependency order comes from the workspace packages referenced through `package.json` dependencies.
-
 ### Transitive (`-t`)
 
-Run the task in one package and all of its dependencies:
+Run the named script or task in a package and its workspace dependencies:
 
 ```bash
 vp run -t @my/app#build
 ```
 
-If `@my/app` depends on `@my/utils`, which depends on `@my/core`, this runs all three in order. Vite+ resolves that chain from the normal workspace package dependencies declared in `package.json`.
+If `@my/app` depends on `@my/utils`, which depends on `@my/core`, this runs `build` in `@my/core`, then `@my/utils`, then `@my/app`.
 
 ### Filter (`--filter`)
 
@@ -218,13 +220,13 @@ vp run --filter "...@my/core" build
 vp run --filter "@my/*" --filter "!@my/utils" build
 ```
 
-Multiple `--filter` flags are combined as a union. Exclusion filters are applied after all inclusions.
+With multiple `--filter` flags, `vp run` selects packages that match any inclusion filter, then removes packages that match an exclusion filter.
 
-When a `--filter` matches no packages, Vite+ prints a warning and exits successfully. Pass `--fail-if-no-match` to abort the run when any filter matches nothing instead.
+`vp run` prints a warning for each filter that matches no packages. If no packages are selected, it exits successfully without running any commands. Add `--fail-if-no-match` to fail the run when any filter matches no packages.
 
 ### Workspace Root (`-w`)
 
-Explicitly run the task in the workspace root package:
+Run the named script or task in the workspace root package:
 
 ```bash
 vp run -w build
@@ -232,7 +234,7 @@ vp run -w build
 
 ## Compound Commands
 
-Commands joined with `&&` are split into independent sub-tasks. Each sub-task is cached separately when [caching is enabled](/guide/cache#when-is-caching-enabled). This works for both `vite.config.ts` tasks and `package.json` scripts:
+`vp run` splits commands joined with `&&` into subtasks and runs them in order. When [caching is enabled](/guide/cache#when-is-caching-enabled), each subtask has its own cache entry. This works for both scripts and tasks:
 
 ```json [package.json]
 {
@@ -242,7 +244,11 @@ Commands joined with `&&` are split into independent sub-tasks. Each sub-task is
 }
 ```
 
-Now, run `vp run --cache check`:
+Run the `check` script with caching enabled:
+
+```bash
+vp run --cache check
+```
 
 ```
 $ vp lint
@@ -255,7 +261,7 @@ $ vp build
 vp run: 0/2 cache hit (0%), 2/2 successful.
 ```
 
-Each sub-task has its own cache entry. For example, if a file used only by the build changes, such as `index.html`, only the build runs again the next time `vp run --cache check` is called:
+If only a build input changes, such as `index.html`, the next `vp run --cache check` reuses the lint result and runs the build again:
 
 ```
 $ vp lint ◉ cache hit, replaying
@@ -268,7 +274,7 @@ vp run: 1/2 cache hit (50%), 2/2 successful, 120ms saved.
 
 ### Nested `vp run`
 
-When a command contains `vp run`, Vite Task inlines it as separate tasks instead of spawning a nested process. Each sub-task is cached independently and output stays flat:
+When a script or task calls `vp run`, the selected commands become part of the same run. With caching enabled, each nested command has its own cache entry:
 
 ```json [package.json]
 {
@@ -278,17 +284,17 @@ When a command contains `vp run`, Vite Task inlines it as separate tasks instead
 }
 ```
 
-Running `vp run ci` expands into three tasks:
+Running `vp run ci` runs `lint`, `test`, and `build` in order:
 
 ```mermaid
 graph LR
   lint --> test --> build
 ```
 
-Flags also work inside nested scripts. For example, `vp run -r build` inside a script expands into individual build tasks for every package.
+You can also use flags in nested commands. For example, `vp run -r build` inside a script runs `build` across workspace packages.
 
 ::: info
-A common monorepo pattern is a root script that runs a task recursively:
+To run `build` across a workspace, you can define this script in the root `package.json`:
 
 ```json [package.json (root) ~vscode-icons:file-type-node~]
 {
@@ -298,9 +304,7 @@ A common monorepo pattern is a root script that runs a task recursively:
 }
 ```
 
-This creates a potential recursion: root's `build` -> `vp run -r build` -> includes root's `build` -> ...
-
-Vite Task detects this and prunes the self-reference automatically, so other packages build normally.
+The recursive run includes the root package, whose `build` script would call itself. `vp run` skips that self-reference and runs `build` in the other packages.
 :::
 
 ## Execution Summary
@@ -332,7 +336,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Use `--last-details` to show the summary from the last run without running tasks again:
+Use `--last-details` to show the summary from the last run without running any commands again:
 
 ```bash
 vp run --last-details
@@ -340,27 +344,27 @@ vp run --last-details
 
 ## Concurrency
 
-By default, up to 4 tasks run at the same time. Use `--concurrency-limit` to change this:
+By default, `vp run` runs up to four scripts or tasks at a time. Use `--concurrency-limit` to change this limit:
 
 ```bash
-# Run up to 8 tasks at once
+# Run up to 8 builds at once
 vp run -r --concurrency-limit 8 build
 
-# Run tasks one at a time
+# Run one build at a time
 vp run -r --concurrency-limit 1 build
 ```
 
-The limit can also be set via the `VP_RUN_CONCURRENCY_LIMIT` environment variable. The `--concurrency-limit` flag takes priority over the environment variable.
+You can also set the limit with the `VP_RUN_CONCURRENCY_LIMIT` environment variable. The `--concurrency-limit` flag takes priority.
 
 ### Parallel Mode
 
-Use `--parallel` to ignore task dependencies and run all tasks at once with unlimited concurrency:
+Use `--parallel` to start the selected scripts and tasks without dependency ordering or a concurrency limit:
 
 ```bash
 vp run -r --parallel dev
 ```
 
-This is useful when tasks are independent and you want maximum throughput. You can combine `--parallel` with `--concurrency-limit` to run tasks without dependency ordering but still cap the number of concurrent tasks:
+This is useful for independent commands, such as dev servers in different packages. Combine `--parallel` with `--concurrency-limit` to limit how many run at once:
 
 ```bash
 vp run -r --parallel --concurrency-limit 4 dev
@@ -368,7 +372,7 @@ vp run -r --parallel --concurrency-limit 4 dev
 
 ## Additional Arguments
 
-Arguments after the task name are passed through to the task command:
+`vp run` passes arguments after the script or task name to its command:
 
 ```bash
 vp run test --reporter verbose
