@@ -112,12 +112,14 @@ jobs:
               Official Vitest packages must use that version. Do not bypass the cap.
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
-              working tree, merges their pnpm-workspace catalogs into the root
-              `pnpm-workspace.yaml`, and syncs the root `Cargo.toml` oxc crate
+              working tree, imports only their build roots and bundled packages,
+              and keeps catalog entries referenced by the retained workspace packages.
+              It updates `pnpm-workspace.yaml` and syncs the root `Cargo.toml` oxc crate
               versions to match `rolldown/Cargo.toml`.
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
-            - Package manager: `pnpm`. Do not downgrade a dependency selected by the
-              upgrade script. Use the latest version that its compatibility policy allows.
+            - Package manager: `pnpm`. Preserve toolchain versions selected by the
+              upgrade script under its compatibility policy. Other shared dependencies
+              follow the pinned upstream requirements.
             - After changing tsdown or rolldown-plugin-dts, run
               `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
               `pnpm install --no-frozen-lockfile`. Core's external `yuku-parser` must
@@ -135,15 +137,11 @@ jobs:
             ### Fixups to perform (in order)
             1. If the `Upgrade dependencies and sync upstream` outcome above is `failure`,
                fix it FIRST — nothing else will work until the merged workspace is correct.
-               Read the failed command in the upgrade log and re-run it. The most common cause is a
-               cross-major semver conflict in the merged catalog, e.g.
-               `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses to
-               auto-resolve cross-major conflicts for packages outside its synced list
-               (oxc-* and tinybench). For passthrough deps that vp does NOT import
-               directly (e.g. `diff`, `acorn`, `astring`, anything only present in
-               `rolldown/scripts/package.json` or vite's internals), bump vp's
-               `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
-               then re-run `pnpm tool sync-remote` until it exits 0. Complete the remaining
+               Read the failed command in the upgrade log and re-run it. Resolve
+               catalog conflicts against the pinned Rolldown and Vite sources.
+               `sync-remote` follows their requirements for imported dependencies;
+               preserve its explicit Oxc, Vitest, and TypeScript integration policies.
+               Re-run `pnpm tool sync-remote` until it exits 0. Complete the remaining
                upgrade operations: `pnpm dedupe`,
                `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
                `pnpm install --no-frozen-lockfile` before building or testing.
@@ -157,8 +155,12 @@ jobs:
                from `rolldown/Cargo.toml`, bump it to match (the oxc same-version
                family follows rolldown's umbrella `oxc` version), run `cargo update`,
                and rebuild.
-            3. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
-               to resync the workspace.
+            3. Follow `.claude/agents/cargo-workspace-merger.md` to synchronize shared root
+               Rust dependency requirements with both pinned upstream sources and
+               update their Renovate exclusions. Preserve documented integration
+               constraints and refresh `Cargo.lock` after the manifest changes.
+               Keep the root catalog exclusion in `.github/renovate.json` aligned with
+               used dependencies imported from the Rolldown and Vite catalogs.
             4. If `CLI_HELP_DIFF_CHANGED` is `true`, read the upstream help diff at
                `$CLI_HELP_DIFF_REPORT`, then follow
                `.claude/skills/sync-upstream-cli-help/SKILL.md` to update the mirrored
