@@ -32,6 +32,7 @@ export interface ScriptRunnerMigration {
   loaderPattern: RegExp;
   envShebang: RegExp;
   shebangPattern: RegExp;
+  includeExtensionlessShebangs?: boolean;
   codeReference: RegExp;
   textReference: RegExp;
   configValue: RegExp;
@@ -897,10 +898,14 @@ export function detectScriptRunnerProject(
           : rewriteScriptRunnerCommand(runner, command, dir).command !== command,
       ) ||
       (runner.detectKeptUses && findRunnerUse(runner, dir) !== undefined) ||
-      sourceTreeMatches(dir, (content, file) => {
-        const result = rewriteRunnerShebang(runner, content, file);
-        return result !== undefined && 'content' in result;
-      })
+      sourceTreeMatches(
+        dir,
+        (content, file) => {
+          const result = rewriteRunnerShebang(runner, content, file, dir);
+          return result !== undefined && 'content' in result;
+        },
+        { includeExtensionless: runner.includeExtensionlessShebangs },
+      )
     );
   });
 }
@@ -935,12 +940,13 @@ function rewriteCommandRecord(
 }
 
 /**
- * The `vpx` version of a runner shebang, or its retention reason.
+ * The migrated runner or Node.js preload shebang, or its retention reason.
  */
 function rewriteRunnerShebang(
   runner: ScriptRunnerMigration,
   content: string,
   file: string,
+  packageDir: string,
 ): { content: string } | { reason: string } | undefined {
   const match = runner.envShebang.exec(content);
   if (!match) {
@@ -948,17 +954,35 @@ function rewriteRunnerShebang(
   }
   const [line, prefix, command] = match;
   // The kernel runs the shebang's command with the file appended.
-  const result = rewriteScriptRunnerCommand(runner, `${command.trimEnd()} ${SHEBANG_ENTRY}`);
+  // Its working directory belongs to the caller, not to the script's directory.
+  const original = `${command} ${SHEBANG_ENTRY}`;
+  const result = rewriteScriptRunnerCommand(runner, original);
+  if (result.command === original && !result.kept.length) {
+    return undefined;
+  }
+  // Inspect the package's explicit local hooks without treating the package
+  // directory as the caller's runtime working directory above.
+  const tokens = parseLiteralCommands(command, true)?.[0];
+  const preloads =
+    tokens?.[0]?.value === 'node' ? scanOptions(runner, tokens, 1, false).preloads : [];
   const reason =
-    result.kept[0] ?? runner.scriptKeepReason?.(path.dirname(file), `./${path.basename(file)}`);
+    result.kept[0] ??
+    preloads
+      .map((script) => runner.scriptKeepReason?.(packageDir, script))
+      .find((reason) => reason !== undefined) ??
+    runner.scriptKeepReason?.(path.dirname(file), `./${path.basename(file)}`);
   if (reason) {
     return { reason };
   }
-  const vpxCommand = result.command.slice(0, -` ${SHEBANG_ENTRY}`.length);
-  return { content: `${prefix}${vpxCommand}${content.slice(line.length)}` };
+  const rewritten = result.command.slice(0, -` ${SHEBANG_ENTRY}`.length);
+  // Node.js can run an extensionless entry, while vpx can interpret it as a package.
+  if (!path.extname(file) && /^vpx(?:\s|$)/.test(rewritten)) {
+    return undefined;
+  }
+  return { content: `${prefix}${rewritten}${content.slice(line.length)}` };
 }
 
-/** Point matching env shebangs in a package's scripts at `vpx`. */
+/** Rewrite matching runner and Node.js preload shebangs in a package's scripts. */
 function rewriteRunnerShebangs(
   runner: ScriptRunnerMigration,
   dir: string,
@@ -966,19 +990,23 @@ function rewriteRunnerShebangs(
 ): boolean {
   let changed = false;
   // The callback never reports a match, so the walk visits every file.
-  sourceTreeMatches(dir, (content, file) => {
-    const result = rewriteRunnerShebang(runner, content, file);
-    if (result && 'reason' in result) {
-      warnMigration(
-        `Kept ${runner.name} in the shebang of ${displayRelative(file)}: ${result.reason}.`,
-        report,
-      );
-    } else if (result) {
-      fs.writeFileSync(file, result.content);
-      changed = true;
-    }
-    return false;
-  });
+  sourceTreeMatches(
+    dir,
+    (content, file) => {
+      const result = rewriteRunnerShebang(runner, content, file, dir);
+      if (result && 'reason' in result) {
+        warnMigration(
+          `Kept ${runner.name} in the shebang of ${displayRelative(file)}: ${result.reason}.`,
+          report,
+        );
+      } else if (result) {
+        fs.writeFileSync(file, result.content);
+        changed = true;
+      }
+      return false;
+    },
+    { includeExtensionless: runner.includeExtensionlessShebangs },
+  );
   return changed;
 }
 
