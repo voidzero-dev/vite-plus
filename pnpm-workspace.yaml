@@ -88,7 +88,7 @@ catalog:
   lightningcss: ^1.33.0
   lint-staged: ^17.6.0
   lodash-es: ^4.17.21
-  micromatch: ^4.0.9
+  micromatch: ^4.0.8
   minimatch: ^10.0.3
   nanotar: ^0.3.0
   oxc-minify: =0.155.0
@@ -102,8 +102,8 @@ catalog:
   picomatch: ^4.0.2
   pirates: ^4.0.7
   playwright: ^1.57.0
-  react: ^19.1.0
-  react-dom: ^19.1.0
+  react: ^19.0.0
+  react-dom: ^19.0.0
   remark-parse: ^11.0.0
   remeda: ^2.50.0
   rolldown-plugin-dts: ^0.28.0

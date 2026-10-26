@@ -550,6 +550,7 @@ export function mergePnpmWorkspaces(
     throw new Error('Vite must declare a valid TypeScript devDependency range');
   }
   const catalog: Record<string, string> = { typescript: typescriptRange };
+  const upstreamCatalogPackages = new Set<string>();
   for (const workspace of [main, rolldown, rolldownVite]) {
     for (const [pkg, version] of Object.entries(workspace.catalog || {})) {
       if (pkg === 'typescript') {
@@ -573,9 +574,17 @@ export function mergePnpmWorkspaces(
         // This community provider does not share the official release schedule.
         catalog[pkg] = main.catalog[pkg];
       } else {
-        catalog[pkg] = catalog[pkg]
-          ? mergeSemverVersions(catalog[pkg], version, pkg, verkit)
-          : version;
+        // Upstream owns ordinary catalog entries, including downgrades. Merge
+        // only declarations from both upstreams or packages whose explicit
+        // policy keeps the higher version selected by this workspace.
+        const mergeExisting = syncedPackages(pkg) || upstreamCatalogPackages.has(pkg);
+        catalog[pkg] =
+          catalog[pkg] && mergeExisting
+            ? mergeSemverVersions(catalog[pkg], version, pkg, verkit)
+            : version;
+      }
+      if (workspace !== main) {
+        upstreamCatalogPackages.add(pkg);
       }
     }
   }

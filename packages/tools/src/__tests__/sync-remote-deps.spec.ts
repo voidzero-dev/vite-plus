@@ -17,6 +17,57 @@ import { alignVendoredVitestDependencies } from '../vendored-vitest.ts';
 
 const VITE_PACKAGE = { devDependencies: { typescript: '~7.0.2' } };
 
+describe('mergePnpmWorkspaces() upstream catalog versions', () => {
+  test.each([
+    ['^4.0.9', '^4.0.8'],
+    ['^5.0.0', '^4.0.8'],
+    ['=5.0.0', '^4.0.8'],
+    ['^4.0.8', '=4.0.9'],
+  ])('replaces the root range %s with upstream %s', (current, upstream) => {
+    const main = { catalog: { micromatch: current, 'project-only': '^1.0.0' } };
+    const dependency = { catalog: { micromatch: upstream } };
+    for (const [rolldown, vite] of [
+      [dependency, {}],
+      [{}, dependency],
+    ]) {
+      const merged = mergePnpmWorkspaces(main, rolldown, vite, VITE_PACKAGE, verkit);
+      expect(merged.catalog?.micromatch).toBe(upstream);
+      expect(merged.catalog?.['project-only']).toBe('^1.0.0');
+      expect(mergePnpmWorkspaces(merged, rolldown, vite, VITE_PACKAGE, verkit)).toEqual(merged);
+    }
+  });
+
+  test.each([
+    ['^4.0.8', '^4.0.9', '^4.0.9'],
+    ['^4.0.9', '^4.0.8', '^4.0.9'],
+    ['^4.0.8', '=4.0.9', '=4.0.9'],
+  ])(
+    'merges upstream ranges %s and %s independently of the root range',
+    (rolldown, vite, expected) => {
+      const merged = mergePnpmWorkspaces(
+        { catalog: { micromatch: '^5.0.0' } },
+        { catalog: { micromatch: rolldown } },
+        { catalog: { micromatch: vite } },
+        VITE_PACKAGE,
+        verkit,
+      );
+      expect(merged.catalog?.micromatch).toBe(expected);
+    },
+  );
+
+  test('preserves the selected Oxc versions when upstream uses an older release', () => {
+    const merged = mergePnpmWorkspaces(
+      { catalog: { 'oxc-parser': '=0.155.0', '@oxc-project/runtime': '=0.155.0' } },
+      { catalog: { 'oxc-parser': '=0.154.0', '@oxc-project/runtime': '=0.154.0' } },
+      {},
+      VITE_PACKAGE,
+      verkit,
+    );
+    expect(merged.catalog?.['oxc-parser']).toBe('=0.155.0');
+    expect(merged.catalog?.['@oxc-project/runtime']).toBe('=0.155.0');
+  });
+});
+
 describe('vendored Vitest dependency alignment', () => {
   test('can be imported from stdin without running the bootstrap', () => {
     const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-import-'));
