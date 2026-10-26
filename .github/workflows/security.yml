@@ -23,7 +23,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Clone the pinned upstream sources so cargo-deny can resolve path dependencies.
+      # Checkout self and clone upstream rolldown so the bundled cargo-deny check
+      # inside security-action can resolve workspace members that reference
+      # `rolldown/crates/*`. Then clear origin so security-action's nested
+      # taiki-e/checkout-action can re-add it without conflict.
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Output rolldown hash
@@ -59,59 +62,8 @@ jobs:
         shell: bash
         run: node packages/tools/src/patch-oxc-node.ts
 
-      # Keep tool versions aligned with the action when updating SECURITY_ACTION_REF.
-      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
-        with:
-          tool: zizmor@1.30.1,cargo-deny@0.20.2
-
-      # security-action does not accept repository-specific advisory exceptions.
-      # Reuse its pinned policies and tools, with only the exception below.
-      - name: Prepare security policy
+      - name: Clear git origin for nested checkout
         shell: bash
-        env:
-          SECURITY_ACTION_REF: a8d382d3e5d0fccc813776e461cb0c3fb9d51a0d # v1.0.10
-        run: |
-          set -euo pipefail
-          policy_dir="${RUNNER_TEMP}/security-policy"
-          mkdir -p "${policy_dir}"
-          for file in deny.toml zizmor.yml; do
-            curl --fail --silent --show-error --location --retry 3 \
-              "https://raw.githubusercontent.com/oxc-project/security-action/${SECURITY_ACTION_REF}/${file}" \
-              --output "${policy_dir}/${file}"
-          done
+        run: git remote remove origin
 
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          import tomllib
-
-          path = Path(os.environ["RUNNER_TEMP"]) / "security-policy/deny.toml"
-          source = path.read_text()
-          expected = tomllib.loads(source)
-          exception = {
-              "id": "RUSTSEC-2026-0387",
-              # pgp_verify.rs only verifies public signatures and key bindings.
-              # It never signs, decrypts, or operates on private keys. pgp 0.21
-              # still requires crypto-bigint 0.5; no compatible fix is published.
-              # https://rustsec.org/advisories/RUSTSEC-2026-0387.html
-              "reason": "pgp only verifies public Node.js release signatures; no secret integers are processed. Remove when pgp supports patched crypto-bigint.",
-          }
-          marker = "ignore = [\n"
-          if source.count(marker) != 1:
-              raise ValueError("Shared advisory policy changed; review the exception insertion")
-          entry = "  { " + ", ".join(f"{key} = {json.dumps(value)}" for key, value in exception.items()) + " },\n"
-          updated = source.replace(marker, marker + entry, 1)
-          expected["advisories"]["ignore"].insert(0, exception)
-          if tomllib.loads(updated) != expected:
-              raise ValueError("The advisory exception must not change other security policies")
-          path.write_text(updated)
-          PY
-
-      - name: Run zizmor
-        shell: bash
-        run: zizmor --config "${RUNNER_TEMP}/security-policy/zizmor.yml" --strict-collection --show-audit-urls=always --min-severity=medium .
-
-      - name: Run cargo-deny
-        shell: bash
-        run: cargo deny --config "${RUNNER_TEMP}/security-policy/deny.toml" check
+      - uses: oxc-project/security-action@a8d382d3e5d0fccc813776e461cb0c3fb9d51a0d # v1.0.10

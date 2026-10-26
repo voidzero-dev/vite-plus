@@ -14,16 +14,6 @@
   ],
   "customManagers": [
     {
-      "description": "Update the shared security policy revision and release together.",
-      "customType": "regex",
-      "managerFilePatterns": ["/^\\.github/workflows/security\\.yml$/"],
-      "matchStrings": [
-        "SECURITY_ACTION_REF: (?<currentDigest>[a-f0-9]{40}) # (?<currentValue>v[^\\s]+)"
-      ],
-      "depNameTemplate": "oxc-project/security-action",
-      "datasourceTemplate": "github-tags"
-    },
-    {
       "description": "Update the Nushell release used by CLI snapshot tests.",
       "customType": "regex",
       "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
