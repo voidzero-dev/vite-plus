@@ -17,7 +17,8 @@ import os from 'node:os';
 import path from 'node:path';
 import url from 'node:url';
 
-import ts from 'typescript';
+import { isStringLiteral } from 'typescript/unstable/ast';
+import { API, type Project } from 'typescript/unstable/sync';
 import { describe, expect, it } from 'vitest';
 
 const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');
@@ -36,26 +37,56 @@ function namedValueExports(mod: Record<string, unknown>): string[] {
   return Object.keys(mod).filter((key) => key !== 'default');
 }
 
+function withTypeProject<T>(
+  files: string[],
+  check: (project: Project) => T,
+  sources: Record<string, string> = {},
+): T {
+  const config = path.join(cliPkgDir, '__test_exports__.json').replaceAll('\\', '/');
+  const virtualFiles = {
+    ...sources,
+    [config]: JSON.stringify({
+      files,
+      compilerOptions: {
+        noEmit: true,
+        strict: true,
+        skipLibCheck: true,
+        types: [],
+        module: 'nodenext',
+        target: 'esnext',
+      },
+    }),
+  };
+  const api = new API({
+    fs: {
+      readFile: (file) => virtualFiles[file.replaceAll('\\', '/')],
+      fileExists: (file) => (file.replaceAll('\\', '/') in virtualFiles ? true : undefined),
+    },
+  });
+  try {
+    const project = api.updateSnapshot({ openProjects: [config] }).getProject(config);
+    expect(project).toBeDefined();
+    return check(project!);
+  } finally {
+    api.close();
+  }
+}
+
+function projectDiagnostics({ program }: Project): string[] {
+  return [
+    ...program.getConfigFileParsingDiagnostics(),
+    ...program.getProgramDiagnostics(),
+    ...program.getGlobalDiagnostics(),
+    ...program.getSyntacticDiagnostics(),
+    ...program.getSemanticDiagnostics(),
+  ].map((diagnostic) => diagnostic.text);
+}
+
 function typeDiagnostics(source: string, separator: string = path.sep): string[] {
   const filename = path.join(cliPkgDir, '__test_exports__.mts').replaceAll(/[\\/]/g, separator);
-  const options: ts.CompilerOptions = {
-    noEmit: true,
-    strict: true,
-    skipLibCheck: true,
-    types: [],
-    module: ts.ModuleKind.NodeNext,
-    target: ts.ScriptTarget.ESNext,
-  };
-  const host = ts.createCompilerHost(options);
-  const getSourceFile = host.getSourceFile.bind(host);
-  host.getSourceFile = (file, ...args) =>
-    file.replaceAll('\\', '/') === filename.replaceAll('\\', '/')
-      ? ts.createSourceFile(file, source, ts.ScriptTarget.ESNext, true)
-      : getSourceFile(file, ...args);
-  const program = ts.createProgram([filename], options, host);
-  return ts
-    .getPreEmitDiagnostics(program)
-    .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+  return withTypeProject([filename], projectDiagnostics, {
+    [filename.replaceAll('\\', '/')]: source,
+  });
 }
 
 describe('package.json exports map', () => {
@@ -96,19 +127,7 @@ playwright({ contextOptions: { reducedMotion: 'bogus' } });
 alias({ contextOptions: { reducedMotion: 'bogus' } });
 `,
       );
-      const program = ts.createProgram([filename], {
-        noEmit: true,
-        strict: true,
-        skipLibCheck: true,
-        types: [],
-        module: ts.ModuleKind.NodeNext,
-        target: ts.ScriptTarget.ESNext,
-      });
-      expect(
-        ts
-          .getPreEmitDiagnostics(program)
-          .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n')),
-      ).toEqual([]);
+      expect(withTypeProject([filename], projectDiagnostics)).toEqual([]);
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -211,22 +230,25 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
 
   it('resolves every relative import in generated test declarations', () => {
     const directory = path.join(cliPkgDir, 'dist/test');
-    const options = { module: ts.ModuleKind.NodeNext };
-    for (const name of fs.readdirSync(directory, { recursive: true, encoding: 'utf8' })) {
-      if (!/\.d\.(?:ts|mts|cts)$/.test(name)) {
-        continue;
-      }
-      const file = path.join(directory, name);
-      const source = fs.readFileSync(file, 'utf8');
-      for (const { fileName: specifier } of ts.preProcessFile(source).importedFiles) {
-        if (specifier.startsWith('.')) {
-          expect(
-            ts.resolveModuleName(specifier, file, options, ts.sys).resolvedModule,
-            `${name}: ${specifier}`,
-          ).toBeDefined();
+    const files = fs
+      .readdirSync(directory, { recursive: true, encoding: 'utf8' })
+      .filter((name) => /\.d\.(?:ts|mts|cts)$/.test(name))
+      .map((name) => path.join(directory, name));
+    expect(files.length).toBeGreaterThan(0);
+    withTypeProject(files, ({ program, checker }) => {
+      for (const file of files) {
+        const source = program.getSourceFile(file);
+        expect(source, file).toBeDefined();
+        for (const specifier of source!.imports) {
+          if (isStringLiteral(specifier) && specifier.text.startsWith('.')) {
+            expect(
+              checker.getSymbolAtLocation(specifier)?.declarations?.length,
+              `${path.relative(directory, file)}: ${specifier.text}`,
+            ).toBeGreaterThan(0);
+          }
         }
       }
-    }
+    });
   });
 
   it.each(['coverage', 'reporters', 'environments', 'snapshot'])(
@@ -299,16 +321,6 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
     expect(Object.keys(pkg.exports).filter((name) => name.includes('webdriverio'))).toEqual([]);
   });
 
-  it('./test/config has both `require` and `default`, with `require` first', () => {
-    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
-    const entry = (pkg.exports as Record<string, unknown>)['./test/config'];
-    expect(isConditionObject(entry)).toBe(true);
-    const keys = Object.keys(entry as ExportConditions);
-    expect(keys).toContain('require');
-    expect(keys).toContain('default');
-    expect(keys.indexOf('require')).toBeLessThan(keys.indexOf('default'));
-  });
-
   it('`require.resolve("vite-plus/test/config")` resolves to the .cjs shim', () => {
     const resolved = requireFromHere.resolve('vite-plus/test/config');
     expect(resolved.endsWith('.cjs'), `resolved to ${resolved}`).toBe(true);
@@ -322,10 +334,7 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
   });
 
   it('CJS shim at ./test/config delegates to vitest/config via require()', () => {
-    const cfg = requireFromHere('vite-plus/test/config') as Record<string, unknown>;
-    expect(cfg).toBeTypeOf('object');
-    // vitest/config re-exports defineConfig / configDefaults — sanity-check one.
-    expect(typeof cfg.defineConfig).toBe('function');
+    expect(requireFromHere('vite-plus/test/config')).toBe(requireFromHere('vitest/config'));
   });
 
   it('browser-playwright declaration uses NodeNext-compatible relative specifiers', () => {

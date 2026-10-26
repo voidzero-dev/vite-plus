@@ -13,6 +13,16 @@
   ],
   "customManagers": [
     {
+      "description": "Update the Nushell release used by CLI snapshot tests.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": [
+        "# renovate: datasource=github-releases depName=nushell/nushell\\s+version: '(?<currentValue>[^']+)'"
+      ],
+      "depNameTemplate": "nushell/nushell",
+      "datasourceTemplate": "github-releases"
+    },
+    {
       "description": "Keep the exact setup-vp migration target current.",
       "customType": "regex",
       "managerFilePatterns": ["/^packages\\/cli\\/src\\/utils\\/constants\\.ts$/"],

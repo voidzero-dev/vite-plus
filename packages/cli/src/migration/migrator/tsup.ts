@@ -6,7 +6,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import corePkg from 'vite/package.json' with { type: 'json' };
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
-import { runCommandSilently } from '../../utils/command.ts';
+import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
 import { TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
@@ -372,21 +372,19 @@ function extractTsdownMigrationWarnings(output: Buffer): string[] {
 
 /** Run `vp dlx tsdown-migrate` in `cwd` with graceful error handling. */
 async function runTsdownMigrateStep(
-  vpBin: string,
   cwd: string,
   packageManager: PackageManager,
 ): Promise<{ ok: boolean; warnings: string[] }> {
   try {
     const result = await runCommandSilently({
-      command: vpBin,
-      args: [
+      ...getVpCommand([
         'dlx',
         `tsdown-migrate@${corePkg.bundledVersions.tsdown}`,
         '--yes',
         '--package-manager',
         packageManager,
         '--no-install',
-      ],
+      ]),
       cwd,
       envs: process.env,
     });
@@ -417,7 +415,6 @@ export async function migrateTsupToTsdown(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
-  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
 
   // A tsup config isn't necessarily workspace-wide the way an ESLint flat
@@ -491,7 +488,7 @@ export async function migrateTsupToTsdown(
     for (const target of tsupTargets) {
       const targetLabel =
         target === rootPath ? 'the project root' : displayRelative(target, projectPath);
-      const migrateResult = await runTsdownMigrateStep(vpBin, target, packageManager);
+      const migrateResult = await runTsdownMigrateStep(target, packageManager);
       if (!migrateResult.ok) {
         spinner.stop();
         const restoreFailures = restoreTsupMigrationTargets(snapshots);

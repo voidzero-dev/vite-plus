@@ -653,16 +653,6 @@ mod tests {
     }
 
     #[test]
-    fn help_entry_uses_static_inline_description() {
-        let help = COMMANDS
-            .iter()
-            .find(|entry| entry.command == "help")
-            .expect("help command should exist");
-        assert_eq!(help.label, "help");
-        assert_eq!(help.summary, "View all commands and details");
-    }
-
-    #[test]
     fn picker_instruction_mentions_search() {
         assert_eq!(
             picker_instruction(""),

@@ -1,0 +1,17 @@
+[[case]]
+name = "global_bin_name_validation"
+vp = "global"
+comment = "Skip unsafe bin names and targets even with --ignore-scripts, while installing valid commands and preserving files outside VP_HOME."
+steps = [{ argv = ["node", "verify.mjs"], tty = false }]
+
+[[case]]
+name = "global_bin_name_deduplication"
+vp = "global"
+comment = "Keep the last valid target for duplicate normalized bin names, including native and JavaScript collisions."
+steps = [{ argv = ["node", "verify-duplicates.mjs"], tty = false }]
+
+[[case]]
+name = "global_bin_read_errors"
+vp = "global"
+comment = "Reject unreadable binary targets before activating an installation, preserving existing commands on failed updates."
+steps = [{ argv = ["node", "verify-read-errors.mjs"], tty = false }]

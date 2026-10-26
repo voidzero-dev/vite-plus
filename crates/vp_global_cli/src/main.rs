@@ -29,9 +29,12 @@ use std::{
     process::{ExitCode, ExitStatus},
 };
 
-use clap::error::{ContextKind, ContextValue};
 use clap_complete::env::CompleteEnv;
 use console::style;
+use vp_cli_help::error::{
+    extract_invalid_subcommand_details, extract_unknown_argument, has_pass_as_value_suggestion,
+    print_invalid_subcommand_error, print_subcommand_suggestion, print_unknown_argument_error,
+};
 use vp_shared::{exit_code_from_status, output};
 
 pub use crate::cli::try_parse_args_from;
@@ -153,43 +156,6 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
     }
 }
 
-struct InvalidSubcommandDetails {
-    invalid_subcommand: String,
-    suggestion: Option<String>,
-}
-
-fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<InvalidSubcommandDetails> {
-    let invalid_subcommand = match error.get(ContextKind::InvalidSubcommand) {
-        Some(ContextValue::String(value)) => value.as_str(),
-        _ => return None,
-    };
-
-    let suggestion = match error.get(ContextKind::SuggestedSubcommand) {
-        Some(ContextValue::String(value)) => Some(value.to_owned()),
-        Some(ContextValue::Strings(values)) => {
-            vp_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
-        }
-        _ => None,
-    };
-
-    Some(InvalidSubcommandDetails { invalid_subcommand: invalid_subcommand.to_owned(), suggestion })
-}
-
-fn print_invalid_subcommand_error(details: &InvalidSubcommandDetails) {
-    vp_shared::header::print_header();
-
-    let highlighted_subcommand =
-        style(&details.invalid_subcommand).for_stderr().blue().bright().to_string();
-    output::error(&format!("Command '{highlighted_subcommand}' not found"));
-}
-
-fn print_nested_suggestion(suggestion: &str) {
-    eprintln!();
-    let highlighted_suggestion =
-        style(format!("`vp {suggestion}`")).for_stderr().blue().bright().to_string();
-    eprintln!("Did you mean {highlighted_suggestion}?");
-}
-
 fn nested_suggestion_command(
     raw_args: &[String],
     invalid_subcommand: &str,
@@ -302,52 +268,6 @@ async fn run_corrected_args(
             ExitCode::FAILURE
         }
     }
-}
-
-fn extract_unknown_argument(error: &clap::Error) -> Option<String> {
-    match error.get(ContextKind::InvalidArg) {
-        Some(ContextValue::String(value)) => Some(value.to_owned()),
-        _ => None,
-    }
-}
-
-fn has_pass_as_value_suggestion(error: &clap::Error) -> bool {
-    let contains_pass_as_value = |suggestion: &str| suggestion.contains("as a value");
-
-    match error.get(ContextKind::Suggested) {
-        Some(ContextValue::String(suggestion)) => contains_pass_as_value(suggestion),
-        Some(ContextValue::Strings(suggestions)) => {
-            suggestions.iter().any(|suggestion| contains_pass_as_value(suggestion))
-        }
-        Some(ContextValue::StyledStr(suggestion)) => {
-            contains_pass_as_value(&suggestion.to_string())
-        }
-        Some(ContextValue::StyledStrs(suggestions)) => {
-            suggestions.iter().any(|suggestion| contains_pass_as_value(&suggestion.to_string()))
-        }
-        _ => false,
-    }
-}
-
-fn print_unknown_argument_error(error: &clap::Error) -> bool {
-    let Some(invalid_argument) = extract_unknown_argument(error) else {
-        return false;
-    };
-
-    vp_shared::header::print_header();
-
-    let highlighted_argument = style(&invalid_argument).for_stderr().blue().bright().to_string();
-    output::error(&format!("Unexpected argument '{highlighted_argument}'"));
-
-    if has_pass_as_value_suggestion(error) {
-        eprintln!();
-        let pass_through_argument = format!("-- {invalid_argument}");
-        let highlighted_pass_through_argument =
-            format!("`{}`", style(&pass_through_argument).for_stderr().blue().bright());
-        eprintln!("Use {highlighted_pass_through_argument} to pass the argument as a value");
-    }
-
-    true
 }
 
 fn dump_dirs_from_env_config() -> bool {
@@ -545,7 +465,8 @@ async fn main() -> ExitCode {
                             )
                         });
 
-                    print_invalid_subcommand_error(&details);
+                    vp_shared::header::print_header();
+                    print_invalid_subcommand_error(&details.invalid_subcommand);
 
                     if let Some(corrected_raw_args) = corrected_top_level_args {
                         let suggestion = details.suggestion.as_ref().expect("suggestion exists");
@@ -561,7 +482,7 @@ async fn main() -> ExitCode {
                                 &details.invalid_subcommand,
                                 suggestion,
                             );
-                            print_nested_suggestion(&suggestion);
+                            print_subcommand_suggestion(&suggestion);
                         }
                         clap_error_to_exit_code(&e)
                     }
@@ -570,7 +491,13 @@ async fn main() -> ExitCode {
                     clap_error_to_exit_code(&e)
                 }
             } else if matches!(e.kind(), ErrorKind::UnknownArgument) {
-                if !print_unknown_argument_error(&e) {
+                if let Some(invalid_argument) = extract_unknown_argument(&e) {
+                    vp_shared::header::print_header();
+                    print_unknown_argument_error(
+                        &invalid_argument,
+                        has_pass_as_value_suggestion(&e),
+                    );
+                } else {
                     e.print().ok();
                 }
                 clap_error_to_exit_code(&e)

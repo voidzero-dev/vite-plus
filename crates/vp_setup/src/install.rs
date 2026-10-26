@@ -589,16 +589,7 @@ pub async fn cleanup_old_versions(
         }
     }
 
-    // Sort newest first (by creation time, matching install.sh)
-    versions.sort_by_key(|b| std::cmp::Reverse(b.0));
-
-    // Remove versions beyond the keep limit, but never remove protected versions
-    for (_time, path) in versions.into_iter().skip(max_keep) {
-        let name = path.as_path().file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if protected_versions.contains(&name) {
-            tracing::debug!("Skipping protected version: {}", name);
-            continue;
-        }
+    for path in versions_to_remove(versions, max_keep, protected_versions) {
         tracing::debug!("Cleaning up old version: {}", path.as_path().display());
         if let Err(e) = tokio::fs::remove_dir_all(&path).await {
             tracing::warn!("Failed to remove {}: {}", path.as_path().display(), e);
@@ -606,6 +597,31 @@ pub async fn cleanup_old_versions(
     }
 
     Ok(())
+}
+
+/// Select the version directories that [`cleanup_old_versions`] removes.
+///
+/// Kept apart from the directory scan so tests can supply exact creation times,
+/// which some filesystems record too coarsely (or not at all) to order fresh dirs.
+fn versions_to_remove(
+    mut versions: Vec<(SystemTime, AbsolutePathBuf)>,
+    max_keep: usize,
+    protected_versions: &[&str],
+) -> Vec<AbsolutePathBuf> {
+    // Sort newest first (by creation time, matching install.sh)
+    versions.sort_by_key(|b| std::cmp::Reverse(b.0));
+
+    // Remove versions beyond the keep limit, but never remove protected versions
+    let mut removable = Vec::new();
+    for (_time, path) in versions.into_iter().skip(max_keep) {
+        let name = path.as_path().file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if protected_versions.contains(&name) {
+            tracing::debug!("Skipping protected version: {}", name);
+            continue;
+        }
+        removable.push(path);
+    }
+    removable
 }
 
 /// Read the previous version from `.previous-version` file.
@@ -864,103 +880,102 @@ mod tests {
         assert!(!is_safe_tar_path(Path::new("/usr/bin/vp")));
     }
 
-    #[tokio::test]
-    async fn test_cleanup_preserves_active_downgraded_version() {
-        let temp = tempfile::tempdir().unwrap();
-        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-
-        // Create 7 version directories with staggered creation times.
-        // Simulate: installed 0.1-0.7 in order, then rolled back to 0.2.0
-        for v in ["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            // Small delay to ensure distinct creation times
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-
-        // Simulate rollback: current points to 0.2.0 (low semver rank)
-        #[cfg(unix)]
-        tokio::fs::symlink("0.2.0", install_dir.join("current")).await.unwrap();
-
-        // Cleanup keeping top 5, with 0.2.0 protected (the active version)
-        cleanup_old_versions(&install_dir, 5, &["0.2.0"]).await.unwrap();
-
-        // 0.2.0 is the active version — it MUST survive cleanup
-        assert!(
-            tokio::fs::try_exists(install_dir.join("0.2.0")).await.unwrap(),
-            "Active version 0.2.0 was deleted by cleanup"
-        );
+    /// Select cleanup candidates from dirs created one second apart, oldest first.
+    fn removed_versions(
+        created_oldest_first: &[&str],
+        max_keep: usize,
+        protected_versions: &[&str],
+    ) -> Vec<std::ffi::OsString> {
+        let install_dir = AbsolutePathBuf::new(std::env::temp_dir()).unwrap();
+        let versions = created_oldest_first
+            .iter()
+            .zip(0..)
+            .map(|(name, secs)| {
+                (UNIX_EPOCH + std::time::Duration::from_secs(secs), install_dir.join(name))
+            })
+            .collect();
+        versions_to_remove(versions, max_keep, protected_versions)
+            .iter()
+            .map(|path| path.as_path().file_name().unwrap().to_os_string())
+            .collect()
     }
 
-    #[tokio::test]
-    async fn test_cleanup_sorts_by_creation_time_not_semver() {
-        let temp = tempfile::tempdir().unwrap();
-        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+    #[test]
+    fn test_cleanup_preserves_active_downgraded_version() {
+        // Simulate: installed 0.1-0.7 in order, then rolled back to 0.2.0.
+        // Keep the top 5, with 0.2.0 protected (the active version).
+        let removed = removed_versions(
+            &["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0"],
+            5,
+            &["0.2.0"],
+        );
 
-        // Create versions in non-semver order with creation times:
-        // 0.5.0 (oldest), 0.1.0, 0.3.0, 0.7.0, 0.2.0, 0.6.0 (newest)
-        for v in ["0.5.0", "0.1.0", "0.3.0", "0.7.0", "0.2.0", "0.6.0"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        // 0.2.0 is the active version — it MUST survive cleanup
+        assert_eq!(removed, ["0.1.0"], "Active version 0.2.0 must survive cleanup");
+    }
+
+    #[test]
+    fn test_cleanup_sorts_by_creation_time_not_semver() {
+        // Creation order: 0.5.0 (oldest), 0.1.0, 0.3.0, 0.7.0, 0.2.0, 0.6.0 (newest)
+        let removed =
+            removed_versions(&["0.5.0", "0.1.0", "0.3.0", "0.7.0", "0.2.0", "0.6.0"], 4, &[]);
 
         // Keep top 4 by creation time → keep 0.6.0, 0.2.0, 0.7.0, 0.3.0
         // Remove 0.1.0 and 0.5.0 (oldest by creation time)
-        cleanup_old_versions(&install_dir, 4, &[]).await.unwrap();
-
-        // The 4 newest by creation time should survive
-        assert!(tokio::fs::try_exists(install_dir.join("0.6.0")).await.unwrap());
-        assert!(tokio::fs::try_exists(install_dir.join("0.2.0")).await.unwrap());
-        assert!(tokio::fs::try_exists(install_dir.join("0.7.0")).await.unwrap());
-        assert!(tokio::fs::try_exists(install_dir.join("0.3.0")).await.unwrap());
-
-        // The 2 oldest by creation time should be removed
-        assert!(
-            !tokio::fs::try_exists(install_dir.join("0.5.0")).await.unwrap(),
-            "0.5.0 (oldest by creation time) should have been removed"
-        );
-        assert!(
-            !tokio::fs::try_exists(install_dir.join("0.1.0")).await.unwrap(),
-            "0.1.0 (second oldest by creation time) should have been removed"
-        );
+        assert_eq!(removed, ["0.1.0", "0.5.0"]);
     }
 
-    #[tokio::test]
-    async fn test_cleanup_removes_old_forced_reinstall_dir() {
-        let temp = tempfile::tempdir().unwrap();
-        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-
+    #[test]
+    fn test_cleanup_removes_old_forced_reinstall_dir() {
         // Forced reinstall directories use semver build metadata. They should
         // still be eligible for normal old-version cleanup.
         let old_forced = "0.1.23+force.123.456";
-        for v in [old_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        let removed = removed_versions(
+            &[old_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"],
+            5,
+            &[],
+        );
 
-        cleanup_old_versions(&install_dir, 5, &[]).await.unwrap();
+        assert_eq!(removed, [old_forced], "old forced reinstall directory should be removed");
+    }
+
+    #[test]
+    fn test_cleanup_preserves_protected_forced_reinstall_dir() {
+        let protected_forced = "0.1.23+force.123.456";
+        let removed = removed_versions(
+            &[protected_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"],
+            5,
+            &[protected_forced],
+        );
 
         assert!(
-            !tokio::fs::try_exists(install_dir.join(old_forced)).await.unwrap(),
-            "old forced reinstall directory should be removed by cleanup"
+            removed.is_empty(),
+            "active forced reinstall directory should be preserved when protected"
         );
     }
 
     #[tokio::test]
-    async fn test_cleanup_preserves_protected_forced_reinstall_dir() {
+    async fn test_cleanup_removes_only_unprotected_version_dirs() {
         let temp = tempfile::tempdir().unwrap();
         let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
 
-        let protected_forced = "0.1.23+force.123.456";
-        for v in [protected_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        // Keeping no versions makes the outcome independent of creation order.
+        let forced = "0.1.23+force.123.456";
+        for name in [forced, "0.1.24", "0.1.25", "current"] {
+            tokio::fs::create_dir(install_dir.join(name)).await.unwrap();
         }
 
-        cleanup_old_versions(&install_dir, 5, &[protected_forced]).await.unwrap();
+        cleanup_old_versions(&install_dir, 0, &["0.1.25"]).await.unwrap();
 
+        assert!(!tokio::fs::try_exists(install_dir.join(forced)).await.unwrap());
+        assert!(!tokio::fs::try_exists(install_dir.join("0.1.24")).await.unwrap());
         assert!(
-            tokio::fs::try_exists(install_dir.join(protected_forced)).await.unwrap(),
-            "active forced reinstall directory should be preserved when protected"
+            tokio::fs::try_exists(install_dir.join("0.1.25")).await.unwrap(),
+            "protected version must survive cleanup"
+        );
+        assert!(
+            tokio::fs::try_exists(install_dir.join("current")).await.unwrap(),
+            "non-version entries must survive cleanup"
         );
     }
 
@@ -1051,23 +1066,20 @@ mod tests {
     async fn fake_pnpm_runtime(
         version_dir: &AbsolutePath,
     ) -> (AbsolutePathBuf, AbsolutePathBuf, vp_js_runtime::JsRuntime, AbsolutePathBuf) {
-        use std::os::unix::fs::PermissionsExt;
-
         let node_bin = version_dir.join("node").join("bin");
         let pnpm_bin = version_dir.join("pnpm").join("bin");
         tokio::fs::create_dir_all(&node_bin).await.unwrap();
         tokio::fs::create_dir_all(&pnpm_bin).await.unwrap();
 
         let node_binary = node_bin.join("node");
-        tokio::fs::write(
+        // Reuse a checked-in executable: concurrent test processes can inherit a freshly
+        // written script's write descriptor and cause ETXTBSY on Linux.
+        tokio::fs::symlink(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake-node.sh"),
             &node_binary,
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > invocation.txt\nprintf '%s' \"$PATH\" > path.txt\nprintf '%s' \"$npm_config_registry\" > registry.txt\n",
         )
         .await
         .unwrap();
-        tokio::fs::set_permissions(&node_binary, std::fs::Permissions::from_mode(0o755))
-            .await
-            .unwrap();
         let pnpm_entry = pnpm_bin.join("pnpm.cjs");
         tokio::fs::write(&pnpm_entry, "").await.unwrap();
         let node_runtime = vp_js_runtime::JsRuntime::from_system(JsRuntimeType::Node, node_binary);

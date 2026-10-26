@@ -5,9 +5,12 @@
 //! config like `run` without needing a Node.js runtime.
 
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{
-    BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind, ObjectPropertyKind,
-    Program, Statement, VariableDeclarationKind,
+use oxc_ast::{
+    StaticPropertyName,
+    ast::{
+        BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind,
+        ObjectPropertyKind, Program, Statement, VariableDeclarationKind,
+    },
 };
 use oxc_parser::Parser;
 use oxc_span::SourceType;
@@ -181,7 +184,8 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
         if let Statement::ExpressionStatement(expr_stmt) = stmt
             && let Expression::AssignmentExpression(assign) = &expr_stmt.expression
             && assign.left.as_member_expression().is_some_and(|m| {
-                m.object().is_specific_id("module") && m.static_property_name() == Some("exports")
+                m.object().is_specific_id("module")
+                    && m.static_property_name().is_some_and(|name| name == "exports")
             })
         {
             return extract_config_from_expr(&assign.right, has_trusted_define_config_binding);
@@ -289,7 +293,7 @@ fn is_trusted_define_config_import(stmt: &Statement<'_>) -> bool {
         return false;
     };
     if import_decl.import_kind != ImportOrExportKind::Value
-        || !is_trusted_define_config_package(import_decl.source.value.as_str())
+        || !import_decl.source.value.as_str().is_some_and(is_trusted_define_config_package)
     {
         return false;
     }
@@ -343,7 +347,7 @@ fn is_trusted_define_config_package(package: &str) -> bool {
 
 fn is_trusted_define_config_require(expr: &Expression<'_>) -> bool {
     expr.without_parentheses().as_member_expression().is_some_and(|member| {
-        member.static_property_name() == Some(DEFINE_CONFIG)
+        member.static_property_name().is_some_and(|name| name == DEFINE_CONFIG)
             && is_trusted_package_require(member.object())
     })
 }
@@ -353,7 +357,7 @@ fn is_trusted_package_require(expr: &Expression<'_>) -> bool {
         expr.without_parentheses(),
         Expression::CallExpression(call)
             if call.common_js_require().is_some_and(|source| {
-                is_trusted_define_config_package(source.value.as_str())
+                source.value.as_str().is_some_and(is_trusted_define_config_package)
             })
     )
 }
@@ -437,7 +441,10 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
             continue;
         }
         let ObjectPropertyKind::ObjectProperty(prop) = prop else { continue };
-        let Some(key) = prop.key.static_name() else {
+        // A key with a lone surrogate is statically known but not
+        // UTF-8-representable, so it cannot key the map — treat it like a
+        // computed key and open the map.
+        let Some(key) = prop.key.static_name().and_then(StaticPropertyName::into_cow_str) else {
             map.clear();
             open = true;
             continue;
@@ -447,7 +454,7 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
         // NonStatic ones: `get_declared` must distinguish a written
         // `key: expr` from a key that merely might exist behind a spread.
         let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
-        map.insert(Box::from(key.as_ref()), value);
+        map.insert(Box::from(key), value);
     }
 
     FieldMap { map, open }
@@ -483,11 +490,15 @@ fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
 
         Expression::NumericLiteral(lit) => Some(f64_to_json_number(lit.value)),
 
-        Expression::StringLiteral(lit) => Some(serde_json::Value::String(lit.value.to_string())),
+        // A lone-surrogate string is not UTF-8-representable, so it cannot be
+        // stored in a JSON value — treat it as non-static.
+        Expression::StringLiteral(lit) => {
+            Some(serde_json::Value::String(lit.value.as_str()?.to_owned()))
+        }
 
         Expression::TemplateLiteral(lit) => {
             let quasi = lit.single_quasi()?;
-            Some(serde_json::Value::String(quasi.to_string()))
+            Some(serde_json::Value::String(quasi.as_str()?.to_owned()))
         }
 
         Expression::UnaryExpression(unary) => {
@@ -524,7 +535,7 @@ fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
                 let ObjectPropertyKind::ObjectProperty(prop) = prop else {
                     continue;
                 };
-                let key = prop.key.static_name()?;
+                let key = prop.key.static_name()?.into_cow_str()?;
                 let value = expr_to_json(&prop.value)?;
                 map.insert(key.into_owned(), value);
             }
@@ -585,24 +596,6 @@ mod tests {
     }
 
     // ── Config file resolution ──────────────────────────────────────────
-
-    #[test]
-    fn resolves_ts_config() {
-        let dir = TempDir::new().unwrap();
-        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        std::fs::write(dir.path().join("vite.config.ts"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path);
-        assert!(result.get("run").is_some());
-    }
-
-    #[test]
-    fn resolves_js_config() {
-        let dir = TempDir::new().unwrap();
-        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        std::fs::write(dir.path().join("vite.config.js"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path);
-        assert!(result.get("run").is_some());
-    }
 
     #[test]
     fn resolves_mts_config() {

@@ -1,6 +1,6 @@
 [package]
 name = "vite-plus-cli"
-version = "1.3.0"
+version = "1.4.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -17,7 +17,6 @@ async-trait = { workspace = true }
 base64-simd = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cow-utils = { workspace = true }
-fspy = { workspace = true }
 rustc-hash = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }

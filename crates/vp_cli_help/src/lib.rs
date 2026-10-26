@@ -4,7 +4,9 @@
     reason = "help rendering needs large, mutable, owned text buffers"
 )]
 
-//! Shared help documents and rendering for Vite+ command-line interfaces.
+//! Shared help documents and diagnostics for Vite+ command-line interfaces.
+
+pub mod error;
 
 use std::{borrow::Cow, fmt::Write as _, io::Write as _};
 

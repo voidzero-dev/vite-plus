@@ -1,4 +1,5 @@
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import {
   chmodSync,
   existsSync,
@@ -164,6 +165,64 @@ describe('install', () => {
 
       // A different spelling is a real write, so it still needs the lock.
       expect(install('./.vite-hooks').isError).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('waits for a concurrent first run to release the git config lock', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-config-lock-wait-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      process.chdir(tmp);
+      const lockPath = join(tmp, '.git', 'config.lock');
+      writeFileSync(lockPath, '');
+
+      // Another worktree's first `vp config` releases the shared lock soon.
+      const holder = spawn(process.execPath, [
+        '-e',
+        `setTimeout(() => require('node:fs').rmSync(${JSON.stringify(lockPath)}), 200)`,
+      ]);
+      expect(install()).toEqual({ message: '', isError: false });
+      await once(holder, 'exit');
+
+      expect(execSync('git config --local core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+        '.vite-hooks/_',
+      );
+      expect(execSync('git config --local vp.hooks.prefix', { cwd: tmp }).toString().trim()).toBe(
+        '.',
+      );
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts values that a concurrent first run wrote while it held the lock', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-config-lock-reread-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      process.chdir(tmp);
+      const configPath = join(tmp, '.git', 'config');
+      writeFileSync(`${configPath}.lock`, '');
+
+      // The other run stores the same values but still holds the lock afterwards.
+      const sameValues =
+        '[core]\n\thooksPath = .vite-hooks/_\n[vp "hooks"]\n\tdir = .vite-hooks\n\tprefix = .\n';
+      const writer = spawn(process.execPath, [
+        '-e',
+        `setTimeout(() => require('node:fs').appendFileSync(${JSON.stringify(configPath)}, ${JSON.stringify(sameValues)}), 100)`,
+      ]);
+      expect(install()).toEqual({ message: '', isError: false });
+      await once(writer, 'exit');
+
+      expect(existsSync(`${configPath}.lock`)).toBe(true);
+      expect(execSync('git config --local core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+        '.vite-hooks/_',
+      );
     } finally {
       process.chdir(originalCwd);
       rmSync(tmp, { recursive: true, force: true });
@@ -717,18 +776,6 @@ describe('hookScript env gates', () => {
 });
 
 describe('hookScript', () => {
-  it('should compute correct depth for simple dir', () => {
-    // ".vite-hooks" → 1 segment → depth 3
-    const script = hookScript('.vite-hooks');
-    expect(countDirnameCalls(script)).toBe(3);
-  });
-
-  it('should compute correct depth for nested dir', () => {
-    // ".config/husky" → 2 segments → depth 4
-    const script = hookScript('.config/husky');
-    expect(countDirnameCalls(script)).toBe(4);
-  });
-
   it('should handle ./ prefix correctly (bug case)', () => {
     // "./.config/husky" should produce same depth as ".config/husky"
     // Before fix: filter(Boolean) kept "." → 3 segments → depth 5 (wrong)

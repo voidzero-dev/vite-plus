@@ -1,0 +1,31 @@
+[[case]]
+name = "migration_tsx_scripts"
+vp = "local"
+comment = "tsx comes from a local stub package so the install stays offline"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "tsx scripts should migrate to vpx automatically", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "scripts run vpx, and the tsx devDependency is gone", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "scripts/release.ts"], comment = "the shebang runs vpx", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_tsx_kept"
+vp = "local"
+comment = "tsx comes from a local stub package so the install stays offline"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.repl", "tsx"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.calc", "tsx -e 'console.log(1 + 1)'"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "scripts vpx cannot run keep tsx, with a warning for each", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the other scripts run vpx, and the tsx devDependency stays", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_tsx_already_vite_plus"
+vp = "local"
+comment = "On a project already using Vite+, the tsx migration belongs to `vp migrate --full`."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "latest"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "a plain upgrade leaves tsx scripts to --full", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--full", "--no-hooks", "--no-agent", "--no-editor"], comment = "--full migrates tsx scripts to vpx", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "scripts run vpx, and the tsx devDependency is gone", continue-on-failure = true },
+]

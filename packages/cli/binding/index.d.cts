@@ -1278,8 +1278,8 @@ export interface ModuleRunnerTransformResult {
    * This will be set if {@link TransformOptions#sourcemap} is `true`.
    */
   map?: SourceMap;
-  deps: Array<string>;
-  dynamicDeps: Array<string>;
+  deps: string[];
+  dynamicDeps: string[];
   /**
    * Parse and transformation errors.
    *
@@ -1688,6 +1688,24 @@ export interface LoadFnOutput {
   format: string;
   source?: string | Uint8Array | Buffer | null;
   responseURL?: string;
+}
+
+/** The code `transformModuleRunner` hands to `@oxc-node/core/importer`. */
+export interface ModuleRunnerOutput {
+  code: string;
+  /** The source map as a JSON string */
+  map?: string;
+  /**
+   * The file is an ES module. Its imports, exports and `import.meta` are calls into
+   * the runner (`__vite_ssr_import__` and friends); a CommonJS file keeps `require`,
+   * `module` and `exports`, and only its `import()` calls into the runner.
+   */
+  esm: boolean;
+  /**
+   * The ES module awaits at its top level, so `require()` of it is
+   * `ERR_REQUIRE_ASYNC_MODULE`.
+   */
+  topLevelAwait: boolean;
 }
 
 export interface OxcResolveOptions {
@@ -3356,6 +3374,7 @@ export interface BindingViteResolvePluginConfig {
   tsconfig?: string;
   environmentConsumer: string;
   environmentName: string;
+  convertExternalRequire?: boolean;
   builtins: Array<BindingStringOrRegex>;
   external: true | string[];
   noExternal: true | Array<string | RegExp>;
@@ -3381,6 +3400,8 @@ export interface BindingViteResolvePluginConfig {
 
 export interface BindingViteResolvePluginResolveOptions {
   isBuild: boolean;
+  /** Defaults to `isBuild`. */
+  isBundled?: boolean;
   isProduction: boolean;
   asSrc: boolean;
   preferRelative: boolean;
@@ -4216,6 +4237,7 @@ export declare namespace oxcNode {
       arg1?: ResolveContext | undefined | null,
     ) => ResolveFnOutput | Promise<ResolveFnOutput>,
   ): ResolveFnOutput | Promise<ResolveFnOutput>;
+  export function enableWatchReport(): void;
   export function load(
     url: string,
     context: LoadContext,
@@ -4227,6 +4249,7 @@ export declare namespace oxcNode {
   ): LoadFnOutput | Promise<LoadFnOutput>;
   export function setTransformDeps(mode?: string | undefined | null): void;
   export function setTsconfigPath(path?: string | undefined | null): void;
+  export function takeWatchDependencies(): Array<string>;
   /** A file transformed for the CommonJS loader. */
   export interface TransformOutput {
     source: string;

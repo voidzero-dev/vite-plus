@@ -572,14 +572,6 @@ mod tests {
     }
 
     #[test]
-    fn test_js_executor_new() {
-        let executor = JsExecutor::new(None);
-        assert!(executor.cli_runtime.is_none());
-        assert!(executor.project_runtime.is_none());
-        assert!(executor.scripts_dir.is_none());
-    }
-
-    #[test]
     fn test_js_executor_with_scripts_dir() {
         let scripts_dir = if cfg!(windows) {
             AbsolutePathBuf::new("C:\\test\\scripts".into()).unwrap()

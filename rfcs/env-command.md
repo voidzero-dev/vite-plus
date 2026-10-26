@@ -831,7 +831,7 @@ PATH
 
 ...
 
-✗ Some issues found. Run the suggested commands to fix them.
+✗ Some issues found.
 ```
 
 ## User Experience
@@ -1037,7 +1037,7 @@ IDE Setup
         . "$HOME/.vite-plus/env"
       Then restart your IDE to apply changes.
 
-✗ Some issues found. Run the suggested commands to fix them.
+✗ Some issues found.
 ```
 
 ## Shell Configuration Reference

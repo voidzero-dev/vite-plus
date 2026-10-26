@@ -88,6 +88,25 @@ export class RegistryCache {
     }
   }
 
+  // Prepare large tool archives before snapshot command deadlines start.
+  // Only HTTP response bytes are shared; installations remain case-local.
+  async prewarm(url: string): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const response = await this.get(url, 'application/octet-stream');
+        if (response.status !== 200) {
+          throw new Error(`Cannot prepare registry response: ${url} (HTTP ${response.status})`);
+        }
+        return;
+      } catch (error) {
+        if (attempt === 2) {
+          throw error;
+        }
+        await setTimeout(1000 * 2 ** attempt);
+      }
+    }
+  }
+
   async get(url: string, accept: string): Promise<Response> {
     this.record('request', url);
     if (!this.enabled) {

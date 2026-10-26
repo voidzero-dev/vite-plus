@@ -4,7 +4,7 @@
   "type": "module",
   "devDependencies": {
     "typescript": "^6.0.3",
-    "vite-plus": "0.1.23"
+    "vite-plus": "latest"
   },
   "packageManager": "pnpm@11.5.0"
 }

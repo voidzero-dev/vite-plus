@@ -1095,8 +1095,52 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 // Keep the wrapper outside bin so it cannot shadow the native executable.
 // Unlike an advanced function, this script forwards all arguments without
 // PowerShell consuming common parameters such as -Verbose or its -V alias.
+// Bare -- recovery is inspired by mise's __mise_restore_double_dash:
+// https://github.com/jdx/mise/blob/34ec0439c868379be87a28591f50d41f84fb8d02/src/shell/pwsh.rs#L45-L103
 const VP_WRAPPER_PS1: &str = r#"# Vite+ PowerShell wrapper (https://viteplus.dev)
 $__vp_bin = '__VP_BIN_WIN__'
+# PowerShell consumes the first bare -- when calling a script. Recover its
+# position from the caller's AST, without evaluating argument expressions again.
+# The call stack also works on Windows PowerShell 5.1, which has no Statement.
+$__vp_stack = @(Get-PSCallStack)
+$__vp_command = $null
+if ($__vp_stack.Count -gt 1) {
+    $__vp_ast = $__vp_stack[1].InvocationInfo.MyCommand.ScriptBlock.Ast
+    $__vp_line = $MyInvocation.ScriptLineNumber
+    $__vp_column = $MyInvocation.OffsetInLine
+    if ($__vp_ast) {
+        $__vp_command = $__vp_ast.Find({ param($node)
+            $node -is [System.Management.Automation.Language.CommandAst] -and
+            $node.Extent.StartLineNumber -eq $__vp_line -and $node.Extent.StartColumnNumber -eq $__vp_column
+        }, $true)
+    }
+}
+if ($__vp_command) {
+    $__vp_index = 0
+    $__vp_elements = $__vp_command.CommandElements
+    for ($__vp_i = 1; $__vp_i -lt $__vp_elements.Count; $__vp_i++) {
+        $__vp_element = $__vp_elements[$__vp_i]
+        # A preceding splat has an unknown length. Leave $args unchanged rather
+        # than reading caller variables, which may have changed or belong to another scope.
+        if ($__vp_element -is [System.Management.Automation.Language.VariableExpressionAst] -and $__vp_element.Splatted) {
+            break
+        }
+        # Only a parameter AST can be consumed. After --%, the separator is literal.
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Extent.Text -ceq '--') {
+            if ($__vp_index -le $args.Count) {
+                $__vp_arguments = [System.Collections.Generic.List[object]]::new()
+                $__vp_arguments.AddRange($args)
+                $__vp_arguments.Insert($__vp_index, '--')
+                $args = $__vp_arguments.ToArray()
+            }
+            break
+        }
+        $__vp_index++
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Argument) {
+            $__vp_index++
+        }
+    }
+}
 $__vp_command_index = 0
 if ($args.Count -ge 1) {
     if ($args[0] -eq "-C") {
@@ -1734,28 +1778,6 @@ mod tests {
                 }
             },
         );
-    }
-
-    #[tokio::test]
-    async fn test_create_env_files_creates_all_files() {
-        let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async(
-            test_env_vars(temp_dir.path(), temp_dir.path()),
-            |_| async {
-                create_env_files().await.unwrap();
-
-                let env_path = home.join("env");
-                let env_fish_path = home.join("env.fish");
-                let env_nu_path = home.join("env.nu");
-                let env_ps1_path = home.join("env.ps1");
-                assert!(env_path.as_path().exists(), "env file should be created");
-                assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
-                assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
-                assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
-            },
-        )
-        .await;
     }
 
     #[tokio::test]

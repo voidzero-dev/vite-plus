@@ -24,14 +24,13 @@ import {
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
-  type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
   runViteInstall,
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.ts';
-import { accent, formatDuration, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
+import { accent, formatDuration, log, muted, printHeader } from '../utils/terminal.ts';
 import {
   confirmBaseUrlFix,
   fixBaseUrlInTsconfig,
@@ -41,6 +40,7 @@ import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import { checkRolldownCompatibility } from './compat/runner.ts';
 import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
+import { handleInstallResult } from './install-result.ts';
 import {
   addFrameworkShim,
   applyVitestV5Migration,
@@ -49,12 +49,14 @@ import {
   checkViteVersion,
   collectToolchainVersionChanges,
   confirmPrettierMigration,
+  confirmTsxMigration,
   detectEslintProject,
   detectFramework,
   detectNodeVersionManagerFile,
   detectPendingCoreMigration,
   detectPrettierProject,
   detectTsupProject,
+  detectTsxProject,
   detectVitePlusBootstrapPending,
   detectYarnPnpMode,
   ensureVitePlusBootstrap,
@@ -72,6 +74,7 @@ import {
   migratePrettierToOxfmt,
   migrateSetupVpVersion,
   migrateTsupToTsdown,
+  migrateTsxToVpx,
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
@@ -281,6 +284,7 @@ interface MigrationPlan extends MigrationSetupPlan {
   prettierConfigFile?: string;
   migrateTsup: boolean;
   tsupConfigFile?: string;
+  migrateTsx: boolean;
   fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
@@ -377,6 +381,7 @@ function hasExistingVitePlusMigrationCandidates(
     eslintProject.hasDependency ||
     prettierProject.hasDependency ||
     tsupProject.hasDependency ||
+    detectTsxProject(workspaceInfo.rootDir, workspaceInfo.packages) ||
     detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined ||
     getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0
   );
@@ -436,6 +441,10 @@ async function collectMigrationPlan(
     packages,
   );
 
+  // 3c. tsx detection + prompt
+  const migrateTsx =
+    detectTsxProject(rootDir, packages) && (await confirmTsxMigration(options.interactive));
+
   // 9. tsconfig baseUrl prompt
   const fixBaseUrl = hasBaseUrlInWorkspace({ rootDir, packages })
     ? await confirmBaseUrlFix(options.interactive)
@@ -463,6 +472,7 @@ async function collectMigrationPlan(
     prettierConfigFile: prettierProject.configFile,
     migrateTsup,
     tsupConfigFile,
+    migrateTsx,
     fixBaseUrl,
     migrateNodeVersionFile,
     nodeVersionDetection,
@@ -470,43 +480,6 @@ async function collectMigrationPlan(
   };
 
   return plan;
-}
-
-/**
- * Reconcile a CommandRunSummary from `runViteInstall` with the migration's
- * duration counter and exit-code state. `runViteInstall` returns
- * `{ status: 'failed', exitCode }` without throwing; treating that as a success
- * (incrementing duration unconditionally) would let the migration claim
- * "Dependencies installed" while node_modules is desynced from the just-mutated
- * package.json. This helper centralizes the right handling: credit duration on
- * success, warn + flip exitCode on failure, stay silent on skip.
- */
-function handleInstallResult(
-  installSummary: CommandRunSummary,
-  rootDir: string,
-  report: MigrationReport,
-  // The pre-migration "initial" install is best-effort: the migration proceeds
-  // regardless of its outcome, and a post-migration "final" install runs with
-  // `--force` / `--no-frozen-lockfile` as the authoritative recovery. Only that
-  // final install's failure should flip `process.exitCode` so a successful
-  // recovery yields exit 0; the initial failure is still surfaced via
-  // `report.warnings` + the warn message.
-  options?: { propagateExitCode?: boolean },
-): number {
-  if (installSummary.status === 'installed') {
-    return installSummary.durationMs;
-  }
-  if (installSummary.status === 'failed') {
-    const exitCode = installSummary.exitCode ?? 1;
-    const message = `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
-    warnMsg(message);
-    report.warnings.push(message);
-    if (options?.propagateExitCode !== false) {
-      process.exitCode = exitCode;
-    }
-    return 0;
-  }
-  return 0;
 }
 
 // Shown on a bare existing-Vite+ upgrade that skipped the setup bucket, on both
@@ -607,6 +580,9 @@ function showMigrationSummary(options: {
   }
   if (report.tsupMigrated) {
     log(`${styleText('gray', '•')} tsup config migrated to tsdown (\`vp pack\`)`);
+  }
+  if (report.tsxMigrated) {
+    log(`${styleText('gray', '•')} tsx scripts migrated to \`vpx\``);
   }
   if (report.nodeVersionFileMigrated) {
     log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);
@@ -881,6 +857,12 @@ async function executeMigrationPlan(
       failMigrationProgress('Migration failed');
       cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
     }
+  }
+
+  // 6c. tsx → vpx (before main rewrite so rewritten lint-staged tasks get merged)
+  if (plan.migrateTsx) {
+    updateMigrationProgress('Migrating tsx scripts');
+    migrateTsxToVpx(workspaceInfo.rootDir, workspaceInfo.packages, report);
   }
 
   // Earlier setup and tool migrations can abort or change the preflight inputs.
@@ -1407,6 +1389,27 @@ async function main() {
           cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
         }
         tsupMigrated = true;
+      }
+    }
+
+    if (
+      fullSetup &&
+      detectTsxProject(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
+    ) {
+      // Interactive only: stop any active spinner so it does not animate beneath
+      // the confirm prompt.
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
+      if (await confirmTsxMigration(options.interactive)) {
+        updateMigrationProgress('Migrating tsx scripts');
+        const tsxResult = migrateTsxToVpx(
+          workspaceInfoOptional.rootDir,
+          workspaceInfoOptional.packages,
+          report,
+        );
+        didMigrate ||= tsxResult.changed;
+        needsInstall ||= tsxResult.dependencyRemoved;
       }
     }
 

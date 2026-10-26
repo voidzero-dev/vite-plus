@@ -19,8 +19,8 @@ catalog:
   '@napi-rs/cli': ^3.10.0
   '@napi-rs/wasm-runtime': ~1.2.5
   '@nkzw/safe-word-list': ^3.1.0
-  '@oxc-node/cli': ^0.1.7
-  '@oxc-node/core': ^0.1.7
+  '@oxc-node/cli': ^1.0.0
+  '@oxc-node/core': ^1.0.0
   '@oxc-project/runtime': =0.155.0
   '@oxc-project/types': =0.155.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
@@ -96,7 +96,7 @@ catalog:
   oxc-transform: =0.155.0
   oxfmt: =0.74.0
   oxlint: =1.89.0
-  oxlint-tsgolint: =7.0.2004
+  oxlint-tsgolint: =7.0.2005
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -120,7 +120,7 @@ catalog:
   tinyglobby: ^0.2.15
   tsdown: ^0.23.1
   tsx: ^4.22.0
-  typescript: ^6.0.0
+  typescript: ~7.0.2
   unified: ^11.0.5
   valibot: 1.5.0
   validate-npm-package-name: ^8.0.0
@@ -201,10 +201,14 @@ minimumReleaseAgeExclude:
   - emnapi
   - '@vitejs/devtools'
   - '@vitejs/devtools-*'
+  - resolve.exports@2.0.4
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
+  rolldown>typescript: ^6.0.0
+  '@volar/typescript>typescript@>=7': '-'
+  '@volar/language-service>typescript@>=7': '-'
 packageExtensions:
   '@rollup/plugin-dynamic-import-vars':
     dependencies:
@@ -218,6 +222,7 @@ packageExtensions:
   '@volar/typescript':
     dependencies:
       '@volar/language-service': 2.4.28
+      typescript: ~6.0.3
   '@vue/compiler-core':
     dependencies:
       '@babel/types': ^7.29.8
@@ -227,6 +232,10 @@ packageExtensions:
   '@vue/language-core':
     dependencies:
       '@vue/compiler-sfc': ^3.5.0
+      typescript: ~6.0.3
+  '@volar/language-service':
+    dependencies:
+      typescript: ~6.0.3
 patchedDependencies:
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch

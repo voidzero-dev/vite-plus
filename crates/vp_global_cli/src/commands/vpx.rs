@@ -53,13 +53,16 @@ Options:
   -v, --version         Print the Vite+ version
   -h, --help            Print help
 
+Before a script, --watch reruns it when a file it uses changes (see `vpx --watch --help`).
+
 Examples:
   vpx eslint .                           # Run local eslint (or download)
   vpx create-vue my-app                  # Download and run create-vue
   vpx oxlint@1.85.0 --version            # Run specific version
   vpx -p cowsay -c 'echo \"hi\" | cowsay'  # Shell mode with package
   vpx ./scripts/seed.ts --dry-run        # Run a TypeScript script
-  vpx --watch ./server.ts                # Pass Node.js options before the script";
+  vpx --inspect ./server.ts              # Pass Node.js options before the script
+  vpx --watch ./server.ts                # Rerun the script when a file it uses changes";
 
 /// A globally installed binary found via `vp install -g`.
 struct GlobalBinary {

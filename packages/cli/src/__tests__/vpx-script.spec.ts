@@ -27,6 +27,7 @@ import {
   parseVpxArgs,
   SCRIPT_EXTENSIONS,
   ScriptError,
+  WATCH_OPTIONS_WITH_VALUE,
 } from '../vpx-script.ts';
 
 const dirs: string[] = [];
@@ -52,13 +53,14 @@ interface DetectionCase {
   name: string;
   files?: Record<string, string>;
   args: string[];
-  expect: 'package' | { error: string } | { script: string[]; tsconfig?: string };
+  expect: 'package' | { error: string } | { script: string[]; tsconfig?: string; watch?: true };
 }
 
 const detectionTable: {
   scriptExtensions: string[];
   nodeOptionsWithValue: string[];
   nodeOptionsWithoutEntry: string[];
+  watchOptionsWithValue: string[];
   packageSpecs: { spec: string; versioned: boolean; command: string }[];
   explicitPrograms: {
     name: string;
@@ -90,9 +92,14 @@ describe('detectScript', () => {
       expect(() => detectScript(fill(args), cwd)).toThrow(new ScriptError(expected.error));
     } else {
       const result = detectScript(fill(args), cwd);
-      expect({ nodeArgs: result?.nodeArgs, tsconfig: result?.tsconfig }).toEqual({
+      expect({
+        nodeArgs: result?.nodeArgs,
+        tsconfig: result?.tsconfig,
+        watch: result?.watch ?? false,
+      }).toEqual({
         nodeArgs: fill(expected.script),
         tsconfig: expected.tsconfig,
+        watch: expected.watch ?? false,
       });
     }
   });
@@ -102,6 +109,7 @@ describe('detectScript', () => {
     expect(SCRIPT_EXTENSIONS).toEqual(detectionTable.scriptExtensions);
     expect([...NODE_OPTIONS_WITH_VALUE]).toEqual(detectionTable.nodeOptionsWithValue);
     expect([...NODE_OPTIONS_WITHOUT_ENTRY]).toEqual(detectionTable.nodeOptionsWithoutEntry);
+    expect([...WATCH_OPTIONS_WITH_VALUE]).toEqual(detectionTable.watchOptionsWithValue);
   });
 });
 

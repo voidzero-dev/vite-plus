@@ -119,12 +119,38 @@ export const NODE_OPTIONS_WITHOUT_ENTRY = new Set([
 ]);
 
 /**
+ * The watcher's options that take a value, which may come as the next argument, so that
+ * value is not taken for the script.
+ */
+export const WATCH_OPTIONS_WITH_VALUE = new Set([
+  '--exclude',
+  '--ignore',
+  '--include',
+  '--kill-signal',
+  '--kill-timeout',
+]);
+
+/**
  * The option an argument names, without `=value`. Node.js accepts `_` for `-` in long
  * option names, as in `--redirect_warnings`.
  */
 function nodeOptionName(arg: string): string {
   const name = arg.split('=', 1)[0];
   return name.startsWith('--') ? `--${name.slice(2).replaceAll('_', '-')}` : name;
+}
+
+/**
+ * Whether the option `name`, given without `=value`, takes `next` as its value. Node.js
+ * 24.19, 26.1, and later read a bare `--experimental-config-file` as `node.config.json`,
+ * and older releases take the next argument as the config file, so that argument is its
+ * value only when it is a `.json` file, which cannot be the script either way. Mirrors
+ * `takes_next_arg` in the global CLI.
+ */
+function takesNextArg(name: string, next: string): boolean {
+  if (name === '--experimental-config-file') {
+    return next.endsWith('.json') && !next.startsWith('-');
+  }
+  return NODE_OPTIONS_WITH_VALUE.has(name) || WATCH_OPTIONS_WITH_VALUE.has(name);
 }
 
 export interface VpxFlags {
@@ -180,6 +206,12 @@ export interface ScriptInvocation {
   nodeArgs: string[];
   /** `--tsconfig` given among the Node.js options. */
   tsconfig?: string;
+  /**
+   * `--watch` or `--watch-path` among the Node.js options: the watcher runs the script,
+   * never Node.js' own watch mode. `--watch` is removed from `nodeArgs`; the watcher
+   * rejects `--watch-path` with a hint.
+   */
+  watch?: true;
 }
 
 export class ScriptError extends Error {}
@@ -201,6 +233,7 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
   // A leading option never named a package bin, so this always runs Node.js.
   const nodeArgs: string[] = [];
   let tsconfig: string | undefined;
+  let watch = false;
   let entry = true;
   for (let index = 0; index < positional.length; index++) {
     const arg = positional[index];
@@ -223,18 +256,20 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
       tsconfig = arg.slice('--tsconfig='.length);
       continue;
     }
+    if (arg === '--watch') {
+      watch = true;
+      continue;
+    }
     const name = nodeOptionName(arg);
+    watch ||= name === '--watch-path';
     entry &&= !NODE_OPTIONS_WITHOUT_ENTRY.has(name);
     nodeArgs.push(arg);
-    if (
-      !arg.includes('=') &&
-      NODE_OPTIONS_WITH_VALUE.has(name) &&
-      positional[index + 1] !== undefined
-    ) {
+    const next = positional[index + 1];
+    if (!arg.includes('=') && next !== undefined && takesNextArg(name, next)) {
       nodeArgs.push(positional[++index]);
     }
   }
-  return { nodeArgs, tsconfig };
+  return watch ? { nodeArgs, tsconfig, watch } : { nodeArgs, tsconfig };
 }
 
 /**

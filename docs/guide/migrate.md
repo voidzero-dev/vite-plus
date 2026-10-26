@@ -8,7 +8,7 @@ import { migrationPrompt, upgradePrompt } from '../.vitepress/theme/data/migrati
 
 ## Overview
 
-This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, Prettier, tsdown, and tsup setups into Vite+.
+This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, Prettier, tsdown, tsup, and tsx setups into Vite+.
 
 Use it when you want to take an existing project and move it onto the Vite+ defaults instead of wiring each tool by hand.
 
@@ -95,21 +95,21 @@ Upgrade the [global CLI](./upgrade.md#global-vp) to your target 1.0 release, the
 
 ### Without the Global CLI
 
-Use an existing Node.js runtime that satisfies `^22.18.0 || ^24.11.0 || >=26.0.0`. Run the target migrator through your package manager without adding it to the project first. For the `1.3.0` release:
+Use an existing Node.js runtime that satisfies `^22.18.0 || ^24.11.0 || >=26.0.0`. Run the target migrator through your package manager without adding it to the project first. For the `1.4.0` release:
 
 ::: code-group
 
 ```bash [pnpm]
-pnpm dlx --package=vite-plus@1.3.0 vp migrate --no-interactive
+pnpm dlx --package=vite-plus@1.4.0 vp migrate --no-interactive
 ```
 
 ```bash [npm]
-npx --package=vite-plus@1.3.0 vp migrate --no-interactive
+npx --package=vite-plus@1.4.0 vp migrate --no-interactive
 ```
 
 :::
 
-Replace `1.3.0` with your target release. For a preview, use the version from the PR and pass `--registry=https://registry-bridge.viteplus.dev` to `pnpm` or `npx` before the `vp` command. Keep the version in `--package` explicit so you run the target migrator rather than the old local CLI.
+Replace `1.4.0` with your target release. For a preview, use the version from the PR and pass `--registry=https://registry-bridge.viteplus.dev` to `pnpm` or `npx` before the `vp` command. Keep the version in `--package` explicit so you run the target migrator rather than the old local CLI.
 
 After migration, finish dependency installation and validate with the updated local CLI:
 
@@ -234,11 +234,11 @@ export default defineConfig({
 });
 ```
 
-When no existing hook policy owns the workflow, `vp migrate` can move supported lint-staged rules and remove the old configuration and dependency. If an existing hook tool is preserved, keep lint-staged in place until you convert that hook policy manually. See the [Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
+When no existing hook policy owns the workflow, `vp migrate` can move supported lint-staged rules and remove the old configuration and dependency. If an existing hook tool is preserved, keep lint-staged in place until you convert that hook policy manually. See the [Commit Hooks](/guide/commit-hooks) and [Staged Config](/config/staged) for details.
 
 ### Git hook tools
 
-The `vp migrate` command does not automatically convert Husky setups. When Husky is detected, Vite+ leaves its hooks, lifecycle scripts, configuration, and dependencies unchanged and shows a warning. You can migrate the project manually using the [Commit hooks guide](/guide/commit-hooks).
+The `vp migrate` command does not automatically convert Husky setups. When Husky is detected, Vite+ leaves its hooks, lifecycle scripts, configuration, and dependencies unchanged and shows a warning. You can migrate the project manually using the [Commit Hooks](/guide/commit-hooks).
 
 Existing project-owned Vite+ hooks are also preserved. The default staged workflow is introduced only when no existing hook policy is found.
 
@@ -246,7 +246,7 @@ If your project currently uses `lefthook`, `simple-git-hooks`, or `yorkie`, `vp 
 
 If you want to move one of those tools over to Vite+ manually, you can follow these steps. First, move your staged-file commands into the `staged` block within `vite.config.ts`. Then, update your lifecycle script so it runs `vp config`. You will also need to create a Vite+ hook at `.vite-hooks/pre-commit` that runs `vp staged`. Run `vp hooks enable` (or `vp config`) to install the dispatcher and set `core.hooksPath`. Finally, once you have confirmed that the Vite+ hook is working as expected, you can remove the old tool's configuration and dependency.
 
-Use `vp hooks status` to verify the dispatcher is active, and `vp hooks disable` if you need to turn it off again in this clone. You can find more details about the full Vite+ hook setup in the [Commit hooks guide](/guide/commit-hooks).
+Use `vp hooks status` to verify the dispatcher is active, and `vp hooks disable` if you need to turn it off again in this clone. You can find more details about the full Vite+ hook setup in the [Commit Hooks](/guide/commit-hooks).
 
 ## Examples
 

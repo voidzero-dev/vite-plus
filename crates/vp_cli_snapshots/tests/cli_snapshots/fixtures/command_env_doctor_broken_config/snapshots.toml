@@ -1,0 +1,10 @@
+[[case]]
+name = "command_env_doctor_broken_config"
+vp = "global"
+skip-platforms = ["windows"]
+comment = "An unreadable config breaks the shims, so doctor reports it as an error and exits with 1."
+steps = [
+  { argv = ["vpt", "write-file", "$HOME/.profile", ". \"$HOME/.vite-plus/env\""], snapshot = false, comment = "source the env file so the output has no platform-specific IDE guidance" },
+  { argv = ["vpt", "write-file", "$VP_HOME/config.json", "{ not json"], snapshot = false },
+  ["vp", "env", "doctor"],
+]

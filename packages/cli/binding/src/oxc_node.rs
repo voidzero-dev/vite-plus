@@ -1,6 +1,8 @@
 //! The `oxcNode` namespace: thin forwarders to the vendored oxc-node, which the binding
 //! links with `default-features = false`, so it registers no NAPI exports of its own.
 //! Only what the `vpx <script>` loader in `packages/cli/src/script-*.ts` uses is exported.
+//! `enableWatchReport` and `takeWatchDependencies` feed watch mode the tsconfig files
+//! oxc-node read and the paths a failed resolve looked for.
 
 use ::oxc_node::{LoadContext, LoadFnOutput, OxcResolveOptions, ResolveContext, ResolveFnOutput};
 use napi::{
@@ -30,6 +32,16 @@ pub fn set_transform_deps(mode: Option<String>) -> Result<()> {
 #[napi(namespace = "oxcNode")]
 pub fn transforms_dep(path: String) -> bool {
     ::oxc_node::transforms_dep(path)
+}
+
+#[napi(namespace = "oxcNode")]
+pub fn enable_watch_report() {
+    ::oxc_node::enable_watch_report();
+}
+
+#[napi(namespace = "oxcNode")]
+pub fn take_watch_dependencies() -> Vec<String> {
+    ::oxc_node::take_watch_dependencies()
 }
 
 #[napi(namespace = "oxcNode")]
