@@ -4,11 +4,12 @@
  * `sync-remote` clones oxc-node into `oxc-node/`, and CI checks it out at the hash in
  * `.upstream-versions.json`. The binding links it with `default-features = false`, so it
  * registers no NAPI exports of its own; `packages/cli/binding/src/oxc_node.rs` forwards
- * the ones the loader uses under an `oxcNode` namespace. The source stays unpatched.
+ * the ones the loader uses under an `oxcNode` namespace.
  *
  * This script points the `oxc` dependency at the workspace version, so the binding links
- * one copy of oxc. It is idempotent. Keep it free of package imports: CI runs it right
- * after checkout, before dependencies are installed.
+ * one copy of oxc, and exposes the frozen loader initialization APIs to embedders
+ * without registering upstream NAPI exports. It is idempotent. Keep it free of package
+ * imports: CI runs it right after checkout, before dependencies are installed.
  */
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -39,6 +40,22 @@ export function setOxcVersion(cargoToml: string, version: string): string {
   return replaceCargoCrateVersion(cargoToml, 'oxc', version);
 }
 
+/** Keep the loader's JS environment and diagnostic source without its NAPI exports. */
+export function exposeLoaderInitialization(source: string): string {
+  for (const name of ['freezeTsconfig', 'initializeLoader']) {
+    const original = `#[cfg(feature = "napi")]\n#[napi(js_name = "${name}")]`;
+    const replacement = `#[cfg_attr(feature = "napi", napi(js_name = "${name}"))]`;
+    if (source.includes(original)) {
+      source = source.replace(original, replacement);
+    } else if (!source.includes(replacement)) {
+      throw new Error(
+        `[patch-oxc-node] Could not find the ${name} registration in oxc-node/src/lib.rs`,
+      );
+    }
+  }
+  return source;
+}
+
 export function patchOxcNode(rootDir: string = process.cwd()): void {
   const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
   const cargoTomlPath = join(rootDir, OXC_NODE_DIR, 'Cargo.toml');
@@ -47,6 +64,13 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
   if (patched !== cargoToml) {
     writeFileSync(cargoTomlPath, patched, 'utf-8');
     log(`✓ Cargo.toml: oxc ${version}`);
+  }
+  const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
+  const source = readFileSync(libPath, 'utf-8');
+  const patchedSource = exposeLoaderInitialization(source);
+  if (patchedSource !== source) {
+    writeFileSync(libPath, patchedSource, 'utf-8');
+    log('✓ lib.rs: loader initialization available to embedders');
   }
 }
 

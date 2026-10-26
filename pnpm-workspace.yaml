@@ -19,8 +19,8 @@ catalog:
   '@napi-rs/cli': ^3.10.0
   '@napi-rs/wasm-runtime': ~1.2.5
   '@nkzw/safe-word-list': ^3.1.0
-  '@oxc-node/cli': ^1.0.0
-  '@oxc-node/core': ^1.0.0
+  '@oxc-node/cli': ^1.0.1
+  '@oxc-node/core': ^1.0.1
   '@oxc-project/runtime': =0.155.0
   '@oxc-project/types': =0.155.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
@@ -30,8 +30,8 @@ catalog:
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
   '@rollup/plugin-node-resolve': ^16.0.0
-  '@tsdown/css': ^0.23.1
-  '@tsdown/exe': ^0.23.1
+  '@tsdown/css': ^0.23.2
+  '@tsdown/exe': ^0.23.2
   '@types/babel__core': 7.20.5
   '@types/connect': ^3.4.38
   '@types/cross-spawn': ^6.0.6
@@ -118,7 +118,7 @@ catalog:
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
   tinyglobby: ^0.2.15
-  tsdown: ^0.23.1
+  tsdown: ^0.23.2
   tsx: ^4.22.0
   typescript: ~7.0.2
   unified: ^11.0.5
@@ -207,6 +207,10 @@ overrides:
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
   rolldown>typescript: ^6.0.0
+  # tsdown 0.23.2 selects the dts 0.29 beta, which requires TypeScript 7.1's
+  # async API and drops native-preview support. Keep vp pack compatible with
+  # stable TypeScript and existing tsgo configurations.
+  tsdown@0.23.2>rolldown-plugin-dts: 0.28.8
   '@volar/typescript>typescript@>=7': '-'
   '@volar/language-service>typescript@>=7': '-'
 packageExtensions:

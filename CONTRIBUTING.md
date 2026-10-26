@@ -112,6 +112,26 @@ To switch back to a release version, use `vp upgrade --force` (`current` points 
 vp upgrade --force
 ```
 
+### Isolated CLI installation
+
+For temporary local validation, use a separate installation and disable persistent shell/PATH changes. This applies to `pnpm bootstrap-cli`, `pnpm bootstrap-cli:ci`, and `pnpm install-global-cli`. `VP_HOME` alone and `CI=true` do not prevent shell profile changes.
+
+Apply the required build environment first. Run the installation and its checks in one subshell:
+
+```sh
+(
+  set -e
+  test_vp_home="$(mktemp -d)"
+  trap 'rm -rf -- "$test_vp_home"' EXIT
+  export VP_HOME="$test_vp_home"
+  export VP_SELF_SETUP_NO_MODIFY_PATH=1
+  pnpm bootstrap-cli
+  export PATH="$VP_HOME/bin:$PATH"
+  vp --version
+  # Run further checks that use this installation here.
+)
+```
+
 ## Validate the local build against a real project
 
 Automated tests don't cover everything. Complex flows such as prompts, pickers, and scaffolding are also worth validating by running your work-in-progress CLI inside a real Vite+ project.
