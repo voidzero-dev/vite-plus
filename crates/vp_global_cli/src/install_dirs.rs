@@ -36,27 +36,33 @@ pub(crate) fn validate_root_normalization(dirs: &VpDirs) -> Result<(), Error> {
             match component {
                 Component::CurDir => {}
                 Component::ParentDir => {
-                    if let Some(parent) = prefix.parent() {
-                        match fs::symlink_metadata(&prefix) {
-                            Ok(_) => {
-                                let resolved = dunce::canonicalize(&prefix)?;
-                                let expected_parent = dunce::canonicalize(parent)?;
-                                if resolved.parent() != Some(expected_parent.as_path()) {
-                                    return Err(Error::Other(vt_str::format!(
-                                        "Refusing to normalize directory {}: resolving '..' across a link changes its target. Specify the directory without '..'.",
-                                        root.as_path().display()
-                                    )));
-                                }
-                            }
-                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                            Err(error) => return Err(error.into()),
-                        }
-                    }
+                    validate_parent_traversal(root, &prefix)?;
                     prefix.pop();
                 }
                 _ => prefix.push(component.as_os_str()),
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_parent_traversal(root: &AbsolutePathBuf, prefix: &Path) -> Result<(), Error> {
+    let Some(parent) = prefix.parent() else {
+        return Ok(());
+    };
+    match fs::symlink_metadata(prefix) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    }
+
+    let resolved = dunce::canonicalize(prefix)?;
+    let expected_parent = dunce::canonicalize(parent)?;
+    if resolved.parent() != Some(expected_parent.as_path()) {
+        return Err(Error::Other(vt_str::format!(
+            "Refusing to normalize directory {}: resolving '..' across a link changes its target. Specify the directory without '..'.",
+            root.as_path().display()
+        )));
     }
     Ok(())
 }
@@ -87,23 +93,23 @@ pub(crate) fn is_owned(root: &AbsolutePathBuf) -> Result<bool, Error> {
 /// directory must never grant permission to delete its existing contents.
 pub(crate) fn prepare(dirs: &VpDirs) -> Result<(), Error> {
     validate_root_normalization(dirs)?;
-    let mut empty = Vec::new();
+    let mut empty_roots = Vec::new();
     // Preflight all roots before creating directories or ownership markers.
     for root in roots(dirs) {
         if is_owned(&root)? {
             continue;
         }
-        let nonempty = match fs::read_dir(&root) {
-            Ok(mut entries) => entries.next().transpose()?.is_some(),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        let is_empty = match fs::read_dir(&root) {
+            Ok(mut entries) => entries.next().transpose()?.is_none(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
             Err(error) => return Err(error.into()),
         };
-        if nonempty {
-            continue;
+        if is_empty {
+            empty_roots.push(root);
         }
-        empty.push(root);
     }
-    for root in empty {
+    for root in empty_roots {
+        // An earlier root may have created the marker through a filesystem alias.
         if is_owned(&root)? {
             continue;
         }

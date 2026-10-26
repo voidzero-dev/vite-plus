@@ -53,8 +53,9 @@ try {
     timeout: 30000,
   });
   assert.equal(result.status, 1, `${result.error ?? ''}\n${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout + result.stderr, /Refusing to normalize directory/);
-  assert.match(result.stdout + result.stderr, /Specify the directory without '\.\.'/);
+  const output = result.stdout + result.stderr;
+  assert.match(output, /Refusing to normalize directory/);
+  assert.match(output, /Specify the directory without '\.\.'/);
   assert.equal(readFileSync(join(personal, 'notes.txt'), 'utf8'), 'keep my notes\n');
   assert.equal(readFileSync(join(user, '.bashrc'), 'utf8'), profile);
   assert.equal(readlinkSync(join(bin, 'vp')), binary);

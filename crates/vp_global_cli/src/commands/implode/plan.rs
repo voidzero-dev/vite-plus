@@ -2,7 +2,10 @@
 
 use std::{fs, path::Path};
 
-use vp_setup::lockfile::{INSTALL_LOCKFILE, INSTALL_RECEIPT, matches_install_receipt};
+use vp_setup::{
+    install::is_install_dir_for_version,
+    lockfile::{INSTALL_LOCKFILE, INSTALL_RECEIPT, matches_install_receipt},
+};
 use vp_shared::{VP_BINARY_NAME, VpDirs};
 use vt_path::AbsolutePathBuf;
 
@@ -18,8 +21,8 @@ pub(super) struct RemovalPlan {
 impl RemovalPlan {
     pub fn new(dirs: &VpDirs, roots: &[AbsolutePathBuf]) -> Result<Self, Error> {
         install_dirs::validate_root_normalization(dirs)?;
-        let mut owned = Vec::new();
-        let mut unowned = Vec::new();
+        let mut owned_roots = Vec::new();
+        let mut unowned_roots = Vec::new();
         for root in roots {
             match fs::symlink_metadata(root) {
                 Ok(_) => {}
@@ -27,7 +30,7 @@ impl RemovalPlan {
                 Err(error) => return Err(error.into()),
             }
             if install_dirs::is_owned(root)? {
-                owned.push(root.clone());
+                owned_roots.push(root.clone());
             } else {
                 let canonical = match dunce::canonicalize(root) {
                     Ok(path) => path,
@@ -36,9 +39,15 @@ impl RemovalPlan {
                     }
                     Err(error) => return Err(error.into()),
                 };
-                unowned.push((root.clone(), canonical));
+                unowned_roots.push((root.clone(), canonical));
             }
         }
+        // Recursive removal must preserve unmarked categories, including aliases.
+        let contains_unowned_root = |directory: &AbsolutePathBuf, canonical: &Path| {
+            unowned_roots.iter().any(|(path, boundary)| {
+                path.as_path().starts_with(directory.as_path()) || boundary.starts_with(canonical)
+            })
+        };
         let mut plan = Self {
             directories: Vec::new(),
             current_link: None,
@@ -51,12 +60,9 @@ impl RemovalPlan {
         if install_dirs::is_owned(&dirs.data)? {
             plan.binary_targets.push(dirs.data.join("current/bin").join(VP_BINARY_NAME));
         }
-        for root in owned {
+        for root in owned_roots {
             let canonical = dunce::canonicalize(&root)?;
-            // A marked ancestor must not bypass an unmarked category, including aliases.
-            if !unowned.iter().any(|(path, boundary)| {
-                path.as_path().starts_with(root.as_path()) || boundary.starts_with(&canonical)
-            }) {
+            if !contains_unowned_root(&root, &canonical) {
                 plan.directories.push(root);
             }
         }
@@ -74,21 +80,19 @@ impl RemovalPlan {
                             continue;
                         }
                         let version_dir = dirs.data.join(entry.file_name());
-                        if verified_version(&version_dir)? {
-                            plan.binary_targets.push(version_dir.join("bin").join(VP_BINARY_NAME));
-                            let canonical = dunce::canonicalize(&version_dir)?;
-                            if !unowned.iter().any(|(path, boundary)| {
-                                path.as_path().starts_with(version_dir.as_path())
-                                    || boundary.starts_with(&canonical)
-                            }) {
-                                if current_target.as_ref() == Some(&canonical) {
-                                    plan.current_link = Some(current.clone());
-                                    plan.binary_targets
-                                        .push(current.join("bin").join(VP_BINARY_NAME));
-                                }
-                                plan.directories.push(version_dir);
-                            }
+                        if !verified_version(&version_dir)? {
+                            continue;
                         }
+                        plan.binary_targets.push(version_dir.join("bin").join(VP_BINARY_NAME));
+                        let canonical = dunce::canonicalize(&version_dir)?;
+                        if contains_unowned_root(&version_dir, &canonical) {
+                            continue;
+                        }
+                        if current_target.as_ref() == Some(&canonical) {
+                            plan.current_link = Some(current.clone());
+                            plan.binary_targets.push(current.join("bin").join(VP_BINARY_NAME));
+                        }
+                        plan.directories.push(version_dir);
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -121,7 +125,8 @@ fn verified_version(directory: &AbsolutePathBuf) -> Result<bool, Error> {
     let Some(receipt) = read_contained_file(&canonical, INSTALL_RECEIPT)? else {
         return Ok(false);
     };
-    let Some(lockfile) = read_contained_file(&canonical, &format!("bin/{INSTALL_LOCKFILE}"))?
+    let Some(lockfile) =
+        read_contained_file(&canonical, &vt_str::format!("bin/{INSTALL_LOCKFILE}"))?
     else {
         return Ok(false);
     };
@@ -143,7 +148,7 @@ fn verified_version(directory: &AbsolutePathBuf) -> Result<bool, Error> {
     };
     let Some(version) = wrapper["version"].as_str() else { return Ok(false) };
     Ok(js_semver::Version::parse(version).is_ok()
-        && (name == version || name.starts_with(&format!("{version}+force.")))
+        && is_install_dir_for_version(name, version)
         && wrapper["name"] == "vp-global"
         && wrapper["private"] == true
         && wrapper["dependencies"]["vite-plus"] == version

@@ -42,17 +42,18 @@ const env = {
   NO_COLOR: '1',
 };
 for (const key of ['VP_HOME', 'VP_DATA_DIR', 'VP_CACHE_DIR', 'VP_BIN_DIR']) delete env[key];
-Object.assign(
-  env,
-  split ? { VP_DATA_DIR: data, VP_CACHE_DIR: cache, VP_BIN_DIR: bin } : { VP_HOME: data },
-);
+if (split) {
+  Object.assign(env, { VP_DATA_DIR: data, VP_CACHE_DIR: cache, VP_BIN_DIR: bin });
+} else {
+  env.VP_HOME = data;
+}
 
 function write(path, contents) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, contents);
 }
 
-function version(name, active = false) {
+function createVersion(name, active = false) {
   const directory = join(data, name);
   const packageVersion = name.split('+')[0];
   const lockfile = `lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      vite-plus:\n        specifier: ${packageVersion}\n        version: ${packageVersion}\n`;
@@ -91,9 +92,9 @@ function run(binary, args) {
 }
 
 try {
-  const old = version('1.4.0');
-  const forced = version('1.4.0+force.123.456');
-  const current = version('1.5.0', true);
+  const old = createVersion('1.4.0');
+  const forced = createVersion('1.4.0+force.123.456');
+  const current = createVersion('1.5.0', true);
   const active = join(current, 'bin', binaryName);
   symlinkSync(current, join(data, 'current'), windows ? 'junction' : 'dir');
   const retained = [
@@ -109,11 +110,11 @@ try {
     [join(bin, 'unrelated-tool'), 'another tool'],
   ];
   for (const [path, contents] of retained) write(path, contents);
-  const incomplete = version('1.3.0');
+  const incomplete = createVersion('1.3.0');
   rmSync(join(incomplete, 'node_modules/.vp-install-complete'));
-  const unlocked = version('1.3.1');
+  const unlocked = createVersion('1.3.1');
   write(join(unlocked, 'node_modules/.vp-install-complete'), 'unlocked');
-  const mismatched = version('1.3.2');
+  const mismatched = createVersion('1.3.2');
   write(join(mismatched, 'bin/vp-install-lock.yaml'), 'different lockfile');
 
   // This is the final command issued by the 1.4.0 upgrader after switching current.
@@ -132,12 +133,13 @@ try {
   const output = run(active, ['implode', '--yes']);
   for (const directory of [old, forced, current])
     assert.equal(existsSync(directory), false, directory);
-  assert.equal(lstatSync(join(data, 'current'), { throwIfNoEntry: false }), undefined);
-  assert.equal(lstatSync(join(bin, binaryName), { throwIfNoEntry: false }), undefined);
-  assert.equal(
-    lstatSync(join(data, 'fallback-bin', windows ? 'node.exe' : 'node'), { throwIfNoEntry: false }),
-    undefined,
-  );
+  for (const path of [
+    join(data, 'current'),
+    join(bin, binaryName),
+    join(data, 'fallback-bin', windows ? 'node.exe' : 'node'),
+  ]) {
+    assert.equal(lstatSync(path, { throwIfNoEntry: false }), undefined);
+  }
   assert.equal(readFileSync(profile, 'utf8'), '# personal config\n');
   console.log('Verified current and historical CLI versions, links, and shims are removed.');
   for (const [path, contents] of preservedContents)

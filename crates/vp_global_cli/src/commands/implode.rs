@@ -193,13 +193,14 @@ fn report_preserved_paths(roots: &[AbsolutePathBuf]) {
     }
     paths.sort();
     paths.dedup();
-    if !paths.is_empty() {
-        output::note(
-            "Some paths were preserved to protect unverified data. Inspect them before removing anything:",
-        );
-        for path in paths {
-            output::raw(&vt_str::format!("  {}", path.display()));
-        }
+    if paths.is_empty() {
+        return;
+    }
+    output::note(
+        "Some paths were preserved to protect unverified data. Inspect them before removing anything:",
+    );
+    for path in paths {
+        output::raw(&vt_str::format!("  {}", path.display()));
     }
 }
 
@@ -276,15 +277,8 @@ fn remove_shim_files(dirs: &vp_shared::VpDirs, paths: &[AbsolutePathBuf]) {
         match std::fs::remove_file(path.as_path()) {
             Ok(()) => {
                 removed += 1;
-                if let Some(pointer) = pointer.as_ref() {
-                    remove_shim_pointer(pointer, &name);
-                }
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                if let Some(pointer) = pointer.as_ref() {
-                    remove_shim_pointer(pointer, &name);
-                }
-            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
                 #[cfg(windows)]
                 if let Some(pointer) = pointer.as_ref() {
@@ -301,7 +295,11 @@ fn remove_shim_files(dirs: &vp_shared::VpDirs, paths: &[AbsolutePathBuf]) {
                     }
                 }
                 output::warn(&vt_str::format!("Vite+ could not remove shim {name}: {e}"));
+                continue;
             }
+        }
+        if let Some(pointer) = pointer.as_ref() {
+            remove_shim_pointer(pointer, &name);
         }
     }
     if removed > 0 {
