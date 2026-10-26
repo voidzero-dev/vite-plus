@@ -48,12 +48,18 @@ should outdated in all packages
 
 ## `vp outdated -r`
 
-should outdated recursively
+should check workspace dependencies without the root
 
 **Exit code:** 1
 
 ```
 Package                        Current  Wanted  Latest  Location                                    Depended by
 test-vite-plus-other-optional    1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-other-optional  app@
-testnpm2                         1.0.0   1.0.0   1.0.1  node_modules/testnpm2                       workspace
+```
+
+## `vp outdated -r --filter @vite-plus-test/utils`
+
+should preserve workspace filtering
+
+```
 ```
