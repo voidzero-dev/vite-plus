@@ -603,6 +603,8 @@ impl JsRuntimeProvider for NodeProvider {
         let arch = match platform.arch {
             crate::platform::Arch::X64 => "x64",
             crate::platform::Arch::Arm64 => "arm64",
+            crate::platform::Arch::Ppc64 => "ppc64",
+            crate::platform::Arch::Ppc64le => "ppc64le",
         };
         // On musl targets, append "-musl" to match unofficial-builds filename pattern
         // e.g. "linux-x64-musl" instead of "linux-x64"
@@ -733,6 +735,8 @@ mod tests {
         let cases = [
             (Platform { os: Os::Linux, arch: Arch::X64 }, "linux-x64"),
             (Platform { os: Os::Linux, arch: Arch::Arm64 }, "linux-arm64"),
+            (Platform { os: Os::Linux, arch: Arch::Ppc64 }, "linux-ppc64"),
+            (Platform { os: Os::Linux, arch: Arch::Ppc64le }, "linux-ppc64le"),
             (Platform { os: Os::Darwin, arch: Arch::X64 }, "darwin-x64"),
             (Platform { os: Os::Darwin, arch: Arch::Arm64 }, "darwin-arm64"),
             (Platform { os: Os::Windows, arch: Arch::X64 }, "win-x64"),
@@ -742,6 +746,8 @@ mod tests {
         let cases = [
             (Platform { os: Os::Linux, arch: Arch::X64 }, "linux-x64-musl"),
             (Platform { os: Os::Linux, arch: Arch::Arm64 }, "linux-arm64-musl"),
+            (Platform { os: Os::Linux, arch: Arch::Ppc64 }, "linux-ppc64-musl"),
+            (Platform { os: Os::Linux, arch: Arch::Ppc64le }, "linux-ppc64le-musl"),
             (Platform { os: Os::Darwin, arch: Arch::X64 }, "darwin-x64"),
             (Platform { os: Os::Darwin, arch: Arch::Arm64 }, "darwin-arm64"),
             (Platform { os: Os::Windows, arch: Arch::X64 }, "win-x64"),
