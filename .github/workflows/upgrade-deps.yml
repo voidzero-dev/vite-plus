@@ -112,8 +112,9 @@ jobs:
               Official Vitest packages must use that version. Do not bypass the cap.
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
-              working tree, merges their pnpm-workspace catalogs into the root
-              `pnpm-workspace.yaml`, and syncs the root `Cargo.toml` oxc crate
+              working tree, imports only their build roots and bundled packages,
+              and keeps catalog entries referenced by the retained workspace packages.
+              It updates `pnpm-workspace.yaml` and syncs the root `Cargo.toml` oxc crate
               versions to match `rolldown/Cargo.toml`.
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
             - Package manager: `pnpm`. Preserve toolchain versions selected by the
@@ -159,7 +160,7 @@ jobs:
                update their Renovate exclusions. Preserve documented integration
                constraints and refresh `Cargo.lock` after the manifest changes.
                Keep the root catalog exclusion in `.github/renovate.json` aligned with
-               dependencies imported from the Rolldown and Vite catalogs.
+               used dependencies imported from the Rolldown and Vite catalogs.
             4. If `CLI_HELP_DIFF_CHANGED` is `true`, read the upstream help diff at
                `$CLI_HELP_DIFF_REPORT`, then follow
                `.claude/skills/sync-upstream-cli-help/SKILL.md` to update the mirrored
