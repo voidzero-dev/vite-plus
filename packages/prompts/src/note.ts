@@ -9,7 +9,7 @@ export interface NoteOptions extends CommonOptions {
 }
 
 /** A compact, enclosed note. Guide bars never replace its side borders. */
-export const note = (message = '', title = '', opts?: NoteOptions): void => {
+export const note = (message = '', title = '', opts?: NoteOptions) => {
   const content = opts?.format ? message.split('\n').map(opts.format).join('\n') : message;
   box(`\n${content}\n`, title, { ...opts, width: 'auto', rounded: true, formatBorder: color.gray });
 };

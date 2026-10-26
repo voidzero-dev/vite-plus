@@ -432,7 +432,7 @@ export function computeAutoInlineList(
   existingInline: (string | RegExp)[] | true | undefined,
   projectRoot: string,
   _createRequire: (from: string) => { resolve: (id: string) => string } = createRequire,
-  installedPackages: Map<string, boolean> = new Map<string, boolean>(),
+  installedPackages = new Map<string, boolean>(),
 ): (string | RegExp)[] | null {
   // User opted into "inline everything" — don't touch.
   if (existingInline === true) {

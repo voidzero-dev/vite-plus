@@ -64,7 +64,7 @@ function getPaddingForLine(
 
 const defaultFormatBorder = color.gray;
 
-export const box = (message = '', title = '', opts?: BoxOptions): void => {
+export const box = (message = '', title = '', opts?: BoxOptions) => {
   const output: Writable = opts?.output ?? process.stdout;
   const columns = getColumns(output);
   const borderWidth = 1;

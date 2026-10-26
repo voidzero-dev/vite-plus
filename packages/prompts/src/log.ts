@@ -29,7 +29,7 @@ export const log = {
       spacing = 0,
       withGuide,
     }: LogMessageOptions = {},
-  ): void => {
+  ) => {
     const parts: string[] = [];
     const hasGuide = getGuide({ withGuide });
     const spacingString = !hasGuide ? '' : secondarySymbol;
@@ -59,23 +59,23 @@ export const log = {
     }
     output.write(`${parts.join('\n')}\n`);
   },
-  info: (message: string, opts?: LogMessageOptions): void => {
+  info: (message: string, opts?: LogMessageOptions) => {
     log.message(message, { ...opts, symbol: color.blue(S_INFO) });
   },
-  success: (message: string, opts?: LogMessageOptions): void => {
+  success: (message: string, opts?: LogMessageOptions) => {
     log.message(message, { ...opts, symbol: completeColor(S_SUCCESS) });
   },
-  step: (message: string, opts?: LogMessageOptions): void => {
+  step: (message: string, opts?: LogMessageOptions) => {
     log.message(message, { ...opts, symbol: completeColor(S_STEP_SUBMIT) });
   },
-  warn: (message: string, opts?: LogMessageOptions): void => {
+  warn: (message: string, opts?: LogMessageOptions) => {
     log.message(message, { ...opts, symbol: color.yellow(S_WARN) });
   },
   /** alias for `log.warn()`. */
-  warning: (message: string, opts?: LogMessageOptions): void => {
+  warning: (message: string, opts?: LogMessageOptions) => {
     log.warn(message, opts);
   },
-  error: (message: string, opts?: LogMessageOptions): void => {
+  error: (message: string, opts?: LogMessageOptions) => {
     log.message(message, { ...opts, symbol: color.red(S_ERROR) });
   },
 };

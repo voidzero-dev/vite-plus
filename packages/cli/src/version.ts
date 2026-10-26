@@ -81,7 +81,7 @@ async function resolveToolVersions(localPackagePath: string): Promise<Record<str
 /**
  * Print version information
  */
-export async function printVersion(cwd: string): Promise<void> {
+export async function printVersion(cwd: string) {
   const globalVersion = getGlobalVersion();
   const cliVersion = getCliVersion();
   const localMetadata = getLocalMetadata(cwd);

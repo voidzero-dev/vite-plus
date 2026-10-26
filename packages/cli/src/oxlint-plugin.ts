@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { definePlugin, defineRule } from '@oxlint/plugins';
-import type { Context, ESTree, Plugin, Rule } from '@oxlint/plugins';
+import type { Context, ESTree } from '@oxlint/plugins';
 
 import cliPackage from '../package.json' with { type: 'json' };
 import {
@@ -362,7 +362,7 @@ function reportLegacyOxlintPluginApiImport(
   reportSpecifier(context, literal, VITE_PLUS_LINT_PLUGINS);
 }
 
-export const preferVitePlusImportsRule: Rule = defineRule({
+export const preferVitePlusImportsRule = defineRule({
   meta: {
     type: 'problem',
     docs: {
@@ -435,7 +435,7 @@ export const preferVitePlusImportsRule: Rule = defineRule({
   },
 });
 
-const plugin: Plugin = definePlugin({
+const plugin = definePlugin({
   meta: {
     name: VITE_PLUS_OXLINT_PLUGIN_NAME,
   },

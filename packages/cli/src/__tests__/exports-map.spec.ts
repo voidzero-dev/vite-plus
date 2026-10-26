@@ -17,9 +17,8 @@ import os from 'node:os';
 import path from 'node:path';
 import url from 'node:url';
 
-import { isStringLiteral } from 'typescript/ast/is';
-import { serverFS } from 'typescript/fs';
-import { API, type Project } from 'typescript/sync';
+import { isStringLiteral } from 'typescript/unstable/ast';
+import { API, type Project } from 'typescript/unstable/sync';
 import { describe, expect, it } from 'vitest';
 
 const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');
@@ -58,22 +57,14 @@ function withTypeProject<T>(
       },
     }),
   };
-  // Overlay the virtual files on the host filesystem; every miss falls back
-  // to the OS so real on-disk sources (dependencies, lib files) still load.
   const api = new API({
     fs: {
-      directoryExists: serverFS.useOS,
-      fileExists: (file) => (file.replaceAll('\\', '/') in virtualFiles ? true : serverFS.useOS),
-      getAccessibleEntries: serverFS.useOS,
-      readFile: (file) => virtualFiles[file.replaceAll('\\', '/')] ?? serverFS.useOS,
-      realpath: serverFS.useOS,
-      stat: serverFS.useOS,
-      writeFile: serverFS.useOS,
-      removeFile: serverFS.useOS,
+      readFile: (file) => virtualFiles[file.replaceAll('\\', '/')],
+      fileExists: (file) => (file.replaceAll('\\', '/') in virtualFiles ? true : undefined),
     },
   });
   try {
-    const project = api.createSnapshot({ openProjects: [config] }).getConfiguredProject(config);
+    const project = api.updateSnapshot({ openProjects: [config] }).getProject(config);
     expect(project).toBeDefined();
     return check(project!);
   } finally {

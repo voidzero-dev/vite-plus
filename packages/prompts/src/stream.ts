@@ -16,7 +16,7 @@ export const stream = {
   message: async (
     iterable: Iterable<string> | AsyncIterable<string>,
     { symbol = '' }: LogMessageOptions = {},
-  ): Promise<void> => {
+  ) => {
     process.stdout.write(symbol ? `${symbol} ` : '');
     const initialWidth = symbol ? 2 : 0;
     let lineWidth = initialWidth;
@@ -36,23 +36,23 @@ export const stream = {
     }
     process.stdout.write('\n');
   },
-  info: (iterable: Iterable<string> | AsyncIterable<string>): Promise<void> => {
+  info: (iterable: Iterable<string> | AsyncIterable<string>) => {
     return stream.message(iterable, { symbol: color.blue(S_INFO) });
   },
-  success: (iterable: Iterable<string> | AsyncIterable<string>): Promise<void> => {
+  success: (iterable: Iterable<string> | AsyncIterable<string>) => {
     return stream.message(iterable, { symbol: completeColor(S_SUCCESS) });
   },
-  step: (iterable: Iterable<string> | AsyncIterable<string>): Promise<void> => {
+  step: (iterable: Iterable<string> | AsyncIterable<string>) => {
     return stream.message(iterable, { symbol: completeColor(S_STEP_SUBMIT) });
   },
-  warn: (iterable: Iterable<string> | AsyncIterable<string>): Promise<void> => {
+  warn: (iterable: Iterable<string> | AsyncIterable<string>) => {
     return stream.message(iterable, { symbol: color.yellow(S_WARN) });
   },
   /** alias for `log.warn()`. */
-  warning: (iterable: Iterable<string> | AsyncIterable<string>): Promise<void> => {
+  warning: (iterable: Iterable<string> | AsyncIterable<string>) => {
     return stream.warn(iterable);
   },
-  error: (iterable: Iterable<string> | AsyncIterable<string>): Promise<void> => {
+  error: (iterable: Iterable<string> | AsyncIterable<string>) => {
     return stream.message(iterable, { symbol: color.red(S_ERROR) });
   },
 };

@@ -40,7 +40,7 @@ const VITE_SRC = `catalog:
 `;
 
 describe('mergeWorkspaceYaml()', () => {
-  test.each(['~7.1.0', '~6.0.3'])(
+  test.each(['~7.0.2', '~7.1.0', '~6.0.3'])(
     "follows Vite's TypeScript declaration %s instead of merging catalog ranges",
     (typescript) => {
       const main = `catalog:
@@ -64,39 +64,16 @@ overrides:
     },
   );
 
-  test.each(['~7.0.2', '~7.0.0'])(
-    'pins the first tsgo-API TypeScript release when Vite stays on %s',
-    (typescript) => {
-      // rolldown-plugin-dts 0.29 (bundled with tsdown) needs the TypeScript Go
-      // API from 7.1; on 7.0.x the classic tsc API is gone, leaving no working
-      // declaration generator.
-      const vitePackage = { devDependencies: { typescript } };
-      const output = mergeWorkspaceYaml(
-        'catalog:\n  typescript: ~7.0.2\n',
-        ROLLDOWN_SRC,
-        VITE_SRC,
-        vitePackage,
-        yaml,
-        verkit,
-      );
-
-      expect(yaml.parse(output).catalog.typescript).toBe('7.1.0-beta');
-      expect(mergeWorkspaceYaml(output, ROLLDOWN_SRC, VITE_SRC, vitePackage, yaml, verkit)).toBe(
-        output,
-      );
-    },
-  );
-
   test('resolves a TypeScript catalog reference from Vite', () => {
     const output = mergeWorkspaceYaml(
       'catalog:\n  typescript: ^6.0.0\n',
       'catalog:\n  typescript: ^6.0.0\n',
-      'catalog:\n  typescript: ~7.1.0\n',
+      'catalog:\n  typescript: ~7.0.2\n',
       { devDependencies: { typescript: 'catalog:' } },
       yaml,
       verkit,
     );
-    expect(yaml.parse(output).catalog.typescript).toBe('~7.1.0');
+    expect(yaml.parse(output).catalog.typescript).toBe('~7.0.2');
   });
 
   test('updates the Rolldown compiler override when its catalog changes', () => {
@@ -166,7 +143,7 @@ overrides:
     const output = mergeWorkspaceYaml(main, rolldown, vite, VITE_PACKAGE, yaml, verkit);
 
     expect(yaml.parse(output).catalog).toEqual({
-      typescript: '7.1.0-beta',
+      typescript: '~7.0.2',
       vitest: '5.1.2',
       '@vitest/browser': '5.1.2',
       '@vitest/utils': '5.1.2',
