@@ -95,7 +95,7 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 `--git` and `--no-git` are not available when adding a package to an existing monorepo.
 :::
 
-After create, manage the dispatcher with `vp hooks status`, `vp hooks disable`, and `vp hooks enable`. See the [Commit hooks guide](/guide/commit-hooks).
+After create, manage the dispatcher with `vp hooks status`, `vp hooks disable`, and `vp hooks enable`. See the [Commit Hooks](/guide/commit-hooks).
 
 ### Dependency build scripts
 

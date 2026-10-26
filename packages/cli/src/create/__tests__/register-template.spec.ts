@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -38,8 +39,10 @@ describe('registerLocalTemplate', () => {
     fs.writeFileSync(path.join(stubDir, 'index.js'), 'export const defineConfig = (c) => c;\n');
   });
 
-  afterEach(() => {
-    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  afterEach(async () => {
+    // Vite removes its bundled config asynchronously. Allow transient Windows
+    // file locks to clear; persistent cleanup errors still fail the test.
+    await rm(workspaceRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     vi.restoreAllMocks();
   });
 

@@ -1,0 +1,12 @@
+{
+  "name": "command-pack-dts-compat",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "types": "./dist/index.d.mts",
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@11.24.0"
+}
