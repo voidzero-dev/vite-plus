@@ -1112,6 +1112,29 @@ describe('migrateTsxToVpx', () => {
     ]);
   });
 
+  it.each(['tsx', 'tsx watch'])(
+    'retains a %s shebang whose package-relative preload needs tsx',
+    (command) => {
+      write('package.json', { type: 'module', devDependencies: { tsx: '^4.20.0' } });
+      write('setup.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+      const source = `#!/usr/bin/env -S ${command} --require ./setup.cts\nexport {};\n`;
+      write('scripts/release.ts', source);
+      const report = createMigrationReport();
+
+      expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+        changed: false,
+        dependencyRemoved: false,
+      });
+      expect(read('scripts/release.ts')).toBe(source);
+      expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
+      expect(report.warnings).toContainEqual(
+        expect.stringContaining(
+          'Kept tsx in the shebang of scripts/release.ts: `./setup.cts` uses import or export',
+        ),
+      );
+    },
+  );
+
   it('keeps tsx for a script that would lose CommonJS globals under vpx', () => {
     write('package.json', { scripts: { build: 'tsx scripts/build.ts' } });
     write('scripts/build.ts', "import fs from 'node:fs';\nfs.readdirSync(__dirname);\n");

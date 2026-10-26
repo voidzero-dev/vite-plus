@@ -963,8 +963,16 @@ function rewriteRunnerShebang(
   // Inspect the package's explicit local hooks without treating the package
   // directory as the caller's runtime working directory above.
   const tokens = parseLiteralCommands(command, true)?.[0];
+  const executable = tokens?.[0]?.value;
+  const directRunner =
+    executable === runner.name ||
+    (executable !== undefined && runner.aliases?.includes(executable) === true);
+  const optionsStart =
+    directRunner && runner.watchSubcommand !== false && tokens?.[1]?.value === 'watch' ? 2 : 1;
   const preloads =
-    tokens?.[0]?.value === 'node' ? scanOptions(runner, tokens, 1, false).preloads : [];
+    tokens && (executable === 'node' || directRunner)
+      ? scanOptions(runner, tokens, optionsStart, directRunner).preloads
+      : [];
   const reason =
     result.kept[0] ??
     preloads
