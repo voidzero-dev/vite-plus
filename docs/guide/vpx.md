@@ -87,7 +87,7 @@ A missing path, or a missing name with a TypeScript extension, is an error: `vpx
 
 - `--tsconfig <path>` applies one tsconfig to every file (see [tsconfig](#tsconfig))
 - `--watch` runs the file again when a file it uses changes (see [Watch Mode](#watch-mode))
-- Node.js options before the file, such as `--inspect`, `--test`, `--env-file`, `--require`, and `--import`, are passed to Node.js; `--require` and `--import` preloads can be TypeScript too
+- Node.js options before the file, such as `--inspect`, `--test`, `--env-file`, `--require`, and `--import`, are passed to Node.js; modules loaded with `--require` and `--import` can be TypeScript too
 - Everything after the file, including `--`, is passed to the script
 
 ### Shebang Scripts
@@ -103,9 +103,9 @@ Scripts can use `vpx` as their interpreter. Make the file executable and keep it
 
 The `vpx` bin of the `vite-plus` package runs scripts on its own, so `"seed": "vpx ./scripts/seed.ts"` works in `package.json` scripts without the global CLI. It runs them on the Node.js that started it, which inside `vp run` and package manager scripts is the project's version.
 
-### Node.js Preload
+### Using Node.js Directly
 
-If a tool starts Node.js itself, replace `--import=tsx` with `--import=vite-plus/register`:
+To run TypeScript with `node`, use `--import vite-plus/register`. This registers the Vite+ TypeScript loader before your script runs:
 
 ```bash
 node --import=vite-plus/register ./scripts/seed.ts
@@ -113,9 +113,9 @@ node --import vite-plus/register --test ./test/example.test.ts
 NODE_OPTIONS='--import=vite-plus/register' node ./scripts/seed.ts
 ```
 
-Install `vite-plus` in the project first. The preload resolves from the project and runs on the Node.js that started the command; it requires the same Node.js versions as Vite+. It provides the same TypeScript transforms, tsconfig resolution, and source maps as `vpx`.
+Install `vite-plus` in the project first. Node.js resolves `vite-plus/register` from the project. The loader provides the same TypeScript transforms, tsconfig resolution, and source maps as `vpx`, and requires the same Node.js versions as Vite+.
 
-Tools with a Node.js argument setting can replace `["--import", "tsx"]` with `["--import", "vite-plus/register"]`. For example, an AVA configuration can use:
+If a tool starts Node.js itself, add `--import vite-plus/register` to its Node.js arguments or `NODE_OPTIONS`. Replace an existing `--import tsx` argument with `--import vite-plus/register`. For example, an AVA configuration can use:
 
 ```json
 {
@@ -127,13 +127,13 @@ Tools with a Node.js argument setting can replace `["--import", "tsx"]` with `["
 
 Keep the tool's existing TypeScript file patterns and other settings. A JavaScript launcher can also run `await import('vite-plus/register')` before dynamically importing a TypeScript file. A static TypeScript import in that launcher is resolved before registration, so use `--import` for static imports.
 
-`fork()` and workers inherit the preload through Node.js arguments. `NODE_OPTIONS` also passes it to spawned Node.js processes. Replacing a child's arguments or environment follows Node.js's normal inheritance rules.
+`fork()` and workers inherit the `--import` option through Node.js arguments. `NODE_OPTIONS` also passes the option to spawned Node.js processes. Replacing a child's arguments or environment follows Node.js's normal inheritance rules.
 
 To select a tsconfig, set `VP_SCRIPT_TSCONFIG=tsconfig.scripts.json`. The existing `TSX_TSCONFIG_PATH` variable also works, with `VP_SCRIPT_TSCONFIG` taking precedence. Otherwise the [usual tsconfig discovery](#tsconfig) applies. Each worker selects its config from its own environment, so workers can use different configs without changing their parent.
 
-Node.js owns its flags, test discovery, and native watch mode. Eval and stdin can import TypeScript files, but their input text is not transformed. All `--require` preloads run before `--import`: put a TypeScript setup file after the loader as `--import ./setup.ts`. Repeated imports of `vite-plus/register` are harmless, including when a tool already runs under `vpx`.
+Node.js owns its flags, test discovery, and native watch mode. Eval and stdin can import TypeScript files, but their input text is not transformed. Modules loaded with `--require` run before modules loaded with `--import`. To load a TypeScript setup file, put `--import ./setup.ts` after `--import vite-plus/register`. Repeated imports of `vite-plus/register` are harmless, including when a tool already runs under `vpx`.
 
-Remove the old tsx preload when you add this one. The [compiler differences from tsx](#coming-from-tsx) also apply to the public preload.
+The [compiler differences from tsx](#coming-from-tsx) also apply when you use `vite-plus/register`.
 
 ### Watch Mode
 
@@ -225,8 +225,8 @@ JSX that depends on a compiler plugin is not supported. `vpx` compiles JSX only 
 - **Node.js version**: `vpx` needs Node.js `^22.18.0 || ^24.11.0 || >=26.0.0`, while tsx also runs on older releases.
 - **Watch mode**: `tsx watch` becomes `vpx --watch`, which takes tsx watch's options (see [Watch Mode](#watch-mode)). It also reruns the script on tsconfig edits and when a file a failed import looked for is created, which tsx watch misses.
 - **Eval, REPL, and `--check`**: `vpx --eval`, the REPL, and `vpx --check` do not transform TypeScript.
-- **`node --import tsx`**: replace it with [`node --import vite-plus/register`](#nodejs-preload), including in tool settings and `NODE_OPTIONS`.
-- **Other loaders**: replace the tsx preload instead of adding a second loader. Two loaders registered together compete for the same files.
+- **`node --import tsx`**: replace it with [`node --import vite-plus/register`](#using-nodejs-directly), including in tool settings and `NODE_OPTIONS`.
+- **Other loaders**: replace `--import tsx` with `--import vite-plus/register`. Registering both TypeScript loaders makes them compete for the same files.
 
 ## `vp exec`
 
