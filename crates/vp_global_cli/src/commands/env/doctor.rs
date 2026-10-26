@@ -573,6 +573,10 @@ async fn check_path(scope: EnvScope) -> bool {
     let fallback = vp_shared::EnvConfig::get().dirs.fallback_bin();
     if !paths.iter().any(|path| path == fallback.as_path()) {
         print_check(&style(output::CROSS).red().to_string(), "Fallback dir", "not in PATH");
+        print_hint(&format!(
+            "Expected: {}",
+            abbreviate_home(&fallback.as_path().display().to_string())
+        ));
         print_path_fix(&vp_shared::EnvConfig::get().dirs.config);
         return false;
     }

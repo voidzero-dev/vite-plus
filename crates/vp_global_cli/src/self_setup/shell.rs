@@ -90,27 +90,5 @@ pub(super) async fn configure() -> Result<(), Error> {
             }
         }
     }
-    #[cfg(windows)]
-    {
-        let bin = setup::escape_powershell_single_quoted_string(&config.dirs.bin.to_string());
-        let fallback =
-            setup::escape_powershell_single_quoted_string(&config.dirs.fallback_bin().to_string());
-        let script = format!(
-            "$bin = '{bin}'; $fallback = '{fallback}'; $path = @([Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Where-Object {{ $_ -and $_ -ne $bin -and $_ -ne $fallback }}); [Environment]::SetEnvironmentVariable('Path', ((@($bin) + $path + @($fallback)) -join ';'), 'User')"
-        );
-        let result = tokio::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-            .output()
-            .await?;
-        if !result.status.success() {
-            return Err(Error::Other(
-                format!(
-                    "Could not configure user PATH: {}",
-                    String::from_utf8_lossy(&result.stderr)
-                )
-                .into(),
-            ));
-        }
-    }
     Ok(())
 }
