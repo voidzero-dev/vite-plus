@@ -28,6 +28,13 @@ interface PnpmWorkspace {
   [key: string]: unknown;
 }
 
+// First TypeScript release whose `typescript/async` entry point exposes the
+// TypeScript Go declaration API (`Program#getDeclarationEmit`) that
+// rolldown-plugin-dts 0.29's tsgo generator requires. The catalog must never
+// select an older 7.x: the classic tsc API no longer exists there, leaving no
+// working declaration generator.
+const TSGO_API_TYPESCRIPT_VERSION = '7.1.0-beta';
+
 interface PackageJson {
   name?: string;
   version?: string;
@@ -544,10 +551,24 @@ export function mergePnpmWorkspaces(
   // Vite declares its compiler in the root package.json, outside its catalog.
   // Follow that range exactly, even when Rolldown still uses an older major.
   const typescriptSpecifier = vitePackage.devDependencies?.typescript;
-  const typescriptRange =
+  let typescriptRange =
     typescriptSpecifier === 'catalog:' ? rolldownVite.catalog?.typescript : typescriptSpecifier;
   if (!typescriptRange || !verkit.normalizeRange(typescriptRange)) {
     throw new Error('Vite must declare a valid TypeScript devDependency range');
+  }
+  // The rolldown-plugin-dts release bundled with tsdown emits declarations
+  // through the TypeScript Go API, which first shipped in TypeScript 7.1; on
+  // 7.0.x the classic tsc API no longer exists, so no declaration generator
+  // works. When Vite's compiler range is pinned to 7.0.x (e.g. `~7.0.2`), pin
+  // the first capable release instead. Ranges that can also select 7.1+
+  // (e.g. `^7.0.0`) or predate 7.0 entirely (classic tsc still works there)
+  // keep Vite's choice. An exact pin: range forms like `~7.1.0-beta` also
+  // match the higher `7.1.0-dev.*` daily builds.
+  if (
+    verkit.rangesIntersect(typescriptRange, '~7.0.0') &&
+    !verkit.rangesIntersect(typescriptRange, `>=${TSGO_API_TYPESCRIPT_VERSION}`)
+  ) {
+    typescriptRange = TSGO_API_TYPESCRIPT_VERSION;
   }
   const catalog: Record<string, string> = { typescript: typescriptRange };
   for (const workspace of [main, rolldown, rolldownVite]) {

@@ -152,7 +152,7 @@ describe('vendored Vitest dependency alignment', () => {
       verkit,
     );
     expect(merged.catalog).toEqual({
-      typescript: '~7.0.2',
+      typescript: '7.1.0-beta',
       vitest: '5.1.2',
       '@vitest/browser': '5.1.2',
       '@vitest/browser-webdriverio': '5.0.0-rc.1',

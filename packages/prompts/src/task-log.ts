@@ -31,6 +31,19 @@ export interface TaskLogCompletionOptions {
   showLog?: boolean;
 }
 
+export interface TaskLogGroup {
+  message(msg: string, mopts?: TaskLogMessageOptions): void;
+  error(message: string): void;
+  success(message: string): void;
+}
+
+export interface TaskLog {
+  message(msg: string, mopts?: TaskLogMessageOptions): void;
+  group(name: string): TaskLogGroup;
+  error(message: string, opts?: TaskLogCompletionOptions): void;
+  success(message: string, opts?: TaskLogCompletionOptions): void;
+}
+
 interface BufferEntry {
   header?: string;
   value: string;
@@ -49,7 +62,7 @@ const stripDestructiveANSI = (input: string): string => {
 /**
  * Renders a log which clears on success and remains on failure
  */
-export const taskLog = (opts: TaskLogOptions) => {
+export const taskLog = (opts: TaskLogOptions): TaskLog => {
   const output: Writable = opts.output ?? process.stdout;
   const columns = getColumns(output);
   const secondarySymbol = color.gray(S_BAR);

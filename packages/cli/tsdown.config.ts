@@ -99,7 +99,12 @@ export default defineConfig([
     format: 'esm',
     fixedExtension: false,
     shims: true,
-    dts: true,
+    dts: {
+      // Generate declarations with Oxc so the build does not depend on the
+      // resolved TypeScript version: rolldown-plugin-dts requires the classic
+      // tsc API (TypeScript <7) or the tsgo API (TypeScript 7.1+).
+      generator: 'oxc',
+    },
     clean: true,
     // NAPI binding uses a relative path that tsdown can't auto-detect from package.json
     deps: { neverBundle: [/\.\.\/binding\/index\.(js|cjs)/] },
