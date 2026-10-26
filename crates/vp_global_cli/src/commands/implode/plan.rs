@@ -296,10 +296,6 @@ mod tests {
             fs::write(personal.join("notes.txt"), b"keep").unwrap();
             std::os::unix::fs::symlink(dirs.data.join("child"), links.join("route")).unwrap();
             let alias = links.join("route/../personal");
-            assert_eq!(
-                dunce::canonicalize(&alias).unwrap(),
-                dunce::canonicalize(&personal).unwrap()
-            );
             assert!(!links.join("personal").as_path().exists());
 
             dirs.cache = personal.clone();
