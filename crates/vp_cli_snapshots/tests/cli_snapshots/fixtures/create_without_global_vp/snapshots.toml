@@ -1,4 +1,13 @@
 [[case]]
+name = "npm_without_global_vp"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["node", "assert-create.mjs", "npm@11.19.0", "missing"], timeout = 240000 },
+]
+
+[[case]]
 name = "pnpm_without_global_vp"
 vp = "local"
 local-registry = true

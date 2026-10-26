@@ -72,6 +72,7 @@ import {
   type OrgResolution,
   resolveOrgManifestForCreate,
 } from './org-resolve.ts';
+import { resolveCreatePackageManagerVersion } from './package-manager-version.ts';
 import {
   checkProjectDirExists,
   promptPackageNameAndTargetDir,
@@ -685,10 +686,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       : (requestedPackageManager ?? detectedPackageManager)) ??
     launcherPackageManager ??
     (await selectPackageManager(options.interactive, compactOutput));
-  const packageManagerVersion =
-    packageManager === detectedPackageManager
-      ? workspaceInfoOptional.packageManagerVersion
-      : 'latest';
+  const packageManagerVersion = resolveCreatePackageManagerVersion(
+    packageManager,
+    workspaceInfoOptional,
+  );
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus

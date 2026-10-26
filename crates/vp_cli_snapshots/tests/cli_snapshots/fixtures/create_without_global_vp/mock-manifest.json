@@ -23,6 +23,10 @@
       }
     }
   },
+  "npm/latest": {
+    "name": "npm",
+    "version": "12.2.1"
+  },
   "pnpm/latest": {
     "name": "pnpm",
     "version": "12.11.2"
