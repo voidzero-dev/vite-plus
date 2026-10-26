@@ -41,6 +41,22 @@ describe('rewriteOxnodeCommand', () => {
     ['OXC_TRANSFORM_ALL=typescript oxnode a.ts', 'OXC_TRANSFORM_ALL=typescript vpx a.ts'],
     ['node --import @oxc-node/core/register a.ts', 'node --import vite-plus/register a.ts'],
     [
+      'node --no-warnings --experimental-specifier-resolution=node --import @oxc-node/core/register --loader ./scripts/variant-loader.js --loader ./scripts/image-loader.js a.ts',
+      'node --no-warnings --experimental-specifier-resolution=node --import vite-plus/register --loader ./scripts/variant-loader.js --loader ./scripts/image-loader.js a.ts',
+    ],
+    [
+      'node --loader=./variant-loader.js --import=@oxc-node/core/register.mjs --experimental-loader ./image-loader.js a.ts',
+      'node --loader=./variant-loader.js --import=vite-plus/register --experimental-loader ./image-loader.js a.ts',
+    ],
+    [
+      'NODE_OPTIONS="--import @oxc-node/core/register --loader ./image-loader.js" node a.ts',
+      'NODE_OPTIONS="--import vite-plus/register --loader ./image-loader.js" node a.ts',
+    ],
+    [
+      'NODE_OPTIONS=--import=@oxc-node/core/register node --loader ./image-loader.js a.ts',
+      'NODE_OPTIONS=--import=vite-plus/register node --loader ./image-loader.js a.ts',
+    ],
+    [
       'node --import @oxc-node/core/register --watch a.ts',
       'node --import vite-plus/register --watch a.ts',
     ],
@@ -311,6 +327,191 @@ describe('oxnode migration', () => {
     expect(report.warnings).toContainEqual(expect.stringContaining(`${file} still uses oxnode`));
   });
 
+  it.each([
+    ['scripts/entry.ts', '#!/usr/bin/env node --import @oxc-node/core/register'],
+    ['scripts/entry.mts', '#!/usr/bin/env -S node --import=@oxc-node/core/register.mjs'],
+    [
+      'scripts/entry.ts',
+      '#!/usr/bin/env node --no-warnings --experimental-specifier-resolution=node --import @oxc-node/core/register --loader ./scripts/variant-loader.js --loader ./scripts/image-loader.js',
+    ],
+    [
+      'bin/release',
+      '#!/usr/bin/env -S node --loader=./scripts/variant-loader.js --import @oxc-node/core/register --experimental-loader ./scripts/image-loader.js',
+    ],
+  ])('rewrites the Node.js preload shebang in %s: %s', (file, shebang) => {
+    write('package.json', { devDependencies: { '@oxc-node/core': '^1.0.0' } });
+    const body = '\nconst value: string = "hello";\nconsole.log(value);\n';
+    write(file, shebang + body);
+    const report = createMigrationReport();
+
+    expect(detectOxnodeProject(root)).toBe(true);
+    expect(migrateOxnodeToVpx(root, undefined, report)).toEqual({
+      changed: true,
+      dependencyRemoved: true,
+    });
+    expect(read(file)).toBe(
+      shebang.replace(/@oxc-node\/core\/register(?:\.mjs)?/, 'vite-plus/register') + body,
+    );
+    expect(readJson('package.json').devDependencies).toEqual({});
+    expect(report.oxnodeMigrated).toBe(true);
+    expect(report.warnings).toEqual([]);
+    expect(detectOxnodeProject(root)).toBe(false);
+    expect(migrateOxnodeToVpx(root)).toEqual({ changed: false, dependencyRemoved: false });
+  });
+
+  it('preserves shebang whitespace, CRLF, and the executable file mode', () => {
+    write('package.json', { devDependencies: { '@oxc-node/core': '^1.0.0' } });
+    const source =
+      '#!/usr/bin/env -S node\t--import "@oxc-node/core/register"  \r\nconsole.log(1);\r\n';
+    write('bin/release', source);
+    const file = path.join(root, 'bin/release');
+    fs.chmodSync(file, 0o755);
+    const mode = fs.statSync(file).mode;
+
+    expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: true });
+    expect(read('bin/release')).toBe(
+      source.replace('@oxc-node/core/register', 'vite-plus/register'),
+    );
+    expect(fs.statSync(file).mode).toBe(mode);
+  });
+
+  it('ignores a Node.js shebang without the oxnode register preload', () => {
+    write('package.json', {});
+    const source = '#!/usr/bin/env -S node --no-warnings\nconsole.log(1);\n';
+    write('entry.ts', source);
+    const report = createMigrationReport();
+
+    expect(detectOxnodeProject(root)).toBe(false);
+    expect(migrateOxnodeToVpx(root, undefined, report)).toEqual({
+      changed: false,
+      dependencyRemoved: false,
+    });
+    expect(read('entry.ts')).toBe(source);
+    expect(report.warnings).toEqual([]);
+  });
+
+  it('checks the entry body without mistaking its register shebang for an API call', () => {
+    write('package.json', {
+      scripts: { release: 'node --import @oxc-node/core/register scripts/release.ts' },
+      devDependencies: { '@oxc-node/core': '^1.0.0' },
+    });
+    write(
+      'scripts/release.ts',
+      '#!/usr/bin/env -S node --import @oxc-node/core/register\nexport {};\n',
+    );
+
+    expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: true });
+    expect(readJson('package.json').scripts.release).toBe(
+      'node --import vite-plus/register scripts/release.ts',
+    );
+    expect(read('scripts/release.ts')).toBe(
+      '#!/usr/bin/env -S node --import vite-plus/register\nexport {};\n',
+    );
+  });
+
+  it('retains a Node.js preload shebang when the body calls a standalone API', () => {
+    write('package.json', { devDependencies: { '@oxc-node/core': '^1.0.0' } });
+    const source =
+      '#!/usr/bin/env -S node --import @oxc-node/core/register\n' +
+      "import { setTsconfigPath } from '@oxc-node/core'; setTsconfigPath('cli.json');\n";
+    write('bin/release', source);
+    const report = createMigrationReport();
+
+    expect(migrateOxnodeToVpx(root, undefined, report)).toEqual({
+      changed: false,
+      dependencyRemoved: false,
+    });
+    expect(read('bin/release')).toBe(source);
+    expect(report.warnings).toContainEqual(expect.stringContaining('standalone oxc-node API'));
+  });
+
+  it.each(['--require ./setup.cjs', '--import ./setup.mjs', '--env-file .env'])(
+    'retains a Node.js preload shebang with %s',
+    (option) => {
+      write('package.json', { devDependencies: { '@oxc-node/core': '^1.0.0' } });
+      const source = `#!/usr/bin/env -S node --import @oxc-node/core/register ${option}\nexport {};\n`;
+      write('entry.ts', source);
+
+      expect(migrateOxnodeToVpx(root)).toEqual({ changed: false, dependencyRemoved: false });
+      expect(read('entry.ts')).toBe(source);
+    },
+  );
+
+  it('checks an absolute shebang loader even when the caller directory is unknown', () => {
+    write('package.json', { devDependencies: { '@oxc-node/core': '^1.0.0' } });
+    write(
+      'scripts/setup.js',
+      "import { setTsconfigPath } from '@oxc-node/core'; setTsconfigPath('cli.json');\n",
+    );
+    const loader = path.join(root, 'scripts/setup.js').replaceAll(path.sep, '/');
+    const source = `#!/usr/bin/env -S node --import @oxc-node/core/register --loader "${loader}"\nexport {};\n`;
+    write('entry.ts', source);
+    const report = createMigrationReport();
+
+    expect(migrateOxnodeToVpx(root, undefined, report)).toEqual({
+      changed: false,
+      dependencyRemoved: false,
+    });
+    expect(read('entry.ts')).toBe(source);
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining('Kept oxnode in the shebang of entry.ts:'),
+    );
+    expect(report.warnings).toContainEqual(expect.stringContaining('standalone oxc-node API'));
+  });
+
+  it('retains a shebang when a package-relative loader calls a standalone API', () => {
+    write('package.json', { devDependencies: { '@oxc-node/core': '^1.0.0' } });
+    write('setup.js', "import { setTsconfigPath } from '@oxc-node/core';\n");
+    const source =
+      '#!/usr/bin/env -S node --import @oxc-node/core/register --loader ./setup.js\nexport {};\n';
+    write('scripts/entry.ts', source);
+    const report = createMigrationReport();
+
+    expect(migrateOxnodeToVpx(root, undefined, report)).toEqual({
+      changed: false,
+      dependencyRemoved: false,
+    });
+    expect(read('scripts/entry.ts')).toBe(source);
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining('Kept oxnode in the shebang of scripts/entry.ts: `./setup.js`'),
+    );
+  });
+
+  it('migrates a shebang with a compatible package-relative loader', () => {
+    write('package.json', { devDependencies: { '@oxc-node/core': '^1.0.0' } });
+    write('setup.js', 'export const resolve = (s, c, next) => next(s, c);\n');
+    const source =
+      '#!/usr/bin/env -S node --import @oxc-node/core/register --loader ./setup.js\nexport {};\n';
+    write('scripts/entry.ts', source);
+
+    expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: true });
+    expect(read('scripts/entry.ts')).toBe(
+      source.replace('@oxc-node/core/register', 'vite-plus/register'),
+    );
+  });
+
+  it('does not inspect a relative loader as if it were beside the shebang file', () => {
+    write('package.json', { devDependencies: { '@oxc-node/core': '^1.0.0' } });
+    write('setup.js', 'export const resolve = (s, c, next) => next(s, c);\n');
+    write('scripts/setup.js', "import { setTsconfigPath } from '@oxc-node/core';\n");
+    const source =
+      '#!/usr/bin/env -S node --import @oxc-node/core/register --loader ./setup.js\nexport {};\n';
+    write('scripts/entry.ts', source);
+    const report = createMigrationReport();
+
+    expect(migrateOxnodeToVpx(root, undefined, report)).toEqual({
+      changed: true,
+      dependencyRemoved: false,
+    });
+    expect(read('scripts/entry.ts')).toBe(
+      source.replace('@oxc-node/core/register', 'vite-plus/register'),
+    );
+    expect(report.warnings).not.toContainEqual(expect.stringContaining('in the shebang'));
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining('scripts/setup.js still uses oxnode'),
+    );
+  });
+
   it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(
     'preserves a runner needed in %s',
     (field) => {
@@ -350,19 +551,21 @@ describe('oxnode migration', () => {
     );
   });
 
-  it.each(['oxnode --import ./setup.ts a.ts', 'oxnode ./setup.ts'])(
-    'retains %s when a named file configures the standalone loader',
-    (command) => {
-      write(
-        'setup.ts',
-        "import { setTsconfigPath } from '@oxc-node/core'; setTsconfigPath('cli.json');\n",
-      );
-      expect(rewriteOxnodeCommand(command, root)).toEqual({
-        command,
-        kept: [expect.stringContaining('standalone oxc-node API')],
-      });
-    },
-  );
+  it.each([
+    'oxnode --import ./setup.ts a.ts',
+    'oxnode ./setup.ts',
+    'node --import @oxc-node/core/register --loader ./setup.ts a.ts',
+    'NODE_OPTIONS="--import @oxc-node/core/register --loader ./setup.ts" node a.ts',
+  ])('retains %s when a named file configures the standalone loader', (command) => {
+    write(
+      'setup.ts',
+      "import { setTsconfigPath } from '@oxc-node/core'; setTsconfigPath('cli.json');\n",
+    );
+    expect(rewriteOxnodeCommand(command, root)).toEqual({
+      command,
+      kept: [expect.stringContaining('standalone oxc-node API')],
+    });
+  });
 
   it('retains root dependencies while a workspace or nested package still uses them', () => {
     write('package.json', {

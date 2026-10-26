@@ -84,7 +84,11 @@ const OXNODE_RUNNER: ScriptRunnerMigration = {
   registerEnvKeepReason: oxnodeEnvironmentReason,
   registerKeepOptions: REGISTER_KEEP_OPTIONS,
   registerPreloadKeepReason(option, value) {
-    if (option === '--import' && value === 'vite-plus/register') {
+    if (
+      option === '--loader' ||
+      option === '--experimental-loader' ||
+      (option === '--import' && value === 'vite-plus/register')
+    ) {
       return undefined;
     }
     return 'an additional startup preload can configure oxc-node hooks or dependency transforms; migrate it manually';
@@ -95,7 +99,8 @@ const OXNODE_RUNNER: ScriptRunnerMigration = {
     }
     return undefined;
   },
-  envShebang: /^(#!\s*\S*\benv\s+(?:-S\s+)?)(oxnode(?=[ \t\r\n]|$)[^\r\n]*)/,
+  envShebang: /^(#!\s*\S*\benv\s+(?:-S\s+)?)((?:oxnode|node)(?=[ \t\r\n]|$)[^\r\n]*)/,
+  includeExtensionlessShebangs: true,
   shebangPattern: /^#![^\n]*[\s/]oxnode(?=\s|$)/,
   codeReference: OXNODE_CODE_REFERENCE,
   textReference: OXNODE_TEXT_REFERENCE,
@@ -138,15 +143,24 @@ const OXNODE_RUNNER: ScriptRunnerMigration = {
     return undefined;
   },
   scriptKeepReason(cwd, script) {
-    if (cwd === undefined || /[*?[{]/.test(script)) {
+    if (/[*?[{]/.test(script)) {
+      return undefined;
+    }
+    const file = script.startsWith('~/')
+      ? path.join(os.homedir(), script.slice(2))
+      : path.isAbsolute(script)
+        ? script
+        : cwd === undefined
+          ? undefined
+          : path.resolve(cwd, script);
+    if (file === undefined) {
       return undefined;
     }
     try {
-      const file = script.startsWith('~/')
-        ? path.join(os.homedir(), script.slice(2))
-        : path.resolve(cwd, script);
       const source = fs.readFileSync(file, 'utf8');
-      if (OXNODE_PACKAGE_REFERENCE.test(source)) {
+      // Node ignores the shebang when it loads a file. Its register reference is
+      // migrated separately and is not a call to a standalone oxc-node API.
+      if (OXNODE_PACKAGE_REFERENCE.test(source.replace(/^#![^\r\n]*/, ''))) {
         return `\`${script}\` uses a standalone oxc-node API or loader that does not configure the bundled \`vpx\` loader`;
       }
     } catch {

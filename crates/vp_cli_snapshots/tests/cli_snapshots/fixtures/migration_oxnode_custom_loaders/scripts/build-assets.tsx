@@ -1,0 +1,2 @@
+#!/usr/bin/env -S node --no-warnings --experimental-specifier-resolution=node --import @oxc-node/core/register --loader ./scripts/variant-loader.js --loader ./scripts/image-loader.js
+import '../src/main.ts';
