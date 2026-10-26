@@ -190,21 +190,23 @@ jobs:
             incorrect source-level fix, fix the source and regenerate until the diff
             is either gone or intentionally kept.
 
-            ### Final validation (this step is complete ONLY when all pass)
-            1. `just build` exits 0.
-            2. `pnpm bootstrap-cli:ci && pnpm test:unit` exits 0.
-            3. `just snapshot-test` exits 0. Snapshot mismatches fail the run with a
-               unified diff. Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic
-               drift from the upgrade (e.g. a bumped version string in help output);
-               unexpected stack traces, missing output, or diverging CLI behavior are
-               regressions to fix.
-            4. `git status --short` and `git diff --stat` have been inspected, and
-               every changed file is intentional for the upgrade PR. Pay special
-               attention to generated NAPI binding files, because later CI runs fail
-               if a build produces uncommitted binding output changes.
+            ### Validation during fixups
+            Rebuild the affected packages and run focused tests for each fix. For
+            tsdown or declaration-generator changes, run `just snapshot-test
+            command_pack_dts_compat`, `just snapshot-test command_pack_monorepo`,
+            and `just snapshot-test migration_from_tsup_monorepo_success`.
+            A successful internal build does
+            not prove that `vp pack` works with consumers' TypeScript versions.
 
-            If any of the four above fails, diagnose the root cause, fix it, and re-run
-            the final validation. Do not exit with the task marked complete otherwise.
+            Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic drift from the
+            upgrade (e.g. a bumped version string in help output). Unexpected stack
+            traces, missing output, or diverging CLI behavior are regressions to fix.
+            Inspect `git status --short` and `git diff --stat` before finishing;
+            every changed file, including generated NAPI bindings, must be intentional.
+
+            The workflow's separate Final validation step runs the full build, unit
+            tests, and snapshot suite after this action. Do not launch the full
+            snapshot suite here or leave any validation command running in the background.
 
             ### Running long commands (IMPORTANT)
             Run every long-running command (`just build`, `pnpm bootstrap-cli:ci`,
@@ -244,6 +246,21 @@ jobs:
         # matching the `continue-on-error` on the build steps above.
         continue-on-error: true
         run: pnpm fmt
+
+      - name: Final validation
+        id: final-validation
+        timeout-minutes: 90
+        # Keep broken upgrades available for review, but only as draft PRs.
+        continue-on-error: true
+        shell: bash
+        env:
+          RELEASE_BUILD: 'true'
+        run: |
+          set -euo pipefail
+          pnpm bootstrap-cli
+          export PATH="$HOME/.vite-plus/bin:$PATH"
+          pnpm test:unit
+          just snapshot-test
 
       - name: Enhance PR description with Kimi K3
         id: enhance-pr-description
@@ -400,6 +417,7 @@ jobs:
           base: main
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
+          draft: ${{ steps.final-validation.outcome != 'success' }}
           sign-commits: true
           token: ${{ steps.app-token.outputs.token }}
           body: ${{ steps.pr-content.outputs.body }}
@@ -411,3 +429,10 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
         run: gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --body-file "${UPGRADE_DEPS_META_DIR}/cli-help-report.md"
+
+      - name: Report validation failure
+        if: always() && steps.final-validation.outcome != 'success'
+        shell: bash
+        run: |
+          echo '::error::The upgraded dependencies did not pass final validation.'
+          exit 1

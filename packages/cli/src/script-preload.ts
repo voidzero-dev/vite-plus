@@ -61,8 +61,9 @@ if (watch) {
 }
 
 // `vpx --tsconfig` pins one config for every file. It must be set before the first
-// transform or resolve; the off-thread hooks load the same native library, so they
-// see it too. Without it, each file uses its nearest tsconfig.
+// transform or resolve. Each thread has its own loader context; script-register.ts
+// forwards the effective selection to the off-thread hooks. Without an override,
+// each file uses its nearest tsconfig.
 oxcNode.setTsconfigPath(process.env.VP_SCRIPT_TSCONFIG);
 // Dependencies run as published, except TypeScript, which Node.js refuses to strip
 // under `node_modules`. Set the same way, before the first transform or resolve.
