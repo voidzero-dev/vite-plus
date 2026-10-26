@@ -28,6 +28,39 @@ pub(crate) fn lexical_path(path: &Path) -> PathBuf {
     normalized
 }
 
+/// Reject parent traversal when lexical normalization would change the directory target.
+pub(crate) fn validate_root_normalization(dirs: &VpDirs) -> Result<(), Error> {
+    for root in [&dirs.data, &dirs.cache, &dirs.config, &dirs.state] {
+        let mut prefix = PathBuf::new();
+        for component in root.as_path().components() {
+            match component {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    if let Some(parent) = prefix.parent() {
+                        match fs::symlink_metadata(&prefix) {
+                            Ok(_) => {
+                                let resolved = dunce::canonicalize(&prefix)?;
+                                let expected_parent = dunce::canonicalize(parent)?;
+                                if resolved.parent() != Some(expected_parent.as_path()) {
+                                    return Err(Error::Other(vt_str::format!(
+                                        "Refusing to normalize directory {}: resolving '..' across a link changes its target. Specify the directory without '..'.",
+                                        root.as_path().display()
+                                    )));
+                                }
+                            }
+                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                            Err(error) => return Err(error.into()),
+                        }
+                    }
+                    prefix.pop();
+                }
+                _ => prefix.push(component.as_os_str()),
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Distinct data, cache, config, and state roots, including nested categories.
 pub(crate) fn roots(dirs: &VpDirs) -> Vec<AbsolutePathBuf> {
     let mut roots: Vec<_> = [&dirs.data, &dirs.cache, &dirs.config, &dirs.state]
@@ -53,6 +86,7 @@ pub(crate) fn is_owned(root: &AbsolutePathBuf) -> Result<bool, Error> {
 /// Claim only empty or newly created roots. Installing into an unowned, nonempty
 /// directory must never grant permission to delete its existing contents.
 pub(crate) fn prepare(dirs: &VpDirs) -> Result<(), Error> {
+    validate_root_normalization(dirs)?;
     let mut empty = Vec::new();
     // Preflight all roots before creating directories or ownership markers.
     for root in roots(dirs) {
@@ -153,6 +187,79 @@ mod tests {
             assert!(!dirs.cache.join(OWNERSHIP_MARKER).as_path().exists());
             assert_eq!(fs::read(dirs.cache.join("personal.txt")).unwrap(), b"keep");
             assert!(!is_owned(&dirs.cache).unwrap());
+        });
+    }
+
+    #[test]
+    fn prepare_allows_parent_components_in_existing_and_missing_directories() {
+        EnvConfig::scoped(|env| {
+            let mut dirs = env.dirs.clone();
+            fs::create_dir(env.dirs.data.join("existing")).unwrap();
+            dirs.data = env.dirs.data.join("existing/../data");
+            dirs.cache = env.dirs.data.join("missing/../cache");
+            dirs.config = dirs.data.clone();
+            dirs.state = dirs.data.clone();
+
+            prepare(&dirs).unwrap();
+
+            assert!(is_owned(&env.dirs.data.join("data")).unwrap());
+            assert!(is_owned(&env.dirs.data.join("cache")).unwrap());
+            assert!(!env.dirs.data.join("missing").as_path().exists());
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prepare_rejects_changed_parent_before_creating_any_roots() {
+        EnvConfig::scoped(|env| {
+            let mut dirs = env.dirs.clone();
+            let personal = env.dirs.data.join("personal");
+            fs::create_dir_all(personal.join("child")).unwrap();
+            fs::write(personal.join("notes.txt"), b"keep").unwrap();
+            let route = env.dirs.data.join("route");
+            std::os::unix::fs::symlink(personal.join("child"), &route).unwrap();
+            dirs.data = env.dirs.data.join("new-data");
+            dirs.cache = route.join("../cache");
+            dirs.config = env.dirs.data.join("new-config");
+            dirs.state = env.dirs.data.join("new-state");
+
+            let error = prepare(&dirs).unwrap_err();
+
+            assert!(error.to_string().contains("Refusing to normalize directory"));
+            for root in roots(&dirs) {
+                assert!(!root.as_path().exists());
+            }
+            assert_eq!(fs::read(personal.join("notes.txt")).unwrap(), b"keep");
+            assert!(!personal.join(OWNERSHIP_MARKER).as_path().exists());
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_root_normalization_allows_links_that_preserve_parent_traversal() {
+        EnvConfig::scoped(|env| {
+            let mut dirs = env.dirs.clone();
+            let target = env.dirs.data.join("target");
+            fs::create_dir_all(target.join("child")).unwrap();
+            let alias = env.dirs.data.join("alias");
+            std::os::unix::fs::symlink(&target, &alias).unwrap();
+            for cache in [alias.clone(), alias.join("child/.."), alias.join("../new-cache")] {
+                dirs.cache = cache;
+                validate_root_normalization(&dirs).unwrap();
+            }
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_root_normalization_rejects_dangling_links_before_parent_traversal() {
+        EnvConfig::scoped(|env| {
+            let mut dirs = env.dirs.clone();
+            let alias = env.dirs.data.join("alias");
+            std::os::unix::fs::symlink(env.dirs.data.join("missing"), &alias).unwrap();
+            dirs.cache = alias.join("../cache");
+
+            assert!(validate_root_normalization(&dirs).is_err());
         });
     }
 

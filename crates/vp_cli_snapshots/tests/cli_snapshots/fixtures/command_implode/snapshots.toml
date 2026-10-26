@@ -65,6 +65,12 @@ steps = [
 ]
 
 [[case]]
+name = "implode_symlink_parent_override"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "unsafe-root.mjs"]]
+
+[[case]]
 name = "implode_legacy_upgrade"
 vp = "global"
 steps = [["node", "legacy-upgrade.mjs"]]

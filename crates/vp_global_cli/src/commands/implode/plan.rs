@@ -17,6 +17,7 @@ pub(super) struct RemovalPlan {
 
 impl RemovalPlan {
     pub fn new(dirs: &VpDirs, roots: &[AbsolutePathBuf]) -> Result<Self, Error> {
+        install_dirs::validate_root_normalization(dirs)?;
         let mut owned = Vec::new();
         let mut unowned = Vec::new();
         for root in roots {
@@ -275,6 +276,42 @@ mod tests {
                 assert!(plan.directories.is_empty(), "{category} must block recursive removal");
             }
             assert_eq!(fs::read(nested.join("notes")).unwrap(), b"keep");
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unowned_nested_cache_rejects_symlink_parent_path() {
+        vp_shared::EnvConfig::scoped(|env| {
+            let mut dirs = env.dirs.clone();
+            dirs.data = env.dirs.data.join("data");
+            dirs.config = dirs.data.clone();
+            dirs.state = dirs.data.clone();
+            let personal = dirs.data.join("personal");
+            let links = env.dirs.data.join("links");
+            fs::create_dir_all(dirs.data.join("child")).unwrap();
+            fs::create_dir(&personal).unwrap();
+            fs::create_dir(&links).unwrap();
+            fs::write(dirs.data.join(install_dirs::OWNERSHIP_MARKER), b"").unwrap();
+            fs::write(personal.join("notes.txt"), b"keep").unwrap();
+            std::os::unix::fs::symlink(dirs.data.join("child"), links.join("route")).unwrap();
+            let alias = links.join("route/../personal");
+            assert_eq!(
+                dunce::canonicalize(&alias).unwrap(),
+                dunce::canonicalize(&personal).unwrap()
+            );
+            assert!(!links.join("personal").as_path().exists());
+
+            dirs.cache = personal.clone();
+            let plan = RemovalPlan::new(&dirs, &install_dirs::roots(&dirs)).unwrap();
+            assert!(plan.directories.is_empty());
+
+            dirs.cache = alias;
+            let error = RemovalPlan::new(&dirs, &install_dirs::roots(&dirs))
+                .err()
+                .expect("a symlink parent path must be rejected before removal");
+            assert!(error.to_string().contains("Refusing to normalize directory"));
+            assert_eq!(fs::read(personal.join("notes.txt")).unwrap(), b"keep");
         });
     }
 
